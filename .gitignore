@@ -1,0 +1,50 @@
+# RAG_Wright .gitignore
+# Secrets, the environment, caches, and generated data artifacts stay out of git.
+# Committed files are the source of truth on resume; generated data is never committed.
+
+# --- Secrets (only in .env, never committed) ---
+.env
+.env.*
+!.env.example
+
+# --- Python environment and build ---
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.eggs/
+
+# --- Test and lint caches ---
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Generated data artifacts (spec: data directory, object store, caches, eval outputs, model caches) ---
+# ArcadeDB data directory
+data/arcadedb/
+# MinIO / object-store artifacts
+data/objectstore/
+# Parsed-document cache (Docling output)
+data/parsed/
+# Embedding caches (BGE-M3 dense + sparse)
+data/embeddings/
+# Golden evaluation set outputs
+data/eval/
+# Model caches (HuggingFace / FlagEmbedding weights, etc.)
+data/models/
+.cache/
+# Catch-all: anything else written under data/ is generated
+/data/
+
+# --- Graphify index output (built locally in Phase 0, refreshed incrementally) ---
+graphify-out/
+
+# --- OS / editor noise ---
+.DS_Store
+*.swp
+.idea/
+.vscode/

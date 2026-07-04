@@ -1,0 +1,37 @@
+[project]
+name = "rag-wright"
+version = "0.1.0"
+description = "RAG_Wright: the capability half of the Hybrid RAG system (SPEC.md v0.1). Builds and registers the FR-C capabilities as ordinary tested software."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "arcadedb-python>=0.4.0",
+    "docling>=2.109.0",
+    "docling-core>=2.86.0",
+    "flagembedding>=1.4.0",
+    "langchain-openai>=1.3.3",
+    "mcp>=1.28.1",
+    "pydantic>=2.0",
+    "spacy>=3.8.14",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag_wright"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
