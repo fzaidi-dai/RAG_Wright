@@ -14,7 +14,7 @@ Success looks like correct, cited, abstention-willing answers across the range o
 
 1. The corpus is documents (text after parsing), not a live analytical database. Structured analytical data is out of scope here; the system only shares canonical entity identifiers with whatever external systems hold that data.
 2. Models are served by default through OpenRouter, and the system deploys fully locally on open models where a client requires it (the private-by-design mode). The model-serving path is a profile, not a premise.
-3. An enterprise Data Catalog (Nessie or equivalent) exists and can supply an ontology (entity and relationship types) and an entity registry (real entities with identifiers, names, and aliases). Where it does not, extraction degrades to the lightweight path plus an open-ended language model.
+3. An enterprise Data Catalog (Nessie or equivalent) exists and can supply an ontology (entity and relationship types) and an entity registry (real entities with identifiers, names, and aliases). Where it does not, extraction degrades to the lightweight path plus an open-ended language model. For the validation corpus, the concrete source is the Contract Understanding Atticus Dataset (CUAD) plus U.S. Securities and Exchange Commission (SEC) Electronic Data Gathering, Analysis, and Retrieval (EDGAR) entity data (see the testing section, the Phase 0 foundation, and ADR-0002): CUAD's expert clause annotations supply the ontology, and EDGAR Central Index Key (CIK) identifiers populate the entity registry as canonical `entity_id`s.
 4. The reasoning, generation, and recursive-language-model (RLM) work runs on a Gemma 4 class model (served through OpenRouter or locally); ingestion tiers models down per task where quality allows.
 
 ## 3. Scope
@@ -100,13 +100,15 @@ Practitioner voice in prose and comments; Pydantic models for the ontology, the 
 
 ## 12. Testing and evaluation strategy
 
+Validation corpus (ADR-0002): the Contract Understanding Atticus Dataset (CUAD), a subset of roughly 100 to 150 contracts (about 100MB, deliberately including some scanned filings so the Docling parse and vision-to-text path is exercised), together with the SEC EDGAR entity data the contracts come from. The golden set is built by archetype from this corpus: CUAD's expert clause annotations give ground truth for the exact and lexical archetype, the semantic archetype, and clause-finding answer-and-citation questions; the EDGAR party-and-entity graph is used to construct the relational and multi-hop questions, since CUAD alone is single-document clause extraction and under-tests the archetype the graph layer exists for. Known limitation: this is single-domain legal, so the generic-RAG generality claim needs validation on a second domain later.
+
 Two levels. Capability tests: each capability (FR-C) is a tested unit with its own contract, built and verified in isolation. End-to-end evaluation: a golden question-and-answer set split by the four archetypes, measuring retrieval recall at k per archetype (each leg, text and graph, measured separately since recall is bounded by their union); the summary-miss failure mode specifically (a detail dropped from the summary that the sparse and graph legs also miss); chunk-boundary quality and summary fidelity (A/B the RLM chunker against a simpler baseline so it earns its cost); entity-resolution quality (do mentions resolve to the right `entity_id`, and how badly does the graph fragment when they do not); end-to-end answer quality, faithfulness, and citation correctness; latency and its tail (to set routing thresholds from data); and a per-source ablation (turn off text retrieval, then graph, then RLM synthesis, and see what the evaluation set loses by archetype).
 
 ## 13. Phased build
 
 Eval-justified, thin slice first, depth over breadth.
 
-Phase 0, foundation: assemble the corpus, fix the chunk and identifier scheme, derive the ontology and entity registry from the catalog, and build the golden evaluation set by archetype. Everything after is measured against it.
+Phase 0, foundation: assemble the corpus (the CUAD contract subset of roughly 100 to 150 contracts including some scanned filings, plus the SEC EDGAR entity data; confirm the Creative Commons Attribution 4.0 license at download), fix the chunk and identifier scheme, derive the ontology (the 41 CUAD clause categories plus party and entity types) and the entity registry (EDGAR CIK identifiers as canonical `entity_id`s), and build the archetype-split golden evaluation set (CUAD expert annotations for the exact, semantic, and clause-finding archetypes; multi-hop questions constructed from the EDGAR party-and-entity graph for the relational archetype). Everything after is measured against it. See ADR-0002.
 
 Phase 1, the strong baseline: build the parsing, RLM chunking (deterministic, gated), embedding, ArcadeDB hybrid index (dense summary vectors plus sparse full-text vectors, fused by RRF), and reranking capabilities. A/B the RLM chunker against a simpler chunker to confirm it earns its cost, and validate ArcadeDB hybrid retrieval against the archetype recall bar. If ArcadeDB hybrid retrieval underperforms the recall bar, substitute a separate hybrid vector store (LanceDB) for the retrieval leg behind the query-skill seam; this is the one eval-gated fallback, not a default.
 
@@ -131,8 +133,8 @@ The system answers correctly, with citations, and abstains when unsupported, acr
 ## 16. Open questions
 
 1. The chunking skill internals: boundary heuristics, the max-token policy, summary structure, and manifest representation.
-2. Ontology and registry derivation: which entity and relationship types, how the Pydantic models are generated, and how the registry is pulled and refreshed.
-3. Entity resolution: the matching strategy (exact, fuzzy, embedding, language-model-assisted) and whether the canonical skeleton is materialized.
+2. Ontology and registry derivation: resolved for the validation corpus (ADR-0002) — the ontology is the 41 CUAD clause categories plus party and entity types (as Pydantic models), and the entity registry is the set of EDGAR Central Index Key (CIK) identifiers used as canonical `entity_id`s. How the Pydantic models are generated from the clause categories, and how the CIK registry is pulled and refreshed, remain to be detailed at the ontology-derivation task.
+3. Entity resolution: closed-world against the EDGAR CIK registry (ADR-0002). The matching strategy (exact, fuzzy, embedding, language-model-assisted) and whether the canonical skeleton is materialized remain open.
 4. Store specifics: the ArcadeDB schema and indexes (the dense `LSM_VECTOR` and sparse `LSM_SPARSE_VECTOR` configurations, dimensions, and similarity), how chunk records and graph nodes and edges carry `chunk_id` and `entity_id`, the query-skill interface shape, and the fallback-store swap point.
 5. Retrieval parameters: top-k per stage, the RRF and sparse-index parameters inside ArcadeDB (including the sparse vocabulary cap and IDF weighting), the rerank cutoff, and the union cap.
 6. Routing thresholds between the cheap path and the RLM tier, set from latency data. (The routing itself is orchestration; the thresholds are a capability-tuning input.)
