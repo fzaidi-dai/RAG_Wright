@@ -4,9 +4,13 @@ Phase 2 output. The persistent, cross-session task ledger and shared memory of p
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
 This is the **capability half** only. Each task builds and registers one FR-C / FR-I / FR-Q
-capability, or a foundation seam, as ordinary tested software. The ingestion and query **graphs**
-are compiled separately from the Orchestration Spec by the GraphWright compiler and are not built
-here. Any task that looks like "wire the pipeline into a graph" is compiler work, not this repo's.
+capability, or a foundation seam, as ordinary tested software. Registration is twofold and is part
+of every capability's definition of done: internal registration (T6, which the Model Context
+Protocol surface exposes) and Autonomous Resource Directory (ARD) registration (the manifest the
+GraphWright compiler discovers and binds against); see "ARD registration" below. The ingestion and
+query **graphs** are compiled separately from the Orchestration Spec by the GraphWright compiler
+and are not built here. Any task that looks like "wire the pipeline into a graph" is compiler work,
+not this repo's.
 
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
 
@@ -14,14 +18,15 @@ here. Any task that looks like "wire the pipeline into a graph" is compiler work
 
 ## Last approved / next up
 
-- **Last approved:** Phase 1 (Plan) — `plan.md` + ADR-0002, commit `a0d8fa5`.
-- **This deliverable:** Phase 2 (Tasks) — this file. Approved with revisions (RAC prefix; FR-I.6
-  line redrawn; EDGAR multi-hop split out as its own foundation task T10; DeepSeek V4 Pro first in
-  the model-profile seam).
-- **Next up (after this commits):** Phase 3 (Contracts) — **T1** (shared identifier contracts,
-  FR-S.2 / FR-S.3, RAC-1). Contracts gate everything.
+- **Last approved:** **T1** (FR-S.2 / FR-S.3, RAC-1) — shared identifier contracts (`ChunkId`,
+  `EntityId`). `EntityId` is strict canonical-only; normalization of raw EDGAR forms is T8's job.
+- **Next up:** Phase 3 (Contracts) — **T2** (provenance and confidence contracts, FR-S.4, RAC-2).
+- **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
+  multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
+  added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
+  capability authors and validates it), committed `ae593c3`.
 - **Open question carried in:** none blocking Phase 3. Matching strategy for entity resolution
-  (§16.3) and ArcadeDB index specifics (§16.4) resolve at their own tasks (T9-area is T8 / T13).
+  (§16.3) and ArcadeDB index specifics (§16.4) resolve at their own tasks (T8 / T13).
 
 ---
 
@@ -41,13 +46,46 @@ here. Any task that looks like "wire the pipeline into a graph" is compiler work
   for the exact symbol and signature before any library call is written. The "grounded surface"
   noted per task is the confirmed Phase 0 target, not a substitute for that per-task query.
 
+## ARD registration (part of every capability's definition of done)
+
+Two registrations, not one, and they must not be conflated.
+
+Internal registration (T6) registers a built capability by its FR-C name with its contract, in
+`src/rag_wright/capabilities/registry.py`. Its consumer is the Model Context Protocol (MCP) skill
+surface (T31).
+
+ARD registration is the Autonomous Resource Directory manifest that lets the GraphWright compiler
+discover and bind the capability when it compiles the ingestion and query graphs from the
+Orchestration Spec. Its consumer is the compiler's discovery and gap-analysis gate, not this repo.
+The manifest is a `*.json` file conforming to GraphWright's `RegistryEntry` schema (GraphWright
+T0.6 / ADR-0005), placed under the real registry root (its location is fixed on the GraphWright
+side), then loaded and validated by `RegistryStore` (GraphWright T6.1). This is not a compiler step
+run here; it is authoring a file the already-built store consumes.
+
+One key, two consumers: the FR-C / FR-I / FR-Q name is both the internal registry key and the
+anchor of the ARD manifest's URN, so the gap report and the registry speak one vocabulary. The T6
+seam emits the manifest skeleton from what registration already knows (URN, kind, contract-derived
+response bounds); each capability then authors what cannot be derived, above all the representative
+queries, since those are the task-bearing field discovery ranks on (GraphWright T6.4), and a
+capability with weak ones is one the compiler will not find.
+
+Definition of done. Every task that builds a discoverable, bound capability carries the final
+acceptance bullet appended below and is `done` only when its ARD manifest is authored
+(representative queries filled) and loads under `RegistryStore(root)` with no `RegistryLoadError`.
+This covers the RLM skill (T15) and each FR-C / FR-I / FR-Q capability that is its own bound graph
+node (T16, T17, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29). It does not cover the
+contracts, the seams (T11, T13), the foundation tests, the corpus and eval tasks, the T18
+escalation path (it extends the T17 capability, not a new one), the T30 caching optimization, or
+the T31 MCP surface. Stated once here as the source of its meaning, repeated per task so the
+working loop enforces it.
+
 ---
 
 ## Status board
 
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
-| T1 | Shared identifier contracts (`chunk_id`, `entity_id`) | 3 Contracts | FR-S.2, FR-S.3 | todo | - |
+| T1 | Shared identifier contracts (`chunk_id`, `entity_id`) | 3 Contracts | FR-S.2, FR-S.3 | done | - |
 | T2 | Provenance and confidence contracts | 3 Contracts | FR-S.4 | todo | - |
 | T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | todo | T1, T2 |
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | todo | - |
@@ -100,16 +138,21 @@ computed from source-document identifier + chunk index + content hash; `entity_i
 canonical registry identifier. Fixed before anything is built (FR-S.2, FR-S.3).
 
 **RAC-1:**
-- [ ] `chunk_id` is computed deterministically from `(source_doc_id, chunk_index, content_hash)`;
-  identical inputs yield an identical `chunk_id` (determinism test).
-- [ ] `entity_id` is a canonical-registry identifier type (EDGAR CIK shaped, per ADR-0002).
-- [ ] Both models are frozen/validated; malformed inputs are rejected.
+- [x] `chunk_id` is computed deterministically from `(source_doc_id, chunk_index, content_hash)`;
+  identical inputs yield an identical `chunk_id` (determinism test). `ChunkId.of()` computes the
+  content hash (SHA-256); `source_doc_id` is constrained to `[A-Za-z0-9._-]` so the `:`-delimited
+  `.value` is parse/match-safe for provenance and citation.
+- [x] `entity_id` is a canonical-registry identifier type (EDGAR CIK shaped, per ADR-0002). The
+  contract is **strict**: canonical 10-digit zero-padded form only; raw EDGAR forms (CIK-prefixed,
+  unpadded, integer) are rejected and normalized upstream at the T8 registry loader.
+- [x] Both models are frozen/validated; malformed inputs are rejected.
 
-**Verification:** `uv run pytest tests/contracts/test_identifiers.py`
+**Verification:** `uv run pytest tests/contracts/test_identifiers.py` — 40 passed.
 
-**Dependencies:** None. **Scope:** S.
+**Dependencies:** None. **Scope:** S. **Status:** done (commit pending).
 **Files:** `src/rag_wright/contracts/identifiers.py`, `tests/contracts/test_identifiers.py`
-**Note:** Load-bearing; scheme change is ask-first (SPEC §14).
+**Note:** Load-bearing; scheme change is ask-first (SPEC §14). `EntityId` normalization deferred to
+T8 by review decision (contract stays strict; the loader owns the world's mess).
 
 ### Task T2: Provenance and confidence contracts
 
@@ -185,16 +228,23 @@ now so that addition is a plug-in, not a reopen.
 
 **Description:** A registry seam where each built capability registers under its FR-C name with
 its contract (contract use, FR-S.5). Registration is what the MCP skill surface (T31) later
-exposes.
+exposes. The same seam also emits the capability's Autonomous Resource Directory (ARD) manifest
+skeleton (see "ARD registration"), so the internal registry and the ARD manifest share the FR-C
+name as their one key and stay coherent.
 
 **RAC-6:**
 - [ ] A capability registers by FR-C name with its contract; lookup by FR-C name returns it.
 - [ ] Registering an unknown or duplicate name is rejected.
+- [ ] Registration emits an ARD manifest skeleton conforming to GraphWright's `RegistryEntry`
+  schema (URN anchored on the FR-C name, kind, and contract-derived response bounds), leaving the
+  authored fields (representative queries, trust attestations) for the capability task to fill.
 
 **Verification:** `uv run pytest tests/capabilities/test_registry.py`
 
 **Dependencies:** None. **Scope:** S.
 **Files:** `src/rag_wright/capabilities/registry.py`, `tests/capabilities/test_registry.py`
+**Note:** The ARD manifest is the interface to the GraphWright compiler's discovery; the internal
+registry is the interface to the MCP surface (T31). One key (the FR-C name), two consumers.
 
 ### Checkpoint: Contracts complete
 - [ ] All contract tests pass. Identifier schemes fixed and approved. Ready to build on them.
@@ -238,6 +288,11 @@ closed-world against this registry (FR-C.8, FR-C.7, §16.2/§16.3, ADR-0002). Th
 **RAC-8:**
 - [ ] Ontology models are populated from the 41 CUAD clause categories plus party/entity types.
 - [ ] The entity registry is built from EDGAR CIK data; CIKs are the canonical `entity_id`s.
+- [ ] **T8 owns EDGAR normalization** (moved here from the T1 contract by review): the loader
+  strips the `CIK` prefix, zero-pads, and validates each raw EDGAR CIK into a canonical `EntityId`.
+  Tests must assert the real messy forms (CIK-prefixed, unpadded, integer) all normalize to the
+  correct canonical `EntityId`, and that genuinely invalid ones are rejected — this is the test
+  that actually proves fragmentation is prevented, and it belongs at the loader boundary.
 - [ ] Closed-world lookup by canonical id and by known surface form works.
 
 **Verification:** `uv run pytest tests/ontology/test_derivation.py`
@@ -245,6 +300,8 @@ closed-world against this registry (FR-C.8, FR-C.7, §16.2/§16.3, ADR-0002). Th
 **Dependencies:** T4, T7. **Scope:** M.
 **Files:** `src/rag_wright/ontology/derive.py`, `src/rag_wright/ontology/registry.py`,
 `tests/ontology/test_derivation.py`
+**Note:** The `EntityId` contract (T1) is strict canonical-only; this loader is the single place
+raw EDGAR forms enter and get normalized. Keep normalization here, not in the contract.
 
 ### Task T9: Golden eval harness + CUAD-annotation archetype sets
 
@@ -398,6 +455,9 @@ contract and tests (FR-C.10, plan §1 note).
 - [ ] `SKILL.md` teaches the method (interpreter load, code-side slice/dispatch, synthesize) as
   authored software, not a build-tool feature.
 - [ ] It defers all determinism/boundary/gating behavior to the applying capabilities.
+- [ ] ARD-registered as an `agent_skill`: its manifest loads under `RegistryStore(root)` with no
+  `RegistryLoadError` and is discoverable; the RLM skill is a required bound capability of both
+  graphs, so its ARD presence is what the gap-analysis gate checks before either graph compiles.
 
 **Verification:** Manual review of `SKILL.md`; no behavioral test (correctly has none).
 
@@ -434,6 +494,9 @@ chunking, embedding, and extraction (FR-C.1). Grounded surface: `docling` `Docum
   sections, tables; OCR text present for the scan).
 - [ ] The parsed result is cached/reusable so it is parsed once.
 - [ ] Registered under FR-C.1.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_parsing.py`
 
@@ -456,6 +519,9 @@ re-chunked (FR-I.1).
   produced.
 - [ ] The content-hash gate skips an unchanged document (no re-chunk).
 - [ ] Registered under the RLM chunking capability.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py`
 
@@ -499,6 +565,9 @@ decoupling property. Grounded surface: `FlagEmbedding` `M3Embedder`.
   synchronous single-call), and it applies backpressure at that boundary, so bulk mode can
   saturate the GPU. Verified by a concurrency test, not left for later graph wiring.
 - [ ] Registered under FR-C.2.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_embedding.py`
 
@@ -517,6 +586,9 @@ document does effectively no work.
 - [ ] A chunk record upserts by `chunk_id` (re-write of the same id updates, does not duplicate).
 - [ ] Re-running an unchanged document does effectively no work (content-hash gate).
 - [ ] A failed document lands in the dead-letter queue; a resumed run continues from checkpoints.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_chunk_write.py -m store`
 
@@ -549,6 +621,9 @@ surface: ArcadeDB `vector.fuse` (proven end to end at T14).
 - [ ] Metadata filters are honored.
 - [ ] recall@k per archetype is measurable on the golden set (feeds GATE-2).
 - [ ] Registered under FR-C.3.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_hybrid_search.py -m store`
 
@@ -566,6 +641,9 @@ Grounded surface: `FlagEmbedding` `FlagAutoReranker`.
 - [ ] The candidate list is reranked and cut to a top-k set.
 - [ ] Rerank improves precision@k over the raw fused list on the golden set.
 - [ ] Registered under FR-C.4.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_reranking.py`
 
@@ -603,6 +681,9 @@ decoupling property.
   non-blocking, its model/GPU calls go through the poolable inference boundary, and it applies
   backpressure, so bulk mode can saturate the GPU. Verified by a concurrency test.
 - [ ] Registered under FR-C.6.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_graph_extraction.py`
 
@@ -623,6 +704,9 @@ at this task.
   per the closed-world policy (not silently fabricated).
 - [ ] Fragmentation rate is measured on the golden set.
 - [ ] The chosen matching strategy is recorded (ADR).
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_entity_resolution.py`
 
@@ -643,6 +727,9 @@ heavy structured data does not go in it (SPEC §8).
   in one transaction.
 - [ ] Re-running an unchanged document does no graph work (content-hash gate).
 - [ ] No heavy structured data is placed in the graph (relationship layer only).
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_graph_storage.py -m store`
 
@@ -661,6 +748,9 @@ index; the answer is treated as evidence, not truth (FR-C.5, FR-Q.3, SPEC §8/§
   `chunk_id`s, `entity_id`s, and confidence tags.
 - [ ] The result is shaped as evidence for fusion (T27), not a final ranked list.
 - [ ] Registered under FR-C.5.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_graph_query.py -m store`
 
@@ -677,6 +767,9 @@ comparable ranked list (FR-Q.4).
 - [ ] The reranked top set and graph-cited chunks are unioned and deduplicated on `chunk_id`,
   capped at the union cap.
 - [ ] It is deterministic and is not a score fusion.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_fusion.py`
 
@@ -698,6 +791,9 @@ structured-under-reasoning work, so they resolve to the DeepSeek V4 Pro default 
 - [ ] Candidate chunks load into the interpreter as data; slicing/filtering happens in code.
 - [ ] Sub-model calls run on focused portions; the capability never attends over the full volume.
 - [ ] Registered under the RLM synthesis capability.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
 
 **Verification:** `uv run pytest tests/capabilities/test_rlm_synthesis.py`
 
@@ -717,6 +813,9 @@ to-text step at ingestion (FR-C.9), on a Gemma 4 class model through the model-p
 - [ ] The answer is confidence-aware (surfaces graph-fact confidence tags).
 - [ ] Vision-to-text converts a scanned filing's images to text at ingestion.
 - [ ] Registered under FR-C.9.
+- [ ] ARD-registered: both the answer generator and vision-to-text manifests (skeletons from T6,
+  representative queries authored) load under `RegistryStore(root)` with no `RegistryLoadError` and
+  are returned by `discover` for their representative queries.
 
 **Verification:** `uv run pytest tests/capabilities/test_answer_generator.py`
 
@@ -786,9 +885,10 @@ confirming the acceptance bar from Phase 0 (SPEC §12, §15, plan §4).
 **Note:** Final review gate for Phase 5.
 
 ### Checkpoint: Complete
-- [ ] All FR-C / FR-I / FR-Q capabilities built, tested, and registered. Both gates resolved and
-  recorded. End-to-end bar met. Ready for the compiler to bind the graphs from the Orchestration
-  Spec.
+- [ ] All FR-C / FR-I / FR-Q capabilities built, tested, internally registered, and ARD-registered
+  (every capability's ARD manifest loads and validates under `RegistryStore`). Both gates resolved
+  and recorded. End-to-end bar met. Ready for the compiler to discover and bind the graphs from the
+  Orchestration Spec.
 
 ---
 
