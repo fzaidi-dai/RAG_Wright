@@ -18,9 +18,10 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T1** (FR-S.2 / FR-S.3, RAC-1) — shared identifier contracts (`ChunkId`,
-  `EntityId`). `EntityId` is strict canonical-only; normalization of raw EDGAR forms is T8's job.
-- **Next up:** Phase 3 (Contracts) — **T2** (provenance and confidence contracts, FR-S.4, RAC-2).
+- **Last approved:** **T2** (FR-S.4, RAC-2) — provenance and confidence contracts (`ConfidenceTag`,
+  `Provenance`, `GraphFact`). `source_doc_id` kept explicit; consistency validator fires on all
+  construction/deserialization paths. (T1: shared identifier contracts, done, `22ea66c`.)
+- **Next up:** Phase 3 (Contracts) — **T3** (chunk record contract, FR-I.3 / FR-S.1, RAC-3).
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -86,7 +87,7 @@ working loop enforces it.
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
 | T1 | Shared identifier contracts (`chunk_id`, `entity_id`) | 3 Contracts | FR-S.2, FR-S.3 | done | - |
-| T2 | Provenance and confidence contracts | 3 Contracts | FR-S.4 | todo | - |
+| T2 | Provenance and confidence contracts | 3 Contracts | FR-S.4 | done | T1 |
 | T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | todo | T1, T2 |
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | todo | - |
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | todo | T2, T4 |
@@ -160,15 +161,20 @@ T8 by review decision (contract stays strict; the loader owns the world's mess).
 graph-derived fact carries a confidence tag (FR-S.4).
 
 **RAC-2:**
-- [ ] Text-bearing models require source-document + chunk provenance.
-- [ ] Graph-fact model requires `confidence ∈ {EXTRACTED, INFERRED, AMBIGUOUS}`; any other value
-  is rejected.
+- [x] Text-bearing models require source-document + chunk provenance. `Provenance` carries an
+  explicit `source_doc_id` plus `chunk_id`; `Provenance.of(chunk_id)` derives the source doc.
+- [x] Graph-fact model requires `confidence ∈ {EXTRACTED, INFERRED, AMBIGUOUS}`; any other value
+  is rejected. `GraphFact` base carries `provenance` + `confidence` (the FR-I.4 node/edge unit).
 
-**Verification:** `uv run pytest tests/contracts/test_provenance.py`
+**Verification:** `uv run pytest tests/contracts/test_provenance.py` — 18 passed.
 
-**Dependencies:** None. **Scope:** S.
+**Dependencies:** T1 (uses `ChunkId`). **Scope:** S. **Status:** done (commit pending).
 **Files:** `src/rag_wright/contracts/provenance.py`, `tests/contracts/test_provenance.py`
-**Note:** Enforces "no claim without a citation" downstream (FR-Q.6).
+**Note:** Enforces "no claim without a citation" downstream (FR-Q.6). `source_doc_id` is kept
+explicit (not a derived property, unlike a purity collapse) by review decision: it enables
+store-level source filtering (FR-Q.1), decouples provenance from the `chunk_id` string format, and
+avoids parsing the identifier — safe because the consistency validator fires on every construction
+and deserialization path (raw / `model_validate` / `model_validate_json`), closing drift.
 
 ### Task T3: Chunk record contract
 
