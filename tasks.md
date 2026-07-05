@@ -18,10 +18,12 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T3** (FR-I.3 / FR-S.1, RAC-3) — chunk record contract (`ChunkRecord`,
-  `BGE_M3_DENSE_DIM`). Vector shapes declared for the store; extracted field named `entity_mentions`
-  (unresolved). (T1 identifiers `22ea66c`; T2 provenance `49bfb68`.)
-- **Next up:** Phase 3 (Contracts) — **T4** (ontology and extraction-target models, FR-C.8, RAC-4).
+- **Last approved:** **T4** (FR-C.8, RAC-4) — ontology and extraction-target models
+  (`ClauseCategory` 41 authoritative; `EntityType`/`RelationshipType` provisional seed, T8 owns
+  membership; `EntityNode`, `ClauseFact`, `RelationshipFact` directed with pre-resolution refs).
+  (T3 chunk record `b2f45bc`; T2 `49bfb68`; T1 `22ea66c`.)
+- **Next up:** Phase 3 (Contracts) — **T5** (graph extraction contract with a real OpenIE extractor
+  seam, FR-C.6 / FR-I.4, RAC-5).
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -89,7 +91,7 @@ working loop enforces it.
 | T1 | Shared identifier contracts (`chunk_id`, `entity_id`) | 3 Contracts | FR-S.2, FR-S.3 | done | - |
 | T2 | Provenance and confidence contracts | 3 Contracts | FR-S.4 | done | T1 |
 | T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | done | T1, T2 |
-| T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | todo | - |
+| T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | done | T1, T2 |
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | todo | T2, T4 |
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | todo | - |
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | todo | - |
@@ -208,13 +210,24 @@ types (FR-C.8, §16.2, ADR-0002). This is the contract shape; the derivation tha
 T8.
 
 **RAC-4:**
-- [ ] The 41 CUAD clause categories plus party/entity/relationship types are expressed as
-  Pydantic models.
-- [ ] A fact that does not conform to the ontology is rejected.
+- [x] The 41 CUAD clause categories (`ClauseCategory`, authoritative, exactly 41) plus party/entity
+  types (`EntityType`) and relationship types (`RelationshipType`) are expressed as Pydantic models.
+  T4 owns ontology **structure**; **T8 is the authority for entity/relationship membership** (a
+  provisional seed ships now: `ORGANIZATION`/`PERSON`, `CONTRACTS_WITH`/`AFFILIATE_OF`).
+- [x] A fact that does not conform to the ontology is rejected (enum-typed fields on `EntityNode`,
+  `ClauseFact`, `RelationshipFact`; off-ontology category/type/relationship raises).
 
-**Verification:** `uv run pytest tests/contracts/test_ontology.py`
+**Verification:** `uv run pytest tests/contracts/test_ontology.py` — 19 passed.
 
-**Dependencies:** None. **Scope:** M.
+**Dependencies:** T1, T2. **Scope:** M. **Status:** done (commit pending).
+**Files:** `src/rag_wright/contracts/ontology.py`, `tests/contracts/test_ontology.py`
+**Note:** Review decisions — (1) ship the provisional entity/relationship seed, T8 finalizes
+membership from the Data Catalog; (2) `RelationshipFact` is **directed** (`source_ref -> target_ref`)
+so T8 can add directed corporate-hierarchy types without reopening it; (3) endpoints are
+**pre-resolution mention refs**, self-loop rejected at the ref level here, while the post-resolution
+same-`entity_id` self-loop check belongs with entity resolution (T24); (4) a `CONTRACTS_WITH` fact
+references its agreement via required provenance (`source_doc_id`), making shared-party multi-hop
+answerable.
 **Files:** `src/rag_wright/contracts/ontology.py`, `tests/contracts/test_ontology.py`
 
 ### Task T5: Graph extraction contract (real OpenIE extension seam)
@@ -722,6 +735,10 @@ at this task.
 - [ ] A known mention resolves to the correct EDGAR CIK `entity_id`; an unknown mention is handled
   per the closed-world policy (not silently fabricated).
 - [ ] Fragmentation rate is measured on the golden set.
+- [ ] **Post-resolution self-loop check (moved here from the T4 contract):** after resolving a
+  `RelationshipFact`'s `source_ref`/`target_ref` to canonical `entity_id`s, a relationship whose two
+  refs resolve to the *same* `entity_id` is collapsed/dropped as a self-loop. This belongs here, not
+  in the T4 fact contract, because two distinct mentions can legitimately resolve to one entity.
 - [ ] The chosen matching strategy is recorded (ADR).
 - [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
   under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
