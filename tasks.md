@@ -18,13 +18,13 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T8** (FR-C.8 / FR-C.7, RAC-8) — ontology reconciliation (41/41 vs real CUAD)
-  + entity registry (8,006 companies, canonical CIK `entity_id`s, closed-world). Reuses
-  `corpus.edgar.normalize_cik`. (T7 `dbfcef0`/`f1e8820`; Phase 3 done through T6.)
-- **Next up:** Phase 4 (Foundations) — **T9** (golden eval harness + CUAD-annotation archetype sets,
-  §12, RAC-9). Builds the pytest eval harness + exact/lexical, semantic, and clause-finding golden
-  sets from the T7 master-clauses CSV + SQuAD (the reconciliation map from T8 binds CSV columns to
-  categories). Gated on T7.
+- **Last approved:** **T9** (§12, RAC-9) — golden eval harness (recall@k per archetype, legs
+  separate) + CUAD-annotation golden set (2,032 subset questions across exact/lexical, semantic,
+  clause-finding), pinned + reproducible. Archetype map is a testable hypothesis. (T8 `c1f43aa`.)
+- **Next up:** Phase 4 (Foundations) — **T10** (EDGAR-derived relational + multi-hop question
+  construction, §12/§8, RAC-10). Builds the RELATIONAL archetype from the EDGAR party-and-entity
+  graph, with **human-verified** name→CIK matches (from T7's UNVERIFIED proposals) — the only path
+  to ground truth. Gated on T7, T9.
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -97,7 +97,7 @@ working loop enforces it.
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | done | T3 |
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | done | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | done | T4, T7 |
-| T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | todo | T7 |
+| T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | done | T7 |
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | todo | T7, T9 |
 | T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | todo | T6 |
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | todo | T11 |
@@ -387,18 +387,24 @@ per archetype per leg (text and graph measured separately). The relational and m
 is built as its own task, T10, deliberately not folded in here.
 
 **RAC-9:**
-- [ ] Golden sets exist for the exact/lexical, semantic, and clause-finding archetypes, grounded
-  in CUAD expert annotations — the T7 master-clauses CSV (41-category annotations) and SQuAD span
-  answers feed these directly (`docs/Corpus_Acquisition.md`).
-- [ ] Harness measures recall@k per archetype, text and graph legs separately.
-- [ ] Harness runs green on a tiny fixture before real capabilities exist (measures nothing yet,
-  but the plumbing is proven).
+- [x] Golden sets exist for the exact/lexical, semantic, and clause-finding archetypes, grounded in
+  CUAD expert annotations (SQuAD span answers). **Live: 2,032 subset questions** (exact_lexical 893,
+  clause_finding 737, semantic 402), pinned to `zenodo:4595826` + the 150-contract subset in the
+  build record → gitignored `data/eval/golden.json`, rebuilt by `uv run python -m eval.build_golden`.
+- [x] Harness measures recall@k per archetype, text and graph legs separately (`evaluate` returns
+  `archetype/leg` means; `retrieve` injected so the plumbing is proven before capabilities exist).
+- [x] Harness runs green on a tiny fixture (recall correctness, per-leg separation, builder spread +
+  skipping, map covers all 41 categories).
 
-**Verification:** `uv run pytest eval/test_harness.py`
+**Verification:** `uv run pytest eval/test_harness.py` — 5 passed (now in the default suite, 194).
 
-**Dependencies:** T7. **Scope:** M.
-**Files:** `eval/harness.py`, `eval/golden/`, `eval/test_harness.py`
-**Note:** Everything after Phase 0 is measured against this. Feeds GATE-1 and GATE-2.
+**Dependencies:** T7. **Scope:** M. **Status:** done.
+**Files:** `eval/harness.py`, `eval/golden.py`, `eval/build_golden.py`, `eval/test_harness.py`,
+`data/eval/golden.json` (gitignored). **testpaths** now includes `eval`.
+**Note:** Everything after Phase 0 is measured against this; feeds GATE-1 and GATE-2. The
+`ARCHETYPE_BY_CATEGORY` map is a **testable hypothesis** to revisit once per-category/per-leg recall
+is observable (review: Termination for Convenience → clause-finding; Parties kept lexical as a known
+borderline; Post-Termination Services + Competitive Restriction Exception flagged revisit).
 
 ### Task T10: EDGAR-derived relational + multi-hop question construction
 

@@ -30,8 +30,8 @@ build-backend = "hatchling.build"
 packages = ["src/rag_wright"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["src"]
+testpaths = ["tests", "eval"]
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 100
