@@ -18,13 +18,13 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T7** (Phase 0, RAC-7) — CUAD + EDGAR corpus acquisition. Two scripts;
-  150-contract subset (10 rasterized image-only; 16 shared-party groups); EDGAR seed + submissions
-  (throttled/cached, warm re-run 0 calls); 23 UNVERIFIED name→CIK proposals. Corpus under gitignored
-  `data/`. (Core `f1e8820`; Phase 3 done through T6.)
-- **Next up:** Phase 4 (Foundations) — **T8** (ontology and registry derivation, FR-C.8 / FR-C.7,
-  RAC-8). Reuses `corpus.edgar.normalize_cik` (the single CIK→`EntityId` point) + the T7
-  `company_tickers.json` seed; populates the T4 ontology from the 41 CUAD categories. Gated on T4, T7.
+- **Last approved:** **T8** (FR-C.8 / FR-C.7, RAC-8) — ontology reconciliation (41/41 vs real CUAD)
+  + entity registry (8,006 companies, canonical CIK `entity_id`s, closed-world). Reuses
+  `corpus.edgar.normalize_cik`. (T7 `dbfcef0`/`f1e8820`; Phase 3 done through T6.)
+- **Next up:** Phase 4 (Foundations) — **T9** (golden eval harness + CUAD-annotation archetype sets,
+  §12, RAC-9). Builds the pytest eval harness + exact/lexical, semantic, and clause-finding golden
+  sets from the T7 master-clauses CSV + SQuAD (the reconciliation map from T8 binds CSV columns to
+  categories). Gated on T7.
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -96,7 +96,7 @@ working loop enforces it.
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | done | T2, T4 |
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | done | T3 |
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | done | - |
-| T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | todo | T4, T7 |
+| T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | done | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | todo | T7 |
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | todo | T7, T9 |
 | T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | todo | T6 |
@@ -355,20 +355,24 @@ closed-world against this registry (FR-C.8, FR-C.7, §16.2/§16.3, ADR-0002). Th
 (§16.3) is decided at T24; this task delivers the registry it resolves against.
 
 **RAC-8:**
-- [ ] Ontology models are populated from the 41 CUAD clause categories plus party/entity types.
-- [ ] The entity registry is built from EDGAR CIK data; CIKs are the canonical `entity_id`s.
-- [ ] **T8 owns EDGAR normalization** (moved here from the T1 contract by review; folds
-  `docs/Corpus_Acquisition.md`): CIK is 10-digit zero-padded, which is exactly the canonical
-  `EntityId` form (T1), so the loader's normalization is zero-pad-to-10 then validate against the
-  strict `EntityId` contract. Tests must assert the real messy EDGAR forms (CIK-prefixed, unpadded,
-  integer) all normalize to the correct canonical `EntityId`, and that genuinely invalid ones are
-  rejected — the test that actually proves fragmentation is prevented, at the loader boundary.
-- [ ] The registry is seeded from the T7 `company_tickers.json` + submissions data.
-- [ ] Closed-world lookup by canonical id and by known surface form works.
+- [x] The T4 ontology is reconciled against the real CUAD `master_clauses.csv` columns
+  (`reconcile_clause_categories`, case-insensitive + answer-spacing-tolerant). **Live: 41/41
+  matched, 0 missing, 0 extra** — the 41 categories are confirmed against real data with no ontology
+  change; the reconciliation yields a CSV-column→category map for T9.
+- [x] The entity registry is built from EDGAR CIK data; CIKs are the canonical `entity_id`s. **Live:
+  8,006 companies from the T7 seed (10,415 ticker-rows collapse to unique CIKs), 0 invalid skipped.**
+- [x] **T8 owns EDGAR normalization** — the registry loader **reuses `corpus.edgar.normalize_cik`**
+  (the single CIK→`EntityId` point, zero-pad-to-10 + strict T1 validate), so it cannot drift. The
+  fragmentation test passes: messy forms (`int`, unpadded, `CIK`-prefixed) all land on the canonical
+  `EntityId`; an invalid CIK row is skipped, not invented.
+- [x] The registry is seeded from the T7 `company_tickers.json`; submissions→former-name aliases are
+  supported (`aliases_by_cik`) and wired at T24 where resolution consumes submissions.
+- [x] Closed-world lookup works: `resolve` returns the canonical id for a known name/ticker/alias
+  (case/punctuation-insensitive) and `None` for an unknown surface form (never fabricated).
 
-**Verification:** `uv run pytest tests/ontology/test_derivation.py`
+**Verification:** `uv run pytest tests/ontology/test_derivation.py` — 10 passed.
 
-**Dependencies:** T4, T7. **Scope:** M.
+**Dependencies:** T4, T7. **Scope:** M. **Status:** done.
 **Files:** `src/rag_wright/ontology/derive.py`, `src/rag_wright/ontology/registry.py`,
 `tests/ontology/test_derivation.py`
 **Note:** The `EntityId` contract (T1) is strict canonical-only; this loader is the single place
