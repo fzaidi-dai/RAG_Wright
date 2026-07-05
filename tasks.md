@@ -18,12 +18,11 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T5** (FR-C.6 / FR-I.4, RAC-5) — graph extraction contract + `Extractor`
-  seam (`ExtractionResult`, `run_extractors`, typed `EntityMention`). Data-shape contracts (T1–T5)
-  are done. (T4 `c4bd236`; T3 `b2f45bc`; T2 `49bfb68`; T1 `22ea66c`.)
-- **Next up:** Phase 3 (Contracts) — **T6** (capability registration seam, FR-S.5 / contract use,
-  RAC-6), the remaining Contracts-phase task (internal registration + the ARD manifest skeleton).
-  **Phase 3 completes at T6, not T5**; T6 then gates the Foundations build tasks.
+- **Last approved:** **T6** (FR-S.5 / contract use, RAC-6) — capability registration seam + ARD
+  manifest skeleton (ADR-0003; `CapabilityRegistry`, `ManifestSkeleton`, mirrored `RegistryEntry`).
+  **Phase 3 (Contracts) complete: T1–T6 all done.** (T5 `b674e7b`; T4 `c4bd236`; T3 `b2f45bc`.)
+- **Next up:** Phase 4 (Foundations) — **T7** (CUAD + EDGAR corpus acquisition and subset, Phase 0,
+  RAC-7) per the acquisition spec. First Build-phase data task; gates T8, T9, T10.
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -93,7 +92,7 @@ working loop enforces it.
 | T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | done | T1, T2 |
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | done | T1, T2 |
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | done | T2, T4 |
-| T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | todo | - |
+| T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | done | T3 |
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | todo | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | todo | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | todo | T7 |
@@ -269,21 +268,36 @@ skeleton (see "ARD registration"), so the internal registry and the ARD manifest
 name as their one key and stay coherent.
 
 **RAC-6:**
-- [ ] A capability registers by FR-C name with its contract; lookup by FR-C name returns it.
-- [ ] Registering an unknown or duplicate name is rejected.
-- [ ] Registration emits an ARD manifest skeleton conforming to GraphWright's `RegistryEntry`
-  schema (URN anchored on the FR-C name, kind, and contract-derived response bounds), leaving the
-  authored fields (representative queries, trust attestations) for the capability task to fill.
+- [x] A capability registers by canonical slug with its contract; lookup by slug returns it.
+- [x] Registering an unknown (non-canonical, per SPEC §5) or duplicate name is rejected; unknown
+  lookup raises. The name is the cross-spec join key — a canonical slug (`hybrid_search`, never
+  `fr-c-3`), enforced against the mirrored slug set.
+- [x] Registration emits an ARD manifest skeleton conforming to the mirrored GraphWright
+  `RegistryEntry` schema (URN `urn:air:dreamai:rag_wright:<slug>`, kind, callable response bounds),
+  leaving the authored fields (representative queries 2-5, trust attestations) for the capability
+  task. The skeleton is a DRAFT that cannot validate as a `RegistryEntry`; only
+  `ManifestSkeleton.author(...)` yields the loadable entry, kept out of the glob'd path until then.
 
-**Verification:** `uv run pytest tests/capabilities/test_registry.py`
+**Verification:** `uv run pytest tests/capabilities/test_registry.py` — 27 passed.
 
-**Dependencies:** None. **Scope:** S.
-**Files:** `src/rag_wright/capabilities/registry.py`, `tests/capabilities/test_registry.py`
+**Dependencies:** T3 (uses a contract type). **Scope:** M. **Status:** done (commit pending).
+**Files:** `src/rag_wright/capabilities/ard.py`, `src/rag_wright/capabilities/registry.py`,
+`tests/capabilities/test_registry.py`, `docs/adr/0003-ard-registration-and-capability-kinds.md`
+**Note:** Review decisions in **ADR-0003** — emit JSON, no `graphwright` dependency; the ADR-0005
+schema is a shared wire-format contract mirrored by deliberate duplication (cross-repo coordination
+point) with a RAG-side conformance test; kind is explicit per capability by the binding rule
+(`mcp_tool` = MCP boundary, `function` = in-process node, `agent_skill` = loaded knowledge); the
+canonical slug set is mirrored from SPEC §5 and enforced; `generation` (FR-C.9) is one capability.
 **Note:** The ARD manifest is the interface to the GraphWright compiler's discovery; the internal
 registry is the interface to the MCP surface (T31). One key (the FR-C name), two consumers.
 
 ### Checkpoint: Contracts complete
-- [ ] All contract tests pass. Identifier schemes fixed and approved. Ready to build on them.
+- [x] All contract tests pass (142 in the suite). Identifier schemes fixed and approved. Phase 3
+  (Contracts) done: T1 identifiers, T2 provenance/confidence, T3 chunk record, T4 ontology, T5
+  extraction seam, T6 registration seam + ARD mirror (ADR-0003). Ready to build on them.
+- Forward notes carried into Phase 4: T8 registry loader normalizes messy EDGAR CIK forms to
+  canonical `EntityId` (from T1 strictness); T24 resolves relationship refs and standalone
+  `EntityMention`s as one mention stream and dedupes the post-resolution self-loop (from T4/T5).
 
 ---
 

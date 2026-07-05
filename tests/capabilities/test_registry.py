@@ -1,0 +1,229 @@
+"""Tests for the capability registration seam and ARD manifest skeleton (T6, FR-S.5, RAC-6).
+
+Two registrations from one key (the FR-C / FR-I / FR-Q capability name):
+- internal: register a built capability by name with its contract (for the MCP surface, T31);
+- ARD: emit a manifest skeleton conforming to GraphWright's RegistryEntry schema (ADR-0005, mirrored
+  in `ard.py` by deliberate duplication) that the compiler discovers.
+
+The tests pin: register/lookup + duplicate/unknown rejection; explicit-kind rule (no default);
+the URN and media-type the skeleton derives; that a partial skeleton is NOT loadable (a draft, kept
+out of the loadable path) and only `author(...)` yields a valid RegistryEntry; and that the mirrored
+schema enforces ADR-0005's invariants so drift is caught in RAG_Wright's own suite.
+"""
+
+import pytest
+from pydantic import ValidationError
+
+from rag_wright.capabilities.ard import (
+    MEDIA_TYPE_BY_KIND,
+    ArdEnvelope,
+    GovernanceBlock,
+    RegistryEntry,
+    ResponseBounds,
+    TrustManifest,
+)
+import re
+
+from rag_wright.capabilities.registry import (
+    CANONICAL_CAPABILITY_SLUGS,
+    CapabilityRegistry,
+    ManifestSkeleton,
+    capability_urn,
+)
+from rag_wright.contracts.chunk import ChunkRecord
+
+
+# --- internal registration (RAC-6) ----------------------------------------------------------
+
+
+def test_register_and_lookup_by_name_returns_contract():
+    reg = CapabilityRegistry()
+    reg.register("hybrid_search", contract=ChunkRecord, kind="mcp_tool")
+    got = reg.get("hybrid_search")
+    assert got.name == "hybrid_search"
+    assert got.contract is ChunkRecord
+    assert got.kind == "mcp_tool"
+
+
+def test_duplicate_registration_is_rejected():
+    reg = CapabilityRegistry()
+    reg.register("embedding", contract=ChunkRecord, kind="function")
+    with pytest.raises(ValueError):
+        reg.register("embedding", contract=ChunkRecord, kind="function")
+
+
+def test_lookup_of_unknown_name_is_rejected():
+    reg = CapabilityRegistry()
+    with pytest.raises(KeyError):
+        reg.get("nope")
+
+
+@pytest.mark.parametrize("bad", ["not_a_capability", "fr-c-3", "Has Space", "hybridsearch", ""])
+def test_register_rejects_non_canonical_name(bad):
+    # The name is the cross-spec join key: only canonical slugs (SPEC section 5) register; a typo,
+    # a requirement id, or an invented name is rejected.
+    reg = CapabilityRegistry()
+    with pytest.raises(ValueError):
+        reg.register(bad, contract=ChunkRecord, kind="function")
+
+
+def test_register_rejects_unknown_kind():
+    reg = CapabilityRegistry()
+    with pytest.raises(ValueError):
+        reg.register("parsing", contract=ChunkRecord, kind="widget")  # not one of the six
+
+
+def test_all_canonical_slugs_are_urn_safe():
+    urn_safe = re.compile(r"^[a-z0-9][a-z0-9_.-]*$")
+    assert all(urn_safe.match(slug) for slug in CANONICAL_CAPABILITY_SLUGS)
+
+
+def test_generation_is_a_single_capability():
+    # FR-C.9 (reasoning + generation + vision-to-text) is one slug, not two.
+    assert "generation" in CANONICAL_CAPABILITY_SLUGS
+    assert "vision_to_text" not in CANONICAL_CAPABILITY_SLUGS
+
+
+# --- explicit kind, no default (RAC-6, review rule) -----------------------------------------
+
+
+def test_kind_is_required_no_default():
+    reg = CapabilityRegistry()
+    with pytest.raises(TypeError):
+        reg.register("parsing", contract=ChunkRecord)  # kind is required
+
+
+# --- ARD skeleton derivation (RAC-6) --------------------------------------------------------
+
+
+def test_skeleton_urn_anchors_on_the_capability_name():
+    reg = CapabilityRegistry()
+    skel = reg.register("graph_query", contract=ChunkRecord, kind="mcp_tool").skeleton
+    assert skel.identifier == capability_urn("graph_query")
+    assert skel.identifier == "urn:air:dreamai:rag_wright:graph_query"
+
+
+def test_callable_kind_gets_media_type_and_response_bounds():
+    reg = CapabilityRegistry()
+    skel = reg.register("reranking", contract=ChunkRecord, kind="function").skeleton
+    assert skel.media_type == MEDIA_TYPE_BY_KIND["function"]
+    assert isinstance(skel.response_bounds, ResponseBounds)
+
+
+def test_mcp_tool_media_type():
+    reg = CapabilityRegistry()
+    skel = reg.register("graph_query", contract=ChunkRecord, kind="mcp_tool").skeleton
+    assert skel.media_type == "application/mcp-server-card+json"
+    assert skel.response_bounds is not None
+
+
+def test_agent_skill_is_loaded_no_response_bounds():
+    reg = CapabilityRegistry()
+    skel = reg.register("rlm_synthesis", contract=ChunkRecord, kind="agent_skill").skeleton
+    assert skel.media_type == "application/ai-skill+md"
+    assert skel.response_bounds is None
+
+
+def test_agent_skill_rejects_response_bounds():
+    reg = CapabilityRegistry()
+    with pytest.raises(ValueError):
+        reg.register(
+            "rlm_chunking",
+            contract=ChunkRecord,
+            kind="agent_skill",
+            response_bounds=ResponseBounds(),
+        )
+
+
+# --- a partial skeleton is a DRAFT, not loadable (review: keep out of the loadable path) -----
+
+
+def test_partial_skeleton_is_not_a_loadable_registry_entry():
+    reg = CapabilityRegistry()
+    skel = reg.register("parsing", contract=ChunkRecord, kind="function").skeleton
+    assert isinstance(skel, ManifestSkeleton)
+    # A skeleton lacks the authored fields (representative queries), so it cannot validate as a
+    # RegistryEntry: a partial can never masquerade as a registered, loadable entry.
+    with pytest.raises(ValidationError):
+        RegistryEntry.model_validate(skel.model_dump(by_alias=True))
+
+
+def test_author_produces_a_valid_loadable_registry_entry():
+    reg = CapabilityRegistry()
+    skel = reg.register("hybrid_search", contract=ChunkRecord, kind="mcp_tool").skeleton
+    entry = skel.author(["find the governing law clause", "what indemnities apply"])
+    assert isinstance(entry, RegistryEntry)
+    assert entry.envelope.identifier == capability_urn("hybrid_search")
+    assert entry.envelope.type == MEDIA_TYPE_BY_KIND["mcp_tool"]
+    assert entry.kind == "mcp_tool"
+    assert entry.response_bounds is not None
+    assert entry.governance.owner  # defaulted
+
+
+@pytest.mark.parametrize("queries", [[], ["only one"], ["a", "b", "c", "d", "e", "f"]])
+def test_author_enforces_two_to_five_representative_queries(queries):
+    reg = CapabilityRegistry()
+    skel = reg.register("reranking", contract=ChunkRecord, kind="function").skeleton
+    with pytest.raises(ValidationError):
+        skel.author(queries)
+
+
+def test_authored_entry_round_trips_through_camelcase_json():
+    reg = CapabilityRegistry()
+    skel = reg.register("embedding", contract=ChunkRecord, kind="function").skeleton
+    entry = skel.author(["embed this chunk", "vectorize the summary"])
+    reloaded = RegistryEntry.model_validate_json(entry.model_dump_json(by_alias=True))
+    assert reloaded == entry
+    # camelCase on the wire (ARD), matching GraphWright's RegistryStore expectations.
+    assert '"representativeQueries"' in entry.model_dump_json(by_alias=True)
+
+
+# --- mirrored ADR-0005 invariants: drift caught in RAG_Wright's own suite --------------------
+
+
+def _envelope(**over):
+    base = dict(
+        identifier="urn:air:dreamai:rag_wright:x",
+        display_name="X",
+        type=MEDIA_TYPE_BY_KIND["mcp_tool"],
+        representative_queries=["q one", "q two"],
+        trust_manifest=TrustManifest(identity="urn:air:dreamai:rag_wright:x", identity_type="domain"),
+    )
+    base.update(over)
+    return ArdEnvelope(**base)
+
+
+def test_envelope_identifier_must_be_an_ard_urn():
+    with pytest.raises(ValidationError):
+        _envelope(identifier="not-a-urn")
+
+
+def test_registry_entry_type_must_match_kind():
+    with pytest.raises(ValidationError):
+        RegistryEntry(
+            kind="mcp_tool",
+            envelope=_envelope(type=MEDIA_TYPE_BY_KIND["function"]),  # mismatched media type
+            response_bounds=ResponseBounds(),
+            governance=GovernanceBlock(owner="dreamai.io"),
+        )
+
+
+def test_callable_kind_requires_response_bounds():
+    with pytest.raises(ValidationError):
+        RegistryEntry(
+            kind="mcp_tool",
+            envelope=_envelope(),
+            response_bounds=None,  # callable must declare bounds
+            governance=GovernanceBlock(owner="dreamai.io"),
+        )
+
+
+def test_requires_closure_only_valid_on_agent_skill():
+    with pytest.raises(ValidationError):
+        RegistryEntry(
+            kind="function",
+            envelope=_envelope(type=MEDIA_TYPE_BY_KIND["function"]),
+            response_bounds=ResponseBounds(),
+            governance=GovernanceBlock(owner="dreamai.io"),
+            requires=["some_other_capability"],
+        )
