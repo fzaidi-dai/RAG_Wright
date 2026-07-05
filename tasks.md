@@ -314,19 +314,37 @@ including some scanned filings so the Docling parse and vision-to-text path is e
 SEC EDGAR entity data. Confirm the Creative Commons Attribution 4.0 (CC BY 4.0) license at
 download (SPEC §13 Phase 0, ADR-0002).
 
-**RAC-7:**
-- [ ] ~100–150 CUAD contracts (~100MB) acquired, including some scanned filings; CC BY 4.0
-  confirmed and recorded.
-- [ ] EDGAR entity data (CIK identifiers, names, aliases) pulled, including the party-and-entity
-  relationships T10 will build questions from.
-- [ ] All artifacts land under the gitignored data directory; nothing corpus-sized is committed.
+**RAC-7 (acquisition; folds `docs/Corpus_Acquisition.md`):**
+- [ ] Two acquisition scripts pull CUAD and EDGAR; all outputs land under gitignored `data/`,
+  nothing corpus-sized committed. CC BY 4.0 confirmed and recorded (attribution).
+- [ ] CUAD: three artifacts pulled — a subset of contract PDFs (Docling parse + vision-to-text
+  path), the master-clauses CSV (41-category expert annotations = extraction/clause-finding ground
+  truth, feeds T9), and the SQuAD JSON (span answers). Source: HuggingFace
+  `theatticusproject/cuad-qa` for SQuAD; GitHub/Zenodo for the PDFs + master-clauses CSV.
+- [ ] Subset is a **deliberate recorded filter step after the full pull** (~100–150 contracts,
+  ~100MB), chosen for archetype coverage — some scanned PDFs, spread across the 25 agreement types,
+  and deliberately multi-party + shared-party contracts — **never a first-N slice**. Selection
+  criteria + resulting manifest are recorded so the subset is reproducible.
+- [ ] EDGAR: `company_tickers.json` pulled once as the registry seed (CIK, ticker, conformed name;
+  feeds T8); `data.sec.gov/submissions/CIK##########.json` fetched for the subset's parties (former
+  names + ticker aliases, for alias handling). Fetch sends a User-Agent (monitored contact) and
+  respects **≤10 req/s with a delay and disk caching** (load-bearing: an IP block would stall the
+  task).
+- [ ] Mechanical name→CIK proposals are **structurally marked UNVERIFIED in the data itself** (a
+  status field or a separate `proposed/` location), so nothing downstream can mistake a proposal
+  for a verified key. Human verification is T10's job and the only path to ground truth.
 
-**Verification:** `uv run python scripts/acquire_corpus.py --check` (manifest counts + license
-note printed; data dir populated, tree stays clean).
+**Verification:** `uv run python scripts/acquire_cuad.py --check` and
+`uv run python scripts/acquire_edgar.py --check` (manifest counts + license note; data dir
+populated, tree stays clean); `uv run pytest tests/scripts/test_acquire.py` (selection, CIK
+normalization, and unverified-marking logic, no network).
 
-**Dependencies:** None. **Scope:** M.
-**Files:** `scripts/acquire_corpus.py`, `data/` (gitignored)
-**Note:** Data task, not a capability. Gates T8, T9, T10.
+**Dependencies:** None. **Scope:** L.
+**Files:** `scripts/acquire_cuad.py`, `scripts/acquire_edgar.py`, `tests/scripts/test_acquire.py`,
+`data/` (gitignored)
+**Note:** Data task, not a capability. Gates T8, T9, T10. Acquisition spec:
+`docs/Corpus_Acquisition.md`. Network path (confirmed): direct fetch into gitignored `data/` with a
+monitored SEC contact User-Agent.
 
 ### Task T8: Ontology and registry derivation
 
@@ -338,11 +356,13 @@ closed-world against this registry (FR-C.8, FR-C.7, §16.2/§16.3, ADR-0002). Th
 **RAC-8:**
 - [ ] Ontology models are populated from the 41 CUAD clause categories plus party/entity types.
 - [ ] The entity registry is built from EDGAR CIK data; CIKs are the canonical `entity_id`s.
-- [ ] **T8 owns EDGAR normalization** (moved here from the T1 contract by review): the loader
-  strips the `CIK` prefix, zero-pads, and validates each raw EDGAR CIK into a canonical `EntityId`.
-  Tests must assert the real messy forms (CIK-prefixed, unpadded, integer) all normalize to the
-  correct canonical `EntityId`, and that genuinely invalid ones are rejected — this is the test
-  that actually proves fragmentation is prevented, and it belongs at the loader boundary.
+- [ ] **T8 owns EDGAR normalization** (moved here from the T1 contract by review; folds
+  `docs/Corpus_Acquisition.md`): CIK is 10-digit zero-padded, which is exactly the canonical
+  `EntityId` form (T1), so the loader's normalization is zero-pad-to-10 then validate against the
+  strict `EntityId` contract. Tests must assert the real messy EDGAR forms (CIK-prefixed, unpadded,
+  integer) all normalize to the correct canonical `EntityId`, and that genuinely invalid ones are
+  rejected — the test that actually proves fragmentation is prevented, at the loader boundary.
+- [ ] The registry is seeded from the T7 `company_tickers.json` + submissions data.
 - [ ] Closed-world lookup by canonical id and by known surface form works.
 
 **Verification:** `uv run pytest tests/ontology/test_derivation.py`
@@ -363,7 +383,8 @@ is built as its own task, T10, deliberately not folded in here.
 
 **RAC-9:**
 - [ ] Golden sets exist for the exact/lexical, semantic, and clause-finding archetypes, grounded
-  in CUAD expert annotations.
+  in CUAD expert annotations — the T7 master-clauses CSV (41-category annotations) and SQuAD span
+  answers feed these directly (`docs/Corpus_Acquisition.md`).
 - [ ] Harness measures recall@k per archetype, text and graph legs separately.
 - [ ] Harness runs green on a tiny fixture before real capabilities exist (measures nothing yet,
   but the plumbing is proven).
@@ -387,6 +408,12 @@ per-source ablation (T32) measurable at all.
 - [ ] Questions require traversal across the EDGAR party-and-entity graph (relational and
   genuine multi-hop, not single-document lookups), with ground-truth answer entities and the
   `entity_id`/`chunk_id` evidence path recorded.
+- [ ] **The name→CIK links are human-verified, not auto-generated** (folds
+  `docs/Corpus_Acquisition.md`): linking a contract's parties to CIKs is itself the entity-resolution
+  problem (FR-C.7), so building the answer key by fuzzy matching and then testing fuzzy matching
+  against it is circular. T7 produces mechanical, UNVERIFIED-marked proposals; **only human-verified
+  matches enter the golden set here** — verification at T10 is the sole path from proposal to ground
+  truth (same human-curated-fixture discipline as the engine's control_level eval).
 - [ ] The set is registered as its own archetype split in the harness (T9), separate from the
   CUAD-annotation sets.
 - [ ] Coverage is enough to measure the graph leg's recall and its per-source ablation loss (T32),
