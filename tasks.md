@@ -18,11 +18,13 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T6** (FR-S.5 / contract use, RAC-6) — capability registration seam + ARD
-  manifest skeleton (ADR-0003; `CapabilityRegistry`, `ManifestSkeleton`, mirrored `RegistryEntry`).
-  **Phase 3 (Contracts) complete: T1–T6 all done.** (T5 `b674e7b`; T4 `c4bd236`; T3 `b2f45bc`.)
-- **Next up:** Phase 4 (Foundations) — **T7** (CUAD + EDGAR corpus acquisition and subset, Phase 0,
-  RAC-7) per the acquisition spec. First Build-phase data task; gates T8, T9, T10.
+- **Last approved:** **T7** (Phase 0, RAC-7) — CUAD + EDGAR corpus acquisition. Two scripts;
+  150-contract subset (10 rasterized image-only; 16 shared-party groups); EDGAR seed + submissions
+  (throttled/cached, warm re-run 0 calls); 23 UNVERIFIED name→CIK proposals. Corpus under gitignored
+  `data/`. (Core `f1e8820`; Phase 3 done through T6.)
+- **Next up:** Phase 4 (Foundations) — **T8** (ontology and registry derivation, FR-C.8 / FR-C.7,
+  RAC-8). Reuses `corpus.edgar.normalize_cik` (the single CIK→`EntityId` point) + the T7
+  `company_tickers.json` seed; populates the T4 ontology from the 41 CUAD categories. Gated on T4, T7.
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -93,7 +95,7 @@ working loop enforces it.
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | done | T1, T2 |
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | done | T2, T4 |
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | done | T3 |
-| T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | in-progress | - |
+| T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | done | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | todo | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | todo | T7 |
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | todo | T7, T9 |
@@ -315,36 +317,35 @@ SEC EDGAR entity data. Confirm the Creative Commons Attribution 4.0 (CC BY 4.0) 
 download (SPEC §13 Phase 0, ADR-0002).
 
 **RAC-7 (acquisition; folds `docs/Corpus_Acquisition.md`):**
-- [ ] Two acquisition scripts pull CUAD and EDGAR; all outputs land under gitignored `data/`,
-  nothing corpus-sized committed. CC BY 4.0 confirmed and recorded (attribution).
-- [ ] CUAD: three artifacts pulled — a subset of contract PDFs (Docling parse + vision-to-text
-  path), the master-clauses CSV (41-category expert annotations = extraction/clause-finding ground
-  truth, feeds T9), and the SQuAD JSON (span answers). Source: HuggingFace
-  `theatticusproject/cuad-qa` for SQuAD; GitHub/Zenodo for the PDFs + master-clauses CSV.
-- [ ] Subset is a **deliberate recorded filter step after the full pull** (~100–150 contracts,
-  ~100MB), chosen for archetype coverage — some scanned PDFs, spread across the 25 agreement types,
-  and deliberately multi-party + shared-party contracts — **never a first-N slice**. Selection
-  criteria + resulting manifest are recorded so the subset is reproducible.
-- [ ] EDGAR: `company_tickers.json` pulled once as the registry seed (CIK, ticker, conformed name;
-  feeds T8); `data.sec.gov/submissions/CIK##########.json` fetched for the subset's parties (former
-  names + ticker aliases, for alias handling). Fetch sends a User-Agent (monitored contact) and
-  respects **≤10 req/s with a delay and disk caching** (load-bearing: an IP block would stall the
-  task).
-- [ ] Mechanical name→CIK proposals are **structurally marked UNVERIFIED in the data itself** (a
-  status field or a separate `proposed/` location), so nothing downstream can mistake a proposal
-  for a verified key. Human verification is T10's job and the only path to ground truth.
+- [x] Two acquisition scripts pull CUAD and EDGAR; all outputs land under gitignored `data/`,
+  nothing corpus-sized committed. CC BY 4.0 confirmed and recorded (attribution in `LICENSE.txt`).
+- [x] CUAD: three artifacts from one pinned snapshot (`zenodo:4595826`, more reproducible than
+  mixing sources) — contract PDFs, master-clauses CSV (41-category annotations, feeds T9), SQuAD
+  JSON. 510 contracts; pool 501 (9 `Filename`↔PDF mismatches skipped).
+- [x] Subset is a **deliberate recorded filter after the full pull** (150 contracts, 28 agreement
+  types, 29.3MB), coverage-driven — **not a first-N slice** — with multi-party (121) and
+  shared-party (16 groups / 38 contracts) coverage. **CUAD ships no image-only PDFs**, so 10
+  selected contracts are deterministically **rasterized to true image-only PDFs** (poppler +
+  Pillow, verified 0 text chars) to exercise the vision-to-text path (Option A). Manifest + criteria
+  + `scanned.json` recorded → reproducible.
+- [x] EDGAR: `company_tickers.json` seed (10,415 companies; feeds T8) + submissions for the
+  subset's proposed parties. Fetch sends a monitored User-Agent and respects **≤10 req/s aggregate
+  sliding-window + durable disk cache** — verified: cold run 24 network calls, warm re-run **0**.
+- [x] Mechanical name→CIK proposals are **structurally UNVERIFIED** (explicit `status` field +
+  separate `data/edgar/proposed/` location). 23/323 resolved (high-precision), 300 unresolved
+  (expected private/variant entities; carries `UNRESOLVED_NOTE`). Human verification is T10's job.
 
 **Verification:** `uv run python scripts/acquire_cuad.py --check` and
-`uv run python scripts/acquire_edgar.py --check` (manifest counts + license note; data dir
-populated, tree stays clean); `uv run pytest tests/scripts/test_acquire.py` (selection, CIK
-normalization, and unverified-marking logic, no network).
+`uv run python scripts/acquire_edgar.py --check` (coverage + license printed, no writes);
+`uv run pytest tests/corpus/` — 37 passed.
 
-**Dependencies:** None. **Scope:** L.
-**Files:** `scripts/acquire_cuad.py`, `scripts/acquire_edgar.py`, `tests/scripts/test_acquire.py`,
-`data/` (gitignored)
+**Dependencies:** None. **Scope:** L. **Status:** done.
+**Files:** `scripts/acquire_cuad.py`, `scripts/acquire_edgar.py`,
+`src/rag_wright/corpus/{selection,http,edgar,cuad}.py`, `tests/corpus/`, `data/` (gitignored).
 **Note:** Data task, not a capability. Gates T8, T9, T10. Acquisition spec:
-`docs/Corpus_Acquisition.md`. Network path (confirmed): direct fetch into gitignored `data/` with a
-monitored SEC contact User-Agent.
+`docs/Corpus_Acquisition.md`. Core committed `f1e8820`; CLIs + live run complete the task. Real-data
+finding: CUAD has no image-only PDFs (resolved by rasterizing 10); conservative matching is
+high-precision/low-recall by design (see T10 unresolved-set note).
 
 ### Task T8: Ontology and registry derivation
 
