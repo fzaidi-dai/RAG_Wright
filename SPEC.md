@@ -57,8 +57,16 @@ This is the shared vocabulary. Every capability an orchestration brief expects t
 - **FR-C.6 Graph extraction.** A hybrid stack: docling-graph Pydantic-contract extraction for schema entities, a lightweight NER-plus-dependency-plus-OpenIE path for the bulk, and an open-ended language-model escalation for hard cases, all conforming to one ontology.
 - **FR-C.7 Entity resolution.** Resolves extracted mentions to the registry's canonical `entity_id` (closed-world against the known set), so the graph does not fragment across surface-form variants.
 - **FR-C.8 Ontology and registry derivation.** Pulls the entity and relationship types (as Pydantic models) and the populated entity registry from the Data Catalog.
-- **FR-C.9 Reasoning, generation, and vision-to-text (Gemma 4).** The answer generator, the image-and-scan-to-text step at ingestion, and the model inside RLM.
-- **FR-C.10 RLM skill.** An authored skill (a SKILL.md with instructions, built as ordinary software in Phase 1, not provided by any build tool) that teaches the divide-and-conquer method: load a working set into an interpreter, slice and dispatch the work in code, and synthesize the results. It is used by two capabilities: the RLM chunking capability (ingestion) and the RLM synthesis capability (query). It is a required capability wherever a graph binds it.
+- **FR-C.9 Reasoning, generation, and vision-to-text (Gemma 4).** The answer generator, the image-and-scan-to-text step at ingestion, and the model inside RLM. Registered as one capability (the vision-to-text and answer-generation uses share the same model capability and are bound at whichever node needs them).
+- **FR-C.10 RLM skill.** An authored skill (a SKILL.md with instructions, built as ordinary software in Phase 1, not provided by any build tool) that teaches the divide-and-conquer method: load a working set into an interpreter, slice and dispatch the work in code, and synthesize the results. The method is applied by two registered capabilities: the RLM chunking capability (ingestion) and the RLM synthesis capability (query). The authored method may itself register as a shared skill that those two require (an `agent_skill` `requires` closure), so the method is loaded once and reused. It is a required capability wherever a graph binds it.
+
+### FR-C canonical slugs (the cross-spec join key)
+
+Each capability is registered under a canonical slug, and that slug is the join key: it is the name the built capability registers under, and the name an orchestration brief uses when it must bind a specific capability. The slug is the semantic capability name, not the requirement id (use `hybrid_search`, never `fr-c-3`), so it survives spec renumbering. The registered capabilities and their slugs:
+
+`parsing` (FR-C.1), `embedding` (FR-C.2), `hybrid_search` (FR-C.3), `reranking` (FR-C.4), `graph_query` (FR-C.5), `graph_extraction` (FR-C.6), `entity_resolution` (FR-C.7), `ontology_registry_derivation` (FR-C.8), `generation` (FR-C.9), `fusion` (the union-and-deduplicate capability, FR-Q.4), `rlm_chunking` and `rlm_synthesis` (the two capabilities that apply the RLM skill, FR-C.10 with FR-I.1 and FR-Q.5). If the authored RLM method is registered as its own shared skill, its slug is `rlm_method`, required by `rlm_chunking` and `rlm_synthesis`.
+
+The Orchestration Spec references most capabilities behaviorally (resolved by discovery against representative queries) and names only the must-bind capabilities explicitly; those explicit names must be exactly these slugs. Registration URNs embed the slug as the final segment (`urn:air:dreamai:rag_wright:<slug>`).
 
 ## 6. Ingestion-side capability requirements
 
