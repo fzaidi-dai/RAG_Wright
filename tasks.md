@@ -18,12 +18,12 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T4** (FR-C.8, RAC-4) — ontology and extraction-target models
-  (`ClauseCategory` 41 authoritative; `EntityType`/`RelationshipType` provisional seed, T8 owns
-  membership; `EntityNode`, `ClauseFact`, `RelationshipFact` directed with pre-resolution refs).
-  (T3 chunk record `b2f45bc`; T2 `49bfb68`; T1 `22ea66c`.)
-- **Next up:** Phase 3 (Contracts) — **T5** (graph extraction contract with a real OpenIE extractor
-  seam, FR-C.6 / FR-I.4, RAC-5).
+- **Last approved:** **T5** (FR-C.6 / FR-I.4, RAC-5) — graph extraction contract + `Extractor`
+  seam (`ExtractionResult`, `run_extractors`, typed `EntityMention`). Data-shape contracts (T1–T5)
+  are done. (T4 `c4bd236`; T3 `b2f45bc`; T2 `49bfb68`; T1 `22ea66c`.)
+- **Next up:** Phase 3 (Contracts) — **T6** (capability registration seam, FR-S.5 / contract use,
+  RAC-6), the remaining Contracts-phase task (internal registration + the ARD manifest skeleton).
+  **Phase 3 completes at T6, not T5**; T6 then gates the Foundations build tasks.
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -92,7 +92,7 @@ working loop enforces it.
 | T2 | Provenance and confidence contracts | 3 Contracts | FR-S.4 | done | T1 |
 | T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | done | T1, T2 |
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | done | T1, T2 |
-| T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | todo | T2, T4 |
+| T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | done | T2, T4 |
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | todo | - |
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | todo | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | todo | T4, T7 |
@@ -239,18 +239,26 @@ TODO**. Adding the deferred Open Information Extraction (OpenIE) path later plug
 into the seam without reopening or editing the capability (plan §1 note, FR-C.6, FR-I.4).
 
 **RAC-5:**
-- [ ] Extraction result conforms to the ontology and carries originating `chunk_id` + confidence.
-- [ ] The contract defines an extractor interface (a real abstraction the capability iterates
-  over), so a new extractor is registered against it without changing existing code.
-- [ ] A stub second extractor is bound behind the seam in test and its output validates, proving
-  the seam is load-bearing (not a placeholder).
+- [x] Extraction result conforms to the ontology and carries originating `chunk_id` + confidence.
+  `ExtractionResult` bundles `ClauseFact`/`RelationshipFact` (T4, provenance+confidence) plus typed
+  `EntityMention`s, and a validator anchors every fact to the result's `chunk_id` (FR-I.4).
+- [x] The contract defines an extractor interface (a real abstraction the capability iterates
+  over): `Extractor` is a `@runtime_checkable Protocol`; `run_extractors(...)` iterates a list.
+  A new extractor (OpenIE) is added by appending to that list — no change to the seam.
+- [x] A stub second extractor is bound behind the seam in test and its output validates: two stubs
+  (`_ClauseStub` ships-first, `_OpenIEStub` the future path) merge with no change to
+  `run_extractors`/`ExtractionResult`, proving the seam is load-bearing.
 
-**Verification:** `uv run pytest tests/contracts/test_extraction.py`
+**Verification:** `uv run pytest tests/contracts/test_extraction.py` — 11 passed.
 
-**Dependencies:** T2, T4. **Scope:** S.
+**Dependencies:** T2, T4. **Scope:** S. **Status:** done (commit pending).
 **Files:** `src/rag_wright/contracts/extraction.py`, `tests/contracts/test_extraction.py`
-**Note:** Adding the OpenIE dependency itself is ask-first (ADR-0001, risk 10). The seam is built
-now so that addition is a plug-in, not a reopen.
+**Note:** Adding the OpenIE dependency itself is ask-first (ADR-0001, risk 10); the seam makes it a
+plug-in, not a reopen. Review decisions: keep typed `EntityMention` (captures standalone entities,
+distinct from T3's retrieval-metadata mentions); `Protocol` over `abc.ABC` (conform-without-inherit)
+— `runtime_checkable` isinstance is a presence check only, output conformance is enforced by
+`ExtractionResult` validation. `EntityMention.text` and relationship `source_ref`/`target_ref` are
+the same surface-form notion → T24 resolves both channels as one stream (see T24).
 
 ### Task T6: Capability registration seam
 
@@ -739,6 +747,12 @@ at this task.
   `RelationshipFact`'s `source_ref`/`target_ref` to canonical `entity_id`s, a relationship whose two
   refs resolve to the *same* `entity_id` is collapsed/dropped as a self-loop. This belongs here, not
   in the T4 fact contract, because two distinct mentions can legitimately resolve to one entity.
+- [ ] **Resolve both mention channels as one stream (from T5):** the standalone
+  `EntityMention`s and the `RelationshipFact` `source_ref`/`target_ref` refs are the same
+  surface-form notion (two channels for the same entities). Resolution must dedupe *across* both, so
+  an entity appearing as both a standalone mention and a relationship endpoint resolves to a single
+  node. Resolving the channels independently is where the duplicate-node fragmentation would occur —
+  build the dedup across channels here rather than discover the double node in the graph eval.
 - [ ] The chosen matching strategy is recorded (ADR).
 - [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
   under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
