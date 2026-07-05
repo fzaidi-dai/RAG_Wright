@@ -18,10 +18,10 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T2** (FR-S.4, RAC-2) — provenance and confidence contracts (`ConfidenceTag`,
-  `Provenance`, `GraphFact`). `source_doc_id` kept explicit; consistency validator fires on all
-  construction/deserialization paths. (T1: shared identifier contracts, done, `22ea66c`.)
-- **Next up:** Phase 3 (Contracts) — **T3** (chunk record contract, FR-I.3 / FR-S.1, RAC-3).
+- **Last approved:** **T3** (FR-I.3 / FR-S.1, RAC-3) — chunk record contract (`ChunkRecord`,
+  `BGE_M3_DENSE_DIM`). Vector shapes declared for the store; extracted field named `entity_mentions`
+  (unresolved). (T1 identifiers `22ea66c`; T2 provenance `49bfb68`.)
+- **Next up:** Phase 3 (Contracts) — **T4** (ontology and extraction-target models, FR-C.8, RAC-4).
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -88,7 +88,7 @@ working loop enforces it.
 |---|---|---|---|---|---|
 | T1 | Shared identifier contracts (`chunk_id`, `entity_id`) | 3 Contracts | FR-S.2, FR-S.3 | done | - |
 | T2 | Provenance and confidence contracts | 3 Contracts | FR-S.4 | done | T1 |
-| T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | todo | T1, T2 |
+| T3 | Chunk record contract | 3 Contracts | FR-I.3, FR-S.1 | done | T1, T2 |
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | todo | - |
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | todo | T2, T4 |
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | todo | - |
@@ -183,14 +183,23 @@ vector, the sparse full-text vector, keywords, entities, and source metadata (FR
 record per chunk for the single store (FR-S.1).
 
 **RAC-3:**
-- [ ] `ChunkRecord` carries `chunk_id`, summary, dense summary vector, sparse full-text vector,
-  keywords, entities, source metadata, and validates each.
-- [ ] Vector field shapes/types are declared so the store schema (T13) can bind them.
+- [x] `ChunkRecord` carries `chunk_id`, summary, dense summary vector, sparse full-text vector,
+  keywords, `entity_mentions`, source metadata, and validates each. No raw full-text field (FR-I.3
+  enumerates summary + vectors + metadata; full text lives in the parse manifest keyed by
+  `chunk_id`, FR-I.1).
+- [x] Vector field shapes/types are declared so the store schema (T13) can bind them:
+  `BGE_M3_DENSE_DIM = 1024` (single authoritative dense dimension), `dense_vector` fixed length +
+  finite; `sparse_vector: dict[int, float]` (store-bindable token-id index -> weight) coerced from
+  BGE-M3's string keys, non-integer keys rejected (not dropped); `source_metadata` constrained to
+  JSON scalars for filterability (FR-Q.1).
 
-**Verification:** `uv run pytest tests/contracts/test_chunk_record.py`
+**Verification:** `uv run pytest tests/contracts/test_chunk_record.py` — 27 passed.
 
-**Dependencies:** T1, T2. **Scope:** S.
+**Dependencies:** T1, T2. **Scope:** S. **Status:** done (commit pending).
 **Files:** `src/rag_wright/contracts/chunk.py`, `tests/contracts/test_chunk_record.py`
+**Note:** By review decision the extracted-entities field is named `entity_mentions` (unresolved
+surface forms for retrieval metadata), NOT `entities` — it must not be joined to graph `entity_id`s
+(resolution is FR-C.7 / T24); the name kills the fragmentation ambiguity at the seam.
 
 ### Task T4: Ontology and extraction-target models
 
@@ -564,8 +573,12 @@ decoupling property. Grounded surface: `FlagEmbedding` `M3Embedder`.
 
 **RAC-19:**
 - [ ] Dense vector produced over the summary; native sparse vector produced over the full chunk
-  text, from the one BGE-M3 model.
-- [ ] Output shapes match the chunk record contract (T3) and the store index config (T13).
+  text, from the one BGE-M3 model. **The full chunk text is read from the parse manifest (FR-I.1),
+  not from the chunk record** — the record holds only the summary + vectors (T3 decision), so the
+  sparse-over-full-text leg must source the text from the manifest keyed by `chunk_id`.
+- [ ] Output shapes match the chunk record contract (T3) and the store index config (T13):
+  dense length `BGE_M3_DENSE_DIM` (1024); sparse emitted as `dict[int, float]` (int token-id keys,
+  converting BGE-M3's `Dict[str, float]` string keys).
 - [ ] **FR-I.6 decoupling property:** the capability is built to be called concurrently and is
   non-blocking, its GPU calls go through a poolable inference boundary (not a hardcoded
   synchronous single-call), and it applies backpressure at that boundary, so bulk mode can
