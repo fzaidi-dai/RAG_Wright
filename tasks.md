@@ -93,7 +93,7 @@ working loop enforces it.
 | T4 | Ontology and extraction-target models | 3 Contracts | FR-C.8 | done | T1, T2 |
 | T5 | Graph extraction contract (real OpenIE extension seam) | 3 Contracts | FR-C.6, FR-I.4 | done | T2, T4 |
 | T6 | Capability registration seam | 3 Contracts | FR-S.5, contract use | done | T3 |
-| T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | todo | - |
+| T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | in-progress | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | todo | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | todo | T7 |
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | todo | T7, T9 |
@@ -424,6 +424,12 @@ per-source ablation (T32) measurable at all.
 **Dependencies:** T7, T9. **Scope:** M.
 **Files:** `eval/multihop.py`, `eval/golden/relational/`, `eval/test_multihop_set.py`
 **Note:** The entire reason the ArcadeDB graph layer exists is measured here. Do not fold into T9.
+**Unresolved-set note (from T7):** the T7 name→CIK proposals are conservative (normalized
+conformed-name only), so the UNRESOLVED set is *expected* to contain real entities — private
+companies/individuals (absent from EDGAR) and name variants (subsidiaries, former names, DBAs). The
+verifier must not read "unresolved" as "not an entity"; graph entity coverage is public-filer-centric
+(FR-C.7), a property to keep in mind when interpreting multi-hop results. See
+`rag_wright.corpus.edgar.UNRESOLVED_NOTE`.
 
 ### Task T11: Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning)
 
