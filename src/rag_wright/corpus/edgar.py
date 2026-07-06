@@ -92,6 +92,49 @@ class MatchCoverage(BaseModel):
     unresolved: list[str]
 
 
+class LooseCandidate(BaseModel):
+    """A looser token-overlap CIK candidate, shown WITH its evidence for human confirmation.
+
+    A proposal to eyeball, never an auto-commit: the registry name and the tokens it matched on are
+    surfaced so a common-token collision ("Federated", "Premier", "Excite") is caught on the
+    evidence, not confirmed on a bare CIK. Always UNVERIFIED until a human approves it.
+    """
+
+    proposed_cik: str
+    registry_name: str  # the EDGAR conformed name matched (the evidence)
+    matched_tokens: list[str]
+    score: float  # Jaccard token overlap
+    status: MatchStatus = MatchStatus.UNVERIFIED
+
+
+def loose_cik_candidates(
+    name: str, company_tickers: list[dict], *, top_n: int = 3, min_overlap: float = 0.34
+) -> list[LooseCandidate]:
+    """Token-overlap CIK candidates for a mention, ranked, each carrying its match evidence."""
+    query = set(normalize_name(name).split())
+    if not query:
+        return []
+    scored: list[tuple[float, set[str], dict]] = []
+    for row in company_tickers:
+        title_tokens = set(normalize_name(row["title"]).split())
+        overlap = query & title_tokens
+        if not overlap:
+            continue
+        jaccard = len(overlap) / len(query | title_tokens)
+        if jaccard >= min_overlap:
+            scored.append((jaccard, overlap, row))
+    scored.sort(key=lambda s: (-s[0], s[2]["title"]))
+    return [
+        LooseCandidate(
+            proposed_cik=normalize_cik(row["cik_str"]).value,
+            registry_name=row["title"],
+            matched_tokens=sorted(overlap),
+            score=round(jaccard, 3),
+        )
+        for jaccard, overlap, row in scored[:top_n]
+    ]
+
+
 def propose_matches(
     party_names: list[str], company_tickers: list[dict]
 ) -> MatchCoverage:
