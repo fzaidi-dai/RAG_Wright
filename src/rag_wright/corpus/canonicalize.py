@@ -28,6 +28,13 @@ _LEGAL_SUFFIX = re.compile(
 )
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _PLACEHOLDER = re.compile(r"<<|>>|_{2,}|\bxxx+\b|\benter\b|company name|\[\s*\]", re.IGNORECASE)
+# Contract party-definition clause fragments ("...and together with Buyer the Buyer Entities"), not
+# entity names. A mention carrying one of these is a role phrase, not a company.
+_ROLE_PHRASE = re.compile(
+    r"\b(together with|buyer entit|seller entit|the buyer|the seller|buyer the|seller the|"
+    r"the company and|and together|the parties|collectively)\b",
+    re.IGNORECASE,
+)
 
 # Bare over-broad / role words that are not entities on their own (a key equal to one of these,
 # after suffix stripping, is a role label or an over-broad match, not a company).
@@ -55,7 +62,7 @@ def normalize_entity_name(name: str) -> str:
 def is_entity(name: str) -> bool:
     """Reject non-entities: template placeholders, role artifacts, and bare over-broad tokens."""
     stripped = name.strip().strip("\"'()[]")
-    if not stripped or _PLACEHOLDER.search(name):
+    if not stripped or _PLACEHOLDER.search(name) or _ROLE_PHRASE.search(name):
         return False
     if stripped.lower().startswith("collectively"):
         return False

@@ -34,7 +34,8 @@ def test_does_not_over_strip_names_ending_in_suffix_letters():
 
 @pytest.mark.parametrize(
     "noise",
-    ["Bank", "<<enter Company Name>>", '(collectively the "Company").', "Company", "Group", "Holdings", ""],
+    ["Bank", "<<enter Company Name>>", '(collectively the "Company").', "Company", "Group", "Holdings", "",
+     "the Company and together with Buyer the Buyer Entities", "together with Seller"],
 )
 def test_rejects_non_entities(noise):
     assert not is_entity(noise)
