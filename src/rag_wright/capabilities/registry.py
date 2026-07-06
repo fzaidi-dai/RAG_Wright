@@ -65,7 +65,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "reranking",  # FR-C.4
         "graph_query",  # FR-C.5
         "graph_extraction",  # FR-C.6
-        "entity_resolution",  # FR-C.7
+        "entity_disambiguation",  # FR-C.7 (canonicalize: normalize/reject/cluster; the T23b stage)
+        "entity_resolution",  # FR-C.7 (closed-world linking to EDGAR CIK)
         "ontology_registry_derivation",  # FR-C.8
         "generation",  # FR-C.9 (reasoning + generation + vision-to-text: one capability)
         "fusion",  # FR-Q.4
