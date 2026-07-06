@@ -18,6 +18,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
 from rag_wright.corpus.cuad import (
     RASTER_DPI,
     load_contract_metadata,
@@ -146,26 +147,36 @@ def main() -> None:
     ap.add_argument("--refresh-metadata", action="store_true", help="rebuild the scanned/metadata cache")
     ap.add_argument("--target-max", type=int, default=150)
     ap.add_argument("--num-scanned", type=int, default=10, help="contracts to rasterize image-only")
-    ap.add_argument("--min-shared-party", type=int, default=30)
+    ap.add_argument("--min-shared-party", type=int, default=90, help="relational-density bias (Option C)")
     ap.add_argument("--min-multi-party", type=int, default=30)
     args = ap.parse_args()
 
     ensure_downloaded()
     ensure_extracted()
     metas = load_or_build_metadata(args.refresh_metadata)
+    # T23b method (used here under human verification, Option C): drop noise mentions and cluster
+    # legal-suffix/whitespace variants to canonical keys, so shared-party density reflects real
+    # entities (a merged Bank of America is one party), not fragmented surface forms.
+    clean_metas = [
+        m.model_copy(update={"parties": [p for p in m.parties if is_entity(p)]}) for m in metas
+    ]
+    canon_metas = [
+        m.model_copy(update={"parties": sorted({normalize_entity_name(p) for p in m.parties})})
+        for m in clean_metas
+    ]
     criteria = SelectionCriteria(
         target_max=args.target_max,
         min_scanned=0,  # CUAD ships no image-only PDFs; scanned coverage is synthesized post-select
         min_shared_party_contracts=args.min_shared_party,
         min_multi_party=args.min_multi_party,
     )
-    manifest = select_subset(metas, criteria, source_snapshot=SOURCE_SNAPSHOT)
-    synthetic = choose_synthetic_scanned(manifest, metas, args.num_scanned)
-    print_summary(manifest, metas, synthetic)
+    manifest = select_subset(canon_metas, criteria, source_snapshot=SOURCE_SNAPSHOT)
+    synthetic = choose_synthetic_scanned(manifest, clean_metas, args.num_scanned)
+    print_summary(manifest, clean_metas, synthetic)
     if args.check:
         print("\n[cuad] --check: no files written.")
     else:
-        write_subset(manifest, metas, synthetic)
+        write_subset(manifest, clean_metas, synthetic)
 
 
 if __name__ == "__main__":

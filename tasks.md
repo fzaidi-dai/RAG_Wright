@@ -77,7 +77,7 @@ Definition of done. Every task that builds a discoverable, bound capability carr
 acceptance bullet appended below and is `done` only when its ARD manifest is authored
 (representative queries filled) and loads under `RegistryStore(root)` with no `RegistryLoadError`.
 This covers the RLM skill (T15) and each FR-C / FR-I / FR-Q capability that is its own bound graph
-node (T16, T17, T19, T20, T21, T22, T23, T24, T25, T26, T27, T28, T29). It does not cover the
+node (T16, T17, T19, T20, T21, T22, T23, T23b, T24, T25, T26, T27, T28, T29). It does not cover the
 contracts, the seams (T11, T13), the foundation tests, the corpus and eval tasks, the T18
 escalation path (it extends the T17 capability, not a new one), the T30 caching optimization, or
 the T31 MCP surface. Stated once here as the source of its meaning, repeated per task so the
@@ -114,7 +114,8 @@ working loop enforces it.
 | T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | todo | T21 |
 | **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | pending | T21, T22, T9, T10 |
 | T23 | Graph extraction (contract + spaCy NER/dep; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | todo | T5, T8, T16 |
-| T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | todo | T8, T23 |
+| T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | todo | T23 |
+| T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | todo | T8, T23b |
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | todo | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | todo | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | todo | T22, T26 |
@@ -790,12 +791,54 @@ decoupling property.
 `tests/capabilities/test_graph_extraction.py`
 **Note:** spaCy ships first; OpenIE slots behind the same extractor seam later (ADR-0001).
 
+### Task T23b: Entity disambiguation and canonicalization (normalize, reject, cluster)
+
+**Description:** Between recognition (T23) and linking (T24), turn raw extracted party and entity
+mentions into canonical mention clusters: normalize surface forms (legal-suffix and
+whitespace/punctuation canonicalization), reject non-entities (template placeholders, role
+artifacts, over-broad or degenerate matches), and cluster the survivors that denote one real-world
+entity (blocking plus similarity). The output is a set of canonical clusters, each a proposal a
+human verifies, that T24 then links to an EDGAR CIK. This is the canonicalization stage FR-C.7
+resolution presupposes, and it keeps human name-to-CIK verification (SPEC §14) scaling with entity
+count, not mention count. Full coreference (pronouns, definite descriptions) is deferred behind a
+real seam, the same discipline as OpenIE at T5.
+
+**RAC-23b:**
+- [ ] Normalization: legal-suffix and whitespace/punctuation variants of one name collapse to a
+  single canonical form, deterministically (e.g., "Bank of America", "Bank of America, N.A.",
+  "Bank of America, N. A" collapse to one form).
+- [ ] Rejection filter: template placeholders (for example "<<enter Company Name>>"), role artifacts
+  (for example "(collectively the \"Company\")"), and over-broad or degenerate matches (for example
+  bare "Bank") are rejected and never reach T24.
+- [ ] Clustering: mentions denoting the same real-world entity are grouped by blocking plus
+  similarity into candidate clusters; cluster precision and recall are measured on a small labeled
+  fixture drawn from the T7 subset.
+- [ ] Output clusters conform to the extraction and ontology contracts (T4, T5), carry `chunk_id`
+  provenance and confidence (T2), and are shaped as proposals for human verification, not
+  auto-committed merges.
+- [ ] The full-coreference path is a real seam (an interface additional resolvers bind), deferred,
+  with a stub bound behind it in test proving the seam is load-bearing (mirrors T5, risk 10).
+- [ ] Registered under the mention disambiguation capability.
+- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
+  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
+  representative query.
+
+**Verification:** `uv run pytest tests/capabilities/test_disambiguation.py`
+
+**Dependencies:** T23. **Scope:** M.
+**Files:** `src/rag_wright/capabilities/disambiguation.py`,
+`tests/capabilities/test_disambiguation.py`
+**Note:** Recognition (T23) and linking (T24) already existed; this fills the canonicalization gap
+between them that the T10 data exposed (Bank-of-America variant fragmentation, template and
+role-artifact noise). It converts the human from cluster generator to proposal verifier, which is
+what makes the ground-truth discipline scale. Folded under FR-C.7 in the coverage map; see the SPEC
+note below. **The normalize/reject/cluster rules were first built and human-verified at T10** in
+`src/rag_wright/corpus/canonicalize.py` (normalize_entity_name / is_entity / cluster_entities, 17
+tests); T23b hardens them into the capability behind the extractor/coreference seam.
+
 ### Task T24: Entity resolution (closed-world to EDGAR CIK)
 
-**Description:** Resolve extracted mentions to the registry's canonical `entity_id` (EDGAR CIK),
-closed-world against the known set, so the graph does not fragment across surface-form variants
-(FR-C.7). Decide and record the matching strategy (exact / fuzzy / embedding / LLM-assisted, §16.3)
-at this task.
+Description: Resolve the canonical mention clusters from T23b to the registry's canonical entity_id (EDGAR CIK), closed-world against the known set (FR-C.7). Surface-form fragmentation is handled upstream at T23b, so this task links a clean cluster to a CIK rather than fighting variants. Decide and record the matching strategy (exact / fuzzy / embedding / LLM-assisted, §16.3) at this task.
 
 **RAC-24:**
 - [ ] A known mention resolves to the correct EDGAR CIK `entity_id`; an unknown mention is handled
@@ -818,7 +861,7 @@ at this task.
 
 **Verification:** `uv run pytest tests/capabilities/test_entity_resolution.py`
 
-**Dependencies:** T8, T23. **Scope:** M.
+**Dependencies:** T8, T23b. **Scope:** M.
 **Files:** `src/rag_wright/capabilities/entity_resolution.py`,
 `tests/capabilities/test_entity_resolution.py`, `docs/adr/000X-entity-resolution.md`
 **Note:** Resolves §16.3 matching strategy. Fragmentation is risk 5.
@@ -1017,7 +1060,7 @@ Every spec requirement traces to a task (or is explicitly out of scope / compile
 | FR-C.4 reranking | T22 |
 | FR-C.5 graph query | T26 |
 | FR-C.6 graph extraction | T5, T23 |
-| FR-C.7 entity resolution | T8, T24 |
+| FR-C.7 entity resolution (canonicalization + linking) | T8, T23b, T24 |
 | FR-C.8 ontology/registry derivation | T4, T8 |
 | FR-C.9 reasoning/generation/vision-to-text | T29 |
 | FR-C.10 RLM skill | T15 |
@@ -1044,8 +1087,7 @@ Every spec requirement traces to a task (or is explicitly out of scope / compile
 
 De-risked early by foundation tests: risk 1 (ArcadeDB recall) by T14/GATE-2; risk 3 (structured
 output on open models) by T12 on DeepSeek V4 Pro. Risk 2 (arcadedb-python v0.x) is mitigated by
-grounding every call (T13, T21, T25, T26). Risk 4 (chunking determinism) is tested in T17. Risk 5
-(entity-resolution fragmentation) is measured in T24. Risk 7 (identifier schemes) fixed at T1.
+grounding every call (T13, T21, T25, T26). Risk 4 (chunking determinism) is tested in T17. Risk 5 (entity-resolution fragmentation) is addressed at T23b (canonicalization) and measured at T23b and T24. Risk 7 (identifier schemes) fixed at T1.
 Risk 8 (summary-miss) is designed into T19 and tested there and at T32. Risk 9
 (citation/abstention) is enforced at T29. Risk 10 (OpenIE undecided) is deferred behind the T5
 extractor seam.
