@@ -27,7 +27,16 @@ _LEGAL_SUFFIX = re.compile(
     re.IGNORECASE,
 )
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_APOSTROPHE = re.compile(r"['’‘`]")  # so "Stremick's" == "Stremicks"
 _PLACEHOLDER = re.compile(r"<<|>>|_{2,}|\bxxx+\b|\benter\b|company name|\[\s*\]", re.IGNORECASE)
+# Alias clause markers: everything from the marker on is an alias, not part of the legal name, so
+# "Acme Inc. d/b/a Brand" -> "Acme Inc." and a mention that is only an alias clause ("formerly known
+# as Tradeum, Inc. which d/b/a VerticalNet Solutions") strips to empty and is rejected.
+_ALIAS_MARKER = re.compile(
+    r"\b(formerly known as|doing business as|also known as|"
+    r"f\s*/?\s*k\s*/?\s*a|d\s*/?\s*b\s*/?\s*a|a\s*/?\s*k\s*/?\s*a)\b",
+    re.IGNORECASE,
+)
 # Contract party-definition clause fragments ("...and together with Buyer the Buyer Entities"), not
 # entity names. A mention carrying one of these is a role phrase, not a company.
 _ROLE_PHRASE = re.compile(
@@ -44,14 +53,26 @@ _OVERBROAD = frozenset(
         "supplier", "licensor", "licensee", "customer", "client", "contractor", "agent", "lender",
         "borrower", "guarantor", "corporation", "corp", "trust", "group", "holdings", "holding",
         "affiliate", "affiliates", "subsidiary", "the company", "the parties",
+        # bare generic-token fragments that are not entities on their own
+        "services", "solutions", "systems", "technologies", "technology", "international",
+        "enterprises", "industries", "communications", "networks", "media", "capital",
+        "management", "ventures", "partners", "associates", "advisors", "advisory", "consulting",
+        "worldwide", "global", "products",
     }
 )
+
+
+def _strip_alias_clause(name: str) -> str:
+    """Cut an alias clause ('... d/b/a X', '... formerly known as Y'), keeping the name before it."""
+    match = _ALIAS_MARKER.search(name)
+    return name[: match.start()].strip(" ,;(") if match else name
 
 
 def normalize_entity_name(name: str) -> str:
     """Clustering key: lowercase, surrounding quotes/parens and legal suffixes stripped, whitespace
     collapsed. Merges `Bank of America`, `Bank of America, N.A.`, `Bank of America, N. A`."""
-    text = name.strip().strip("\"'()[]").lower()
+    text = _strip_alias_clause(name).strip().strip("\"'()[]").lower()
+    text = _APOSTROPHE.sub("", text)  # possessive: "stremick's" -> "stremicks"
     prev = None
     while prev != text:  # strip stacked suffixes ("co., ltd.")
         prev = text

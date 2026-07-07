@@ -63,3 +63,34 @@ def test_cluster_merges_variants_into_one_entity():
     assert set(by_key) == {"bank of america", "scansource"}  # 2 entities, noise dropped
     assert len(by_key["bank of america"].variants) == 3
     assert by_key["bank of america"].representative == "Bank of America, N.A."  # longest form
+
+
+# --- T10-surfaced hardening: possessives, bare generics, alias clauses -----------------------
+
+
+def test_possessive_apostrophe_variants_merge():
+    assert normalize_entity_name("Stremick's Heritage Foods, LLC") == normalize_entity_name(
+        "Stremicks Heritage Foods, LLC"
+    )
+    assert normalize_entity_name("Stremick's Heritage Foods, LLC") == "stremicks heritage foods"
+
+
+@pytest.mark.parametrize("bare", ["Services", "Solutions", "Systems", "International", "Technologies"])
+def test_rejects_bare_generic_token_fragments(bare):
+    assert not is_entity(bare)
+
+
+def test_keeps_generic_token_inside_a_real_name():
+    assert is_entity("VerticalNet Solutions")
+    assert is_entity("Cisco Systems, Inc.")
+
+
+def test_alias_clause_recovers_name_before_marker():
+    assert normalize_entity_name("Acme Widgets Inc. d/b/a AcmeBrand") == "acme widgets"
+    assert is_entity("Acme Widgets Inc. d/b/a AcmeBrand")
+
+
+def test_alias_only_mention_is_rejected():
+    # a mention that is only an alias clause has no name before the marker -> empty -> rejected
+    assert not is_entity("formerly known as Tradeum, Inc. which d/b/a VerticalNet Solutions")
+    assert normalize_entity_name("formerly known as Tradeum, Inc.") == ""
