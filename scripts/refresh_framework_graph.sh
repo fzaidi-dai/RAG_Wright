@@ -46,6 +46,17 @@ if [ -f "$OUT" ]; then
 fi
 cp "$BUILT" "$OUT"
 
+# Merge the ArcadeDB SQL-vector docs (the surface arcadedb-python does not wrap: vector.fuse,
+# vector.sparseNeighbors, the LSM_*_VECTOR DDL) into the same single framework index. The extraction
+# was LLM-produced once (scripts/extract_arcadedb_docs.py, via OpenRouter/DeepSeek V4 Pro) into a
+# committed artifact; this merge is deterministic and free. Additive (dedup=False): docs added, the
+# Python-AST grounding untouched. Re-run the extraction only when docs/vendor/arcadedb/ changes.
+GRAPHIFY_PY="$(cat graphify-out/.graphify_python 2>/dev/null || command -v graphify)"
+if [ -f docs/vendor/arcadedb/arcadedb-docs-extraction.json ] && [ -n "$GRAPHIFY_PY" ]; then
+  echo "[framework] merging ArcadeDB SQL-vector docs (additive, no LLM)..."
+  "$GRAPHIFY_PY" scripts/merge_docs_into_framework.py "$OUT" || echo "[framework] WARNING: doc merge failed"
+fi
+
 nodes="$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1]))['nodes']))" "$OUT")"
 echo "[framework] rebuilt -> $OUT ($nodes nodes)"
 echo "[framework] backups: $(ls graphify-out/framework/graph.json.bak-* 2>/dev/null | wc -l | tr -d ' ') kept in graphify-out/framework/"

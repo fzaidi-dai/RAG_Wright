@@ -1,0 +1,1252 @@
+{
+  "nodes": [
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "label": "ArcadeDB Vector Embeddings Guide",
+      "file_type": "document",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_openai_text_embedding_3_small",
+      "label": "OpenAI text-embedding-3-small (1536 dims)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_openai_text_embedding_3_large",
+      "label": "OpenAI text-embedding-3-large (3072 dims)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_sentence_transformers_all_minilm_l6_v2",
+      "label": "Sentence Transformers all-MiniLM-L6-v2 (384 dims)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_sentence_transformers_all_mpnet_base_v2",
+      "label": "Sentence Transformers all-mpnet-base-v2 (768 dims)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_cohere_embed_english_v3_0",
+      "label": "Cohere embed-english-v3.0 (1024 dims)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_clip",
+      "label": "CLIP (512 dims, multi-modal)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_cosine_similarity",
+      "label": "COSINE similarity",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_dot_product_similarity",
+      "label": "DOT_PRODUCT similarity",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_euclidean_similarity",
+      "label": "EUCLIDEAN similarity",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_int8_quantization",
+      "label": "INT8 quantization",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_product_quantization",
+      "label": "PRODUCT quantization",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_binary_quantization",
+      "label": "BINARY quantization",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_none_quantization",
+      "label": "NONE quantization",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_rrf_fusion",
+      "label": "RRF fusion strategy",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_dbsf_fusion",
+      "label": "DBSF fusion strategy",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_linear_fusion",
+      "label": "LINEAR fusion strategy",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_lsm_vector_index",
+      "label": "LSM_VECTOR index",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_lsm_sparse_vector_index",
+      "label": "LSM_SPARSE_VECTOR index",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_neighbors_function",
+      "label": "vector.neighbors function",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_sparseneighbors_function",
+      "label": "vector.sparseNeighbors function",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_fuse_operator",
+      "label": "vector.fuse operator",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_rrfscore_function",
+      "label": "vector.rrfScore function",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_hybridscore_function",
+      "label": "vector.hybridScore function",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_search_index",
+      "label": "SEARCH_INDEX",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb_vector_embeddings_dimensions_concept",
+      "label": "dimensions (vector dimension)",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "concepts_vector_search",
+      "label": "Vector Search Concepts",
+      "file_type": "document",
+      "source_file": "../../concepts/vector-search.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "tutorials_vector_search_tutorial",
+      "label": "Vector Search Tutorial",
+      "file_type": "document",
+      "source_file": "../../tutorials/vector-search-tutorial.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reference_java_api_java_vectors",
+      "label": "Java Vector API",
+      "file_type": "document",
+      "source_file": "../../reference/java-api/java-vectors.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reference_sql_sql_functions",
+      "label": "SQL Vector Functions",
+      "file_type": "document",
+      "source_file": "../../reference/sql/sql-functions.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "reference_http_api_http",
+      "label": "HTTP API",
+      "file_type": "document",
+      "source_file": "../../reference/http-api/http.html",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "datastax_jvector_issue_665",
+      "label": "JVector native int8 HNSW tracking issue",
+      "file_type": "document",
+      "source_file": "https://github.com/datastax/jvector/issues/665",
+      "source_location": null,
+      "source_url": "https://github.com/datastax/jvector/issues/665",
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "label": "ArcadeDB Vector Search Tutorial",
+      "file_type": "document",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product",
+      "label": "Product vertex type",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_name",
+      "label": "Product.name property",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_category",
+      "label": "Product.category property",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_embedding",
+      "label": "Product.embedding property",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_lsm_vector_index",
+      "label": "LSM_VECTOR index on Product.embedding",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_vector_neighbors",
+      "label": "vector.neighbors function",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_expand",
+      "label": "expand function",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_frequently_bought_with",
+      "label": "FREQUENTLY_BOUGHT_WITH edge type",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_similar_to",
+      "label": "SIMILAR_TO edge type",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_largeproduct",
+      "label": "LargeProduct vertex type",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_largeproduct_embedding",
+      "label": "LargeProduct.embedding property",
+      "file_type": "code",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_efsearch",
+      "label": "efSearch parameter",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_cosine",
+      "label": "COSINE similarity metric",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_euclidean",
+      "label": "EUCLIDEAN similarity metric",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_dot_product",
+      "label": "DOT_PRODUCT similarity metric",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_text_embedding_3_small",
+      "label": "OpenAI text-embedding-3-small model",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_all_minilm_l6_v2",
+      "label": "Sentence Transformers all-MiniLM-L6-v2 model",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_graph_rag",
+      "label": "Graph RAG use case",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    },
+    {
+      "id": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_recommendation_engine",
+      "label": "Recommendation Engine use case",
+      "file_type": "concept",
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "source_url": null,
+      "captured_at": null,
+      "author": null,
+      "contributor": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_openai_text_embedding_3_small",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_openai_text_embedding_3_large",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_sentence_transformers_all_minilm_l6_v2",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_sentence_transformers_all_mpnet_base_v2",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_cohere_embed_english_v3_0",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_clip",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_cosine_similarity",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_dot_product_similarity",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_euclidean_similarity",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_int8_quantization",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_product_quantization",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_binary_quantization",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_none_quantization",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_rrf_fusion",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_dbsf_fusion",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_linear_fusion",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_lsm_vector_index",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_lsm_sparse_vector_index",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_neighbors_function",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_sparseneighbors_function",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_fuse_operator",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_rrfscore_function",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_hybridscore_function",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_search_index",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_dimensions_concept",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "concepts_vector_search",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "tutorials_vector_search_tutorial",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "reference_java_api_java_vectors",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "reference_sql_sql_functions",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "reference_http_api_http",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings",
+      "target": "datastax_jvector_issue_665",
+      "relation": "cites",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_fuse_operator",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_neighbors_function",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_fuse_operator",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_sparseneighbors_function",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb_vector_embeddings_vector_fuse_operator",
+      "target": "docs_vendor_arcadedb_arcadedb_vector_embeddings_search_index",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_name",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_category",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_embedding",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_lsm_vector_index",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_vector_neighbors",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_expand",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_frequently_bought_with",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_similar_to",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_largeproduct",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_largeproduct_embedding",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_efsearch",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_cosine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_euclidean",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_dot_product",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_text_embedding_3_small",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_all_minilm_l6_v2",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_graph_rag",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_document",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_recommendation_engine",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_lsm_vector_index",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_embedding",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_vector_neighbors",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_embedding",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_frequently_bought_with",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_similar_to",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product",
+      "relation": "references",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 1.0
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_vector_neighbors",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_cosine",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 0.9
+    },
+    {
+      "source": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_largeproduct_embedding",
+      "target": "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_cosine",
+      "relation": "conceptually_related_to",
+      "confidence": "INFERRED",
+      "confidence_score": 0.9,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md",
+      "source_location": null,
+      "weight": 0.9
+    }
+  ],
+  "hyperedges": [
+    {
+      "id": "similarity_functions_group",
+      "label": "Similarity Functions",
+      "nodes": [
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_cosine_similarity",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_dot_product_similarity",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_euclidean_similarity"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md"
+    },
+    {
+      "id": "quantization_strategies_group",
+      "label": "Quantization Strategies",
+      "nodes": [
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_int8_quantization",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_product_quantization",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_binary_quantization",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_none_quantization"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md"
+    },
+    {
+      "id": "fusion_strategies_group",
+      "label": "Fusion Strategies",
+      "nodes": [
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_rrf_fusion",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_dbsf_fusion",
+        "docs_vendor_arcadedb_arcadedb_vector_embeddings_linear_fusion"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-embeddings.md"
+    },
+    {
+      "id": "product_schema_group",
+      "label": "Product schema with vector index",
+      "nodes": [
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_name",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_category",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product_embedding",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_lsm_vector_index"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.85,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md"
+    },
+    {
+      "id": "similarity_metrics_group",
+      "label": "Supported vector similarity metrics",
+      "nodes": [
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_cosine",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_euclidean",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_dot_product"
+      ],
+      "relation": "form",
+      "confidence": "EXTRACTED",
+      "confidence_score": 0.95,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md"
+    },
+    {
+      "id": "vector_graph_pattern_group",
+      "label": "Hybrid vector search and graph traversal pattern",
+      "nodes": [
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_product",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_vector_neighbors",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_frequently_bought_with",
+        "docs_vendor_arcadedb_arcadedb-vector-search-tutorial_similar_to"
+      ],
+      "relation": "participate_in",
+      "confidence": "INFERRED",
+      "confidence_score": 0.8,
+      "source_file": "docs/vendor/arcadedb/arcadedb-vector-search-tutorial.md"
+    }
+  ]
+}
