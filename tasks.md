@@ -18,13 +18,23 @@ not this repo's.
 
 ## Last approved / next up
 
-- **Last approved:** **T9** (§12, RAC-9) — golden eval harness (recall@k per archetype, legs
-  separate) + CUAD-annotation golden set (2,032 subset questions across exact/lexical, semantic,
-  clause-finding), pinned + reproducible. Archetype map is a testable hypothesis. (T8 `c1f43aa`.)
-- **Next up:** Phase 4 (Foundations) — **T10** (EDGAR-derived relational + multi-hop question
-  construction, §12/§8, RAC-10). Builds the RELATIONAL archetype from the EDGAR party-and-entity
-  graph, with **human-verified** name→CIK matches (from T7's UNVERIFIED proposals) — the only path
-  to ground truth. Gated on T7, T9.
+- **RESUME HERE (T10 in progress):** the entity verification is **complete** — the human-verified
+  set is at `data/edgar/verification_set.json` (gitignored, persists locally): **45/45 resolved**
+  (28 CIK + 17 PRIVATE), triage fields stripped. Along the way T10 built the T23b canonicalizer
+  (`corpus/canonicalize.py`) and the EDGAR loose/lookup helpers, all committed. **Next action: build
+  the RELATIONAL archetype from that verified set** — see the build rules below.
+  - **Build rules (from the review):** 1-hop co-party questions per verified hub, answer key = the
+    hub's **full** verified co-party set (CIK entities and verified-PRIVATE entities are **both
+    first-class**; the axis is verified-vs-unverified, not public-vs-private). Keep only **real**
+    2-hop chains (three verified *distinct* entities, two real contractual edges; no variant/artifact
+    hops; public/private irrelevant). **Distinct subs have separate answer keys** (e.g. ScanSource
+    vs ScanSource Latin America — do not list one's counterparties under the other). Register as the
+    RELATIONAL split in the harness (`eval/harness.py`, `Archetype.RELATIONAL`); record
+    "public-filer-centric, multi-hop-modest" as the honest eval property.
+  - Regenerate the base set anytime: `prep_relational_verification` → `enrich_edgar_candidates`
+    (but the resolved `resolution` fields are the ground truth — do not overwrite them).
+- **Last approved:** **T9** (§12, RAC-9) — golden eval harness + CUAD-annotation golden set (2,032
+  questions). (T8 `c1f43aa`.)
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -98,7 +108,7 @@ working loop enforces it.
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | done | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | done | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | done | T7 |
-| T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | todo | T7, T9 |
+| T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | in-progress | T7, T9 |
 | T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | todo | T6 |
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | todo | T11 |
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | todo | T3, T6 |
@@ -804,21 +814,30 @@ count, not mention count. Full coreference (pronouns, definite descriptions) is 
 real seam, the same discipline as OpenIE at T5.
 
 **RAC-23b:**
-- [ ] Normalization: legal-suffix and whitespace/punctuation variants of one name collapse to a
-  single canonical form, deterministically (e.g., "Bank of America", "Bank of America, N.A.",
-  "Bank of America, N. A" collapse to one form).
-- [ ] Rejection filter: template placeholders (for example "<<enter Company Name>>"), role artifacts
-  (for example "(collectively the \"Company\")"), and over-broad or degenerate matches (for example
-  bare "Bank") are rejected and never reach T24.
-- [ ] Clustering: mentions denoting the same real-world entity are grouped by blocking plus
-  similarity into candidate clusters; cluster precision and recall are measured on a small labeled
-  fixture drawn from the T7 subset.
+- [ ] Normalization (per ADR-0004): legal-suffix, whitespace/punctuation, possessive-apostrophe,
+  and unicode (NFKC) variants of one name collapse to a single canonical form, deterministically
+  ("Bank of America", "Bank of America, N.A.", "Bank of America, N. A" collapse to one; "Stremick's"
+  and "Stremicks" collapse to one).
+- [ ] Rejection filter (per ADR-0004): template placeholders (for example "<<enter Company Name>>"),
+  role artifacts (for example "(collectively the \"Company\")"), bare generic-token or
+  below-specificity fragments (for example "Bank", "Services", "Group"), and alias prefixes
+  ("formerly known as", "f/k/a", "a/k/a", "d/b/a", recovering the trailing real name where present,
+  else rejecting) are rejected and never reach T24.
+- [ ] Clustering (per ADR-0004): mentions denoting the same real-world entity are grouped by
+  blocking plus similarity into candidate clusters, biased conservatively so ambiguous near-duplicates
+  (parent/subsidiary or shared-token pairs, e.g. "ScanSource" vs "ScanSource Latin America",
+  "Armstrong Flooring" vs "Armstrong Hardwood Flooring") are flagged for human decision, never
+  auto-merged; cluster precision and recall are measured on a small labeled fixture from the T7 subset.
+  - [ ] Regression fixtures cover the T10-surfaced misses: possessive-apostrophe merge
+  (Stremick's / Stremicks), bare-generic-token reject ("Services"), and alias-prefix reject
+  ("formerly known as ... d/b/a ...").
 - [ ] Output clusters conform to the extraction and ontology contracts (T4, T5), carry `chunk_id`
   provenance and confidence (T2), and are shaped as proposals for human verification, not
   auto-committed merges.
 - [ ] The full-coreference path is a real seam (an interface additional resolvers bind), deferred,
   with a stub bound behind it in test proving the seam is load-bearing (mirrors T5, risk 10).
-- [ ] Registered under the mention disambiguation capability.
+- [ ] Registered under the `entity_disambiguation` slug (SPEC FR-C.7 canonicalization capability;
+  this exact string is the ARD manifest URN anchor).
 - [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
   under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
   representative query.
@@ -827,7 +846,7 @@ real seam, the same discipline as OpenIE at T5.
 
 **Dependencies:** T23. **Scope:** M.
 **Files:** `src/rag_wright/capabilities/disambiguation.py`,
-`tests/capabilities/test_disambiguation.py`
+`tests/capabilities/test_disambiguation.py`, `docs/adr/0004-entity-disambiguation.md`
 **Note:** Recognition (T23) and linking (T24) already existed; this fills the canonicalization gap
 between them that the T10 data exposed (Bank-of-America variant fragmentation, template and
 role-artifact noise). It converts the human from cluster generator to proposal verifier, which is
@@ -835,6 +854,7 @@ what makes the ground-truth discipline scale. Folded under FR-C.7 in the coverag
 note below. **The normalize/reject/cluster rules were first built and human-verified at T10** in
 `src/rag_wright/corpus/canonicalize.py` (normalize_entity_name / is_entity / cluster_entities, 17
 tests); T23b hardens them into the capability behind the extractor/coreference seam.
+The normalize and reject rules are recorded in ADR-0004 and are corpus-derived: the possessive-apostrophe rule (Stremick's equals Stremicks), the bare-generic-token reject ("Services", "Bank"), and the alias-prefix reject ("formerly known as", "d/b/a") each came from a real T10 verification-set miss.
 
 ### Task T24: Entity resolution (closed-world to EDGAR CIK)
 
@@ -862,8 +882,9 @@ Description: Resolve the canonical mention clusters from T23b to the registry's 
 **Verification:** `uv run pytest tests/capabilities/test_entity_resolution.py`
 
 **Dependencies:** T8, T23b. **Scope:** M.
+
 **Files:** `src/rag_wright/capabilities/entity_resolution.py`,
-`tests/capabilities/test_entity_resolution.py`, `docs/adr/000X-entity-resolution.md`
+`tests/capabilities/test_entity_resolution.py`, `docs/adr/0005-entity-resolution.md`
 **Note:** Resolves §16.3 matching strategy. Fragmentation is risk 5.
 
 ### Task T25: Graph storage (nodes/edges carry `chunk_id`, content-hash gated)
