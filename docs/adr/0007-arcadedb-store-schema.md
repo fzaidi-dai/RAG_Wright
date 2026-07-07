@@ -69,9 +69,28 @@ Chunk (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR`; plus the two UNIQUE i
   `ensure_schema` reads `schema:types` / `schema:indexes` and creates only what is absent. Re-running
   is a no-op (tested).
 - **`vector.fuse` exists** (`SELECT vector.fuse([], [])` returns `[]`), which de-risks the server-side
-  RRF fusion GATE-2 depends on. Proving it end-to-end with real ranked lists is T14.
-- The query-side vector-search function name is not yet pinned (probes for `vectorNeighbors` /
-  `vectorDistance` did not resolve); that grounding belongs to T14/T21, not the schema.
+  RRF fusion GATE-2 depends on. Proven end-to-end with real ranked lists at T14 (below).
+
+## A-T1 hybrid result (T14) — early GATE-2 signal
+
+Grounded from the ArcadeDB docs and confirmed live on 26.7.1, the hybrid query is:
+
+```sql
+SELECT expand(`vector.fuse`(
+  `vector.neighbors`('Chunk[dense]', :denseVec, k),
+  `vector.sparseNeighbors`('Chunk[sparse_indices,sparse_weights]', :qIdx, :qVal, k),
+  { fusion: 'RRF' }
+)) LIMIT k
+```
+
+(dotted names backtick-quoted; strategies RRF/DBSF/LINEAR). `vector.sparseNeighbors` runs on the
+bare sparse index. With four records across two source docs, RRF fuses the dense-leg winner and the
+sparse-leg winner above the records weak on both legs, and a metadata filter composes by wrapping the
+fused query: `SELECT ... FROM (<fuse>) WHERE source_doc_id = :doc`.
+
+**Signal: ArcadeDB hybrid retrieval works as documented — no lean toward the LanceDB fallback.**
+This is an early A-T1 signal, not the GATE-2 decision, which is measured on the golden set (T9/T10)
+at T21/T22.
 
 ## Consequences
 
