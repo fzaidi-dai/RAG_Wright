@@ -107,6 +107,49 @@ class LooseCandidate(BaseModel):
     status: MatchStatus = MatchStatus.UNVERIFIED
 
 
+_CIK_TAG = re.compile(r"<cik>(\d+)</cik>", re.IGNORECASE)
+
+
+def parse_browse_edgar_ciks(atom_xml: str) -> list[str]:
+    """CIKs from an EDGAR `browse-edgar ...&output=atom` company-search response (delisted filers
+    included). Returns canonical 10-digit CIKs, deduped in order; multiple means an ambiguous name."""
+    seen: list[str] = []
+    for match in _CIK_TAG.finditer(atom_xml):
+        try:
+            value = normalize_cik(match.group(1)).value
+        except ValueError:
+            continue
+        if value not in seen:
+            seen.append(value)
+    return seen
+
+
+class EdgarEvidence(BaseModel):
+    """Grounded EDGAR evidence for a CIK, to confirm on (former_names resolve dot-com name changes)."""
+
+    proposed_cik: str
+    registry_name: str
+    former_names: list[str] = []
+    tickers: list[str] = []
+    source: str = "edgar_submissions"
+    status: MatchStatus = MatchStatus.UNVERIFIED
+
+
+def parse_submissions_evidence(submissions: dict) -> EdgarEvidence:
+    """The conformed name, former names, and tickers from an EDGAR submissions record."""
+    return EdgarEvidence(
+        proposed_cik=normalize_cik(submissions["cik"]).value,
+        registry_name=submissions.get("name", ""),
+        former_names=[f["name"] for f in submissions.get("formerNames", []) if f.get("name")],
+        tickers=submissions.get("tickers", []),
+    )
+
+
+def former_names(submissions: dict) -> list[str]:
+    """Former company names from an EDGAR submissions record (alias handling; reused by T24)."""
+    return [f["name"] for f in submissions.get("formerNames", []) if f.get("name")]
+
+
 def loose_cik_candidates(
     name: str, company_tickers: list[dict], *, top_n: int = 3, min_overlap: float = 0.34
 ) -> list[LooseCandidate]:

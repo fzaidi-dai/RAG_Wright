@@ -111,3 +111,26 @@ def test_loose_common_token_collision_is_visible_in_evidence():
     cands = loose_cik_candidates("Federated Advisory Services Company", _TICKERS_LOOSE, min_overlap=0.1)
     fed = [c for c in cands if "federated" in c.matched_tokens]
     assert fed and fed[0].matched_tokens == ["federated"]  # only the common token -> suspicious
+
+
+# --- grounded EDGAR lookup parsers (T10 Task 2) ----------------------------------------------
+
+from rag_wright.corpus.edgar import (  # noqa: E402
+    EdgarEvidence,
+    parse_browse_edgar_ciks,
+    parse_submissions_evidence,
+)
+
+
+def test_parse_browse_edgar_ciks_dedupes_and_pads():
+    xml = "<company-info><cik>0001043946</cik></company-info><company-info><cik>1007297</cik></company-info>"
+    assert parse_browse_edgar_ciks(xml) == ["0001043946", "0001007297"]
+
+
+def test_parse_submissions_evidence_carries_former_names():
+    subs = {"cik": "1043946", "name": "VERTICALNET INC",
+            "formerNames": [{"name": "TRADEUM INC"}], "tickers": ["VERT"]}
+    ev = parse_submissions_evidence(subs)
+    assert isinstance(ev, EdgarEvidence)
+    assert ev.proposed_cik == "0001043946" and ev.registry_name == "VERTICALNET INC"
+    assert ev.former_names == ["TRADEUM INC"] and ev.status is MatchStatus.UNVERIFIED
