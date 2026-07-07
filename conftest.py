@@ -35,5 +35,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         _load_dotenv()
     for item in items:
         for opt in _OPT_IN:
-            if opt in item.keywords and opt not in selected:
+            # check the actual marker, not `item.keywords` (which also matches path parts like
+            # `tests/store/`, wrongly skipping hermetic tests that merely live under that directory).
+            if item.get_closest_marker(opt) is not None and opt not in selected:
                 item.add_marker(pytest.mark.skip(reason=f"opt-in: run with -m {opt}"))

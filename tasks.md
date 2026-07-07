@@ -18,12 +18,21 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T13** (FR-S.1/FR-S.5, RAC-13) — store seam + ArcadeDB schema and hybrid indexes
-  (dense `LSM_VECTOR` + sparse `LSM_SPARSE_VECTOR`), opt-in `-m store` (needs a local ArcadeDB). Then
-  **T14** (`vector.fuse` hybrid foundation test). **T15** (RLM skill authoring) needs no external
-  deps and can go in parallel. Ground every `arcadedb_python` call against the framework graph (v0.x,
-  risk 2). The `store` marker + `.env` loading are already wired (T12 `conftest.py`).
-- **Last approved:** **T12** (FR-C.6 dep, risk 3, RAC-12) — A-T2 forced-structured foundation test.
+- **NEXT UP:** **T14** (FR-C.3 dep, risk 1, RAC-14) — A-T1 ArcadeDB `vector.fuse` hybrid foundation
+  test: write a few chunk records and run a `vector.fuse` RRF hybrid query honoring a metadata filter,
+  record the early GATE-2 signal. Container is up (`docs/ArcadeDB_Local.md`); `vector.fuse` confirmed
+  present at T13. Ground the query-side vector-search function name against the live server (not yet
+  pinned). **T15** (RLM skill) needs no external deps (parallel option).
+- **Last approved:** **T13** (FR-S.1/FR-S.5, RAC-13) — store seam + ArcadeDB schema. Stood up ArcadeDB
+  26.7.2 (Docker, :2480) during the task and sanity-probed it. `Store` Protocol seam (semantic, no
+  SQL) with `ArcadeDBStore` behind it + an in-memory stub proving swappability. Schema: `Chunk` (dense
+  `LSM_VECTOR` dim=1024 COSINE; sparse `LSM_SPARSE_VECTOR` over two parallel arrays
+  `sparse_indices`/`sparse_weights`; `chunk_id` UNIQUE) and `Entity` (carries `chunk_id`). Idempotent
+  by schema introspection (ArcadeDB rejects `IF NOT EXISTS`). Empirical: sparse needs two arrays not a
+  map (T3 dict decomposed at the store boundary, T20 writes it); `vector.fuse` exists (de-risks
+  GATE-2). ADR-0007; `docs/ArcadeDB_Local.md`. Fixed a T12 conftest bug (gate opt-in by marker, not
+  path keyword). `-m store` 3 passed; default suite 244 passed + 5 skipped.
+- **Prior:** **T12** (RAC-12) forced-structured seam test; **T11** (RAC-11) model-profile seam.
   Live probes through the seam confirmed the empirical profiles (ADR-0006): **DeepSeek V4 Pro**
   (`deepseek/deepseek-v4-pro`) honors the forced tool call while reasoning (bare `function_calling`,
   no `extra_body`); **Qwen 3.7 Plus** (`qwen/qwen3.7-plus`) reproduces risk 3 (`<400> ... tool_choice
@@ -117,7 +126,7 @@ working loop enforces it.
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | done | T7, T9 |
 | T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | done | T6 |
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | done | T11 |
-| T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | todo | T3, T6 |
+| T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | done | T3, T6 |
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | todo | T13 |
 | T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | todo | - |
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | todo | T3 |
@@ -556,20 +565,30 @@ ArcadeDB schema with the dense `LSM_VECTOR` and sparse `LSM_SPARSE_VECTOR` index
 specifics open question at this task.
 
 **RAC-13:**
-- [ ] The query-skill seam interface is defined; the ArcadeDB implementation sits behind it.
-- [ ] Schema created with dense `LSM_VECTOR` (dimensions/similarity chosen for BGE-M3) and sparse
-  `LSM_SPARSE_VECTOR` indexes; chunk records and graph nodes carry `chunk_id`.
-- [ ] A second stub implementation can bind the same seam (proves swappability for the LanceDB
-  fallback path).
+- [x] The query-skill seam interface is defined; the ArcadeDB implementation sits behind it.
+  `store/seam.py` `Store` (runtime_checkable Protocol, semantic not SQL: `ensure_schema`,
+  `type_names`, `property_names`, `index_names`, `ping`, `close`); `ArcadeDBStore` binds it.
+- [x] Schema created with dense `LSM_VECTOR` (dims=`BGE_M3_DENSE_DIM` 1024, COSINE) and sparse
+  `LSM_SPARSE_VECTOR` indexes; chunk records and graph nodes carry `chunk_id`. `Chunk` (chunk_id
+  UNIQUE, source_doc_id, dense, sparse_indices, sparse_weights) + `Entity` (entity_id UNIQUE,
+  chunk_id). **Empirical (26.7.2): sparse index needs two parallel arrays not a map** → T3
+  `sparse_vector: dict[int,float]` decomposed at the store boundary (T20). Idempotent by schema
+  introspection (ArcadeDB rejects `IF NOT EXISTS` here). ADR-0007.
+- [x] A second stub implementation can bind the same seam (proves swappability for the LanceDB
+  fallback path). `_InMemoryStore` in the test satisfies `isinstance(..., Store)` and the schema
+  surface.
 
-**Verification:** `uv run pytest tests/store/test_arcadedb_schema.py -m store` (requires a local
-ArcadeDB instance; marked `store`).
+**Verification:** `uv run pytest tests/store/test_arcadedb_schema.py -m store` — 3 passed (live
+ArcadeDB, opt-in); hermetic stub tests run in the default suite (244 passed + 5 skipped). Local run:
+`docs/ArcadeDB_Local.md`.
 
-**Dependencies:** T3, T6. **Scope:** M.
+**Dependencies:** T3, T6. **Scope:** M. **Status:** done.
 **Files:** `src/rag_wright/store/seam.py`, `src/rag_wright/store/arcadedb.py`,
-`tests/store/test_arcadedb_schema.py`
-**Note:** Ground every `arcadedb_python` call against the framework graph first (driver is v0.x,
-risk 2).
+`tests/store/test_arcadedb_schema.py`, `docs/adr/0007-arcadedb-store-schema.md`,
+`docs/ArcadeDB_Local.md`, `.env.example`, `conftest.py` (marker-gate fix).
+**Note:** Grounded against `arcadedb_python` 0.4.0 (`SyncClient`/`DatabaseDao`) and the live 26.7.2
+server (driver is v0.x, risk 2). `vector.fuse` confirmed present (de-risks GATE-2; proven end-to-end
+at T14). Query-side vector-search function name pinned at T14/T21.
 
 ### Task T14: A-T1 ArcadeDB `vector.fuse` hybrid foundation test
 
