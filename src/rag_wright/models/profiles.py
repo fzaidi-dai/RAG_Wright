@@ -46,11 +46,11 @@ class ModelRole(str, Enum):
     GENERAL = "general"  # reasoning, generation, vision-to-text, RLM; the local-deployment default
 
 
-# Documented default model ids per role (SPEC + Phase 2 ledger). Overridable by env (`_ROLE_ENV`),
-# so T12's empirically-confirmed slug is a config change, not a code change.
+# Default model ids per role, confirmed against the live OpenRouter catalog at T12 (ADR-0006).
+# Overridable by env (`_ROLE_ENV`), so a later slug change stays config, not code.
 DEFAULT_STRUCTURED_REASONING = "deepseek/deepseek-v4-pro"
-DEFAULT_STRUCTURED_REASONING_SECONDARY = "qwen/qwen-3.7-plus"
-DEFAULT_GENERAL = "google/gemma-4-class"
+DEFAULT_STRUCTURED_REASONING_SECONDARY = "qwen/qwen3.7-plus"
+DEFAULT_GENERAL = "google/gemma-4-31b-it"
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", DEFAULT_STRUCTURED_REASONING),
@@ -63,11 +63,17 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default
 # (function_calling, no extra_body) via `profile_for`, so no call site special-cases a model.
+# Structured-output methods and extra bodies below are empirical, confirmed by a live forced-schema
+# call at T12 and recorded in ADR-0006.
 PROFILES: dict[str, ModelProfile] = {
-    # T12 fills DeepSeek V4 Pro's empirical structured-only `extra_body` (thinking-disable) + its ADR.
+    # DeepSeek V4 Pro honors the forced tool call while reasoning; no thinking-disable needed.
     DEFAULT_STRUCTURED_REASONING: ModelProfile(model_id=DEFAULT_STRUCTURED_REASONING),
+    # Qwen 3.7 Plus rejects `tool_choice` object/required in thinking mode ("<400> ... does not
+    # support being set to required or object in thinking mode"); disabling reasoning on the forced
+    # structured call alone fixes it, leaving its free-text/reasoning calls untouched (ADR-0006).
     DEFAULT_STRUCTURED_REASONING_SECONDARY: ModelProfile(
-        model_id=DEFAULT_STRUCTURED_REASONING_SECONDARY
+        model_id=DEFAULT_STRUCTURED_REASONING_SECONDARY,
+        structured_extra_body={"reasoning": {"enabled": False}},
     ),
     DEFAULT_GENERAL: ModelProfile(model_id=DEFAULT_GENERAL),
 }

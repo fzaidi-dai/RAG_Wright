@@ -32,6 +32,10 @@ packages = ["src/rag_wright"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "eval"]
 pythonpath = ["src", "."]
+markers = [
+    "model: opt-in live model call via OpenRouter (needs .env); run with -m model",
+    "store: opt-in test needing a local ArcadeDB instance; run with -m store",
+]
 
 [tool.ruff]
 line-length = 100

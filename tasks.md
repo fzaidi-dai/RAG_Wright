@@ -18,20 +18,21 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T12** (FR-C.6 dep, risk 3, RAC-12) — forced-structured-output foundation test on
-  DeepSeek V4 Pro (opt-in `-m model`, needs OpenRouter access), confirming the empirical slug +
-  structured-only `extra_body` and recording them in a dated ADR. Also T13/T14 (store seam + ArcadeDB
-  hybrid) and T15 (RLM skill) are available in parallel. Note: T12's ADR filename in its row says
-  `0003-model-profile.md`, but `0003` is taken (ARD) — renumber at T12.
-- **Last approved:** **T11** (assumption 2, tech stack, RAC-11) — model-profile seam. One
-  construction point (`src/rag_wright/models/{profiles,seam}.py`): a profile keyed by model id
-  carries the structured method (default `function_calling`) + optional structured-only `extra_body`
-  (applied to the forced structured call only, base client untouched); roles resolve to DeepSeek V4
-  Pro (primary) / Qwen 3.7 Plus (secondary) / Gemma 4 class (general, local default), env-overridable,
-  no provider flag in any call site; `with_structured_output` reached only through the seam. Model
-  slugs are documented placeholders and DeepSeek's `extra_body` is `None` — **both finalized
-  empirically at T12** (no unconfirmed flag baked in). 9 tests, full suite 242.
-- **Prior:** **T10** (§12/§8, RAC-10) — EDGAR-derived RELATIONAL + multi-hop golden set.
+- **NEXT UP:** **T13** (FR-S.1/FR-S.5, RAC-13) — store seam + ArcadeDB schema and hybrid indexes
+  (dense `LSM_VECTOR` + sparse `LSM_SPARSE_VECTOR`), opt-in `-m store` (needs a local ArcadeDB). Then
+  **T14** (`vector.fuse` hybrid foundation test). **T15** (RLM skill authoring) needs no external
+  deps and can go in parallel. Ground every `arcadedb_python` call against the framework graph (v0.x,
+  risk 2). The `store` marker + `.env` loading are already wired (T12 `conftest.py`).
+- **Last approved:** **T12** (FR-C.6 dep, risk 3, RAC-12) — A-T2 forced-structured foundation test.
+  Live probes through the seam confirmed the empirical profiles (ADR-0006): **DeepSeek V4 Pro**
+  (`deepseek/deepseek-v4-pro`) honors the forced tool call while reasoning (bare `function_calling`,
+  no `extra_body`); **Qwen 3.7 Plus** (`qwen/qwen3.7-plus`) reproduces risk 3 (`<400> ... tool_choice
+  ... in thinking mode`) and is fixed by the structured-only `extra_body={"reasoning":{"enabled":
+  false}}`. Slugs corrected from T11 placeholders (also general default `google/gemma-4-31b-it`).
+  Opt-in live test `tests/foundation/test_model_seam_structured.py -m model` (2 passed); default suite
+  242 passed + 2 skipped, hermetic. `model`/`store` markers registered; `conftest.py` gates opt-in
+  tests and loads `.env`.
+- **Prior:** **T11** (RAC-11) model-profile seam; **T10** (RAC-10) EDGAR RELATIONAL golden set.
   **19 questions (16 one-hop + 3 two-hop)** built from the human-verified set into
   `eval/golden/relational/set.json` (**committed** as a verified fixture — the derived answer keys,
   the only durable copy in git; the gitignored triage file `data/edgar/verification_set.json` stays
@@ -115,7 +116,7 @@ working loop enforces it.
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | done | T7 |
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | done | T7, T9 |
 | T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | done | T6 |
-| T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | todo | T11 |
+| T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | done | T11 |
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | todo | T3, T6 |
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | todo | T13 |
 | T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | todo | - |
@@ -526,17 +527,26 @@ risk 3). Learn and record the working profile (method, structured-only extra bod
 before extraction depends on it.
 
 **RAC-12:**
-- [ ] A forced-schema call on DeepSeek V4 Pro returns a valid contract instance through the seam.
-- [ ] The working profile (method + structured-only extra body) for DeepSeek V4 Pro is recorded in
-  a dated ADR; Qwen 3.7 Plus is noted as the secondary profile.
+- [x] A forced-schema call on DeepSeek V4 Pro returns a valid contract instance through the seam.
+  Live: `seam.build_structured("deepseek/deepseek-v4-pro", _PartyExtraction).invoke(...)` returned a
+  valid Pydantic instance; the Qwen secondary passes too (via its profile's `extra_body`).
+- [x] The working profile (method + structured-only extra body) for DeepSeek V4 Pro is recorded in
+  a dated ADR; Qwen 3.7 Plus is noted as the secondary profile. **ADR-0006** (dated 2026-07-07):
+  DeepSeek = `function_calling`, no `extra_body` (honors the forced tool call while reasoning);
+  Qwen = `function_calling` + `{"reasoning":{"enabled":false}}` (bare call fails risk-3 in thinking
+  mode). Slugs corrected from T11 placeholders.
 
-**Verification:** `uv run pytest tests/foundation/test_model_seam_structured.py -m model`
-(requires model access via OpenRouter; marked `model` so it is opt-in).
+**Verification:** `uv run pytest tests/foundation/test_model_seam_structured.py -m model` — 2 passed
+(primary + secondary; requires OpenRouter access, marked `model` so it is opt-in; default suite skips
+it, 242 passed + 2 skipped).
 
-**Dependencies:** T11. **Scope:** S.
-**Files:** `tests/foundation/test_model_seam_structured.py`, `docs/adr/0003-model-profile.md`
-**Note:** Needs OpenRouter access (`.env`). Validates the profile on the model actually
-prioritized. De-risks FR-C.6 before it is built.
+**Dependencies:** T11. **Scope:** S. **Status:** done.
+**Files:** `tests/foundation/test_model_seam_structured.py`, `docs/adr/0006-model-profile.md`
+(renumbered — `0003` is taken by ARD), `src/rag_wright/models/profiles.py` (empirical slugs +
+`extra_body`), `conftest.py` + `pyproject.toml` (opt-in `model`/`store` markers, `.env` load).
+**Note:** Needs OpenRouter access (`.env`). Validated the profile on the prioritized model and
+reproduced risk 3 live on the secondary, proving the seam's structured-only `extra_body` is
+load-bearing. De-risks FR-C.6 before it is built.
 
 ### Task T13: Store seam + ArcadeDB schema and hybrid indexes
 
