@@ -1,8 +1,28 @@
 # ADR-0007: The ArcadeDB store seam and hybrid schema
 
 Date: 2026-07-07. Status: Accepted. Records the store seam and the ArcadeDB schema/indexes built at
-T13, and the empirical findings from standing up ArcadeDB 26.7.2 that shaped them (risk 2, the v0.x
+T13, and the empirical findings from standing up ArcadeDB 26.7.1 that shaped them (risk 2, the v0.x
 client and version behavior).
+
+## Grounding (two surfaces, no Java)
+
+The store spans two grounding surfaces, both Python-appropriate:
+
+- **The client API is `arcadedb-python` 0.4.0** (the officially recommended Python driver, latest
+  release), indexed in the Graphify framework graph. It is the grounding authority for connection,
+  database lifecycle, `query()`/command execution, dense `vector_search`/`create_vector_index`, and
+  the bulk operations. Every client call T13 makes resolves against it.
+- **The SQL vector functions are not wrapped by the Python API**, so hybrid retrieval is issued as
+  SQL through the grounded `query()` method, and that SQL's authority is the **official ArcadeDB
+  documentation** (docs.arcadedb.com), not the server jar. Confirmed forms: dense
+  `vector.neighbors('T[dense]', vec, k)`; sparse `vector.sparseNeighbors('T[idx,wt]', qIdx, qWt, k)`;
+  hybrid `SELECT expand(vector.fuse(<dense>, <sparse>, { fusion: 'RRF' }))`; sparse index
+  `CREATE INDEX ON T (idx, wt) LSM_SPARSE_VECTOR METADATA { dimensions: <vocab>, modifier: 'IDF' }`.
+  The Java engine is not a grounding target: this is a Python project against the Python API + the
+  vendor's SQL docs.
+
+The server is pinned to the stable **26.7.1** tag (not the moving `:latest`/`-SNAPSHOT`), so the
+build is reproducible and matches the documented SQL.
 
 ## Context
 
@@ -12,7 +32,7 @@ without touching capability code. T13 defines that seam and the schema: a chunk-
 the dense summary vector and the sparse full-text vector, and a graph-node type, both keyed by
 `chunk_id`, with a dense `LSM_VECTOR` index and a sparse `LSM_SPARSE_VECTOR` index.
 
-The build stood up ArcadeDB locally (Docker, `arcadedata/arcadedb`, 26.7.2, port 2480; see
+The build stood up ArcadeDB locally (Docker, `arcadedata/arcadedb:26.7.1`, port 2480; see
 `docs/ArcadeDB_Local.md`) and sanity-checked the primitives before writing code, because the client
 is v0.x and the index behavior was unverified.
 
@@ -38,7 +58,7 @@ join (FR-S.1, FR-I.4).
 'COSINE' }` (dimension bound to T3's `BGE_M3_DENSE_DIM`, not a magic number); sparse `CREATE INDEX ON
 Chunk (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR`; plus the two UNIQUE identifier indexes.
 
-## Empirical findings (from the sanity probe against 26.7.2)
+## Empirical findings (from the sanity probe against 26.7.1)
 
 - **The sparse index needs two parallel arrays, not a map.** `LSM_SPARSE_VECTOR` rejects a single MAP
   property: "Sparse vector index requires 2 properties: an indices array (ARRAY_OF_INTEGERS) and a
@@ -58,7 +78,12 @@ Chunk (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR`; plus the two UNIQUE i
 - T20 (chunk write) decomposes `sparse_vector` into the two arrays and upserts by `chunk_id`.
 - T14 proves `vector.fuse` RRF over the dense and sparse legs end to end; T13 confirmed the primitive
   exists and the two indexes build.
-- The ArcadeDB version is pinned in practice to 26.7.2 for these findings; re-verify on upgrade.
+- The ArcadeDB version is pinned to stable 26.7.1 for these findings; re-verify on upgrade.
+- **Sparse index refinement (grounded post-hoc):** the docs show `LSM_SPARSE_VECTOR` takes
+  `METADATA { dimensions: <vocab>, modifier: 'IDF' }` for BM25-style weighting. T13's index was
+  created without it (it builds and is searchable). Setting `dimensions` (the BGE-M3 sparse vocab)
+  and the IDF modifier is retrieval-quality tuning that the SPEC scopes to the sparse-vocabulary-cap
+  and IDF-weighting retrieval parameters (section 16.5, i.e. T21/GATE-2), not the T13 schema shape.
 - Local run and credentials are documented in `docs/ArcadeDB_Local.md`; the dev password lives only
   in gitignored `.env`, the data only under gitignored `data/arcadedb/`.
 - The store tests are opt-in (`-m store`), kept out of the default hermetic suite by `conftest.py`

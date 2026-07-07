@@ -1,8 +1,9 @@
 # Running ArcadeDB locally (T13/T14)
 
 The single store (FR-S.1) runs as a local Docker container during development. Confirmed against
-**ArcadeDB 26.7.2** (image `arcadedata/arcadedb:latest`), the version T13's schema and the
-`vector.fuse` de-risk were validated on.
+Pinned to **ArcadeDB 26.7.1** (the latest stable tag; `:latest` resolves to a moving `-SNAPSHOT`
+dev build, which we deliberately do not use). This is the version T13's schema and the `vector.fuse`
+de-risk are validated on. Sparse vector index and server-side hybrid retrieval exist since 26.5.1.
 
 ## Start
 
@@ -11,7 +12,7 @@ docker run -d --name arcadedb-ragwright \
   -p 2480:2480 -p 2424:2424 \
   -v "$PWD/data/arcadedb:/home/arcadedb/databases" \
   -e JAVA_OPTS="-Darcadedb.server.rootPassword=<YOUR_DEV_PASSWORD> -Darcadedb.server.mode=development" \
-  arcadedata/arcadedb:latest
+  arcadedata/arcadedb:26.7.1
 ```
 
 - Port `2480` is the HTTP API the `arcadedb_python` client uses; `2424` is the binary protocol.
