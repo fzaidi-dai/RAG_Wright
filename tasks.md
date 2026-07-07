@@ -18,9 +18,20 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T11** (assumption 2, tech stack, RAC-11) — model-profile seam (DeepSeek V4 Pro
-  first for structured-under-reasoning). Foundations continue; T11–T15 are largely parallel.
-- **Last approved:** **T10** (§12/§8, RAC-10) — EDGAR-derived RELATIONAL + multi-hop golden set.
+- **NEXT UP:** **T12** (FR-C.6 dep, risk 3, RAC-12) — forced-structured-output foundation test on
+  DeepSeek V4 Pro (opt-in `-m model`, needs OpenRouter access), confirming the empirical slug +
+  structured-only `extra_body` and recording them in a dated ADR. Also T13/T14 (store seam + ArcadeDB
+  hybrid) and T15 (RLM skill) are available in parallel. Note: T12's ADR filename in its row says
+  `0003-model-profile.md`, but `0003` is taken (ARD) — renumber at T12.
+- **Last approved:** **T11** (assumption 2, tech stack, RAC-11) — model-profile seam. One
+  construction point (`src/rag_wright/models/{profiles,seam}.py`): a profile keyed by model id
+  carries the structured method (default `function_calling`) + optional structured-only `extra_body`
+  (applied to the forced structured call only, base client untouched); roles resolve to DeepSeek V4
+  Pro (primary) / Qwen 3.7 Plus (secondary) / Gemma 4 class (general, local default), env-overridable,
+  no provider flag in any call site; `with_structured_output` reached only through the seam. Model
+  slugs are documented placeholders and DeepSeek's `extra_body` is `None` — **both finalized
+  empirically at T12** (no unconfirmed flag baked in). 9 tests, full suite 242.
+- **Prior:** **T10** (§12/§8, RAC-10) — EDGAR-derived RELATIONAL + multi-hop golden set.
   **19 questions (16 one-hop + 3 two-hop)** built from the human-verified set into
   `eval/golden/relational/set.json` (**committed** as a verified fixture — the derived answer keys,
   the only durable copy in git; the gitignored triage file `data/edgar/verification_set.json` stays
@@ -103,7 +114,7 @@ working loop enforces it.
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | done | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | done | T7 |
 | T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | done | T7, T9 |
-| T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | todo | T6 |
+| T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | done | T6 |
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | todo | T11 |
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | todo | T3, T6 |
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | todo | T13 |
@@ -478,20 +489,33 @@ not capability code**:
   generation.
 
 **RAC-11:**
-- [ ] A profile keyed by model id supplies structured-output method + optional structured-only
-  extra body; the extra body applies only to the forced-structured call.
-- [ ] The structured-under-reasoning default resolves to DeepSeek V4 Pro; Qwen 3.7 Plus is a
+- [x] A profile keyed by model id supplies structured-output method + optional structured-only
+  extra body; the extra body applies only to the forced-structured call. `ModelProfile{model_id,
+  structured_method (default function_calling), structured_extra_body}`; the seam threads
+  `extra_body` through `with_structured_output(schema, method=..., extra_body=...)` so it binds to
+  the structured runnable only — a test asserts it reaches the structured call but never the base
+  client's constructor (free-text / reasoning unaffected).
+- [x] The structured-under-reasoning default resolves to DeepSeek V4 Pro; Qwen 3.7 Plus is a
   selectable secondary; Gemma 4 class is the local-mode / general-generation default. All of this
-  lives in profile config, and no provider/model-specific flag appears in any call site.
-- [ ] `with_structured_output(...)` is reached only through the seam.
+  lives in profile config, and no provider/model-specific flag appears in any call site. `ModelRole`
+  → id via `model_for`, each env-overridable (`RAG_MODEL_*`); an unregistered model gets the safe
+  default profile so no call site special-cases a model.
+- [x] `with_structured_output(...)` is reached only through the seam (`seam.build_structured`; the
+  base `seam.build_model` carries no structured flag or `extra_body`).
 
-**Verification:** `uv run pytest tests/models/test_profile_seam.py` (unit, mocked client — no
-network).
+**Verification:** `uv run pytest tests/models/test_profile_seam.py` — 9 passed (unit, fake client, no
+network; full suite 242).
 
-**Dependencies:** T6. **Scope:** M.
+**Dependencies:** T6. **Scope:** M. **Status:** done.
 **Files:** `src/rag_wright/models/profiles.py`, `src/rag_wright/models/seam.py`,
 `tests/models/test_profile_seam.py`
-**Note:** Priorities live here, never in capability code (CLAUDE.md standing rule).
+**Note:** Priorities live here, never in capability code (CLAUDE.md standing rule). The model slugs
+(`deepseek/deepseek-v4-pro`, `qwen/qwen-3.7-plus`, `google/gemma-4-class`) are documented,
+env-overridable placeholders and DeepSeek's `structured_extra_body` ships `None`: the exact slug and
+the empirical thinking-disable `extra_body` are confirmed against a live call and recorded in a dated
+ADR at **T12** (no unconfirmed provider flag baked in, per the standing rule). Grounded against
+`langchain_openai.chat_models.base` (ADR-0001): `with_structured_output` forwards kwargs into the
+tool binding, which is what makes `extra_body` structured-call-only.
 
 ### Task T12: A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR)
 
