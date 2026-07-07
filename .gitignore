@@ -48,3 +48,6 @@ graphify-out/
 *.swp
 .idea/
 .vscode/
+
+# Scratch working directory (verification prep, etc.)
+temp/

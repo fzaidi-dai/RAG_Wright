@@ -151,7 +151,49 @@ The system answers correctly, with citations, and abstains when unsupported, acr
 9. Serving and infrastructure: the OpenRouter model ladder for the default path, and for the local mode the serving runtime (Ollama versus vLLM), model sizes, and GPU footprint; refresh cadence and triggers; and evaluation-set size and maintenance.
 10. Whether a domain LoRA is needed on top of the grounding, decided from evaluation results.
 
-## 17. Glossary of terms
+## 17. Domain portability (swapping the dataset)
+
+The domain lives in three artifacts, not in the pipeline. Swapping datasets away from CUAD and EDGAR is mostly swapping what those artifacts contain, which is why most of ingestion and retrieval does not move. This section is the procedure and the precondition to check.
+
+### The three artifacts that carry the domain
+
+- The ontology (entity and relationship types). Today: CUAD's 41 clause categories plus party and entity types.
+- The entity registry (the canonical `entity_id` set with names and aliases). Today: EDGAR CIK identifiers.
+- The golden evaluation set (the archetype-split ground truth). Today: CUAD expert annotations plus the EDGAR-derived relational set.
+
+Everything mechanical consumes these three through seams and does not know their source.
+
+### What changes, and where (four touchpoints)
+
+1. Ontology and registry derivation (FR-C.8, T8). The one real code-touch, deliberately isolated here. A new dataset supplies a different ontology and a different canonical id scheme, so T8's derivation logic changes. The blast radius is T8; everything downstream binds to the derived ontology and the `entity_id` interface, not to CUAD or EDGAR (open question 2).
+2. Entity resolution registry (FR-C.7, T24). Contents, not code. Linking stays closed-world against whatever registry T8 produced, and the matching strategy recorded in ADR-0005 is domain-general; only the target set changes.
+3. Disambiguation rules (FR-C.7, T23b). Additive. New domain noise (different placeholder conventions, non-US legal forms, personal names rather than company names) surfaces new misses, so append normalization and reject rules to ADR-0004 with their triggering case. The capability's shape does not change; its rule table grows. A personal-name domain may add one new normalization family, still behind the same capability.
+4. Graph extraction schema binding (FR-C.6, T23). Through the ontology seam. Extraction conforms to one ontology, and that ontology is now different, so the Pydantic contract it extracts against changes, because T8 handed it a different ontology, not because the extractor was rewritten. The hybrid extraction stack is domain-general.
+
+### What must stay domain-blind (a swap that forces a change here is a design bug, not a swap)
+
+- The ingestion spine: parsing (T16), RLM chunking (T17), embedding (T19), and chunk write (T20). Structure-level and text-level, no domain semantics.
+- The retrieval path end to end: hybrid search (T21), reranking (T22), graph query (T26), fusion (T27), RLM synthesis (T28), and answer generation (T29). They operate over embeddings, chunks, and `chunk_id` and `entity_id` references.
+- The store, the seams, and the ARD: ArcadeDB, the model-profile seam, the query-skill and store seams, the capability registry, and the ARD manifests (which describe capabilities, not data).
+
+If a domain assumption leaks into any of these, it is a bug to hunt down, not a place to edit for the new dataset.
+
+### The precondition to check before any swap (the one that can break the model)
+
+The registry is closed-world (open question 3). That premise holds only if the new dataset comes with an authoritative entity-id source, which EDGAR's CIKs are today. So the question to ask of any candidate dataset is not "is it contracts" but "does it carry an authoritative canonical id scheme."
+
+- If yes, the swap is as cheap as the four touchpoints above.
+- If no, T8 has nothing to derive a registry from and T24's closed-world premise breaks. The entity leg becomes open-world resolution, which is a real design change, not a swap. Decide this before committing to the dataset.
+
+### The work that is not cheap (do not under-scope it)
+
+The evaluation set is not a small aside; it is most of the actual work. A new domain needs its archetype-split golden set rebuilt, and if it is graph-heavy, a new human-verified entity set (the T10 exercise, again). Budget for that, not for pipeline changes.
+
+### One-line summary
+
+Domain equals ontology plus registry plus evaluation set. A dataset swap touches T8 (derivation, real code), T24 (registry contents), T23b (rule table, additive), and T23 (ontology binding). Parsing, chunking, embedding, and the entire retrieval path stay unchanged. Precondition: the new dataset must carry an authoritative id scheme, or the closed-world entity leg is a rebuild.
+
+## 18. Glossary of terms
 
 - **Abstention.** Returning "the context does not support an answer" rather than fabricating one.
 - **ArcadeDB.** The single multi-model store (Apache 2.0) holding both the hybrid retrieval index (dense and sparse vector indexes with server-side RRF fusion) and the knowledge graph, reached behind a query-skill seam.
