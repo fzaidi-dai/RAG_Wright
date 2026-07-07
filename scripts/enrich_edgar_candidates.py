@@ -30,6 +30,16 @@ SUBMISSIONS = "https://data.sec.gov/submissions/CIK{cik}.json"
 
 # collision re-queries (had a wrong local token match) + subsidiary pairs (propose, never merge)
 REQUERY = ["bravatek", "baidu", "china online", "fonterra", "quantum"]
+# Public filers the key-based query missed (a wrong local candidate blocked re-lookup); each MUST be
+# re-queried with a distinctive query and MUST NOT default to PRIVATE on a blank. token-in-key -> query.
+FORCE_LOOKUP = {
+    "watley": "watley",  # AB WATLEY GROUP INC
+    "pc quote": "pc quote",  # -> HYPERFEED TECHNOLOGIES INC (former: PC QUOTE INC)
+    "vitamin shoppe": "vitamin shoppe",
+    "neoforma": "neoforma",
+    "ingram micro": "ingram micro",
+    "xplore": "xplore technologies",  # confirm parent vs "...of America" sub
+}
 SUBSIDIARY_PAIRS = [
     ("scansource", "scansource latin america"),
     ("federated advisory services", "federated investment management"),
@@ -68,13 +78,14 @@ def main() -> None:
 
     enriched = 0
     for e in doc["entities"]:
-        key, rep = e["entity_key"], e["representative"]
-        needs = not e["candidates"] or any(t in key for t in REQUERY)
+        key = e["entity_key"]
+        forced_query = next((q for tok, q in FORCE_LOOKUP.items() if tok in key), None)
+        needs = not e["candidates"] or any(t in key for t in REQUERY) or forced_query
         if not needs:
             continue
-        # query by the canonical key (suffix-stripped, no punctuation) -- browse-edgar prefix-matches
-        # the conformed name, so "verticalnet" hits "VERTICALNET INC" where "VerticalNet, Inc." misses
-        e["edgar_candidates"] = edgar_lookup(key)  # [] recorded => supports PRIVATE
+        # query by a forced distinctive query where the key would miss (name changes / word order),
+        # else the canonical key -- browse-edgar prefix-matches the conformed name
+        e["edgar_candidates"] = edgar_lookup(forced_query or key)  # [] => supports PRIVATE
         enriched += 1
 
     # subsidiary-pair flags: propose but never collapse; the human reads these off the contract
