@@ -79,9 +79,10 @@ def main() -> None:
 
     # subsidiary-pair flags: propose but never collapse; the human reads these off the contract
     keys = {e["entity_key"] for e in doc["entities"]}
+    existing = {(f["type"], tuple(f["entities"])) for f in doc.get("flags", [])}
     for a, b in SUBSIDIARY_PAIRS:
         present = [k for k in (a, b) if k in keys]
-        if len(present) == 2:
+        if len(present) == 2 and ("subsidiary_pair", tuple(present)) not in existing:
             doc.setdefault("flags", []).append(
                 {"type": "subsidiary_pair", "entities": present,
                  "note": "distinct nodes unless the contract signs them as one party; do not merge"}
