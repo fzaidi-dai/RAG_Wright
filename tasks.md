@@ -18,23 +18,17 @@ not this repo's.
 
 ## Last approved / next up
 
-- **RESUME HERE (T10 in progress):** the entity verification is **complete** — the human-verified
-  set is at `data/edgar/verification_set.json` (gitignored, persists locally): **45/45 resolved**
-  (28 CIK + 17 PRIVATE), triage fields stripped. Along the way T10 built the T23b canonicalizer
-  (`corpus/canonicalize.py`) and the EDGAR loose/lookup helpers, all committed. **Next action: build
-  the RELATIONAL archetype from that verified set** — see the build rules below.
-  - **Build rules (from the review):** 1-hop co-party questions per verified hub, answer key = the
-    hub's **full** verified co-party set (CIK entities and verified-PRIVATE entities are **both
-    first-class**; the axis is verified-vs-unverified, not public-vs-private). Keep only **real**
-    2-hop chains (three verified *distinct* entities, two real contractual edges; no variant/artifact
-    hops; public/private irrelevant). **Distinct subs have separate answer keys** (e.g. ScanSource
-    vs ScanSource Latin America — do not list one's counterparties under the other). Register as the
-    RELATIONAL split in the harness (`eval/harness.py`, `Archetype.RELATIONAL`); record
-    "public-filer-centric, multi-hop-modest" as the honest eval property.
-  - Regenerate the base set anytime: `prep_relational_verification` → `enrich_edgar_candidates`
-    (but the resolved `resolution` fields are the ground truth — do not overwrite them).
-- **Last approved:** **T9** (§12, RAC-9) — golden eval harness + CUAD-annotation golden set (2,032
-  questions). (T8 `c1f43aa`.)
+- **NEXT UP:** **T11** (assumption 2, tech stack, RAC-11) — model-profile seam (DeepSeek V4 Pro
+  first for structured-under-reasoning). Foundations continue; T11–T15 are largely parallel.
+- **Last approved:** **T10** (§12/§8, RAC-10) — EDGAR-derived RELATIONAL + multi-hop golden set.
+  **19 questions (16 one-hop + 3 two-hop)** built from the human-verified set into
+  `eval/golden/relational/set.json` (**committed** as a verified fixture — the derived answer keys,
+  the only durable copy in git; the gitignored triage file `data/edgar/verification_set.json` stays
+  out; ADR-0005). Registered as `Archetype.RELATIONAL` in the harness; honest property recorded:
+  `public-filer-centric, multi-hop-modest`. Rebuild anytime: `uv run python -m eval.multihop` (the
+  `resolution` fields, not the rebuild, are ground truth). Along the way T10 also built the T23b
+  canonicalizer (`corpus/canonicalize.py`) and the EDGAR loose/lookup helpers (all committed;
+  ADR-0004). (T9 golden harness + CUAD set, 2,032 questions, remains the prior CUAD baseline.)
 - **Phase 2 (Tasks) ledger** was approved with revisions (RAC prefix; FR-I.6 line redrawn; EDGAR
   multi-hop split out as T10; DeepSeek V4 Pro first in the model-profile seam; ARD registration
   added as a cross-cutting definition of done, T6 emits the manifest skeleton and each bound
@@ -108,7 +102,7 @@ working loop enforces it.
 | T7 | CUAD + EDGAR corpus acquisition and subset | 4 Foundations | Phase 0 | done | - |
 | T8 | Ontology and registry derivation | 4 Foundations | FR-C.8, FR-C.7 | done | T4, T7 |
 | T9 | Golden eval harness + CUAD-annotation archetype sets | 4 Foundations | §12 | done | T7 |
-| T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | in-progress | T7, T9 |
+| T10 | EDGAR-derived relational + multi-hop question construction | 4 Foundations | §12, §8 | done | T7, T9 |
 | T11 | Model-profile seam (DeepSeek V4 Pro first for structured-under-reasoning) | 4 Foundations | assumption 2, tech stack | todo | T6 |
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | todo | T11 |
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | todo | T3, T6 |
@@ -427,25 +421,37 @@ single-document questions. Making it visible and separate is what makes the grap
 per-source ablation (T32) measurable at all.
 
 **RAC-10:**
-- [ ] Questions require traversal across the EDGAR party-and-entity graph (relational and
+- [x] Questions require traversal across the EDGAR party-and-entity graph (relational and
   genuine multi-hop, not single-document lookups), with ground-truth answer entities and the
-  `entity_id`/`chunk_id` evidence path recorded.
-- [ ] **The name→CIK links are human-verified, not auto-generated** (folds
+  `entity_id`/`chunk_id` evidence path recorded. **Live: 19 questions** — 16 one-hop (hub's full
+  co-party set) + 3 two-hop; `entity_paths` records the entity_id evidence chain per answer, chunk_id
+  path resolved at eval time (same deferral as CUAD `relevant_ids`).
+- [x] **The name→CIK links are human-verified, not auto-generated** (folds
   `docs/Corpus_Acquisition.md`): linking a contract's parties to CIKs is itself the entity-resolution
   problem (FR-C.7), so building the answer key by fuzzy matching and then testing fuzzy matching
-  against it is circular. T7 produces mechanical, UNVERIFIED-marked proposals; **only human-verified
-  matches enter the golden set here** — verification at T10 is the sole path from proposal to ground
-  truth (same human-curated-fixture discipline as the engine's control_level eval).
-- [ ] The set is registered as its own archetype split in the harness (T9), separate from the
-  CUAD-annotation sets.
-- [ ] Coverage is enough to measure the graph leg's recall and its per-source ablation loss (T32),
-  not a token handful.
+  against it is circular. **Only the human-verified `resolution` fields (45/45: 28 CIK + 17 PRIVATE)
+  enter the set** — `build_relational` reads ground truth, never re-matches. CIK filers and
+  verified-PRIVATE entities are **both first-class** (axis = verified-vs-unverified); variant
+  spellings collapse by resolved identity; distinct subs keep separate keys (ScanSource vs ScanSource
+  Latin America); SKIP excluded.
+- [x] The set is registered as its own archetype split in the harness (T9), separate from the
+  CUAD-annotation sets. `RelationalQuestion.to_golden()` → `Archetype.RELATIONAL`; `evaluate()`
+  reports `relational/text` and `relational/graph`, each leg separate.
+- [x] Coverage is enough to measure the graph leg's recall and its per-source ablation loss (T32),
+  not a token handful. **Honest property recorded** (`public-filer-centric, multi-hop-modest`): the
+  corpus is star-shaped, so 16 one-hop but only 3 genuine 2-hop hubs — modest *by the corpus*, not by
+  under-building. Made visible by measurement (`make-load-bearing-work-a-visible-task`), not hidden.
 
-**Verification:** `uv run pytest eval/test_multihop_set.py`
+**Verification:** `uv run pytest eval/test_multihop_set.py` — 6 passed (full suite 233). Rebuild the
+set: `uv run python -m eval.multihop`.
 
-**Dependencies:** T7, T9. **Scope:** M.
-**Files:** `eval/multihop.py`, `eval/golden/relational/`, `eval/test_multihop_set.py`
+**Dependencies:** T7, T9. **Scope:** M. **Status:** done.
+**Files:** `eval/multihop.py`, `eval/golden/relational/set.json` (**committed** verified fixture),
+`eval/test_multihop_set.py`, `docs/adr/0005-relational-golden-set.md`.
 **Note:** The entire reason the ArcadeDB graph layer exists is measured here. Do not fold into T9.
+The built set is committed (verified answer keys, the only durable copy in git); the gitignored
+triage file `data/edgar/verification_set.json` stays out. Decisions in **ADR-0005** (identity key,
+`PRIVATE:<key>` sentinel keeps `EntityId` strict, commit-the-fixture rationale).
 **Unresolved-set note (from T7):** the T7 name→CIK proposals are conservative (normalized
 conformed-name only), so the UNRESOLVED set is *expected* to contain real entities — private
 companies/individuals (absent from EDGAR) and name variants (subsidiaries, former names, DBAs). The

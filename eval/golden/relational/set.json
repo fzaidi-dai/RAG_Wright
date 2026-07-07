@@ -1,0 +1,698 @@
+{
+  "eval_property": "public-filer-centric, multi-hop-modest",
+  "counts": {
+    "one_hop": 16,
+    "two_hop": 3
+  },
+  "questions": [
+    {
+      "qid": "rel:1hop:bank of america",
+      "hop_count": 1,
+      "question": "Which parties contract directly with BANK OF AMERICA CORPORATION?",
+      "anchor": {
+        "entity_key": "bank of america",
+        "representative": "BANK OF AMERICA CORPORATION",
+        "entity_id": "0000070858",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "banc of america preferred funding",
+          "representative": "BANC OF AMERICA PREFERRED FUNDING CORPORATION",
+          "entity_id": "0001565450",
+          "private": false
+        },
+        {
+          "entity_key": "cardlytics",
+          "representative": "Cardlytics, Inc.",
+          "entity_id": "0001666071",
+          "private": false
+        }
+      ],
+      "entity_paths": [
+        [
+          "0000070858",
+          "0001565450"
+        ],
+        [
+          "0000070858",
+          "0001666071"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:premier nutrition",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Premier Nutrition Company, LLC?",
+      "anchor": {
+        "entity_key": "premier nutrition",
+        "representative": "Premier Nutrition Company, LLC",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "fonterra usa",
+          "representative": "Fonterra (USA) Inc.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "stremicks heritage foods",
+          "representative": "Stremick's Heritage Foods, LLC",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:premier nutrition",
+          "PRIVATE:fonterra usa"
+        ],
+        [
+          "PRIVATE:premier nutrition",
+          "PRIVATE:stremicks heritage foods"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:verticalnet",
+      "hop_count": 1,
+      "question": "Which parties contract directly with VerticalNet, Inc.?",
+      "anchor": {
+        "entity_key": "verticalnet",
+        "representative": "VerticalNet, Inc.",
+        "entity_id": "0001043946",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "neoforma com",
+          "representative": "Neoforma.com, Inc.",
+          "entity_id": "0001096219",
+          "private": false
+        },
+        {
+          "entity_key": "impresse",
+          "representative": "Impresse Corporation",
+          "entity_id": "0001104493",
+          "private": false
+        },
+        {
+          "entity_key": "paperexchange com",
+          "representative": "PaperExchange.com, LLC",
+          "entity_id": "0001108514",
+          "private": false
+        },
+        {
+          "entity_key": "leadersonline",
+          "representative": "LeadersOnline, Inc.",
+          "entity_id": "0001111000",
+          "private": false
+        },
+        {
+          "entity_key": "converge",
+          "representative": "Converge, Inc.",
+          "entity_id": "0001143343",
+          "private": false
+        },
+        {
+          "entity_key": "verticalnet enterprises",
+          "representative": "VerticalNet Enterprises LLC",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001043946",
+          "0001096219"
+        ],
+        [
+          "0001043946",
+          "0001104493"
+        ],
+        [
+          "0001043946",
+          "0001108514"
+        ],
+        [
+          "0001043946",
+          "0001111000"
+        ],
+        [
+          "0001043946",
+          "0001143343"
+        ],
+        [
+          "0001043946",
+          "PRIVATE:verticalnet enterprises"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:excite",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Excite, Inc.?",
+      "anchor": {
+        "entity_key": "excite",
+        "representative": "Excite, Inc.",
+        "entity_id": "0001007297",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "n2k",
+          "representative": "N2K Inc.",
+          "entity_id": "0000791704",
+          "private": false
+        },
+        {
+          "entity_key": "vitamin shoppe industries",
+          "representative": "Vitamin Shoppe Industries Inc.",
+          "entity_id": "0001106971",
+          "private": false
+        },
+        {
+          "entity_key": "netgrocer",
+          "representative": "NetGrocer, Inc.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001007297",
+          "0000791704"
+        ],
+        [
+          "0001007297",
+          "0001106971"
+        ],
+        [
+          "0001007297",
+          "PRIVATE:netgrocer"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:federated advisory services",
+      "hop_count": 1,
+      "question": "Which parties contract directly with FEDERATED ADVISORY SERVICES COMPANY?",
+      "anchor": {
+        "entity_key": "federated advisory services",
+        "representative": "FEDERATED ADVISORY SERVICES COMPANY",
+        "entity_id": "0001279010",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "federated investment management",
+          "representative": "FEDERATED INVESTMENT MANAGEMENT COMPANY",
+          "entity_id": "0001086433",
+          "private": false
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001279010",
+          "0001086433"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:federated investment management",
+      "hop_count": 1,
+      "question": "Which parties contract directly with FEDERATED INVESTMENT MANAGEMENT COMPANY?",
+      "anchor": {
+        "entity_key": "federated investment management",
+        "representative": "FEDERATED INVESTMENT MANAGEMENT COMPANY",
+        "entity_id": "0001086433",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "federated advisory services",
+          "representative": "FEDERATED ADVISORY SERVICES COMPANY",
+          "entity_id": "0001279010",
+          "private": false
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001086433",
+          "0001279010"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:stremicks heritage foods",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Stremick's Heritage Foods, LLC?",
+      "anchor": {
+        "entity_key": "stremicks heritage foods",
+        "representative": "Stremick's Heritage Foods, LLC",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "premier nutrition",
+          "representative": "Premier Nutrition Company, LLC",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:stremicks heritage foods",
+          "PRIVATE:premier nutrition"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:2hop:stremicks heritage foods",
+      "hop_count": 2,
+      "question": "Which parties are connected to Stremick's Heritage Foods, LLC through exactly one shared counterparty (two contractual hops), but do not contract with it directly?",
+      "anchor": {
+        "entity_key": "stremicks heritage foods",
+        "representative": "Stremick's Heritage Foods, LLC",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "fonterra usa",
+          "representative": "Fonterra (USA) Inc.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:stremicks heritage foods",
+          "PRIVATE:premier nutrition",
+          "PRIVATE:fonterra usa"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:beijing sina internet information service",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Beijing SINA Internet Information Service Co., Ltd.?",
+      "anchor": {
+        "entity_key": "beijing sina internet information service",
+        "representative": "Beijing SINA Internet Information Service Co., Ltd.",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "beijing yisheng leju information services",
+          "representative": "Beijing Yisheng Leju Information Services Co., Ltd.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "shanghai sina leju information technology",
+          "representative": "Shanghai SINA Leju Information Technology Co. Ltd.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:beijing sina internet information service",
+          "PRIVATE:beijing yisheng leju information services"
+        ],
+        [
+          "PRIVATE:beijing sina internet information service",
+          "PRIVATE:shanghai sina leju information technology"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:2hop:beijing sina internet information service",
+      "hop_count": 2,
+      "question": "Which parties are connected to Beijing SINA Internet Information Service Co., Ltd. through exactly one shared counterparty (two contractual hops), but do not contract with it directly?",
+      "anchor": {
+        "entity_key": "beijing sina internet information service",
+        "representative": "Beijing SINA Internet Information Service Co., Ltd.",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "beijing baidu netcom science and technology",
+          "representative": "Beijing Baidu Netcom Science and Technology Co., Ltd.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "china online housing hong kong",
+          "representative": "China Online Housing (Hong Kong) Co., Ltd.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:beijing sina internet information service",
+          "PRIVATE:beijing yisheng leju information services",
+          "PRIVATE:beijing baidu netcom science and technology"
+        ],
+        [
+          "PRIVATE:beijing sina internet information service",
+          "PRIVATE:beijing yisheng leju information services",
+          "PRIVATE:china online housing hong kong"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:beijing yisheng leju information services",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Beijing Yisheng Leju Information Services Co., Ltd.?",
+      "anchor": {
+        "entity_key": "beijing yisheng leju information services",
+        "representative": "Beijing Yisheng Leju Information Services Co., Ltd.",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "beijing baidu netcom science and technology",
+          "representative": "Beijing Baidu Netcom Science and Technology Co., Ltd.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "beijing sina internet information service",
+          "representative": "Beijing SINA Internet Information Service Co., Ltd.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "china online housing hong kong",
+          "representative": "China Online Housing (Hong Kong) Co., Ltd.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:beijing yisheng leju information services",
+          "PRIVATE:beijing baidu netcom science and technology"
+        ],
+        [
+          "PRIVATE:beijing yisheng leju information services",
+          "PRIVATE:beijing sina internet information service"
+        ],
+        [
+          "PRIVATE:beijing yisheng leju information services",
+          "PRIVATE:china online housing hong kong"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:2hop:beijing yisheng leju information services",
+      "hop_count": 2,
+      "question": "Which parties are connected to Beijing Yisheng Leju Information Services Co., Ltd. through exactly one shared counterparty (two contractual hops), but do not contract with it directly?",
+      "anchor": {
+        "entity_key": "beijing yisheng leju information services",
+        "representative": "Beijing Yisheng Leju Information Services Co., Ltd.",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "shanghai sina leju information technology",
+          "representative": "Shanghai SINA Leju Information Technology Co. Ltd.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:beijing yisheng leju information services",
+          "PRIVATE:beijing sina internet information service",
+          "PRIVATE:shanghai sina leju information technology"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:bravatek solutions",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Bravatek Solutions, Inc.?",
+      "anchor": {
+        "entity_key": "bravatek solutions",
+        "representative": "Bravatek Solutions, Inc.",
+        "entity_id": "0001449574",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "sibannac",
+          "representative": "Sibannac, Inc.",
+          "entity_id": "0001313938",
+          "private": false
+        },
+        {
+          "entity_key": "fazync",
+          "representative": "Fazync LLC",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "i3 integrative creative solutions",
+          "representative": "i3 Integrative Creative Solutions, LLC",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001449574",
+          "0001313938"
+        ],
+        [
+          "0001449574",
+          "PRIVATE:fazync"
+        ],
+        [
+          "0001449574",
+          "PRIVATE:i3 integrative creative solutions"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:fox mobile entertainment",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Fox Mobile Entertainment, Inc.?",
+      "anchor": {
+        "entity_key": "fox mobile entertainment",
+        "representative": "Fox Mobile Entertainment, Inc.",
+        "entity_id": null,
+        "private": true
+      },
+      "answer_entities": [
+        {
+          "entity_key": "glu mobile",
+          "representative": "Glu Mobile, Inc. f/k/a Sorrent, Inc.",
+          "entity_id": "0001366246",
+          "private": false
+        }
+      ],
+      "entity_paths": [
+        [
+          "PRIVATE:fox mobile entertainment",
+          "0001366246"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:glu mobile",
+      "hop_count": 1,
+      "question": "Which parties contract directly with Glu Mobile, Inc. f/k/a Sorrent, Inc.?",
+      "anchor": {
+        "entity_key": "glu mobile",
+        "representative": "Glu Mobile, Inc. f/k/a Sorrent, Inc.",
+        "entity_id": "0001366246",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "fox mobile entertainment",
+          "representative": "Fox Mobile Entertainment, Inc.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001366246",
+          "PRIVATE:fox mobile entertainment"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:international business machines",
+      "hop_count": 1,
+      "question": "Which parties contract directly with International Business Machines Corporation?",
+      "anchor": {
+        "entity_key": "international business machines",
+        "representative": "International Business Machines Corporation",
+        "entity_id": "0000051143",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "bluefly",
+          "representative": "Bluefly, Inc.",
+          "entity_id": "0001030896",
+          "private": false
+        },
+        {
+          "entity_key": "the quantum group",
+          "representative": "The Quantum Group Inc.",
+          "entity_id": "0001118847",
+          "private": false
+        },
+        {
+          "entity_key": "manufacturers services western us operations",
+          "representative": "Manufacturers' Services Western US Operations, Inc.",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "0000051143",
+          "0001030896"
+        ],
+        [
+          "0000051143",
+          "0001118847"
+        ],
+        [
+          "0000051143",
+          "PRIVATE:manufacturers services western us operations"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:netgear",
+      "hop_count": 1,
+      "question": "Which parties contract directly with NETGEAR, Inc.?",
+      "anchor": {
+        "entity_key": "netgear",
+        "representative": "NETGEAR, Inc.",
+        "entity_id": "0001122904",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "ingram micro",
+          "representative": "INGRAM MICRO INC.",
+          "entity_id": "0001018003",
+          "private": false
+        }
+      ],
+      "entity_paths": [
+        [
+          "0001122904",
+          "0001018003"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:pc quote",
+      "hop_count": 1,
+      "question": "Which parties contract directly with PC Quote, Inc.?",
+      "anchor": {
+        "entity_key": "pc quote",
+        "representative": "PC Quote, Inc.",
+        "entity_id": "0000745774",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "a b watley",
+          "representative": "A.B. Watley, Inc.",
+          "entity_id": "0001035632",
+          "private": false
+        }
+      ],
+      "entity_paths": [
+        [
+          "0000745774",
+          "0001035632"
+        ]
+      ]
+    },
+    {
+      "qid": "rel:1hop:scansource",
+      "hop_count": 1,
+      "question": "Which parties contract directly with ScanSource, Inc.?",
+      "anchor": {
+        "entity_key": "scansource",
+        "representative": "ScanSource, Inc.",
+        "entity_id": "0000918965",
+        "private": false
+      },
+      "answer_entities": [
+        {
+          "entity_key": "cisco systems",
+          "representative": "Cisco Systems, Inc.",
+          "entity_id": "0000858877",
+          "private": false
+        },
+        {
+          "entity_key": "xplore technologies corporation of america",
+          "representative": "Xplore Technologies Corporation of America",
+          "entity_id": "0001445858",
+          "private": false
+        },
+        {
+          "entity_key": "scansource latin america",
+          "representative": "ScanSource Latin America, Inc.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "zebra technologies do brasil com rcio de produtos de inform tica ltda",
+          "representative": "Zebra Technologies do Brasil - Com\u00e9rcio de Produtos de Inform\u00e5tica Ltda.",
+          "entity_id": null,
+          "private": true
+        },
+        {
+          "entity_key": "zebra technologies international",
+          "representative": "Zebra Technologies International, LLC",
+          "entity_id": null,
+          "private": true
+        }
+      ],
+      "entity_paths": [
+        [
+          "0000918965",
+          "0000858877"
+        ],
+        [
+          "0000918965",
+          "0001445858"
+        ],
+        [
+          "0000918965",
+          "PRIVATE:scansource latin america"
+        ],
+        [
+          "0000918965",
+          "PRIVATE:zebra technologies do brasil com rcio de produtos de inform tica ltda"
+        ],
+        [
+          "0000918965",
+          "PRIVATE:zebra technologies international"
+        ]
+      ]
+    }
+  ]
+}
