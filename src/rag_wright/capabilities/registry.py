@@ -36,6 +36,8 @@ from pydantic import BaseModel
 from rag_wright.capabilities.ard import (
     CALLABLE_KINDS,
     MEDIA_TYPE_BY_KIND,
+    URN_NAMESPACE,
+    URN_PUBLISHER,
     ArdEnvelope,
     Attestation,
     EntryKind,
@@ -45,9 +47,8 @@ from rag_wright.capabilities.ard import (
     TrustManifest,
 )
 
-# The ARD URN is domain-anchored: urn:air:<publisher>:<namespace>:<name> (ADR-0005).
-_URN_PUBLISHER = "dreamai"
-_URN_NAMESPACE = "rag_wright"
+# The ARD URN is domain-anchored (ARD v0.9 4.2.1): urn:air:<publisher>:<namespace>:<name>. The
+# publisher and namespace are the single source in ard.py (dreamai.io / rag_wright).
 _DEFAULT_OWNER = "dreamai.io"
 
 # The canonical capability slugs are the cross-spec join keys (SPEC.md section 5, "FR-C canonical
@@ -78,8 +79,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
 
 
 def capability_urn(name: str) -> str:
-    """The domain-anchored ARD URN for a capability name."""
-    return f"urn:air:{_URN_PUBLISHER}:{_URN_NAMESPACE}:{name}"
+    """The domain-anchored ARD URN for a capability name (urn:air:dreamai.io:rag_wright:<name>)."""
+    return f"urn:air:{URN_PUBLISHER}:{URN_NAMESPACE}:{name}"
 
 
 class ManifestSkeleton(BaseModel):

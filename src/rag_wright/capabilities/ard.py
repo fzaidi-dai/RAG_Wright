@@ -14,10 +14,22 @@ the wire via `to_camel`, `extra="forbid"`).
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
 from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
+
+# The ARD identifier scheme (ARD v0.9 section 4.2.1, https://github.com/ards-project/ard-spec):
+# urn:air:<publisher>:<namespace>:<name>. Our vertical's publisher is the FQDN dreamai.io and the
+# namespace is rag_wright, so every capability we author carries `RAG_URN_PREFIX + <slug>`. The
+# generic schema mirror (ArdEnvelope, below) validates only the `urn:air:` prefix, matching
+# GraphWright's schema which accepts any publisher; the exact-publisher check is applied where we
+# author/write OUR manifests (write_manifest, and the emitter in registry.py).
+URN_PUBLISHER = "dreamai.io"
+URN_NAMESPACE = "rag_wright"
+RAG_URN_PREFIX = f"urn:air:{URN_PUBLISHER}:{URN_NAMESPACE}:"
 
 # The six governed kinds (GraphWright FR-5.1). `agent_skill` is loaded by an agent node; the others
 # are callables that declare response bounds (FR-5.2).
@@ -125,3 +137,45 @@ class RegistryEntry(_ArdModel):
         if self.requires and self.kind != "agent_skill":
             raise ValueError(f"a requires closure is only valid on an agent_skill, not {self.kind!r}")
         return self
+
+
+# --- the shared ARD registry root (GraphWright docs/authoring/registry-root.md) ------------------
+#
+# One shared registry root, config-addressed by the ARD_REGISTRY_ROOT env var that GraphWright's
+# RegistryStore also reads. RAG_Wright writes its manifests here; the compiler discovers them from
+# the same directory. We never create a second or project-local root and never hardcode a path.
+
+_DEFAULT_REGISTRY_ROOT = Path("~/.air/registry")  # `.air` mirrors the urn:air: scheme (registry-root.md)
+
+
+def registry_root() -> Path:
+    """Resolve the shared ARD registry root from `ARD_REGISTRY_ROOT`, creating it if absent.
+
+    Defaults to `~/.air/registry` when the env var is unset (same default as GraphWright). A leading
+    `~` is expanded; no absolute path is baked into source. An empty root is a valid, zero-entry
+    catalog, so this always returns a usable directory.
+    """
+    raw = os.environ.get("ARD_REGISTRY_ROOT", "").strip()
+    root = Path(raw).expanduser() if raw else _DEFAULT_REGISTRY_ROOT.expanduser()
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def write_manifest(entry: RegistryEntry, *, root: Optional[Path] = None) -> Path:
+    """Write an authored manifest to `<root>/<slug>.json`, the flat top-level ARD layout.
+
+    The identifier must be one of our own URNs (`urn:air:dreamai.io:rag_wright:<slug>`) — this is the
+    exact-publisher check for what we author, distinct from `ArdEnvelope`'s generic `urn:air:` schema
+    mirror. The file is named after the URN's final segment; identity is the `identifier` field
+    inside. Serialized ARD-shaped (camelCase on the wire) per ADR-0005.
+    """
+    identifier = entry.envelope.identifier
+    if not identifier.startswith(RAG_URN_PREFIX):
+        raise ValueError(
+            f"manifest identifier {identifier!r} is not one of ours; expected it to start with "
+            f"{RAG_URN_PREFIX!r} (urn:air:dreamai.io:rag_wright:<slug>)"
+        )
+    slug = identifier.rsplit(":", 1)[-1]
+    target = (root if root is not None else registry_root()) / f"{slug}.json"
+    target.write_text(entry.model_dump_json(by_alias=True, indent=2), encoding="utf-8")
+    return target

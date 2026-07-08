@@ -6,7 +6,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 This is the **capability half** only. Each task builds and registers one FR-C / FR-I / FR-Q
 capability, or a foundation seam, as ordinary tested software. Registration is twofold and is part
 of every capability's definition of done: internal registration (T6, which the Model Context
-Protocol surface exposes) and Autonomous Resource Directory (ARD) registration (the manifest the
+Protocol surface exposes) and Agentic Resource Discovery (ARD) registration (the manifest the
 GraphWright compiler discovers and binds against); see "ARD registration" below. The ingestion and
 query **graphs** are compiled separately from the Orchestration Spec by the GraphWright compiler
 and are not built here. Any task that looks like "wire the pipeline into a graph" is compiler work,
@@ -80,7 +80,7 @@ Internal registration (T6) registers a built capability by its FR-C name with it
 `src/rag_wright/capabilities/registry.py`. Its consumer is the Model Context Protocol (MCP) skill
 surface (T31).
 
-ARD registration is the Autonomous Resource Directory manifest that lets the GraphWright compiler
+ARD registration is the Agentic Resource Discovery manifest that lets the GraphWright compiler
 discover and bind the capability when it compiles the ingestion and query graphs from the
 Orchestration Spec. Its consumer is the compiler's discovery and gap-analysis gate, not this repo.
 The manifest is a `*.json` file conforming to GraphWright's `RegistryEntry` schema (GraphWright
@@ -288,7 +288,7 @@ the same surface-form notion → T24 resolves both channels as one stream (see T
 
 **Description:** A registry seam where each built capability registers under its FR-C name with
 its contract (contract use, FR-S.5). Registration is what the MCP skill surface (T31) later
-exposes. The same seam also emits the capability's Autonomous Resource Directory (ARD) manifest
+exposes. The same seam also emits the capability's Agentic Resource Discovery (ARD) manifest
 skeleton (see "ARD registration"), so the internal registry and the ARD manifest share the FR-C
 name as their one key and stay coherent.
 
@@ -298,7 +298,7 @@ name as their one key and stay coherent.
   lookup raises. The name is the cross-spec join key — a canonical slug (`hybrid_search`, never
   `fr-c-3`), enforced against the mirrored slug set.
 - [x] Registration emits an ARD manifest skeleton conforming to the mirrored GraphWright
-  `RegistryEntry` schema (URN `urn:air:dreamai:rag_wright:<slug>`, kind, callable response bounds),
+  `RegistryEntry` schema (URN `urn:air:dreamai.io:rag_wright:<slug>`, kind, callable response bounds),
   leaving the authored fields (representative queries 2-5, trust attestations) for the capability
   task. The skeleton is a DRAFT that cannot validate as a `RegistryEntry`; only
   `ManifestSkeleton.author(...)` yields the loadable entry, kept out of the glob'd path until then.

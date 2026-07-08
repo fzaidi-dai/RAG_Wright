@@ -9,7 +9,7 @@
 
 Every built capability has two registrations from one key, its FR-C / FR-I / FR-Q name (tasks.md
 "ARD registration"): an internal registration (by name, with its contract, for the MCP skill
-surface, T31) and an Autonomous Resource Directory (ARD) registration (a manifest the GraphWright
+surface, T31) and an Agentic Resource Discovery (ARD) registration (a manifest the GraphWright
 compiler discovers and binds). The ARD manifest must conform to GraphWright's `RegistryEntry` schema
 (GraphWright ADR-0005), which its `RegistryStore` loads and validates. RAG_Wright is the capability
 half; GraphWright is the compiler half. This ADR records how RAG_Wright conforms to that schema and
@@ -45,10 +45,17 @@ how each capability's ARD `kind` is chosen.
    "all function" were both rejected: the first falsely exposes internal functions over MCP, the
    second erases the required MCP surface.
 
-4. **Identity URN:** `urn:air:dreamai:rag_wright:<slug>`, where `<slug>` is the capability's
+4. **Identity URN:** `urn:air:dreamai.io:rag_wright:<slug>`, where `<slug>` is the capability's
    **canonical slug** from SPEC.md section 5 ("FR-C canonical slugs") — the semantic name, never a
    requirement id (`hybrid_search`, never `fr-c-3`), so it survives spec renumbering. It is the
    cross-spec join key the Orchestration Spec binds against and the internal registry key. The
+   `urn:air:` scheme, and the rule that `<publisher>` is a domain-anchored FQDN, are defined by the
+   **ARD specification** (ARD v0.9 section 4.2.1, "Agent Identifier Format and Rationale":
+   https://github.com/ards-project/ard-spec/blob/main/spec/ard.md) — ARD is **Agentic Resource
+   Discovery**, and `air` is its registered URN Namespace Identifier (not an abbreviation to expand).
+   Our publisher is the FQDN `dreamai.io`; the generic `urn:air:` schema validator mirrors
+   GraphWright's (any publisher), while the exact `urn:air:dreamai.io:rag_wright:` prefix is enforced
+   where we author and write our own manifests. The
    registry mirrors the canonical slug set (like the schema mirror, a cross-repo coordination point)
    and **rejects a non-canonical name**. `generation` (FR-C.9) is a single slug: reasoning,
    generation, and vision-to-text are one capability bound wherever needed, not two. `governance.owner`
@@ -62,6 +69,13 @@ how each capability's ARD `kind` is chosen.
    cannot validate as one. Because `RegistryStore` globs `*.json` non-recursively at the registry
    root, drafts live in a `staging/` subdirectory (never globbed) until authored, so neither the
    store nor the compiler's glob ever loads a partial as if it were registered.
+
+6. **One shared registry root, config-addressed.** `ard.write_manifest` resolves the write location
+   from the `ARD_REGISTRY_ROOT` environment variable — the same variable GraphWright's `RegistryStore`
+   reads, per GraphWright's `docs/authoring/registry-root.md` — defaulting to `~/.air/registry` when
+   unset, creating the directory if absent, and writing each authored manifest to `<root>/<slug>.json`
+   (the flat, non-recursive layout the store globs). We read that one shared root; we never create a
+   second or project-local root and never hardcode a path.
 
 ## Consequences
 

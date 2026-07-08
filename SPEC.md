@@ -66,7 +66,7 @@ Each capability is registered under a canonical slug, and that slug is the join 
 
 `parsing` (FR-C.1), `embedding` (FR-C.2), `hybrid_search` (FR-C.3), `reranking` (FR-C.4), `graph_query` (FR-C.5), `graph_extraction` (FR-C.6), `entity_disambiguation` and `entity_resolution` (the two-stage canonicalize-then-link capabilities, FR-C.7), `ontology_registry_derivation` (FR-C.8), `generation` (FR-C.9), `fusion` (the union-and-deduplicate capability, FR-Q.4), `rlm_chunking` and `rlm_synthesis` (the two capabilities that apply the RLM skill, FR-C.10 with FR-I.1 and FR-Q.5). If the authored RLM method is registered as its own shared skill, its slug is `rlm_method`, required by `rlm_chunking` and `rlm_synthesis`.
 
-The Orchestration Spec references most capabilities behaviorally (resolved by discovery against representative queries) and names only the must-bind capabilities explicitly; those explicit names must be exactly these slugs. Registration URNs embed the slug as the final segment (`urn:air:dreamai:rag_wright:<slug>`).
+The Orchestration Spec references most capabilities behaviorally (resolved by discovery against representative queries) and names only the must-bind capabilities explicitly; those explicit names must be exactly these slugs. Registration URNs embed the slug as the final segment (`urn:air:dreamai.io:rag_wright:<slug>`).
 
 ## 6. Ingestion-side capability requirements
 

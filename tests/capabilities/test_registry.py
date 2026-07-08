@@ -16,12 +16,16 @@ from pydantic import ValidationError
 
 from rag_wright.capabilities.ard import (
     MEDIA_TYPE_BY_KIND,
+    RAG_URN_PREFIX,
     ArdEnvelope,
     GovernanceBlock,
     RegistryEntry,
     ResponseBounds,
     TrustManifest,
+    registry_root,
+    write_manifest,
 )
+import json
 import re
 
 from rag_wright.capabilities.registry import (
@@ -100,7 +104,7 @@ def test_skeleton_urn_anchors_on_the_capability_name():
     reg = CapabilityRegistry()
     skel = reg.register("graph_query", contract=ChunkRecord, kind="mcp_tool").skeleton
     assert skel.identifier == capability_urn("graph_query")
-    assert skel.identifier == "urn:air:dreamai:rag_wright:graph_query"
+    assert skel.identifier == "urn:air:dreamai.io:rag_wright:graph_query"
 
 
 def test_callable_kind_gets_media_type_and_response_bounds():
@@ -227,3 +231,52 @@ def test_requires_closure_only_valid_on_agent_skill():
             governance=GovernanceBlock(owner="dreamai.io"),
             requires=["some_other_capability"],
         )
+
+
+# --- shared ARD registry root: config-addressed by ARD_REGISTRY_ROOT (registry-root.md) ------
+
+
+def _authored_entry(name: str = "hybrid_search") -> RegistryEntry:
+    skel = CapabilityRegistry().register(name, contract=ChunkRecord, kind="mcp_tool").skeleton
+    return skel.author(["find the governing law clause", "what indemnities apply"])
+
+
+def test_registry_root_resolves_from_env_and_creates_it(tmp_path, monkeypatch):
+    target = tmp_path / "shared" / "registry"
+    monkeypatch.setenv("ARD_REGISTRY_ROOT", str(target))
+    root = registry_root()
+    assert root == target
+    assert root.is_dir()  # created on resolution
+
+
+def test_registry_root_defaults_to_air_registry_when_unset(tmp_path, monkeypatch):
+    monkeypatch.delenv("ARD_REGISTRY_ROOT", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))  # keep the default off the real home
+    root = registry_root()
+    assert root == tmp_path / ".air" / "registry"  # `.air` mirrors the urn:air: scheme
+    assert root.is_dir()
+
+
+def test_write_manifest_writes_flat_slug_json_to_the_root(tmp_path, monkeypatch):
+    monkeypatch.setenv("ARD_REGISTRY_ROOT", str(tmp_path))
+    entry = _authored_entry("hybrid_search")
+
+    path = write_manifest(entry)
+
+    assert path == tmp_path / "hybrid_search.json"  # flat, named after the URN's final segment
+    data = json.loads(path.read_text())
+    assert data["envelope"]["identifier"] == "urn:air:dreamai.io:rag_wright:hybrid_search"
+    assert "representativeQueries" in data["envelope"]  # ARD-shaped camelCase on the wire
+
+
+def test_write_manifest_rejects_a_foreign_publisher():
+    # a valid urn:air: URN from another publisher passes the generic schema but is not ours to write
+    foreign = RegistryEntry(
+        kind="mcp_tool",
+        envelope=_envelope(identifier="urn:air:someoneelse.com:their_ns:x"),
+        response_bounds=ResponseBounds(),
+        governance=GovernanceBlock(owner="dreamai.io"),
+    )
+    assert not foreign.envelope.identifier.startswith(RAG_URN_PREFIX)
+    with pytest.raises(ValueError, match="not one of ours"):
+        write_manifest(foreign)
