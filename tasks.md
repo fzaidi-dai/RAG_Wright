@@ -18,10 +18,19 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** paused before **T15** (RLM skill authoring) at the human's request — settling something
-  first. T15 needs no external deps. The two foundation risk-tests are both cleared (A-T1 store, A-T2
-  model). Remaining foundation tasks: T15 (RLM skill). Then GATE-1 depends on T17/T19/T9.
-- **Last approved:** **T14** (FR-C.3 dep, risk 1, RAC-14) — A-T1 `vector.fuse` hybrid foundation test.
+- **NEXT UP:** **T16** (FR-C.1, RAC-16) — Parsing (Docling `DocumentConverter`): parse a CUAD PDF +
+  a scanned filing into the structured representation, cache/reuse, register under FR-C.1, and author
+  its ARD manifest (`parsing`, kind `function`) into the shared root. Begins the Build write-side
+  (spec Phase 1). **Cross-cutting (T15-T29):** each capability adds its `CapabilityManifest` to
+  `capabilities/manifests.py` and publishes to the shared root; mirror conformance green; no live
+  `RegistryStore` load here.
+- **Last approved:** **T15** (FR-C.10, RAC-15) — RLM skill authoring. `skills/rlm/SKILL.md` teaches the
+  divide-and-conquer method (interpreter → code-side slice/dispatch → synthesize), defers
+  determinism/boundary/gating/model-choice to the applying capabilities. Built the **reusable ARD
+  authoring seam** `capabilities/manifests.py` (one `CapabilityManifest` per capability) +
+  `scripts/publish_manifests.py`; `rlm_method` (agent_skill) manifest present in the shared root
+  (`~/.air/registry/rlm_method.json`). Mirror conformance green. 3 manifest tests; full suite 251.
+- **Prior:** **T14** (RAC-14) A-T1 `vector.fuse` hybrid test; **T13** (RAC-13) store seam + schema.
   Grounded the hybrid SQL against the official ArcadeDB docs + live 26.7.1, then tested end to end
   through the arcadedb-python `query()` method: `SELECT expand(vector.fuse(vector.neighbors(...),
   vector.sparseNeighbors(...), {fusion:'RRF'}))` returns a sensible fused ranking (dense-leg + sparse-leg
@@ -125,7 +134,7 @@ working loop enforces it.
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | done | T11 |
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | done | T3, T6 |
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | done | T13 |
-| T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | todo | - |
+| T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | done | - |
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | todo | T3 |
 | T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | todo | T15, T16, T11 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | todo | **GATE-1**, T17 |
@@ -622,17 +631,27 @@ its own; the RLM chunking (T17) and RLM synthesis (T28) capabilities each apply 
 contract and tests (FR-C.10, plan §1 note).
 
 **RAC-15:**
-- [ ] `SKILL.md` teaches the method (interpreter load, code-side slice/dispatch, synthesize) as
-  authored software, not a build-tool feature.
-- [ ] It defers all determinism/boundary/gating behavior to the applying capabilities.
-- [ ] ARD-registered as an `agent_skill`: its manifest loads under `RegistryStore(root)` with no
-  `RegistryLoadError` and is discoverable; the RLM skill is a required bound capability of both
-  graphs, so its ARD presence is what the gap-analysis gate checks before either graph compiles.
+- [x] `SKILL.md` teaches the method (interpreter load, code-side slice/dispatch, synthesize) as
+  authored software, not a build-tool feature. `src/rag_wright/skills/rlm/SKILL.md` (frontmatter +
+  the three-step method, recursive; shows how RLM chunking and RLM synthesis each apply it).
+- [x] It defers all determinism/boundary/gating behavior to the applying capabilities. Explicit
+  "What this skill does NOT own" section: determinism, boundary validation, gating, model choice.
+- [x] ARD-registered as an `agent_skill`: manifest authored via `ard.write_manifest` and **present in
+  the shared root** (`~/.air/registry/rlm_method.json`, `urn:air:dreamai.io:rag_wright:rlm_method`,
+  `application/ai-skill+md`). Mirror conformance tests green; the on-disk manifest re-validates as a
+  `RegistryEntry`. Live `RegistryStore(root)` load is deferred to the GraphWright side (not done here).
 
-**Verification:** Manual review of `SKILL.md`; no behavioral test (correctly has none).
+**Verification:** Manual review of `SKILL.md`; `uv run pytest tests/capabilities/test_manifests.py`
+— 3 passed (authoring + on-disk shape). Publish to the root: `uv run python scripts/publish_manifests.py`.
+Full suite 251 passed + 7 skipped.
 
-**Dependencies:** None. **Scope:** S.
-**Files:** `src/rag_wright/skills/rlm/SKILL.md`
+**Dependencies:** None. **Scope:** S. **Status:** done.
+**Files:** `src/rag_wright/skills/rlm/SKILL.md`, `src/rag_wright/capabilities/manifests.py`
+(reusable ARD-authoring seam, one `CapabilityManifest` per capability — extended each T15-T29 task),
+`scripts/publish_manifests.py`, `tests/capabilities/test_manifests.py`.
+**Note (cross-cutting, per the T15-T29 directive):** every capability authors its ARD manifest via
+`ard.py` into the shared root under `urn:air:dreamai.io:rag_wright:<slug>` with the mirror conformance
+test green and the manifest present in the root; no live `RegistryStore` load here (GraphWright side).
 
 ### Checkpoint: Foundations complete
 - [ ] Contract, model-seam, and registry unit tests green. A-T1 and A-T2 run and their outcomes
