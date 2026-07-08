@@ -18,18 +18,19 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T17** (FR-I.1, RAC-17) — RLM chunking (deterministic, content-hash gated): read the
-  whole parsed document (T16) through an interpreter using the RLM skill (T15), split along
-  topic/section/chapter boundaries into coherent chunks (capped ~20k tokens), summary per chunk +
-  per-document manifest + stable `chunk_id`s; temperature-zero/structured-output determinism, boundary
-  validation, content-hash gate. Uses the model-profile seam (T11). Author the `rlm_chunking`
-  (agent_skill, `requires: [rlm_method]`) ARD manifest. Depends on T15, T16, T11. **GATE-1** (RLM
-  chunker A/B) follows after T17+T19.
-- **Last approved:** **T16** (FR-C.1, RAC-16) — Parsing (Docling). `DocumentConverter` behind a
-  `Parser` seam → `ParsedDocument`; content-hash gated (parsed once via `save_as_json`/`load_from_json`).
-  Live `-m parse`: real CUAD PDF + scanned-OCR both parse (2 passed). `parsing` (function) manifest
-  present in the shared root. Added the manifest scaling test + `parse` opt-in marker. Full suite 259.
-- **Prior:** **T15** (RAC-15) RLM skill + reusable ARD seam; **T14** (RAC-14) A-T1 hybrid test.
+- **NEXT UP:** **T19** (FR-C.2/FR-I.3/FR-I.6, RAC-19) — Embedding (BGE-M3): dense vector over the
+  summary + native sparse vector over the full chunk text (read from the parse manifest, not the
+  chunk record), one model; output shapes match T3 (`BGE_M3_DENSE_DIM=1024` dense, `dict[int,float]`
+  sparse). FR-I.6 decoupling property: concurrent/non-blocking, poolable GPU boundary, backpressure —
+  proven by a concurrency test. Author the `embedding` (function) ARD manifest. Grounded surface:
+  `FlagEmbedding` `M3Embedder`. **(T18 small→large escalation is GATE-1 gated — deferred until the
+  RLM-chunker A/B runs, which needs T17+T19+T9; so build T19 next, then T20, then GATE-1, then T18.)**
+- **Last approved:** **T17** (FR-I.1, RAC-17) — RLM chunking. Code-deterministic boundaries/`chunk_id`s
+  (section structure + ~20k cap) + summaries via the seam (`SUMMARIZATION` role → DeepSeek V4 Flash,
+  structured output); content-hash gated. **Live end-to-end (real parse + real per-chunk summaries)
+  caught & fixed a cap-accumulation bug**; regression added. `rlm_chunking` (agent_skill, requires
+  rlm_method) in the shared root. Full suite 266.
+- **Prior:** **T16** (RAC-16) Parsing (Docling); **T15** (RAC-15) RLM skill + reusable ARD seam.
   Grounded the hybrid SQL against the official ArcadeDB docs + live 26.7.1, then tested end to end
   through the arcadedb-python `query()` method: `SELECT expand(vector.fuse(vector.neighbors(...),
   vector.sparseNeighbors(...), {fusion:'RRF'}))` returns a sensible fused ranking (dense-leg + sparse-leg
@@ -135,7 +136,7 @@ working loop enforces it.
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | done | T13 |
 | T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | done | - |
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | done | T3 |
-| T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | todo | T15, T16, T11 |
+| T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | done | T15, T16, T11 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | todo | **GATE-1**, T17 |
 | T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | todo | T16 |
 | T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | todo | T13, T17, T19 |
@@ -713,22 +714,32 @@ structured output, boundary validation, and a content-hash gate so an unchanged 
 re-chunked (FR-I.1).
 
 **RAC-17:**
-- [ ] Same document in yields identical chunk boundaries and `chunk_id`s across runs (determinism
-  test, temperature zero / structured output).
-- [ ] Boundary validation runs; chunks are capped at ~20,000 tokens; a summary + manifest are
-  produced.
-- [ ] The content-hash gate skips an unchanged document (no re-chunk).
-- [ ] Registered under the RLM chunking capability.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] Same document in yields identical chunk boundaries and `chunk_id`s across runs. Boundaries are
+  code-deterministic (from the parsed section structure + the token cap); `chunk_id` via
+  `ChunkId.of` (canonical `<src>:<idx>:<64hex>`). Summaries deterministic via structured-output /
+  temperature-zero. Test: chunk twice → identical `ChunkManifest`.
+- [x] Boundary validation runs; chunks capped at ~20,000 tokens; a summary + manifest produced.
+  `_validate_boundaries` (uniqueness, sequential index, non-empty, ≤ cap); over-cap items hard-split;
+  per-chunk summary; per-document `ChunkManifest`. **Cap-accumulation bug (joined length vs summed
+  per-item estimates) found by the live end-to-end run and fixed; hermetic regression added.**
+- [x] The content-hash gate skips an unchanged document (no re-chunk). Manifest cached by content
+  hash; unchanged → cache hit (stub summarizer call-count proves no new summaries).
+- [x] Registered under the RLM chunking capability. `register_rlm_chunking` → `rlm_chunking`,
+  `agent_skill`, contract `ChunkManifest`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/rlm_chunking.json`,
+  `agent_skill`, `requires: ['rlm_method']`); mirror conformance green; re-validates as a
+  `RegistryEntry`. Live `RegistryStore` load is the GraphWright-side step.
 
-**Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py`
+**Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py` (6 hermetic passed); live:
+`-m model` (summarizer) and `-m "parse and model"` (**end-to-end real parse + 6 real DeepSeek Flash
+summaries, all chunks ≤ cap; 41s**). Full suite 266 passed + 10 skipped.
 
-**Dependencies:** T15, T16, T11. **Scope:** L.
-**Files:** `src/rag_wright/capabilities/rlm_chunking.py`,
-`tests/capabilities/test_rlm_chunking.py`
-**Note:** Resolves chunking-skill internals (§16.1). Determinism is testable (risk 4).
+**Dependencies:** T15, T16, T11. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/capabilities/rlm_chunking.py`, `tests/capabilities/test_rlm_chunking.py`,
+`src/rag_wright/models/profiles.py` (new `SUMMARIZATION` role → DeepSeek V4 Flash, FR-I.6 tiering),
+`src/rag_wright/capabilities/manifests.py` (rlm_chunking spec, requires rlm_method).
+**Note:** Resolves chunking-skill internals (§16.1). Determinism is testable (risk 4). The real-doc
+end-to-end run is the level at which the cap bug surfaced — hermetic stubs did not reach it.
 
 ### Task T18: Small-to-large chunking escalation
 

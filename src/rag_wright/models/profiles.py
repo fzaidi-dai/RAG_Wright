@@ -44,6 +44,7 @@ class ModelRole(str, Enum):
     STRUCTURED_REASONING = "structured_reasoning"  # forced schema under reasoning: extraction, grading, synthesis
     STRUCTURED_REASONING_SECONDARY = "structured_reasoning_secondary"  # same call class, selectable fallback
     GENERAL = "general"  # reasoning, generation, vision-to-text, RLM; the local-deployment default
+    SUMMARIZATION = "summarization"  # a smaller model for chunking and summarization (FR-I.6 tiering)
 
 
 # Default model ids per role, confirmed against the live OpenRouter catalog at T12 (ADR-0006).
@@ -51,6 +52,7 @@ class ModelRole(str, Enum):
 DEFAULT_STRUCTURED_REASONING = "deepseek/deepseek-v4-pro"
 DEFAULT_STRUCTURED_REASONING_SECONDARY = "qwen/qwen3.7-plus"
 DEFAULT_GENERAL = "google/gemma-4-31b-it"
+DEFAULT_SUMMARIZATION = "deepseek/deepseek-v4-flash"  # the smaller/faster DeepSeek (FR-I.6)
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", DEFAULT_STRUCTURED_REASONING),
@@ -59,6 +61,7 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
         DEFAULT_STRUCTURED_REASONING_SECONDARY,
     ),
     ModelRole.GENERAL: ("RAG_MODEL_GENERAL", DEFAULT_GENERAL),
+    ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", DEFAULT_SUMMARIZATION),
 }
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default
@@ -76,6 +79,9 @@ PROFILES: dict[str, ModelProfile] = {
         structured_extra_body={"reasoning": {"enabled": False}},
     ),
     DEFAULT_GENERAL: ModelProfile(model_id=DEFAULT_GENERAL),
+    # DeepSeek V4 Flash does reasoning + structured output together, like V4 Pro (ADR-0006); no
+    # thinking-disable needed.
+    DEFAULT_SUMMARIZATION: ModelProfile(model_id=DEFAULT_SUMMARIZATION),
 }
 
 

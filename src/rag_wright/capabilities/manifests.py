@@ -87,6 +87,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("parsing", "docling", "ingestion"),
     ),
+    CapabilityManifest(
+        slug="rlm_chunking",
+        kind="agent_skill",  # applies the RLM method; loaded knowledge, requires rlm_method
+        display_name="RLM chunking",
+        description=(
+            "Read a whole parsed document through an interpreter using the RLM method, split it along "
+            "topic/section/chapter boundaries into semantically coherent chunks (capped ~20,000 "
+            "tokens), and write a summary per chunk with a per-document manifest and stable "
+            "chunk_ids. Deterministic and content-hash gated (FR-I.1)."
+        ),
+        representative_queries=(
+            "chunk a long parsed document into semantically coherent sections",
+            "split a document along topic and section boundaries within a token cap",
+            "produce a summary per chunk and stable chunk ids",
+            "re-chunk a document only when its content changes",
+        ),
+        requires=("rlm_method",),
+        tags=("chunking", "rlm", "ingestion"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
