@@ -18,19 +18,18 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T16** (FR-C.1, RAC-16) — Parsing (Docling `DocumentConverter`): parse a CUAD PDF +
-  a scanned filing into the structured representation, cache/reuse, register under FR-C.1, and author
-  its ARD manifest (`parsing`, kind `function`) into the shared root. Begins the Build write-side
-  (spec Phase 1). **Cross-cutting (T15-T29):** each capability adds its `CapabilityManifest` to
-  `capabilities/manifests.py` and publishes to the shared root; mirror conformance green; no live
-  `RegistryStore` load here.
-- **Last approved:** **T15** (FR-C.10, RAC-15) — RLM skill authoring. `skills/rlm/SKILL.md` teaches the
-  divide-and-conquer method (interpreter → code-side slice/dispatch → synthesize), defers
-  determinism/boundary/gating/model-choice to the applying capabilities. Built the **reusable ARD
-  authoring seam** `capabilities/manifests.py` (one `CapabilityManifest` per capability) +
-  `scripts/publish_manifests.py`; `rlm_method` (agent_skill) manifest present in the shared root
-  (`~/.air/registry/rlm_method.json`). Mirror conformance green. 3 manifest tests; full suite 251.
-- **Prior:** **T14** (RAC-14) A-T1 `vector.fuse` hybrid test; **T13** (RAC-13) store seam + schema.
+- **NEXT UP:** **T17** (FR-I.1, RAC-17) — RLM chunking (deterministic, content-hash gated): read the
+  whole parsed document (T16) through an interpreter using the RLM skill (T15), split along
+  topic/section/chapter boundaries into coherent chunks (capped ~20k tokens), summary per chunk +
+  per-document manifest + stable `chunk_id`s; temperature-zero/structured-output determinism, boundary
+  validation, content-hash gate. Uses the model-profile seam (T11). Author the `rlm_chunking`
+  (agent_skill, `requires: [rlm_method]`) ARD manifest. Depends on T15, T16, T11. **GATE-1** (RLM
+  chunker A/B) follows after T17+T19.
+- **Last approved:** **T16** (FR-C.1, RAC-16) — Parsing (Docling). `DocumentConverter` behind a
+  `Parser` seam → `ParsedDocument`; content-hash gated (parsed once via `save_as_json`/`load_from_json`).
+  Live `-m parse`: real CUAD PDF + scanned-OCR both parse (2 passed). `parsing` (function) manifest
+  present in the shared root. Added the manifest scaling test + `parse` opt-in marker. Full suite 259.
+- **Prior:** **T15** (RAC-15) RLM skill + reusable ARD seam; **T14** (RAC-14) A-T1 hybrid test.
   Grounded the hybrid SQL against the official ArcadeDB docs + live 26.7.1, then tested end to end
   through the arcadedb-python `query()` method: `SELECT expand(vector.fuse(vector.neighbors(...),
   vector.sparseNeighbors(...), {fusion:'RRF'}))` returns a sensible fused ranking (dense-leg + sparse-leg
@@ -135,7 +134,7 @@ working loop enforces it.
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | done | T3, T6 |
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | done | T13 |
 | T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | done | - |
-| T16 | Parsing (Docling) | 4 Build write | FR-C.1 | todo | T3 |
+| T16 | Parsing (Docling) | 4 Build write | FR-C.1 | done | T3 |
 | T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | todo | T15, T16, T11 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | todo | **GATE-1**, T17 |
 | T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | todo | T16 |
@@ -679,18 +678,30 @@ representation (reading order, headings, sections, tables, OCR), parsed once and
 chunking, embedding, and extraction (FR-C.1). Grounded surface: `docling` `DocumentConverter`.
 
 **RAC-16:**
-- [ ] A CUAD PDF and a scanned filing both parse into the structured representation (headings,
-  sections, tables; OCR text present for the scan).
-- [ ] The parsed result is cached/reusable so it is parsed once.
-- [ ] Registered under FR-C.1.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] A CUAD PDF and a scanned filing both parse into the structured representation (headings,
+  sections, tables; OCR text present for the scan). **Live (`-m parse`, 2 passed, 203s):** the
+  smallest text-layer CUAD contract parsed to headings/sections/markdown; the image-only scanned
+  NETGEAR filing OCR'd to text (RapidOCR). `DocumentConverter` behind a `Parser` seam →
+  `DoclingDocument`.
+- [x] The parsed result is cached/reusable so it is parsed once. Content-hash gated: the
+  `DoclingDocument` is cached (`save_as_json`/`load_from_json`) keyed by source content hash;
+  unchanged content is a cache hit, changed content re-parses (proven hermetically via a
+  call-counting stub `Parser`).
+- [x] Registered under FR-C.1. `register_parsing` → `parsing`, kind `function`, contract
+  `ParsedDocument` (source_doc_id reuses T1's citation-safe charset).
+- [x] ARD-registered: manifest authored + **present in the shared root**
+  (`~/.air/registry/parsing.json`, `urn:air:dreamai.io:rag_wright:parsing`, kind `function` with
+  response bounds); mirror conformance green; re-validates as a `RegistryEntry`. Live `RegistryStore`
+  load / discovery is the GraphWright-side step (not done here).
 
-**Verification:** `uv run pytest tests/capabilities/test_parsing.py`
+**Verification:** `uv run pytest tests/capabilities/test_parsing.py` (6 hermetic passed); live:
+`... -m parse` (2 passed); manifest: `tests/capabilities/test_manifests.py`. Full suite 259 passed +
+9 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T3. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/parsing.py`, `tests/capabilities/test_parsing.py`
+**Dependencies:** T3. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/capabilities/parsing.py`, `tests/capabilities/test_parsing.py`,
+`src/rag_wright/capabilities/manifests.py` (+`parsing` spec), `tests/capabilities/test_manifests.py`
+(scaling test over all specs), `pyproject.toml` + `conftest.py` (`parse` opt-in marker).
 
 ### Task T17: RLM chunking (deterministic, content-hash gated)
 

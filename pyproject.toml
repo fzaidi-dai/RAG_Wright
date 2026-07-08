@@ -35,6 +35,7 @@ pythonpath = ["src", "."]
 markers = [
     "model: opt-in live model call via OpenRouter (needs .env); run with -m model",
     "store: opt-in test needing a local ArcadeDB instance; run with -m store",
+    "parse: opt-in live Docling parse (needs models + the gitignored corpus); run with -m parse",
 ]
 
 [tool.ruff]

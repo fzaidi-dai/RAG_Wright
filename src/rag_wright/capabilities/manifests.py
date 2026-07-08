@@ -70,6 +70,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("rlm", "method", "divide-and-conquer"),
     ),
+    CapabilityManifest(
+        slug="parsing",
+        kind="function",  # an in-process graph-node call
+        display_name="Document parsing (Docling)",
+        description=(
+            "Turn a source document (PDF, Office file, or scan) into a clean structured "
+            "representation — reading order, headings, sections, tables, and OCR text — parsed once "
+            "and reused by chunking, embedding, and extraction (FR-C.1)."
+        ),
+        representative_queries=(
+            "parse a PDF contract into structured sections and tables",
+            "extract reading order and headings from a source document",
+            "OCR a scanned filing into machine-readable text",
+            "turn an Office document into a clean structured representation",
+        ),
+        tags=("parsing", "docling", "ingestion"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

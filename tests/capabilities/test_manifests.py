@@ -10,8 +10,22 @@ from __future__ import annotations
 
 import json
 
-from rag_wright.capabilities.ard import RegistryEntry
+import pytest
+
+from rag_wright.capabilities.ard import CALLABLE_KINDS, RegistryEntry
 from rag_wright.capabilities.manifests import MANIFEST_SPECS, author, publish
+
+
+@pytest.mark.parametrize("slug", sorted(MANIFEST_SPECS))
+def test_every_spec_authors_and_publishes_a_valid_manifest(slug, tmp_path):
+    entry = author(slug)
+    assert entry.envelope.identifier == f"urn:air:dreamai.io:rag_wright:{slug}"
+    # callable kinds declare response bounds; agent_skill (loaded) does not
+    assert (entry.response_bounds is not None) == (entry.kind in CALLABLE_KINDS)
+
+    path = publish(slug, root=tmp_path)
+    assert path == tmp_path / f"{slug}.json"
+    RegistryEntry.model_validate(json.loads(path.read_text()))  # what GraphWright's store will load
 
 
 def test_rlm_method_manifest_is_specified_as_an_agent_skill():
