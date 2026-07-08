@@ -13,7 +13,7 @@ import pathlib
 
 import pytest
 
-_OPT_IN = ("model", "store", "parse")
+_OPT_IN = ("model", "store", "parse", "embed")
 
 
 def _load_dotenv() -> None:

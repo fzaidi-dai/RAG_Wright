@@ -18,19 +18,20 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T19** (FR-C.2/FR-I.3/FR-I.6, RAC-19) — Embedding (BGE-M3): dense vector over the
-  summary + native sparse vector over the full chunk text (read from the parse manifest, not the
-  chunk record), one model; output shapes match T3 (`BGE_M3_DENSE_DIM=1024` dense, `dict[int,float]`
-  sparse). FR-I.6 decoupling property: concurrent/non-blocking, poolable GPU boundary, backpressure —
-  proven by a concurrency test. Author the `embedding` (function) ARD manifest. Grounded surface:
-  `FlagEmbedding` `M3Embedder`. **(T18 small→large escalation is GATE-1 gated — deferred until the
-  RLM-chunker A/B runs, which needs T17+T19+T9; so build T19 next, then T20, then GATE-1, then T18.)**
-- **Last approved:** **T17** (FR-I.1, RAC-17) — RLM chunking. Code-deterministic boundaries/`chunk_id`s
-  (section structure + ~20k cap) + summaries via the seam (`SUMMARIZATION` role → DeepSeek V4 Flash,
-  structured output); content-hash gated. **Live end-to-end (real parse + real per-chunk summaries)
-  caught & fixed a cap-accumulation bug**; regression added. `rlm_chunking` (agent_skill, requires
-  rlm_method) in the shared root. Full suite 266.
-- **Prior:** **T16** (RAC-16) Parsing (Docling); **T15** (RAC-15) RLM skill + reusable ARD seam.
+- **NEXT UP:** **T20** (FR-I.3/FR-I.5, RAC-20) — Chunk write + incremental upsert (content-hash
+  gated): write `ChunkRecord`s to ArcadeDB, upsert by `chunk_id` (re-write updates, no dupe);
+  content-hash gate so an unchanged doc does no work; dead-letter queue + resumable per-doc/per-chunk
+  checkpoints. Needs a local ArcadeDB (`-m store`). Combines T13 (store), T17 (chunks), T19
+  (embeddings) into the T3 `ChunkRecord`, decomposing `sparse_vector` dict → the two parallel arrays
+  at the store boundary. Author the `chunk_write` ARD manifest. Depends on T13, T17, T19.
+  **Also runnable now: GATE-1** (RLM chunker A/B vs a baseline chunker on the golden set) — a
+  human-gated branch point deciding whether T18 is built; raise with the human.
+- **Last approved:** **T19** (FR-C.2/FR-I.3/FR-I.6, RAC-19) — Embedding (BGE-M3). `BGEM3Embedder`
+  behind an `Embedder` seam; dense over summary + native sparse over full text; T3 shapes (1024 /
+  `dict[int,float]`). FR-I.6 decoupling: async `embed_chunks` over `to_thread` + semaphore
+  (backpressure), concurrency-tested. Live `-m embed` confirmed real BGE-M3 dense+sparse. `embedding`
+  (function) manifest in the shared root. Full suite 273.
+- **Prior:** **T17** (RAC-17) RLM chunking (live e2e caught a cap bug); **T16** (RAC-16) Parsing.
   Grounded the hybrid SQL against the official ArcadeDB docs + live 26.7.1, then tested end to end
   through the arcadedb-python `query()` method: `SELECT expand(vector.fuse(vector.neighbors(...),
   vector.sparseNeighbors(...), {fusion:'RRF'}))` returns a sensible fused ranking (dense-leg + sparse-leg
@@ -138,7 +139,7 @@ working loop enforces it.
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | done | T3 |
 | T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | done | T15, T16, T11 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | todo | **GATE-1**, T17 |
-| T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | todo | T16 |
+| T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | done | T16 |
 | T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | todo | T13, T17, T19 |
 | **GATE-1** | **RLM chunker A/B go / no-go** | 4 Build | §12, plan §2 | pending | T17, T19, T9 |
 | T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | todo | T14, T20 |
@@ -768,27 +769,33 @@ summary-miss mitigation (§12, risk 8). This is a GPU-calling capability, so it 
 decoupling property. Grounded surface: `FlagEmbedding` `M3Embedder`.
 
 **RAC-19:**
-- [ ] Dense vector produced over the summary; native sparse vector produced over the full chunk
-  text, from the one BGE-M3 model. **The full chunk text is read from the parse manifest (FR-I.1),
-  not from the chunk record** — the record holds only the summary + vectors (T3 decision), so the
-  sparse-over-full-text leg must source the text from the manifest keyed by `chunk_id`.
-- [ ] Output shapes match the chunk record contract (T3) and the store index config (T13):
-  dense length `BGE_M3_DENSE_DIM` (1024); sparse emitted as `dict[int, float]` (int token-id keys,
-  converting BGE-M3's `Dict[str, float]` string keys).
-- [ ] **FR-I.6 decoupling property:** the capability is built to be called concurrently and is
-  non-blocking, its GPU calls go through a poolable inference boundary (not a hardcoded
-  synchronous single-call), and it applies backpressure at that boundary, so bulk mode can
-  saturate the GPU. Verified by a concurrency test, not left for later graph wiring.
-- [ ] Registered under FR-C.2.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] Dense vector over the summary; native sparse vector over the full chunk text, from the one
+  BGE-M3 model. The sparse leg reads the chunk's full text (`Chunk.text`, from the T17 chunk/parse
+  manifest keyed by `chunk_id`), not the record; the dense leg reads `Chunk.summary`. Routing
+  verified hermetically (`dense_inputs==[summary]`, `sparse_inputs==[text]`); **live BGE-M3 (`-m
+  embed`) produced real dense + native sparse.**
+- [x] Output shapes match T3/T13: dense length `BGE_M3_DENSE_DIM` (1024); sparse `dict[int, float]`
+  (BGE-M3's `Dict[str,float]` string keys converted to ints). Wrong dense dimension is rejected.
+- [x] **FR-I.6 decoupling property:** `embed_chunks` is async/non-blocking; each encode runs through
+  `asyncio.to_thread` (poolable boundary) bounded by a semaphore (backpressure). Concurrency test:
+  in-flight encodes reach exactly `max_concurrency` (and `=1` is strictly serial); concurrent run is
+  faster than serial.
+- [x] Registered under FR-C.2. `register_embedding` → `embedding`, kind `function`, contract
+  `ChunkEmbedding`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/embedding.json`,
+  `urn:air:dreamai.io:rag_wright:embedding`); mirror conformance green; re-validates as a
+  `RegistryEntry`. Live `RegistryStore` load is the GraphWright-side step.
 
-**Verification:** `uv run pytest tests/capabilities/test_embedding.py`
+**Verification:** `uv run pytest tests/capabilities/test_embedding.py` (6 hermetic passed); live:
+`-m embed` (real BGE-M3, 1 passed, ~7min incl. model download). Full suite 273 passed + 12 skipped.
 
-**Dependencies:** T16. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/embedding.py`, `tests/capabilities/test_embedding.py`
+**Dependencies:** T16. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/capabilities/embedding.py`, `tests/capabilities/test_embedding.py`,
+`src/rag_wright/capabilities/manifests.py` (+embedding spec), `pyproject.toml` + `conftest.py`
+(`embed` opt-in marker).
 **Note:** FR-I.6 decoupling is built in here because it is cheap now, expensive to retrofit.
+**GATE-1 is now runnable** (RLM chunker A/B needs T17 + T19 + T9 — all done); it is a human-gated
+branch point that decides whether T18 (small→large escalation) is built.
 
 ### Task T20: Chunk write + incremental upsert (content-hash gated)
 

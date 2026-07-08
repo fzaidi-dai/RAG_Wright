@@ -106,6 +106,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         requires=("rlm_method",),
         tags=("chunking", "rlm", "ingestion"),
     ),
+    CapabilityManifest(
+        slug="embedding",
+        kind="function",
+        display_name="Embedding (BGE-M3)",
+        description=(
+            "From one BGE-M3 model, produce a dense vector over the chunk summary and a native sparse "
+            "vector over the full chunk text (the summary-miss mitigation). Output shapes match the "
+            "chunk-record contract: dense length 1024, sparse token-id -> weight (FR-C.2, FR-I.3)."
+        ),
+        representative_queries=(
+            "embed a chunk summary into a dense vector with BGE-M3",
+            "produce a native sparse lexical vector over full chunk text",
+            "generate dense and sparse embeddings from one model",
+            "vectorize chunks for hybrid retrieval",
+        ),
+        tags=("embedding", "bge-m3", "ingestion"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
