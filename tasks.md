@@ -18,12 +18,11 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **GATE-1** (RLM chunker A/B go/no-go) is now runnable (needs T17 + T19 + T9, all done)
-  — a **human-gated branch point** that A/Bs the RLM chunker vs a simpler baseline on the golden set
-  and decides whether **T18** (small→large escalation) is built; raise with the human. The next build
-  task after GATE-1 is **T21** (hybrid search, FR-C.3/FR-Q.1): server-side RRF over the dense and
-  sparse legs (`vector.fuse`, proven at T14), metadata filters, recall@k measurable on the golden
-  set; needs `-m store`; author the `hybrid_search` manifest.
+- **NEXT UP:** **T21** (hybrid search, FR-C.3/FR-Q.1): server-side RRF over the dense and sparse legs
+  (`vector.fuse`, proven at T14), metadata filters, recall@k measurable on the golden set; needs
+  `-m store`; author the `hybrid_search` manifest. **GATE-1 run + decided (2026-07-09): keep the RLM
+  chunker, defer T18 (not built) → the earns-its-cost call moves to GATE-2/T22; if unproven there,
+  make the RLM chunker optional, not dropped.**
 - **Last approved:** **T20** (FR-I.3/FR-I.5, RAC-20) — Chunk write + incremental upsert. Assembles the
   T3 `ChunkRecord` from a chunk (T17) + embedding (T19); upserts by `chunk_id` via the extended
   `Store` seam (ArcadeDB decomposes sparse dict → two arrays); content-hash gate (unchanged doc →
@@ -146,10 +145,10 @@ enforces it.
 | T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | done | - |
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | done | T3 |
 | T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | done | T15, T16, T11 |
-| T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | todo | **GATE-1**, T17 |
+| T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | deferred (GATE-1) | **GATE-1**, T17 |
 | T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | done | T16 |
 | T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | done | T13, T17, T19 |
-| **GATE-1** | **RLM chunker A/B go / no-go** | 4 Build | §12, plan §2 | pending | T17, T19, T9 |
+| **GATE-1** | **RLM chunker A/B go / no-go** | 4 Build | §12, plan §2 | run: keep RLM, defer T18 → GATE-2 | T17, T19, T9 |
 | T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | todo | T14, T20 |
 | T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | todo | T21 |
 | **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | pending | T21, T22, T9, T10 |
@@ -768,6 +767,9 @@ apparatus are dropped (plan §2).
 **Files:** `src/rag_wright/capabilities/rlm_chunking.py` (escalation path),
 `tests/capabilities/test_chunking_escalation.py`
 **Note:** Conditional — do not build before GATE-1 clears. This is the FR-I.6 model-tiering slice.
+**Deferred (GATE-1, 2026-07-09):** the dense-only A/B did not justify the escalation apparatus, so
+T18 is not built now; the RLM chunker is kept and the earns-its-cost decision moves to GATE-2/T22
+(see the GATE-1 section). If the chunker is unproven there, make it optional rather than drop it.
 
 ### Task T19: Embedding (BGE-M3: dense over summary, sparse over full text)
 
@@ -839,7 +841,7 @@ store holds the records. The bulk-vs-background run modes (FR-I.6 part 3) are
 deployment/orchestration, not built here. Not ARD-registered: a seam-bound pipeline step, no §5 slug
 (see the ARD-registration rule).
 
-### GATE-1: RLM chunker A/B go / no-go (branch point)
+### GATE-1: RLM chunker A/B go / no-go (branch point) — RUN; decision recorded
 
 **Not a task.** A/B the RLM chunker (T17) against a simpler baseline chunker on the golden set
 (T9): boundary quality + summary fidelity (§12, plan §2).
@@ -847,6 +849,29 @@ deployment/orchestration, not built here. Not ARD-registered: a seam-bound pipel
   full apparatus.
 - **Does not beat baseline →** drop T18 and the elaborate chunking apparatus; fall back to the
   simpler chunker; redirect the plan. Raise with the human before proceeding either way.
+
+**Run (`eval/gate1_chunker_ab.py`, 2026-07-09) — dense-only proxy (T17 + T19 + T9; no store, no
+sparse leg), 4 golden docs / 59 questions:**
+
+| chunker | boundary quality | recall@1 | recall@3 | recall@5 | chunks/doc |
+|---|---|---|---|---|---|
+| RLM (T17) | **0.920** | 0.200 | 0.536 | **0.799** | 4–7 |
+| baseline (fixed window) | 0.886 | **0.322** | **0.562** | 0.685 | 13–17 |
+
+Read honestly: RLM wins boundary quality; retrieval is **mixed and confounded** — RLM's recall@5
+edge is inflated by having only ~5 chunks/doc (top-5 ≈ retrieve-everything), and on the fair metric
+(recall@1) the baseline wins. Decisively, this proxy is **dense-over-summary only** and cannot see
+the RLM design's core advantage — the **sparse-over-full-text leg** — which is exactly where the
+baseline currently wins (literal matches). So GATE-1 is not the definitive test of the RLM chunker.
+
+**Decision (human, 2026-07-09): KEEP the RLM chunker (not dropped). Do NOT build T18 now — defer.**
+The elaborate small→large escalation is not justified on this dense-only proxy; the earns-its-cost
+call is made at **GATE-2 / T22**, with the full hybrid pipeline. If the RLM chunker does not prove its
+value there, **make it optional (a seam/config toggle), not dropped**. Proceed to T21.
+
+**Eval caveat (standing rule, [[evals-in-depth-no-shortcuts]]):** this run used only the 4 shortest
+well-covered docs to finish faster — a shortcut. GATE-2's eval must be in-depth and honest: a full or
+genuinely representative sample (short AND long docs, all archetypes), never downscaled for time.
 
 ---
 
