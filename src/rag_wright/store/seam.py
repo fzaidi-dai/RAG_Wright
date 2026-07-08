@@ -11,7 +11,9 @@ ArcadeDB's SQL dialect. Write-side and query-side methods are added by the tasks
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
+
+from rag_wright.contracts.chunk import ChunkRecord
 
 
 @runtime_checkable
@@ -35,3 +37,16 @@ class Store(Protocol):
 
     def close(self) -> None:
         """Release any resources held by the implementation."""
+
+    # --- write-side (T20): the chunk-record write leg. Semantic, not SQL: the seam takes the T3
+    # ChunkRecord and each store maps it to its own representation (ArcadeDB decomposes the sparse
+    # vector into two parallel arrays; a LanceDB fallback would store it its own way).
+
+    def upsert_chunk(self, record: ChunkRecord) -> None:
+        """Write a chunk record, upserting by `chunk_id` (re-write of the same id updates in place)."""
+
+    def get_chunk(self, chunk_id: str) -> Optional[dict]:
+        """The stored row for `chunk_id` (store-native fields), or None if absent."""
+
+    def chunk_count(self) -> int:
+        """The number of chunk records in the store."""

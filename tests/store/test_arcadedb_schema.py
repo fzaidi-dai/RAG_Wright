@@ -48,6 +48,18 @@ class _InMemoryStore:
     def close(self) -> None:
         pass
 
+    # write-side (T20): a chunk store keyed by chunk_id, proving the seam is bindable end to end
+    def upsert_chunk(self, record) -> None:
+        self._rows = getattr(self, "_rows", {})
+        self._rows[record.chunk_id.value] = record
+
+    def get_chunk(self, chunk_id: str):
+        row = getattr(self, "_rows", {}).get(chunk_id)
+        return {"chunk_id": chunk_id, "summary": row.summary} if row else None
+
+    def chunk_count(self) -> int:
+        return len(getattr(self, "_rows", {}))
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()

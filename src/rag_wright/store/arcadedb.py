@@ -17,11 +17,11 @@ introspection: create only what is absent.
 from __future__ import annotations
 
 import os
-from typing import Any
+from typing import Any, Iterable
 
 from arcadedb_python import DatabaseDao, SyncClient
 
-from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
+from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord
 
 CHUNK_TYPE = "Chunk"
 ENTITY_TYPE = "Entity"
@@ -31,6 +31,19 @@ _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
 _SPARSE_INDEX = f"{CHUNK_TYPE}[sparse_indices,sparse_weights]"
 _CHUNK_ID_INDEX = f"{CHUNK_TYPE}[chunk_id]"
 _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
+
+
+def _sql_str(value: str) -> str:
+    """A single-quoted ArcadeDB SQL string literal (backslash and quote escaped)."""
+    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+
+
+def _float_array(values: Iterable[float]) -> str:
+    return "[" + ",".join(repr(float(x)) for x in values) + "]"
+
+
+def _str_array(values: Iterable[str]) -> str:
+    return "[" + ",".join(_sql_str(v) for v in values) + "]"
 
 
 class ArcadeDBStore:
@@ -111,6 +124,41 @@ class ArcadeDBStore:
     def close(self) -> None:
         # The HTTP client holds no persistent connection to release.
         pass
+
+    # --- write-side (T20) -----------------------------------------------------------------------
+
+    def upsert_chunk(self, record: ChunkRecord) -> None:
+        """Upsert a chunk record by `chunk_id`. The sparse vector is decomposed into the two parallel
+        arrays the `LSM_SPARSE_VECTOR` index binds (ADR-0007); the dense vector's length is enforced
+        by the `LSM_VECTOR` index."""
+        chunk_id = record.chunk_id.value
+        token_ids = sorted(record.sparse_vector)  # deterministic order across the paired arrays
+        dense = _float_array(record.dense_vector)
+        sparse_indices = "[" + ",".join(str(i) for i in token_ids) + "]"
+        sparse_weights = _float_array(record.sparse_vector[i] for i in token_ids)
+        self._command(
+            f"UPDATE {CHUNK_TYPE} SET"
+            f" chunk_id = {_sql_str(chunk_id)},"
+            f" source_doc_id = {_sql_str(record.chunk_id.source_doc_id)},"
+            f" summary = {_sql_str(record.summary)},"
+            f" dense = {dense},"
+            f" sparse_indices = {sparse_indices},"
+            f" sparse_weights = {sparse_weights},"
+            f" keywords = {_str_array(record.keywords)},"
+            f" entity_mentions = {_str_array(record.entity_mentions)}"
+            f" UPSERT WHERE chunk_id = {_sql_str(chunk_id)}"
+        )
+
+    def get_chunk(self, chunk_id: str) -> Any:
+        rows = self._query(
+            f"SELECT chunk_id, source_doc_id, summary FROM {CHUNK_TYPE} "
+            f"WHERE chunk_id = {_sql_str(chunk_id)}"
+        )
+        return rows[0] if rows else None
+
+    def chunk_count(self) -> int:
+        rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")
+        return int(rows[0]["n"]) if rows else 0
 
     # --- test / lifecycle helper ----------------------------------------------------------------
 

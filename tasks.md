@@ -18,20 +18,20 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T20** (FR-I.3/FR-I.5, RAC-20) — Chunk write + incremental upsert (content-hash
-  gated): write `ChunkRecord`s to ArcadeDB, upsert by `chunk_id` (re-write updates, no dupe);
-  content-hash gate so an unchanged doc does no work; dead-letter queue + resumable per-doc/per-chunk
-  checkpoints. Needs a local ArcadeDB (`-m store`). Combines T13 (store), T17 (chunks), T19
-  (embeddings) into the T3 `ChunkRecord`, decomposing `sparse_vector` dict → the two parallel arrays
-  at the store boundary. Author the `chunk_write` ARD manifest. Depends on T13, T17, T19.
-  **Also runnable now: GATE-1** (RLM chunker A/B vs a baseline chunker on the golden set) — a
-  human-gated branch point deciding whether T18 is built; raise with the human.
-- **Last approved:** **T19** (FR-C.2/FR-I.3/FR-I.6, RAC-19) — Embedding (BGE-M3). `BGEM3Embedder`
-  behind an `Embedder` seam; dense over summary + native sparse over full text; T3 shapes (1024 /
-  `dict[int,float]`). FR-I.6 decoupling: async `embed_chunks` over `to_thread` + semaphore
-  (backpressure), concurrency-tested. Live `-m embed` confirmed real BGE-M3 dense+sparse. `embedding`
-  (function) manifest in the shared root. Full suite 273.
-- **Prior:** **T17** (RAC-17) RLM chunking (live e2e caught a cap bug); **T16** (RAC-16) Parsing.
+- **NEXT UP:** **GATE-1** (RLM chunker A/B go/no-go) is now runnable (needs T17 + T19 + T9, all done)
+  — a **human-gated branch point** that A/Bs the RLM chunker vs a simpler baseline on the golden set
+  and decides whether **T18** (small→large escalation) is built; raise with the human. The next build
+  task after GATE-1 is **T21** (hybrid search, FR-C.3/FR-Q.1): server-side RRF over the dense and
+  sparse legs (`vector.fuse`, proven at T14), metadata filters, recall@k measurable on the golden
+  set; needs `-m store`; author the `hybrid_search` manifest.
+- **Last approved:** **T20** (FR-I.3/FR-I.5, RAC-20) — Chunk write + incremental upsert. Assembles the
+  T3 `ChunkRecord` from a chunk (T17) + embedding (T19); upserts by `chunk_id` via the extended
+  `Store` seam (ArcadeDB decomposes sparse dict → two arrays); content-hash gate (unchanged doc →
+  skipped); dead-letter queue + resumable per-chunk checkpoints. Live `-m store` verified real upsert
+  dedup/update. **Not ARD-registered** — a seam-bound pipeline step, no §5 slug (ARD scope corrected:
+  T20 + T25 dropped from the definition-of-done; rule = only query-discovered §5 capabilities
+  register). Full suite 279.
+- **Prior:** **T19** (RAC-19) Embedding (BGE-M3); **T17** (RAC-17) RLM chunking; **T16** Parsing.
   Grounded the hybrid SQL against the official ArcadeDB docs + live 26.7.1, then tested end to end
   through the arcadedb-python `query()` method: `SELECT expand(vector.fuse(vector.neighbors(...),
   vector.sparseNeighbors(...), {fusion:'RRF'}))` returns a sensible fused ranking (dense-leg + sparse-leg
@@ -105,15 +105,23 @@ response bounds); each capability then authors what cannot be derived, above all
 queries, since those are the task-bearing field discovery ranks on (GraphWright T6.4), and a
 capability with weak ones is one the compiler will not find.
 
-Definition of done. Every task that builds a discoverable, bound capability carries the final
-acceptance bullet appended below and is `done` only when its ARD manifest is authored
-(representative queries filled) and loads under `RegistryStore(root)` with no `RegistryLoadError`.
-This covers the RLM skill (T15) and each FR-C / FR-I / FR-Q capability that is its own bound graph
-node (T16, T17, T19, T20, T21, T22, T23, T23b, T24, T25, T26, T27, T28, T29). It does not cover the
-contracts, the seams (T11, T13), the foundation tests, the corpus and eval tasks, the T18
-escalation path (it extends the T17 capability, not a new one), the T30 caching optimization, or
-the T31 MCP surface. Stated once here as the source of its meaning, repeated per task so the
-working loop enforces it.
+Definition of done. Every task that builds a capability **the compiler discovers by representative
+query** — one of the SPEC section 5 canonical slugs — carries the final acceptance bullet appended
+below and is `done` only when its ARD manifest is authored (representative queries filled) and loads
+under `RegistryStore(root)` with no `RegistryLoadError`. This covers the RLM skill (T15) and each
+FR-C / FR-Q capability that has a section-5 slug (T16, T17, T19, T21, T22, T23, T23b, T24, T26, T27,
+T28, T29). It does **not** cover the contracts, the seams (T11, T13), **the seam-bound ingestion
+pipeline steps that have no section-5 slug — chunk write (T20, FR-I.3) and graph storage (T25,
+FR-I.4): they bind the store seam and are wired into the ingestion graph by the compiler, not
+discovered by query, so they register nothing and author no manifest**, the foundation tests, the
+corpus and eval tasks, the T18 escalation path (it extends the T17 capability, not a new one), the
+T30 caching optimization, or the T31 MCP surface.
+
+**The rule (so §5 and this list stay in exact agreement and this does not creep back):** only
+query-discovered capabilities — the section-5 canonical slugs — register and author an ARD manifest;
+seam-bound pipeline nodes (the write and store legs) do not. A task with no section-5 slug carries no
+ARD bullet. Stated once here as the source of its meaning, repeated per task so the working loop
+enforces it.
 
 ---
 
@@ -140,7 +148,7 @@ working loop enforces it.
 | T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | done | T15, T16, T11 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | todo | **GATE-1**, T17 |
 | T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | done | T16 |
-| T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | todo | T13, T17, T19 |
+| T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | done | T13, T17, T19 |
 | **GATE-1** | **RLM chunker A/B go / no-go** | 4 Build | §12, plan §2 | pending | T17, T19, T9 |
 | T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | todo | T14, T20 |
 | T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | todo | T21 |
@@ -805,19 +813,31 @@ dead-letter queue for failed documents (FR-I.3, FR-I.5). Content-hash gating mea
 document does effectively no work.
 
 **RAC-20:**
-- [ ] A chunk record upserts by `chunk_id` (re-write of the same id updates, does not duplicate).
-- [ ] Re-running an unchanged document does effectively no work (content-hash gate).
-- [ ] A failed document lands in the dead-letter queue; a resumed run continues from checkpoints.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] A chunk record upserts by `chunk_id` (re-write of the same id updates, does not duplicate).
+  ArcadeDB `UPDATE Chunk SET ... UPSERT WHERE chunk_id = ...`; the sparse vector is decomposed into
+  the two parallel arrays at the store boundary (ADR-0007). **Live (`-m store`): re-writing a
+  chunk_id updates in place, count stays 1.**
+- [x] Re-running an unchanged document does effectively no work (content-hash gate). Per-document
+  checkpoint keyed by content hash; a completed same-hash run returns `skipped` with no store writes.
+- [x] A failed document lands in the dead-letter queue; a resumed run continues from checkpoints.
+  Per-chunk checkpoints; a write exception dead-letters the doc; a retry skips already-written chunks
+  and completes, clearing the dead-letter entry.
+- **(No ARD bullet.)** Chunk write is a seam-bound ingestion pipeline step with no SPEC section-5
+  slug (FR-I.3), so it registers nothing and authors no manifest — per the ARD-registration rule
+  above (only query-discovered capabilities register). It reaches the store only through the T13
+  `Store` seam (extended here with `upsert_chunk` / `get_chunk` / `chunk_count`).
 
-**Verification:** `uv run pytest tests/capabilities/test_chunk_write.py -m store`
+**Verification:** `uv run pytest tests/capabilities/test_chunk_write.py` (6 hermetic passed);
+`-m store` (real ArcadeDB upsert dedup/update, 1 passed). Full suite 279 passed + 13 skipped.
 
-**Dependencies:** T13, T17, T19. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/chunk_write.py`, `tests/capabilities/test_chunk_write.py`
-**Note:** Capability-level idempotence and checkpoints. The bulk-vs-background run modes (FR-I.6
-part 3) are deployment/orchestration, not built here.
+**Dependencies:** T13, T17, T19. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/capabilities/chunk_write.py`, `tests/capabilities/test_chunk_write.py`,
+`src/rag_wright/store/{seam,arcadedb}.py` (write-side seam: `upsert_chunk`/`get_chunk`/`chunk_count`),
+`tests/store/test_arcadedb_schema.py` (stub extended to the write-side seam).
+**Note:** Capability-level idempotence and checkpoints (filesystem checkpoint + dead-letter dirs); the
+store holds the records. The bulk-vs-background run modes (FR-I.6 part 3) are
+deployment/orchestration, not built here. Not ARD-registered: a seam-bound pipeline step, no §5 slug
+(see the ARD-registration rule).
 
 ### GATE-1: RLM chunker A/B go / no-go (branch point)
 
@@ -1012,9 +1032,9 @@ heavy structured data does not go in it (SPEC §8).
   in one transaction.
 - [ ] Re-running an unchanged document does no graph work (content-hash gate).
 - [ ] No heavy structured data is placed in the graph (relationship layer only).
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- **(No ARD bullet.)** Graph storage is a seam-bound ingestion pipeline step with no SPEC section-5
+  slug (FR-I.4), so it registers nothing and authors no manifest — per the ARD-registration rule
+  above. It writes through the T13 `Store` seam.
 
 **Verification:** `uv run pytest tests/capabilities/test_graph_storage.py -m store`
 
@@ -1170,10 +1190,11 @@ confirming the acceptance bar from Phase 0 (SPEC §12, §15, plan §4).
 **Note:** Final review gate for Phase 5.
 
 ### Checkpoint: Complete
-- [ ] All FR-C / FR-I / FR-Q capabilities built, tested, internally registered, and ARD-registered
-  (every capability's ARD manifest loads and validates under `RegistryStore`). Both gates resolved
-  and recorded. End-to-end bar met. Ready for the compiler to discover and bind the graphs from the
-  Orchestration Spec.
+- [ ] All capabilities built and tested; every **query-discovered §5 capability** is internally
+  registered and ARD-registered (its manifest loads and validates under `RegistryStore`), while the
+  **seam-bound write/store steps (chunk write T20, graph storage T25) register nothing** (they are
+  wired by the compiler, not discovered). Both gates resolved and recorded. End-to-end bar met. Ready
+  for the compiler to discover and bind the graphs from the Orchestration Spec.
 
 ---
 
