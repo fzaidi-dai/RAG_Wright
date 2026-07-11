@@ -18,13 +18,14 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP (open decisions — see GATE-2 run 1):** **T22 capability is built** (RAC-22 b1/b3/b4 done,
-  live-verified; **b2 rerank-precision explicitly OPEN**, pending ACORD). **GATE-2 run 1 was NOT
-  adjudicated** — CUAD questions are not retrieval queries (ADR-0011); (a) store bar not adjudicated / no
-  LanceDB signal / keep ArcadeDB / not marked met. Two ask-first tasks queued: **T-CHK** (fix the T17
-  degenerate-chunking bug — must precede any RLM-vs-baseline numbers) and **T33** (ACORD content-query
-  retrieval eval — closes GATE-2a + RAC-22 b2). Immediate options for the human: commit T22 (bullet open),
-  do the per-doc rerank/chunker signal on existing data, approve T-CHK, and/or approve T33.
+- **NEXT UP: T23** (graph extraction) — resume the build at the graph layer (does not need ArcadeDB;
+  T25 does). Done + committed this session: **T22** (reranking, RAC-22 **b2 still OPEN** pending ACORD),
+  **T-CHK** (chunker degenerate-split fix), **T-SUM** (concurrent summarization, 3.4× live). **GATE-2
+  runs 1+2 not adjudicated** (ADR-0011: CUAD not a retrieval benchmark); store bar kept-on-ArcadeDB, not
+  marked met; per-doc run 2 confirmed 0 fallbacks + RLM at-least-as-good on clean chunks (recall edge
+  chunk-count-confounded, precision ~tied). **Still open (both ask-first): T33** (ACORD → closes GATE-2a +
+  RAC-22 b2) and the post-graph **GATE-2b** RLM keep-vs-optional call. ArcadeDB container stopped (idle
+  until T25/T33).
 - **Last approved:** **T21** (FR-C.3/FR-Q.1, RAC-21) — Hybrid search. Query-side capability: embed the
   query once (dense + sparse over the query text, via the T19 `Embedder` seam), hand both vectors to
   the new **semantic** query-side `Store.hybrid_search(dense, sparse, *, k, filters)` seam method, which
@@ -1014,6 +1015,18 @@ Strict bookkeeping:
 - **Fix path:** content-bearing queries via **ACORD** (T33, ask-first), and the **T17 chunker fix** (T-CHK)
   before any RLM-vs-baseline numbers.
 
+**GATE-2 run 2 (2026-07-12, `--per-doc`, after T-CHK + T-SUM) — within-document signal only.** Re-ingest
+on the fixed chunker: **0 summarizer fallbacks** (was 7 — confirms they were the split bug), RLM chunks
+296 (was 632), no near-empty. Per-doc (within-document retrieval) recall is now believable (exact_lexical
+R@1 ≈ 0.49 vs 0.027 cross-corpus in run 1 — confirms run 1's collapse was the CUAD-query artifact). RLM
+edges baseline on recall in nearly every cell (reversing GATE-1's superseded signal), **but that edge is
+partly confounded by RLM's lower chunk count** (fewer chunks → easier recall@k); on **precision@5 the two
+are ~tied** (RLM .232/.136/.143 vs baseline .215/.122/.153). Rerank is marginally positive/neutral per-doc
+(small haystack gives it little room). **Adjudicates nothing:** not the store bar (cross-corpus), not
+RAC-22 b2 (rerank — stays pending ACORD), not the RLM keep-vs-optional call (GATE-2b, needs
+cross-part/multi-hop/temporal + KG). Honest takeaway: on clean chunks RLM is **at least as good as
+baseline**, not worse.
+
 ### Task T33: ACORD content-query retrieval eval (extends T9) — ask-first
 
 **Description:** Ingest ACORD (Atticus Clause Retrieval Dataset: CC-BY-4.0, BEIR, 114 attorney-authored
@@ -1049,9 +1062,9 @@ near-empty chunks in validation. Changes an approved capability → **ask-first*
 - [x] Regression fixture on the ASIANDRAGON pathology (synthetic 112 level-1 headings) + an opt-in real-doc
   check on the cached parse. **Real ASIANDRAGON: 113 → 34 chunks, char min 1006 (was 10 near-empty),
   median 1141, all ≥ floor.** Distribution (min/median/max) reported.
-- [ ] Summarizer text-fallbacks re-checked at re-ingest to confirm they were a symptom of the split bug
-  (near-empty text → structured None), not a separate failure — expected ~0 after the fix. **Confirmed at
-  the re-ingest step** (next).
+- [x] Summarizer text-fallbacks re-checked at re-ingest: **0 fallbacks** with the fixed chunker (run 1
+  had 7). Confirms the fallbacks were a symptom of the split bug (near-empty text → structured None), not
+  a separate failure. Re-ingest chunk distribution: total 296 (was 632), median 9/doc, **no near-empty**.
 
 **Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py` (12 passed incl. real ASIANDRAGON
 regression; 2 opt-in skipped). Full suite 300 passed + 16 skipped.
