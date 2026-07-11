@@ -8,8 +8,10 @@ Summaries come from a `Summarizer` seam; hermetic tests inject a deterministic c
 
 from __future__ import annotations
 
+import glob
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from docling_core.types.doc.document import DoclingDocument
@@ -17,19 +19,28 @@ from docling_core.types.doc.document import DoclingDocument
 from rag_wright.capabilities.parsing import ParsedDocument, parse
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.rlm_chunking import (
+    DEFAULT_TOKEN_CAP,
+    MIN_CHUNK_CHARS,
+    BoundaryValidationError,
     Chunk,
     ChunkManifest,
+    _MIN_NONEMPTY_CHARS,
+    _split_into_chunks,
+    _validate_boundaries,
     chunk,
     register_rlm_chunking,
 )
+from rag_wright.contracts.identifiers import ChunkId
 
 
 def _two_section_doc() -> DoclingDocument:
+    # each section body is over the MIN_CHUNK_CHARS floor, so the two sections stay as two chunks (a
+    # major boundary with enough content splits); tiny sections would correctly merge (T-CHK).
     doc = DoclingDocument(name="stub")
     doc.add_text(label="section_header", text="1. Definitions")
-    doc.add_text(label="text", text="Affiliate means an entity controlling a party.")
+    doc.add_text(label="text", text="Affiliate means an entity controlling a party. " * 30)
     doc.add_text(label="section_header", text="2. Governing Law")
-    doc.add_text(label="text", text="This Agreement is governed by the laws of Delaware.")
+    doc.add_text(label="text", text="This Agreement is governed by the laws of Delaware. " * 30)
     return doc
 
 
@@ -129,6 +140,98 @@ def test_rlm_chunking_registers_as_an_agent_skill(tmp_path):
     assert registration.kind == "agent_skill"
     assert registration.contract is ChunkManifest
     assert registration.skeleton.response_bounds is None  # agent_skill is loaded, not callable
+
+
+# --- T-CHK: degenerate-split fix (min-size floor + hierarchy-preserving merge) -------------------
+
+
+def _item(text: str, label: str = "text", level: int | None = None) -> SimpleNamespace:
+    return SimpleNamespace(text=text, label=label, level=level)
+
+
+def _doc(items: list[SimpleNamespace]) -> SimpleNamespace:
+    return SimpleNamespace(texts=items)  # _split_into_chunks only reads .texts/.text/.label/.level
+
+
+def test_tiny_adjacent_sections_merge_up_to_the_floor():
+    # 40 short same-level sections must not become 40 tiny chunks; they fold up to the floor.
+    items: list[SimpleNamespace] = []
+    for i in range(40):
+        items.append(_item(f"{i}. Clause", "section_header", level=1))
+        items.append(_item("A short clause sentence of moderate length. " * 3))  # ~132 chars
+    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
+
+    assert 2 <= len(chunks) < 40  # merged, not one fragment per heading
+    assert all(len(c) >= MIN_CHUNK_CHARS for c in chunks)  # every chunk meets the size floor
+    assert min(len(c) for c in chunks) >= _MIN_NONEMPTY_CHARS  # no near-empty chunk
+
+
+def test_deeper_subsection_stays_with_its_parent_section():
+    items = [
+        _item("1. Main Section", "section_header", level=1),
+        _item("Body of the main section. " * 60),  # ~1600 chars, over the floor
+        _item("1.1 Subsection", "section_header", level=2),  # deeper level -> not a major boundary
+        _item("Subsection body text here."),
+    ]
+    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
+
+    assert len(chunks) == 1  # the subsection is NOT split away from its parent (hierarchy preserved)
+    assert "1.1 Subsection" in chunks[0]
+
+
+def test_major_boundary_splits_when_both_sections_meet_the_floor():
+    big = "Clause text of the section. " * 60  # ~1680 chars, over the floor
+    items = [
+        _item("1. First", "section_header", level=1), _item(big),
+        _item("2. Second", "section_header", level=1), _item(big),  # same level -> major boundary
+    ]
+    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
+
+    assert len(chunks) == 2  # a real section break splits when there is enough content on both sides
+
+
+def test_asiandragon_dense_header_pathology_regression():
+    # Models the real ASIANDRAGON parse: 112 level-1 headings (Docling flattened every numbered clause
+    # to a level-1 header), some heading-only runs. The buggy splitter made 113 chunks (10 near-empty);
+    # the floor + hierarchy-preserving merge must collapse this and emit no near-empty chunk.
+    items: list[SimpleNamespace] = []
+    for i in range(112):
+        items.append(_item(f"{i}. HEADING", "section_header", level=1))
+        if i % 5:  # ~1 in 5 headings has no body (consecutive headers) -> the near-empty source
+            items.append(_item("Some clause body text of moderate length here. " * 2))  # ~94 chars
+    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
+    lens = sorted(len(c) for c in chunks)
+
+    assert len(chunks) < 40  # was 113 chunks on the real doc
+    assert lens[0] >= _MIN_NONEMPTY_CHARS  # no near-empty / heading-only chunk (was 10)
+    assert all(length >= MIN_CHUNK_CHARS for length in lens)  # the size floor holds (cap >> floor)
+
+
+def test_validate_rejects_near_empty_chunk_but_allows_a_lone_short_chunk():
+    ok = Chunk(chunk_id=ChunkId.of("d", 0, "a").value, chunk_index=0,
+               text="A real chunk body, long enough to matter.", summary="s", token_estimate=10)
+    heading_only = Chunk(chunk_id=ChunkId.of("d", 1, "b").value, chunk_index=1,
+                         text="1.", summary="s", token_estimate=1)
+    with pytest.raises(BoundaryValidationError, match="near-empty"):
+        _validate_boundaries([ok, heading_only], DEFAULT_TOKEN_CAP)
+
+    lone_short = Chunk(chunk_id=ChunkId.of("d", 0, "c").value, chunk_index=0,
+                       text="Tiny doc.", summary="s", token_estimate=2)
+    _validate_boundaries([lone_short], DEFAULT_TOKEN_CAP)  # a short single-chunk doc is allowed
+
+
+def test_asiandragon_real_parse_no_longer_fragments():
+    files = glob.glob("data/gate2_cache/parsed/ASIANDRAGON*.json")
+    if not files:
+        pytest.skip("ASIANDRAGON cached parse not present (run the GATE-2 harness to produce it)")
+    doc = DoclingDocument.load_from_json(files[0])
+    chunks = _split_into_chunks(doc, DEFAULT_TOKEN_CAP)
+    lens = sorted(len(c) for c in chunks)
+
+    assert len(chunks) < 60  # was 113
+    assert lens[0] >= _MIN_NONEMPTY_CHARS  # was 10 near-empty chunks
+    print(f"\nASIANDRAGON real: {len(chunks)} chunks (was 113); "
+          f"char min={lens[0]} median={lens[len(lens) // 2]} max={lens[-1]}")
 
 
 @pytest.mark.model

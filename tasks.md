@@ -158,7 +158,7 @@ enforces it.
 | T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | done | T14, T20 |
 | T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | capability done; RAC-22 b2 open | T21 |
 | **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | run 1 not adjudicated (ADR-0011); keep ArcadeDB | T21, T22, T9, T10 |
-| T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | todo | T17 |
+| T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T23 | Graph extraction (contract + spaCy NER/dep; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | todo | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | todo | T23 |
@@ -858,12 +858,18 @@ deployment/orchestration, not built here. Not ARD-registered: a seam-bound pipel
 - **Does not beat baseline →** drop T18 and the elaborate chunking apparatus; fall back to the
   simpler chunker; redirect the plan. Raise with the human before proceeding either way.
 
+> **SUPERSEDED (2026-07-12, T-CHK):** these RLM numbers were measured on the buggy splitter (degenerate
+> over-fragmentation + near-empty chunks, fixed in T-CHK). They do **not** change the GATE-1 decision
+> (ADR-0009 keeps the RLM chunker regardless of any single-corpus result), but they must **not** be cited
+> later as evidence about the chunking strategy. Any RLM-vs-baseline A/B after T-CHK requires a full
+> re-ingest on clean chunks (the stored chunks are stale).
+
 **Run (`eval/gate1_chunker_ab.py`, 2026-07-09) — dense-only proxy (T17 + T19 + T9; no store, no
 sparse leg), 4 golden docs / 59 questions:**
 
 | chunker | boundary quality | recall@1 | recall@3 | recall@5 | chunks/doc |
 |---|---|---|---|---|---|
-| RLM (T17) | **0.920** | 0.200 | 0.536 | **0.799** | 4–7 |
+| RLM (T17, ~~superseded~~) | **0.920** | 0.200 | 0.536 | **0.799** | 4–7 |
 | baseline (fixed window) | 0.886 | **0.322** | **0.562** | 0.685 | 13–17 |
 
 Read honestly: RLM wins boundary quality; retrieval is **mixed and confounded** — RLM's recall@5
@@ -1027,7 +1033,32 @@ chunks (`_validate_boundaries` only rejects fully-empty text). This depresses RL
 of the query artifact — must be fixed before any RLM-vs-baseline comparison so a chunker bug is not
 attributed to the chunking strategy. Fix: a min-size floor / merge tiny adjacent sections; reject
 near-empty chunks in validation. Changes an approved capability → **ask-first**.
-**Status:** todo (ask-first gate). **Dep:** T17.
+
+**RAC-CHK:**
+- [x] Min-size floor (`MIN_CHUNK_CHARS=1000`, ~250 tokens) via forward accumulation: a heading starts a
+  new chunk only once the current chunk meets the floor AND the heading is a *major* boundary
+  (same-or-higher level than the section the chunk opened with). Below-floor or deeper-subsection
+  headings keep accumulating.
+- [x] **Hierarchy-preserving** (per review constraint): a deeper subsection is never split away from its
+  parent (test: level-2 subsection stays in the level-1 parent's chunk); tiny sections fold into a
+  neighbour within the same parent (`_merge_below_floor`, backward-first, never over the cap), never by
+  destroying a boundary. A real section break still splits when both sides meet the floor.
+- [x] Validation rejects near-empty/heading-only chunks (`_validate_boundaries`, `<20` chars when >1
+  chunk); a lone short chunk (short doc) is allowed. Cap guarantees preserved (hard-split unchanged).
+- [x] Regression fixture on the ASIANDRAGON pathology (synthetic 112 level-1 headings) + an opt-in real-doc
+  check on the cached parse. **Real ASIANDRAGON: 113 → 34 chunks, char min 1006 (was 10 near-empty),
+  median 1141, all ≥ floor.** Distribution (min/median/max) reported.
+- [ ] Summarizer text-fallbacks re-checked at re-ingest to confirm they were a symptom of the split bug
+  (near-empty text → structured None), not a separate failure — expected ~0 after the fix. **Confirmed at
+  the re-ingest step** (next).
+
+**Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py` (12 passed incl. real ASIANDRAGON
+regression; 2 opt-in skipped). Full suite 300 passed + 16 skipped.
+**Files:** `src/rag_wright/capabilities/rlm_chunking.py` (`MIN_CHUNK_CHARS`, hierarchy-aware
+`_split_into_chunks`, `_merge_below_floor`, near-empty validation), `tests/capabilities/test_rlm_chunking.py`.
+**Consequence recorded:** GATE-1's RLM numbers marked **superseded** (measured on buggy chunks; ADR-0009
+keeps RLM regardless). Any post-T-CHK A/B needs a full re-ingest (stored chunks stale).
+**Status:** done (fallback re-check + per-doc signal at the re-ingest step, next). **Dep:** T17.
 
 ---
 

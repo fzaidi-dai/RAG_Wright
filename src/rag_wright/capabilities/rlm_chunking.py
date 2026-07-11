@@ -27,8 +27,16 @@ from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
 
 DEFAULT_TOKEN_CAP = 20_000
-_HEADER_LABELS = ("section_header", "title")  # a heading starts a new chunk (section boundary)
+_HEADER_LABELS = ("section_header", "title")  # a heading is a candidate section boundary
 _SUMMARIZE_PROMPT = "Summarize this contract chunk in one or two sentences, factually:"
+
+# Minimum chunk size floor (~250 tokens, T-CHK). A header only STARTS a new chunk once the current
+# chunk meets this floor; below-floor sections fold into their neighbour, so a document whose parser
+# over-detected headings (e.g. an OCR'd contract where every numbered clause is a level-1 heading) is
+# not shattered into tiny fragments. The floor coalesces boundaries within a parent section; it never
+# splits a subsection away from its parent (deeper headings keep accumulating). Tunable.
+MIN_CHUNK_CHARS = 1000
+_MIN_NONEMPTY_CHARS = 20  # a chunk shorter than this is degenerate (heading-only); never emitted
 
 
 class BoundaryValidationError(ValueError):
@@ -101,29 +109,39 @@ _SEP = "\n\n"
 def _split_into_chunks(document, token_cap: int) -> list[str]:
     """Slice the parsed document into coherent, capped chunk texts (deterministic, code-side).
 
-    A new chunk starts at each section heading and whenever the token cap would be exceeded; a single
-    over-cap item is hard-split so every chunk honors the cap. The cap is checked against the actual
-    *joined* length (the `\\n\\n` separators plus the exact character count), so it matches each
-    chunk's recomputed `token_estimate` and no chunk can slip over the cap through per-item rounding.
+    A new chunk starts at a section heading only once the current chunk has reached the size floor and
+    the heading is a *major* boundary (same or higher level than the section the chunk opened with);
+    a deeper subsection heading, or a heading reached before the floor, keeps accumulating, so tiny
+    sections fold into their neighbour within the same parent rather than becoming their own fragment
+    (T-CHK). The cap always wins: a chunk is flushed when the token cap would be exceeded, and a single
+    over-cap item is hard-split. The cap is checked against the actual *joined* length so no chunk
+    slips over through per-item rounding. Any residual below-floor chunk is merged post hoc.
     """
     cap_chars = token_cap * 4  # _estimate_tokens is len // 4, so the cap in characters
+    floor = min(MIN_CHUNK_CHARS, cap_chars)  # a tiny cap (tests) cannot demand a larger floor
     chunks: list[str] = []
     buffer: list[str] = []
     buffer_len = 0  # len(_SEP.join(buffer))
+    section_level: int | None = None  # level of the heading that opened the current chunk's section
 
     def flush() -> None:
-        nonlocal buffer, buffer_len
+        nonlocal buffer, buffer_len, section_level
         if buffer:
             chunks.append(_SEP.join(buffer))
-            buffer, buffer_len = [], 0
+            buffer, buffer_len, section_level = [], 0, None
 
     for item in document.texts:
         text = (getattr(item, "text", "") or "").strip()
         if not text:
             continue
         label = str(getattr(item, "label", "")).lower()
-        if any(h in label for h in _HEADER_LABELS):
-            flush()  # section boundary
+        is_header = any(h in label for h in _HEADER_LABELS)
+        level = getattr(item, "level", None) if is_header else None
+
+        if is_header and buffer and buffer_len >= floor:
+            major = section_level is None or level is None or level <= section_level
+            if major:  # enough content AND a same-or-higher-level boundary -> a real section break
+                flush()
 
         if len(text) > cap_chars:  # a single item larger than the cap
             flush()
@@ -134,11 +152,31 @@ def _split_into_chunks(document, token_cap: int) -> list[str]:
         if buffer and buffer_len + added > cap_chars:  # cap boundary (measured on the joined text)
             flush()
             added = len(text)
+        if not buffer and is_header:  # this heading opens a new chunk's section
+            section_level = level
         buffer.append(text)
         buffer_len += added
 
     flush()
-    return chunks
+    return _merge_below_floor(chunks, floor, cap_chars)
+
+
+def _merge_below_floor(chunks: list[str], floor: int, cap_chars: int) -> list[str]:
+    """Fold any residual below-floor chunk into an adjacent chunk (backward first, then the first
+    chunk forward), never exceeding the cap. Eliminates heading-only/near-empty fragments left by a
+    cap-forced flush or a tiny trailing section; a lone chunk is left as-is (a short document)."""
+    if len(chunks) <= 1:
+        return chunks
+    merged: list[str] = []
+    for c in chunks:
+        if merged and len(c) < floor and len(merged[-1]) + len(_SEP) + len(c) <= cap_chars:
+            merged[-1] = merged[-1] + _SEP + c  # fold backward into the previous chunk (same neighbour)
+        else:
+            merged.append(c)
+    if len(merged) > 1 and len(merged[0]) < floor and len(merged[0]) + len(_SEP) + len(merged[1]) <= cap_chars:
+        merged[1] = merged[0] + _SEP + merged[1]  # a below-floor first chunk folds forward
+        merged.pop(0)
+    return merged
 
 
 def _validate_boundaries(chunks: list[Chunk], token_cap: int) -> None:
@@ -152,6 +190,8 @@ def _validate_boundaries(chunks: list[Chunk], token_cap: int) -> None:
             raise BoundaryValidationError(f"non-sequential chunk_index at {index}")
         if not chunk_.text.strip():
             raise BoundaryValidationError(f"empty chunk at {index}")
+        if len(chunks) > 1 and len(chunk_.text.strip()) < _MIN_NONEMPTY_CHARS:
+            raise BoundaryValidationError(f"near-empty (heading-only) chunk at {index} (T-CHK)")
         if chunk_.token_estimate > token_cap:
             raise BoundaryValidationError(f"chunk {index} exceeds token cap ({token_cap})")
 
