@@ -141,6 +141,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("retrieval", "hybrid", "rrf", "query"),
     ),
+    CapabilityManifest(
+        slug="reranking",
+        kind="function",  # an in-process query-side node
+        display_name="Reranking (BGE cross-encoder precision gate)",
+        description=(
+            "Re-score retrieved candidate passages against the query with a BGE-reranker "
+            "cross-encoder (which reads query and passage together, more precise than the "
+            "bi-encoder retrieval legs) and cut the list to a top-k precision gate before "
+            "synthesis (FR-C.4, FR-Q.2)."
+        ),
+        representative_queries=(
+            "rerank retrieved passages by cross-encoder relevance to the query",
+            "apply a precision gate that cuts candidates to the most relevant top-k",
+            "reorder hybrid-search results with a BGE reranker before answering",
+            "select the best passages to ground an answer on",
+        ),
+        tags=("reranking", "cross-encoder", "bge-reranker", "query"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

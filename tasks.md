@@ -18,12 +18,13 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T22** (reranking, FR-C.4/FR-Q.2): a BGE-reranker cross-encoder reranks the T21
-  candidate list and cuts it to a top-k precision gate before synthesis; must beat the raw fused list
-  on precision@k on the golden set; author the `reranking` manifest. **This is also GATE-2 / the RLM
-  chunker's earns-its-cost point** (GATE-1 deferred that call here) — the GATE-2 eval must be in-depth
-  and representative (short AND long docs, all archetypes), never downscaled for time
-  ([[evals-in-depth-no-shortcuts]]).
+- **NEXT UP (open decisions — see GATE-2 run 1):** **T22 capability is built** (RAC-22 b1/b3/b4 done,
+  live-verified; **b2 rerank-precision explicitly OPEN**, pending ACORD). **GATE-2 run 1 was NOT
+  adjudicated** — CUAD questions are not retrieval queries (ADR-0011); (a) store bar not adjudicated / no
+  LanceDB signal / keep ArcadeDB / not marked met. Two ask-first tasks queued: **T-CHK** (fix the T17
+  degenerate-chunking bug — must precede any RLM-vs-baseline numbers) and **T33** (ACORD content-query
+  retrieval eval — closes GATE-2a + RAC-22 b2). Immediate options for the human: commit T22 (bullet open),
+  do the per-doc rerank/chunker signal on existing data, approve T-CHK, and/or approve T33.
 - **Last approved:** **T21** (FR-C.3/FR-Q.1, RAC-21) — Hybrid search. Query-side capability: embed the
   query once (dense + sparse over the query text, via the T19 `Embedder` seam), hand both vectors to
   the new **semantic** query-side `Store.hybrid_search(dense, sparse, *, k, filters)` seam method, which
@@ -155,8 +156,10 @@ enforces it.
 | T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | done | T13, T17, T19 |
 | **GATE-1** | **RLM chunker A/B go / no-go** | 4 Build | §12, plan §2 | run: keep RLM, defer T18 → GATE-2 | T17, T19, T9 |
 | T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | done | T14, T20 |
-| T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | todo | T21 |
-| **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | pending | T21, T22, T9, T10 |
+| T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | capability done; RAC-22 b2 open | T21 |
+| **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | run 1 not adjudicated (ADR-0011); keep ArcadeDB | T21, T22, T9, T10 |
+| T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | todo | T17 |
+| T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T23 | Graph extraction (contract + spaCy NER/dep; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | todo | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | todo | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | todo | T8, T23b |
@@ -932,17 +935,31 @@ to a top set before any expensive work, the precision gate before synthesis (FR-
 Grounded surface: `FlagEmbedding` `FlagAutoReranker`.
 
 **RAC-22:**
-- [ ] The candidate list is reranked and cut to a top-k set.
-- [ ] Rerank improves precision@k over the raw fused list on the golden set.
-- [ ] Registered under FR-C.4.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] The candidate list is reranked and cut to a top-k set. `rerank(query, passages, *, reranker,
+  top_k)` scores each `(query, passage)` pair via the BGE cross-encoder seam, sorts by score desc
+  (stable — ties keep fused order), cuts to `top_k`. `Passage` in → `RerankResult` (ranked
+  `ScoredCandidate`s). Pure query-side function; it does not fetch text (the graph wires summary vs
+  full text). Live `-m rerank`: real `bge-reranker-v2-m3` ranks a relevant passage above an irrelevant.
+- [ ] **PENDING valid queries.** Rerank improves precision@k over the raw fused list on the golden set.
+  **GATE-2 run 1 could NOT adjudicate this** — rerank was ~neutral only because the relevant chunk was
+  rarely in the candidate pool (CUAD-question query artifact, ADR-0011), which is not a rerank result.
+  Closes when measured on ACORD's content-bearing queries (the ACORD task). **Do not check this bullet
+  until then; T22 is committed with it explicitly open.**
+- [x] Registered under FR-C.4. `register_reranking` → `reranking`, kind `function`, contract `RerankResult`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/reranking.json`,
+  `urn:air:dreamai.io:rag_wright:reranking`, kind `function`); mirror conformance green; re-validates as
+  a `RegistryEntry`. Live `RegistryStore(root)` load is the GraphWright-side step.
 
-**Verification:** `uv run pytest tests/capabilities/test_reranking.py`
+**Verification:** `uv run pytest tests/capabilities/test_reranking.py` (8 hermetic passed); live:
+`... -m rerank` (1 passed, real cross-encoder). Full suite 294 passed + 16 skipped. Publish:
+`uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T21. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/reranking.py`, `tests/capabilities/test_reranking.py`
+**Dependencies:** T21. **Scope:** M. **Status:** capability done; RAC-22 b2 open pending ACORD.
+**Files:** `src/rag_wright/capabilities/reranking.py`, `tests/capabilities/test_reranking.py`,
+`src/rag_wright/capabilities/manifests.py` (+`reranking` spec), `pyproject.toml` + `conftest.py`
+(`rerank` opt-in marker; `transformers>=4.44.2,<5` pin — ADR-0010).
+**Note:** transformers pinned <5 (ADR-0010): FlagEmbedding's reranker needs the `prepare_for_model` that
+transformers 5.x removed. RAC-22 b2 is the GATE-2 rerank-precision measurement (see GATE-2 run 1 below).
 
 ### GATE-2: Recall-bar, ArcadeDB hybrid vs LanceDB fallback (branch point)
 
@@ -969,6 +986,48 @@ mix is not thereby useless; semantic chunking's advantage is corpus- and query-t
   all archetypes), never downscaled for time ([[evals-in-depth-no-shortcuts]]). GATE-1's 4-shortest-docs
   dense-only proxy is explicitly **not** sufficient for this call.
 - Record the outcome (keep-default vs. optional) with its eval evidence, and raise with the human.
+
+**GATE-2 run 1 (2026-07-11, `eval/gate2_hybrid_rerank.py`, 21-doc stratified sample) — NOT ADJUDICATED.**
+The run used CUAD golden questions as cross-corpus retrieval queries and returned implausibly low recall
+(exact_lexical recall@1 0.027; recall@10 0.13–0.29 across archetypes, both chunkers; rerank ~neutral).
+Diagnosed before reporting: **CUAD is an extraction/classification benchmark, not a retrieval one** — its
+questions/category labels share ~2–9% vocabulary with the answers, so the numbers measure a
+query-formulation artifact, not the retriever (ADR-0011, [[cuad-not-a-retrieval-benchmark]]). GATE-1's
+per-doc RLM recall@5 0.799 proves the pipeline retrieves correctly in a small haystack; the collapse is
+the big-haystack × content-free-query combination, which hits both chunkers and any store equally.
+Strict bookkeeping:
+- **(a) store bar:** *not adjudicated on this run; no signal favoring LanceDB.* Keep ArcadeDB. **Not marked
+  met** (we neither switch on an inconclusive measurement nor claim a bar we did not measure).
+- **RAC-22 b2 (rerank precision):** *pending valid queries*, not checked.
+- **(b) RLM earns-its-cost:** unchanged — post-graph GATE-2b (needs cross-part/multi-hop/temporal + KG),
+  and blocked additionally by the T17 chunker bug below.
+- **Genuinely proven (the run's real result):** the full read+ingest pipeline ran end to end at scale with
+  zero crashes — 21 docs, both chunkers, parse → chunk → embed (dense+sparse) → ArcadeDB write →
+  server-side RRF hybrid → BGE rerank, over 630–840 chunks. Real T16–T22 integration validation.
+- **Fix path:** content-bearing queries via **ACORD** (T33, ask-first), and the **T17 chunker fix** (T-CHK)
+  before any RLM-vs-baseline numbers.
+
+### Task T33: ACORD content-query retrieval eval (extends T9) — ask-first
+
+**Description:** Ingest ACORD (Atticus Clause Retrieval Dataset: CC-BY-4.0, BEIR, 114 attorney-authored
+queries, ~126k graded query-clause pairs, corpus of SEC/EDGAR + F500 ToS clauses — same family as ours,
+distinct clause pool) into the store via the pipeline and run its expert queries through hybrid search +
+rerank, scored against qrels. Supplies the content-bearing cross-corpus retrieval bar CUAD cannot
+(ADR-0011). Adjudicates **GATE-2(a) store bar** and **RAC-22 b2 rerank precision**; does NOT exercise the
+RLM chunker (pre-segmented clauses), so the RLM call stays at GATE-2b. **LLM-generated queries are rejected
+as circular; if ACORD is unusable, return to the human before any alternative.**
+**Status:** todo (ask-first gate). **Dep:** T21, T22. License + corpus provenance verified (2026-07-12).
+
+### Task T-CHK: RLM chunker degenerate-split fix (T17 bug) — ask-first
+
+**Description:** GATE-2 run 1 surfaced degenerate RLM chunking: `_split_into_chunks` flushes at every
+header item with no minimum-chunk-size floor and no tiny-section coalescing, so header-dense/OCR'd docs
+over-fragment (ASIANDRAGON 113 chunks/10k tok; ADAMSGOLF 49 chunks/24KB) and emit near-empty heading-only
+chunks (`_validate_boundaries` only rejects fully-empty text). This depresses RLM retrieval independently
+of the query artifact — must be fixed before any RLM-vs-baseline comparison so a chunker bug is not
+attributed to the chunking strategy. Fix: a min-size floor / merge tiny adjacent sections; reject
+near-empty chunks in validation. Changes an approved capability → **ask-first**.
+**Status:** todo (ask-first gate). **Dep:** T17.
 
 ---
 
