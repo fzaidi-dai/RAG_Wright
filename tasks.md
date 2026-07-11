@@ -18,18 +18,23 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP:** **T21** (hybrid search, FR-C.3/FR-Q.1): server-side RRF over the dense and sparse legs
-  (`vector.fuse`, proven at T14), metadata filters, recall@k measurable on the golden set; needs
-  `-m store`; author the `hybrid_search` manifest. **GATE-1 run + decided (2026-07-09): keep the RLM
-  chunker, defer T18 (not built) → the earns-its-cost call moves to GATE-2/T22; if unproven there,
-  make the RLM chunker optional, not dropped.**
-- **Last approved:** **T20** (FR-I.3/FR-I.5, RAC-20) — Chunk write + incremental upsert. Assembles the
-  T3 `ChunkRecord` from a chunk (T17) + embedding (T19); upserts by `chunk_id` via the extended
-  `Store` seam (ArcadeDB decomposes sparse dict → two arrays); content-hash gate (unchanged doc →
-  skipped); dead-letter queue + resumable per-chunk checkpoints. Live `-m store` verified real upsert
-  dedup/update. **Not ARD-registered** — a seam-bound pipeline step, no §5 slug (ARD scope corrected:
-  T20 + T25 dropped from the definition-of-done; rule = only query-discovered §5 capabilities
-  register). Full suite 279.
+- **NEXT UP:** **T22** (reranking, FR-C.4/FR-Q.2): a BGE-reranker cross-encoder reranks the T21
+  candidate list and cuts it to a top-k precision gate before synthesis; must beat the raw fused list
+  on precision@k on the golden set; author the `reranking` manifest. **This is also GATE-2 / the RLM
+  chunker's earns-its-cost point** (GATE-1 deferred that call here) — the GATE-2 eval must be in-depth
+  and representative (short AND long docs, all archetypes), never downscaled for time
+  ([[evals-in-depth-no-shortcuts]]).
+- **Last approved:** **T21** (FR-C.3/FR-Q.1, RAC-21) — Hybrid search. Query-side capability: embed the
+  query once (dense + sparse over the query text, via the T19 `Embedder` seam), hand both vectors to
+  the new **semantic** query-side `Store.hybrid_search(dense, sparse, *, k, filters)` seam method, which
+  the ArcadeDB impl fuses server-side by RRF (`vector.fuse`, the T14-proven SQL) into one ranked
+  `Candidate` list honoring metadata filters. Each leg fetched to a `DEFAULT_CANDIDATE_POOL=100` pool,
+  filter applied post-fusion, cut to `k`. Registered under FR-C.3 (`function`) + ARD manifest authored
+  and published. Live `-m store` verified real server-side RRF (c1 dense-leg + c2 sparse-leg winners
+  fuse to the top, weak c3 excluded) and a `source_doc_id` filter. **recall@k on the golden set is
+  measurable through this capability but the golden-set run is deferred to GATE-2/T22.** Full suite 285
+  passed + 15 skipped. **GATE-1 (2026-07-09): kept the RLM chunker, T18 deferred → earns-its-cost call
+  is at GATE-2/T22; if unproven, make the chunker optional, not dropped.**
 - **Prior:** **T19** (RAC-19) Embedding (BGE-M3); **T17** (RAC-17) RLM chunking; **T16** Parsing.
   Grounded the hybrid SQL against the official ArcadeDB docs + live 26.7.1, then tested end to end
   through the arcadedb-python `query()` method: `SELECT expand(vector.fuse(vector.neighbors(...),
@@ -149,7 +154,7 @@ enforces it.
 | T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | done | T16 |
 | T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | done | T13, T17, T19 |
 | **GATE-1** | **RLM chunker A/B go / no-go** | 4 Build | §12, plan §2 | run: keep RLM, defer T18 → GATE-2 | T17, T19, T9 |
-| T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | todo | T14, T20 |
+| T21 | Hybrid search (server-side RRF, metadata filters) | 4 Build read | FR-C.3, FR-Q.1 | done | T14, T20 |
 | T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | todo | T21 |
 | **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | pending | T21, T22, T9, T10 |
 | T23 | Graph extraction (contract + spaCy NER/dep; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | todo | T5, T8, T16 |
@@ -884,19 +889,41 @@ ArcadeDB into one ranked candidate list, honoring metadata filters (FR-C.3, FR-Q
 surface: ArcadeDB `vector.fuse` (proven end to end at T14).
 
 **RAC-21:**
-- [ ] A query returns one RRF-fused ranked candidate list from the dense and sparse legs.
-- [ ] Metadata filters are honored.
-- [ ] recall@k per archetype is measurable on the golden set (feeds GATE-2).
-- [ ] Registered under FR-C.3.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] A query returns one RRF-fused ranked candidate list from the dense and sparse legs. The query
+  is embedded once (dense + sparse over the query text) via the T19 `Embedder` seam; both vectors go
+  to the new semantic query-side seam method `Store.hybrid_search(dense, sparse, *, k, filters)`, which
+  the ArcadeDB impl fuses server-side (`vector.fuse` RRF over the dense `vector.neighbors` and sparse
+  `vector.sparseNeighbors` legs, the T14-proven SQL). Each leg fetched to `DEFAULT_CANDIDATE_POOL=100`,
+  fused, cut to `k`. `hybrid_search(...)` returns a `HybridSearchResult` (RRF-ranked `Candidate`s).
+  **Live (`-m store`): c1 (dense-leg winner) + c2 (sparse-leg winner) fuse to the top two; weak c3 is
+  excluded.**
+- [x] Metadata filters are honored. Equality filters applied post-fusion as a wrapping `WHERE` on the
+  stored columns (proven at T14). **Live: a `source_doc_id='docA'` filter returns only docA candidates.**
+- [x] recall@k per archetype is **measurable** on the golden set: `hybrid_search(query, ..., k)` gives
+  the `retrieve(query, k)` shape the T9 harness injects. **The golden-set recall run itself is deferred
+  to GATE-2/T22** (it must be in-depth, all archetypes, short AND long docs, per
+  [[evals-in-depth-no-shortcuts]]); T21 delivers the measurable capability, not the gate.
+- [x] Registered under FR-C.3. `register_hybrid_search` → `hybrid_search`, kind `function`, contract
+  `HybridSearchResult`.
+- [x] ARD-registered: manifest authored + **present in the shared root**
+  (`~/.air/registry/hybrid_search.json`, `urn:air:dreamai.io:rag_wright:hybrid_search`, kind `function`
+  with response bounds; representative queries authored); mirror conformance green; re-validates as a
+  `RegistryEntry`. Live `RegistryStore(root)` load / `discover` is the GraphWright-side step (not here).
 
-**Verification:** `uv run pytest tests/capabilities/test_hybrid_search.py -m store`
+**Verification:** `uv run pytest tests/capabilities/test_hybrid_search.py` (5 hermetic passed); live:
+`... -m store` (2 passed — real ArcadeDB server-side RRF + metadata filter); manifest:
+`tests/capabilities/test_manifests.py`. Full suite 285 passed + 15 skipped. Publish:
+`uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T14, T20. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/hybrid_search.py`,
-`tests/capabilities/test_hybrid_search.py`
+**Dependencies:** T14, T20. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/capabilities/hybrid_search.py`, `tests/capabilities/test_hybrid_search.py`,
+`src/rag_wright/store/{seam,arcadedb}.py` (query-side seam method + ArcadeDB RRF SQL, `_sql_literal`,
+`DEFAULT_CANDIDATE_POOL`), `src/rag_wright/capabilities/manifests.py` (+`hybrid_search` spec),
+`tests/store/test_arcadedb_schema.py` (stub extended to the query-side seam).
+**Note:** No new ADR — reuses ADR-0007's ArcadeDB store/schema + the T14-grounded `vector.fuse` SQL.
+Metadata filtering is **post-fusion** (filter the pooled fused list, then cut to `k`); the `pool=100`
+per leg gives fusion and the filter room. The capability preserves the server's RRF order and does not
+re-rank — that is the reranker's job (T22, the precision gate).
 
 ### Task T22: Reranking (cross-encoder precision gate)
 

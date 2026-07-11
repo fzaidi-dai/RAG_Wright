@@ -21,10 +21,15 @@ from typing import Any, Iterable
 
 from arcadedb_python import DatabaseDao, SyncClient
 
-from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord
+from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
 
 CHUNK_TYPE = "Chunk"
 ENTITY_TYPE = "Entity"
+
+# Candidates fetched per leg before fusion. RRF reorders within this pool, so it is set well above a
+# typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then
+# cut to `k`. Tuned at GATE-2 against the golden set if recall calls for it.
+DEFAULT_CANDIDATE_POOL = 100
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
 _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
@@ -44,6 +49,15 @@ def _float_array(values: Iterable[float]) -> str:
 
 def _str_array(values: Iterable[str]) -> str:
     return "[" + ",".join(_sql_str(v) for v in values) + "]"
+
+
+def _sql_literal(value: MetadataValue) -> str:
+    """A SQL literal for a filterable metadata scalar (bool checked before int: `bool` subclasses `int`)."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return repr(value)
+    return _sql_str(str(value))
 
 
 class ArcadeDBStore:
@@ -159,6 +173,42 @@ class ArcadeDBStore:
     def chunk_count(self) -> int:
         rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")
         return int(rows[0]["n"]) if rows else 0
+
+    # --- query-side (T21) -----------------------------------------------------------------------
+
+    def hybrid_search(
+        self,
+        dense_query: list[float],
+        sparse_query: dict[int, float],
+        *,
+        k: int,
+        filters: dict[str, MetadataValue] | None = None,
+    ) -> list[dict]:
+        """Server-side RRF fusion of the dense and sparse legs, honoring equality metadata filters.
+
+        Grounded and proven end to end at T14: `vector.fuse` fuses a dense `vector.neighbors` leg and a
+        sparse `vector.sparseNeighbors` leg with the RRF strategy; `expand` flattens the fused list into
+        rows. Each leg is fetched to `DEFAULT_CANDIDATE_POOL` (or `k` if larger) so fusion and the filter
+        have a real pool to work over; the fused, ranked result is then filtered and cut to `k`. Dotted
+        function names are backtick-quoted. The `arcadedb-python` API does not wrap these functions
+        (ADR-0007/ADR-0008), so they are issued through the grounded `query()` method.
+        """
+        leg_k = max(k, DEFAULT_CANDIDATE_POOL)
+        token_ids = sorted(sparse_query)  # deterministic order across the paired arrays
+        sparse_indices = "[" + ",".join(str(i) for i in token_ids) + "]"
+        sparse_weights = _float_array(sparse_query[i] for i in token_ids)
+        dense = _float_array(dense_query)
+        fused = (
+            "SELECT expand(`vector.fuse`("
+            f"`vector.neighbors`('{_DENSE_INDEX}', {dense}, {leg_k}), "
+            f"`vector.sparseNeighbors`('{_SPARSE_INDEX}', {sparse_indices}, {sparse_weights}, {leg_k}), "
+            "{ fusion: 'RRF' }))"
+        )
+        where = ""
+        if filters:
+            clauses = " AND ".join(f"{col} = {_sql_literal(v)}" for col, v in filters.items())
+            where = f" WHERE {clauses}"
+        return self._query(f"SELECT chunk_id, source_doc_id FROM ({fused}){where} LIMIT {k}")
 
     # --- test / lifecycle helper ----------------------------------------------------------------
 

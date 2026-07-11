@@ -60,6 +60,17 @@ class _InMemoryStore:
     def chunk_count(self) -> int:
         return len(getattr(self, "_rows", {}))
 
+    # query-side (T21): RRF hybrid search over the seam; the stub returns stored rows honoring the
+    # filter (no vector math), enough to prove a second implementation binds the query-side surface
+    def hybrid_search(self, dense_query, sparse_query, *, k, filters=None):
+        rows = [
+            {"chunk_id": r.chunk_id.value, "source_doc_id": r.chunk_id.source_doc_id}
+            for r in getattr(self, "_rows", {}).values()
+        ]
+        if filters:
+            rows = [r for r in rows if all(r.get(col) == v for col, v in filters.items())]
+        return rows[:k]
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()

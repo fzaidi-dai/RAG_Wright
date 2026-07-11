@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Optional, Protocol, runtime_checkable
 
-from rag_wright.contracts.chunk import ChunkRecord
+from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
 
 
 @runtime_checkable
@@ -50,3 +50,19 @@ class Store(Protocol):
 
     def chunk_count(self) -> int:
         """The number of chunk records in the store."""
+
+    # --- query-side (T21): the hybrid retrieval leg. Semantic, not SQL: the seam takes the two
+    # query vectors and each store fuses them its own way (ArcadeDB by server-side RRF over its
+    # dense/sparse indexes; a LanceDB fallback by its own hybrid query), so FR-C.3 is swappable.
+
+    def hybrid_search(
+        self,
+        dense_query: list[float],
+        sparse_query: dict[int, float],
+        *,
+        k: int,
+        filters: Optional[dict[str, MetadataValue]] = None,
+    ) -> list[dict]:
+        """Fuse the dense and sparse legs into one ranked candidate list (Reciprocal Rank Fusion),
+        honoring equality metadata filters, returning up to `k` rows (each with at least `chunk_id`
+        and `source_doc_id`) in ranked order, best first."""

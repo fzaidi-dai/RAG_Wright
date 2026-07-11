@@ -123,6 +123,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("embedding", "bge-m3", "ingestion"),
     ),
+    CapabilityManifest(
+        slug="hybrid_search",
+        kind="function",  # an in-process query-side node
+        display_name="Hybrid search (RRF over dense + sparse)",
+        description=(
+            "Retrieve candidate chunks for a natural-language query by fusing a dense "
+            "semantic leg and a sparse lexical leg server-side with Reciprocal Rank Fusion "
+            "(ArcadeDB vector.fuse), honoring metadata filters, into one ranked candidate list "
+            "(FR-C.3, FR-Q.1)."
+        ),
+        representative_queries=(
+            "retrieve the most relevant chunks for a natural-language query",
+            "hybrid dense and sparse search fused by reciprocal rank fusion",
+            "find candidate passages combining semantic and lexical matching",
+            "search the chunk index and filter candidates by source document",
+        ),
+        tags=("retrieval", "hybrid", "rrf", "query"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
