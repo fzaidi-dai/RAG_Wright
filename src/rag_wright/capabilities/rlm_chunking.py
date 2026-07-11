@@ -15,6 +15,7 @@ hermetically with a stub, and the real (model-calling) summarizer is exercised o
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -27,6 +28,7 @@ from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
 
 DEFAULT_TOKEN_CAP = 20_000
+DEFAULT_SUMMARY_CONCURRENCY = 8  # in-flight summary calls (backpressure); summaries are network-bound
 _HEADER_LABELS = ("section_header", "title")  # a heading is a candidate section boundary
 _SUMMARIZE_PROMPT = "Summarize this contract chunk in one or two sentences, factually:"
 
@@ -196,18 +198,36 @@ def _validate_boundaries(chunks: list[Chunk], token_cap: int) -> None:
             raise BoundaryValidationError(f"chunk {index} exceeds token cap ({token_cap})")
 
 
+async def _summarize_all(
+    texts: list[str], summarizer: Summarizer, max_concurrency: int
+) -> list[str]:
+    """Summarize chunk texts concurrently, bounded by a semaphore (the embedding capability's
+    async+backpressure pattern, T19). Each blocking `summarize()` runs in a thread (`asyncio.to_thread`)
+    so the network-bound calls overlap; the semaphore caps in-flight requests. `gather` preserves order,
+    so each summary lines up with its text and chunking stays deterministic (each call is independent
+    of concurrency)."""
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def _one(text: str) -> str:
+        async with semaphore:  # backpressure
+            return await asyncio.to_thread(summarizer.summarize, text)
+
+    return list(await asyncio.gather(*(_one(text) for text in texts)))
+
+
 def chunk(
     parsed: ParsedDocument,
     *,
     summarizer: Summarizer,
     cache_dir: Path,
     token_cap: int = DEFAULT_TOKEN_CAP,
+    max_concurrency: int = DEFAULT_SUMMARY_CONCURRENCY,
 ) -> ChunkManifest:
     """Chunk a parsed document into a `ChunkManifest`, content-hash gated (chunked once).
 
     If a manifest for this document's content hash already exists it is reused (no re-chunk);
-    otherwise the parsed document is sliced, each slice is summarized, boundaries are validated, and
-    the manifest is cached.
+    otherwise the parsed document is sliced, each slice is summarized (concurrently, bounded by
+    `max_concurrency`), boundaries are validated, and the manifest is cached.
     """
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / f"{parsed.source_doc_id}.{parsed.content_hash[:16]}.chunks.json"
@@ -215,15 +235,17 @@ def chunk(
         return ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
 
     document = load_document(parsed)
+    texts = _split_into_chunks(document, token_cap)
+    summaries = asyncio.run(_summarize_all(texts, summarizer, max_concurrency))
     chunks = [
         Chunk(
             chunk_id=ChunkId.of(parsed.source_doc_id, index, text).value,
             chunk_index=index,
             text=text,
-            summary=summarizer.summarize(text),
+            summary=summary,
             token_estimate=_estimate_tokens(text),
         )
-        for index, text in enumerate(_split_into_chunks(document, token_cap))
+        for index, (text, summary) in enumerate(zip(texts, summaries))
     ]
     _validate_boundaries(chunks, token_cap)
 

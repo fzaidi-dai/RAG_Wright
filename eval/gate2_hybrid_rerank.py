@@ -175,8 +175,12 @@ def _relevant(question: dict, doc_chunks: dict[str, str]) -> set[str]:
 
 
 def _evaluate(chunker: str, store: ArcadeDBStore, embedder: _Embedder, reranker: BGEReranker,
-              questions: list[dict], chunk_meta: dict[str, tuple[str, str]]) -> dict:
-    """Run every question through hybrid search + rerank; aggregate recall@k / precision@k per archetype."""
+              questions: list[dict], chunk_meta: dict[str, tuple[str, str]],
+              *, per_doc: bool, sdid_by_golden: dict[str, str]) -> dict:
+    """Run every question through hybrid search + rerank; aggregate recall@k / precision@k per archetype.
+
+    per_doc=True filters retrieval to the question's own document (the T21 source_doc_id filter), i.e. a
+    within-document haystack — an honest rerank + chunker signal, NOT the cross-corpus store bar."""
     q_texts = [q["question"] for q in questions]
     dense_q, sparse_q = embedder.encode(q_texts)
 
@@ -195,7 +199,8 @@ def _evaluate(chunker: str, store: ArcadeDBStore, embedder: _Embedder, reranker:
             continue  # no answer-bearing chunk under this chunker -> not scoreable for this question
         counts[arch] += 1
 
-        fused = store.hybrid_search(dq, sq, k=RETRIEVE_K)
+        filters = {"source_doc_id": sdid_by_golden[doc]} if per_doc else None
+        fused = store.hybrid_search(dq, sq, k=RETRIEVE_K, filters=filters)
         fused_ids = [r["chunk_id"] for r in fused]
 
         passages = [Passage(chunk_id=cid, source_doc_id=chunk_meta[cid][0], text=chunk_meta[cid][1])
@@ -218,14 +223,17 @@ def _evaluate(chunker: str, store: ArcadeDBStore, embedder: _Embedder, reranker:
             "precision_fused": _means(prec_fused), "precision_rerank": _means(prec_rerank)}
 
 
-def _run_chunker(name: str, docs: list[str], by_doc, embedder, reranker, summarizer) -> dict:
+def _run_chunker(name: str, docs: list[str], by_doc, embedder, reranker, summarizer,
+                 *, per_doc: bool) -> dict:
     db = f"ragwright_gate2_{name}"
     store = ArcadeDBStore.from_env(database=db, reset=True)
     store.ensure_schema()
     chunk_meta: dict[str, tuple[str, str]] = {}  # chunk_id -> (golden_doc_id, chunk_text)
+    sdid_by_golden: dict[str, str] = {}  # golden_doc_id -> stored (sanitized) source_doc_id
     questions: list[dict] = []
     for d in docs:
         parsed = parse(PDF_DIR / f"{d}.pdf", cache_dir=CACHE / "parsed", parser=DoclingParser())
+        sdid_by_golden[d] = parsed.source_doc_id
         if name == "rlm":
             chunks = chunk(parsed, summarizer=summarizer, cache_dir=CACHE / "chunks").chunks
         else:
@@ -236,7 +244,8 @@ def _run_chunker(name: str, docs: list[str], by_doc, embedder, reranker, summari
             chunk_meta[c.chunk_id] = (d, c.text)
         questions.extend(q for q in by_doc[d] if q["archetype"] in CUAD_ARCHETYPES)
         print(f"  [{name}] {d[:44]:44} chunks={len(chunks):3d} total_q={len(questions)}", flush=True)
-    result = _evaluate(name, store, embedder, reranker, questions, chunk_meta)
+    result = _evaluate(name, store, embedder, reranker, questions, chunk_meta,
+                       per_doc=per_doc, sdid_by_golden=sdid_by_golden)
     store.drop()
     store.close()
     return result
@@ -245,6 +254,8 @@ def _run_chunker(name: str, docs: list[str], by_doc, embedder, reranker, summari
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--docs", type=int, default=21, help="stratified sample size (short+long spread)")
+    ap.add_argument("--per-doc", action="store_true",
+                    help="retrieve within each answer's document (within-doc rerank + chunker signal)")
     args = ap.parse_args()
 
     golden = json.loads(GOLDEN.read_text())["questions"]
@@ -267,11 +278,12 @@ def main() -> None:
     reranker = BGEReranker()
     summarizer = _RobustSummarizer(SeamSummarizer())
 
-    results = [_run_chunker(name, docs, by_doc, embedder, reranker, summarizer)
+    results = [_run_chunker(name, docs, by_doc, embedder, reranker, summarizer, per_doc=args.per_doc)
                for name in ("rlm", "baseline")]
     print(f"\nsummarizer text-fallbacks (structured-output misses): {summarizer.fallbacks}")
 
-    print("\n=== GATE-2 result (text leg; mean over the sample) ===")
+    mode = "PER-DOC (within-document; rerank + chunker signal only)" if args.per_doc else "cross-corpus"
+    print(f"\n=== GATE-2 result [{mode}] (text leg; mean over the sample) ===")
     for r in results:
         print(f"\n[{r['chunker']}]  scoreable questions: {r['counts']}")
         for a in CUAD_ARCHETYPES:

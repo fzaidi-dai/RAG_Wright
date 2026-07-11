@@ -159,6 +159,7 @@ enforces it.
 | T22 | Reranking (cross-encoder precision gate) | 4 Build read | FR-C.4, FR-Q.2 | capability done; RAC-22 b2 open | T21 |
 | **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | run 1 not adjudicated (ADR-0011); keep ArcadeDB | T21, T22, T9, T10 |
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
+| T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T23 | Graph extraction (contract + spaCy NER/dep; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | todo | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | todo | T23 |
@@ -1059,6 +1060,29 @@ regression; 2 opt-in skipped). Full suite 300 passed + 16 skipped.
 **Consequence recorded:** GATE-1's RLM numbers marked **superseded** (measured on buggy chunks; ADR-0009
 keeps RLM regardless). Any post-T-CHK A/B needs a full re-ingest (stored chunks stale).
 **Status:** done (fallback re-check + per-doc signal at the re-ingest step, next). **Dep:** T17.
+
+### Task T-SUM: Concurrent summarization (T17 enhancement)
+
+**Description:** RLM `chunk()` summarized chunks in a serial loop — 900 chunks × ~4s serial OpenRouter
+calls ≈ 1 hour, the re-ingest bottleneck (Docling was cached; no rate-limit in our code). Applied the
+embedding capability's proven async+backpressure pattern (T19, FR-I.6) to summarization: `_summarize_all`
+runs each blocking `summarize()` in a thread (`asyncio.to_thread`), bounded by an `asyncio.Semaphore`
+(`DEFAULT_SUMMARY_CONCURRENCY=8`); `gather` preserves order so chunking stays deterministic (each
+summary is independent of concurrency). `chunk()` stays synchronous (internal `asyncio.run`), so no
+caller changes.
+
+**RAC-SUM:**
+- [x] Summaries run concurrently, bounded by a semaphore. Hermetic: `max_inflight == 4` at cap 4, `== 1`
+  at cap 1 (strictly serial); order preserved (determinism holds; `chunk twice → identical` still passes).
+- [x] **Validated with real LLM calls** (the T17 lesson — stubs are not enough): live `-m model` test,
+  12 real DeepSeek summaries, **concurrent(8)=8.1s vs serial(1)=27.1s = 3.4× speedup**, thread-safe, no
+  throttling errors, all summaries valid.
+
+**Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py` (14 passed + 2 opt-in skipped;
+full suite 302 passed + 16 skipped); live `... -m model` (3.4× speedup).
+**Files:** `src/rag_wright/capabilities/rlm_chunking.py` (`_summarize_all`, concurrent `chunk()`,
+`DEFAULT_SUMMARY_CONCURRENCY`), `tests/capabilities/test_rlm_chunking.py` (thread-safe stub + concurrency
++ live-speedup tests). **Status:** done. **Dep:** T17.
 
 ---
 

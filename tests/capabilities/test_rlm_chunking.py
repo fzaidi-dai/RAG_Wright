@@ -8,8 +8,11 @@ Summaries come from a `Summarizer` seam; hermetic tests inject a deterministic c
 
 from __future__ import annotations
 
+import asyncio
 import glob
 import json
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -26,6 +29,7 @@ from rag_wright.capabilities.rlm_chunking import (
     ChunkManifest,
     _MIN_NONEMPTY_CHARS,
     _split_into_chunks,
+    _summarize_all,
     _validate_boundaries,
     chunk,
     register_rlm_chunking,
@@ -53,13 +57,16 @@ class _StubParser:
 
 
 class _StubSummarizer:
-    """Deterministic summarizer that counts calls (to prove the content-hash gate)."""
+    """Deterministic summarizer that counts calls (to prove the content-hash gate). Thread-safe:
+    summaries now run concurrently through asyncio.to_thread, so the counter needs a lock."""
 
     def __init__(self) -> None:
+        self._lock = threading.Lock()
         self.calls = 0
 
     def summarize(self, text: str) -> str:
-        self.calls += 1
+        with self._lock:
+            self.calls += 1
         return f"summary: {text[:24]}"
 
 
@@ -232,6 +239,94 @@ def test_asiandragon_real_parse_no_longer_fragments():
     assert lens[0] >= _MIN_NONEMPTY_CHARS  # was 10 near-empty chunks
     print(f"\nASIANDRAGON real: {len(chunks)} chunks (was 113); "
           f"char min={lens[0]} median={lens[len(lens) // 2]} max={lens[-1]}")
+
+
+# --- concurrent summarization (async + semaphore backpressure, T19 pattern) ---------------------
+
+
+def test_summaries_run_concurrently_bounded_by_the_semaphore():
+    class _Probe:
+        """Records the peak number of summarize() calls in flight at once."""
+
+        def __init__(self) -> None:
+            self._lock = threading.Lock()
+            self.inflight = 0
+            self.max_inflight = 0
+
+        def summarize(self, text: str) -> str:
+            with self._lock:
+                self.inflight += 1
+                self.max_inflight = max(self.max_inflight, self.inflight)
+            time.sleep(0.05)  # stand in for a network round-trip so calls actually overlap
+            with self._lock:
+                self.inflight -= 1
+            return f"s:{text}"
+
+    probe = _Probe()
+    texts = [f"t{i}" for i in range(12)]
+
+    summaries = asyncio.run(_summarize_all(texts, probe, max_concurrency=4))
+
+    assert summaries == [f"s:t{i}" for i in range(12)]  # gather preserves order (determinism holds)
+    assert probe.max_inflight == 4  # genuinely concurrent AND bounded exactly by the semaphore
+
+
+def test_serial_summarizer_reaches_only_one_in_flight():
+    class _Probe:
+        def __init__(self) -> None:
+            self._lock = threading.Lock()
+            self.inflight = 0
+            self.max_inflight = 0
+
+        def summarize(self, text: str) -> str:
+            with self._lock:
+                self.inflight += 1
+                self.max_inflight = max(self.max_inflight, self.inflight)
+            time.sleep(0.02)
+            with self._lock:
+                self.inflight -= 1
+            return text
+
+    probe = _Probe()
+    asyncio.run(_summarize_all(["a", "b", "c"], probe, max_concurrency=1))
+    assert probe.max_inflight == 1  # max_concurrency=1 is strictly serial
+
+
+@pytest.mark.model
+def test_concurrent_summarization_is_faster_with_real_llm_calls(capsys):
+    """Live: summarize real chunk texts through the real seam summarizer, concurrently vs serially.
+
+    Proves the async+semaphore path works with actual OpenRouter/DeepSeek calls (thread-safe under
+    to_thread, no throttling errors) AND actually overlaps them (concurrent wall-clock << serial),
+    which the sleep-stub concurrency test cannot show.
+    """
+    from rag_wright.capabilities.rlm_chunking import SeamSummarizer
+
+    summarizer = SeamSummarizer()
+    texts = [
+        f"Section {i}: This clause of the agreement governs {topic}. The parties agree to the "
+        f"terms set out herein, which are binding and enforceable under the governing law."
+        for i, topic in enumerate(
+            ["exclusivity", "termination", "payment terms", "confidentiality", "indemnification",
+             "governing law", "assignment", "warranties", "limitation of liability", "notices",
+             "force majeure", "dispute resolution"]
+        )
+    ]
+
+    t0 = time.monotonic()
+    concurrent = asyncio.run(_summarize_all(texts, summarizer, max_concurrency=8))
+    t_concurrent = time.monotonic() - t0
+
+    t0 = time.monotonic()
+    asyncio.run(_summarize_all(texts, summarizer, max_concurrency=1))  # serial baseline (timing only)
+    t_serial = time.monotonic() - t0
+
+    assert len(concurrent) == len(texts)
+    assert all(isinstance(s, str) and s.strip() for s in concurrent)  # real summaries, no errors/None
+    with capsys.disabled():
+        print(f"\n[live] {len(texts)} real summaries: concurrent(8)={t_concurrent:.1f}s "
+              f"serial(1)={t_serial:.1f}s  speedup={t_serial / t_concurrent:.1f}x")
+    assert t_concurrent < t_serial * 0.6  # 8-way concurrency clearly overlaps the network calls
 
 
 @pytest.mark.model
