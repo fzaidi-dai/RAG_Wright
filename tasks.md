@@ -946,12 +946,29 @@ Grounded surface: `FlagEmbedding` `FlagAutoReranker`.
 
 ### GATE-2: Recall-bar, ArcadeDB hybrid vs LanceDB fallback (branch point)
 
-**Not a task.** Validate ArcadeDB hybrid retrieval against the archetype recall bar (T9 + T10),
-each leg measured separately (§12, plan §2).
+**Not a task.** GATE-2 carries **two** branch decisions, measured on the golden sets (T9 + T10), each
+leg measured separately (§12, plan §2).
+
+**(a) The store recall bar — ArcadeDB hybrid vs. LanceDB fallback.**
 - **Meets the bar →** continue with ArcadeDB.
 - **Underperforms →** substitute LanceDB for the retrieval leg behind the query-skill seam
   (FR-S.5) — the one eval-gated fallback, not a default. Raise with the human; the seam (T13)
   already makes the swap local to the store implementation.
+
+**(b) The RLM chunker earns-its-cost call (deferred here from GATE-1).** The gate **measures** the RLM
+chunker; it does **not get to delete** it. The only decision space is **keep-as-default vs. make-optional
+(a seam/config toggle)** — never "drop" (ADR-0009). Rationale: RLM chunking's job is efficient semantic
+*boundary preservation* (meaningful units — chapters/sections/sub-sections — not fixed-window cuts), and
+meaningful chunks + the Knowledge Graph are two halves of one design for complex cross-part/temporal
+reasoning grounded and cited (why ArcadeDB holds both in one store, FR-S.1). This is enterprise-grade RAG
+for *any* corpus, not eval-chasing the current one: a capability that does not win on this corpus/query
+mix is not thereby useless; semantic chunking's advantage is corpus- and query-type-dependent.
+- **Consequence for the eval:** GATE-2 must be able to *see* RLM's advantage or it proves nothing about
+  it — it must exercise cross-part / multi-hop / temporal queries (the T10 relational set exists for
+  this) and account for KG synergy, on a full or genuinely representative sample (short AND long docs,
+  all archetypes), never downscaled for time ([[evals-in-depth-no-shortcuts]]). GATE-1's 4-shortest-docs
+  dense-only proxy is explicitly **not** sufficient for this call.
+- Record the outcome (keep-default vs. optional) with its eval evidence, and raise with the human.
 
 ---
 
