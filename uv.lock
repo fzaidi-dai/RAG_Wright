@@ -619,6 +619,14 @@ standard = [
 ]
 
 [[package]]
+name = "en-core-web-sm"
+version = "3.8.0"
+source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+wheels = [
+    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl", hash = "sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85" },
+]
+
+[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1955,6 +1963,7 @@ dependencies = [
     { name = "arcadedb-python" },
     { name = "docling" },
     { name = "docling-core" },
+    { name = "en-core-web-sm" },
     { name = "flagembedding" },
     { name = "langchain-openai" },
     { name = "mcp" },
@@ -1975,6 +1984,7 @@ requires-dist = [
     { name = "arcadedb-python", specifier = ">=0.4.0" },
     { name = "docling", specifier = ">=2.109.0" },
     { name = "docling-core", specifier = ">=2.86.0" },
+    { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "flagembedding", specifier = ">=1.4.0" },
     { name = "langchain-openai", specifier = ">=1.3.3" },
     { name = "mcp", specifier = ">=1.28.1" },

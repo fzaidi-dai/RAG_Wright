@@ -159,6 +159,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("reranking", "cross-encoder", "bge-reranker", "query"),
     ),
+    CapabilityManifest(
+        slug="graph_extraction",
+        kind="function",  # an in-process ingestion-side node
+        display_name="Graph extraction (hybrid: spaCy NER + contract + LLM escalation)",
+        description=(
+            "Extract ontology-conforming graph facts from a parsed chunk with a hybrid stack: spaCy "
+            "NER for typed entity mentions, Pydantic-contract extraction for clause categories and "
+            "signing-party CONTRACTS_WITH edges, and an LLM escalation for hard-case relationships. "
+            "Every fact carries chunk_id provenance and a confidence tag (FR-C.6, FR-I.4)."
+        ),
+        representative_queries=(
+            "extract entities and relationships from a contract chunk",
+            "identify the signing parties and which clause types a chunk contains",
+            "produce ontology-conforming graph facts with provenance and confidence",
+            "recognize the organizations and people mentioned in a document",
+        ),
+        tags=("extraction", "graph", "ner", "spacy", "ingestion"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

@@ -22,13 +22,25 @@ from pydantic import BaseModel, field_validator, model_validator
 
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.ontology import ClauseFact, EntityType, RelationshipFact
+from rag_wright.contracts.provenance import ConfidenceTag
 
 
 class EntityMention(BaseModel):
-    """A pre-resolution entity mention: a surface form plus its ontology type.
+    """A pre-resolution entity mention: a surface form, its ontology type, and a confidence tag.
 
     Graph extraction produces typed mentions (NER labels); entity resolution (FR-C.7 / T24) later
     maps the surface form to a canonical `entity_id` and creates the canonical `EntityNode`.
+
+    A mention IS an ontology-conforming graph fact (FR-S.4): it is read from the text, so a spaCy NER
+    or contract-extracted mention carries a `confidence` tag like any other fact (ADR-0012). Its
+    `chunk_id` provenance is the containing `ExtractionResult.chunk_id` (mentions are anchored by the
+    result, not individually provenanced, since resolution collapses many mentions to one node). This
+    is deliberately how the spaCy path satisfies "each path produces facts carrying chunk_id +
+    confidence" — by emitting confidence-bearing mentions, NOT by inventing edges: co-occurrence of
+    two organizations in legal text is frequently non-contractual (a non-compete, a governing-law or
+    payment-clause reference), so a proximity edge is a false-edge generator, and nothing downstream
+    filters edges (T26 surfaces confidence, it does not gate on it — FR-C.5/FR-Q.3). CONTRACTS_WITH
+    comes from signing-party structure (the contract extractor), never proximity (ADR-0012).
 
     `text` here is the *same notion* as a `RelationshipFact`'s `source_ref` / `target_ref`: both are
     pre-resolution entity surface forms. Standalone mentions and relationship endpoints are two
@@ -38,6 +50,7 @@ class EntityMention(BaseModel):
 
     text: str
     entity_type: EntityType
+    confidence: ConfidenceTag
 
     @field_validator("text")
     @classmethod

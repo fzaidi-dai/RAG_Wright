@@ -42,7 +42,8 @@ class _ClauseStub:
     def extract(self, chunk_id: ChunkId, text: str) -> ExtractionResult:
         return ExtractionResult(
             chunk_id=chunk_id,
-            entity_mentions=[EntityMention(text="Acme Corp", entity_type=EntityType.ORGANIZATION)],
+            entity_mentions=[EntityMention(text="Acme Corp", entity_type=EntityType.ORGANIZATION,
+                                            confidence=ConfidenceTag.EXTRACTED)],
             clause_facts=[
                 ClauseFact(
                     category=ClauseCategory.GOVERNING_LAW,
@@ -149,16 +150,23 @@ def test_merge_rejects_results_for_different_chunks():
 # --- EntityMention: typed pre-resolution mention --------------------------------------------
 
 
-def test_entity_mention_is_typed():
-    m = EntityMention(text="Beta LLC", entity_type=EntityType.ORGANIZATION)
+def test_entity_mention_is_typed_and_confidence_bearing():
+    m = EntityMention(text="Beta LLC", entity_type=EntityType.ORGANIZATION,
+                      confidence=ConfidenceTag.EXTRACTED)
     assert m.entity_type is EntityType.ORGANIZATION
+    assert m.confidence is ConfidenceTag.EXTRACTED  # a mention is a confidence-bearing fact (ADR-0012)
 
 
 def test_entity_mention_rejects_blank_text():
     with pytest.raises(ValidationError):
-        EntityMention(text="  ", entity_type=EntityType.PERSON)
+        EntityMention(text="  ", entity_type=EntityType.PERSON, confidence=ConfidenceTag.EXTRACTED)
 
 
 def test_entity_mention_rejects_type_outside_ontology():
     with pytest.raises(ValidationError):
-        EntityMention(text="Acme", entity_type="ROBOT")
+        EntityMention(text="Acme", entity_type="ROBOT", confidence=ConfidenceTag.EXTRACTED)
+
+
+def test_entity_mention_requires_confidence():
+    with pytest.raises(ValidationError):
+        EntityMention(text="Acme", entity_type=EntityType.ORGANIZATION)  # confidence is required

@@ -8,6 +8,7 @@ dependencies = [
     "arcadedb-python>=0.4.0",
     "docling>=2.109.0",
     "docling-core>=2.86.0",
+    "en-core-web-sm",
     "flagembedding>=1.4.0",
     "langchain-openai>=1.3.3",
     "mcp>=1.28.1",
@@ -39,8 +40,12 @@ markers = [
     "parse: opt-in live Docling parse (needs models + the gitignored corpus); run with -m parse",
     "embed: opt-in live BGE-M3 encode (downloads the model); run with -m embed",
     "rerank: opt-in live BGE-reranker cross-encoder (downloads the model); run with -m rerank",
+    "ner: opt-in live spaCy NER model (en_core_web_sm); run with -m ner",
 ]
 
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }

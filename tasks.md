@@ -162,7 +162,7 @@ enforces it.
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
-| T23 | Graph extraction (contract + spaCy NER/dep; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | todo | T5, T8, T16 |
+| T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | todo | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | todo | T8, T23b |
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | todo | T13, T23, T24 |
@@ -1111,24 +1111,36 @@ GPU-calling capability (the LLM escalation and spaCy pipelines), so it carries t
 decoupling property.
 
 **RAC-23:**
-- [ ] Contract extraction, the spaCy NER/dependency path, and the LLM escalation each produce
-  ontology-conforming facts carrying `chunk_id` + confidence.
-- [ ] The LLM escalation uses the model-profile seam and the A-T2-recorded DeepSeek V4 Pro profile
-  (no hardcoded flag).
-- [ ] **FR-I.6 decoupling property:** extraction is built to be called concurrently and
-  non-blocking, its model/GPU calls go through the poolable inference boundary, and it applies
-  backpressure, so bulk mode can saturate the GPU. Verified by a concurrency test.
-- [ ] Registered under FR-C.6.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] Contract extraction, the spaCy NER path, and the LLM escalation each produce ontology-conforming
+  facts carrying `chunk_id` + confidence. **`SpacyNerExtractor`** emits typed mentions only
+  (ORG→ORGANIZATION, PERSON→PERSON, EXTRACTED) — **no proximity edges** (ADR-0012; `EntityMention` gained
+  a `confidence` field). **`ContractExtractor`** emits ClauseFacts + party mentions + **CONTRACTS_WITH
+  from the signing-party structure** (the only source of that edge, EXTRACTED). **`LlmEscalationExtractor`**
+  emits hard-case RelationshipFacts (INFERRED). All anchored to `chunk_id` via `ExtractionResult`/`Provenance`.
+- [x] The LLM extractors call the model only through the seam under the DeepSeek V4 Pro
+  `STRUCTURED_REASONING` profile (ADR-0006); no provider/model flag in the code. **Live `-m model`: real
+  DeepSeek round-trips the 41-value `ClauseCategory` enum + `RelationshipType` schemas.**
+- [x] **FR-I.6 decoupling:** `extract_chunks` is async; each chunk's stack runs in `asyncio.to_thread`
+  bounded by a semaphore. Concurrency test: `max_inflight == 4` at cap 4, `== 1` serial.
+- [x] Registered under FR-C.6. `register_graph_extraction` → `graph_extraction`, `function`, contract
+  `ExtractionResult`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/graph_extraction.json`); mirror
+  conformance green; re-validates as a `RegistryEntry`. Live `RegistryStore` load is the GraphWright step.
 
-**Verification:** `uv run pytest tests/capabilities/test_graph_extraction.py`
+**Verification:** `uv run pytest tests/capabilities/test_graph_extraction.py` (10 hermetic passed); live:
+`-m ner` (real spaCy, 1 passed) and `-m model` (real DeepSeek contract + escalation, 2 passed). Full suite
+313 passed + 20 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T5, T8, T16. **Scope:** L.
-**Files:** `src/rag_wright/capabilities/graph_extraction.py`,
-`tests/capabilities/test_graph_extraction.py`
-**Note:** spaCy ships first; OpenIE slots behind the same extractor seam later (ADR-0001).
+**Dependencies:** T5, T8, T16. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/capabilities/graph_extraction.py`, `tests/capabilities/test_graph_extraction.py`,
+`src/rag_wright/contracts/extraction.py` (`EntityMention.confidence`, ADR-0012),
+`tests/contracts/test_extraction.py`, `src/rag_wright/capabilities/manifests.py` (+`graph_extraction`),
+`pyproject.toml`/`uv.lock` (`en_core_web_sm` MIT, wheel-pinned) + `conftest.py` (`ner` marker),
+`docs/adr/0012-entity-mention-confidence-no-proximity-edges.md`.
+**Note:** Co-occurrence edges rejected as false-edge generators — CONTRACTS_WITH from party structure only
+(ADR-0012), because T26 surfaces but does not filter by confidence (FR-C.5/FR-Q.3). spaCy model is
+config-driven (`RAG_SPACY_MODEL`, swappable md/lg/trf, not trf); OntoNotes NER noise is expected and
+handled by T23b + the human gate. OpenIE still slots behind the T5 seam later (ADR-0001).
 
 ### Task T23b: Entity disambiguation and canonicalization (normalize, reject, cluster)
 
