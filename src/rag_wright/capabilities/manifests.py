@@ -177,6 +177,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("extraction", "graph", "ner", "spacy", "ingestion"),
     ),
+    CapabilityManifest(
+        slug="entity_disambiguation",
+        kind="function",  # an in-process graph-layer node
+        display_name="Entity disambiguation (normalize / reject / cluster)",
+        description=(
+            "Turn the raw extracted entity-mention stream into canonical mention clusters: normalize "
+            "surface-form variants to one key, reject non-entities (placeholders, role artifacts, bare "
+            "generic tokens, alias prefixes), and cluster survivors — flagging ambiguous near-duplicates "
+            "for human decision rather than merging. Clusters are human-verifiable proposals carrying "
+            "chunk_id provenance and confidence (FR-C.7)."
+        ),
+        representative_queries=(
+            "canonicalize entity surface-form variants into one entity",
+            "reject template placeholders and role artifacts from extracted parties",
+            "cluster contract party mentions that denote the same company",
+            "flag parent/subsidiary near-duplicate entities for human review",
+        ),
+        tags=("entity", "disambiguation", "canonicalization", "graph"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

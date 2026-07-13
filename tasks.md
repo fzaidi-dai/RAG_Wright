@@ -163,7 +163,7 @@ enforces it.
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
-| T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | todo | T23 |
+| T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | todo | T8, T23b |
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | todo | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | todo | T25 |
@@ -1155,39 +1155,38 @@ count, not mention count. Full coreference (pronouns, definite descriptions) is 
 real seam, the same discipline as OpenIE at T5.
 
 **RAC-23b:**
-- [ ] Normalization (per ADR-0004): legal-suffix, whitespace/punctuation, possessive-apostrophe,
-  and unicode (NFKC) variants of one name collapse to a single canonical form, deterministically
-  ("Bank of America", "Bank of America, N.A.", "Bank of America, N. A" collapse to one; "Stremick's"
-  and "Stremicks" collapse to one).
-- [ ] Rejection filter (per ADR-0004): template placeholders (for example "<<enter Company Name>>"),
-  role artifacts (for example "(collectively the \"Company\")"), bare generic-token or
-  below-specificity fragments (for example "Bank", "Services", "Group"), and alias prefixes
-  ("formerly known as", "f/k/a", "a/k/a", "d/b/a", recovering the trailing real name where present,
-  else rejecting) are rejected and never reach T24.
-- [ ] Clustering (per ADR-0004): mentions denoting the same real-world entity are grouped by
-  blocking plus similarity into candidate clusters, biased conservatively so ambiguous near-duplicates
-  (parent/subsidiary or shared-token pairs, e.g. "ScanSource" vs "ScanSource Latin America",
-  "Armstrong Flooring" vs "Armstrong Hardwood Flooring") are flagged for human decision, never
-  auto-merged; cluster precision and recall are measured on a small labeled fixture from the T7 subset.
-  - [ ] Regression fixtures cover the T10-surfaced misses: possessive-apostrophe merge
-  (Stremick's / Stremicks), bare-generic-token reject ("Services"), and alias-prefix reject
-  ("formerly known as ... d/b/a ...").
-- [ ] Output clusters conform to the extraction and ontology contracts (T4, T5), carry `chunk_id`
-  provenance and confidence (T2), and are shaped as proposals for human verification, not
-  auto-committed merges.
-- [ ] The full-coreference path is a real seam (an interface additional resolvers bind), deferred,
-  with a stub bound behind it in test proving the seam is load-bearing (mirrors T5, risk 10).
-- [ ] Registered under the `entity_disambiguation` slug (SPEC FR-C.7 canonicalization capability;
-  this exact string is the ARD manifest URN anchor).
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] Normalization (ADR-0004 N1-N5): reuses the T10 `corpus.canonicalize.normalize_entity_name`
+  (legal-suffix, whitespace/punctuation, possessive-apostrophe, NFKC). Test: the three "Bank of America"
+  variants collapse to one cluster; "Stremick's"/"Stremicks" collapse.
+- [x] Rejection filter (ADR-0004 R1-R5): reuses `corpus.canonicalize.is_entity`. Test: placeholder,
+  role artifact, bare generic ("Services"), and alias-only ("formerly known as Tradeum, Inc.") are
+  rejected (in `DisambiguationResult.rejected`, never a cluster); "Acme Inc. d/b/a SuperBrand" recovers
+  "Acme".
+- [x] Clustering (ADR-0004 C3/C4): grouped by (normalized key, entity_type); ambiguous near-duplicates
+  **flagged, never merged** — `_flag_near_duplicates` sets `ambiguous_with` for proper-token-subset or
+  shared-first-token pairs. Test: ScanSource / ScanSource Latin America and Armstrong Flooring / Armstrong
+  Hardwood Flooring stay 4 clusters, each flagged; Bank of America / Bank of England neither merged nor
+  flagged. Cluster precision/recall == 1.0 on a labeled fixture.
+- [x] Regression fixtures cover the T10 misses: possessive-apostrophe merge, bare-generic reject,
+  alias-prefix reject.
+- [x] Output `MentionCluster`s carry `chunk_id` provenance (the chunks the mentions came from) and the
+  **weakest** confidence over the cluster (test: an AMBIGUOUS member → AMBIGUOUS cluster), shaped as
+  proposals (`ambiguous_with` = human decision points), never auto-committed merges.
+- [x] Full-coreference `CoreferenceResolver` seam (deferred, mirrors T5): `disambiguate(...,
+  coreference_resolvers=...)`; a stub resolver bound in test rewrites the cluster set (load-bearing);
+  default is no resolvers.
+- [x] Registered under `entity_disambiguation` (FR-C.7); contract `DisambiguationResult`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/entity_disambiguation.json`);
+  mirror conformance green; re-validates as a `RegistryEntry`.
 
-**Verification:** `uv run pytest tests/capabilities/test_disambiguation.py`
+**Verification:** `uv run pytest tests/capabilities/test_disambiguation.py` (11 passed, hermetic). Full
+suite 324 passed + 20 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T23. **Scope:** M.
+**Dependencies:** T23. **Scope:** M. **Status:** done.
 **Files:** `src/rag_wright/capabilities/disambiguation.py`,
-`tests/capabilities/test_disambiguation.py`, `docs/adr/0004-entity-disambiguation.md`
+`tests/capabilities/test_disambiguation.py`, `src/rag_wright/capabilities/manifests.py`
+(+`entity_disambiguation`), `docs/adr/0004-entity-disambiguation.md` (existing; honored).
+Reuses `src/rag_wright/corpus/canonicalize.py` (T10) — normalize/reject/cluster kept, not rewritten.
 **Note:** Recognition (T23) and linking (T24) already existed; this fills the canonicalization gap
 between them that the T10 data exposed (Bank-of-America variant fragmentation, template and
 role-artifact noise). It converts the human from cluster generator to proposal verifier, which is
