@@ -168,7 +168,7 @@ enforces it.
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | done | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | done | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | done | T22, T26 |
-| T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | todo | T15, T27 |
+| T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | done | T15, T27 |
 | T29 | Answer generator (grounded, cited, abstains) + vision-to-text | 4 Build RLM | FR-C.9, FR-Q.6 | todo | T11, T27 |
 | T30 | Prefix + result caching | 4 Build RLM | §13 P3, §16.7 | todo | T28, T29 |
 | T31 | MCP skill surface (governed skills over MCP) | 5 Integrate | FR-S.5 | todo | T6, T22, T26 |
@@ -1331,18 +1331,26 @@ it never attends over the full chunk volume (FR-Q.5). The recursive sub-calls ar
 structured-under-reasoning work, so they resolve to the DeepSeek V4 Pro default in the seam.
 
 **RAC-28:**
-- [ ] Candidate chunks load into the interpreter as data; slicing/filtering happens in code.
-- [ ] Sub-model calls run on focused portions; the capability never attends over the full volume.
-- [ ] Registered under the RLM synthesis capability.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] Candidate chunks load into the interpreter as data (a Python list of `SynthesisChunk`) and are
+  sliced in code — one focused unit per chunk. `rlm_synthesize(query, chunks, *, synthesizer, ...)`.
+- [x] Sub-model calls run on focused portions and the capability **never attends over the full volume**:
+  each `synthesize_slice` sees one chunk; the code-side `_reduce` combines at most `fanout` notes per
+  call, recursing. Test asserts each chunk is sliced alone and no combine sees > `fanout` notes (the
+  reduce recursed). Dispatch is **concurrent + bounded** (async + `asyncio.Semaphore`, per the CLAUDE.md
+  parallel-LLM rule; `max_inflight == N`). Sub-calls use the DeepSeek V4 Pro `STRUCTURED_REASONING`
+  profile (ADR-0006); no model flag in code.
+- [x] Registered under `rlm_synthesis` (FR-Q.5), kind **`agent_skill`** (applies the RLM method, requires
+  `rlm_method`), contract `SynthesisResult`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/rlm_synthesis.json`,
+  `requires: ['rlm_method']`); mirror conformance green; re-validates as a `RegistryEntry`.
 
-**Verification:** `uv run pytest tests/capabilities/test_rlm_synthesis.py`
+**Verification:** `uv run pytest tests/capabilities/test_rlm_synthesis.py` (6 hermetic passed); live
+`-m model` (1 passed, real DeepSeek, 3 concurrent slice calls + reduce in ~10s). Full suite 357 passed +
+24 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T15, T27. **Scope:** L.
-**Files:** `src/rag_wright/capabilities/rlm_synthesis.py`,
-`tests/capabilities/test_rlm_synthesis.py`
+**Dependencies:** T15, T27. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/capabilities/rlm_synthesis.py`, `tests/capabilities/test_rlm_synthesis.py`,
+`src/rag_wright/capabilities/manifests.py` (+`rlm_synthesis`, requires rlm_method).
 
 ### Task T29: Answer generator (grounded, cited, abstains) + vision-to-text
 

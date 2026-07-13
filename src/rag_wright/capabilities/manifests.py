@@ -249,6 +249,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("fusion", "union", "evidence", "query"),
     ),
+    CapabilityManifest(
+        slug="rlm_synthesis",
+        kind="agent_skill",  # applies the RLM method; loaded knowledge, requires rlm_method
+        display_name="RLM synthesis",
+        description=(
+            "Apply the RLM divide-and-conquer method to the retrieved candidate chunks: load them into "
+            "an interpreter as data, slice in code (one focused unit per chunk), sub-call a model once "
+            "per unit, and combine the outputs in a recursive code-side reduce — so synthesis never "
+            "attends over the full chunk volume (FR-Q.5)."
+        ),
+        representative_queries=(
+            "synthesize an answer from many retrieved chunks without attending over all at once",
+            "divide-and-conquer synthesis over a large candidate set",
+            "reduce retrieved passages into a focused synthesis for a query",
+            "recursively combine per-chunk extracts into one answer",
+        ),
+        requires=("rlm_method",),
+        tags=("rlm", "synthesis", "query"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
