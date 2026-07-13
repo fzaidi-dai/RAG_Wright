@@ -232,6 +232,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("graph", "query", "traversal", "multi-hop", "relational"),
     ),
+    CapabilityManifest(
+        slug="fusion",
+        kind="function",  # an in-process query-side node
+        display_name="Fusion (union/dedup on chunk_id, capped)",
+        description=(
+            "Union and deduplicate the reranked retrieval top set and the graph-cited chunks on "
+            "chunk_id into one capped, deterministic evidence set for synthesis. Not a score fusion "
+            "(the graph returns an answer, not a comparable ranked list) (FR-Q.4)."
+        ),
+        representative_queries=(
+            "combine retrieval results and graph evidence into one evidence set",
+            "union and deduplicate cited chunks from the text and graph legs",
+            "merge reranked passages with graph-cited chunks for synthesis",
+            "build one capped evidence set from both retrieval and the knowledge graph",
+        ),
+        tags=("fusion", "union", "evidence", "query"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

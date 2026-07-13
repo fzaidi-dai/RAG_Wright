@@ -167,7 +167,7 @@ enforces it.
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | done | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | done | T25 |
-| T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | todo | T22, T26 |
+| T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | done | T22, T26 |
 | T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | todo | T15, T27 |
 | T29 | Answer generator (grounded, cited, abstains) + vision-to-text | 4 Build RLM | FR-C.9, FR-Q.6 | todo | T11, T27 |
 | T30 | Prefix + result caching | 4 Build RLM | §13 P3, §16.7 | todo | T28, T29 |
@@ -1302,17 +1302,22 @@ graph-cited chunks (T26), capped; not a score fusion, since the graph returns an
 comparable ranked list (FR-Q.4).
 
 **RAC-27:**
-- [ ] The reranked top set and graph-cited chunks are unioned and deduplicated on `chunk_id`,
-  capped at the union cap.
-- [ ] It is deterministic and is not a score fusion.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] The reranked top set (T22 `RerankResult`) and graph-cited chunks (T26 `GraphAnswer` evidence) are
+  unioned and deduplicated on `chunk_id`, capped (`DEFAULT_UNION_CAP=20`). `fuse(reranked, graph, *, cap)`
+  → `FusionResult` of `FusedChunk{chunk_id, sources}`. Test: retrieval [c1,c2] + graph [c2,c3] → [c1,c2,c3],
+  c2 tagged both sources; cap cuts the union.
+- [x] Deterministic (retrieval order first, then graph first-appearance; same inputs → identical output)
+  and **not a score fusion** — `FusedChunk` carries `sources`, no score (the graph returns an answer, not
+  a comparable ranked list).
+- [x] Registered under FR-Q.4. `register_fusion` → `fusion`, `function`, contract `FusionResult`. ARD
+  manifest present in the shared root (`~/.air/registry/fusion.json`); mirror conformance green.
 
-**Verification:** `uv run pytest tests/capabilities/test_fusion.py`
+**Verification:** `uv run pytest tests/capabilities/test_fusion.py` (6 passed, hermetic). Full suite 350
+passed + 23 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T22, T26. **Scope:** S.
-**Files:** `src/rag_wright/capabilities/fusion.py`, `tests/capabilities/test_fusion.py`
+**Dependencies:** T22, T26. **Scope:** S. **Status:** done.
+**Files:** `src/rag_wright/capabilities/fusion.py`, `tests/capabilities/test_fusion.py`,
+`src/rag_wright/capabilities/manifests.py` (+`fusion`).
 
 ---
 
