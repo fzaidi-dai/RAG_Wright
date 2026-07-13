@@ -268,6 +268,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         requires=("rlm_method",),
         tags=("rlm", "synthesis", "query"),
     ),
+    CapabilityManifest(
+        slug="generation",
+        kind="function",  # one capability: grounded answer generation + vision-to-text
+        display_name="Answer generation (grounded, cited, abstains) + vision-to-text",
+        description=(
+            "Produce a grounded, cited answer from the retrieved evidence — no claim without a citation, "
+            "confidence-aware, abstaining when the context does not support an answer — and transcribe "
+            "scanned/image content to text at ingestion, both on the Gemma 4 class model (FR-C.9, FR-Q.6)."
+        ),
+        representative_queries=(
+            "answer a question grounded in the retrieved evidence with citations",
+            "abstain when the retrieved context does not support an answer",
+            "generate a confidence-aware cited answer from contract evidence",
+            "transcribe a scanned filing image to text",
+        ),
+        tags=("generation", "answer", "grounded", "cited", "vision-to-text"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

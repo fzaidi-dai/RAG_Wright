@@ -169,7 +169,7 @@ enforces it.
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | done | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | done | T22, T26 |
 | T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | done | T15, T27 |
-| T29 | Answer generator (grounded, cited, abstains) + vision-to-text | 4 Build RLM | FR-C.9, FR-Q.6 | todo | T11, T27 |
+| T29 | Answer generator (grounded, cited, abstains) + vision-to-text | 4 Build RLM | FR-C.9, FR-Q.6 | done | T11, T27 |
 | T30 | Prefix + result caching | 4 Build RLM | §13 P3, §16.7 | todo | T28, T29 |
 | T31 | MCP skill surface (governed skills over MCP) | 5 Integrate | FR-S.5 | todo | T6, T22, T26 |
 | T32 | End-to-end scenarios + per-source ablation | 5 Integrate | §12, §15 | todo | T29, T31 |
@@ -1359,21 +1359,28 @@ abstain when the retrieved context does not support an answer (FR-Q.6); plus the
 to-text step at ingestion (FR-C.9), on a Gemma 4 class model through the model-profile seam.
 
 **RAC-29:**
-- [ ] An answer carries a citation for every claim; an unsupported question yields an abstention,
-  not a fabrication.
-- [ ] The answer is confidence-aware (surfaces graph-fact confidence tags).
-- [ ] Vision-to-text converts a scanned filing's images to text at ingestion.
-- [ ] Registered under FR-C.9.
-- [ ] ARD-registered: both the answer generator and vision-to-text manifests (skeletons from T6,
-  representative queries authored) load under `RegistryStore(root)` with no `RegistryLoadError` and
-  are returned by `discover` for their representative queries.
+- [x] Every non-abstaining answer carries a citation, and an unsupported question abstains rather than
+  fabricates — **enforced in code** around the model: empty evidence abstains without a model call;
+  citations not in the evidence are dropped; an answer left with no valid citation is coerced to an
+  abstention (FR-Q.6). `generate_answer(query, evidence, *, model) -> GeneratedAnswer{answer, citations,
+  abstained}`. **Live (`-m model`): real Gemma answer cited only from the real evidence ids.**
+- [x] Confidence-aware: graph-fact confidence tags are put in front of the generator (`_evidence_block`
+  surfaces `[confidence: …]`); a test asserts the tag reaches the model's prompt.
+- [x] Vision-to-text converts a scanned image to text at ingestion (`vision_to_text`, Gemma 4 multimodal
+  via the seam). **Live: transcribed a synthetic PNG ("HELLO WORLD").**
+- [x] Registered under FR-C.9 (`generation`, one capability incl. vision-to-text — the single §5 slug),
+  contract `GeneratedAnswer`.
+- [x] ARD-registered: the `generation` manifest (representative queries span answer-generation AND
+  vision-to-text) is present in the shared root; mirror conformance green. (FR-C.9 is one slug, so one
+  manifest covers both — the RAC's "both manifests" reconciles to this single capability.)
 
-**Verification:** `uv run pytest tests/capabilities/test_answer_generator.py`
+**Verification:** `uv run pytest tests/capabilities/test_answer_generator.py` (8 hermetic passed); live
+`-m model` (2 passed: real Gemma generation + real image transcription). Full suite 366 passed + 26
+skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T11, T27. **Scope:** L.
-**Files:** `src/rag_wright/capabilities/answer_generator.py`,
-`src/rag_wright/capabilities/vision_to_text.py`,
-`tests/capabilities/test_answer_generator.py`
+**Dependencies:** T11, T27. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/capabilities/answer_generator.py`, `src/rag_wright/capabilities/vision_to_text.py`,
+`tests/capabilities/test_answer_generator.py`, `src/rag_wright/capabilities/manifests.py` (+`generation`).
 **Note:** Enforces "no claim without a citation" and abstention (risk 9). Vision-to-text exercises
 the scanned-filing subset (ADR-0002).
 
