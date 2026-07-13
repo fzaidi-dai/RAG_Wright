@@ -22,9 +22,12 @@ from typing import Any, Iterable
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
+from rag_wright.store.seam import GraphEdge, GraphNode
 
 CHUNK_TYPE = "Chunk"
 ENTITY_TYPE = "Entity"
+REL_EDGE_TYPE = "Relationship"  # entity -> entity relationship edge (the graph's primary content)
+MENTIONS_EDGE_TYPE = "Mentions"  # chunk -> entity provenance edge (FR-S.1: chunk and entities connect)
 
 # Candidates fetched per leg before fusion. RRF reorders within this pool, so it is set well above a
 # typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then
@@ -102,8 +105,16 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {CHUNK_TYPE}.sparse_weights ARRAY_OF_FLOATS")
         if ENTITY_TYPE not in types:
             self._command(f"CREATE VERTEX TYPE {ENTITY_TYPE}")
-            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.entity_id STRING")
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.entity_id STRING")  # node key (CIK or surrogate)
             self._command(f"CREATE PROPERTY {ENTITY_TYPE}.chunk_id STRING")
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.cik STRING")  # canonical CIK, or '' if unlinked
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.name STRING")
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.entity_type STRING")
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.confidence STRING")
+        if REL_EDGE_TYPE not in types:
+            self._command(f"CREATE EDGE TYPE {REL_EDGE_TYPE}")
+        if MENTIONS_EDGE_TYPE not in types:
+            self._command(f"CREATE EDGE TYPE {MENTIONS_EDGE_TYPE}")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -209,6 +220,59 @@ class ArcadeDBStore:
             clauses = " AND ".join(f"{col} = {_sql_literal(v)}" for col, v in filters.items())
             where = f" WHERE {clauses}"
         return self._query(f"SELECT chunk_id, source_doc_id FROM ({fused}){where} LIMIT {k}")
+
+    # --- graph-write (T25) ----------------------------------------------------------------------
+
+    def write_graph(self, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+        """Upsert entity nodes and create relationship edges in ONE transaction (FR-S.1). Each entity
+        is connected to its source chunk by a `Mentions` edge (for chunks that exist), so a chunk and
+        its extracted entities land together. Uses `execute_transaction` so a failure rolls back whole."""
+        statements: list[str] = []
+        for node in nodes:  # nodes first, so edge endpoints exist within the transaction
+            statements.append(
+                f"UPDATE {ENTITY_TYPE} SET"
+                f" entity_id = {_sql_str(node.node_key)},"
+                f" cik = {_sql_str(node.entity_id)},"
+                f" name = {_sql_str(node.name)},"
+                f" entity_type = {_sql_str(node.entity_type)},"
+                f" confidence = {_sql_str(node.confidence)},"
+                f" chunk_id = {_sql_str(node.chunk_id)}"
+                f" UPSERT WHERE entity_id = {_sql_str(node.node_key)}"
+            )
+        existing_chunks = self._existing_chunks({node.chunk_id for node in nodes})
+        for node in nodes:
+            if node.chunk_id in existing_chunks:  # connect chunk -> entity (provenance edge)
+                statements.append(
+                    f"CREATE EDGE {MENTIONS_EDGE_TYPE}"
+                    f" FROM (SELECT FROM {CHUNK_TYPE} WHERE chunk_id = {_sql_str(node.chunk_id)})"
+                    f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(node.node_key)})"
+                )
+        for edge in edges:
+            statements.append(
+                f"CREATE EDGE {REL_EDGE_TYPE}"
+                f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
+                f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
+                f" SET relationship_type = {_sql_str(edge.relationship_type)},"
+                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)}"
+            )
+        if statements:
+            self._db.execute_transaction(statements)
+
+    def graph_counts(self) -> dict[str, int]:
+        entities = self._query(f"SELECT count(*) AS n FROM {ENTITY_TYPE}")
+        rels = self._query(f"SELECT count(*) AS n FROM {REL_EDGE_TYPE}")
+        return {
+            "entities": int(entities[0]["n"]) if entities else 0,
+            "relationships": int(rels[0]["n"]) if rels else 0,
+        }
+
+    def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
+        if not chunk_ids:
+            return set()
+        rows = self._query(
+            f"SELECT chunk_id FROM {CHUNK_TYPE} WHERE chunk_id IN {_str_array(sorted(chunk_ids))}"
+        )
+        return {row["chunk_id"] for row in rows}
 
     # --- test / lifecycle helper ----------------------------------------------------------------
 

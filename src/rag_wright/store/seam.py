@@ -11,9 +11,34 @@ ArcadeDB's SQL dialect. Write-side and query-side methods are added by the tasks
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional, Protocol, runtime_checkable
 
 from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
+
+
+@dataclass(frozen=True)
+class GraphNode:
+    """A graph entity node to write (T25). `node_key` is the vertex identity (a canonical CIK when
+    linked, an `UNLINKED:<key>` surrogate otherwise); `entity_id` is the CIK, or empty when unlinked."""
+
+    node_key: str
+    entity_id: str
+    name: str
+    entity_type: str
+    confidence: str
+    chunk_id: str
+
+
+@dataclass(frozen=True)
+class GraphEdge:
+    """A relationship edge between two entity nodes (by `node_key`), carrying provenance + confidence."""
+
+    source_key: str
+    target_key: str
+    relationship_type: str
+    confidence: str
+    chunk_id: str
 
 
 @runtime_checkable
@@ -66,3 +91,15 @@ class Store(Protocol):
         """Fuse the dense and sparse legs into one ranked candidate list (Reciprocal Rank Fusion),
         honoring equality metadata filters, returning up to `k` rows (each with at least `chunk_id`
         and `source_doc_id`) in ranked order, best first."""
+
+    # --- graph-write (T25): the knowledge-graph leg. Semantic, not SQL: the seam takes entity nodes
+    # and relationship edges and each store writes them its own way (ArcadeDB as vertices/edges in
+    # one transaction; a fallback store however it models a graph). Nodes/edges carry chunk_id (FR-I.4).
+
+    def write_graph(self, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
+        """Write entity nodes (upsert by `node_key`) and relationship edges between them in ONE
+        transaction (FR-S.1: a chunk and its entities land together), connecting each entity to its
+        source chunk. Nodes and edges carry `chunk_id` and confidence (FR-I.4)."""
+
+    def graph_counts(self) -> dict[str, int]:
+        """Counts for introspection/tests: `{'entities': n, 'relationships': m}`."""

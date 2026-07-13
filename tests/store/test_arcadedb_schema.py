@@ -71,6 +71,18 @@ class _InMemoryStore:
             rows = [r for r in rows if all(r.get(col) == v for col, v in filters.items())]
         return rows[:k]
 
+    # graph-write (T25): the stub records nodes/edges, proving a second implementation binds the seam
+    def write_graph(self, nodes, edges) -> None:
+        self._nodes = getattr(self, "_nodes", {})
+        self._edges = getattr(self, "_edges", [])
+        for node in nodes:
+            self._nodes[node.node_key] = node  # upsert by node_key
+        self._edges.extend(edges)
+
+    def graph_counts(self) -> dict:
+        return {"entities": len(getattr(self, "_nodes", {})),
+                "relationships": len(getattr(self, "_edges", []))}
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()

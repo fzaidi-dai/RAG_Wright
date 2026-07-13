@@ -165,7 +165,7 @@ enforces it.
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
-| T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | todo | T13, T23, T24 |
+| T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | done | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | todo | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | todo | T22, T26 |
 | T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | todo | T15, T27 |
@@ -1240,19 +1240,30 @@ extracted entities connect in one transaction (FR-S.1). The graph is the relatio
 heavy structured data does not go in it (SPEC §8).
 
 **RAC-25:**
-- [ ] Nodes/edges are written carrying `chunk_id` and confidence; chunk and its entities connect
-  in one transaction.
-- [ ] Re-running an unchanged document does no graph work (content-hash gate).
-- [ ] No heavy structured data is placed in the graph (relationship layer only).
-- **(No ARD bullet.)** Graph storage is a seam-bound ingestion pipeline step with no SPEC section-5
-  slug (FR-I.4), so it registers nothing and authors no manifest — per the ARD-registration rule
-  above. It writes through the T13 `Store` seam.
+- [x] Nodes/edges written carrying `chunk_id` + confidence; a chunk and its entities land in **one
+  transaction** (`DatabaseDao.execute_transaction`). Entity nodes upsert by `node_key` (CIK when linked,
+  `UNLINKED:<key>` surrogate otherwise; `cik`/name/type/confidence/chunk_id props); `Relationship` edges
+  connect resolved node keys; `Mentions` edges connect each `Chunk` to its `Entity` (FR-S.1). Live
+  (`-m store`): 2 nodes + 1 relationship + 2 Mentions created in one transaction. Ref-only endpoints get
+  a minimal node so every edge connects.
+- [x] Content-hash gate: a per-document checkpoint keyed by content hash makes an unchanged re-run a
+  no-op (`skipped`, no store write, no duplicate edges). Live-verified; hermetic test proves the store is
+  written exactly once; a changed hash re-writes.
+- [x] Relationship layer only (SPEC §8): nodes carry id/name/type/confidence, edges carry the
+  relationship — no heavy structured data.
+- **(No ARD bullet.)** Seam-bound ingestion step, no §5 slug (FR-I.4) → registers nothing, no manifest
+  (per the ARD-registration rule). Writes through the T13 `Store` seam (extended: `write_graph`,
+  `graph_counts`, + `GraphNode`/`GraphEdge`).
 
-**Verification:** `uv run pytest tests/capabilities/test_graph_storage.py -m store`
+**Verification:** `uv run pytest tests/capabilities/test_graph_storage.py` (5 hermetic passed); live
+`-m store` (1 passed: real transaction, nodes/edges/Mentions, gate); T13/T14 store tests still green with
+the extended `Entity` schema. Full suite 338 passed + 21 skipped.
 
-**Dependencies:** T13, T23, T24. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/graph_storage.py`,
-`tests/capabilities/test_graph_storage.py`
+**Dependencies:** T13, T23, T24. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/capabilities/graph_storage.py`, `tests/capabilities/test_graph_storage.py`,
+`src/rag_wright/store/{seam,arcadedb}.py` (graph-write seam: `write_graph`/`graph_counts`,
+`GraphNode`/`GraphEdge`, `Entity` props + `Relationship`/`Mentions` edge types),
+`tests/store/test_arcadedb_schema.py` (stub extended to the graph-write seam).
 
 ### Task T26: Graph query (cited `chunk_id`s, `entity_id`s, confidence)
 
