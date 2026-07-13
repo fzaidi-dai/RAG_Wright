@@ -196,6 +196,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("entity", "disambiguation", "canonicalization", "graph"),
     ),
+    CapabilityManifest(
+        slug="entity_resolution",
+        kind="function",  # an in-process graph-layer node
+        display_name="Entity resolution (closed-world to EDGAR CIK)",
+        description=(
+            "Link canonical mention clusters to their EDGAR CIK entity_id in the registry, closed-world "
+            "(exact normalized match; unknown -> unlinked, never fabricated). Resolves relationship "
+            "endpoints as the same stream so an entity in both channels is one node, and drops "
+            "post-resolution self-loops (FR-C.7)."
+        ),
+        representative_queries=(
+            "link an extracted company mention to its EDGAR CIK",
+            "resolve contract parties to canonical registry entities",
+            "map entity surface forms to a canonical entity id, closed-world",
+            "deduplicate relationship endpoints and standalone mentions to one entity node",
+        ),
+        tags=("entity", "resolution", "edgar", "cik", "graph"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

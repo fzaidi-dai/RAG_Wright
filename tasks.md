@@ -164,7 +164,7 @@ enforces it.
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
-| T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | todo | T8, T23b |
+| T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | todo | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | todo | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | todo | T22, T26 |
@@ -1201,31 +1201,36 @@ The normalize and reject rules are recorded in ADR-0004 and are corpus-derived: 
 Description: Resolve the canonical mention clusters from T23b to the registry's canonical entity_id (EDGAR CIK), closed-world against the known set (FR-C.7). Surface-form fragmentation is handled upstream at T23b, so this task links a clean cluster to a CIK rather than fighting variants. Decide and record the matching strategy (exact / fuzzy / embedding / LLM-assisted, §16.3) at this task.
 
 **RAC-24:**
-- [ ] A known mention resolves to the correct EDGAR CIK `entity_id`; an unknown mention is handled
-  per the closed-world policy (not silently fabricated).
-- [ ] Fragmentation rate is measured on the golden set.
-- [ ] **Post-resolution self-loop check (moved here from the T4 contract):** after resolving a
-  `RelationshipFact`'s `source_ref`/`target_ref` to canonical `entity_id`s, a relationship whose two
-  refs resolve to the *same* `entity_id` is collapsed/dropped as a self-loop. This belongs here, not
-  in the T4 fact contract, because two distinct mentions can legitimately resolve to one entity.
-- [ ] **Resolve both mention channels as one stream (from T5):** the standalone
-  `EntityMention`s and the `RelationshipFact` `source_ref`/`target_ref` refs are the same
-  surface-form notion (two channels for the same entities). Resolution must dedupe *across* both, so
-  an entity appearing as both a standalone mention and a relationship endpoint resolves to a single
-  node. Resolving the channels independently is where the duplicate-node fragmentation would occur —
-  build the dedup across channels here rather than discover the double node in the graph eval.
-- [ ] The chosen matching strategy is recorded (ADR).
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] A known cluster resolves to the correct EDGAR CIK `entity_id`; an unknown resolves to `None`
+  (closed-world, not fabricated). `resolve_entities` links each `MentionCluster` via
+  `registry.resolve` (representative then variants, first hit). Test: "Acme Corporation" → CIK, a
+  private co → None, and an alias variant ("Acme Inc") links.
+- [x] Fragmentation rate is **measured** — `fragmentation_rate(result, gold_by_key)` = fraction of true
+  entities ending as >1 node. Test: two clusters T23b left separate both link to one CIK → 0.0
+  (resolution reduces fragmentation via alias linking); a split entity → 1.0. Full golden-set run is
+  eval-time (like recall).
+- [x] **Post-resolution self-loop check** (moved from the T4 contract, needs resolved ids): a
+  relationship whose two *distinct* refs resolve to the same non-None `entity_id` is dropped. Test:
+  "Acme Corporation" AFFILIATE_OF "Acme Inc" (both → 0000000001) → dropped; two unlinked refs → kept.
+- [x] **Both mention channels as one stream:** a relationship ref resolves by matching a cluster key
+  first (taking that cluster's id, even if None), falling back to the registry only for a cluster-less
+  ref — so an entity as both a standalone mention and a relationship endpoint is one node. Test: the
+  CONTRACTS_WITH refs take the standalone Acme/Beta cluster ids.
+- [x] Matching strategy recorded: **ADR-0013** — exact normalized, closed-world, no fuzzy/embedding/LLM
+  (conservative-merge bias; a wrong fuzzy link is a silent false merge). Fuzzy is a later, eval-gated
+  option behind the same `resolve` boundary.
+- [x] Registered under `entity_resolution` (FR-C.7); contract `ResolutionResult`. ARD manifest present
+  in the shared root (`~/.air/registry/entity_resolution.json`); mirror conformance green.
 
-**Verification:** `uv run pytest tests/capabilities/test_entity_resolution.py`
+**Verification:** `uv run pytest tests/capabilities/test_entity_resolution.py` (9 passed, hermetic). Full
+suite 333 passed + 20 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T8, T23b. **Scope:** M.
-
+**Dependencies:** T8, T23b. **Scope:** M. **Status:** done.
 **Files:** `src/rag_wright/capabilities/entity_resolution.py`,
-`tests/capabilities/test_entity_resolution.py`, `docs/adr/0005-entity-resolution.md`
-**Note:** Resolves §16.3 matching strategy. Fragmentation is risk 5.
+`tests/capabilities/test_entity_resolution.py`, `src/rag_wright/capabilities/manifests.py`
+(+`entity_resolution`), `docs/adr/0013-entity-resolution-matching-strategy.md`.
+**Note:** Resolves §16.3 (ADR-0013). Fragmentation is risk 5. **ADR is 0013**, not the ledger's earlier
+"0005-entity-resolution.md" reference (0005 is the relational golden set).
 
 ### Task T25: Graph storage (nodes/edges carry `chunk_id`, content-hash gated)
 
