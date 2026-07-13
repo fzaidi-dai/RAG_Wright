@@ -103,3 +103,14 @@ class Store(Protocol):
 
     def graph_counts(self) -> dict[str, int]:
         """Counts for introspection/tests: `{'entities': n, 'relationships': m}`."""
+
+    # --- graph-query (T26): relationship traversal. Semantic, not SQL: returns store-agnostic path
+    # rows (target + the entity_ids/chunk_ids/confidences along the path) so the capability can shape
+    # the cited evidence. Confidence is SURFACED on every path, not filtered on (FR-C.5/FR-Q.3).
+
+    def graph_neighbors(
+        self, entity_id: str, *, relationship_type: str, max_hops: int
+    ) -> list[dict]:
+        """Traverse `relationship_type` edges from the start entity up to `max_hops`, returning one row
+        per reached entity+path: `target_id`, `target_name`, `path_entity_ids`, `path_chunk_ids`,
+        `path_confidences`, `hops`. Every edge is surfaced regardless of confidence (T26 does not gate)."""

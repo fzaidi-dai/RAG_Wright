@@ -83,6 +83,36 @@ class _InMemoryStore:
         return {"entities": len(getattr(self, "_nodes", {})),
                 "relationships": len(getattr(self, "_edges", []))}
 
+    # query-side (T26): a minimal in-memory one/two-hop traversal over the stored edges
+    def graph_neighbors(self, entity_id, *, relationship_type, max_hops):
+        nodes, edges = getattr(self, "_nodes", {}), getattr(self, "_edges", [])
+        rels = [e for e in edges if e.relationship_type == relationship_type]
+
+        def _name(key):
+            node = nodes.get(key)
+            return node.name if node else key
+
+        def _neighbors(key):
+            for e in rels:
+                if e.source_key == key:
+                    yield e.target_key, e
+                elif e.target_key == key:
+                    yield e.source_key, e
+
+        paths = []
+        for nb, e1 in _neighbors(entity_id):
+            paths.append({"target_id": nb, "target_name": _name(nb), "hops": 1,
+                          "path_entity_ids": [entity_id, nb], "path_chunk_ids": [e1.chunk_id],
+                          "path_confidences": [e1.confidence]})
+            if max_hops >= 2:
+                for nb2, e2 in _neighbors(nb):
+                    if nb2 not in (entity_id, nb):
+                        paths.append({"target_id": nb2, "target_name": _name(nb2), "hops": 2,
+                                      "path_entity_ids": [entity_id, nb, nb2],
+                                      "path_chunk_ids": [e1.chunk_id, e2.chunk_id],
+                                      "path_confidences": [e1.confidence, e2.confidence]})
+        return paths
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()

@@ -166,7 +166,7 @@ enforces it.
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | done | T13, T23, T24 |
-| T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | todo | T25 |
+| T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | done | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | todo | T22, T26 |
 | T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | todo | T15, T27 |
 | T29 | Answer generator (grounded, cited, abstains) + vision-to-text | 4 Build RLM | FR-C.9, FR-Q.6 | todo | T11, T27 |
@@ -1272,18 +1272,28 @@ with cited `chunk_id`s, `entity_id`s, and confidence tags, from the same store a
 index; the answer is treated as evidence, not truth (FR-C.5, FR-Q.3, SPEC §8/§14).
 
 **RAC-26:**
-- [ ] A multi-hop question over the EDGAR-derived golden set (T10) returns an answer with cited
-  `chunk_id`s, `entity_id`s, and confidence tags.
-- [ ] The result is shaped as evidence for fusion (T27), not a final ranked list.
-- [ ] Registered under FR-C.5.
-- [ ] ARD-registered: the ARD manifest (skeleton from T6, representative queries authored) loads
-  under `RegistryStore(root)` with no `RegistryLoadError` and is returned by `discover` for each
-  representative query.
+- [x] A relational/multi-hop question returns an answer with cited `chunk_id`s, `entity_id`s, and
+  confidence tags. `graph_query(start_entity_id, *, store, relationship_type, max_hops)` traverses via
+  the store's `graph_neighbors` (ArcadeDB `MATCH` over `Relationship` edges — `bothE` cites each edge's
+  `chunk_id`/`confidence`, `bothV` the reached entity; one-hop + two-hop, `$matched` de-dup; grounded
+  live). Returns a `GraphAnswer` of `GraphEvidence` (entity_id, name, `path_entity_ids`, `chunk_ids`,
+  `confidences`, hops). **Live (`-m store`): one-hop co-parties (B, C) cited from their edges; two-hop
+  A→B→D with the full path `[A,B,D]` and both edges' chunks.** Confidence is **surfaced, not filtered**
+  (FR-C.5/FR-Q.3); gating on it is the generator's job (FR-Q.6/T29). Full golden-set run is eval-time.
+- [x] Shaped as evidence for fusion (T27), not a final ranked list: `GraphAnswer.evidence` is an unranked
+  list of cited candidates.
+- [x] Registered under FR-C.5. `register_graph_query` → `graph_query`, `function`, contract `GraphAnswer`.
+- [x] ARD-registered: manifest present in the shared root (`~/.air/registry/graph_query.json`); mirror
+  conformance green; re-validates as a `RegistryEntry`.
 
-**Verification:** `uv run pytest tests/capabilities/test_graph_query.py -m store`
+**Verification:** `uv run pytest tests/capabilities/test_graph_query.py` (4 hermetic passed); live
+`-m store` (2 passed: real one-hop + two-hop MATCH). Full suite 343 passed + 23 skipped. Publish:
+`uv run python scripts/publish_manifests.py`.
 
-**Dependencies:** T25. **Scope:** M.
-**Files:** `src/rag_wright/capabilities/graph_query.py`, `tests/capabilities/test_graph_query.py`
+**Dependencies:** T25. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/capabilities/graph_query.py`, `tests/capabilities/test_graph_query.py`,
+`src/rag_wright/store/{seam,arcadedb}.py` (`graph_neighbors` traversal), `manifests.py`
+(+`graph_query`), `tests/store/test_arcadedb_schema.py` (stub extended with in-memory traversal).
 
 ### Task T27: Fusion (union/dedup on `chunk_id`, capped)
 

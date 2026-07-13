@@ -266,6 +266,52 @@ class ArcadeDBStore:
             "relationships": int(rels[0]["n"]) if rels else 0,
         }
 
+    def graph_neighbors(
+        self, entity_id: str, *, relationship_type: str, max_hops: int
+    ) -> list[dict]:
+        """Traverse via ArcadeDB `MATCH` over `Relationship` edges (grounded live, T26): `bothE` binds
+        each edge (so its `chunk_id`/`confidence` are cited) and `bothV` the reached entity. One-hop and
+        two-hop are separate MATCH queries; `$matched` de-dups the two-hop return to the start. Braces
+        are concatenated in (they clash with f-string interpolation)."""
+        eid = _sql_str(entity_id)
+        rel = _sql_str(relationship_type)
+        paths: list[dict] = []
+
+        one_hop = (
+            "MATCH {type: " + ENTITY_TYPE + ", as: a, where: (entity_id = " + eid + ")}"
+            ".bothE('" + REL_EDGE_TYPE + "'){as: e, where: (relationship_type = " + rel + ")}"
+            ".bothV(){as: b, where: (entity_id <> " + eid + ")}"
+            " RETURN b.entity_id AS target_id, b.name AS target_name,"
+            " e.chunk_id AS c1, e.confidence AS cf1"
+        )
+        for row in self._query(one_hop):
+            paths.append({
+                "target_id": row["target_id"], "target_name": row["target_name"],
+                "path_entity_ids": [entity_id, row["target_id"]],
+                "path_chunk_ids": [row["c1"]], "path_confidences": [row["cf1"]], "hops": 1,
+            })
+
+        if max_hops >= 2:
+            two_hop = (
+                "MATCH {type: " + ENTITY_TYPE + ", as: a, where: (entity_id = " + eid + ")}"
+                ".bothE('" + REL_EDGE_TYPE + "'){as: e1, where: (relationship_type = " + rel + ")}"
+                ".bothV(){as: b, where: (entity_id <> " + eid + ")}"
+                ".bothE('" + REL_EDGE_TYPE + "'){as: e2, where: (relationship_type = " + rel + ")}"
+                ".bothV(){as: cc, where: (entity_id <> " + eid
+                + " and entity_id <> $matched.b.entity_id)}"
+                " RETURN b.entity_id AS mid_id, e1.chunk_id AS e1c, e1.confidence AS e1cf,"
+                " cc.entity_id AS target_id, cc.name AS target_name,"
+                " e2.chunk_id AS e2c, e2.confidence AS e2cf"
+            )
+            for row in self._query(two_hop):
+                paths.append({
+                    "target_id": row["target_id"], "target_name": row["target_name"],
+                    "path_entity_ids": [entity_id, row["mid_id"], row["target_id"]],
+                    "path_chunk_ids": [row["e1c"], row["e2c"]],
+                    "path_confidences": [row["e1cf"], row["e2cf"]], "hops": 2,
+                })
+        return paths
+
     def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
         if not chunk_ids:
             return set()

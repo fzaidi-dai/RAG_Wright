@@ -214,6 +214,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("entity", "resolution", "edgar", "cik", "graph"),
     ),
+    CapabilityManifest(
+        slug="graph_query",
+        kind="function",  # an in-process query-side graph node
+        display_name="Graph query (cited relational/multi-hop answer)",
+        description=(
+            "Answer relational and multi-hop questions by traversing the knowledge graph from a start "
+            "entity over relationship edges, returning cited chunk_ids, entity_ids, and confidence tags "
+            "as evidence for fusion (treated as evidence, not truth; confidence surfaced, not filtered) "
+            "(FR-C.5, FR-Q.3)."
+        ),
+        representative_queries=(
+            "who are the counterparties of this company in the contract graph",
+            "find entities connected to a company within two hops",
+            "answer a multi-hop relational question with cited graph evidence",
+            "traverse contract relationships between organizations",
+        ),
+        tags=("graph", "query", "traversal", "multi-hop", "relational"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
