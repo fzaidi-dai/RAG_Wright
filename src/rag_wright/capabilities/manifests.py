@@ -270,20 +270,37 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="generation",
-        kind="function",  # one capability: grounded answer generation + vision-to-text
-        display_name="Answer generation (grounded, cited, abstains) + vision-to-text",
+        kind="function",  # in-process callable; the compiler binds it, not over MCP (T31 note)
+        display_name="Answer generation (grounded, cited, abstains)",
         description=(
             "Produce a grounded, cited answer from the retrieved evidence — no claim without a citation, "
-            "confidence-aware, abstaining when the context does not support an answer — and transcribe "
-            "scanned/image content to text at ingestion, both on the Gemma 4 class model (FR-C.9, FR-Q.6)."
+            "confidence-aware, abstaining when the context does not support an answer (FR-C.9, FR-Q.6). "
+            "Split from vision-to-text so discovery ranks it only on answer-generation intents (ADR-0014)."
         ),
         representative_queries=(
             "answer a question grounded in the retrieved evidence with citations",
             "abstain when the retrieved context does not support an answer",
             "generate a confidence-aware cited answer from contract evidence",
-            "transcribe a scanned filing image to text",
+            "produce a cited answer or an abstention from retrieved passages",
         ),
-        tags=("generation", "answer", "grounded", "cited", "vision-to-text"),
+        tags=("generation", "answer", "grounded", "cited", "abstention"),
+    ),
+    CapabilityManifest(
+        slug="vision_to_text",
+        kind="function",
+        display_name="Vision-to-text (scanned-image transcription)",
+        description=(
+            "Transcribe a scanned filing's images to text at ingestion on the Gemma 4 class model "
+            "(FR-C.9). Split from answer generation (ADR-0014): different inputs (an image, not evidence), "
+            "different failure modes, and a different caller (ingestion, not the query path)."
+        ),
+        representative_queries=(
+            "transcribe a scanned filing image to text",
+            "extract the text from a scanned or image-only document",
+            "convert a contract page image into machine-readable text at ingestion",
+            "read text off a rasterized document image",
+        ),
+        tags=("vision-to-text", "ocr", "transcription", "ingestion"),
     ),
 )
 

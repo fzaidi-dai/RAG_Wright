@@ -82,10 +82,11 @@ def test_all_canonical_slugs_are_urn_safe():
     assert all(urn_safe.match(slug) for slug in CANONICAL_CAPABILITY_SLUGS)
 
 
-def test_generation_is_a_single_capability():
-    # FR-C.9 (reasoning + generation + vision-to-text) is one slug, not two.
+def test_generation_and_vision_to_text_are_separate_capabilities():
+    # FR-C.9 was split into two slugs so discovery ranks each on its own intents (ADR-0014):
+    # answer generation and scanned-image transcription have different inputs, callers, failure modes.
     assert "generation" in CANONICAL_CAPABILITY_SLUGS
-    assert "vision_to_text" not in CANONICAL_CAPABILITY_SLUGS
+    assert "vision_to_text" in CANONICAL_CAPABILITY_SLUGS
 
 
 # --- explicit kind, no default (RAC-6, review rule) -----------------------------------------

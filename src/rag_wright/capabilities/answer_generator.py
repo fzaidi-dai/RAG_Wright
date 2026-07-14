@@ -4,8 +4,8 @@ Produces the final answer from the query-side evidence (fusion/synthesis). It en
 rule — **no claim without a citation** (FR-Q.6): every non-abstaining answer must cite `chunk_id`s that
 are actually in the evidence, and a question the evidence does not support yields an **abstention**, not
 a fabrication. It is **confidence-aware**: graph-derived facts carry their confidence tag into the
-evidence the model sees (T26 surfaces it; here it is put in front of the generator). One capability with
-vision-to-text (`vision_to_text.py`), both on the Gemma 4 class model via the model-profile seam.
+evidence the model sees (T26 surfaces it; here it is put in front of the generator). Vision-to-text is a
+separate capability/slug (`vision_to_text.py`, ADR-0014), though both run on the Gemma 4 class model.
 
 Grounding and citation are enforced in CODE around the model, not left to the prompt: fabricated
 citations (ids not in the evidence) are dropped, and an answer that ends up with no valid citation is
@@ -101,10 +101,10 @@ def generate_answer(
 
 
 def register_generation(registry: CapabilityRegistry) -> None:
-    """Register generation under FR-C.9 (`generation`, one capability incl. vision-to-text)."""
+    """Register answer generation under FR-C.9 (`generation`; vision-to-text is its own slug, ADR-0014)."""
     registry.register(
         "generation",
         contract=GeneratedAnswer,
         kind="function",
-        display_name="Answer generation (grounded, cited, abstains) + vision-to-text",
+        display_name="Answer generation (grounded, cited, abstains)",
     )

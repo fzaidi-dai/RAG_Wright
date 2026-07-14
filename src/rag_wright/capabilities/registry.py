@@ -68,8 +68,9 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "graph_extraction",  # FR-C.6
         "entity_disambiguation",  # FR-C.7 (canonicalize: normalize/reject/cluster; the T23b stage)
         "entity_resolution",  # FR-C.7 (closed-world linking to EDGAR CIK)
-        "ontology_registry_derivation",  # FR-C.8
-        "generation",  # FR-C.9 (reasoning + generation + vision-to-text: one capability)
+        "ontology_registry_derivation",  # FR-C.8 (foundation derivation: slug, but no ARD manifest)
+        "generation",  # FR-C.9 (grounded/cited/abstaining answer generation)
+        "vision_to_text",  # FR-C.9 (scanned-image transcription; split from generation, ADR-0014)
         "fusion",  # FR-Q.4
         "rlm_chunking",  # FR-I.1 (applies the RLM skill)
         "rlm_synthesis",  # FR-Q.5 (applies the RLM skill)

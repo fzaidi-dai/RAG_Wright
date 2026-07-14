@@ -123,11 +123,20 @@ discovered by query, so they register nothing and author no manifest**, the foun
 corpus and eval tasks, the T18 escalation path (it extends the T17 capability, not a new one), the
 T30 caching optimization, or the T31 MCP surface.
 
-**The rule (so §5 and this list stay in exact agreement and this does not creep back):** only
-query-discovered capabilities — the section-5 canonical slugs — register and author an ARD manifest;
-seam-bound pipeline nodes (the write and store legs) do not. A task with no section-5 slug carries no
-ARD bullet. Stated once here as the source of its meaning, repeated per task so the working loop
-enforces it.
+**The rule (three categories — a canonical slug and an ARD manifest are NOT the same thing; the test is
+"is it discovered by query at compile time," per GraphWright's RegistryStore verification, SPEC §5):**
+
+1. **Query-discovered capabilities** — canonical slug **and** an ARD manifest. The compiler discovers
+   them by representative query and binds them into the graphs. The FR-C / FR-Q capabilities, now **14**
+   after the FR-C.9 split into `generation` + `vision_to_text` (ADR-0014).
+2. **Seam-bound pipeline nodes** — **no** slug, **no** manifest (they bind the store seam, wired by the
+   compiler, not discovered): chunk write (T20, FR-I.3), graph storage (T25, FR-I.4).
+3. **Foundation derivations** — a canonical slug (a real capability with a contract + internal registry
+   entry) but **no** manifest, because they run **before** compilation and their output is an input to
+   the graph, not a node the compiler binds: `ontology_registry_derivation` (FR-C.8, T8).
+
+A task carries the ARD bullet iff it is category 1. Stated once here, repeated per task so the working
+loop enforces it.
 
 ---
 
@@ -427,6 +436,11 @@ closed-world against this registry (FR-C.8, FR-C.7, §16.2/§16.3, ADR-0002). Th
 `tests/ontology/test_derivation.py`
 **Note:** The `EntityId` contract (T1) is strict canonical-only; this loader is the single place
 raw EDGAR forms enter and get normalized. Keep normalization here, not in the contract.
+**ARD category — foundation derivation (GraphWright RegistryStore verification, ADR-0014 taxonomy):**
+`ontology_registry_derivation` (FR-C.8) is a **canonical slug with NO ARD manifest**. It is not
+seam-bound; it is a real capability with a contract and an internal registry entry, but it runs **before**
+compilation and its output (the ontology + registry) is an **input** to the graph, not a node the
+compiler discovers by query — so it authors no manifest. Category 3 in the three-category ARD rule above.
 
 ### Task T9: Golden eval harness + CUAD-annotation archetype sets
 
@@ -1368,21 +1382,28 @@ to-text step at ingestion (FR-C.9), on a Gemma 4 class model through the model-p
   surfaces `[confidence: …]`); a test asserts the tag reaches the model's prompt.
 - [x] Vision-to-text converts a scanned image to text at ingestion (`vision_to_text`, Gemma 4 multimodal
   via the seam). **Live: transcribed a synthetic PNG ("HELLO WORLD").**
-- [x] Registered under FR-C.9 (`generation`, one capability incl. vision-to-text — the single §5 slug),
-  contract `GeneratedAnswer`.
-- [x] ARD-registered: the `generation` manifest (representative queries span answer-generation AND
-  vision-to-text) is present in the shared root; mirror conformance green. (FR-C.9 is one slug, so one
-  manifest covers both — the RAC's "both manifests" reconciles to this single capability.)
+- [x] Registered under FR-C.9 as **two** capabilities/slugs (split per GraphWright's RegistryStore
+  verification, **ADR-0014**): `generation` (answer generation, contract `GeneratedAnswer`,
+  `register_generation`) and `vision_to_text` (transcription, contract `VisionTranscription`,
+  `register_vision_to_text`) — different inputs/callers/failure modes, so discovery ranks each on its own
+  intents (a bundled slug diluted both).
+- [x] ARD-registered: **both** the `generation` and `vision_to_text` manifests are present in the shared
+  root (`~/.air/registry/{generation,vision_to_text}.json`), each with representative queries scoped to
+  its own behavior; mirror conformance green; 14 manifests total. GraphWright re-verifies after the emit.
 
 **Verification:** `uv run pytest tests/capabilities/test_answer_generator.py` (8 hermetic passed); live
 `-m model` (2 passed: real Gemma generation + real image transcription). Full suite 366 passed + 26
 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
 **Dependencies:** T11, T27. **Scope:** L. **Status:** done.
-**Files:** `src/rag_wright/capabilities/answer_generator.py`, `src/rag_wright/capabilities/vision_to_text.py`,
-`tests/capabilities/test_answer_generator.py`, `src/rag_wright/capabilities/manifests.py` (+`generation`).
+**Files:** `src/rag_wright/capabilities/answer_generator.py` (`register_generation`),
+`src/rag_wright/capabilities/vision_to_text.py` (`register_vision_to_text`, `VisionTranscription`),
+`tests/capabilities/test_answer_generator.py`, `src/rag_wright/capabilities/registry.py` (+`vision_to_text`
+slug), `src/rag_wright/capabilities/manifests.py` (+`generation`, +`vision_to_text`),
+`docs/adr/0014-split-generation-and-vision-to-text.md`, SPEC §5 + FR-C.9 (split).
 **Note:** Enforces "no claim without a citation" and abstention (risk 9). Vision-to-text exercises
-the scanned-filing subset (ADR-0002).
+the scanned-filing subset (ADR-0002). **FR-C.9 split into `generation` + `vision_to_text` (ADR-0014)**
+after GraphWright's RegistryStore verification flagged discovery dilution from the bundled slug.
 
 ### Task T30: Prefix + result caching
 
@@ -1410,6 +1431,11 @@ itself is orchestration; §16.6).
 **Description:** Expose the registered capabilities (T6) as governed skills over a Model Context
 Protocol (MCP) interface, so agents call the component and do not own it (FR-S.5, SPEC §1).
 Grounded surface: the official `mcp` SDK (ADR-0001).
+**ARD manifest kind is not affected by this surface (GraphWright RegistryStore verification):** the ARD
+manifest `kind` describes how the **compiler** binds a capability — the 10 non-RLM capabilities are
+`function` because the compiler binds them as **in-process callables**, deliberately, not over MCP. T31's
+MCP surface is a **separate exposure** of RAG_Wright's capabilities to external callers; it does **not**
+change any manifest `kind`. Do not revisit `function` → `mcp_tool` when building this.
 
 **RAC-31:**
 - [ ] Retrieval and graph capabilities are reachable only through the query-skill interface over

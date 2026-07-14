@@ -108,6 +108,17 @@ def test_vision_to_text_calls_the_vision_model():
     assert vision.seen == {"len": len(b"\x89PNGfake"), "media_type": "image/png"}
 
 
+def test_vision_to_text_registers_under_its_own_slug():
+    from rag_wright.capabilities.vision_to_text import VisionTranscription, register_vision_to_text
+
+    registry = CapabilityRegistry()
+    register_vision_to_text(registry)
+    reg = registry.get("vision_to_text")
+    assert reg.name == "vision_to_text"  # split from generation (ADR-0014)
+    assert reg.contract is VisionTranscription
+    assert reg.kind == "function"
+
+
 # --- live Gemma (opt-in): real generation + real image transcription -----------------------------
 
 

@@ -13,9 +13,17 @@ import base64
 from typing import Protocol, runtime_checkable
 
 from langchain_core.messages import HumanMessage
+from pydantic import BaseModel
 
+from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_model
+
+
+class VisionTranscription(BaseModel):
+    """The vision-to-text capability's output contract: the transcribed text of an image."""
+
+    text: str
 
 _TRANSCRIBE_PROMPT = (
     "Transcribe all text visible in this image exactly, preserving reading order. "
@@ -49,3 +57,13 @@ class SeamVisionModel:
 def vision_to_text(image: bytes, *, model: VisionModel, media_type: str = "image/png") -> str:
     """Transcribe a scanned image to text (ingestion-side, for image-only filings)."""
     return model.image_to_text(image, media_type=media_type)
+
+
+def register_vision_to_text(registry: CapabilityRegistry) -> None:
+    """Register vision-to-text under FR-C.9 (`vision_to_text`, split from `generation`, ADR-0014)."""
+    registry.register(
+        "vision_to_text",
+        contract=VisionTranscription,
+        kind="function",
+        display_name="Vision-to-text (scanned-image transcription)",
+    )
