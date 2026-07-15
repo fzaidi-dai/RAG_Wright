@@ -11,9 +11,41 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
-from rag_wright.capabilities.ard import CALLABLE_KINDS, RegistryEntry
+from rag_wright.capabilities.ard import CALLABLE_KINDS, RegistryEntry, SkillRuntime
 from rag_wright.capabilities.manifests import MANIFEST_SPECS, author, publish
+
+
+# --- skill_runtime: the agent_skill intrinsic-runtime block (mirrored per ADR-0003) --------------
+
+
+def test_agent_skill_manifests_carry_skill_runtime():
+    for slug in ("rlm_method", "rlm_chunking", "rlm_synthesis"):
+        runtime = author(slug).skill_runtime
+        assert runtime is not None
+        assert runtime.needs_interpreter is True and runtime.rlm is True
+        # our RLM dispatches each code-sliced unit to a MODEL via the seam, not to sub-agents (ADR-0014
+        # analysis): no registered/ad-hoc/dynamic sub-agents, so no governed slugs to grant.
+        assert runtime.granted_subagents == []
+
+
+def test_function_manifests_have_no_skill_runtime():
+    for slug in ("parsing", "generation", "vision_to_text", "hybrid_search"):
+        assert author(slug).skill_runtime is None
+
+
+def test_skill_runtime_serializes_camelcase_on_the_wire(tmp_path):
+    data = json.loads(publish("rlm_method", root=tmp_path).read_text())
+    assert data["skillRuntime"] == {"needsInterpreter": True, "rlm": True, "grantedSubagents": []}
+    RegistryEntry.model_validate(data)  # re-validates as GraphWright's store will load it
+
+
+def test_skill_runtime_is_rejected_on_a_non_agent_skill():
+    data = author("parsing").model_dump(by_alias=True)  # a function entry
+    data["skillRuntime"] = SkillRuntime(needs_interpreter=True).model_dump(by_alias=True)
+    with pytest.raises(ValidationError):  # skill_runtime is agent_skill only (like requires)
+        RegistryEntry.model_validate(data)
 
 
 @pytest.mark.parametrize("slug", sorted(MANIFEST_SPECS))

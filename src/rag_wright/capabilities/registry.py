@@ -44,6 +44,7 @@ from rag_wright.capabilities.ard import (
     GovernanceBlock,
     RegistryEntry,
     ResponseBounds,
+    SkillRuntime,
     TrustManifest,
 )
 
@@ -110,6 +111,7 @@ class ManifestSkeleton(BaseModel):
         identity_type: str = "domain",
         golden_eval_ref: Optional[str] = None,
         requires: Optional[list[str]] = None,
+        skill_runtime: Optional[SkillRuntime] = None,
         description: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ) -> RegistryEntry:
@@ -136,6 +138,7 @@ class ManifestSkeleton(BaseModel):
             envelope=envelope,
             response_bounds=self.response_bounds,
             requires=requires or [],
+            skill_runtime=skill_runtime,
             golden_eval_ref=golden_eval_ref,
             governance=GovernanceBlock(owner=self.owner),
         )

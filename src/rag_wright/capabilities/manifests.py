@@ -24,6 +24,7 @@ from rag_wright.capabilities.ard import (
     EntryKind,
     RegistryEntry,
     ResponseBounds,
+    SkillRuntime,
     write_manifest,
 )
 from rag_wright.capabilities.registry import (
@@ -44,6 +45,7 @@ class CapabilityManifest:
     representative_queries: tuple[str, ...]  # 2-5; the field discovery ranks on
     tags: tuple[str, ...] = ()
     requires: tuple[str, ...] = ()  # closure; agent_skill only
+    skill_runtime: Optional[SkillRuntime] = None  # intrinsic runtime; agent_skill only
     golden_eval_ref: Optional[str] = None
     response_bounds: Optional[ResponseBounds] = None  # callable kinds only; defaults if omitted
 
@@ -69,6 +71,10 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "synthesize an answer from many partitioned sub-calls",
         ),
         tags=("rlm", "method", "divide-and-conquer"),
+        # Intrinsic RLM runtime: the interpreter holds the working set and runs the code-side
+        # slice/dispatch/reduce; no sub-agents — the sub-calls are per-slice MODEL calls via the
+        # model-profile seam (deployment config, out of the manifest), so granted_subagents is empty.
+        skill_runtime=SkillRuntime(needs_interpreter=True, rlm=True),
     ),
     CapabilityManifest(
         slug="parsing",
@@ -105,6 +111,8 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         requires=("rlm_method",),
         tags=("chunking", "rlm", "ingestion"),
+        skill_runtime=SkillRuntime(needs_interpreter=True, rlm=True),  # slices in code, per-slice
+        # summarizer MODEL calls via the seam; no sub-agents -> granted_subagents empty.
     ),
     CapabilityManifest(
         slug="embedding",
@@ -267,6 +275,8 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         requires=("rlm_method",),
         tags=("rlm", "synthesis", "query"),
+        skill_runtime=SkillRuntime(needs_interpreter=True, rlm=True),  # slices + recursive reduce in
+        # code, per-slice synthesizer MODEL calls via the seam; no sub-agents -> granted_subagents empty.
     ),
     CapabilityManifest(
         slug="generation",
@@ -331,6 +341,7 @@ def author(slug: str) -> RegistryEntry:
     return skeleton.author(
         list(spec.representative_queries),
         requires=list(spec.requires) or None,
+        skill_runtime=spec.skill_runtime,
         golden_eval_ref=spec.golden_eval_ref,
     )
 

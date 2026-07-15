@@ -108,6 +108,17 @@ class GovernanceBlock(_ArdModel):
     control_level_min: Literal["high", "moderate", "low"] = "moderate"
 
 
+class SkillRuntime(_ArdModel):
+    """An agent skill's intrinsic runtime requirements, so the compiler can hydrate an interpreter node
+    without fabricating anything (GraphWright RegistryEntry; mirrored per ADR-0003). Internal-only,
+    never the ARD envelope; `agent_skill` only (validated like `requires`); absent when a skill has no
+    special runtime needs. Intrinsic requirements only — the model is deployment config and stays out."""
+
+    needs_interpreter: bool = False  # the skill runs code in the interpreter
+    rlm: bool = False  # the auditable RLM-pattern marker (FR-1.4, FR-4.10)
+    granted_subagents: list[str] = Field(default_factory=list)  # governed slugs it may dispatch to
+
+
 class RegistryEntry(_ArdModel):
     """A governed registry record: the ARD envelope plus internal-only governance and eval fields.
 
@@ -120,6 +131,7 @@ class RegistryEntry(_ArdModel):
     golden_eval_ref: Optional[str] = None
     response_bounds: Optional[ResponseBounds] = None  # required for callable kinds
     requires: list[str] = Field(default_factory=list)  # closure; agent_skill only
+    skill_runtime: Optional[SkillRuntime] = None  # intrinsic runtime; agent_skill only (like requires)
     governance: GovernanceBlock
 
     @model_validator(mode="after")
@@ -136,6 +148,8 @@ class RegistryEntry(_ArdModel):
             raise ValueError(f"kind {self.kind!r} is not callable and carries no response_bounds")
         if self.requires and self.kind != "agent_skill":
             raise ValueError(f"a requires closure is only valid on an agent_skill, not {self.kind!r}")
+        if self.skill_runtime is not None and self.kind != "agent_skill":
+            raise ValueError(f"skill_runtime is only valid on an agent_skill, not {self.kind!r}")
         return self
 
 
