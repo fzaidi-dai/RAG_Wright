@@ -18,6 +18,16 @@ not this repo's.
 
 ## Last approved / next up
 
+- **LAST APPROVED (committed): T17 (rebuild)** — RLM chunking = **LLM semantic boundary discovery** (mandatory,
+  no fixed-size). A `BoundaryDiscoverer` seam (`SeamBoundaryDiscoverer` via `build_rlm_agent`,
+  deepseek-v4-pro) returns spans over `document.texts` items; `_finalize_chunks` is the deterministic-
+  given-boundaries layer (join, cap, **T-CHK floor/merge/near-empty preserved over the discoverer's
+  spans**, id, validate); summaries stay the concurrent flat map. Recursion **not gated** for chunking
+  (ADR-0019). Live boundary-quality test (a coherent clause kept whole) **4/4** on deepseek-v4-pro,
+  including a clean semantic partition. **Caveat:** boundary quality is guarded ONLY by the opt-in live
+  test — CI does not cover it; run `-m model` before trusting a chunking-boundary change. 14 passed + 2
+  skipped hermetic; full suite **379 passed + 26 skipped**. Logged **T34** (no document upsert path
+  exists). **Next after approval:** T28 (RLM synthesis).
 - **LAST APPROVED (committed): T15 (B′ rebuild)** — RLM skill + reusable machinery (recursive dynamic
   sub-agents). Grounding overturned ADR-0015 Q2's self-dispatch: a self-referential sub-agent is **not
   constructible** on `deepagents==0.6.12` (eager roster compile in `SubAgentMiddleware.__init__`) — I
@@ -181,7 +191,7 @@ loop enforces it.
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | done | T13 |
 | T15 | RLM skill + machinery (recursive dynamic sub-agents; B′) | 4 Build RLM | FR-C.10 | done (rebuild) | ADR-0015/0016/0017/0018 |
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | done | T3 |
-| T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | done | T15, T16, T11 |
+| T17 | RLM chunking (LLM semantic boundary discovery) | 4 Build write | FR-I.1 | done (rebuild) | T15, T16, T11, ADR-0019 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | deferred (GATE-1) | **GATE-1**, T17 |
 | T19 | Embedding (BGE-M3; concurrent + backpressure) | 4 Build write | FR-C.2, FR-I.3, FR-I.6 | done | T16 |
 | T20 | Chunk write + incremental upsert (content-hash gated) | 4 Build write | FR-I.3, FR-I.5 | done | T13, T17, T19 |
@@ -193,6 +203,7 @@ loop enforces it.
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
+| T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -841,7 +852,57 @@ chunking, embedding, and extraction (FR-C.1). Grounded surface: `docling` `Docum
 `src/rag_wright/capabilities/manifests.py` (+`parsing` spec), `tests/capabilities/test_manifests.py`
 (scaling test over all specs), `pyproject.toml` + `conftest.py` (`parse` opt-in marker).
 
-### Task T17: RLM chunking (deterministic, content-hash gated)
+### Task T17 (REOPENED 2026-07-15, rebuild): RLM chunking = LLM semantic boundary discovery
+
+**Description:** The B′ rebuild makes chunking what the SPEC requires: **LLM-driven semantic boundary
+discovery, mandatory, no fixed-size chunking ever**. A strong model (STRUCTURED_REASONING / deepseek-v4-pro)
+explores the parsed document via the T15 machinery (`build_rlm_agent` + a `peek` tool), and returns
+semantically coherent boundary **spans over the document's items**. Reproducibility is moot (ingestion
+chunks once and persists; only a document change re-chunks — task T34): the value is a good boundary, not a
+repeatable one. The layer **after** boundaries are chosen is deterministic-given-boundaries and lives in a
+separate function (`_finalize_chunks`): join each span, enforce the cap, apply the **T-CHK floor + merge +
+near-empty rejection** (an LLM can just as easily emit a boundary around a lone heading), compute
+`chunk_id`, validate. Summaries stay the existing concurrent flat map. Recursion is available-when-warranted,
+**not gated** for chunking (ADR-0019).
+
+**RAC-17 (rebuild):**
+- [x] Boundaries are **LLM-found and semantic, not fixed-size**: a `BoundaryDiscoverer` seam
+  (`SeamBoundaryDiscoverer` via `build_rlm_agent`, deepseek-v4-pro), spans over `document.texts` items.
+  Hermetic tests inject a stub discoverer; **live** test asserts a known coherent clause (items 3..6) is
+  **not split across chunks** — boundary quality, the T15-opaque-proof analogue. Live: **4/4** (1 via
+  pytest + 3 via the hit-rate harness) on deepseek-v4-pro, incl. a clean semantic partition
+  `(0,1)(2,2)(3,6)(7,8)` isolating the clause. (Thinner than T15's 10/10; this test is load-bearing — see
+  the coverage caveat below.)
+- [x] **Per-slice tool use** in the exploration: the discoverer's `peek(index)` tool is invoked mid-handling
+  (hermetic, fake-model-driven through the real machinery).
+- [x] **id/gate/validation deterministic given the spans**: stable `chunk_id`s given the same spans;
+  content-hash gate skips the re-chunk **and the LLM call**; partition validation rejects gaps/overlaps/short
+  coverage. **T-CHK preserved over the discoverer's spans**: the floor + merge + near-empty rejection now
+  fire in `_finalize_chunks`; the dense-header pathology (one span per item) coalesces, no near-empty chunk;
+  the ASIANDRAGON regression fixture still passes over spans. Added a residual-rebalance so the floor holds
+  even for a tiny trailing span.
+- [x] **Not recursion-gated** (ADR-0019): recursion available-when-warranted, intrinsic to synthesis/T28.
+
+**Verification:** `uv run pytest tests/capabilities/test_rlm_chunking.py` — 14 passed + 2 skipped (live);
+`-m model` coherent-clause **passed** (+ reliability re-runs). ruff clean. Full suite **379 passed + 26
+skipped**. `_split_into_chunks` (the old header heuristic) removed; its floor/merge logic preserved in
+`_finalize_chunks`. Added `tools=` (orchestrator tools) to `build_rlm_agent` for the `peek` tool.
+
+**COVERAGE CAVEAT (deliberate, recorded):** the hermetic suite proves the *mechanism* (spans → correct
+join, cap, T-CHK floor/near-empty, ids, gate, partition validation) but **asserts no boundary quality** —
+that a coherent unit is kept whole is model judgment and cannot be checked against a fake. Boundary quality
+is guarded **only** by the opt-in live test (`-m model`). So: **CI does not cover boundary quality**, and
+`-m model` must be run before trusting any change that touches boundary discovery or the SKILL/prompt.
+Removed the two old pure-heuristic tests (subsection-stays, major-boundary) — they asserted the old
+deterministic heuristic's specific choices; that decision is now the LLM's and is covered only by the live
+coherent-clause test. This is a real shift in what CI catches; not silent.
+
+**Dependencies:** T15, T16, T11, ADR-0019. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/capabilities/rlm_chunking.py`, `src/rag_wright/skills/rlm/agent.py` (+`tools=`),
+`tests/capabilities/test_rlm_chunking.py`, `docs/adr/0019-recursion-is-optional-for-chunking-required-for-synthesis.md`.
+**Finding logged:** T34 (document update/upsert path does not exist).
+
+### Task T17 (original, superseded by the rebuild above): RLM chunking (deterministic, content-hash gated)
 
 **Description:** Read the whole parsed document through an interpreter (not bounded by a context
 window) using the RLM skill (T15), splitting along topic/section/chapter boundaries into
@@ -1156,6 +1217,22 @@ rerank, scored against qrels. Supplies the content-bearing cross-corpus retrieva
 RLM chunker (pre-segmented clauses), so the RLM call stays at GATE-2b. **LLM-generated queries are rejected
 as circular; if ACORD is unusable, return to the human before any alternative.**
 **Status:** todo (ask-first gate). **Dep:** T21, T22. License + corpus provenance verified (2026-07-12).
+
+### Task T34: Document update/upsert path (finding, logged during T17) — later
+
+**Description:** Confirmed during the T17 rebuild (2026-07-15): **no document-level update/upsert path
+exists**. The store has `upsert_chunk` (per-chunk) and `write_document` (a document's chunks, content-hash
+gated) but **no delete-by-document**. On a document *change* the content hash changes → new `chunk_id`s →
+`write_document` upserts the new chunks while the **old chunks orphan** (and their graph nodes + index
+entries with them). This delete-and-re-chunk route is the only way a document is ever chunked more than
+once, and it is what makes the "chunk once, persist, never recompute" ingestion lifecycle complete.
+
+**Scope (when built, not now):** on a changed document, delete all existing chunks for that `source_doc_id`
+(and their graph nodes and hybrid-index entries), then re-chunk and re-insert from scratch. Touches
+chunking (T17), the chunk write/store (T20, ArcadeDB `store/`), and the graph layer (T25). Needs a
+delete-by-`source_doc_id` on the store seam + graph, wired into a document-update entry point.
+
+**Status:** todo (finding — not a T17 blocker; makes the ingestion lifecycle complete). **Dep:** T17, T20, T25.
 
 ### Task T-CHK: RLM chunker degenerate-split fix (T17 bug) — ask-first
 

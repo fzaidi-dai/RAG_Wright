@@ -1,24 +1,35 @@
 """RLM chunking capability (FR-I.1): a parsed document -> coherent, capped, summarized chunks.
 
-Applies the RLM method (FR-C.10, `rlm_method`): the whole parsed document is loaded into the
-interpreter (not bounded by a context window), sliced along topic/section/chapter boundaries in
-code, and each slice is dispatched to a summarizer. Boundaries and `chunk_id`s are computed
-deterministically from the document's section structure plus a ~20,000-token cap, so identical input
-yields identical boundaries and ids across runs; summaries come from the model-profile seam under
-structured output / temperature zero, also deterministic. Chunking is content-hash gated: an
-unchanged document is not re-chunked.
+Chunk boundaries are decided by an **LLM exploring the document** (the RLM machinery, T15): a strong
+model reads the parsed document's structure, greps for structural markers, examines section sizes, and
+returns semantically coherent boundary spans over the document's items. This is the capability, and it is
+mandatory — no fixed-size chunking, ever (SPEC): abrupt fixed-size cuts destroy clause-level retrieval,
+and the LLM-found semantic boundary is what prevents that. Recursion is available-when-warranted (a
+section too large to judge in one pass may be decomposed further) but is not required of chunking; that
+is intrinsic to synthesis (T28) and the RLM method, not chunking (ADR-0019).
 
-The summarizer sits behind a `Summarizer` seam so the deterministic slice/gate logic is tested
-hermetically with a stub, and the real (model-calling) summarizer is exercised opt-in. Grounded on
-`ChunkId` (T1), the parsing capability (T16), and the model-profile seam (T11).
+Boundary discovery does not need to be reproducible: ingestion chunks a document once and persists the
+result; retrieval never re-chunks. Only a document *change* re-chunks (a delete-and-re-chunk, task T34).
+Stability of `chunk_id` comes from persistence, not from a repeatable algorithm.
+
+The layer that runs **after** boundaries are chosen is deterministic given those boundaries and lives in
+a separate function (`_finalize_chunks`): it joins each span's items, enforces the token cap, applies the
+minimum-size floor and tiny-fragment merge (T-CHK — an LLM can just as easily return a boundary around a
+lone heading), computes `chunk_id`, and validates. Summaries come from a `Summarizer` seam, filled
+concurrently (a flat map, the right shape for independent summaries). Both the boundary discoverer and the
+summarizer sit behind seams so the deterministic layer is tested hermetically with stubs and the real
+(model-calling) implementations are exercised opt-in.
 """
 
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
 from rag_wright.capabilities.parsing import ParsedDocument, load_document
@@ -26,23 +37,22 @@ from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
+from rag_wright.skills.rlm.agent import build_rlm_agent
 
 DEFAULT_TOKEN_CAP = 20_000
 DEFAULT_SUMMARY_CONCURRENCY = 8  # in-flight summary calls (backpressure); summaries are network-bound
-_HEADER_LABELS = ("section_header", "title")  # a heading is a candidate section boundary
 _SUMMARIZE_PROMPT = "Summarize this contract chunk in one or two sentences, factually:"
 
-# Minimum chunk size floor (~250 tokens, T-CHK). A header only STARTS a new chunk once the current
-# chunk meets this floor; below-floor sections fold into their neighbour, so a document whose parser
-# over-detected headings (e.g. an OCR'd contract where every numbered clause is a level-1 heading) is
-# not shattered into tiny fragments. The floor coalesces boundaries within a parent section; it never
-# splits a subsection away from its parent (deeper headings keep accumulating). Tunable.
+# Minimum chunk size floor (~250 tokens, T-CHK). Applied in `_finalize_chunks` over the DISCOVERER's
+# spans: an LLM boundary discoverer can just as easily emit a boundary around a lone heading or a
+# two-token fragment as the old mechanical splitter could, so below-floor spans fold into a neighbour and
+# heading-only fragments are rejected. The floor coalesces adjacent spans; it never splits.
 MIN_CHUNK_CHARS = 1000
 _MIN_NONEMPTY_CHARS = 20  # a chunk shorter than this is degenerate (heading-only); never emitted
 
 
 class BoundaryValidationError(ValueError):
-    """Raised when produced chunks violate a boundary invariant (cap, uniqueness, ordering)."""
+    """Raised when produced chunks violate a boundary invariant (cap, uniqueness, ordering, coverage)."""
 
 
 class Chunk(BaseModel):
@@ -68,6 +78,117 @@ class ChunkManifest(BaseModel):
     chunks: list[Chunk] = Field(default_factory=list)
 
 
+class BoundarySpan(BaseModel):
+    """One candidate chunk as an inclusive item-index range over the parsed document's `texts`.
+
+    Spans-over-items is what makes "not fixed-size" structural rather than asserted: a chunk is always a
+    contiguous run of the document's own structural items, never an arbitrary character interval. The
+    discoverer returns a partition of the document (contiguous, gap-free, covering every item)."""
+
+    model_config = {"frozen": True}
+
+    start_index: int
+    end_index: int  # inclusive
+
+
+@runtime_checkable
+class BoundaryDiscoverer(Protocol):
+    """The semantic boundary-discovery seam: decide chunk boundaries as a partition of item-index spans."""
+
+    def discover(self, document) -> list[BoundarySpan]: ...
+
+
+# --- the real, LLM-driven boundary discoverer (opt-in / live) ------------------------------------
+
+_DISCOVERY_INSTRUCTIONS = (
+    "You are given a parsed legal document as a list of structural items (index, label, level, character "
+    "length, and a short preview). Partition it into semantically coherent chunks by grouping CONTIGUOUS "
+    "items so that each chunk is one coherent unit (a clause, a section, a related run) and no chunk "
+    "exceeds ~{cap} characters. Never split a single coherent clause across two chunks, and never cut at a "
+    "fixed size. Use the peek(index) tool to read an item's full text when the preview is not enough. "
+    "Return ONLY a JSON array of the boundaries as objects {{\"start_index\": i, \"end_index\": j}} "
+    "(inclusive, contiguous, covering every item from 0 to the last)."
+)
+
+
+def _item_view(document) -> list[dict]:
+    """A compact structural view of the document for the model to explore (full text stays behind peek)."""
+    view: list[dict] = []
+    for i, item in enumerate(document.texts):
+        text = (getattr(item, "text", "") or "").strip()
+        view.append(
+            {
+                "index": i,
+                "label": str(getattr(item, "label", "")),
+                "level": getattr(item, "level", None),
+                "len": len(text),
+                "preview": text[:80],
+            }
+        )
+    return view
+
+
+def _extract_spans(text: str) -> list[BoundarySpan]:
+    """Parse the last JSON array of {start_index, end_index} objects from the model's final output."""
+    end = text.rfind("]")
+    start = text.rfind("[", 0, end)
+    if start == -1 or end == -1:
+        raise BoundaryValidationError("boundary discoverer returned no JSON span array")
+    raw = json.loads(text[start : end + 1])
+    return [BoundarySpan(start_index=int(o["start_index"]), end_index=int(o["end_index"])) for o in raw]
+
+
+class SeamBoundaryDiscoverer:
+    """The real discoverer: a strong model explores the document via the RLM machinery and returns spans.
+
+    Uses the STRUCTURED_REASONING role (deepseek-v4-pro, the quality-sensitive model) through the T15
+    `build_rlm_agent` machinery: the document's structural view is handed to the orchestrator, which may
+    `peek()` at item text and (for a section too large to judge in one pass) recurse via the sub-agents —
+    available-when-warranted, not forced. It returns a partition of boundary spans.
+    """
+
+    def __init__(self, model: object = None, *, token_cap: int = DEFAULT_TOKEN_CAP) -> None:
+        # `model` is a model id (str) resolved through the profile seam, or a `BaseChatModel` instance
+        # (tests inject a fake); defaults to the quality-sensitive STRUCTURED_REASONING role.
+        self._model = model if model is not None else model_for(ModelRole.STRUCTURED_REASONING)
+        self._token_cap = token_cap
+
+    def discover(self, document) -> list[BoundarySpan]:
+        view = _item_view(document)
+
+        @tool
+        def peek(index: int) -> str:
+            """Return the full text of the document item at the given index."""
+            if 0 <= index < len(document.texts):
+                return (getattr(document.texts[index], "text", "") or "").strip()
+            return ""
+
+        # one model across all roles (the strong reasoning model): boundary discovery is a single
+        # exploration, and a sub-agent it dispatches for an over-large section warrants the same model.
+        agent = build_rlm_agent(
+            reasoning_model=self._model, decomposer_model=self._model, worker_model=self._model,
+            tools=[peek], worker_tools=[peek],
+        )
+        instructions = _DISCOVERY_INSTRUCTIONS.format(cap=self._token_cap * 4)
+        request = f"Run this as a workflow.\n\n{instructions}\n\nDocument items (JSON):\n{json.dumps(view)}"
+        result = agent.invoke({"messages": [HumanMessage(content=request)]})
+        final = _final_text(result["messages"])
+        spans = _extract_spans(final)
+        _validate_partition(spans, len(document.texts))
+        return spans
+
+
+def _final_text(messages) -> str:
+    """The model's final answer text (the last non-empty assistant message, or the last eval result)."""
+    for message in reversed(messages):
+        if isinstance(message, AIMessage) and (message.text or "").strip():
+            return message.text
+    for message in reversed(messages):
+        if isinstance(message, ToolMessage) and message.name == "eval":
+            return str(message.content)
+    return ""
+
+
 @runtime_checkable
 class Summarizer(Protocol):
     """The per-chunk summarization seam."""
@@ -80,10 +201,10 @@ class _Summary(BaseModel):
 
 
 class SeamSummarizer:
-    """The real summarizer: a structured-output call through the model-profile seam (deterministic).
+    """The real summarizer: a structured-output call through the model-profile seam.
 
     Uses the SUMMARIZATION role (a smaller model, FR-I.6). Structured output plus the seam's
-    temperature-zero base make the summary deterministic.
+    temperature-zero base keep summaries stable per call.
     """
 
     def __init__(self, model_id: str | None = None) -> None:
@@ -95,12 +216,12 @@ class SeamSummarizer:
 
 
 def _estimate_tokens(text: str) -> int:
-    """A deterministic, tokenizer-free token estimate (~4 chars/token)."""
+    """A tokenizer-free token estimate (~4 chars/token)."""
     return max(1, len(text) // 4)
 
 
 def _hard_split(text: str, token_cap: int) -> list[str]:
-    """Split text that alone exceeds the cap into <= cap-sized pieces (deterministic, by chars)."""
+    """Split text that alone exceeds the cap into <= cap-sized pieces (by chars)."""
     cap_chars = token_cap * 4
     return [text[i : i + cap_chars] for i in range(0, len(text), cap_chars)]
 
@@ -108,76 +229,79 @@ def _hard_split(text: str, token_cap: int) -> list[str]:
 _SEP = "\n\n"
 
 
-def _split_into_chunks(document, token_cap: int) -> list[str]:
-    """Slice the parsed document into coherent, capped chunk texts (deterministic, code-side).
+def _validate_partition(spans: list[BoundarySpan], n_items: int) -> None:
+    """The discoverer must return a contiguous, gap-free partition covering every item (no lost text)."""
+    if n_items == 0:
+        return
+    if not spans:
+        raise BoundaryValidationError("boundary discoverer returned no spans")
+    ordered = sorted(spans, key=lambda s: s.start_index)
+    if ordered[0].start_index != 0 or ordered[-1].end_index != n_items - 1:
+        raise BoundaryValidationError("boundary spans do not cover the whole document")
+    for prev, nxt in zip(ordered, ordered[1:]):
+        if nxt.start_index != prev.end_index + 1:
+            raise BoundaryValidationError("boundary spans overlap or leave a gap")
+        if prev.end_index < prev.start_index:
+            raise BoundaryValidationError("boundary span end precedes its start")
 
-    A new chunk starts at a section heading only once the current chunk has reached the size floor and
-    the heading is a *major* boundary (same or higher level than the section the chunk opened with);
-    a deeper subsection heading, or a heading reached before the floor, keeps accumulating, so tiny
-    sections fold into their neighbour within the same parent rather than becoming their own fragment
-    (T-CHK). The cap always wins: a chunk is flushed when the token cap would be exceeded, and a single
-    over-cap item is hard-split. The cap is checked against the actual *joined* length so no chunk
-    slips over through per-item rounding. Any residual below-floor chunk is merged post hoc.
-    """
-    cap_chars = token_cap * 4  # _estimate_tokens is len // 4, so the cap in characters
+
+def _join_span(document, span: BoundarySpan) -> str:
+    """Join the non-empty text of the items a span covers (the deterministic-given-boundaries join)."""
+    parts = []
+    for i in range(span.start_index, span.end_index + 1):
+        text = (getattr(document.texts[i], "text", "") or "").strip()
+        if text:
+            parts.append(text)
+    return _SEP.join(parts)
+
+
+def _finalize_chunks(document, spans: list[BoundarySpan], token_cap: int) -> list[str]:
+    """Deterministic given the boundaries: join each span, enforce the cap, apply the T-CHK floor/merge.
+
+    Runs after the discoverer chooses boundaries and is independent of how they were found. The token cap
+    always wins (an over-cap span is hard-split); below-floor spans fold into a neighbour so a discoverer
+    that returned a lone-heading or two-token span does not become a tiny fragment (T-CHK)."""
+    cap_chars = token_cap * 4
     floor = min(MIN_CHUNK_CHARS, cap_chars)  # a tiny cap (tests) cannot demand a larger floor
-    chunks: list[str] = []
-    buffer: list[str] = []
-    buffer_len = 0  # len(_SEP.join(buffer))
-    section_level: int | None = None  # level of the heading that opened the current chunk's section
-
-    def flush() -> None:
-        nonlocal buffer, buffer_len, section_level
-        if buffer:
-            chunks.append(_SEP.join(buffer))
-            buffer, buffer_len, section_level = [], 0, None
-
-    for item in document.texts:
-        text = (getattr(item, "text", "") or "").strip()
+    texts: list[str] = []
+    for span in spans:
+        text = _join_span(document, span)
         if not text:
             continue
-        label = str(getattr(item, "label", "")).lower()
-        is_header = any(h in label for h in _HEADER_LABELS)
-        level = getattr(item, "level", None) if is_header else None
-
-        if is_header and buffer and buffer_len >= floor:
-            major = section_level is None or level is None or level <= section_level
-            if major:  # enough content AND a same-or-higher-level boundary -> a real section break
-                flush()
-
-        if len(text) > cap_chars:  # a single item larger than the cap
-            flush()
-            chunks.extend(_hard_split(text, token_cap))
-            continue
-
-        added = (len(_SEP) if buffer else 0) + len(text)
-        if buffer and buffer_len + added > cap_chars:  # cap boundary (measured on the joined text)
-            flush()
-            added = len(text)
-        if not buffer and is_header:  # this heading opens a new chunk's section
-            section_level = level
-        buffer.append(text)
-        buffer_len += added
-
-    flush()
-    return _merge_below_floor(chunks, floor, cap_chars)
+        if len(text) > cap_chars:  # cap safety net: a single over-cap span is hard-split
+            texts.extend(_hard_split(text, token_cap))
+        else:
+            texts.append(text)
+    return _merge_below_floor(texts, floor, cap_chars)
 
 
 def _merge_below_floor(chunks: list[str], floor: int, cap_chars: int) -> list[str]:
-    """Fold any residual below-floor chunk into an adjacent chunk (backward first, then the first
-    chunk forward), never exceeding the cap. Eliminates heading-only/near-empty fragments left by a
-    cap-forced flush or a tiny trailing section; a lone chunk is left as-is (a short document)."""
+    """Fold any below-floor chunk into an adjacent chunk (backward first, then the first chunk forward),
+    never exceeding the cap. Eliminates heading-only/near-empty fragments; a lone chunk is left as-is."""
     if len(chunks) <= 1:
         return chunks
     merged: list[str] = []
     for c in chunks:
         if merged and len(c) < floor and len(merged[-1]) + len(_SEP) + len(c) <= cap_chars:
-            merged[-1] = merged[-1] + _SEP + c  # fold backward into the previous chunk (same neighbour)
+            merged[-1] = merged[-1] + _SEP + c  # fold backward into the previous chunk
         else:
             merged.append(c)
     if len(merged) > 1 and len(merged[0]) < floor and len(merged[0]) + len(_SEP) + len(merged[1]) <= cap_chars:
         merged[1] = merged[0] + _SEP + merged[1]  # a below-floor first chunk folds forward
         merged.pop(0)
+    # a below-floor LAST chunk that could not fold backward within the cap (a small residual after a full
+    # chunk): fold it back if it fits, else rebalance the pair into two >= floor halves, so the floor
+    # holds even when a discoverer emits a tiny trailing span (T-CHK). Only when the floor is genuinely
+    # below the cap (real usage: floor 1000 << cap); a degenerate floor==cap leaves a cap-forced residual.
+    if len(merged) > 1 and len(merged[-1]) < floor and floor < cap_chars:
+        tail = merged.pop()
+        combined = merged[-1] + _SEP + tail
+        if len(combined) <= cap_chars:
+            merged[-1] = combined
+        else:
+            half = len(combined) // 2  # both halves land in [floor, cap] since floor < cap and combined > cap
+            merged[-1] = combined[:half]
+            merged.append(combined[half:])
     return merged
 
 
@@ -202,10 +326,9 @@ async def _summarize_all(
     texts: list[str], summarizer: Summarizer, max_concurrency: int
 ) -> list[str]:
     """Summarize chunk texts concurrently, bounded by a semaphore (the embedding capability's
-    async+backpressure pattern, T19). Each blocking `summarize()` runs in a thread (`asyncio.to_thread`)
-    so the network-bound calls overlap; the semaphore caps in-flight requests. `gather` preserves order,
-    so each summary lines up with its text and chunking stays deterministic (each call is independent
-    of concurrency)."""
+    async+backpressure pattern, T19). Each blocking `summarize()` runs in a thread so the network-bound
+    calls overlap; the semaphore caps in-flight requests. `gather` preserves order, so each summary lines
+    up with its text. Summarization is a flat map (independent per chunk), which is the right shape."""
     semaphore = asyncio.Semaphore(max_concurrency)
 
     async def _one(text: str) -> str:
@@ -220,14 +343,16 @@ def chunk(
     *,
     summarizer: Summarizer,
     cache_dir: Path,
+    discoverer: Optional[BoundaryDiscoverer] = None,
     token_cap: int = DEFAULT_TOKEN_CAP,
     max_concurrency: int = DEFAULT_SUMMARY_CONCURRENCY,
 ) -> ChunkManifest:
-    """Chunk a parsed document into a `ChunkManifest`, content-hash gated (chunked once).
+    """Chunk a parsed document into a `ChunkManifest`, content-hash gated (chunked once, then persisted).
 
-    If a manifest for this document's content hash already exists it is reused (no re-chunk);
-    otherwise the parsed document is sliced, each slice is summarized (concurrently, bounded by
-    `max_concurrency`), boundaries are validated, and the manifest is cached.
+    An LLM `discoverer` chooses the semantic boundaries (defaults to the live `SeamBoundaryDiscoverer`;
+    hermetic tests inject a stub); `_finalize_chunks` turns its spans into capped, floor-respecting chunk
+    texts; each is summarized concurrently; boundaries are validated; the manifest is cached. If a manifest
+    for this document's content hash already exists it is reused (the gate; no re-chunk, no LLM call).
     """
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / f"{parsed.source_doc_id}.{parsed.content_hash[:16]}.chunks.json"
@@ -235,7 +360,10 @@ def chunk(
         return ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
 
     document = load_document(parsed)
-    texts = _split_into_chunks(document, token_cap)
+    discoverer = discoverer if discoverer is not None else SeamBoundaryDiscoverer(token_cap=token_cap)
+    spans = discoverer.discover(document)
+    _validate_partition(spans, len(document.texts))
+    texts = _finalize_chunks(document, spans, token_cap)
     summaries = asyncio.run(_summarize_all(texts, summarizer, max_concurrency))
     chunks = [
         Chunk(

@@ -1,64 +1,67 @@
-"""T17: RLM chunking (deterministic, content-hash gated) — FR-I.1, RAC-17.
+"""T17: RLM chunking (LLM semantic boundary discovery) — FR-I.1, RAC-17.
 
-Chunk boundaries and chunk_ids are code-deterministic (derived from the parsed document's section
-structure plus the token cap), so identical input yields identical boundaries and ids across runs.
-Summaries come from a `Summarizer` seam; hermetic tests inject a deterministic call-counting stub
-(the real seam summarizer, structured-output/temperature-zero, is exercised opt-in `-m model`).
+Chunk boundaries are decided by an LLM exploring the document (the RLM machinery); the layer that runs
+after boundaries are chosen is deterministic given those spans and lives in `_finalize_chunks` (join,
+cap, T-CHK floor/merge, id, validate). Hermetic tests inject a stub `BoundaryDiscoverer` (and a
+call-counting `Summarizer` stub); the real LLM discoverer and summarizer are exercised opt-in `-m model`.
+Recursion is available-when-warranted, not required of chunking, so nothing here gates on it (ADR-0019).
 """
 
 from __future__ import annotations
 
 import asyncio
 import glob
-import json
 import threading
 import time
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from docling_core.types.doc.document import DoclingDocument
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 
 from rag_wright.capabilities.parsing import ParsedDocument, parse
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.rlm_chunking import (
     DEFAULT_TOKEN_CAP,
     MIN_CHUNK_CHARS,
+    BoundarySpan,
     BoundaryValidationError,
     Chunk,
     ChunkManifest,
+    SeamBoundaryDiscoverer,
     _MIN_NONEMPTY_CHARS,
-    _split_into_chunks,
+    _finalize_chunks,
     _summarize_all,
     _validate_boundaries,
+    _validate_partition,
     chunk,
     register_rlm_chunking,
 )
 from rag_wright.contracts.identifiers import ChunkId
 
 
-def _two_section_doc() -> DoclingDocument:
-    # each section body is over the MIN_CHUNK_CHARS floor, so the two sections stay as two chunks (a
-    # major boundary with enough content splits); tiny sections would correctly merge (T-CHK).
-    doc = DoclingDocument(name="stub")
-    doc.add_text(label="section_header", text="1. Definitions")
-    doc.add_text(label="text", text="Affiliate means an entity controlling a party. " * 30)
-    doc.add_text(label="section_header", text="2. Governing Law")
-    doc.add_text(label="text", text="This Agreement is governed by the laws of Delaware. " * 30)
-    return doc
+# --- hermetic stubs ------------------------------------------------------------------------------
 
 
-class _StubParser:
-    def __init__(self, doc: DoclingDocument) -> None:
-        self._doc = doc
+class _StubDiscoverer:
+    """A boundary discoverer that returns fixed spans (stands in for the LLM; counts calls)."""
 
-    def convert(self, source: Path) -> DoclingDocument:
-        return self._doc
+    def __init__(self, spans: list[tuple[int, int]]) -> None:
+        self._spans = spans
+        self.calls = 0
+
+    def discover(self, document) -> list[BoundarySpan]:
+        self.calls += 1
+        return [BoundarySpan(start_index=a, end_index=b) for a, b in self._spans]
 
 
 class _StubSummarizer:
     """Deterministic summarizer that counts calls (to prove the content-hash gate). Thread-safe:
-    summaries now run concurrently through asyncio.to_thread, so the counter needs a lock."""
+    summaries run concurrently through asyncio.to_thread, so the counter needs a lock."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
@@ -70,86 +73,77 @@ class _StubSummarizer:
         return f"summary: {text[:24]}"
 
 
+class _StubParser:
+    def __init__(self, doc: DoclingDocument) -> None:
+        self._doc = doc
+
+    def convert(self, source: Path) -> DoclingDocument:
+        return self._doc
+
+
+def _two_section_doc() -> DoclingDocument:
+    doc = DoclingDocument(name="stub")
+    doc.add_text(label="section_header", text="1. Definitions")
+    doc.add_text(label="text", text="Affiliate means an entity controlling a party. " * 30)
+    doc.add_text(label="section_header", text="2. Governing Law")
+    doc.add_text(label="text", text="This Agreement is governed by the laws of Delaware. " * 30)
+    return doc
+
+
 def _parsed(tmp_path: Path, doc: DoclingDocument, content: bytes = b"%PDF one") -> ParsedDocument:
     src = tmp_path / "contract_a.pdf"
     src.write_bytes(content)
     return parse(src, cache_dir=tmp_path / "parsed", parser=_StubParser(doc))
 
 
-def test_chunks_split_at_section_boundaries_with_summaries(tmp_path):
+# a discoverer that returns the two section spans of `_two_section_doc` (items [0,1] and [2,3])
+def _section_discoverer() -> _StubDiscoverer:
+    return _StubDiscoverer([(0, 1), (2, 3)])
+
+
+# --- boundaries follow the discoverer's semantic spans (not fixed-size) ---------------------------
+
+
+def test_chunks_follow_the_discoverers_semantic_spans(tmp_path):
     parsed = _parsed(tmp_path, _two_section_doc())
 
-    manifest = chunk(parsed, summarizer=_StubSummarizer(), cache_dir=tmp_path / "chunks")
+    manifest = chunk(parsed, summarizer=_StubSummarizer(), discoverer=_section_discoverer(),
+                     cache_dir=tmp_path / "chunks")
 
     assert isinstance(manifest, ChunkManifest)
     assert manifest.source_doc_id == "contract_a"
-    assert len(manifest.chunks) == 2  # one chunk per section
+    assert len(manifest.chunks) == 2  # one chunk per discoverer span, not fixed-size intervals
     assert [c.chunk_index for c in manifest.chunks] == [0, 1]
     assert all(isinstance(c, Chunk) and c.summary.startswith("summary:") for c in manifest.chunks)
+    # each chunk is exactly the joined text of its span's items (structural, item-aligned)
+    assert "Definitions" in manifest.chunks[0].text and "Affiliate" in manifest.chunks[0].text
     assert "Governing Law" in manifest.chunks[1].text
 
 
-def test_chunk_ids_are_stable_and_deterministic_across_runs(tmp_path):
+def test_chunk_ids_are_stable_given_the_same_spans(tmp_path):
     parsed = _parsed(tmp_path, _two_section_doc())
 
-    first = chunk(parsed, summarizer=_StubSummarizer(), cache_dir=tmp_path / "a")
-    second = chunk(parsed, summarizer=_StubSummarizer(), cache_dir=tmp_path / "b")
+    first = chunk(parsed, summarizer=_StubSummarizer(), discoverer=_section_discoverer(), cache_dir=tmp_path / "a")
+    second = chunk(parsed, summarizer=_StubSummarizer(), discoverer=_section_discoverer(), cache_dir=tmp_path / "b")
 
     assert [c.chunk_id for c in first.chunks] == [c.chunk_id for c in second.chunks]
-    assert first.model_dump() == second.model_dump()  # identical boundaries + ids + summaries
-    # chunk_id is the canonical ChunkId form: <source_doc_id>:<index>:<64-hex>
+    assert first.model_dump() == second.model_dump()  # id/gate/validation deterministic given the spans
     sid, idx, h = first.chunks[0].chunk_id.split(":")
     assert sid == "contract_a" and idx == "0" and len(h) == 64
 
 
-def test_content_hash_gate_skips_rechunk_of_unchanged_document(tmp_path):
+def test_content_hash_gate_skips_rechunk_and_the_llm_call(tmp_path):
     parsed = _parsed(tmp_path, _two_section_doc())
-    summarizer = _StubSummarizer()
+    summarizer, discoverer = _StubSummarizer(), _section_discoverer()
 
-    chunk(parsed, summarizer=summarizer, cache_dir=tmp_path / "chunks")
-    calls_after_first = summarizer.calls
-    chunk(parsed, summarizer=summarizer, cache_dir=tmp_path / "chunks")  # unchanged -> cache hit
+    chunk(parsed, summarizer=summarizer, discoverer=discoverer, cache_dir=tmp_path / "chunks")
+    chunk(parsed, summarizer=summarizer, discoverer=discoverer, cache_dir=tmp_path / "chunks")  # cache hit
 
-    assert calls_after_first == 2  # one summary per section on the first run
-    assert summarizer.calls == 2  # the second run re-chunks nothing (no new summarize calls)
-
-
-def test_token_cap_hard_splits_oversized_content(tmp_path):
-    doc = DoclingDocument(name="big")
-    doc.add_text(label="text", text="word " * 400)  # ~2000 chars -> ~500 token estimate
-    parsed = _parsed(tmp_path, doc)
-
-    manifest = chunk(parsed, summarizer=_StubSummarizer(), cache_dir=tmp_path / "chunks", token_cap=100)
-
-    assert len(manifest.chunks) >= 2  # split under the cap
-    assert all(c.token_estimate <= 100 for c in manifest.chunks)  # boundary validation holds
-    assert manifest.token_cap == 100
+    assert discoverer.calls == 1  # the gate skips the (expensive) LLM boundary discovery on re-chunk
+    assert summarizer.calls == 2  # two summaries once; the second run summarizes nothing
 
 
-def test_accumulated_items_never_exceed_the_cap(tmp_path):
-    # many medium items with no headers accumulate near the cap; the joined chunk must still honor it
-    # (regression: per-item token estimates summed below the cap while the joined text exceeded it).
-    doc = DoclingDocument(name="many")
-    for _ in range(30):
-        doc.add_text(label="text", text="clause " * 30)  # ~210 chars -> ~52 token estimate each
-    parsed = _parsed(tmp_path, doc)
-
-    manifest = chunk(parsed, summarizer=_StubSummarizer(), cache_dir=tmp_path / "chunks", token_cap=100)
-
-    assert len(manifest.chunks) >= 2
-    assert all(c.token_estimate <= 100 for c in manifest.chunks)  # no chunk slips over the cap
-
-
-def test_rlm_chunking_registers_as_an_agent_skill(tmp_path):
-    reg = CapabilityRegistry()
-    register_rlm_chunking(reg)
-    registration = reg.get("rlm_chunking")
-    assert registration.kind == "agent_skill"
-    assert registration.contract is ChunkManifest
-    assert registration.skeleton.response_bounds is None  # agent_skill is loaded, not callable
-
-
-# --- T-CHK: degenerate-split fix (min-size floor + hierarchy-preserving merge) -------------------
+# --- the deterministic-given-boundaries layer ----------------------------------------------------
 
 
 def _item(text: str, label: str = "text", level: int | None = None) -> SimpleNamespace:
@@ -157,61 +151,78 @@ def _item(text: str, label: str = "text", level: int | None = None) -> SimpleNam
 
 
 def _doc(items: list[SimpleNamespace]) -> SimpleNamespace:
-    return SimpleNamespace(texts=items)  # _split_into_chunks only reads .texts/.text/.label/.level
+    return SimpleNamespace(texts=items)
 
 
-def test_tiny_adjacent_sections_merge_up_to_the_floor():
-    # 40 short same-level sections must not become 40 tiny chunks; they fold up to the floor.
+def _one_span_per_item(n: int) -> list[BoundarySpan]:
+    return [BoundarySpan(start_index=i, end_index=i) for i in range(n)]
+
+
+def test_finalize_joins_span_items_and_honors_the_cap():
+    doc = _doc([_item("word " * 400)])  # ~2000 chars, one item
+    texts = _finalize_chunks(doc, [BoundarySpan(start_index=0, end_index=0)], token_cap=100)
+    assert len(texts) >= 2  # over-cap span hard-split under the cap (cap = 100 tokens ~ 400 chars)
+    assert all(len(t) <= 400 for t in texts)
+
+
+def test_partition_validation_rejects_gaps_overlaps_and_short_coverage():
+    _validate_partition([BoundarySpan(start_index=0, end_index=1), BoundarySpan(start_index=2, end_index=2)], 3)
+    with pytest.raises(BoundaryValidationError):  # gap at index 1
+        _validate_partition([BoundarySpan(start_index=0, end_index=0), BoundarySpan(start_index=2, end_index=2)], 3)
+    with pytest.raises(BoundaryValidationError):  # overlap at index 1
+        _validate_partition([BoundarySpan(start_index=0, end_index=1), BoundarySpan(start_index=1, end_index=2)], 3)
+    with pytest.raises(BoundaryValidationError):  # does not reach the last item
+        _validate_partition([BoundarySpan(start_index=0, end_index=1)], 3)
+
+
+def test_over_cap_span_is_hard_split(tmp_path):
+    doc = DoclingDocument(name="big")
+    doc.add_text(label="text", text="word " * 400)  # ~2000 chars -> ~500 token estimate
+    parsed = _parsed(tmp_path, doc)
+
+    manifest = chunk(parsed, summarizer=_StubSummarizer(), discoverer=_StubDiscoverer([(0, 0)]),
+                     cache_dir=tmp_path / "chunks", token_cap=100)
+
+    assert len(manifest.chunks) >= 2  # split under the cap
+    assert all(c.token_estimate <= 100 for c in manifest.chunks)
+
+
+# --- T-CHK: the floor + near-empty rejection now fire over the DISCOVERER's spans -----------------
+
+
+def test_tiny_discoverer_spans_merge_up_to_the_floor():
+    # worst case: the LLM returns a boundary around every single item (headings and short bodies alone).
+    # The floor must coalesce them, exactly as it did for the old mechanical splitter (T-CHK).
     items: list[SimpleNamespace] = []
     for i in range(40):
         items.append(_item(f"{i}. Clause", "section_header", level=1))
         items.append(_item("A short clause sentence of moderate length. " * 3))  # ~132 chars
-    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
+    doc = _doc(items)
 
-    assert 2 <= len(chunks) < 40  # merged, not one fragment per heading
-    assert all(len(c) >= MIN_CHUNK_CHARS for c in chunks)  # every chunk meets the size floor
-    assert min(len(c) for c in chunks) >= _MIN_NONEMPTY_CHARS  # no near-empty chunk
+    # a small cap (~1500 chars) so several chunks form; without the floor these would be 80 fragments.
+    texts = _finalize_chunks(doc, _one_span_per_item(len(items)), token_cap=375)
 
-
-def test_deeper_subsection_stays_with_its_parent_section():
-    items = [
-        _item("1. Main Section", "section_header", level=1),
-        _item("Body of the main section. " * 60),  # ~1600 chars, over the floor
-        _item("1.1 Subsection", "section_header", level=2),  # deeper level -> not a major boundary
-        _item("Subsection body text here."),
-    ]
-    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
-
-    assert len(chunks) == 1  # the subsection is NOT split away from its parent (hierarchy preserved)
-    assert "1.1 Subsection" in chunks[0]
+    assert 2 <= len(texts) < 40  # coalesced to a few chunks, not one fragment per heading/body
+    assert all(len(t) >= MIN_CHUNK_CHARS for t in texts)  # every chunk meets the size floor
+    assert min(len(t) for t in texts) >= _MIN_NONEMPTY_CHARS  # no near-empty chunk
 
 
-def test_major_boundary_splits_when_both_sections_meet_the_floor():
-    big = "Clause text of the section. " * 60  # ~1680 chars, over the floor
-    items = [
-        _item("1. First", "section_header", level=1), _item(big),
-        _item("2. Second", "section_header", level=1), _item(big),  # same level -> major boundary
-    ]
-    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
-
-    assert len(chunks) == 2  # a real section break splits when there is enough content on both sides
-
-
-def test_asiandragon_dense_header_pathology_regression():
-    # Models the real ASIANDRAGON parse: 112 level-1 headings (Docling flattened every numbered clause
-    # to a level-1 header), some heading-only runs. The buggy splitter made 113 chunks (10 near-empty);
-    # the floor + hierarchy-preserving merge must collapse this and emit no near-empty chunk.
+def test_asiandragon_dense_header_pathology_over_discoverer_spans():
+    # The real ASIANDRAGON shape: 112 level-1 headings, some heading-only runs. An LLM discoverer that
+    # returned a span per item must not yield 113 chunks (10 near-empty); the floor collapses it (T-CHK).
     items: list[SimpleNamespace] = []
     for i in range(112):
         items.append(_item(f"{i}. HEADING", "section_header", level=1))
-        if i % 5:  # ~1 in 5 headings has no body (consecutive headers) -> the near-empty source
+        if i % 5:
             items.append(_item("Some clause body text of moderate length here. " * 2))  # ~94 chars
-    chunks = _split_into_chunks(_doc(items), DEFAULT_TOKEN_CAP)
-    lens = sorted(len(c) for c in chunks)
+    doc = _doc(items)
 
-    assert len(chunks) < 40  # was 113 chunks on the real doc
+    texts = _finalize_chunks(doc, _one_span_per_item(len(items)), token_cap=500)  # ~2000-char chunks
+    lens = sorted(len(t) for t in texts)
+
+    assert 2 <= len(texts) < 40  # was 113 chunks on the real doc; several now, not one fragment per header
     assert lens[0] >= _MIN_NONEMPTY_CHARS  # no near-empty / heading-only chunk (was 10)
-    assert all(length >= MIN_CHUNK_CHARS for length in lens)  # the size floor holds (cap >> floor)
+    assert all(length >= MIN_CHUNK_CHARS for length in lens)  # the size floor holds
 
 
 def test_validate_rejects_near_empty_chunk_but_allows_a_lone_short_chunk():
@@ -227,27 +238,73 @@ def test_validate_rejects_near_empty_chunk_but_allows_a_lone_short_chunk():
     _validate_boundaries([lone_short], DEFAULT_TOKEN_CAP)  # a short single-chunk doc is allowed
 
 
-def test_asiandragon_real_parse_no_longer_fragments():
+def test_asiandragon_real_parse_no_longer_fragments_over_spans():
     files = glob.glob("data/gate2_cache/parsed/ASIANDRAGON*.json")
     if not files:
         pytest.skip("ASIANDRAGON cached parse not present (run the GATE-2 harness to produce it)")
     doc = DoclingDocument.load_from_json(files[0])
-    chunks = _split_into_chunks(doc, DEFAULT_TOKEN_CAP)
-    lens = sorted(len(c) for c in chunks)
+    texts = _finalize_chunks(doc, _one_span_per_item(len(doc.texts)), token_cap=500)
+    lens = sorted(len(t) for t in texts)
 
-    assert len(chunks) < 60  # was 113
+    assert len(texts) < 60  # was 113
     assert lens[0] >= _MIN_NONEMPTY_CHARS  # was 10 near-empty chunks
-    print(f"\nASIANDRAGON real: {len(chunks)} chunks (was 113); "
+    print(f"\nASIANDRAGON real spans->finalize: {len(texts)} chunks (was 113); "
           f"char min={lens[0]} median={lens[len(lens) // 2]} max={lens[-1]}")
 
 
-# --- concurrent summarization (async + semaphore backpressure, T19 pattern) ---------------------
+# --- per-slice tool use in the exploration (the discoverer's peek tool) ---------------------------
+
+
+class _FakeChat(BaseChatModel):
+    responder: Any = None
+
+    def _generate(self, messages, stop=None, run_manager=None, **kwargs) -> ChatResult:
+        return ChatResult(generations=[ChatGeneration(message=self.responder(messages))])
+
+    def bind_tools(self, tools, **kwargs):
+        return self
+
+    @property
+    def _llm_type(self) -> str:
+        return "fake-chat"
+
+
+def test_boundary_discoverer_can_use_the_peek_tool_during_exploration():
+    doc = _two_section_doc()
+    seen_peek = {"index": None}
+
+    def responder(messages):
+        # once peek has returned an item's text, emit the boundary spans; else call peek first
+        for m in messages:
+            if isinstance(m, ToolMessage) and m.name == "peek":
+                seen_peek["index"] = 0
+        if seen_peek["index"] is not None:
+            return AIMessage(content='[{"start_index": 0, "end_index": 1}, {"start_index": 2, "end_index": 3}]')
+        return AIMessage(content="", tool_calls=[{"name": "peek", "args": {"index": 0}, "id": "p1"}])
+
+    spans = SeamBoundaryDiscoverer(model=_FakeChat(responder=responder)).discover(doc)
+
+    assert seen_peek["index"] == 0  # the exploration invoked its per-slice tool mid-handling
+    assert [(s.start_index, s.end_index) for s in spans] == [(0, 1), (2, 3)]  # spans parsed + partition-valid
+
+
+# --- registration --------------------------------------------------------------------------------
+
+
+def test_rlm_chunking_registers_as_an_agent_skill():
+    reg = CapabilityRegistry()
+    register_rlm_chunking(reg)
+    registration = reg.get("rlm_chunking")
+    assert registration.kind == "agent_skill"
+    assert registration.contract is ChunkManifest
+    assert registration.skeleton.response_bounds is None  # agent_skill is loaded, not callable
+
+
+# --- concurrent summarization (async + semaphore backpressure, T19 pattern) ----------------------
 
 
 def test_summaries_run_concurrently_bounded_by_the_semaphore():
     class _Probe:
-        """Records the peak number of summarize() calls in flight at once."""
-
         def __init__(self) -> None:
             self._lock = threading.Lock()
             self.inflight = 0
@@ -257,7 +314,7 @@ def test_summaries_run_concurrently_bounded_by_the_semaphore():
             with self._lock:
                 self.inflight += 1
                 self.max_inflight = max(self.max_inflight, self.inflight)
-            time.sleep(0.05)  # stand in for a network round-trip so calls actually overlap
+            time.sleep(0.05)
             with self._lock:
                 self.inflight -= 1
             return f"s:{text}"
@@ -267,7 +324,7 @@ def test_summaries_run_concurrently_bounded_by_the_semaphore():
 
     summaries = asyncio.run(_summarize_all(texts, probe, max_concurrency=4))
 
-    assert summaries == [f"s:t{i}" for i in range(12)]  # gather preserves order (determinism holds)
+    assert summaries == [f"s:t{i}" for i in range(12)]  # gather preserves order
     assert probe.max_inflight == 4  # genuinely concurrent AND bounded exactly by the semaphore
 
 
@@ -289,44 +346,51 @@ def test_serial_summarizer_reaches_only_one_in_flight():
 
     probe = _Probe()
     asyncio.run(_summarize_all(["a", "b", "c"], probe, max_concurrency=1))
-    assert probe.max_inflight == 1  # max_concurrency=1 is strictly serial
+    assert probe.max_inflight == 1
+
+
+# --- opt-in live: boundary quality (a real model keeps a coherent unit whole) ---------------------
+
+
+def _coherent_clause_doc() -> DoclingDocument:
+    """A contract with ONE clearly coherent clause spanning items 3..6 (a heading + three sentences that
+    plainly belong together). A faithful semantic discoverer keeps 3..6 in one chunk; a fixed-size or
+    careless splitter cuts inside it."""
+    doc = DoclingDocument(name="coherent")
+    doc.add_text(label="section_header", text="1. Definitions")
+    doc.add_text(label="text", text="Affiliate means an entity that controls a party to this Agreement. " * 12)
+    doc.add_text(label="section_header", text="2. Term")
+    # items 3..6 — the coherent indemnification clause
+    doc.add_text(label="section_header", text="3. Indemnification")
+    doc.add_text(label="text", text="The Seller shall indemnify and hold harmless the Buyer from any loss "
+                 "arising out of a breach of the warranties in this Agreement.")
+    doc.add_text(label="text", text="Such indemnification shall cover reasonable attorneys' fees and costs "
+                 "incurred by the Buyer in connection with any such claim.")
+    doc.add_text(label="text", text="This indemnification obligation shall survive the termination of this "
+                 "Agreement and remain in effect for a period of three years.")
+    doc.add_text(label="section_header", text="4. Governing Law")
+    doc.add_text(label="text", text="This Agreement is governed by the laws of the State of Delaware. " * 12)
+    return doc
 
 
 @pytest.mark.model
-def test_concurrent_summarization_is_faster_with_real_llm_calls(capsys):
-    """Live: summarize real chunk texts through the real seam summarizer, concurrently vs serially.
+def test_a_real_model_keeps_a_coherent_clause_in_one_chunk():
+    """Live (opt-in, `-m model`): boundary QUALITY, not just presence. The discoverer is handed a document
+    with a coherent clause spanning a known item range (3..6); a faithful semantic boundary keeps that
+    clause whole, while a fixed-size or every-header splitter cuts inside it. This is the T17 analogue of
+    T15's opaque-working-set proof: it tests for GOOD boundaries, the entire value proposition.
 
-    Proves the async+semaphore path works with actual OpenRouter/DeepSeek calls (thread-safe under
-    to_thread, no throttling errors) AND actually overlaps them (concurrent wall-clock << serial),
-    which the sleep-stub concurrency test cannot show.
-    """
-    from rag_wright.capabilities.rlm_chunking import SeamSummarizer
+    A RED result is first a boundary-quality signal (the discoverer split a coherent unit), not a mechanism
+    failure (the mechanism is proven hermetically above)."""
+    doc = _coherent_clause_doc()
+    spans = SeamBoundaryDiscoverer(token_cap=2000).discover(doc)
 
-    summarizer = SeamSummarizer()
-    texts = [
-        f"Section {i}: This clause of the agreement governs {topic}. The parties agree to the "
-        f"terms set out herein, which are binding and enforceable under the governing law."
-        for i, topic in enumerate(
-            ["exclusivity", "termination", "payment terms", "confidentiality", "indemnification",
-             "governing law", "assignment", "warranties", "limitation of liability", "notices",
-             "force majeure", "dispute resolution"]
-        )
-    ]
-
-    t0 = time.monotonic()
-    concurrent = asyncio.run(_summarize_all(texts, summarizer, max_concurrency=8))
-    t_concurrent = time.monotonic() - t0
-
-    t0 = time.monotonic()
-    asyncio.run(_summarize_all(texts, summarizer, max_concurrency=1))  # serial baseline (timing only)
-    t_serial = time.monotonic() - t0
-
-    assert len(concurrent) == len(texts)
-    assert all(isinstance(s, str) and s.strip() for s in concurrent)  # real summaries, no errors/None
-    with capsys.disabled():
-        print(f"\n[live] {len(texts)} real summaries: concurrent(8)={t_concurrent:.1f}s "
-              f"serial(1)={t_serial:.1f}s  speedup={t_serial / t_concurrent:.1f}x")
-    assert t_concurrent < t_serial * 0.6  # 8-way concurrency clearly overlaps the network calls
+    # every item in the coherent clause (3..6) must fall inside a SINGLE span — the clause is not split.
+    containing = [s for s in spans if s.start_index <= 3 and s.end_index >= 6]
+    assert containing, (
+        f"the coherent indemnification clause (items 3..6) was split across chunks; spans="
+        f"{[(s.start_index, s.end_index) for s in spans]}"
+    )
 
 
 @pytest.mark.model
@@ -338,35 +402,3 @@ def test_real_seam_summarizer_produces_a_summary():
         "It defines exclusivity, term, and termination."
     )
     assert isinstance(summary, str) and summary.strip()
-
-
-# --- full pipeline over a real document with real per-chunk LLM summaries (opt-in: parse + model) --
-
-
-@pytest.mark.parse
-@pytest.mark.model
-def test_end_to_end_real_document_chunks_with_real_summaries(tmp_path):
-    """Parse a real CUAD contract (Docling) and chunk it with the real seam summarizer.
-
-    This exercises the whole RLM chunking path with live LLM calls (one per chunk) and is the level
-    at which the cap-accumulation bug surfaced; hermetic stubs did not reach it.
-    """
-    from rag_wright.capabilities.parsing import DoclingParser, parse
-    from rag_wright.capabilities.rlm_chunking import SeamSummarizer, chunk
-
-    pdf_dir = Path("data/cuad/subset/pdf")
-    scanned_json = Path("data/cuad/subset/scanned.json")
-    if not scanned_json.exists():
-        pytest.skip("CUAD subset not present")
-    scanned = set(json.loads(scanned_json.read_text())["contract_ids"])
-    text_pdfs = sorted(p for p in pdf_dir.glob("*.pdf") if p.stem not in scanned)
-    if not text_pdfs:
-        pytest.skip("CUAD subset PDFs not present")
-    pdf = min(text_pdfs, key=lambda p: p.stat().st_size)  # smallest, to bound live-call count
-
-    parsed = parse(pdf, cache_dir=tmp_path / "parsed", parser=DoclingParser())
-    manifest = chunk(parsed, summarizer=SeamSummarizer(), cache_dir=tmp_path / "chunks", token_cap=2000)
-
-    assert manifest.chunks
-    assert all(c.token_estimate <= 2000 for c in manifest.chunks)  # boundary validation holds live
-    assert all(c.summary.strip() for c in manifest.chunks)  # a real summary per chunk

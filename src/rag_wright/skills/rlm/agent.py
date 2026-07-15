@@ -177,6 +177,7 @@ def build_rlm_agent(
     worker_system_prompt: str = _SLICE_WORKER_PROMPT,
     worker_tools: Sequence[Union[BaseTool, Callable[..., Any], dict[str, Any]]] = (),
     worker_skills: Sequence[str] = (),
+    tools: Sequence[Union[BaseTool, Callable[..., Any], dict[str, Any]]] = (),
     system_prompt: Optional[str] = None,
     skills: Optional[Sequence[str]] = None,
     interpreter: Optional[CodeInterpreterMiddleware] = None,
@@ -206,6 +207,7 @@ def build_rlm_agent(
     ]
     return create_deep_agent(
         model=orchestrator,
+        tools=list(tools),
         system_prompt=system_prompt if system_prompt is not None else method_prompt(),
         subagents=subagents,
         middleware=[interpreter or CodeInterpreterMiddleware(subagents=True)],
