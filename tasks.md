@@ -18,15 +18,22 @@ not this repo's.
 
 ## Last approved / next up
 
-- **NEXT UP: T23** (graph extraction) — resume the build at the graph layer (does not need ArcadeDB;
-  T25 does). Done + committed this session: **T22** (reranking, RAC-22 **b2 still OPEN** pending ACORD),
-  **T-CHK** (chunker degenerate-split fix), **T-SUM** (concurrent summarization, 3.4× live). **GATE-2
-  runs 1+2 not adjudicated** (ADR-0011: CUAD not a retrieval benchmark); store bar kept-on-ArcadeDB, not
-  marked met; per-doc run 2 confirmed 0 fallbacks + RLM at-least-as-good on clean chunks (recall edge
-  chunk-count-confounded, precision ~tied). **Still open (both ask-first): T33** (ACORD → closes GATE-2a +
-  RAC-22 b2) and the post-graph **GATE-2b** RLM keep-vs-optional call. ArcadeDB container stopped (idle
-  until T25/T33).
-- **Last approved:** **T21** (FR-C.3/FR-Q.1, RAC-21) — Hybrid search. Query-side capability: embed the
+- **LAST APPROVED (committed): T-DISP** — `requires_dynamic_dispatch` typed flag on `skill_runtime`,
+  the ARD-contract groundwork for the recursive-RLM rebuild (ADR-0015/0017). Landed: the flag +
+  implies-interpreter validator on `ard.py`, populated `true` on the 3 RLM manifests, conformance tests,
+  ADR-0017. Self-dispatch **confirmed** on `deepagents==0.6.12` (name-based roster; self-referential
+  `rlm_decomposer` constructs without infinite recursion) — last pre-T15 grounding item cleared. Full
+  suite **373 passed + 26 skipped**. **After approval + commit: T15 stays HELD** until GraphWright's
+  applier (translating the flag into the interpreter trigger) lands; then the T15→T17→T28 rebuild runs,
+  each through its own gate, re-emitting with `grantedSubagents=["rlm_decomposer","rlm_slice_worker"]`.
+- **Done this session (all committed):** T22 (reranking, RAC-22 **b2 still OPEN** pending ACORD), T-CHK,
+  T-SUM, **T23/T23b/T24/T25/T26/T27** (graph extraction → fusion), **T28** (RLM synthesis, pre-rebuild),
+  **T29** (answer generator + vision-to-text). ARD split of FR-C.9 → `generation` + `vision_to_text`
+  (approved spec change). **GATE-2 runs 1+2 not adjudicated** (ADR-0011: CUAD not a retrieval benchmark);
+  store bar kept-on-ArcadeDB, not marked met. **Still open (both ask-first): T33** (ACORD → closes
+  GATE-2a + RAC-22 b2) and the post-graph **GATE-2b** RLM keep-vs-optional call. ArcadeDB container
+  stopped (idle until T25/T33 re-run).
+- **Prior last-approved:** **T21** (FR-C.3/FR-Q.1, RAC-21) — Hybrid search. Query-side capability: embed the
   query once (dense + sparse over the query text, via the T19 `Embedder` seam), hand both vectors to
   the new **semantic** query-side `Store.hybrid_search(dense, sparse, *, k, filters)` seam method, which
   the ArcadeDB impl fuses server-side by RRF (`vector.fuse`, the T14-proven SQL) into one ranked
@@ -170,6 +177,7 @@ loop enforces it.
 | **GATE-2** | **Recall-bar: ArcadeDB hybrid vs LanceDB fallback** | 4 Build | FR-S.5, plan §2 | run 1 not adjudicated (ADR-0011); keep ArcadeDB | T21, T22, T9, T10 |
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
+| T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
@@ -654,6 +662,42 @@ arcadedb-python DAO.
 **Note:** Early de-risk of the recall-bar gate; not the gate itself. Hybrid SQL grounded against the
 official ArcadeDB docs (the Python API does not wrap `vector.fuse`/`sparseNeighbors`) + confirmed on
 the live server.
+
+### Task T-DISP: `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork)
+
+**Description:** The recursive-RLM rebuild (ADR-0015) reopens T15/T17/T28 to make RLM interpreter +
+dynamic sub-agents. Its dynamic dispatch is prompt-triggered by the interpreter (langchain-quickjs's
+"workflow" word), a **silent under-performance** if it fails to fire. Grounding the pinned
+`langchain-quickjs==0.3.2` proved a skill **cannot** inject that trigger from its own authored content
+(the trigger reads the *user's request*, and the skill content lands in the *system message*) — so the
+requirement is declared as a **typed flag** `requires_dynamic_dispatch: bool` on `skill_runtime`, and
+GraphWright's runtime (not our wire contract) owns the magic word (ADR-0017). This is the ARD-contract
+prerequisite that gates T15's reimplementation.
+
+**Acceptance:**
+- [x] `SkillRuntime.requires_dynamic_dispatch: bool = False` mirrored on `ard.py`; a validator rejects
+  `requires_dynamic_dispatch=True` with `needs_interpreter=False` (dynamic dispatch is exposed by the
+  interpreter), kept a **distinct** field (not collapsed into `needs_interpreter`).
+- [x] `agent_skill`-only, like the rest of `skill_runtime` (a `function` manifest carrying it fails
+  `RegistryEntry` validation).
+- [x] Populated `true` on the three RLM specs (`rlm_method`, `rlm_chunking`, `rlm_synthesis`); the wire
+  form carries `skillRuntime.requiresDynamicDispatch: true` (camelCase).
+- [x] Grounding recorded: **self-dispatch confirmed** on `deepagents==0.6.12` — dispatch is name-based
+  (`subagents_by_name`/`subagent_graphs` name-keyed dicts, `deepagents/middleware/subagents.py:585,588`)
+  and a self-referential `rlm_decomposer` roster constructs with **no infinite recursion**. So
+  `task(subagentType="rlm_decomposer")` self-dispatch (ADR-0015 Q2) is structurally sound. Last pre-T15
+  grounding item cleared.
+
+**Verification:** `uv run ruff check` clean; `uv run pytest tests/capabilities/test_manifests.py` —
+22 passed; full suite **373 passed + 26 skipped**. Wire form verified:
+`skillRuntime: {needsInterpreter, rlm, grantedSubagents: [], requiresDynamicDispatch: True}`.
+
+**Dependencies:** ADR-0015, ADR-0017. **Scope:** S. **Status:** done.
+**Files:** `src/rag_wright/capabilities/ard.py`, `src/rag_wright/capabilities/manifests.py`,
+`tests/capabilities/test_manifests.py`, `docs/adr/0017-dynamic-dispatch-trigger-as-typed-flag.md`.
+**Note:** `grantedSubagents` stays `[]` until the T15/T17/T28 rebuild lands (populated then to
+`["rlm_decomposer","rlm_slice_worker"]`, ADR-0015). **T15 stays held** until both this flag (landed here)
+and GraphWright's applier (translating the flag into the interpreter's trigger) are in place (ADR-0017).
 
 ### Task T15: RLM skill authoring (general method only)
 

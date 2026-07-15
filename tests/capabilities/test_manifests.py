@@ -25,9 +25,7 @@ def test_agent_skill_manifests_carry_skill_runtime():
         runtime = author(slug).skill_runtime
         assert runtime is not None
         assert runtime.needs_interpreter is True and runtime.rlm is True
-        # our RLM dispatches each code-sliced unit to a MODEL via the seam, not to sub-agents (ADR-0014
-        # analysis): no registered/ad-hoc/dynamic sub-agents, so no governed slugs to grant.
-        assert runtime.granted_subagents == []
+        assert runtime.requires_dynamic_dispatch is True  # RLM needs code-driven fan-out (ADR-0017)
 
 
 def test_function_manifests_have_no_skill_runtime():
@@ -37,8 +35,17 @@ def test_function_manifests_have_no_skill_runtime():
 
 def test_skill_runtime_serializes_camelcase_on_the_wire(tmp_path):
     data = json.loads(publish("rlm_method", root=tmp_path).read_text())
-    assert data["skillRuntime"] == {"needsInterpreter": True, "rlm": True, "grantedSubagents": []}
+    assert data["skillRuntime"] == {
+        "needsInterpreter": True, "rlm": True, "grantedSubagents": [], "requiresDynamicDispatch": True,
+    }
     RegistryEntry.model_validate(data)  # re-validates as GraphWright's store will load it
+
+
+def test_requires_dynamic_dispatch_implies_interpreter():
+    # the typed flag carries the requirement, not the trigger word; it implies an interpreter (ADR-0017)
+    SkillRuntime(needs_interpreter=True, requires_dynamic_dispatch=True)  # ok
+    with pytest.raises(ValidationError):
+        SkillRuntime(needs_interpreter=False, requires_dynamic_dispatch=True)
 
 
 def test_skill_runtime_is_rejected_on_a_non_agent_skill():

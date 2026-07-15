@@ -116,7 +116,23 @@ class SkillRuntime(_ArdModel):
 
     needs_interpreter: bool = False  # the skill runs code in the interpreter
     rlm: bool = False  # the auditable RLM-pattern marker (FR-1.4, FR-4.10)
-    granted_subagents: list[str] = Field(default_factory=list)  # governed slugs it may dispatch to
+    granted_subagents: list[str] = Field(default_factory=list)  # sub-agent names it may dispatch to
+    # This skill's execution requires the interpreter's code-driven fan-out (task() dispatch) to be
+    # triggered. A TYPED flag, NOT the trigger phrasing: the exact word (langchain-quickjs's "workflow")
+    # is owned by GraphWright's runtime, which translates this flag into whatever the installed
+    # interpreter version expects — so the magic word never enters the wire contract (ADR-0017). Implies
+    # `needs_interpreter` (dynamic dispatch is exposed by the interpreter), but kept a distinct field:
+    # a future interpreter-using skill might not need dynamic-dispatch triggering.
+    requires_dynamic_dispatch: bool = False
+
+    @model_validator(mode="after")
+    def _dispatch_implies_interpreter(self) -> SkillRuntime:
+        if self.requires_dynamic_dispatch and not self.needs_interpreter:
+            raise ValueError(
+                "requires_dynamic_dispatch implies needs_interpreter (task() fan-out is exposed by the "
+                "interpreter); set needs_interpreter=True"
+            )
+        return self
 
 
 class RegistryEntry(_ArdModel):
