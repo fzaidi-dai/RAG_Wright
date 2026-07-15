@@ -26,6 +26,25 @@ def test_agent_skill_manifests_carry_skill_runtime():
         assert runtime is not None
         assert runtime.needs_interpreter is True and runtime.rlm is True
         assert runtime.requires_dynamic_dispatch is True  # RLM needs code-driven fan-out (ADR-0017)
+        # populated since the recursive rebuild (T15/T17/T28): the sub-agents are real (ADR-0015)
+        assert runtime.granted_subagents == ["rlm_decomposer", "rlm_slice_worker"]
+
+
+def test_granted_subagents_matches_the_names_the_skill_actually_declares():
+    # grantedSubagents is a claim the runtime binds against: it MUST equal the sub-agent names the RLM
+    # skill itself declares and dispatches (skills/rlm/agent.GRANTED_SUBAGENTS). Drift between the manifest
+    # roster and the real sub-agent configs passes RAG_Wright's tests but fails at GraphWright's bind, so
+    # assert self-consistency here where it is cheap (ADR-0015).
+    from rag_wright.skills.rlm.agent import (
+        RLM_DECOMPOSER,
+        RLM_SLICE_WORKER,
+        GRANTED_SUBAGENTS,
+    )
+
+    declared = list(GRANTED_SUBAGENTS)
+    assert declared == [RLM_DECOMPOSER, RLM_SLICE_WORKER]  # the roster is exactly the two named sub-agents
+    for slug in ("rlm_method", "rlm_chunking", "rlm_synthesis"):
+        assert author(slug).skill_runtime.granted_subagents == declared  # manifest roster == skill's roster
 
 
 def test_function_manifests_have_no_skill_runtime():
@@ -36,7 +55,8 @@ def test_function_manifests_have_no_skill_runtime():
 def test_skill_runtime_serializes_camelcase_on_the_wire(tmp_path):
     data = json.loads(publish("rlm_method", root=tmp_path).read_text())
     assert data["skillRuntime"] == {
-        "needsInterpreter": True, "rlm": True, "grantedSubagents": [], "requiresDynamicDispatch": True,
+        "needsInterpreter": True, "rlm": True,
+        "grantedSubagents": ["rlm_decomposer", "rlm_slice_worker"], "requiresDynamicDispatch": True,
     }
     RegistryEntry.model_validate(data)  # re-validates as GraphWright's store will load it
 

@@ -1557,9 +1557,11 @@ removed flat `synthesize_slice`/`rlm_synthesize_async`. Dropped the old flat-des
 
 **Dependencies:** T15, T27, ADR-0019. **Scope:** L. **Status:** done.
 **Files:** `src/rag_wright/capabilities/rlm_synthesis.py`, `tests/capabilities/test_rlm_synthesis.py`.
-**Rebuild complete:** T15→T17→T28 all rebuilt. **Immediate follow-up (needs approval):** populate
-`grantedSubagents = ["rlm_decomposer","rlm_slice_worker"]` in the 3 RLM manifests + re-emit + notify
-GraphWright (the sub-agents are now real).
+**Rebuild complete:** T15→T17→T28 all rebuilt. **Follow-up done (separate commit):** populated
+`grantedSubagents = ["rlm_decomposer","rlm_slice_worker"]` in the 3 RLM manifests (bound from the skill's
+own `GRANTED_SUBAGENTS`, with a conformance test asserting manifest roster == skill roster so it cannot
+drift), re-emitted to the shared root. **GraphWright handoff:** the sub-agents are real; GraphWright
+re-runs mirror-vs-store verification and this unblocks its T9d.6 interpreter arm / W10.
 
 ### Task T28 (original, superseded by the rebuild above): RLM synthesis (interpreter load, slice in code, recursive sub-calls)
 

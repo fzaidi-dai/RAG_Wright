@@ -32,6 +32,15 @@ from rag_wright.capabilities.registry import (
     ManifestSkeleton,
     capability_urn,
 )
+from rag_wright.skills.rlm.agent import GRANTED_SUBAGENTS
+
+# The RLM sub-agent roster the three RLM skills dispatch to, as the skill itself declares them
+# (single source of truth in `skills/rlm/agent.py`). Since the recursive rebuild (T15/T17/T28) these are
+# real Deep Agents sub-agents, so `grantedSubagents` is populated (ADR-0015; was `[]` pre-rebuild). Bound
+# from `GRANTED_SUBAGENTS` so the manifest roster cannot drift from the names the skill actually declares
+# and dispatches — a conformance test asserts the two are identical (drift passes here, fails GraphWright's
+# bind).
+_RLM_GRANTED = list(GRANTED_SUBAGENTS)
 
 
 @dataclass(frozen=True)
@@ -71,10 +80,12 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "synthesize an answer from many partitioned sub-calls",
         ),
         tags=("rlm", "method", "divide-and-conquer"),
-        # Intrinsic RLM runtime: the interpreter holds the working set and runs the code-side
-        # slice/dispatch/reduce; no sub-agents — the sub-calls are per-slice MODEL calls via the
-        # model-profile seam (deployment config, out of the manifest), so granted_subagents is empty.
-        skill_runtime=SkillRuntime(needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True),
+        # Intrinsic RLM runtime: the interpreter holds the working set and runs the code-side recursive
+        # decompose(), dispatching the two real sub-agents (ADR-0015). granted_subagents is bound from the
+        # skill's own roster so it cannot drift from what the skill declares/dispatches.
+        skill_runtime=SkillRuntime(
+            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
+        ),
     ),
     CapabilityManifest(
         slug="parsing",
@@ -111,8 +122,9 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         requires=("rlm_method",),
         tags=("chunking", "rlm", "ingestion"),
-        skill_runtime=SkillRuntime(needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True),  # slices in code, per-slice
-        # summarizer MODEL calls via the seam; no sub-agents -> granted_subagents empty.
+        skill_runtime=SkillRuntime(  # LLM boundary discovery via the recursive machinery; real sub-agents
+            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
+        ),
     ),
     CapabilityManifest(
         slug="embedding",
@@ -275,8 +287,9 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         requires=("rlm_method",),
         tags=("rlm", "synthesis", "query"),
-        skill_runtime=SkillRuntime(needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True),  # slices + recursive reduce in
-        # code, per-slice synthesizer MODEL calls via the seam; no sub-agents -> granted_subagents empty.
+        skill_runtime=SkillRuntime(  # recursive descent (real sub-agents) + kept _reduce ascent
+            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
+        ),
     ),
     CapabilityManifest(
         slug="generation",
