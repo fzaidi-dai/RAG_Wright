@@ -18,6 +18,15 @@ not this repo's.
 
 ## Last approved / next up
 
+- **LAST APPROVED (committed): T28 (rebuild)** — RLM synthesis = **recursive descent + kept `_reduce` ascent**.
+  A `SliceExtractor` seam (`SeamSliceExtractor` via `build_rlm_agent`) decomposes the candidate set (fresh
+  `rlm_decomposer` per over-large group, `rlm_slice_worker` extracts per leaf); the Python `_reduce` fan-in
+  (kept, ADR-0016) combines. **Recursion GATED** here (ADR-0019): the descent recurses past depth one
+  (opaque candidate set, decomposer fires at >1 depth, code-driven fan-out). Per-slice tool use proven;
+  every extract cited. Live extract+synthesize **passed** (real deepseek: $500M + Delaware + citations). 6
+  passed + 1 skipped; full suite **379 passed + 26 skipped**. **The T15→T17→T28 rebuild is complete** —
+  immediate follow-up (needs approval): populate `grantedSubagents` in the 3 manifests + re-emit + notify
+  GraphWright.
 - **LAST APPROVED (committed): T17 (rebuild)** — RLM chunking = **LLM semantic boundary discovery** (mandatory,
   no fixed-size). A `BoundaryDiscoverer` seam (`SeamBoundaryDiscoverer` via `build_rlm_agent`,
   deepseek-v4-pro) returns spans over `document.texts` items; `_finalize_chunks` is the deterministic-
@@ -210,7 +219,7 @@ loop enforces it.
 | T25 | Graph storage (nodes/edges carry `chunk_id`, gated) | 4 Build graph | FR-I.4, FR-I.5 | done | T13, T23, T24 |
 | T26 | Graph query (cited `chunk_id`s, `entity_id`s, confidence) | 4 Build graph | FR-C.5, FR-Q.3 | done | T25 |
 | T27 | Fusion (union/dedup on `chunk_id`, capped) | 4 Build graph | FR-Q.4 | done | T22, T26 |
-| T28 | RLM synthesis (interpreter load, slice in code, sub-calls) | 4 Build RLM | FR-Q.5 | done | T15, T27 |
+| T28 | RLM synthesis (recursive descent + kept _reduce ascent) | 4 Build RLM | FR-Q.5 | done (rebuild) | T15, T27, ADR-0019 |
 | T29 | Answer generator (grounded, cited, abstains) + vision-to-text | 4 Build RLM | FR-C.9, FR-Q.6 | done | T11, T27 |
 | T30 | Prefix + result caching | 4 Build RLM | §13 P3, §16.7 | todo | T28, T29 |
 | T31 | MCP skill surface (governed skills over MCP) | 5 Integrate | FR-S.5 | todo | T6, T22, T26 |
@@ -1519,7 +1528,40 @@ passed + 23 skipped. Publish: `uv run python scripts/publish_manifests.py`.
 
 ## Phase 4 — Build, RLM synthesis tier (spec Phase 3)
 
-### Task T28: RLM synthesis (interpreter load, slice in code, recursive sub-calls)
+### Task T28 (REOPENED 2026-07-15, rebuild): RLM synthesis = recursive descent + kept _reduce ascent
+
+**Description:** The query-side RLM rebuild (ADR-0015/0016). Two halves: **descent** (new, recursive) — a
+`SliceExtractor` seam (`SeamSliceExtractor` via `build_rlm_agent`) decomposes the candidate set through
+the T15 machinery (fresh `rlm_decomposer` per over-large group, `rlm_slice_worker` extracts query-relevant
+facts per leaf; per-slice tools/skills live in the worker); **ascent** (kept, ADR-0016) — the Python
+`_reduce` fan-in combines the extracts into the synthesis. Unlike chunking, **recursion IS gated** here
+(ADR-0019). Every `SliceOutput` keeps its `chunk_id` (no claim without a citation, FR-Q.6).
+
+**RAC-28 (rebuild):**
+- [x] Descent + ascent compose: `rlm_synthesize` = `extractor.extract` then `_reduce`; cited `chunk_id`s;
+  empty candidates → empty. Hermetic with a stub extractor + stub combine.
+- [x] **Recursion GATED (ADR-0016/0019):** the descent recurses past depth one — an opaque candidate set
+  (`C0`) whose leaves only the decomposer reveals forces re-entry; the decomposer fires at >1 depth,
+  workers extract the leaves, dispatch is code-driven (`eval_id`, fail-if-sequential). Driven by scripted
+  fake models through the real machinery.
+- [x] **Per-slice tool use** in extraction: a worker invokes a `cite` tool mid-extraction.
+- [x] **`_reduce` kept** exactly (the ascent): recursive fan-in, ≤ fanout per combine (9 extracts, fanout
+  3 → 4 combine calls). No sub-call ever sees the whole set of extracts.
+- [x] **Live** (`-m model`): real deepseek-v4-pro extracts from candidates ($500M, Delaware) + combines +
+  preserves citations. **Passed.**
+
+**Verification:** `uv run pytest tests/capabilities/test_rlm_synthesis.py` — 6 passed + 1 skipped (live);
+`-m model` **passed**. ruff clean. Full suite **379 passed + 26 skipped**. No external callers of the
+removed flat `synthesize_slice`/`rlm_synthesize_async`. Dropped the old flat-descent concurrency tests
+(that path is replaced by the agent; the `_reduce` fan-in is retained + tested).
+
+**Dependencies:** T15, T27, ADR-0019. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/capabilities/rlm_synthesis.py`, `tests/capabilities/test_rlm_synthesis.py`.
+**Rebuild complete:** T15→T17→T28 all rebuilt. **Immediate follow-up (needs approval):** populate
+`grantedSubagents = ["rlm_decomposer","rlm_slice_worker"]` in the 3 RLM manifests + re-emit + notify
+GraphWright (the sub-agents are now real).
+
+### Task T28 (original, superseded by the rebuild above): RLM synthesis (interpreter load, slice in code, recursive sub-calls)
 
 **Description:** Using the RLM skill (T15), load the candidate chunks (T27) into an interpreter as
 data, slice and filter in code, and recursively call sub-models on the small focused portions, so

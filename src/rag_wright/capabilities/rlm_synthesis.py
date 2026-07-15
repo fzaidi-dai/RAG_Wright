@@ -1,47 +1,65 @@
-"""RLM synthesis (FR-Q.5, T28): apply the RLM method to the retrieved candidate chunks.
+"""RLM synthesis (FR-Q.5, T28): apply the recursive RLM method to the retrieved candidate chunks.
 
-Applies the shared RLM divide-and-conquer method (FR-C.10, `rlm_method`, T15) on the query side: the
-candidate chunks (from fusion, T27) are loaded into the interpreter as ordinary data, sliced in code
-(one focused unit per chunk), a sub-model is called once per unit on that unit alone, and the per-unit
-outputs are combined in code — recursively (a code-side fan-in reduce), so a model is only ever called
-on a small focused slice or a small group of already-reduced notes, never over the full chunk volume.
+The query-side RLM. The rebuild (ADR-0015/0016) makes synthesis genuinely recursive dynamic sub-agents,
+in two halves:
 
-The sub-calls are structured-under-reasoning work, so they resolve to the DeepSeek V4 Pro default via
-the model-profile seam (ADR-0006); no model flag lives here. Dispatch is concurrent with backpressure
-(the async + semaphore pattern, as in embedding/summarization): parallelizing the independent sub-calls
-is the same tokens and cost but far less wall-clock (CLAUDE.md).
+  - DESCENT (new, recursive): a `SliceExtractor` decomposes the candidate set through the T15 machinery
+    (`build_rlm_agent`) — the interpreter holds the candidate chunks, a fresh `rlm_decomposer` splits an
+    over-large group, and an `rlm_slice_worker` extracts the query-relevant facts from each leaf slice
+    (per-slice tool use and per-slice skills live in the worker). A model is only ever called on a focused
+    slice, never over the full candidate volume.
+  - ASCENT (kept, ADR-0016): the Python `_reduce` fan-in combines the per-slice extracts into the final
+    synthesis, recursively (each combine sees at most `fanout` notes), so a model is never called over the
+    whole set of extracts either.
+
+Unlike chunking, recursion IS gated for synthesis (ADR-0019): the ADR-0016 fail-if-absent recursion
+discipline applies. The extractor and the combine both sit behind seams so the ascent is tested
+hermetically with stubs and the descent machinery is driven by scripted fake models; the live extract +
+synthesize is opt-in. No claim leaves without a citation: every `SliceOutput` carries its `chunk_id`
+(FR-Q.6).
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Protocol, runtime_checkable
+import json
+from typing import Optional, Protocol, runtime_checkable
 
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_model
+from rag_wright.skills.rlm.agent import RLM_DECOMPOSER, RLM_SLICE_WORKER, build_rlm_agent
 
-DEFAULT_SYNTHESIS_CONCURRENCY = 8  # in-flight sub-calls (backpressure); network-bound
+__all__ = [
+    "RLM_DECOMPOSER",
+    "RLM_SLICE_WORKER",
+    "SynthesisChunk",
+    "SliceOutput",
+    "SynthesisResult",
+    "Synthesizer",
+    "SeamSynthesizer",
+    "SliceExtractor",
+    "SeamSliceExtractor",
+    "rlm_synthesize",
+    "register_rlm_synthesis",
+]
+
+DEFAULT_REDUCE_CONCURRENCY = 8  # in-flight combine calls (backpressure); network-bound
 DEFAULT_FANOUT = 8  # code-side reduce fan-in: a combine call sees at most this many notes at once
 
-_SLICE_PROMPT = (
-    "Extract only the facts in this passage that help answer the question, with any figures and named "
-    "entities, faithfully and concisely. If the passage is irrelevant, say so briefly."
+_EXTRACT_WORKER_PROMPT = (
+    "You handle ONE slice of retrieved candidate passages. Extract only the facts in this slice that help "
+    "answer the question, with any figures and named entities, faithfully and concisely, and keep each "
+    "fact tied to the chunk_id it came from. If the slice is irrelevant, say so briefly. You never see the "
+    "whole candidate set."
 )
 _COMBINE_PROMPT = (
     "Combine these notes into a single faithful synthesis that answers the question, keeping figures and "
     "named entities. Do not add facts not present in the notes."
 )
-
-
-@runtime_checkable
-class Synthesizer(Protocol):
-    """The sub-model seam: a focused call on one slice, and a code-side combine over reduced notes."""
-
-    def synthesize_slice(self, query: str, text: str) -> str: ...
-    def combine(self, query: str, extracts: list[str]) -> str: ...
 
 
 class SynthesisChunk(BaseModel):
@@ -52,7 +70,7 @@ class SynthesisChunk(BaseModel):
 
 
 class SliceOutput(BaseModel):
-    """One slice's focused sub-call result (the divide step)."""
+    """One slice's focused extract (the divide step), tied to its chunk_id (no claim without a citation)."""
 
     chunk_id: str
     extract: str
@@ -67,15 +85,21 @@ class SynthesisResult(BaseModel):
     chunk_ids: list[str]
 
 
+# --- the ascent: the kept Python `_reduce` fan-in (ADR-0016) --------------------------------------
+
+
+@runtime_checkable
+class Synthesizer(Protocol):
+    """The combine seam: fold a small group of already-reduced notes (<= fanout) into one synthesis."""
+
+    def combine(self, query: str, extracts: list[str]) -> str: ...
+
+
 class SeamSynthesizer:
-    """The real sub-model: free-text focused calls through the model-profile seam (DeepSeek V4 Pro)."""
+    """The real combine: a free-text call through the model-profile seam (DeepSeek V4 Pro, ADR-0006)."""
 
     def __init__(self, model_id: str | None = None) -> None:
         self._model_id = model_id or model_for(ModelRole.STRUCTURED_REASONING)
-
-    def synthesize_slice(self, query: str, text: str) -> str:
-        message = build_model(self._model_id).invoke(f"{_SLICE_PROMPT}\nQuestion: {query}\n\nPassage:\n{text}")
-        return message.content if hasattr(message, "content") else str(message)
 
     def combine(self, query: str, extracts: list[str]) -> str:
         notes = "\n\n---\n\n".join(extracts)
@@ -87,7 +111,8 @@ async def _reduce(
     query: str, extracts: list[str], synthesizer: Synthesizer, semaphore: asyncio.Semaphore, fanout: int
 ) -> str:
     """Fan-in reduce in code: combine at most `fanout` notes per call, recursing on the results so a
-    model is never called over the whole set. Groups at one level are combined concurrently."""
+    model is never called over the whole set. Groups at one level are combined concurrently. Kept from
+    the pre-rebuild implementation as the synthesis combine step (the ascent complements the descent)."""
     if not extracts:
         return ""
     if len(extracts) <= fanout:
@@ -103,46 +128,124 @@ async def _reduce(
     return await _reduce(query, partials, synthesizer, semaphore, fanout)
 
 
-async def rlm_synthesize_async(
-    query: str,
-    chunks: list[SynthesisChunk],
-    *,
-    synthesizer: Synthesizer,
-    max_concurrency: int = DEFAULT_SYNTHESIS_CONCURRENCY,
-    fanout: int = DEFAULT_FANOUT,
-) -> SynthesisResult:
-    """Load chunks as data, sub-call once per chunk (concurrently, bounded), then reduce in code."""
-    if not chunks:
-        return SynthesisResult(query=query, slice_outputs=[], synthesis="", chunk_ids=[])
-    semaphore = asyncio.Semaphore(max_concurrency)
+# --- the descent: the recursive RLM extractor (the T15 machinery) ---------------------------------
 
-    async def _slice(chunk: SynthesisChunk) -> SliceOutput:
-        async with semaphore:  # backpressure; each call sees only this chunk (never the full volume)
-            extract = await asyncio.to_thread(synthesizer.synthesize_slice, query, chunk.text)
-        return SliceOutput(chunk_id=chunk.chunk_id, extract=extract)
 
-    slice_outputs = list(await asyncio.gather(*(_slice(chunk) for chunk in chunks)))
-    synthesis = await _reduce(
-        query, [output.extract for output in slice_outputs], synthesizer, semaphore, fanout
-    )
-    return SynthesisResult(
-        query=query, slice_outputs=slice_outputs, synthesis=synthesis,
-        chunk_ids=[chunk.chunk_id for chunk in chunks],
-    )
+@runtime_checkable
+class SliceExtractor(Protocol):
+    """The recursive-descent seam: decompose the candidate set and extract query-relevant facts per leaf."""
+
+    def extract(self, query: str, chunks: list[SynthesisChunk]) -> list[SliceOutput]: ...
+
+
+def _final_text(messages) -> str:
+    for message in reversed(messages):
+        if isinstance(message, AIMessage) and (message.text or "").strip():
+            return message.text
+    for message in reversed(messages):
+        if isinstance(message, ToolMessage) and message.name == "eval":
+            return str(message.content)
+    return ""
+
+
+def _parse_slice_outputs(text: str) -> list[SliceOutput]:
+    """Parse the last JSON array of {chunk_id, extract} objects from the model's final output."""
+    end = text.rfind("]")
+    start = text.rfind("[", 0, end)
+    if start == -1 or end == -1:
+        return []
+    raw = json.loads(text[start : end + 1])
+    return [SliceOutput(chunk_id=str(o["chunk_id"]), extract=str(o["extract"])) for o in raw]
+
+
+class SeamSliceExtractor:
+    """The real extractor: the candidate set is decomposed recursively via `build_rlm_agent` and each leaf
+    slice is extracted by an `rlm_slice_worker`. Per-role models resolve through the profile seam
+    (STRUCTURED_REASONING / DeepSeek V4 Pro) or are injected as instances (tests). `working_set` overrides
+    the candidate view handed to the orchestrator (tests use an opaque handle to force recursion)."""
+
+    def __init__(
+        self,
+        model: object = None,
+        *,
+        decomposer_model: object = None,
+        worker_model: object = None,
+        worker_tools=(),
+        worker_skills=(),
+        working_set: object = None,
+    ) -> None:
+        self._model = model
+        self._decomposer_model = decomposer_model
+        self._worker_model = worker_model
+        self._worker_tools = worker_tools
+        self._worker_skills = worker_skills
+        self._working_set = working_set
+
+    def _build_agent(self, chunks: list[SynthesisChunk]):
+        model = self._model if self._model is not None else model_for(ModelRole.STRUCTURED_REASONING)
+        return build_rlm_agent(
+            reasoning_model=model,
+            decomposer_model=self._decomposer_model if self._decomposer_model is not None else model,
+            worker_model=self._worker_model if self._worker_model is not None else model,
+            worker_system_prompt=_EXTRACT_WORKER_PROMPT,
+            worker_tools=self._worker_tools,
+            worker_skills=self._worker_skills,
+        )
+
+    def _request(self, query: str, chunks: list[SynthesisChunk]) -> str:
+        working_set = self._working_set if self._working_set is not None else [
+            {"chunk_id": c.chunk_id, "text": c.text} for c in chunks
+        ]
+        return (
+            "Run this as a workflow. Below is the retrieved candidate set for a question. Load it into the "
+            "interpreter, decompose it (dispatch rlm_decomposer for an over-large group and recurse), and "
+            "hand each leaf slice to an rlm_slice_worker that extracts the facts relevant to the question, "
+            "keeping each fact tied to its chunk_id. Then return ONLY a JSON array "
+            "[{\"chunk_id\": ..., \"extract\": ...}], one entry per candidate chunk.\n\n"
+            f"Question: {query}\n\nCandidate set (JSON):\n{json.dumps(working_set)}"
+        )
+
+    def extract(self, query: str, chunks: list[SynthesisChunk]) -> list[SliceOutput]:
+        if not chunks:
+            return []
+        agent = self._build_agent(chunks)
+        result = agent.invoke({"messages": [HumanMessage(content=self._request(query, chunks))]})
+        return _parse_slice_outputs(_final_text(result["messages"]))
+
+
+# --- the capability: descent then ascent ---------------------------------------------------------
 
 
 def rlm_synthesize(
     query: str,
     chunks: list[SynthesisChunk],
     *,
-    synthesizer: Synthesizer,
-    max_concurrency: int = DEFAULT_SYNTHESIS_CONCURRENCY,
+    extractor: Optional[SliceExtractor] = None,
+    synthesizer: Optional[Synthesizer] = None,
+    max_concurrency: int = DEFAULT_REDUCE_CONCURRENCY,
     fanout: int = DEFAULT_FANOUT,
 ) -> SynthesisResult:
-    """Synchronous convenience for callers not already in an event loop."""
-    return asyncio.run(
-        rlm_synthesize_async(query, chunks, synthesizer=synthesizer,
-                             max_concurrency=max_concurrency, fanout=fanout)
+    """Synthesize an answer over the candidate chunks: recursive extract (descent) then reduce (ascent).
+
+    `extractor` decomposes the candidate set and extracts per leaf (defaults to the live
+    `SeamSliceExtractor`; hermetic tests inject a stub); `_reduce` combines the extracts via `synthesizer`
+    (defaults to `SeamSynthesizer`). Every extract keeps its `chunk_id`, so the result is cited (FR-Q.6).
+    """
+    if not chunks:
+        return SynthesisResult(query=query, slice_outputs=[], synthesis="", chunk_ids=[])
+    extractor = extractor if extractor is not None else SeamSliceExtractor()
+    synthesizer = synthesizer if synthesizer is not None else SeamSynthesizer()
+
+    slice_outputs = extractor.extract(query, chunks)
+    semaphore = asyncio.Semaphore(max_concurrency)
+    synthesis = asyncio.run(
+        _reduce(query, [o.extract for o in slice_outputs], synthesizer, semaphore, fanout)
+    )
+    return SynthesisResult(
+        query=query,
+        slice_outputs=slice_outputs,
+        synthesis=synthesis,
+        chunk_ids=[chunk.chunk_id for chunk in chunks],
     )
 
 
