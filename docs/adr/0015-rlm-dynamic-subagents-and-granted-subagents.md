@@ -29,19 +29,34 @@ non-recursive build; the recursive rebuild populates it.
    authored here, in the manifest, because the RLM decomposition's sub-agents are known at authoring time.
    No new ARD slug/manifest is created for them.
 2. **The recursive RLM defines two named sub-agents (Q1):**
-   - `rlm_decomposer` — the recursive orchestrator: holds a slice in interpreter variables, decides in
-     code to further-slice-and-dispatch or to delegate a leaf, and runs the fan-in reduce (the existing
-     `_reduce` is kept) over returned results.
+   - `rlm_decomposer` — decides one level's split: given an over-budget slice, it returns the sub-slices
+     (a fresh agent, fresh context, per dispatch). It does **not** hold the recursion itself; the
+     interpreter does (see Q2, corrected).
    - `rlm_slice_worker` — the leaf worker: handles one budget-sized focused slice; **per-slice tool use
      and per-slice skills live here** (it runs a full agentic loop). Specialized per call via the `task()`
      description (summarize for chunking, extract-and-synthesize for synthesis), so one config serves both.
    Both are Deep Agents configs, not ARD capabilities. `grantedSubagents = ["rlm_decomposer",
    "rlm_slice_worker"]` on `rlm_method`, `rlm_chunking`, and `rlm_synthesis`.
-3. **The decomposer self-dispatches (Q2):** `rlm_decomposer` dispatches `task(subagentType=
-   "rlm_decomposer")` on each over-budget sub-slice, so **`grantedSubagents` includes a self-reference**.
-   RLM recursion is data-dependent and unbounded; one self-dispatching config expresses arbitrary depth,
-   where distinct per-level decomposers cannot. Matches SKILL.md ("apply the *same* three steps") and the
-   RLM paper's per-level fresh context.
+3. **The interpreter re-dispatches the decomposer per level (Q2, corrected 2026-07-15 — design B′).**
+   The recursion lives in the **interpreter's `eval` code**: a recursive `decompose(node)` workflow holds
+   the working set and the recursion stack, dispatches a **fresh `rlm_decomposer`** at each over-budget
+   internal node (per-level fresh context — exactly what the RLM paper wants), and an `rlm_slice_worker`
+   at each leaf. Arbitrary depth comes from the same interpreter function re-entering itself, not from an
+   agent dispatching itself. `grantedSubagents` is unchanged: `["rlm_decomposer", "rlm_slice_worker"]`,
+   **without a self-reference** (the decomposer is dispatched *by the interpreter*, never by itself).
+
+   **Why not the decomposer self-dispatching (the original Q2).** A genuinely self-referential sub-agent
+   is **not constructible on the pinned `deepagents==0.6.12`**: `SubAgentMiddleware.__init__` compiles its
+   whole roster **eagerly** (`middleware/subagents.py`, `__init__` → `_build_task_tool` → the
+   `[_compile_spec(spec) for spec in subagents]` comprehension), so a config whose roster contains itself
+   re-enters that compile without a base case — infinite recursion at construction; a runnable cannot
+   contain itself. (Runtime dispatch *is* name-based — `subagent_graphs[subagent_type]` — but that never
+   helps construction.) Grounded empirically on the pinned version: a closed self-reference recurses at
+   build time; the only "successful" build was an accidental depth-2 where Python's evaluation order
+   broke the cycle before the middleware was attached — not real recursion. Relocating the recursion to
+   the interpreter is not a workaround: it is the RLM paradigm stated correctly ("the interpreter selects
+   slices and dispatches sub-agents"), and it keeps the wire contract (`grantedSubagents`) stable.
+   Recorded so the next reader does not re-derive the dead end.
 
 ## Design constraints for the rebuild (recorded so they are not lost)
 
@@ -68,8 +83,9 @@ the fast path. Recorded as context; RAG_Wright does not enforce it.
 ## Consequences
 
 - After the rebuild, the three agent_skill manifests carry `skillRuntime.grantedSubagents = ["rlm_decomposer",
-  "rlm_slice_worker"]` (with the decomposer self-referencing). Re-emitted to the shared root; GraphWright
-  re-runs the mirror-vs-real-store verification.
+  "rlm_slice_worker"]` (the interpreter re-dispatches the decomposer per level, Q2 corrected — **no**
+  self-reference). The list is **unchanged** from what was committed, so no manifest re-emit and no
+  GraphWright re-verify are forced by the B′ correction.
 - New dependencies (landed 2026-07-15, **pinned exactly** — the runtime and dynamic sub-agents are beta,
   so a floating version is a future silent breakage, same discipline as the deepagents pin): **`deepagents==0.6.12`**
   (MIT) and **`langchain-quickjs==0.3.2`** (MIT; backed by `quickjs-rs`/rquickjs — QuickJS is MIT, rquickjs

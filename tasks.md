@@ -18,6 +18,20 @@ not this repo's.
 
 ## Last approved / next up
 
+- **LAST APPROVED (committed): T15 (B′ rebuild)** — RLM skill + reusable machinery (recursive dynamic
+  sub-agents). Grounding overturned ADR-0015 Q2's self-dispatch: a self-referential sub-agent is **not
+  constructible** on `deepagents==0.6.12` (eager roster compile in `SubAgentMiddleware.__init__`) — I
+  surfaced it and you approved **design B′** (the interpreter re-dispatches a fresh `rlm_decomposer` per
+  level; `grantedSubagents` unchanged, no manifest churn). Delivered: rewritten `SKILL.md`, `agent.py`
+  (`build_rlm_agent` + the two sub-agent configs + shipped `RLM_WORKFLOW_JS`), ADR-0015 Q2 correction,
+  and the 4 ADR-0016 fail-if-absent tests (written first, confirmed red vs pre-rebuild, now green;
+  recursion asserts `maxSplitDepth>=1` + >1 decomposer level + teeth tests for flat-workflow and
+  sequential-dispatch). Plus an **opt-in real-model smoke test** that caught a real defect — the method
+  wired as a lazy `skills=` source was never read, so a real model flatten-and-hardcoded; fix (ADR-0018)
+  = method into the orchestrator **system prompt** + firmer SKILL.md; redesigned around an opaque working
+  set so full leaf coverage proves derivation; **10/10** live after the fix. 6 passed + 1 skipped; full
+  suite **379 passed + 26 skipped**. Deterministic chunk core and `_reduce` untouched. **Next after
+  approval:** T17, then T28; then populate `grantedSubagents` + re-emit.
 - **LAST APPROVED (committed): T-DISP** — `requires_dynamic_dispatch` typed flag on `skill_runtime`,
   the ARD-contract groundwork for the recursive-RLM rebuild (ADR-0015/0017). Landed: the flag +
   implies-interpreter validator on `ard.py`, populated `true` on the 3 RLM manifests, conformance tests,
@@ -165,7 +179,7 @@ loop enforces it.
 | T12 | A-T2 forced-structured-output foundation test on DeepSeek V4 Pro (+ ADR) | 4 Foundations | FR-C.6 dep, risk 3 | done | T11 |
 | T13 | Store seam + ArcadeDB schema and hybrid indexes | 4 Foundations | FR-S.1, FR-S.5 | done | T3, T6 |
 | T14 | A-T1 ArcadeDB `vector.fuse` hybrid foundation test | 4 Foundations | FR-C.3 dep, risk 1 | done | T13 |
-| T15 | RLM skill authoring (general method only) | 4 Foundations | FR-C.10 | done | - |
+| T15 | RLM skill + machinery (recursive dynamic sub-agents; B′) | 4 Build RLM | FR-C.10 | done (rebuild) | ADR-0015/0016/0017/0018 |
 | T16 | Parsing (Docling) | 4 Build write | FR-C.1 | done | T3 |
 | T17 | RLM chunking (deterministic, content-hash gated) | 4 Build write | FR-I.1 | done | T15, T16, T11 |
 | T18 | Small-to-large chunking escalation | 4 Build write | FR-I.2 | deferred (GATE-1) | **GATE-1**, T17 |
@@ -699,7 +713,54 @@ prerequisite that gates T15's reimplementation.
 `["rlm_decomposer","rlm_slice_worker"]`, ADR-0015). **T15 stays held** until both this flag (landed here)
 and GraphWright's applier (translating the flag into the interpreter's trigger) are in place (ADR-0017).
 
-### Task T15: RLM skill authoring (general method only)
+### Task T15 (REOPENED 2026-07-15, B′ rebuild): RLM skill + machinery (recursive dynamic sub-agents)
+
+**Description:** The ADR-0015/0016 rebuild turns RLM from interpreter-plus-model-calls into interpreter
++ dynamic sub-agents. T15 delivers the reusable machinery T17/T28 apply: the rewritten `SKILL.md`, the
+two Deep Agents sub-agent configs (`rlm_decomposer`, `rlm_slice_worker`), the interpreter-driven
+recursive `decompose()` workflow, and the ADR-0016 fail-if-absent tests. **Design B′** (ADR-0015 Q2,
+corrected): the recursion lives in the interpreter, which re-dispatches a *fresh* `rlm_decomposer` per
+level; a self-referential agent is **not constructible** on `deepagents==0.6.12` (eager roster compile).
+
+**RAC-15 (rebuild):**
+- [x] `SKILL.md` teaches the B′ method: load the working set into the interpreter, write a recursive
+  `decompose()` workflow that dispatches a fresh decomposer per level + a worker per leaf, combine in
+  code. States the workflow trigger is declared (`requiresDynamicDispatch`) and applied by the runtime.
+- [x] Machinery in `src/rag_wright/skills/rlm/agent.py`: `RLM_DECOMPOSER`/`RLM_SLICE_WORKER`/
+  `GRANTED_SUBAGENTS`, `decomposer_config`, `slice_worker_config` (per-slice tools + skills),
+  `RLM_WORKFLOW_JS` (the shipped recursive descent), and `build_rlm_agent(...)` assembling
+  `create_deep_agent` + `CodeInterpreterMiddleware`, models through the profile seam (never a string id).
+- [x] **Four ADR-0016 fail-if-absent tests, written first and confirmed red against pre-rebuild code**
+  (no `build_rlm_agent` entrypoint), then green — driving the REAL machinery + shipped `RLM_WORKFLOW_JS`
+  with scripted fake models (hermetic, genuine `task()` dispatch): (1) recursion-forced — the eval result
+  shows `maxSplitDepth>=1`, `leafCount==3` (only reachable via two levels), and the decomposer fired at
+  >1 depth; a **teeth** test proves a flat one-level workflow fails it; (2) a leaf worker invokes a tool
+  mid-handling; (3) a leaf worker loads a skill (source present in its context); (4) code-driven fan-out —
+  dispatches carry the parent `eval_id`; a **teeth** test proves sequential (top-level `task`) dispatch is
+  rejected.
+- [x] **Opt-in real-model smoke test** (`@pytest.mark.model`) proving what the fakes cannot: a REAL
+  orchestrator, given the method, recurses on the decomposer's output. It surfaced a defect **here**: the
+  method wired as a lazy `skills=` source was **never read**, so the model flatten-and-hardcoded the
+  split. Fix (ADR-0018): load the method into the orchestrator's **system prompt**; strengthen SKILL.md
+  (explicit recursion mandate + anti-pattern). Test redesigned with an **opaque** working set whose leaves
+  only the decomposer reveals, so full leaf coverage proves derivation (not a lowered bar). **10/10**
+  live runs on `google/gemma-4-31b-it` after the fix (was 0-1 before).
+- [ ] `grantedSubagents` population to `["rlm_decomposer","rlm_slice_worker"]` + re-emit is deferred to
+  after the full rebuild (T17, T28) lands, per the sequencing directive (manifests currently `[]`).
+
+**Verification:** `uv run pytest tests/capabilities/test_rlm_method.py` — 6 passed + 1 skipped (the
+`model` smoke test); `-m model` — 1 passed live (10/10 across the hit-rate harness). Red confirmed by
+moving `agent.py` aside (ModuleNotFoundError). ruff clean. Full suite **379 passed + 26 skipped** (+1
+opt-in). Deterministic chunk core (`_split_into_chunks`, `ChunkId`, gate, `Chunk`) and the `_reduce`
+fan-in are **untouched** (T17/T28 preserve them as separate functions).
+
+**Dependencies:** ADR-0015, ADR-0016, ADR-0017, ADR-0018. **Scope:** L. **Status:** done.
+**Files:** `src/rag_wright/skills/rlm/SKILL.md`, `src/rag_wright/skills/rlm/agent.py`,
+`tests/capabilities/test_rlm_method.py`, `tests/capabilities/_fixtures/rlm_probe_skill/SKILL.md`,
+`docs/adr/0015-rlm-dynamic-subagents-and-granted-subagents.md` (Q2 correction),
+`docs/adr/0018-rlm-method-is-the-orchestrator-system-prompt.md`.
+
+### Task T15 (original, superseded by the rebuild above): RLM skill authoring (general method only)
 
 **Description:** Author the RLM SKILL.md as the general divide-and-conquer method (load a working
 set into an interpreter, slice and dispatch in code, synthesize). It has no testable behavior of
