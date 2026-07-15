@@ -70,5 +70,14 @@ the fast path. Recorded as context; RAG_Wright does not enforce it.
 - After the rebuild, the three agent_skill manifests carry `skillRuntime.grantedSubagents = ["rlm_decomposer",
   "rlm_slice_worker"]` (with the decomposer self-referencing). Re-emitted to the shared root; GraphWright
   re-runs the mirror-vs-real-store verification.
-- New dependencies (`deepagents`, `langchain-quickjs`) and the reopening of T15/T17/T28 are the rebuild's
-  cost; both are ask-first and gated before landing.
+- New dependencies (landed 2026-07-15, **pinned exactly** — the runtime and dynamic sub-agents are beta,
+  so a floating version is a future silent breakage, same discipline as the deepagents pin): **`deepagents==0.6.12`**
+  (MIT) and **`langchain-quickjs==0.3.2`** (MIT; backed by `quickjs-rs`/rquickjs — QuickJS is MIT, rquickjs
+  MIT/BSD-2 — commercially clean). Dependency-audit note recorded here per the project convention (licenses
+  live in ADRs). The rebuild reopens T15/T17/T28.
+- Call-site check (2026-07-15, before any retirement): no production `src/` pipeline calls `chunk()` or
+  `rlm_synthesize()` — they are graph-bound → **RETIRE** case. Caveats: the `Chunk` *type* (used by
+  `embedding.py`/`chunk_write.py`) is a shared contract and is preserved; rlm_chunking's code-deterministic
+  boundary/`chunk_id`/gate logic is a T17 contract guarantee, not the RLM method, and stays deterministic;
+  the eval harnesses (gate1/gate2) that call `chunk()` are measurement tooling to be repointed, not a
+  convert-blocker.
