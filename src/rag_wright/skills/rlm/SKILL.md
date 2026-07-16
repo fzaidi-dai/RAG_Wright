@@ -87,6 +87,12 @@ const leaves = await decompose(workingSet, 0);
    decomposer marks that slice a leaf (`decision.leaf === true`), then dispatch a `rlm_slice_worker`.
 3. **One `decompose()` per node, one decomposer dispatch per node.** A single decomposer call for the
    whole working set is wrong: that is a flat split, and it defeats the method.
+4. **Cover the whole working set — recurse on EVERY part.** `Promise.all(decision.parts.map(...))` must
+   recurse on *all* parts, never a subset. Missing a deep leaf silently drops that part's content while
+   the run still reports success — the exact silent failure this method must not have. Out of context you
+   cannot see the whole set, so be exhaustive by construction. (The applying capability also guarantees
+   coverage in code — it holds the whole working set and covers anything the recursion missed — but do not
+   rely on that as a licence to be incomplete; the code guarantee is a safety net, not the method.)
 
 **Anti-pattern (do NOT do this):**
 

@@ -215,6 +215,7 @@ loop enforces it.
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
+| T37 | Deep-recursion completeness: structural coverage guarantee (capability-level DONE; node-level pending GraphWright seam) | 5 Integrate | FR-Q.5, FR-I.1 | in-progress (seam surfaced) | T36 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -1244,6 +1245,38 @@ chunking (T17), the chunk write/store (T20, ArcadeDB `store/`), and the graph la
 delete-by-`source_doc_id` on the store seam + graph, wired into a document-update entry point.
 
 **Status:** todo (finding — not a T17 blocker; makes the ingestion lifecycle complete). **Dep:** T17, T20, T25.
+
+### Task T37: Deep-recursion completeness — structural coverage guarantee (T36 finding)
+
+**Finding (GraphWright bind_run, 2026-07-17):** with the working set genuinely out of context (prompt-render
+cut, delivery only via `tools.workingSet()`), the real RLM skill's deep-recursion completeness is variable
+— full leaf coverage only ~half the time, sometimes silently missing a deep leaf while reporting success
+(same silent-under-performance class as the earlier RLM findings). Masked earlier because step-1 delivery
+was additive (working set in tool AND prompt), so the model could reach coverage by reading the prompt
+without depending on recursion. **My tests had the same masking:** T28's opaque proof is hermetic (a fake
+orchestrator emits a fixed correct workflow — never tested real-model completeness); T28/T17 live tests use
+small/shallow sets. My synthetic reproduction (clean probe binary tree) is 5/5 even at depth 4 — structurally
+easier than the real run, so it does not reproduce the ~50%. The finding is real (GraphWright measured it on
+the real skill).
+
+**Fix (design: runtime guarantees coverage, model reasons about grouping):**
+- [x] **Capability-level guarantee (DONE, proven deterministically):** the code holds the whole working set
+  and covers anything the recursion missed. Synthesis: `_guarantee_coverage` extracts any candidate the
+  descent dropped (direct `Synthesizer.extract`, bounded to the missed chunks). Chunking: `_repair_partition`
+  fills any item range the recursion left as its own span. Tests prove coverage holds even when the descent
+  returns incomplete output. Strengthened SKILL.md (rule 4: recurse on EVERY part). **This protects
+  RAG_Wright's standalone use (evals, `rlm_synthesize`/`chunk`).**
+- [ ] **Node-level guarantee (PENDING — cross-repo seam):** GraphWright's `bind_run` runs the interpreter
+  WORKFLOW (SKILL.md) in the node, not RAG_Wright's Python `rlm_synthesize` harness, and the graph
+  orchestration is compiled from the Orchestration Spec — so the capability-level Python guarantee does NOT
+  run in GraphWright's node. The durable node fix must run WHERE THE NODE RUNS: a **runtime coverage
+  post-check at the RLM node** (the node holds the working set via `tools.workingSet()`; after the workflow
+  returns, the runtime verifies every working-set item was covered and repairs/re-dispatches the missed) —
+  the same principle at the node. RAG_Wright can provide the coverage/repair logic; GraphWright wires it as
+  the node's finalization (or runs an authored workflow with the coverage tail). **Surfaced to GraphWright;
+  the two-node channel graph is held until the node seam is decided.**
+
+**Status:** capability-level done; node-level pending the GraphWright seam decision. **Dep:** T36.
 
 ### Task T35: Per-process interpreter-session serialization (KI-1 cross-graph constraint) — ADR-0020
 

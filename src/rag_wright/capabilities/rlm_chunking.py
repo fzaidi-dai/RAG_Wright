@@ -175,9 +175,8 @@ class SeamBoundaryDiscoverer:
             )
             messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
         final = _final_text(messages)
-        spans = _extract_spans(final)
-        _validate_partition(spans, len(document.texts))
-        return spans
+        # coverage guarantee (T36): repair any gap the recursion missed so the whole document is covered
+        return _repair_partition(_extract_spans(final), len(document.texts))
 
 
 def _final_text(messages) -> str:
@@ -229,6 +228,28 @@ def _hard_split(text: str, token_cap: int) -> list[str]:
 
 
 _SEP = "\n\n"
+
+
+def _repair_partition(spans: list[BoundarySpan], n_items: int) -> list[BoundarySpan]:
+    """Coverage guarantee (T36 finding): out of context the discoverer's recursion can silently miss an
+    item range, dropping document text while the run reports success. The code holds the whole document,
+    so it reconstructs a complete contiguous partition from whatever the model returned: a gap the
+    recursion left becomes its own span, and an overlap is clipped. Runtime guarantees coverage; the model
+    reasons about boundaries. The result always covers every item 0..n_items-1 exactly once."""
+    if n_items == 0:
+        return []
+    result: list[BoundarySpan] = []
+    cursor = 0
+    for span in sorted(spans, key=lambda s: s.start_index):
+        if span.end_index < cursor:  # fully behind the cursor (overlap already covered) — drop it
+            continue
+        if span.start_index > cursor:  # a gap the recursion missed — cover it as its own span
+            result.append(BoundarySpan(start_index=cursor, end_index=span.start_index - 1))
+        result.append(BoundarySpan(start_index=max(span.start_index, cursor), end_index=span.end_index))
+        cursor = span.end_index + 1
+    if cursor < n_items:  # trailing gap (the recursion stopped short)
+        result.append(BoundarySpan(start_index=cursor, end_index=n_items - 1))
+    return result
 
 
 def _validate_partition(spans: list[BoundarySpan], n_items: int) -> None:

@@ -51,10 +51,15 @@ class _StubExtractor:
 
 
 class _StubSynthesizer:
-    """A Synthesizer whose combine concatenates notes (deterministic; counts calls)."""
+    """A Synthesizer whose combine concatenates notes and whose extract covers one slice (counts calls)."""
 
     def __init__(self) -> None:
         self.combine_calls = 0
+        self.extract_calls = 0
+
+    def extract(self, query: str, text: str) -> str:
+        self.extract_calls += 1
+        return f"extracted({text})"
 
     def combine(self, query: str, extracts: list[str]) -> str:
         self.combine_calls += 1
@@ -103,6 +108,22 @@ def test_rlm_synthesize_extracts_then_reduces_and_cites_chunks():
 def test_rlm_synthesize_on_empty_candidates_returns_empty():
     result = rlm_synthesize("q", [], extractor=_StubExtractor([]), synthesizer=_StubSynthesizer())
     assert result.slice_outputs == [] and result.synthesis == "" and result.chunk_ids == []
+
+
+def test_coverage_guarantee_covers_a_candidate_the_descent_silently_missed():
+    # T36 finding: out of context the recursive descent can miss a deep leaf -- here it returns extracts
+    # for d:0 and d:2 but SILENTLY DROPS d:1. The code holds the whole candidate set, so it guarantees d:1
+    # is extracted anyway (via synthesizer.extract), not dropped, and orders outputs to the candidates.
+    chunks = [SynthesisChunk(chunk_id=f"d:{i}:h", text=f"passage {i}") for i in range(3)]
+    extractor = _StubExtractor([("d:0:h", "fact 0"), ("d:2:h", "fact 2")])  # d:1 missed
+    synthesizer = _StubSynthesizer()
+
+    result = rlm_synthesize("q", chunks, extractor=extractor, synthesizer=synthesizer)
+
+    assert [o.chunk_id for o in result.slice_outputs] == ["d:0:h", "d:1:h", "d:2:h"]  # every candidate covered
+    assert result.slice_outputs[1].extract == "extracted(passage 1)"  # the missed leaf covered by the code
+    assert synthesizer.extract_calls == 1  # ONLY the missed chunk was repaired (bounded, not a re-run)
+    assert result.chunk_ids == ["d:0:h", "d:1:h", "d:2:h"]  # no claim without a citation, all present
 
 
 # --- the kept _reduce fan-in (ascent, ADR-0016) --------------------------------------------------
