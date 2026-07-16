@@ -213,6 +213,7 @@ loop enforces it.
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
+| T35 | Per-process interpreter-session serialization (KI-1) — HARD GATE on any concurrent-batch ingestion path | 5 Integrate | OQ8, ADR-0020 | todo (constraint; satisfied while serial) | T17, T28 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -1242,6 +1243,34 @@ chunking (T17), the chunk write/store (T20, ArcadeDB `store/`), and the graph la
 delete-by-`source_doc_id` on the store seam + graph, wired into a document-update entry point.
 
 **Status:** todo (finding — not a T17 blocker; makes the ingestion lifecycle complete). **Dep:** T17, T20, T25.
+
+### Task T35: Per-process interpreter-session serialization (KI-1 cross-graph constraint) — ADR-0020
+
+**Description:** GraphWright's KI-1 resolution (2026-07-16): two QuickJS interpreter runtimes coexisting
+in one process race on shared Rust-side state and **silently complete without dispatching ~half the
+time, with zero exceptions**. GraphWright's compile-time guard rejects two interpreter nodes within one
+graph, so a single ingestion graph is safe (one `rlm_chunking` interpreter session, concurrent workers
+inside = reliable single-session case). What its guard cannot see: a harness running **multiple
+documents' graphs concurrently in one process** brings up coexisting sessions across graphs — the exact
+race. This is harness-level, so ours to enforce (ADR-0020).
+
+**Current state — SATISFIED (nothing to build yet):** the ingestion/eval harnesses are **serial** (plain
+`for d in docs:` loops in `eval/gate1_chunker_ab.py` and `eval/gate2_hybrid_rerank.py`; each `chunk()`
+runs its one interpreter session to completion before the next). No `asyncio.gather`/thread/process pool
+over documents exists. So at most one interpreter session is live per process; KI-1 cannot bite today.
+
+**Constraint (HARD GATE):** before **any** concurrent-batch ingestion path is built, per-process
+interpreter-session serialization must be in place — at most one RLM interpreter session (chunking AND
+synthesis) live per process at a time (e.g. a process-level semaphore(1) around the interpreter run);
+everything else (parse, embed, summarize, write) may stay concurrent. Separate processes are inherently
+safe, so per-process scope is correct. Guard it with a KI-1-style check (dispatch actually fired under
+concurrency), because the failure is silent. Closes the interpreter-concurrency dimension of **OQ8**.
+
+**Exit path:** lifted when the upstream coexistence bug (langchain-quickjs/deepagents) is fixed — or via a
+sandbox-based RLM build / RLM-in-LangGraph-via-DSPy — verified by the KI-1 regression harness at full
+dispatch under concurrency. Then this and GraphWright's in-graph guard lift together.
+
+**Status:** todo (binding constraint; satisfied while the harness is serial). **Dep:** T17, T28.
 
 ### Task T-CHK: RLM chunker degenerate-split fix (T17 bug) — ask-first
 
