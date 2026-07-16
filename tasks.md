@@ -214,7 +214,7 @@ loop enforces it.
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
-| T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | todo (pending GraphWright tool bind) | T17, T28 |
+| T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -1304,7 +1304,8 @@ principle as the workflow trigger and eager method load.
   directory (Agent Skills spec compliance). Directory can't be `rlm-method` — `rag_wright.skills.rlm` is an
   imported Python package and module names can't contain hyphens. Bundled here since it also touches SKILL.md.
 
-**Status:** todo — **pending GraphWright binding `working_set`** and the two-node channel graph. **Dep:** T17, T28.
+**Status:** done (2026-07-16). GraphWright's bind landed; implemented + re-validated. **Dep:** T17, T28.
+**Re-validation (green):** T28 opaque-recursion + citations and T17 coherent-clause-kept-whole both **passed live** under tool-delivery (real model calls `tools.workingSet()` and follows the method); no-truncation is a committed hermetic test (300-item doc + full last-item text intact via the tool). Grounded PTC-only exposure: `working_set` is exposed as `tools.workingSet()` inside `eval` and is NOT a top-level tool, so the working set never enters context. Full suite 383 passed + 26 skipped.
 
 ### Task T-CHK: RLM chunker degenerate-split fix (T17 bug) — ask-first
 

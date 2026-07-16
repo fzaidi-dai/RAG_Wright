@@ -101,31 +101,31 @@ class BoundaryDiscoverer(Protocol):
 # --- the real, LLM-driven boundary discoverer (opt-in / live) ------------------------------------
 
 _DISCOVERY_INSTRUCTIONS = (
-    "You are given a parsed legal document as a list of structural items (index, label, level, character "
-    "length, and a short preview). Partition it into semantically coherent chunks by grouping CONTIGUOUS "
-    "items so that each chunk is one coherent unit (a clause, a section, a related run) and no chunk "
-    "exceeds ~{cap} characters. Never split a single coherent clause across two chunks, and never cut at a "
-    "fixed size. Use the peek(index) tool to read an item's full text when the preview is not enough. "
+    "Call `const items = await tools.workingSet();` to get the parsed document as a list of structural "
+    "items (each has index, label, level, and full text); it is a JavaScript value in the interpreter, "
+    "never in your context. Partition it into semantically coherent chunks by grouping CONTIGUOUS items so "
+    "that each chunk is one coherent unit (a clause, a section, a related run) and no chunk exceeds ~{cap} "
+    "characters. Never split a single coherent clause across two chunks, and never cut at a fixed size. "
     "Return ONLY a JSON array of the boundaries as objects {{\"start_index\": i, \"end_index\": j}} "
     "(inclusive, contiguous, covering every item from 0 to the last)."
 )
 
 
-def _item_view(document) -> list[dict]:
-    """A compact structural view of the document for the model to explore (full text stays behind peek)."""
-    view: list[dict] = []
+def _document_items(document) -> list[dict]:
+    """The document's items as data for the working-set tool: index, label, level, and FULL text. This is
+    a JS value delivered through `tools.workingSet()` — it lives in the interpreter and never enters the
+    model's context (no truncation; a whole document survives intact), so no `peek` tool is needed."""
+    items: list[dict] = []
     for i, item in enumerate(document.texts):
-        text = (getattr(item, "text", "") or "").strip()
-        view.append(
+        items.append(
             {
                 "index": i,
                 "label": str(getattr(item, "label", "")),
                 "level": getattr(item, "level", None),
-                "len": len(text),
-                "preview": text[:80],
+                "text": (getattr(item, "text", "") or "").strip(),
             }
         )
-    return view
+    return items
 
 
 def _extract_spans(text: str) -> list[BoundarySpan]:
@@ -154,25 +154,24 @@ class SeamBoundaryDiscoverer:
         self._token_cap = token_cap
 
     def discover(self, document) -> list[BoundarySpan]:
-        view = _item_view(document)
+        items = _document_items(document)
 
         @tool
-        def peek(index: int) -> str:
-            """Return the full text of the document item at the given index."""
-            if 0 <= index < len(document.texts):
-                return (getattr(document.texts[index], "text", "") or "").strip()
-            return ""
+        def working_set() -> list:
+            """Return the working set: the parsed document's items (index, label, level, full text)."""
+            return items
 
         instructions = _DISCOVERY_INSTRUCTIONS.format(cap=self._token_cap * 4)
-        request = f"Run this as a workflow.\n\n{instructions}\n\nDocument items (JSON):\n{json.dumps(view)}"
+        request = f"Run this as a workflow.\n\n{instructions}"
         # one model across all roles (the strong reasoning model): boundary discovery is a single
         # exploration, and a sub-agent it dispatches for an over-large section warrants the same model.
-        # The interpreter session is serialized process-wide (KI-1, ADR-0020): build + run + teardown all
-        # inside the lock, so no two QuickJS runtimes coexist if ingestion ever runs documents concurrently.
-        with rlm_interpreter_session() as interpreter:
+        # The working set is delivered as a PTC value (`tools.workingSet()`, T36): it stays in the
+        # interpreter and never enters the model's context. The interpreter session is serialized
+        # process-wide (KI-1, ADR-0020): build + run + teardown all inside the lock.
+        with rlm_interpreter_session(ptc=[working_set]) as interpreter:
             agent = build_rlm_agent(
                 reasoning_model=self._model, decomposer_model=self._model, worker_model=self._model,
-                tools=[peek], worker_tools=[peek], interpreter=interpreter,
+                interpreter=interpreter,
             )
             messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
         final = _final_text(messages)

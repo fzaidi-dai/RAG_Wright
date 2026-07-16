@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import glob
+import json
 import threading
 import time
 from pathlib import Path
@@ -252,7 +253,7 @@ def test_asiandragon_real_parse_no_longer_fragments_over_spans():
           f"char min={lens[0]} median={lens[len(lens) // 2]} max={lens[-1]}")
 
 
-# --- per-slice tool use in the exploration (the discoverer's peek tool) ---------------------------
+# --- working-set delivered via the runtime tool, never in the prompt (T36) -----------------------
 
 
 class _FakeChat(BaseChatModel):
@@ -269,23 +270,52 @@ class _FakeChat(BaseChatModel):
         return "fake-chat"
 
 
-def test_boundary_discoverer_can_use_the_peek_tool_during_exploration():
-    doc = _two_section_doc()
-    seen_peek = {"index": None}
+def test_boundary_discoverer_delivers_the_document_via_the_working_set_tool_not_the_prompt():
+    doc = _two_section_doc()  # 4 items
 
     def responder(messages):
-        # once peek has returned an item's text, emit the boundary spans; else call peek first
+        # after the eval read tools.workingSet(), derive spans from the item count it reported. The spans
+        # are correct ONLY if the full 4-item document reached the interpreter via the tool.
         for m in messages:
-            if isinstance(m, ToolMessage) and m.name == "peek":
-                seen_peek["index"] = 0
-        if seen_peek["index"] is not None:
-            return AIMessage(content='[{"start_index": 0, "end_index": 1}, {"start_index": 2, "end_index": 3}]')
-        return AIMessage(content="", tool_calls=[{"name": "peek", "args": {"index": 0}, "id": "p1"}])
+            if isinstance(m, ToolMessage) and m.name == "eval":
+                body = str(m.content)
+                info = json.loads(body[body.find("{"): body.rfind("}") + 1]) if "{" in body else {}
+                if info.get("n") == 4:
+                    return AIMessage(content='[{"start_index": 0, "end_index": 1}, {"start_index": 2, "end_index": 3}]')
+                return AIMessage(content="[]")  # working set not delivered -> no valid partition
+        # the request carries NO document; the discoverer must have bound it as tools.workingSet()
+        code = "const ws = await tools.workingSet(); JSON.stringify({n: ws.length})"
+        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": code}, "id": "e1"}])
+
+    # the request the discoverer sends must not contain the document text (it goes through the tool)
+    spans = SeamBoundaryDiscoverer(model=_FakeChat(responder=responder)).discover(doc)
+
+    assert [(s.start_index, s.end_index) for s in spans] == [(0, 1), (2, 3)]  # spans derived from tool-delivered ws
+
+
+def test_working_set_tool_delivers_a_large_document_intact_no_truncation():
+    # T36 no-truncation guarantee: a whole document reaches the interpreter via tools.workingSet() with no
+    # truncation -- a PTC return marshals as a native JS value and bypasses max_result_chars (which caps
+    # only model-facing eval OUTPUT, never a value held in a JS variable). Prove the full item count AND
+    # the last item's full text survive.
+    doc = DoclingDocument(name="big")
+    for i in range(300):
+        doc.add_text(label="text", text=f"Clause {i}: " + "lorem ipsum dolor sit amet. " * 10)  # ~290 chars each
+
+    def responder(messages):
+        for m in messages:
+            if isinstance(m, ToolMessage) and m.name == "eval":
+                body = str(m.content)
+                info = json.loads(body[body.find("{"): body.rfind("}") + 1]) if "{" in body else {}
+                if info.get("n") == 300 and info.get("lastLen", 0) > 200:  # full count + full last text
+                    return AIMessage(content='[{"start_index": 0, "end_index": 299}]')
+                return AIMessage(content="[]")  # truncated -> invalid
+        code = "const ws = await tools.workingSet(); JSON.stringify({n: ws.length, lastLen: ws[ws.length-1].text.length})"
+        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": code}, "id": "e1"}])
 
     spans = SeamBoundaryDiscoverer(model=_FakeChat(responder=responder)).discover(doc)
 
-    assert seen_peek["index"] == 0  # the exploration invoked its per-slice tool mid-handling
-    assert [(s.start_index, s.end_index) for s in spans] == [(0, 1), (2, 3)]  # spans parsed + partition-valid
+    assert [(s.start_index, s.end_index) for s in spans] == [(0, 299)]  # whole 300-item doc intact through the tool
 
 
 # --- registration --------------------------------------------------------------------------------

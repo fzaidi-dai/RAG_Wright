@@ -58,7 +58,9 @@ _INTERPRETER_SEMAPHORE = threading.BoundedSemaphore(1)
 
 
 @contextmanager
-def rlm_interpreter_session() -> Iterator[CodeInterpreterMiddleware]:
+def rlm_interpreter_session(
+    *, ptc: Sequence[BaseTool] = ()
+) -> Iterator[CodeInterpreterMiddleware]:
     """Own the process for exactly one RLM interpreter session (KI-1, ADR-0020).
 
     Holds `_INTERPRETER_SEMAPHORE` from before the interpreter runtime is built (the middleware is created
@@ -67,9 +69,13 @@ def rlm_interpreter_session() -> Iterator[CodeInterpreterMiddleware]:
     just the dispatch call. Build the RLM agent with the yielded middleware and run it inside the `with`;
     do parsing/String work outside it. Reentrant call from within one session would deadlock — one session
     per call stack, which the discoverer/extractor honour (they invoke once, then parse outside).
+
+    `ptc` are Programmatic-Tool-Calling tools exposed **inside** the interpreter as `tools.<camelCase>()`
+    and never as top-level tools — this is how the working set is delivered as a JS value that stays out of
+    the model's context (`working_set` → `tools.workingSet()`, T36 / GraphWright working-set contract).
     """
     _INTERPRETER_SEMAPHORE.acquire()
-    interpreter = CodeInterpreterMiddleware(subagents=True)
+    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=list(ptc) or None)
     try:
         yield interpreter
     finally:
@@ -89,18 +95,19 @@ _SLICE_WORKER_PROMPT = (
     "needed, then return the result for this slice only. You never see the whole working set."
 )
 
-# The canonical interpreter-driven recursive workflow (ADR-0015 Q2 corrected, design B'). Expects a
-# `WORKING_SET` binding already in the interpreter (the applying capability loads it as data before this
-# runs) and dispatches sub-agents by name via `task()`. Recursion lives HERE, in the interpreter: a fresh
+# The canonical interpreter-driven recursive workflow (ADR-0015 Q2 corrected, design B'). Reads the
+# working set from the runtime PTC tool `tools.workingSet()` (T36) — a JS value that never enters context —
+# and dispatches sub-agents by name via `task()`. Recursion lives HERE, in the interpreter: a fresh
 # `rlm_decomposer` decides each level's split, `decompose()` re-enters itself on the returned parts
 # (arbitrary depth, the interpreter holds the stack), and `rlm_slice_worker` handles each leaf. The RLM
 # skill (SKILL.md) teaches this workflow; the node writes it into the `eval` tool when its request asks
 # for a "workflow" (the trigger GraphWright's applier guarantees, requiresDynamicDispatch). It returns
 # the per-leaf results plus the depths at which splitting occurred, so the descent is inspectable.
 RLM_WORKFLOW_JS = r"""
-// Recursive divide-and-conquer over WORKING_SET. Fan the work out to sub-agents in code (a "workflow"),
-// never one grinding tool call at a time. The interpreter holds the working set and the recursion stack;
-// the model is only ever called on a focused slice.
+// Recursive divide-and-conquer. Read the working set from the runtime tool (a JS value that stays in the
+// interpreter and never enters the model's context), then fan the work out to sub-agents in code (a
+// "workflow"), never one grinding tool call at a time. The interpreter holds the working set and the
+// recursion stack; the model is only ever called on a focused slice.
 const _splitDepths = [];  // the depths at which decompose() re-entered itself (proof of descent)
 async function decompose(slice, depth) {
   const decision = JSON.parse(await task({
@@ -119,7 +126,8 @@ async function decompose(slice, depth) {
   const handled = await Promise.all(decision.parts.map((p) => decompose(p, depth + 1)));
   return handled.flat();
 }
-const _leaves = await decompose(WORKING_SET, 0);
+const workingSet = await tools.workingSet();  // the runtime delivers it; it never enters context
+const _leaves = await decompose(workingSet, 0);
 JSON.stringify({
   leaves: _leaves,
   leafCount: _leaves.length,

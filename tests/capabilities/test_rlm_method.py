@@ -89,16 +89,33 @@ def _decomposer_responder(split_map: dict[str, list[str]]) -> Callable[[list[Bas
     return respond
 
 
-def _orchestrator_responder(working_set: Any, workflow_js: str = RLM_WORKFLOW_JS):
-    """An orchestrator that writes the workflow into `eval` once, then finishes (code-driven fan-out)."""
+def _orchestrator_responder(workflow_js: str = RLM_WORKFLOW_JS):
+    """An orchestrator that writes the workflow into `eval` once, then finishes (code-driven fan-out).
+    The working set is delivered via `tools.workingSet()` (T36), so the workflow reads it — not the prompt."""
 
     def respond(messages: list[BaseMessage]) -> AIMessage:
         if any(isinstance(m, ToolMessage) and m.name == "eval" for m in messages):
             return AIMessage(content="done")
-        code = f"const WORKING_SET = {json.dumps(working_set)};\n{workflow_js}"
-        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": code}, "id": "eval_1"}])
+        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": workflow_js}, "id": "eval_1"}])
 
     return respond
+
+
+def _ws_tool(value: Any):
+    @tool
+    def working_set() -> object:
+        """Return the working set (delivered as a PTC value; never enters the model's context)."""
+        return value
+
+    return working_set
+
+
+def _build_rlm(ws_value: Any, **roles: Any):
+    """Build an RLM agent with `working_set` bound as a PTC returning `ws_value` (the T36 delivery seam)."""
+    from langchain_quickjs import CodeInterpreterMiddleware
+
+    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=[_ws_tool(ws_value)])
+    return build_rlm_agent(interpreter=interpreter, **roles)
 
 
 def _run(agent, human: str = "run the workflow"):
@@ -138,8 +155,9 @@ def test_recursion_forced_the_interpreter_reenters_decompose_past_depth_one():
     # A1, A2 are reachable ONLY by re-entering decompose() at depth 1. A one-level splitter yields
     # leaves [A, B] at maxSplitDepth 0 and fails every assertion below.
     split_map = {"R": ["A", "B"], "A": ["A1", "A2"]}
-    agent = build_rlm_agent(
-        reasoning_model=FakeChat(responder=_orchestrator_responder("R")),
+    agent = _build_rlm(
+        "R",
+        reasoning_model=FakeChat(responder=_orchestrator_responder()),
         decomposer_model=FakeChat(responder=_decomposer_responder(split_map)),
         worker_model=FakeChat(responder=lambda m: AIMessage(content=f"handled {_slice_of(m)}")),
     )
@@ -159,13 +177,15 @@ def test_a_flat_one_level_workflow_fails_the_recursion_assertion():
     # Teeth: the recursion assertion is not vacuous. A non-recursive workflow (split once, dispatch the
     # parts as leaves) produces maxSplitDepth 0 and cannot satisfy the depth check above.
     flat_js = r"""
-    const decision = JSON.parse(await task({description: "decompose depth 0: " + WORKING_SET, subagentType: "rlm_decomposer"}));
-    const parts = decision.leaf ? [WORKING_SET] : decision.parts;
+    const workingSet = await tools.workingSet();
+    const decision = JSON.parse(await task({description: "decompose depth 0: " + workingSet, subagentType: "rlm_decomposer"}));
+    const parts = decision.leaf ? [workingSet] : decision.parts;
     for (const p of parts) { await task({description: "handle leaf depth 0: " + p, subagentType: "rlm_slice_worker"}); }
     JSON.stringify({leafCount: parts.length, maxSplitDepth: 0});
     """.strip()
-    agent = build_rlm_agent(
-        reasoning_model=FakeChat(responder=_orchestrator_responder("R", flat_js)),
+    agent = _build_rlm(
+        "R",
+        reasoning_model=FakeChat(responder=_orchestrator_responder(flat_js)),
         decomposer_model=FakeChat(responder=_decomposer_responder({"R": ["A", "B"], "A": ["A1", "A2"]})),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="handled")),
     )
@@ -190,8 +210,9 @@ def test_a_slice_worker_can_invoke_a_tool_mid_handling():
             return AIMessage(content="leaf handled")
         return AIMessage(content="", tool_calls=[{"name": "record_fact", "args": {"fact": "f1"}, "id": "t1"}])
 
-    agent = build_rlm_agent(
-        reasoning_model=FakeChat(responder=_orchestrator_responder("x")),
+    agent = _build_rlm(
+        "x",
+        reasoning_model=FakeChat(responder=_orchestrator_responder()),
         decomposer_model=FakeChat(responder=_decomposer_responder({})),  # x is a leaf
         worker_model=FakeChat(responder=worker_responder),
         worker_tools=[record_fact],
@@ -205,8 +226,9 @@ def test_a_slice_worker_can_invoke_a_tool_mid_handling():
 
 def test_a_slice_worker_can_load_a_skill():
     worker_seen: list[list[BaseMessage]] = []
-    agent = build_rlm_agent(
-        reasoning_model=FakeChat(responder=_orchestrator_responder("x")),
+    agent = _build_rlm(
+        "x",
+        reasoning_model=FakeChat(responder=_orchestrator_responder()),
         decomposer_model=FakeChat(responder=_decomposer_responder({})),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="leaf handled"), received=worker_seen),
         worker_skills=[_PROBE_SKILL],
@@ -232,8 +254,9 @@ def _is_code_driven(events: list[dict]) -> bool:
 
 
 def test_the_workflow_fires_code_driven_fanout_not_sequential_dispatch():
-    agent = build_rlm_agent(
-        reasoning_model=FakeChat(responder=_orchestrator_responder("R")),
+    agent = _build_rlm(
+        "R",
+        reasoning_model=FakeChat(responder=_orchestrator_responder()),
         decomposer_model=FakeChat(responder=_decomposer_responder({"R": ["A", "B"]})),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="handled")),
     )
@@ -349,10 +372,11 @@ def _probe_worker(messages: list[BaseMessage]) -> AIMessage:
 
 
 _OPAQUE_REQUEST = (
-    "Run this as a workflow. The working set is an opaque handle: N0. You cannot see its contents or its "
-    "sub-slices; only the rlm_decomposer can reveal them. Apply the RLM method from your instructions: "
-    "load N0 into the interpreter, decompose it by dispatching rlm_decomposer and recursing on the parts "
-    "it returns, and hand each leaf slice to an rlm_slice_worker. Report the leaves you handled."
+    "Run this as a workflow. Get the working set with `const workingSet = await tools.workingSet();` — it "
+    "is an opaque handle whose contents and sub-slices you cannot see; only the rlm_decomposer can reveal "
+    "them. Apply the RLM method from your instructions: decompose the working set by dispatching "
+    "rlm_decomposer and recursing on the parts it returns, and hand each leaf slice to an rlm_slice_worker. "
+    "Report the leaves you handled."
 )
 
 
@@ -365,7 +389,8 @@ def test_a_real_model_recurses_on_the_decomposers_output_not_a_hardcoded_split()
     hermetically above): it means a real model read the method and did not follow it (flatten-and-hardcode,
     wrong sub-agents, or no code-driven fan-out). Fix the skill, not the harness. See ADR-0018.
     """
-    agent = build_rlm_agent(
+    agent = _build_rlm(
+        "N0",
         decomposer_model=FakeChat(responder=_probe_decomposer),
         worker_model=FakeChat(responder=_probe_worker),
     )

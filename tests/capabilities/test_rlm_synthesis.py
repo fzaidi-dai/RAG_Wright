@@ -138,21 +138,25 @@ def _probe_decomposer(messages: list[BaseMessage]) -> AIMessage:
     return AIMessage(content=json.dumps({"leaf": False, "parts": [f"{sid}.0", f"{sid}.1"]}))
 
 
-def _workflow_orchestrator(working_set: str):
-    """An orchestrator that writes the recursive decompose() workflow into eval (code-driven fan-out)."""
+def _workflow_orchestrator():
+    """An orchestrator that writes the recursive decompose() workflow into eval (code-driven fan-out).
+    The working set arrives via `tools.workingSet()` (T36), not embedded in the code."""
 
     def respond(messages: list[BaseMessage]) -> AIMessage:
         if any(isinstance(m, ToolMessage) and m.name == "eval" for m in messages):
             return AIMessage(content="done")
-        code = f'const WORKING_SET = {json.dumps(working_set)};\n{RLM_WORKFLOW_JS}'
-        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": code}, "id": "eval_1"}])
+        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": RLM_WORKFLOW_JS}, "id": "eval_1"}])
 
     return respond
 
 
 def _stream_events(extractor: SeamSliceExtractor, chunks) -> list[dict]:
+    from langchain_quickjs import CodeInterpreterMiddleware
+
     events: list[dict] = []
-    agent = extractor._build_agent(chunks)
+    # bind the working set as a PTC (T36), the same way extract() does, so the workflow reads it
+    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=[extractor._working_set_tool(chunks)])
+    agent = extractor._build_agent(chunks, interpreter=interpreter)
     for mode, data in agent.stream(
         {"messages": [HumanMessage(content="run the workflow")]},
         stream_mode=["custom", "values"],
@@ -167,9 +171,10 @@ def test_synthesis_descent_recurses_past_depth_one():
     # The candidate set is an opaque handle C0 whose sub-slices only the decomposer reveals; reaching the
     # leaves forces the interpreter to re-enter decompose(). A flat one-level split cannot reach them.
     extractor = SeamSliceExtractor(
-        model=FakeChat(responder=_workflow_orchestrator("C0")),
+        model=FakeChat(responder=_workflow_orchestrator()),
         decomposer_model=FakeChat(responder=_probe_decomposer),
         worker_model=FakeChat(responder=lambda m: AIMessage(content=f"extracted {_deepest(_last_human(m))}")),
+        working_set="C0",  # delivered via tools.workingSet() (opaque handle; only the decomposer reveals leaves)
     )
     events = _stream_events(extractor, [SynthesisChunk(chunk_id="C0", text="opaque")])
 

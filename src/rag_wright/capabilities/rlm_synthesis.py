@@ -26,6 +26,7 @@ import json
 from typing import Optional, Protocol, runtime_checkable
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.tools import tool
 from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
@@ -198,26 +199,37 @@ class SeamSliceExtractor:
             interpreter=interpreter,
         )
 
-    def _request(self, query: str, chunks: list[SynthesisChunk]) -> str:
-        working_set = self._working_set if self._working_set is not None else [
+    def _working_set_tool(self, chunks: list[SynthesisChunk]):
+        value = self._working_set if self._working_set is not None else [
             {"chunk_id": c.chunk_id, "text": c.text} for c in chunks
         ]
+
+        @tool
+        def working_set() -> object:
+            """Return the working set: the retrieved candidate chunks (chunk_id, text)."""
+            return value
+
+        return working_set
+
+    def _request(self, query: str) -> str:
         return (
-            "Run this as a workflow. Below is the retrieved candidate set for a question. Load it into the "
-            "interpreter, decompose it (dispatch rlm_decomposer for an over-large group and recurse), and "
-            "hand each leaf slice to an rlm_slice_worker that extracts the facts relevant to the question, "
-            "keeping each fact tied to its chunk_id. Then return ONLY a JSON array "
-            "[{\"chunk_id\": ..., \"extract\": ...}], one entry per candidate chunk.\n\n"
-            f"Question: {query}\n\nCandidate set (JSON):\n{json.dumps(working_set)}"
+            "Run this as a workflow. Call `const workingSet = await tools.workingSet();` to get the "
+            "retrieved candidate set (a list of {chunk_id, text}); it is a JavaScript value in the "
+            "interpreter, never in your context. Decompose it (dispatch rlm_decomposer for an over-large "
+            "group and recurse), hand each leaf slice to an rlm_slice_worker that extracts the facts "
+            "relevant to the question, keeping each fact tied to its chunk_id. Then return ONLY a JSON "
+            "array [{\"chunk_id\": ..., \"extract\": ...}], one entry per candidate chunk.\n\n"
+            f"Question: {query}"
         )
 
     def extract(self, query: str, chunks: list[SynthesisChunk]) -> list[SliceOutput]:
         if not chunks:
             return []
-        request = self._request(query, chunks)
-        # Serialize the interpreter session process-wide (KI-1, ADR-0020): build + run + teardown inside
-        # the lock, so no two QuickJS runtimes coexist if queries ever run concurrently in one process.
-        with rlm_interpreter_session() as interpreter:
+        request = self._request(query)
+        # The candidate set is delivered as a PTC value (`tools.workingSet()`, T36): it stays in the
+        # interpreter and never enters the model's context. The interpreter session is serialized
+        # process-wide (KI-1, ADR-0020): build + run + teardown inside the lock.
+        with rlm_interpreter_session(ptc=[self._working_set_tool(chunks)]) as interpreter:
             agent = self._build_agent(chunks, interpreter=interpreter)
             messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
         return _parse_slice_outputs(_final_text(messages))

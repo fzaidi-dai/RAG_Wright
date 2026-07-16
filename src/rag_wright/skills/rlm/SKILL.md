@@ -1,5 +1,5 @@
 ---
-name: rlm-method
+name: rlm
 description: >
   The recursive-language-model (RLM) divide-and-conquer method: when a working set is too large for
   one context window, load it into the code interpreter as data, then write a recursive workflow that
@@ -24,10 +24,11 @@ over everything at once. Stuffing the whole volume into one call is the failure 
 
 ## The method: interpreter holds the whole → a recursive workflow dispatches sub-agents → combine
 
-1. **Load the working set into the interpreter as data.** Read the full input into the code interpreter
-   as ordinary values (strings, lists, dicts), *not* into a prompt. The interpreter, not the model,
-   holds the state and the recursion stack, and is not bounded by a context window. Nothing about the
-   whole volume is sent to a model yet.
+1. **Get the working set from the runtime, as data.** Call `const workingSet = await tools.workingSet();`
+   — the runtime returns the full input as ordinary interpreter values (strings, lists, dicts), *not*
+   into a prompt. The interpreter, not the model, holds the state and the recursion stack, and is not
+   bounded by a context window. Nothing about the whole volume is sent to a model. The working set is
+   never in your context; you only ever hold it as an interpreter variable.
 
 2. **Write a recursive `decompose()` workflow in code that dispatches sub-agents.** This is a
    **workflow**: fan the work out to sub-agents with `task()` from interpreter code, never one grinding
@@ -54,7 +55,10 @@ interpreter holds the whole and drives the recursion.**
 
 ### The canonical workflow (write it this way)
 
-The recursive descent, written into the `eval` tool (the applying capability loads `WORKING_SET` first):
+The recursive descent, written into the `eval` tool. Read the working set from the runtime tool
+`tools.workingSet()` — it returns the whole working set as a JavaScript value that lives in the
+interpreter and never enters your context. Do **not** expect the working set in your prompt; call the
+tool.
 
 ```javascript
 async function decompose(slice, depth) {
@@ -69,7 +73,8 @@ async function decompose(slice, depth) {
   const handled = await Promise.all(decision.parts.map((p) => decompose(p, depth + 1)));
   return handled.flat();
 }
-const leaves = await decompose(WORKING_SET, 0);
+const workingSet = await tools.workingSet();  // delivered by the runtime; never in your context
+const leaves = await decompose(workingSet, 0);
 ```
 
 **These rules are not optional. Follow them exactly:**
