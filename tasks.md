@@ -214,6 +214,7 @@ loop enforces it.
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
+| T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | todo (pending GraphWright tool bind) | T17, T28 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -1275,6 +1276,35 @@ sandbox-based RLM build / RLM-in-LangGraph-via-DSPy — verified by the KI-1 reg
 dispatch under concurrency. Then this and GraphWright's in-graph guard lift together.
 
 **Status:** todo (binding constraint; satisfied while the harness is serial). **Dep:** T17, T28.
+
+### Task T36: Working-set delivered by a runtime tool, not message-embedded JSON (GraphWright contract)
+
+**Description:** Cross-repo contract from GraphWright (docs/handoff/working-set-binding.md, 2026-07-16).
+Today RAG_Wright delivers the working set **in the model's context**: rlm_synthesis embeds the candidate
+set as JSON in the HumanMessage; rlm_chunking embeds an item-view (metadata + 80-char previews) + a `peek`
+tool. That partially defeats RLM (the model should hold interpreter variables, not the whole set). Fix:
+GraphWright binds a deterministic PTC tool returning the node's channel input, exposed **inside the
+interpreter** as `globalThis.tools.workingSet()` (host tool name `working_set`; grounded:
+`to_camel_case('working_set')='workingSet'`, PTC exposes `tools.<camel>` async, `task` excluded from PTC
+so no collision). The result stays a JS value, **never enters context** — runtime-guaranteed wiring, same
+principle as the workflow trigger and eager method load.
+
+**Scope (pending GraphWright binding the tool):**
+- SKILL.md canonical workflow becomes: `const workingSet = await tools.workingSet(); decompose(workingSet, 0);`
+  — replaces the `WORKING_SET`-binding assumption.
+- rlm_synthesis: drop JSON-in-HumanMessage; the extractor binds `working_set` (PTC) returning the
+  candidates in RAG_Wright's own harness (GraphWright binds it from the channel in production).
+- rlm_chunking: drop item-view-in-message; `peek` is **subsumed** (the model reads item text from the
+  returned JS value); the discoverer binds `working_set` returning the document items.
+- **Re-validation, NOT a free swap:** re-run **T28**'s opaque-candidate-set recursion + citation-preservation
+  proof AND **T17**'s coherent-clause boundary-quality proof under tool-based delivery (both proofs ran
+  against the OLD message-embedded seam). Also validate a **large** working set via the tool does not hit a
+  PTC result-size cap (`max_result_chars`), since the whole point is a big value that stays in JS.
+- **Skill rename (cosmetic, folded in):** frontmatter `name: rlm-method` → `name: rlm` to match the `rlm`
+  directory (Agent Skills spec compliance). Directory can't be `rlm-method` — `rag_wright.skills.rlm` is an
+  imported Python package and module names can't contain hyphens. Bundled here since it also touches SKILL.md.
+
+**Status:** todo — **pending GraphWright binding `working_set`** and the two-node channel graph. **Dep:** T17, T28.
 
 ### Task T-CHK: RLM chunker degenerate-split fix (T17 bug) — ask-first
 
