@@ -34,12 +34,40 @@ serialized so no two RLM sessions are alive at the same moment in the same proce
   runs its one interpreter session to completion before the loop advances). No `asyncio.gather`, thread
   pool, or process pool over documents exists anywhere in `eval/`, `scripts/`, or `src/`. So KI-1 cannot
   bite today; this ADR is the recorded constraint, not a change to running behavior.
-- **Binding on any future concurrent-batch path (task T35).** Before any batch path that processes
-  documents concurrently in one process is built, per-process interpreter-session serialization must be in
-  place — e.g., a process-level lock/semaphore(1) held around the RLM interpreter run (chunking and
-  synthesis), so concurrent callers serialize on that step alone. Separate **processes** are inherently
-  safe (no in-process coexistence), so a per-process lock is the correct scope; the batch design (OQ8) is
-  free on batch size and worker count as long as this holds.
+- **Enforcement is in place now (always-on), not deferred.** A process-wide `BoundedSemaphore(1)` +
+  `rlm_interpreter_session()` in `skills/rlm/agent.py` serializes the full interpreter-session lifetime for
+  both the chunking discoverer and the synthesis extractor (see "The always-on guard" below). Separate
+  **processes** are inherently safe (no in-process coexistence), so a per-process lock is the correct
+  scope; the batch design (OQ8) is free on batch size and worker count as long as this holds.
+- **Task T35 is the throughput design, not the correctness rescue.** The semaphore is the always-on
+  correctness floor; T35 builds the real concurrent batch path (batch sizes, worker counts, OQ8) that
+  serializes interpreter sessions **consciously** rather than relying on an uncontended semaphore, and it
+  carries a **fail-if-silent** check — that dispatch actually fired under concurrency, not merely that the
+  run completed — because the failure has no error signal. The semaphore makes silent degradation not
+  happen; the T35 check proves it isn't.
+
+## The always-on guard (a correctness safeguard, NOT performance overhead)
+
+Because the failure is **silent** (~50% dispatch loss, zero exceptions), a "remember to add serialization
+before you add concurrency" ledger note (task T35) is insufficient on its own: a note defends against
+failures that announce themselves, and this one's whole nature is that it doesn't. So the enforcement is
+**always on**, not deferred:
+
+- `skills/rlm/agent.py` holds a process-wide `_INTERPRETER_SEMAPHORE = BoundedSemaphore(1)` and a
+  `rlm_interpreter_session()` context manager. Both `SeamBoundaryDiscoverer.discover` (chunking) and
+  `SeamSliceExtractor.extract` (synthesis) run their interpreter session inside it: the middleware is
+  created **inside** the lock, its QuickJS runtime is built lazily on first `eval` **inside** the lock,
+  and the registry is **closed inside** the lock (`_registry.close()`, deterministic teardown, not GC) —
+  the full coexistence window, from before build to after teardown, exactly as scoped. A semaphore around
+  only the dispatch call would let a second runtime come up while the first waits; this does not.
+- This makes the safe behaviour the **default** rather than the **remembered** behaviour. It is
+  **uncontended (zero cost)** while ingestion is serial, and engages only if concurrency is ever added —
+  converting a silent-**correctness** failure into a visible-**performance** one (slower, debuggable,
+  noticed), which is strictly better.
+
+**This lock is load-bearing. Do NOT remove it as an "uncontended lock in a serial path."** A one-line
+comment at the semaphore says so, to prevent a well-meaning cleanup from silently reopening the hole. It
+lifts only via the exit path below.
 
 ## Why now
 

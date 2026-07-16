@@ -25,7 +25,9 @@ provider or model flag lives here.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+import threading
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -43,6 +45,38 @@ from rag_wright.models.seam import build_model
 RLM_DECOMPOSER = "rlm_decomposer"
 RLM_SLICE_WORKER = "rlm_slice_worker"
 GRANTED_SUBAGENTS: tuple[str, str] = (RLM_DECOMPOSER, RLM_SLICE_WORKER)
+
+# LOAD-BEARING, do NOT remove as an "uncontended lock in a serial path" (KI-1, ADR-0020). Two QuickJS
+# interpreter runtimes coexisting in one process race on shared Rust state and silently complete without
+# dispatching ~half the time, with zero exceptions. This process-wide semaphore serializes the FULL
+# interpreter-session lifetime (build -> run -> teardown) so no two RLM runtimes are ever alive at once.
+# It is uncontended (zero cost) while ingestion is serial; it makes the safe behaviour the DEFAULT so that
+# adding concurrency later turns a silent-correctness failure into a visible-performance one (slower, not
+# wrong). It lifts only when the upstream coexistence bug is fixed (ADR-0020 exit path). Task T35 designs
+# the real concurrent batch; this is the always-on correctness floor beneath it, not throughput tuning.
+_INTERPRETER_SEMAPHORE = threading.BoundedSemaphore(1)
+
+
+@contextmanager
+def rlm_interpreter_session() -> Iterator[CodeInterpreterMiddleware]:
+    """Own the process for exactly one RLM interpreter session (KI-1, ADR-0020).
+
+    Holds `_INTERPRETER_SEMAPHORE` from before the interpreter runtime is built (the middleware is created
+    here; its QuickJS runtime is built lazily on first `eval`, inside the lock) until after it is torn down
+    (the registry is closed here, deterministically, not on GC timing) — the whole coexistence window, not
+    just the dispatch call. Build the RLM agent with the yielded middleware and run it inside the `with`;
+    do parsing/String work outside it. Reentrant call from within one session would deadlock — one session
+    per call stack, which the discoverer/extractor honour (they invoke once, then parse outside).
+    """
+    _INTERPRETER_SEMAPHORE.acquire()
+    interpreter = CodeInterpreterMiddleware(subagents=True)
+    try:
+        yield interpreter
+    finally:
+        try:
+            interpreter._registry.close()  # tear the QuickJS runtime down inside the lock (no coexistence)
+        finally:
+            _INTERPRETER_SEMAPHORE.release()
 
 _DECOMPOSER_PROMPT = (
     "You decide how to split ONE working-set slice for a recursive divide-and-conquer. If the slice is "

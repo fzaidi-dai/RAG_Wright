@@ -31,7 +31,12 @@ from pydantic import BaseModel
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_model
-from rag_wright.skills.rlm.agent import RLM_DECOMPOSER, RLM_SLICE_WORKER, build_rlm_agent
+from rag_wright.skills.rlm.agent import (
+    RLM_DECOMPOSER,
+    RLM_SLICE_WORKER,
+    build_rlm_agent,
+    rlm_interpreter_session,
+)
 
 __all__ = [
     "RLM_DECOMPOSER",
@@ -181,7 +186,7 @@ class SeamSliceExtractor:
         self._worker_skills = worker_skills
         self._working_set = working_set
 
-    def _build_agent(self, chunks: list[SynthesisChunk]):
+    def _build_agent(self, chunks: list[SynthesisChunk], *, interpreter=None):
         model = self._model if self._model is not None else model_for(ModelRole.STRUCTURED_REASONING)
         return build_rlm_agent(
             reasoning_model=model,
@@ -190,6 +195,7 @@ class SeamSliceExtractor:
             worker_system_prompt=_EXTRACT_WORKER_PROMPT,
             worker_tools=self._worker_tools,
             worker_skills=self._worker_skills,
+            interpreter=interpreter,
         )
 
     def _request(self, query: str, chunks: list[SynthesisChunk]) -> str:
@@ -208,9 +214,13 @@ class SeamSliceExtractor:
     def extract(self, query: str, chunks: list[SynthesisChunk]) -> list[SliceOutput]:
         if not chunks:
             return []
-        agent = self._build_agent(chunks)
-        result = agent.invoke({"messages": [HumanMessage(content=self._request(query, chunks))]})
-        return _parse_slice_outputs(_final_text(result["messages"]))
+        request = self._request(query, chunks)
+        # Serialize the interpreter session process-wide (KI-1, ADR-0020): build + run + teardown inside
+        # the lock, so no two QuickJS runtimes coexist if queries ever run concurrently in one process.
+        with rlm_interpreter_session() as interpreter:
+            agent = self._build_agent(chunks, interpreter=interpreter)
+            messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
+        return _parse_slice_outputs(_final_text(messages))
 
 
 # --- the capability: descent then ascent ---------------------------------------------------------

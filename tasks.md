@@ -213,7 +213,7 @@ loop enforces it.
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
 | T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
-| T35 | Per-process interpreter-session serialization (KI-1) — HARD GATE on any concurrent-batch ingestion path | 5 Integrate | OQ8, ADR-0020 | todo (constraint; satisfied while serial) | T17, T28 |
+| T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -1254,17 +1254,21 @@ inside = reliable single-session case). What its guard cannot see: a harness run
 documents' graphs concurrently in one process** brings up coexisting sessions across graphs — the exact
 race. This is harness-level, so ours to enforce (ADR-0020).
 
-**Current state — SATISFIED (nothing to build yet):** the ingestion/eval harnesses are **serial** (plain
-`for d in docs:` loops in `eval/gate1_chunker_ab.py` and `eval/gate2_hybrid_rerank.py`; each `chunk()`
-runs its one interpreter session to completion before the next). No `asyncio.gather`/thread/process pool
-over documents exists. So at most one interpreter session is live per process; KI-1 cannot bite today.
+**Current state — SATISFIED, with an ALWAYS-ON GUARD now in place.** The harnesses are serial (plain
+`for d in docs:` loops), so KI-1 cannot bite today. AND, because the failure is silent, the enforcement is
+**always on**, not deferred to this task: `skills/rlm/agent.py` holds a process-wide `BoundedSemaphore(1)`
++ `rlm_interpreter_session()` that serializes the **full** interpreter-session lifetime (build → run →
+`_registry.close()` teardown, all in-lock) for both the chunking discoverer and the synthesis extractor.
+Uncontended (zero cost) while serial; if concurrency is ever added without designing T35, it turns a
+silent-correctness failure into a visible-performance one (serialized, slower, noticed) rather than
+quietly-degraded chunks. **Load-bearing — not to be "cleaned up"** (ADR-0020). Tested: sessions never
+overlap across threads; registry torn down on exit.
 
-**Constraint (HARD GATE):** before **any** concurrent-batch ingestion path is built, per-process
-interpreter-session serialization must be in place — at most one RLM interpreter session (chunking AND
-synthesis) live per process at a time (e.g. a process-level semaphore(1) around the interpreter run);
-everything else (parse, embed, summarize, write) may stay concurrent. Separate processes are inherently
-safe, so per-process scope is correct. Guard it with a KI-1-style check (dispatch actually fired under
-concurrency), because the failure is silent. Closes the interpreter-concurrency dimension of **OQ8**.
+**T35's job is THROUGHPUT design, not correctness rescue.** The semaphore is the correctness floor; T35
+designs the real concurrent batch path (batch sizes, worker counts, OQ8) that serializes interpreter
+sessions **consciously**, and carries a **fail-if-silent** check — that dispatch actually FIRED under
+concurrency, not merely that the run completed — because the failure has no error signal. Everything else
+(parse, embed, summarize, write) may stay concurrent. Closes the interpreter-concurrency dimension of **OQ8**.
 
 **Exit path:** lifted when the upstream coexistence bug (langchain-quickjs/deepagents) is fixed — or via a
 sandbox-based RLM build / RLM-in-LangGraph-via-DSPy — verified by the KI-1 regression harness at full

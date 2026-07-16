@@ -34,6 +34,7 @@ from rag_wright.skills.rlm.agent import (
     RLM_SLICE_WORKER,
     RLM_WORKFLOW_JS,
     build_rlm_agent,
+    rlm_interpreter_session,
 )
 
 _PROBE_SKILL = str((Path(__file__).parent / "_fixtures" / "rlm_probe_skill" / "SKILL.md").resolve())
@@ -261,6 +262,50 @@ def test_sequential_dispatch_is_detected_as_a_fallback():
     assert not any(isinstance(m, ToolMessage) and m.name == "eval" for m in messages)  # no eval ran
     assert not _is_code_driven(events)  # sequential dispatch is correctly rejected
 
+
+# --- KI-1: the process-wide interpreter-session serialization guard (ADR-0020) -------------------
+
+
+def test_rlm_interpreter_session_serializes_across_threads():
+    # KI-1 (ADR-0020): two QuickJS runtimes must never be alive at once in one process, because they race
+    # on shared Rust state and silently drop ~half their dispatches. The guard makes the interpreter
+    # session mutually exclusive process-wide, so concurrent callers serialize on it (the always-on
+    # correctness floor). Prove no two sessions overlap even under concurrency.
+    import threading
+    import time
+
+    inside = 0
+    max_inside = 0
+    probe = threading.Lock()
+
+    def worker() -> None:
+        nonlocal inside, max_inside
+        with rlm_interpreter_session():
+            with probe:
+                inside += 1
+                max_inside = max(max_inside, inside)
+            time.sleep(0.03)  # hold the session so overlap would be observed if it were allowed
+            with probe:
+                inside -= 1
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert max_inside == 1  # never two interpreter sessions alive at once (would be >1 without the guard)
+
+
+def test_rlm_interpreter_session_yields_an_interpreter_and_tears_it_down():
+    # the session yields the middleware to build the agent with, and closes its registry on exit
+    # (deterministic teardown inside the lock, not GC), so the runtime's full lifetime is exclusive.
+    from langchain_quickjs import CodeInterpreterMiddleware
+
+    with rlm_interpreter_session() as interpreter:
+        assert isinstance(interpreter, CodeInterpreterMiddleware)
+        registry = interpreter._registry
+    assert registry._slots == {}  # close() cleared every REPL slot on exit (runtime torn down in-lock)
 
 
 # --- opt-in: does a REAL model, given the RLM method, FOLLOW it (recurse on decomposer output)? ---

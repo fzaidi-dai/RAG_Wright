@@ -37,7 +37,7 @@ from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
-from rag_wright.skills.rlm.agent import build_rlm_agent
+from rag_wright.skills.rlm.agent import build_rlm_agent, rlm_interpreter_session
 
 DEFAULT_TOKEN_CAP = 20_000
 DEFAULT_SUMMARY_CONCURRENCY = 8  # in-flight summary calls (backpressure); summaries are network-bound
@@ -163,16 +163,19 @@ class SeamBoundaryDiscoverer:
                 return (getattr(document.texts[index], "text", "") or "").strip()
             return ""
 
-        # one model across all roles (the strong reasoning model): boundary discovery is a single
-        # exploration, and a sub-agent it dispatches for an over-large section warrants the same model.
-        agent = build_rlm_agent(
-            reasoning_model=self._model, decomposer_model=self._model, worker_model=self._model,
-            tools=[peek], worker_tools=[peek],
-        )
         instructions = _DISCOVERY_INSTRUCTIONS.format(cap=self._token_cap * 4)
         request = f"Run this as a workflow.\n\n{instructions}\n\nDocument items (JSON):\n{json.dumps(view)}"
-        result = agent.invoke({"messages": [HumanMessage(content=request)]})
-        final = _final_text(result["messages"])
+        # one model across all roles (the strong reasoning model): boundary discovery is a single
+        # exploration, and a sub-agent it dispatches for an over-large section warrants the same model.
+        # The interpreter session is serialized process-wide (KI-1, ADR-0020): build + run + teardown all
+        # inside the lock, so no two QuickJS runtimes coexist if ingestion ever runs documents concurrently.
+        with rlm_interpreter_session() as interpreter:
+            agent = build_rlm_agent(
+                reasoning_model=self._model, decomposer_model=self._model, worker_model=self._model,
+                tools=[peek], worker_tools=[peek], interpreter=interpreter,
+            )
+            messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
+        final = _final_text(messages)
         spans = _extract_spans(final)
         _validate_partition(spans, len(document.texts))
         return spans
