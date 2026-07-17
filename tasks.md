@@ -1320,8 +1320,13 @@ silent class one step earlier, at the load boundary.
 - [x] A `working_set_size` PTC tool added to synthesis + chunking (the truthful delivered count).
 - [x] Test `test_load_assertion_fails_loud_on_an_under_read` — working_set returns 3 while size reports 8:
   the assertion throws loud, no leaf runs. Full suite **386 passed + 26 skipped**.
-- [ ] Mechanical vs elective (GraphWright's question): reproduction running (12 real runs) to determine
-  whether the assertion alone suffices (mechanical) or needs assertion-plus-instruction (elective).
+- [x] **Mechanical vs elective (GraphWright's question): ELECTIVE.** Dumped the real model's eval code —
+  it loads the full set then writes `workingSet.slice(0, 2)`: it electively **samples/subsets** (here a
+  diagnostic, but the exact tendency that lands on the processing path as "read 3 of 8"). The channel is
+  not truncating; the model elects. So the fix is **assertion-plus-instruction** (both landed): the
+  instruction prevents the elective subset, the assertion enforces it (fails loud on any residual
+  under-read, elective or mechanical). The dump confirms the aligned skill is followed (full load +
+  `workingSetSize`).
 - Fixed a broken `skills/rlm/__init__.py` (externally added; absolute `from skills...` → `from rag_wright...`).
 
 **Status:** skill-side done (drift eliminated, count fixed, depth signal, load assertion); node proof is
