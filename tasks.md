@@ -14,6 +14,16 @@ not this repo's.
 
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
 
+> **HYGIENE (recurring, tracked 2026-07-17):** external-agent scratch has twice appeared in `src/`
+> (turn 1: a broken `skills/rlm/__init__.py` + an external `_MAX_DEPTH` cap; turn 2: a dead
+> `handle_leaf_depth_3` Python mirror of the JS depth-cap branch + its export + ~13 untracked test
+> runners). The invariant at risk is **tested-equals-shipped** — a second copy of real logic (a Python
+> mirror of `RLM_WORKFLOW_JS`) is not guarded by the drift test and can be mistaken for, or drift from,
+> the truth. Standing rule: **any external edit to the RLM files (`agent.py`, `SKILL.md`,
+> `RLM_WORKFLOW_JS`, `skills/rlm/__init__.py`) is suspect until verified** — those are where a silent
+> mirror or broken import does real damage. Verify (drift test + suite + no unguarded logic copy) before
+> trusting an external RLM edit.
+
 ---
 
 ## Last approved / next up

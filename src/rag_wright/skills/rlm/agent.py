@@ -163,6 +163,7 @@ JSON.stringify({
 });
 """.strip()
 
+
 _SKILL_PATH = Path(__file__).parent / "SKILL.md"
 
 
