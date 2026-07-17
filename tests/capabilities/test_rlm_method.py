@@ -227,6 +227,18 @@ def test_coverage_tail_covers_an_incomplete_descent_in_the_interpreter():
     assert len(_starts(events, RLM_SLICE_WORKER)) == 6  # 3 handled by the descent + 3 by the tail = every item
 
 
+def test_skill_md_canonical_workflow_is_byte_identical_to_rlm_workflow_js():
+    # The REAL model follows SKILL.md; the hermetic tests run RLM_WORKFLOW_JS. If they drift, the tests
+    # validate a different artifact than what ships — exactly how the missing item count in the SKILL.md
+    # decomposer dispatch (which makes a literal-following model fall flat, no recursion) slipped past a
+    # green test. Assert the canonical SKILL.md workflow is byte-identical to RLM_WORKFLOW_JS.
+    skill = (Path(__file__).parents[2] / "src" / "rag_wright" / "skills" / "rlm" / "SKILL.md").read_text()
+    blocks = re.findall(r"```javascript\n(.*?)\n```", skill, re.DOTALL)
+    assert blocks, "no javascript block found in SKILL.md"
+    assert blocks[0].strip() == RLM_WORKFLOW_JS, "SKILL.md canonical workflow drifted from RLM_WORKFLOW_JS"
+    assert "over " in RLM_WORKFLOW_JS and "items" in RLM_WORKFLOW_JS  # the decomposer dispatch carries the count
+
+
 # --- 2. per-slice tool use -----------------------------------------------------------------------
 
 

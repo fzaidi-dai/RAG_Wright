@@ -1277,13 +1277,34 @@ The skill's workflow runs in the node by construction AND in this harness — on
   a workflow whose descent handles only half the items reaches full coverage via the tail (6/6, 3 descent +
   3 tail). Full suite 384 passed + 26 skipped.
 
-**Acceptance bar (unchanged):** full leaf coverage reliably, out of context, measured by GraphWright's
-cut-prompt opaque-construction **bind_run** against the real skill with the coverage tail in the workflow.
-Capability-level/deterministic green proves the logic is correct and in-interpreter; the **node proof is
-bind_run**. Two-node graph proceeds once GraphWright's bind_run is reliable against the new skill.
+**bind_run findings (GraphWright, 2026-07-17) — the masking moved one level down, to recursion depth:**
+- **Finding 1 — coverage passes FLAT.** The flat item-list + cuts made coverage trivially satisfiable (no
+  deep leaves to miss), so a run that does NO divide-and-conquer (one worker over all items,
+  maxSplitDepth=0, tail-fire=0) still passes the coverage bar. GraphWright saw 1/5 runs go fully flat with
+  full coverage. **The honest signal is maxSplitDepth, not coverage.** At production scale a flat chunking
+  run = one worker over the whole document = context overflow, RLM defeated, invisible on small test sets.
+- **Finding 2 — root cause (confirmed).** SKILL.md dispatched the decomposer as `"decompose depth D"` with
+  **no item count**, while `RLM_WORKFLOW_JS` (what the deterministic tests ran) sent `"...over N items"`.
+  The decomposer needs the count to return index `cuts`, so a model following SKILL.md **literally can't
+  partition and falls flat**; the count-bearing variant recurses. The green test validated a **different
+  artifact** than what ships.
 
-**Status:** skill-side done (coverage tail in the workflow, deterministically proven, in-interpreter);
-node proof is GraphWright's bind_run. **Dep:** T36.
+**Fix (landed):**
+- [x] **Eliminated the drift:** SKILL.md's canonical workflow is now **byte-identical to `RLM_WORKFLOW_JS`**
+  (count included), asserted by `test_skill_md_canonical_workflow_is_byte_identical_to_rlm_workflow_js` — so
+  skill-vs-tested-artifact drift fails a test here, not at GraphWright's node.
+- [x] **Depth signal in validation:** the recursion test asserts `maxSplitDepth >= 1` (recursion happened),
+  the flat-teeth test asserts `< 1` (flatness caught) — not just coverage.
+- [x] **Re-validated the real model reliably RECURSES out of context:** a real deepseek following the aligned
+  skill on an 8-item set = **5/5 genuine recursion** (maxDepth=3, 15 decomposer dispatches), vs GraphWright's
+  1/5 flat on the old skill. Full suite **385 passed + 26 skipped**.
+
+**Acceptance bar (updated by GraphWright):** genuine recursion RELIABLY — `maxSplitDepth > 0` on a working
+set that requires decomposition — measured by GraphWright's cut-prompt bind_run against the aligned skill,
+NOT coverage (coverage was shown to pass flat).
+
+**Status:** skill-side done (drift eliminated, count fixed, depth signal added, 5/5 real recursion);
+node proof is GraphWright's depth-measuring bind_run. **Dep:** T36.
 
 ### Task T35: Per-process interpreter-session serialization (KI-1 cross-graph constraint) — ADR-0020
 
