@@ -1340,15 +1340,35 @@ multi-process pool that DEADLOCKS on macOS → forced single-process CPU (`devic
 the runner; embedding `max_length=1024` caps the vector compute (full text preserved in the sidecar).
 
 **DRY-RUN RESULT — BELOW THRESHOLD (2026-07-17):** on the complete 3,931-clause index, 57 test queries:
-`recall@50 = 0.379` (gate ≥ 0.70), `recall@10 = 0.137`, `nDCG@10 = 0.138`. **Diagnostic (raw hybrid, no
-rerank):** recall@{10,50,100,200} = 0.084 / 0.283 / 0.473 / 0.650. So **rerank HELPS** (0.283→0.379 @50, it
-is working) and **the bottleneck is HYBRID RETRIEVAL** — even the top-200 pool (5% of the corpus) holds only
-65% of relevant clauses. That, plus nDCG@10 below ACORD's published baselines, is a **red flag (ADR-0011:
-diagnose implausible retrieval numbers before reporting)** pointing at a retrieval config issue, not mere
-difficulty. **Per the pinned discipline the threshold is NOT recalibrated to fit 0.379, and the graded run
-does NOT proceed, until the retrieval ceiling is diagnosed** (candidate causes: corpus `max_length=1024`
-truncation of long clauses; dense-vs-sparse leg imbalance / a possibly-degraded dense leg on this DB; RRF
-balance). Next: isolate dense-only vs sparse-only recall, and test lifting the embedding `max_length`.
+`recall@50 = 0.379` (gate ≥ 0.70), `recall@10 = 0.137`, `nDCG@10 = 0.138`. Below-baseline nDCG was the
+ADR-0011 red flag → diagnosed fully before any recalibrate-vs-fix verdict.
+
+**DIAGNOSIS COMPLETE (2026-07-18) — retrieval is HEALTHY; the low full-corpus numbers are a TASK MISMATCH,
+not a bug:**
+1. **Leg isolation** (full-corpus, pool=200): dense recall@50 0.301 / nDCG@10 0.109; sparse 0.232 / 0.089;
+   fused 0.283 / 0.102. Both legs work (dense > sparse), and **RRF fusion slightly HURTS recall@50**
+   (0.283 < dense 0.301) — a real, tunable finding (the weak sparse leg drags dense-found relevants below
+   rank 50). Not a dead/broken leg.
+2. **Spot-check** (top-10 fused, length-annotated): hits are **topically plausible, not garbage** — "Audit
+   Rights" → all 10 audit clauses; "England Governing Law" → 8/10 relevant, first at rank 1; "multiple
+   governing laws" → all governing-law clauses but *single*-law ones (the "multiple" nuance missed, first
+   relevant at rank 16). Failure class = fine-grained legal-nuance ranking = genuine difficulty, NOT a bug
+   (relevant clauses mean 583 chars — no short-vs-long embedding pathology seen).
+3. **Baseline reference (ADR-0011 completed)** — ACORD paper Table 3 retrieval-only nDCG@10: BM25 0.540,
+   MiniLM bi-encoder 0.572, OpenAI-large 0.641 (topline MiniLM+GPT4o-reranker 0.812). Those are per-query
+   judged-POOL rankings (~1,088 explicitly-annotated clauses/query), not full-corpus. Ranking my retriever
+   **like-for-like on the judged pool: nDCG@5 = 0.417, nDCG@10 = 0.452** — squarely in ACORD's baseline band
+   (slightly below BM25's 0.54, as expected for off-the-shelf BGE-M3). So the earlier full-corpus nDCG 0.10
+   was the *harder task* (rank 3,931 vs rank ~1,088), not a defect.
+
+**VERDICT:** NOT a bug — retrieval performs at ACORD-baseline level on the like-for-like task. The `recall@50
+≥ 0.70` bar was an ungrounded pre-run guess against the WRONG task: full-corpus recall@50 on ACORD is far
+harder than the pool-ranking ACORD baselines measure, and ACORD publishes no recall@50 to anchor it. Two
+real levers remain (improvements, not bug-fixes): (a) **fusion tuning** — dense-alone beats fused @50, so
+RRF weighting / dropping the weak sparse leg is worth testing; (b) lift embedding `max_length`. **OPEN
+DECISION at the gate (do NOT lock a graded bar until decided):** recalibrate the bar to grounded/achievable,
+and/or switch the retrieval metric to pool-ranking nDCG@10 (directly comparable to ACORD baselines), and/or
+invest the fusion/max_length improvements first.
 
 ### Task T40: Chunk-text sidecar — persist full chunk text at ingest (FR-I.3, RAC to follow)
 
