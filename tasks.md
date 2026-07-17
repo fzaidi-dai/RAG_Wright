@@ -211,11 +211,11 @@ loop enforces it.
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
-| T33 | ACORD content-query retrieval eval (extends T9; ask-first) | 4 Foundations | §12 | todo | T21, T22 |
+| T33 | ACORD eval (extends T9; ask-first) — LIKELY the query-graph golden set (coordinated eval, not solo) | 4 Foundations | §12 | HELD pending eval reconciliation w/ GraphWright | T21, T22 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
-| T37 | Deep-recursion completeness: coverage tail in the skill's interpreter WORKFLOW (not wrapper, not node) | 5 Integrate | FR-C.10, FR-Q.5, FR-I.1 | done (skill side); node proof = GraphWright bind_run | T36 |
+| T37 | Recursion completeness + load faithfulness: coverage tail + load assertion in the skill's interpreter WORKFLOW | 5 Integrate | FR-C.10, FR-Q.5, FR-I.1 | done (both sides; GraphWright node bind_run 6/6 full-load-and-full-depth) | T36 |
 | T23 | Graph extraction (contract + spaCy NER; concurrent + backpressure) | 4 Build graph | FR-C.6, FR-I.4, FR-I.6 | done | T5, T8, T16 |
 | T23b | Mention disambiguation and canonicalization (normalize, reject, cluster) | 4 Build graph | FR-C.7 | done | T23 |
 | T24 | Entity resolution (closed-world to EDGAR CIK) | 4 Build graph | FR-C.7 | done | T8, T23b |
@@ -1228,7 +1228,22 @@ rerank, scored against qrels. Supplies the content-bearing cross-corpus retrieva
 (ADR-0011). Adjudicates **GATE-2(a) store bar** and **RAC-22 b2 rerank precision**; does NOT exercise the
 RLM chunker (pre-segmented clauses), so the RLM call stays at GATE-2b. **LLM-generated queries are rejected
 as circular; if ACORD is unusable, return to the human before any alternative.**
-**Status:** todo (ask-first gate). **Dep:** T21, T22. License + corpus provenance verified (2026-07-12).
+**Status:** HELD (2026-07-17) pending eval reconciliation with GraphWright. ACORD is very likely the
+query-graph **golden set** (114 expert queries, closes GATE-2(a) + RAC-22 b2). GraphWright is scoping the
+query graph toward a golden-eval; it has been asked whether ACORD IS that golden set. If yes, T33 is
+RAG_Wright's half of a **joint eval**, so its metric + threshold must match GraphWright's acceptance
+criteria — building it independently now would risk two overlapping evals with mismatched metrics.
+**Do not start until the reconciliation lands.** Two settled inputs to carry into it:
+- **Grading model:** target **deepseek-v4-pro** (`STRUCTURED_REASONING`) — the model the synthesis workers
+  actually run extraction on (the project's "larger model for quality-sensitive extraction", ADR-0006), and
+  what RAG_Wright's re-validations ran on. GraphWright's node ran qwen3.7-plus (`_SECONDARY`); the joint
+  eval must pin ONE. RAG_Wright owns the benchmark design, so recommends deepseek-v4-pro.
+- **Metric — completeness-sensitive:** ACORD's expert **qrels** (graded relevant clauses per query) support
+  it: grade whether the synthesized answer actually *drew on the graded-relevant evidence*, not just
+  produced a plausible answer — catches the shallow-but-present degradation the real extraction workers can
+  fall into. Caveat: ACORD gives relevant-clause judgments, not reference answer strings, so completeness is
+  graded against the relevant-evidence set (which is the right shape for "did it use the evidence").
+**Dep:** T21, T22. License + corpus provenance verified (2026-07-12).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
@@ -1329,8 +1344,11 @@ silent class one step earlier, at the load boundary.
   `workingSetSize`).
 - Fixed a broken `skills/rlm/__init__.py` (externally added; absolute `from skills...` → `from rag_wright...`).
 
-**Status:** skill-side done (drift eliminated, count fixed, depth signal, load assertion); node proof is
-GraphWright's depth-and-load bind_run. Query graph held until under-read is closed. **Dep:** T36.
+**Status:** DONE, both sides (2026-07-17). GraphWright's node-side depth-and-load bind_run against the
+aligned skill passed **6/6 full-load-and-full-depth**. Skill side: drift eliminated (SKILL.md ==
+RLM_WORKFLOW_JS, byte-identical, drift-tested), count fixed, depth signal, load-completeness assertion,
+elective-subset instruction. The whole RLM arc (delivery, load faithfulness, recursion depth, coverage,
+cross-node flow) is proven on both sides. **Dep:** T36.
 
 ### Task T35: Per-process interpreter-session serialization (KI-1 cross-graph constraint) — ADR-0020
 
