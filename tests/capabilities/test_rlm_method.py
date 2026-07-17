@@ -104,20 +104,25 @@ def _orchestrator_responder(workflow_js: str = RLM_WORKFLOW_JS):
     return respond
 
 
-def _ws_tool(value: Any):
+def _ws_ptc(value: Any):
     @tool
     def working_set() -> object:
         """Return the working set (delivered as a PTC value; never enters the model's context)."""
         return value
 
-    return working_set
+    @tool
+    def working_set_size() -> int:
+        """Return the delivered working-set item count (the workflow's load-completeness assertion, T37)."""
+        return len(value)
+
+    return [working_set, working_set_size]
 
 
 def _build_rlm(ws_value: Any, **roles: Any):
-    """Build an RLM agent with `working_set` bound as a PTC returning `ws_value` (the T36 delivery seam)."""
+    """Build an RLM agent with `working_set`/`working_set_size` bound as PTCs (the T36/T37 delivery seam)."""
     from langchain_quickjs import CodeInterpreterMiddleware
 
-    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=[_ws_tool(ws_value)])
+    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=_ws_ptc(ws_value))
     return build_rlm_agent(interpreter=interpreter, **roles)
 
 
@@ -225,6 +230,37 @@ def test_coverage_tail_covers_an_incomplete_descent_in_the_interpreter():
 
     assert result.get("covered") == 6 and result.get("total") == 6  # full coverage despite the incomplete descent
     assert len(_starts(events, RLM_SLICE_WORKER)) == 6  # 3 handled by the descent + 3 by the tail = every item
+
+
+def test_load_assertion_fails_loud_on_an_under_read():
+    # T37 (load boundary): the model loads only 3 of 8 delivered items (workingSet is short), upstream of
+    # the coverage tail so the tail can't catch it. The workflow's load-completeness assertion compares
+    # against the truthful runtime size (a scalar the model cannot under-read) and FAILS LOUD, converting a
+    # silent evidence drop into a visible error before any leaf runs over the truncated set.
+    from langchain_quickjs import CodeInterpreterMiddleware
+
+    @tool
+    def working_set() -> object:
+        """An UNDER-READ: returns only 3 of the 8 delivered items."""
+        return _ws_items(3)
+
+    @tool
+    def working_set_size() -> int:
+        """The truthful delivered count: 8."""
+        return 8
+
+    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=[working_set, working_set_size])
+    agent = build_rlm_agent(
+        interpreter=interpreter,
+        reasoning_model=FakeChat(responder=_orchestrator_responder()),
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
+        worker_model=FakeChat(responder=lambda m: AIMessage(content="ok")),
+    )
+    events, messages = _run(agent)
+
+    eval_msgs = [m for m in messages if isinstance(m, ToolMessage) and m.name == "eval"]
+    assert eval_msgs and "UNDER-READ" in str(eval_msgs[0].content)  # the load assertion threw, loudly
+    assert len(_starts(events, RLM_SLICE_WORKER)) == 0  # no leaf ran over the truncated set (threw first)
 
 
 def test_skill_md_canonical_workflow_is_byte_identical_to_rlm_workflow_js():

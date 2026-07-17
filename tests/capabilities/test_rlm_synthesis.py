@@ -149,8 +149,8 @@ def _stream_events(extractor: SeamSliceExtractor, chunks) -> list[dict]:
     from langchain_quickjs import CodeInterpreterMiddleware
 
     events: list[dict] = []
-    # bind the working set as a PTC (T36), the same way extract() does, so the workflow reads it
-    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=[extractor._working_set_tool(chunks)])
+    # bind the working set + its size as PTCs (T36/T37), the same way extract() does, so the workflow reads it
+    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=extractor._working_set_ptc(chunks))
     agent = extractor._build_agent(chunks, interpreter=interpreter)
     for mode, data in agent.stream(
         {"messages": [HumanMessage(content="run the workflow")]},

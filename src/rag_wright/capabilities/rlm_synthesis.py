@@ -199,17 +199,24 @@ class SeamSliceExtractor:
             interpreter=interpreter,
         )
 
-    def _working_set_tool(self, chunks: list[SynthesisChunk]):
+    def _working_set_ptc(self, chunks: list[SynthesisChunk]):
         value = self._working_set if self._working_set is not None else [
             {"id": c.chunk_id, "chunk_id": c.chunk_id, "text": c.text} for c in chunks
         ]
+        delivered = len(value)
 
         @tool
         def working_set() -> object:
             """Return the working set: the retrieved candidate chunks (id, chunk_id, text)."""
             return value
 
-        return working_set
+        @tool
+        def working_set_size() -> int:
+            """Return the number of items in the delivered working set (a truthful count the workflow's
+            load-completeness assertion checks against, so an under-read fails loud, not silent)."""
+            return delivered
+
+        return [working_set, working_set_size]
 
     def _request(self, query: str) -> str:
         return (
@@ -230,7 +237,7 @@ class SeamSliceExtractor:
         # The candidate set is delivered as a PTC value (`tools.workingSet()`, T36): it stays in the
         # interpreter and never enters the model's context. The interpreter session is serialized
         # process-wide (KI-1, ADR-0020): build + run + teardown inside the lock.
-        with rlm_interpreter_session(ptc=[self._working_set_tool(chunks)]) as interpreter:
+        with rlm_interpreter_session(ptc=self._working_set_ptc(chunks)) as interpreter:
             agent = self._build_agent(chunks, interpreter=interpreter)
             messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
         return _parse_slice_outputs(_final_text(messages))

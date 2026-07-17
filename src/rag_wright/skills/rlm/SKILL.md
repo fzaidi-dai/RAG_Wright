@@ -24,11 +24,15 @@ over everything at once. Stuffing the whole volume into one call is the failure 
 
 ## The method: interpreter holds the whole → a recursive workflow dispatches sub-agents → combine
 
-1. **Get the working set from the runtime, as data.** Call `const workingSet = await tools.workingSet();`
-   — the runtime returns the full input as ordinary interpreter values (strings, lists, dicts), *not*
-   into a prompt. The interpreter, not the model, holds the state and the recursion stack, and is not
-   bounded by a context window. Nothing about the whole volume is sent to a model. The working set is
-   never in your context; you only ever hold it as an interpreter variable.
+1. **Get the working set from the runtime, as data — the WHOLE set.** Call
+   `const workingSet = await tools.workingSet();` — the runtime returns the full input as ordinary
+   interpreter values (strings, lists, dicts), *not* into a prompt. Load **all** of it: never sample,
+   slice, or subset it, and never decide part of it suffices — you cannot see it, so you cannot judge
+   that. Immediately assert you loaded the whole delivered set against `tools.workingSetSize()` (see the
+   canonical workflow); a short load is a silent evidence drop the coverage tail cannot catch, because the
+   tail only guarantees coverage over what you loaded. The interpreter, not the model, holds the state and
+   the recursion stack, and is not bounded by a context window. The working set is never in your context;
+   you only ever hold it as an interpreter variable.
 
 2. **Write a recursive `decompose()` workflow in code that dispatches sub-agents.** This is a
    **workflow**: fan the work out to sub-agents with `task()` from interpreter code, never one grinding
@@ -69,9 +73,23 @@ the decomposer cannot return index cuts and you fall back to a flat, non-recursi
 // sub-agents in code (a "workflow"), never one grinding tool call at a time. The interpreter holds the
 // working set and the recursion stack; the model is only ever called on a focused slice.
 const workingSet = await tools.workingSet();  // [{id, ...}, ...] delivered by the runtime, never in context
+// LOAD-COMPLETENESS ASSERTION (T37): verify you loaded the WHOLE delivered set before anything else. The
+// size comes from the runtime (a scalar it cannot under-read); if the load is short, fail loud rather than
+// silently working over a truncated set — the coverage tail below only guarantees coverage over what you
+// loaded, so an under-read here is a silent evidence drop nothing downstream catches.
+const _delivered = await tools.workingSetSize();
+if (workingSet.length !== _delivered) {
+  throw new Error("LOAD UNDER-READ: loaded " + workingSet.length + " of " + _delivered + " delivered items");
+}
+const _MAX_DEPTH = 3;                // hard cap on recursion — beyond this, force leaf (no runaway splits)
 const _splitDepths = [];             // the depths at which decompose() re-entered itself (proof of descent)
 const _handled = new Set();          // ids of working-set items a leaf worker covered
 async function decompose(items, depth) {
+  if (items.length === 0) return [];    // empty slice — nothing to dispatch (no-op leaf)
+  if (depth >= _MAX_DEPTH) {
+    for (const it of items) _handled.add(it.id);
+    return [await task({ description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker" })];
+  }
   const decision = JSON.parse(await task({
     description: "decompose depth " + depth + " over " + items.length + " items",
     subagentType: "rlm_decomposer",
@@ -113,9 +131,10 @@ JSON.stringify({
    `rlm_decomposer` return value (`decision.cuts`), obtained by dispatching the decomposer. You do not
    decide the split yourself and you do not know the grouping in advance; only the decomposer does.
 2. **Recurse on the decomposer's output.** When the decomposer returns `cuts`, slice `items` into those
-   groups and call `decompose()` again on **each group**. A group may itself split, to arbitrary depth.
-   Stop a branch only when the decomposer marks that slice a leaf (`decision.leaf === true`), then dispatch
-   a `rlm_slice_worker`.
+   groups and call `decompose()` again on **each group**. A group may itself split, up to `_MAX_DEPTH`
+   (3) — beyond that the code force-terminates the branch as a leaf without calling the decomposer
+   again (a hard cap against runaway recursion). Stop a branch early when the decomposer marks that
+   slice a leaf (`decision.leaf === true`), then dispatch a `rlm_slice_worker`.
 3. **One `decompose()` per node, one decomposer dispatch per node.** A single decomposer call for the
    whole working set is wrong: that is a flat split, and it defeats the method.
 4. **The coverage tail guarantees completeness — never skip it, and never rely on it as a licence to be

@@ -1303,8 +1303,29 @@ The skill's workflow runs in the node by construction AND in this harness — on
 set that requires decomposition — measured by GraphWright's cut-prompt bind_run against the aligned skill,
 NOT coverage (coverage was shown to pass flat).
 
-**Status:** skill-side done (drift eliminated, count fixed, depth signal added, 5/5 real recursion);
-node proof is GraphWright's depth-measuring bind_run. **Dep:** T36.
+**bind_run finding 3 (2026-07-17) — the silent drop moved to the LOAD boundary:** with delivery cut
+clean (channel proven to fill the field with all 8), on ~1/11 runs the synthesis model **under-loaded** at
+`const workingSet = await tools.workingSet()` — it read 3 of 8. The channel delivered 8 (deterministic);
+the model loaded 3. The **coverage tail cannot catch this**: the tail guarantees coverage over what was
+loaded, so with 3 loaded it faithfully covers those 3 and reports `missed=0`, success. The under-load is
+**upstream of every guarantee** (delivery proven, coverage proven, evidence still vanishes) — the same
+silent class one step earlier, at the load boundary.
+
+**Fix (load-completeness assertion, mirroring the coverage tail at the other end):**
+- [x] The workflow, right after the load, verifies it loaded the whole delivered set:
+  `const _delivered = await tools.workingSetSize(); if (workingSet.length !== _delivered) throw`. The size
+  is a **scalar from the runtime the model cannot under-read**, so an under-load fails **loud** before any
+  leaf runs over the truncated set — silent evidence-drop → visible error. In `RLM_WORKFLOW_JS` + SKILL.md
+  (byte-identical, drift-tested) and in chunking's discovery instructions. Both RLM nodes get it.
+- [x] A `working_set_size` PTC tool added to synthesis + chunking (the truthful delivered count).
+- [x] Test `test_load_assertion_fails_loud_on_an_under_read` — working_set returns 3 while size reports 8:
+  the assertion throws loud, no leaf runs. Full suite **386 passed + 26 skipped**.
+- [ ] Mechanical vs elective (GraphWright's question): reproduction running (12 real runs) to determine
+  whether the assertion alone suffices (mechanical) or needs assertion-plus-instruction (elective).
+- Fixed a broken `skills/rlm/__init__.py` (externally added; absolute `from skills...` → `from rag_wright...`).
+
+**Status:** skill-side done (drift eliminated, count fixed, depth signal, load assertion); node proof is
+GraphWright's depth-and-load bind_run. Query graph held until under-read is closed. **Dep:** T36.
 
 ### Task T35: Per-process interpreter-session serialization (KI-1 cross-graph constraint) — ADR-0020
 

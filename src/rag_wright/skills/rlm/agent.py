@@ -101,7 +101,7 @@ _SLICE_WORKER_PROMPT = (
 # working set from the runtime PTC tool `tools.workingSet()` (T36) — a JS value that never enters context —
 # and dispatches sub-agents by name via `task()`. Recursion lives HERE, in the interpreter: a fresh
 # `rlm_decomposer` decides each level's split, `decompose()` re-enters itself on the returned parts
-# (arbitrary depth, the interpreter holds the stack), and `rlm_slice_worker` handles each leaf. The RLM
+# (depth capped at _MAX_DEPTH = 3, the interpreter holds the stack), and `rlm_slice_worker` handles each leaf. The RLM
 # skill (SKILL.md) teaches this workflow; the node writes it into the `eval` tool when its request asks
 # for a "workflow" (the trigger GraphWright's applier guarantees, requiresDynamicDispatch). It returns
 # the per-leaf results plus the depths at which splitting occurred, so the descent is inspectable.
@@ -111,9 +111,23 @@ RLM_WORKFLOW_JS = r"""
 // sub-agents in code (a "workflow"), never one grinding tool call at a time. The interpreter holds the
 // working set and the recursion stack; the model is only ever called on a focused slice.
 const workingSet = await tools.workingSet();  // [{id, ...}, ...] delivered by the runtime, never in context
+// LOAD-COMPLETENESS ASSERTION (T37): verify you loaded the WHOLE delivered set before anything else. The
+// size comes from the runtime (a scalar it cannot under-read); if the load is short, fail loud rather than
+// silently working over a truncated set — the coverage tail below only guarantees coverage over what you
+// loaded, so an under-read here is a silent evidence drop nothing downstream catches.
+const _delivered = await tools.workingSetSize();
+if (workingSet.length !== _delivered) {
+  throw new Error("LOAD UNDER-READ: loaded " + workingSet.length + " of " + _delivered + " delivered items");
+}
+const _MAX_DEPTH = 3;                // hard cap on recursion — beyond this, force leaf (no runaway splits)
 const _splitDepths = [];             // the depths at which decompose() re-entered itself (proof of descent)
 const _handled = new Set();          // ids of working-set items a leaf worker covered
 async function decompose(items, depth) {
+  if (items.length === 0) return [];    // empty slice — nothing to dispatch (no-op leaf)
+  if (depth >= _MAX_DEPTH) {
+    for (const it of items) _handled.add(it.id);
+    return [await task({ description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker" })];
+  }
   const decision = JSON.parse(await task({
     description: "decompose depth " + depth + " over " + items.length + " items",
     subagentType: "rlm_decomposer",

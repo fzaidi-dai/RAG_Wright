@@ -103,7 +103,10 @@ class BoundaryDiscoverer(Protocol):
 _DISCOVERY_INSTRUCTIONS = (
     "Call `const items = await tools.workingSet();` to get the parsed document as a list of structural "
     "items (each has id, index, label, level, and full text); it is a JavaScript value in the interpreter, "
-    "never in your context. Partition it into semantically coherent chunks by grouping CONTIGUOUS items so "
+    "never in your context. LOAD CHECK (do not skip): immediately verify you loaded the WHOLE document — "
+    "`const _n = await tools.workingSetSize(); if (items.length !== _n) throw new Error('LOAD UNDER-READ: ' "
+    "+ items.length + ' of ' + _n);` — the size is the truthful runtime count and a short load is a silent "
+    "text drop. Partition it into semantically coherent chunks by grouping CONTIGUOUS items so "
     "that each chunk is one coherent unit (a clause, a section, a related run) and no chunk exceeds ~{cap} "
     "characters. Never split a single coherent clause across two chunks, and never cut at a fixed size. "
     "COVERAGE TAIL (do not skip): before returning, verify in code that your spans cover EVERY item from 0 "
@@ -163,8 +166,14 @@ class SeamBoundaryDiscoverer:
 
         @tool
         def working_set() -> list:
-            """Return the working set: the parsed document's items (index, label, level, full text)."""
+            """Return the working set: the parsed document's items (id, index, label, level, full text)."""
             return items
+
+        @tool
+        def working_set_size() -> int:
+            """Return the number of items in the delivered working set (a truthful count the workflow's
+            load-completeness assertion checks, so an under-read of the document fails loud, not silent)."""
+            return len(items)
 
         instructions = _DISCOVERY_INSTRUCTIONS.format(cap=self._token_cap * 4)
         request = f"Run this as a workflow.\n\n{instructions}"
@@ -173,7 +182,7 @@ class SeamBoundaryDiscoverer:
         # The working set is delivered as a PTC value (`tools.workingSet()`, T36): it stays in the
         # interpreter and never enters the model's context. The interpreter session is serialized
         # process-wide (KI-1, ADR-0020): build + run + teardown all inside the lock.
-        with rlm_interpreter_session(ptc=[working_set]) as interpreter:
+        with rlm_interpreter_session(ptc=[working_set, working_set_size]) as interpreter:
             agent = build_rlm_agent(
                 reasoning_model=self._model, decomposer_model=self._model, worker_model=self._model,
                 interpreter=interpreter,
