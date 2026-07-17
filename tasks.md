@@ -1240,22 +1240,46 @@ rerank, scored against qrels. Supplies the content-bearing cross-corpus retrieva
 (ADR-0011). Adjudicates **GATE-2(a) store bar** and **RAC-22 b2 rerank precision**; does NOT exercise the
 RLM chunker (pre-segmented clauses), so the RLM call stays at GATE-2b. **LLM-generated queries are rejected
 as circular; if ACORD is unusable, return to the human before any alternative.**
-**Status:** HELD (2026-07-17) pending eval reconciliation with GraphWright. ACORD is very likely the
-query-graph **golden set** (114 expert queries, closes GATE-2(a) + RAC-22 b2). GraphWright is scoping the
-query graph toward a golden-eval; it has been asked whether ACORD IS that golden set. If yes, T33 is
-RAG_Wright's half of a **joint eval**, so its metric + threshold must match GraphWright's acceptance
-criteria — building it independently now would risk two overlapping evals with mismatched metrics.
-**Do not start until the reconciliation lands.** Two settled inputs to carry into it:
-- **Grading model:** target **deepseek-v4-pro** (`STRUCTURED_REASONING`) — the model the synthesis workers
-  actually run extraction on (the project's "larger model for quality-sensitive extraction", ADR-0006), and
-  what RAG_Wright's re-validations ran on. GraphWright's node ran qwen3.7-plus (`_SECONDARY`); the joint
-  eval must pin ONE. RAG_Wright owns the benchmark design, so recommends deepseek-v4-pro.
-- **Metric — completeness-sensitive:** ACORD's expert **qrels** (graded relevant clauses per query) support
-  it: grade whether the synthesized answer actually *drew on the graded-relevant evidence*, not just
-  produced a plausible answer — catches the shallow-but-present degradation the real extraction workers can
-  fall into. Caveat: ACORD gives relevant-clause judgments, not reference answer strings, so completeness is
-  graded against the relevant-evidence set (which is the right shape for "did it use the evidence").
-**Dep:** T21, T22. License + corpus provenance verified (2026-07-12).
+**Status:** UNHELD / criteria LOCKED (2026-07-17). ACORD IS the **joint golden set**: one benchmark, one
+ground truth (its qrels), two metrics. **T33 is RAG_Wright's retrieval half** — recall/nDCG over qrels on
+the retrieve→rerank→fusion legs. GraphWright owns the **synthesis half** — citation-recall on
+rehydrate→synthesis→answer. Both repos build toward this shared criteria; T39 (extraction-depth grading)
+is a logged follow-on out of this milestone.
+
+**Grading model:** **deepseek-v4-pro** (`STRUCTURED_REASONING`) pins the answer half — the project's
+"larger model for quality-sensitive extraction" (ADR-0006), what the synthesis workers actually run and
+what RAG_Wright's re-validations ran on. The joint eval pins ONE model (GraphWright's node had run
+qwen3.7-plus/`_SECONDARY`); RAG_Wright owns the benchmark design and pins deepseek-v4-pro.
+
+**Locked acceptance criteria (set before the run):**
+- **Retrieval (RAG's half) — primary gate: `recall@50 ≥ 0.70`.** k=50 = the fused/reranked pool that
+  feeds synthesis; this is the true system ceiling — a relevant clause that never reaches the evidence is
+  unrecoverable downstream. `recall@10 ≥ 0.50` and `nDCG@10 ≥ 0.40` are reported, **not gated** (ranking
+  diagnostics).
+- **Answer (GraphWright's half) — `citation-recall ≥ 0.75`, conditioned on evidence reaching synthesis**
+  (isolates the answer half without penalizing it for retrieval's misses).
+- **PIN 1 — acceptance is the CONJUNCTION, with ordering: `recall@50 ≥ 0.70` AND `citation-recall ≥ 0.75`.**
+  The retrieval gate is the **precondition** that makes citation-recall interpretable. Citation-recall
+  alone is never a pass: conditioning on *arrived* evidence shrinks the denominator when retrieval
+  underperforms, so a high conditioned value over a tiny arrived set (extreme: 1 clause arrived + cited →
+  1.0) can look best exactly when retrieval failed. Retrieval passing = substantial evidence arrived = the
+  citation-recall number is trustworthy.
+- **PIN 2 — zero-arrival queries** (no relevant clause reached synthesis; citation-recall undefined) are
+  **counted as retrieval failures under the recall gate, EXCLUDED from the citation-recall population** —
+  not scored 1.0 or 0.0, not silently dropped. Pinned before the run because how the degenerate cases fold
+  in affects the aggregate.
+- **Pre-run-judgment caveat:** thresholds are calibrated to ACORD's difficulty (hard attorney clause
+  retrieval), not measured achievability (T33 unbuilt). If a dry run shows them miscalibrated, recalibrate
+  **before the graded run, never after** — preserves the "set before results" discipline.
+
+**Description (build scope):** Ingest ACORD (Atticus Clause Retrieval Dataset: CC-BY-4.0, BEIR, 114
+attorney-authored queries, ~126k graded query-clause pairs, corpus of SEC/EDGAR + F500 ToS clauses) into
+the store via the pipeline and run its expert queries through hybrid search + rerank + fusion, scored
+against qrels for the recall gate. Rehydration to text is the **`chunk_read` governed capability (T38)**,
+not caller-side plumbing. Does NOT exercise the RLM chunker (pre-segmented clauses), so the RLM
+keep-vs-optional call stays at GATE-2b. **LLM-generated queries are rejected as circular; if ACORD is
+unusable, return to the human before any alternative.**
+**Dep:** T21, T22 (+ T38 chunk_read). License + corpus provenance verified (2026-07-12).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
