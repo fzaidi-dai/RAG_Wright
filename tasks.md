@@ -221,9 +221,9 @@ loop enforces it.
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
-| T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | unheld; build on criteria lock (thresholds + chunk_read confirmed) | T21, T22 |
-| T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | awaiting-approval | T17, T19, T20 |
-| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | awaiting-approval | T40 |
+| T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | next up; criteria + invariant locked, ready to build | T21, T22, T38, T40 |
+| T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | done | T17, T19, T20 |
+| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | done | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
@@ -1280,7 +1280,27 @@ against qrels for the recall gate. Rehydration to text is the **`chunk_read` gov
 not caller-side plumbing. Does NOT exercise the RLM chunker (pre-segmented clauses), so the RLM
 keep-vs-optional call stays at GATE-2b. **LLM-generated queries are rejected as circular; if ACORD is
 unusable, return to the human before any alternative.**
-**Dep:** T21, T22 (+ T38 chunk_read). License + corpus provenance verified (2026-07-12).
+**Dep:** T21, T22, T38 (chunk_read), T40 (sidecar). License + corpus provenance verified (2026-07-12).
+
+**Ingest constraint (load-bearing, verified before build 2026-07-17):** ACORD ingest MUST go through
+`ChunkWriter.write_document` (index upsert + sidecar write under one gate + completeness guard), **never a
+direct `store.upsert_chunk`** — a direct write would populate the index while bypassing the sidecar and
+break the invariant below. Pre-segmented ACORD clauses skip the RLM chunker but still flow chunk → embed
+(BGE-M3) → `write_document(records, texts=...)`.
+
+**Rehydration invariant + eval-integrity handling (pinned before the run):** the chain
+**indexed ⟹ sidecar-text-present** (T40 guard) and **fusion surfaces only indexed chunk_ids** (hybrid_search
+returns only `Chunk`-index rows; reranking passes ids through; the graph leg is empty on the retrieval
+path) → `chunk_read` **cannot miss on a clean ingest**. Therefore a `chunk_read` `KeyError` during the eval
+is a **can't-happen**, i.e. the invariant was violated (a real ingest/sidecar bug). So the harness treats a
+`chunk_read` raise as an **eval-integrity failure**: caught, surfaced loudly with the query and chunk_id,
+**halt-and-investigate** — never folded into a metric, never swallowed by a generic run abort. (Sits
+alongside the already-pinned zero-arrival-query handling: those count as retrieval failures under the
+recall gate and are excluded from the citation-recall population.)
+
+**First synthesis run on pipeline-persisted text:** T40 (persist) + T38 (rehydrate) close the loop, so this
+is the first time synthesis runs on pipeline text rather than test-provided text (earlier proofs used the
+phantom-manifest text source). Carry into the run notes.
 
 ### Task T40: Chunk-text sidecar — persist full chunk text at ingest (FR-I.3, RAC to follow)
 
