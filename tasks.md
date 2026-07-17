@@ -1272,6 +1272,39 @@ qwen3.7-plus/`_SECONDARY`); RAG_Wright owns the benchmark design and pins deepse
 - **Pre-run-judgment caveat:** thresholds are calibrated to ACORD's difficulty (hard attorney clause
   retrieval), not measured achievability (T33 unbuilt). If a dry run shows them miscalibrated, recalibrate
   **before the graded run, never after** — preserves the "set before results" discipline.
+- **PIN 3 — the conditioning assumed a passing retrieval bar; the product rule grounds the bar (2026-07-18).**
+  This makes PIN 1's precondition explicit and resolves how the retrieval bar is set (supersedes the
+  ungrounded `recall@50 ≥ 0.70`).
+  - **Hidden assumption, now explicit:** conditioned citation-recall (denominator = relevant clauses that
+    *reached synthesis*, not all relevant) only isolates the synthesis half *fairly when a substantial,
+    representative evidence set arrives* — i.e. when retrieval clears its bar. Below the bar the arrived set
+    is small and **biased toward easy-to-retrieve clauses**, so the conditioned number measures synthesis on
+    an unrepresentative subset and is **not interpretable alone**.
+  - **Reading rule below bar:** the honest end-to-end number is the **product**
+    `end_to_end_completeness = retrieval_recall × conditioned_citation_recall` (telescopes to
+    `|cited ∩ relevant| / |relevant|`, completeness over ALL relevant, since cited ⊆ arrived). At the current
+    fused recall ~0.38 the answer can miss ~60% of relevant evidence while the conditioned value looks
+    excellent. **If synthesis is run while retrieval is below bar, report the product, never the conditioned
+    value alone** — it is a product *diagnostic*, not a graded citation-recall.
+  - **Consequence:** the conjunction's left operand is not met, so the graded run **cannot** be framed as
+    "retrieval validated, now test synthesis." Retrieval reaches its grounded bar first.
+  - **RESOLUTION — the grounded recall bar = `E / 0.75`**, where `E` = the end-to-end evidence-use
+    completeness target (what fraction of ALL relevant clauses a good answer must draw on) and `0.75` is the
+    citation-recall gate. This derives the recall bar from the eval's actual success criterion, not a guess —
+    what was missing when 0.70 was ungrounded. **nDCG stays DIAGNOSTIC, not the gate** (it measures top-10
+    ranking; the end-to-end outcome is bounded by recall, not nDCG). Not "achievable recall" either (that is
+    fit-to-result). **Coherence requirement:** the recall-gate `k` MUST equal the synthesis evidence-feed cap
+    (top-`k` fused → synthesis), so `recall@k` = the fraction of relevant that arrives = the product's
+    retrieval term (today `DEFAULT_UNION_CAP=20` ≠ 50 — align before the graded run).
+  - **`E = 0.5` PROPOSED (bar = 0.5/0.75 = `recall@k ≥ 0.667`), pending confirmation.** Rationale: a complete
+    answer draws on the *majority* of the relevant evidence (principled, not fit — current 0.38 fails it, so
+    it is a real target, not a lowered bar). **Achievability flag:** current raw-hybrid `recall@200 = 0.65`
+    is the retrieval *ceiling* (relevant clauses present anywhere in top-200), and `recall@k ≤ recall@200`, so
+    a 0.667 bar is *above* today's ceiling — it requires improving the retriever itself (legal-tuning / a
+    stronger model / higher-recall retrieval), NOT just rerank. That gap (0.38 → 0.667, ceiling 0.65) is the
+    retrieval investment the grounded bar demands; the current 0.38 is the gap to close, not a bar to lower to.
+    The three earlier gate options collapse: nDCG-gate dropped (wrong metric), recall regrounded as `E/0.75`
+    (grounded, not fit), retrieval-investment is the *consequence* of the grounded bar.
 
 **Description (build scope):** Ingest ACORD (Atticus Clause Retrieval Dataset: CC-BY-4.0, BEIR, 114
 attorney-authored queries, ~126k graded query-clause pairs, corpus of SEC/EDGAR + F500 ToS clauses) into
