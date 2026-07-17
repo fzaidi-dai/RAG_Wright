@@ -62,10 +62,6 @@ _EXTRACT_WORKER_PROMPT = (
     "fact tied to the chunk_id it came from. If the slice is irrelevant, say so briefly. You never see the "
     "whole candidate set."
 )
-_EXTRACT_PROMPT = (
-    "Extract only the facts in this passage that help answer the question, with any figures and named "
-    "entities, faithfully and concisely. If the passage is irrelevant, say so briefly."
-)
 _COMBINE_PROMPT = (
     "Combine these notes into a single faithful synthesis that answers the question, keeping figures and "
     "named entities. Do not add facts not present in the notes."
@@ -100,26 +96,16 @@ class SynthesisResult(BaseModel):
 
 @runtime_checkable
 class Synthesizer(Protocol):
-    """The combine seam plus a direct single-slice extract used only by the coverage guarantee.
+    """The combine seam: fold a small group of already-reduced notes (<= fanout) into one synthesis."""
 
-    `combine` folds a small group of already-reduced notes (<= fanout) into one synthesis (the ascent).
-    `extract` extracts one candidate directly — used ONLY to cover a chunk the recursive descent missed
-    (the completeness repair), never on the main path (that is the worker's job)."""
-
-    def extract(self, query: str, text: str) -> str: ...
     def combine(self, query: str, extracts: list[str]) -> str: ...
 
 
 class SeamSynthesizer:
-    """The real combine + repair-extract: free-text calls through the model-profile seam (DeepSeek V4 Pro,
-    ADR-0006)."""
+    """The real combine: a free-text call through the model-profile seam (DeepSeek V4 Pro, ADR-0006)."""
 
     def __init__(self, model_id: str | None = None) -> None:
         self._model_id = model_id or model_for(ModelRole.STRUCTURED_REASONING)
-
-    def extract(self, query: str, text: str) -> str:
-        message = build_model(self._model_id).invoke(f"{_EXTRACT_PROMPT}\nQuestion: {query}\n\nPassage:\n{text}")
-        return message.content if hasattr(message, "content") else str(message)
 
     def combine(self, query: str, extracts: list[str]) -> str:
         notes = "\n\n---\n\n".join(extracts)
@@ -215,12 +201,12 @@ class SeamSliceExtractor:
 
     def _working_set_tool(self, chunks: list[SynthesisChunk]):
         value = self._working_set if self._working_set is not None else [
-            {"chunk_id": c.chunk_id, "text": c.text} for c in chunks
+            {"id": c.chunk_id, "chunk_id": c.chunk_id, "text": c.text} for c in chunks
         ]
 
         @tool
         def working_set() -> object:
-            """Return the working set: the retrieved candidate chunks (chunk_id, text)."""
+            """Return the working set: the retrieved candidate chunks (id, chunk_id, text)."""
             return value
 
         return working_set
@@ -228,11 +214,12 @@ class SeamSliceExtractor:
     def _request(self, query: str) -> str:
         return (
             "Run this as a workflow. Call `const workingSet = await tools.workingSet();` to get the "
-            "retrieved candidate set (a list of {chunk_id, text}); it is a JavaScript value in the "
-            "interpreter, never in your context. Decompose it (dispatch rlm_decomposer for an over-large "
-            "group and recurse), hand each leaf slice to an rlm_slice_worker that extracts the facts "
-            "relevant to the question, keeping each fact tied to its chunk_id. Then return ONLY a JSON "
-            "array [{\"chunk_id\": ..., \"extract\": ...}], one entry per candidate chunk.\n\n"
+            "retrieved candidate set (a list of {id, chunk_id, text}); it is a JavaScript value in the "
+            "interpreter, never in your context. Decompose it (dispatch rlm_decomposer with `cuts` for an "
+            "over-large group and recurse), hand each leaf slice to an rlm_slice_worker that extracts the "
+            "facts relevant to the question, keeping each fact tied to its chunk_id. Apply the coverage "
+            "tail from your instructions: before returning, cover any candidate the recursion missed. Then "
+            "return ONLY a JSON array [{\"chunk_id\": ..., \"extract\": ...}], one entry per candidate.\n\n"
             f"Question: {query}"
         )
 
@@ -252,27 +239,6 @@ class SeamSliceExtractor:
 # --- the capability: descent then ascent ---------------------------------------------------------
 
 
-def _guarantee_coverage(
-    query: str,
-    chunks: list[SynthesisChunk],
-    outputs: list[SliceOutput],
-    synthesizer: Synthesizer,
-) -> list[SliceOutput]:
-    """Coverage guarantee (T36 finding): out of context, the recursive descent can silently miss a deep
-    leaf, dropping a candidate's facts while the run reports success. The code holds the whole candidate
-    set, so it guarantees every `chunk_id` has an extract: any candidate the descent missed is extracted
-    directly here (a bounded repair over only the missed chunks). Runtime guarantees coverage; the model
-    reasons about grouping. Returns exactly one output per candidate, in candidate order."""
-    by_id = {output.chunk_id: output for output in outputs}
-    covered: list[SliceOutput] = []
-    for chunk in chunks:
-        output = by_id.get(chunk.chunk_id)
-        if output is None:  # the descent missed this candidate out of context — cover it, do not drop it
-            output = SliceOutput(chunk_id=chunk.chunk_id, extract=synthesizer.extract(query, chunk.text))
-        covered.append(output)
-    return covered
-
-
 def rlm_synthesize(
     query: str,
     chunks: list[SynthesisChunk],
@@ -284,18 +250,17 @@ def rlm_synthesize(
 ) -> SynthesisResult:
     """Synthesize an answer over the candidate chunks: recursive extract (descent) then reduce (ascent).
 
-    `extractor` decomposes the candidate set and extracts per leaf (defaults to the live
-    `SeamSliceExtractor`; hermetic tests inject a stub); a code-side coverage guarantee then ensures every
-    candidate has an extract even if the descent missed a deep leaf out of context (T36 finding); `_reduce`
-    combines the extracts via `synthesizer` (defaults to `SeamSynthesizer`). Every extract keeps its
-    `chunk_id`, so the result is cited (FR-Q.6).
+    `extractor` decomposes the candidate set and extracts per leaf, with the coverage guarantee **in the
+    interpreter workflow** (the skill's coverage tail covers any candidate the recursion missed, so it runs
+    in every consumer including GraphWright's node, not just here — T37); `_reduce` combines the extracts
+    via `synthesizer` (defaults to `SeamSynthesizer`). Every extract keeps its `chunk_id`, cited (FR-Q.6).
     """
     if not chunks:
         return SynthesisResult(query=query, slice_outputs=[], synthesis="", chunk_ids=[])
     extractor = extractor if extractor is not None else SeamSliceExtractor()
     synthesizer = synthesizer if synthesizer is not None else SeamSynthesizer()
 
-    slice_outputs = _guarantee_coverage(query, chunks, extractor.extract(query, chunks), synthesizer)
+    slice_outputs = extractor.extract(query, chunks)
     semaphore = asyncio.Semaphore(max_concurrency)
     synthesis = asyncio.run(
         _reduce(query, [o.extract for o in slice_outputs], synthesizer, semaphore, fanout)

@@ -73,18 +73,21 @@ def _last_human(messages: list[BaseMessage]) -> str:
     return ""
 
 
-def _slice_of(messages: list[BaseMessage]) -> str:
-    """The slice token from a `... depth N: SLICE` task description the sub-agent was handed."""
-    return _last_human(messages).rsplit(": ", 1)[-1].strip()
+def _ws_items(n: int) -> list[dict]:
+    """A working set of `n` identifiable items (the shape the coverage tail diffs against)."""
+    return [{"id": i, "text": f"item {i}"} for i in range(n)]
 
 
-def _decomposer_responder(split_map: dict[str, list[str]]) -> Callable[[list[BaseMessage]], AIMessage]:
-    """A decomposer that splits a slice per `split_map`, else calls it a leaf (design B': one level)."""
+def _decomposer_responder(leaf_size: int = 1) -> Callable[[list[BaseMessage]], AIMessage]:
+    """A decomposer that splits an item-list in half (returns `cuts`) until it is <= `leaf_size` items,
+    then marks it a leaf. Reads the item count from the description RLM_WORKFLOW_JS sends."""
 
     def respond(messages: list[BaseMessage]) -> AIMessage:
-        parts = split_map.get(_slice_of(messages))
-        payload = {"leaf": False, "parts": parts} if parts else {"leaf": True}
-        return AIMessage(content=json.dumps(payload))
+        match = re.search(r"over (\d+) items", _last_human(messages))
+        n = int(match.group(1)) if match else 1
+        if n <= leaf_size:
+            return AIMessage(content=json.dumps({"leaf": True}))
+        return AIMessage(content=json.dumps({"leaf": False, "cuts": [n // 2]}))
 
     return respond
 
@@ -150,26 +153,28 @@ def _starts(events: list[dict], subagent_type: str) -> list[dict]:
 # --- 1. recursive input decomposition ------------------------------------------------------------
 
 
+def _decompose_depths(events: list[dict]) -> set[int]:
+    return {int(e["description"].split("depth ", 1)[1].split(" ", 1)[0]) for e in _starts(events, RLM_DECOMPOSER)}
+
+
 def test_recursion_forced_the_interpreter_reenters_decompose_past_depth_one():
-    # A working set that a single split cannot satisfy: R -> [A, B], and A -> [A1, A2]. The leaves
-    # A1, A2 are reachable ONLY by re-entering decompose() at depth 1. A one-level splitter yields
-    # leaves [A, B] at maxSplitDepth 0 and fails every assertion below.
-    split_map = {"R": ["A", "B"], "A": ["A1", "A2"]}
+    # 4 items split in half to singleton leaves: [0,1,2,3] -> [0,1],[2,3] -> [0],[1],[2],[3]. The leaves
+    # are reachable ONLY by re-entering decompose() past depth 0. A one-level splitter fails the checks.
     agent = _build_rlm(
-        "R",
+        _ws_items(4),
         reasoning_model=FakeChat(responder=_orchestrator_responder()),
-        decomposer_model=FakeChat(responder=_decomposer_responder(split_map)),
-        worker_model=FakeChat(responder=lambda m: AIMessage(content=f"handled {_slice_of(m)}")),
+        decomposer_model=FakeChat(responder=_decomposer_responder(leaf_size=1)),
+        worker_model=FakeChat(responder=lambda m: AIMessage(content="handled")),
     )
     events, messages = _run(agent)
     result = _eval_result(messages)
 
     # (a) the interpreter re-entered decompose() past the first level (a split occurred at depth >= 1)
     assert result.get("maxSplitDepth", -1) >= 1
-    # (b) leaves A1, A2, B are reachable only through two levels of decomposition
-    assert result.get("leafCount") == 3
+    # (b) every item covered — the coverage tail confirms it in-interpreter (covered == total, none missed)
+    assert result.get("covered") == 4 and result.get("total") == 4 and result.get("missed") == 0
     # (c) the decomposer actually fired at MORE THAN ONE level, not a flat batch at depth 0
-    depths = {int(e["description"].split("depth ", 1)[1].split(":", 1)[0]) for e in _starts(events, RLM_DECOMPOSER)}
+    depths = _decompose_depths(events)
     assert len(depths) >= 2 and max(depths) >= 2, f"decomposer fired only at depths {depths}"
 
 
@@ -178,19 +183,48 @@ def test_a_flat_one_level_workflow_fails_the_recursion_assertion():
     # parts as leaves) produces maxSplitDepth 0 and cannot satisfy the depth check above.
     flat_js = r"""
     const workingSet = await tools.workingSet();
-    const decision = JSON.parse(await task({description: "decompose depth 0: " + workingSet, subagentType: "rlm_decomposer"}));
-    const parts = decision.leaf ? [workingSet] : decision.parts;
-    for (const p of parts) { await task({description: "handle leaf depth 0: " + p, subagentType: "rlm_slice_worker"}); }
-    JSON.stringify({leafCount: parts.length, maxSplitDepth: 0});
+    const handled = new Set();
+    await task({description: "decompose depth 0 over " + workingSet.length + " items", subagentType: "rlm_decomposer"});
+    for (const it of workingSet) { await task({description: "handle leaf depth 0", subagentType: "rlm_slice_worker"}); handled.add(it.id); }
+    JSON.stringify({leafCount: workingSet.length, covered: handled.size, total: workingSet.length, maxSplitDepth: 0});
     """.strip()
     agent = _build_rlm(
-        "R",
+        _ws_items(4),
         reasoning_model=FakeChat(responder=_orchestrator_responder(flat_js)),
-        decomposer_model=FakeChat(responder=_decomposer_responder({"R": ["A", "B"], "A": ["A1", "A2"]})),
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="handled")),
     )
     _events, messages = _run(agent)
     assert _eval_result(messages).get("maxSplitDepth", -1) < 1  # a flat batch never recurses
+
+
+def test_coverage_tail_covers_an_incomplete_descent_in_the_interpreter():
+    # T37: the completeness guarantee lives in the WORKFLOW, so it runs wherever the skill runs (the node
+    # AND this harness). Even a workflow whose descent is INCOMPLETE (handles only the first half) reaches
+    # full coverage: the tail diffs the working set (held in code) against `handled` and re-dispatches the
+    # missed -- proven in-interpreter, the property a Python wrapper could not give GraphWright's node.
+    incomplete_js = r"""
+    const workingSet = await tools.workingSet();
+    const handled = new Set();
+    for (const it of workingSet.slice(0, Math.floor(workingSet.length / 2))) {
+      await task({description: "handle leaf", subagentType: "rlm_slice_worker"}); handled.add(it.id);
+    }
+    for (const it of workingSet.filter((it) => !handled.has(it.id))) {   // COVERAGE TAIL
+      handled.add(it.id); await task({description: "cover missed", subagentType: "rlm_slice_worker"});
+    }
+    JSON.stringify({covered: handled.size, total: workingSet.length});
+    """.strip()
+    agent = _build_rlm(
+        _ws_items(6),
+        reasoning_model=FakeChat(responder=_orchestrator_responder(incomplete_js)),
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
+        worker_model=FakeChat(responder=lambda m: AIMessage(content="ok")),
+    )
+    events, messages = _run(agent)
+    result = _eval_result(messages)
+
+    assert result.get("covered") == 6 and result.get("total") == 6  # full coverage despite the incomplete descent
+    assert len(_starts(events, RLM_SLICE_WORKER)) == 6  # 3 handled by the descent + 3 by the tail = every item
 
 
 # --- 2. per-slice tool use -----------------------------------------------------------------------
@@ -211,9 +245,9 @@ def test_a_slice_worker_can_invoke_a_tool_mid_handling():
         return AIMessage(content="", tool_calls=[{"name": "record_fact", "args": {"fact": "f1"}, "id": "t1"}])
 
     agent = _build_rlm(
-        "x",
+        _ws_items(1),  # a single-item working set -> one leaf -> the worker uses its tool
         reasoning_model=FakeChat(responder=_orchestrator_responder()),
-        decomposer_model=FakeChat(responder=_decomposer_responder({})),  # x is a leaf
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
         worker_model=FakeChat(responder=worker_responder),
         worker_tools=[record_fact],
     )
@@ -227,9 +261,9 @@ def test_a_slice_worker_can_invoke_a_tool_mid_handling():
 def test_a_slice_worker_can_load_a_skill():
     worker_seen: list[list[BaseMessage]] = []
     agent = _build_rlm(
-        "x",
+        _ws_items(1),
         reasoning_model=FakeChat(responder=_orchestrator_responder()),
-        decomposer_model=FakeChat(responder=_decomposer_responder({})),
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="leaf handled"), received=worker_seen),
         worker_skills=[_PROBE_SKILL],
     )
@@ -255,9 +289,9 @@ def _is_code_driven(events: list[dict]) -> bool:
 
 def test_the_workflow_fires_code_driven_fanout_not_sequential_dispatch():
     agent = _build_rlm(
-        "R",
+        _ws_items(4),
         reasoning_model=FakeChat(responder=_orchestrator_responder()),
-        decomposer_model=FakeChat(responder=_decomposer_responder({"R": ["A", "B"]})),
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="handled")),
     )
     events, messages = _run(agent)
@@ -278,7 +312,7 @@ def test_sequential_dispatch_is_detected_as_a_fallback():
 
     agent = build_rlm_agent(
         reasoning_model=FakeChat(responder=sequential_orchestrator),
-        decomposer_model=FakeChat(responder=_decomposer_responder({})),
+        decomposer_model=FakeChat(responder=_decomposer_responder()),
         worker_model=FakeChat(responder=lambda m: AIMessage(content="handled")),
     )
     events, messages = _run(agent)

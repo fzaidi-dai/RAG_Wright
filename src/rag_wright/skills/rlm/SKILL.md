@@ -61,38 +61,49 @@ interpreter and never enters your context. Do **not** expect the working set in 
 tool.
 
 ```javascript
-async function decompose(slice, depth) {
+const workingSet = await tools.workingSet();  // [{id, ...}, ...] delivered by the runtime; never in context
+const handled = new Set();                    // ids of items a leaf worker covered
+async function decompose(items, depth) {
   const decision = JSON.parse(await task({
-    description: "decompose depth " + depth + ": " + slice, subagentType: "rlm_decomposer",
+    description: "decompose depth " + depth, subagentType: "rlm_decomposer",
   }));
   if (decision.leaf) {
-    return [await task({ description: "handle leaf depth " + depth + ": " + slice, subagentType: "rlm_slice_worker" })];
+    for (const it of items) handled.add(it.id);
+    return [await task({ description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker" })];
   }
-  // fresh decomposer decided THIS level; re-enter decompose() on each RETURNED part (the interpreter
-  // holds the stack). The parts come from `decision.parts`, NOT from a list you wrote yourself.
-  const handled = await Promise.all(decision.parts.map((p) => decompose(p, depth + 1)));
-  return handled.flat();
+  // the decomposer partitions THIS level with `cuts`; recurse on EVERY group (the interpreter holds the stack)
+  const bounds = [0, ...decision.cuts, items.length];
+  const groups = [];
+  for (let i = 0; i < bounds.length - 1; i++) groups.push(items.slice(bounds[i], bounds[i + 1]));
+  return (await Promise.all(groups.map((g) => decompose(g, depth + 1)))).flat();
 }
-const workingSet = await tools.workingSet();  // delivered by the runtime; never in your context
 const leaves = await decompose(workingSet, 0);
+// COVERAGE TAIL — the code guarantees completeness, not your recursion. You hold every item (via the
+// tool), so before returning, cover anything the recursion missed. Never skip this: out of context you
+// cannot see the whole set, and a missed deep leaf is a silent drop.
+for (const it of workingSet.filter((it) => !handled.has(it.id))) {
+  handled.add(it.id);
+  await task({ description: "cover missed item", subagentType: "rlm_slice_worker" });
+}
 ```
 
 **These rules are not optional. Follow them exactly:**
 
-1. **The split is the decomposer's job, never yours.** Every sub-slice a leaf worker handles MUST come
-   from a `rlm_decomposer` return value (`decision.parts`), obtained by dispatching the decomposer. You
-   do not decide the split yourself and you do not know the leaves in advance; only the decomposer does.
-2. **Recurse on the decomposer's output.** When the decomposer returns parts, call `decompose()` again on
-   **each returned part**. A part may itself split, to arbitrary depth. Stop a branch only when the
-   decomposer marks that slice a leaf (`decision.leaf === true`), then dispatch a `rlm_slice_worker`.
+1. **The split is the decomposer's job, never yours.** How to partition each level MUST come from a
+   `rlm_decomposer` return value (`decision.cuts`), obtained by dispatching the decomposer. You do not
+   decide the split yourself and you do not know the grouping in advance; only the decomposer does.
+2. **Recurse on the decomposer's output.** When the decomposer returns `cuts`, slice `items` into those
+   groups and call `decompose()` again on **each group**. A group may itself split, to arbitrary depth.
+   Stop a branch only when the decomposer marks that slice a leaf (`decision.leaf === true`), then dispatch
+   a `rlm_slice_worker`.
 3. **One `decompose()` per node, one decomposer dispatch per node.** A single decomposer call for the
    whole working set is wrong: that is a flat split, and it defeats the method.
-4. **Cover the whole working set — recurse on EVERY part.** `Promise.all(decision.parts.map(...))` must
-   recurse on *all* parts, never a subset. Missing a deep leaf silently drops that part's content while
-   the run still reports success — the exact silent failure this method must not have. Out of context you
-   cannot see the whole set, so be exhaustive by construction. (The applying capability also guarantees
-   coverage in code — it holds the whole working set and covers anything the recursion missed — but do not
-   rely on that as a licence to be incomplete; the code guarantee is a safety net, not the method.)
+4. **The coverage tail guarantees completeness — never skip it, and never rely on it as a licence to be
+   incomplete.** After the recursion, the tail (above) diffs the working set against `handled` and
+   dispatches any item the recursion missed, in interpreter code, before returning. This is *code checking
+   coverage against the whole working set you hold*, not you being asked to be thorough — the structural
+   guarantee the method needs, because out of context a missed deep leaf is a silent drop that still
+   reports success. Still write a complete recursion; the tail is the safety net, not the method.
 
 **Anti-pattern (do NOT do this):**
 

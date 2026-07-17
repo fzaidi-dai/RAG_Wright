@@ -102,23 +102,28 @@ class BoundaryDiscoverer(Protocol):
 
 _DISCOVERY_INSTRUCTIONS = (
     "Call `const items = await tools.workingSet();` to get the parsed document as a list of structural "
-    "items (each has index, label, level, and full text); it is a JavaScript value in the interpreter, "
+    "items (each has id, index, label, level, and full text); it is a JavaScript value in the interpreter, "
     "never in your context. Partition it into semantically coherent chunks by grouping CONTIGUOUS items so "
     "that each chunk is one coherent unit (a clause, a section, a related run) and no chunk exceeds ~{cap} "
     "characters. Never split a single coherent clause across two chunks, and never cut at a fixed size. "
-    "Return ONLY a JSON array of the boundaries as objects {{\"start_index\": i, \"end_index\": j}} "
-    "(inclusive, contiguous, covering every item from 0 to the last)."
+    "COVERAGE TAIL (do not skip): before returning, verify in code that your spans cover EVERY item from 0 "
+    "to items.length-1 with no gap; for any item range the recursion missed, add a span covering it — the "
+    "code guarantees coverage, a missed item is a silent text drop. Return ONLY a JSON array of the "
+    "boundaries as objects {{\"start_index\": i, \"end_index\": j}} (inclusive, contiguous, covering every "
+    "item from 0 to the last)."
 )
 
 
 def _document_items(document) -> list[dict]:
-    """The document's items as data for the working-set tool: index, label, level, and FULL text. This is
-    a JS value delivered through `tools.workingSet()` — it lives in the interpreter and never enters the
-    model's context (no truncation; a whole document survives intact), so no `peek` tool is needed."""
+    """The document's items as data for the working-set tool: id, index, label, level, and FULL text. This
+    is a JS value delivered through `tools.workingSet()` — it lives in the interpreter and never enters the
+    model's context (no truncation; a whole document survives intact), so no `peek` tool is needed. `id`
+    lets the workflow's coverage tail diff handled items against the whole set (T37)."""
     items: list[dict] = []
     for i, item in enumerate(document.texts):
         items.append(
             {
+                "id": i,
                 "index": i,
                 "label": str(getattr(item, "label", "")),
                 "level": getattr(item, "level", None),
@@ -175,8 +180,11 @@ class SeamBoundaryDiscoverer:
             )
             messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
         final = _final_text(messages)
-        # coverage guarantee (T36): repair any gap the recursion missed so the whole document is covered
-        return _repair_partition(_extract_spans(final), len(document.texts))
+        spans = _extract_spans(final)
+        # the workflow's coverage tail (in the skill, T37) guarantees full coverage; validate loudly here
+        # so an incomplete run fails visibly rather than silently dropping document text.
+        _validate_partition(spans, len(document.texts))
+        return spans
 
 
 def _final_text(messages) -> str:
@@ -228,28 +236,6 @@ def _hard_split(text: str, token_cap: int) -> list[str]:
 
 
 _SEP = "\n\n"
-
-
-def _repair_partition(spans: list[BoundarySpan], n_items: int) -> list[BoundarySpan]:
-    """Coverage guarantee (T36 finding): out of context the discoverer's recursion can silently miss an
-    item range, dropping document text while the run reports success. The code holds the whole document,
-    so it reconstructs a complete contiguous partition from whatever the model returned: a gap the
-    recursion left becomes its own span, and an overlap is clipped. Runtime guarantees coverage; the model
-    reasons about boundaries. The result always covers every item 0..n_items-1 exactly once."""
-    if n_items == 0:
-        return []
-    result: list[BoundarySpan] = []
-    cursor = 0
-    for span in sorted(spans, key=lambda s: s.start_index):
-        if span.end_index < cursor:  # fully behind the cursor (overlap already covered) — drop it
-            continue
-        if span.start_index > cursor:  # a gap the recursion missed — cover it as its own span
-            result.append(BoundarySpan(start_index=cursor, end_index=span.start_index - 1))
-        result.append(BoundarySpan(start_index=max(span.start_index, cursor), end_index=span.end_index))
-        cursor = span.end_index + 1
-    if cursor < n_items:  # trailing gap (the recursion stopped short)
-        result.append(BoundarySpan(start_index=cursor, end_index=n_items - 1))
-    return result
 
 
 def _validate_partition(spans: list[BoundarySpan], n_items: int) -> None:

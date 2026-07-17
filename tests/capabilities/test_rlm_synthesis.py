@@ -51,15 +51,10 @@ class _StubExtractor:
 
 
 class _StubSynthesizer:
-    """A Synthesizer whose combine concatenates notes and whose extract covers one slice (counts calls)."""
+    """A Synthesizer whose combine concatenates notes (deterministic; counts calls)."""
 
     def __init__(self) -> None:
         self.combine_calls = 0
-        self.extract_calls = 0
-
-    def extract(self, query: str, text: str) -> str:
-        self.extract_calls += 1
-        return f"extracted({text})"
 
     def combine(self, query: str, extracts: list[str]) -> str:
         self.combine_calls += 1
@@ -110,22 +105,6 @@ def test_rlm_synthesize_on_empty_candidates_returns_empty():
     assert result.slice_outputs == [] and result.synthesis == "" and result.chunk_ids == []
 
 
-def test_coverage_guarantee_covers_a_candidate_the_descent_silently_missed():
-    # T36 finding: out of context the recursive descent can miss a deep leaf -- here it returns extracts
-    # for d:0 and d:2 but SILENTLY DROPS d:1. The code holds the whole candidate set, so it guarantees d:1
-    # is extracted anyway (via synthesizer.extract), not dropped, and orders outputs to the candidates.
-    chunks = [SynthesisChunk(chunk_id=f"d:{i}:h", text=f"passage {i}") for i in range(3)]
-    extractor = _StubExtractor([("d:0:h", "fact 0"), ("d:2:h", "fact 2")])  # d:1 missed
-    synthesizer = _StubSynthesizer()
-
-    result = rlm_synthesize("q", chunks, extractor=extractor, synthesizer=synthesizer)
-
-    assert [o.chunk_id for o in result.slice_outputs] == ["d:0:h", "d:1:h", "d:2:h"]  # every candidate covered
-    assert result.slice_outputs[1].extract == "extracted(passage 1)"  # the missed leaf covered by the code
-    assert synthesizer.extract_calls == 1  # ONLY the missed chunk was repaired (bounded, not a re-run)
-    assert result.chunk_ids == ["d:0:h", "d:1:h", "d:2:h"]  # no claim without a citation, all present
-
-
 # --- the kept _reduce fan-in (ascent, ADR-0016) --------------------------------------------------
 
 
@@ -143,20 +122,15 @@ def test_reduce_fans_in_recursively_over_groups():
 
 # --- the descent machinery: recursion is GATED for synthesis (ADR-0016/0019) ----------------------
 
-_TOKEN = re.compile(r"C0(?:\.\d+)*")
 
-
-def _deepest(text: str) -> str:
-    tokens = _TOKEN.findall(text)
-    return max(tokens, key=len) if tokens else "C0"
-
-
-def _probe_decomposer(messages: list[BaseMessage]) -> AIMessage:
-    """Reveals an opaque depth-2 candidate tree; the leaf ids only appear via recursion on this output."""
-    sid = _deepest(_last_human(messages))
-    if sid.count(".") >= 2:
+def _cuts_decomposer(messages: list[BaseMessage]) -> AIMessage:
+    """Splits an item-list in half (returns `cuts`) until a single item, then a leaf — forces the
+    interpreter to re-enter decompose() past depth one."""
+    match = re.search(r"over (\d+) items", _last_human(messages))
+    n = int(match.group(1)) if match else 1
+    if n <= 1:
         return AIMessage(content=json.dumps({"leaf": True}))
-    return AIMessage(content=json.dumps({"leaf": False, "parts": [f"{sid}.0", f"{sid}.1"]}))
+    return AIMessage(content=json.dumps({"leaf": False, "cuts": [n // 2]}))
 
 
 def _workflow_orchestrator():
@@ -189,15 +163,15 @@ def _stream_events(extractor: SeamSliceExtractor, chunks) -> list[dict]:
 
 
 def test_synthesis_descent_recurses_past_depth_one():
-    # The candidate set is an opaque handle C0 whose sub-slices only the decomposer reveals; reaching the
-    # leaves forces the interpreter to re-enter decompose(). A flat one-level split cannot reach them.
+    # 4 candidates split in half to singleton leaves; the leaves are reachable only by re-entering
+    # decompose() past depth 0. The working set arrives via tools.workingSet(), out of context.
+    chunks = [SynthesisChunk(chunk_id=f"c{i}", text=f"passage {i}") for i in range(4)]
     extractor = SeamSliceExtractor(
         model=FakeChat(responder=_workflow_orchestrator()),
-        decomposer_model=FakeChat(responder=_probe_decomposer),
-        worker_model=FakeChat(responder=lambda m: AIMessage(content=f"extracted {_deepest(_last_human(m))}")),
-        working_set="C0",  # delivered via tools.workingSet() (opaque handle; only the decomposer reveals leaves)
+        decomposer_model=FakeChat(responder=_cuts_decomposer),
+        worker_model=FakeChat(responder=lambda m: AIMessage(content="extracted")),
     )
-    events = _stream_events(extractor, [SynthesisChunk(chunk_id="C0", text="opaque")])
+    events = _stream_events(extractor, chunks)
 
     starts = [e for e in events if e.get("phase") == "start"]
     assert RLM_SLICE_WORKER in {e.get("subagent_type") for e in starts}  # leaves extracted by workers

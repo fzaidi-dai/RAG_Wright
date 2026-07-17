@@ -36,7 +36,6 @@ from rag_wright.capabilities.rlm_chunking import (
     SeamBoundaryDiscoverer,
     _MIN_NONEMPTY_CHARS,
     _finalize_chunks,
-    _repair_partition,
     _summarize_all,
     _validate_boundaries,
     _validate_partition,
@@ -175,41 +174,6 @@ def test_partition_validation_rejects_gaps_overlaps_and_short_coverage():
         _validate_partition([BoundarySpan(start_index=0, end_index=1), BoundarySpan(start_index=1, end_index=2)], 3)
     with pytest.raises(BoundaryValidationError):  # does not reach the last item
         _validate_partition([BoundarySpan(start_index=0, end_index=1)], 3)
-
-
-def test_repair_partition_fills_a_gap_the_recursion_missed():
-    # T36 finding: the discoverer's recursion returns spans that SKIP items 2-3 out of context. The code
-    # holds the whole document, so the repair covers the gap rather than silently dropping the text.
-    spans = [BoundarySpan(start_index=0, end_index=1), BoundarySpan(start_index=4, end_index=5)]  # 2-3 missing
-
-    repaired = _repair_partition(spans, 6)
-
-    assert [(s.start_index, s.end_index) for s in repaired] == [(0, 1), (2, 3), (4, 5)]  # the gap 2-3 filled
-    _validate_partition(repaired, 6)  # now a complete, contiguous, valid partition
-
-
-def test_repair_partition_clips_overlaps_and_covers_a_trailing_gap():
-    spans = [BoundarySpan(start_index=0, end_index=3), BoundarySpan(start_index=2, end_index=4)]  # overlap 2-3
-    repaired = _repair_partition(spans, 8)
-    _validate_partition(repaired, 8)  # covers 0..7 exactly once
-    assert repaired[0].start_index == 0 and repaired[-1].end_index == 7  # overlap clipped + trailing gap filled
-
-
-def test_discoverer_repairs_a_gap_the_model_left(  # integration: incomplete model output -> full coverage
-):
-    doc = _doc([_item(f"item {i}") for i in range(6)])  # a 6-item document
-
-    def responder(messages):
-        for m in messages:
-            if isinstance(m, ToolMessage) and m.name == "eval":
-                # the model returns spans that MISS items 2-3 (a dropped deep leaf out of context)
-                return AIMessage(content='[{"start_index": 0, "end_index": 1}, {"start_index": 4, "end_index": 5}]')
-        return AIMessage(content="", tool_calls=[{"name": "eval", "args": {"code": "1"}, "id": "e1"}])
-
-    spans = SeamBoundaryDiscoverer(model=_FakeChat(responder=responder)).discover(doc)
-
-    _validate_partition(spans, 6)  # the discoverer's coverage guarantee filled the gap -> complete partition
-    assert (0, 5) == (spans[0].start_index, spans[-1].end_index)  # every item covered, none dropped
 
 
 def test_over_cap_span_is_hard_split(tmp_path):

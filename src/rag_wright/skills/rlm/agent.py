@@ -85,10 +85,12 @@ def rlm_interpreter_session(
             _INTERPRETER_SEMAPHORE.release()
 
 _DECOMPOSER_PROMPT = (
-    "You decide how to split ONE working-set slice for a recursive divide-and-conquer. If the slice is "
-    "small and focused enough to handle directly, mark it a leaf; otherwise return the sub-slices to "
-    "recurse on. Reply as JSON: {\"leaf\": true} for a leaf, or {\"leaf\": false, \"parts\": [...]} to "
-    "split. Decide only THIS level; the interpreter re-dispatches you on each sub-slice."
+    "You decide how to split ONE working-set slice (a list of items) for a recursive divide-and-conquer. "
+    "If the slice is small and focused enough to handle directly, mark it a leaf; otherwise return the "
+    "split offsets that partition it into coherent contiguous groups. Reply as JSON: {\"leaf\": true} for "
+    "a leaf, or {\"leaf\": false, \"cuts\": [i, j, ...]} where each cut is an ascending index into the "
+    "slice at which a new group begins. The cuts partition the slice, so no item is lost. Decide only THIS "
+    "level; the interpreter re-dispatches you on each group."
 )
 _SLICE_WORKER_PROMPT = (
     "You handle ONE focused working-set slice end to end. Use the tools and skills you are given as "
@@ -104,33 +106,45 @@ _SLICE_WORKER_PROMPT = (
 # for a "workflow" (the trigger GraphWright's applier guarantees, requiresDynamicDispatch). It returns
 # the per-leaf results plus the depths at which splitting occurred, so the descent is inspectable.
 RLM_WORKFLOW_JS = r"""
-// Recursive divide-and-conquer. Read the working set from the runtime tool (a JS value that stays in the
-// interpreter and never enters the model's context), then fan the work out to sub-agents in code (a
-// "workflow"), never one grinding tool call at a time. The interpreter holds the working set and the
-// recursion stack; the model is only ever called on a focused slice.
-const _splitDepths = [];  // the depths at which decompose() re-entered itself (proof of descent)
-async function decompose(slice, depth) {
+// Recursive divide-and-conquer over a working set of items. Read it from the runtime tool (a JS value
+// that stays in the interpreter and never enters the model's context), then fan the work out to
+// sub-agents in code (a "workflow"), never one grinding tool call at a time. The interpreter holds the
+// working set and the recursion stack; the model is only ever called on a focused slice.
+const workingSet = await tools.workingSet();  // [{id, ...}, ...] delivered by the runtime, never in context
+const _splitDepths = [];             // the depths at which decompose() re-entered itself (proof of descent)
+const _handled = new Set();          // ids of working-set items a leaf worker covered
+async function decompose(items, depth) {
   const decision = JSON.parse(await task({
-    description: "decompose depth " + depth + ": " + slice,
+    description: "decompose depth " + depth + " over " + items.length + " items",
     subagentType: "rlm_decomposer",
   }));
   if (decision.leaf) {
-    const out = await task({
-      description: "handle leaf depth " + depth + ": " + slice,
-      subagentType: "rlm_slice_worker",
-    });
-    return [out];
+    for (const it of items) _handled.add(it.id);
+    return [await task({ description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker" })];
   }
   _splitDepths.push(depth);
-  // Fresh decomposer already ran for THIS level; recurse on each returned part (per-level fresh context).
-  const handled = await Promise.all(decision.parts.map((p) => decompose(p, depth + 1)));
+  // decision.cuts partition `items` into contiguous groups (no item lost); recurse on every group.
+  const bounds = [0, ...decision.cuts, items.length];
+  const groups = [];
+  for (let i = 0; i < bounds.length - 1; i++) groups.push(items.slice(bounds[i], bounds[i + 1]));
+  const handled = await Promise.all(groups.map((g) => decompose(g, depth + 1)));
   return handled.flat();
 }
-const workingSet = await tools.workingSet();  // the runtime delivers it; it never enters context
 const _leaves = await decompose(workingSet, 0);
+// COVERAGE TAIL (structural, in-interpreter): the code holds EVERY item, so it guarantees coverage even
+// if the recursion missed a deep leaf out of context — a silent drop otherwise (T37). Any uncovered item
+// is dispatched now, not dropped. This is code checking coverage, not the model asked to be thorough.
+const _missed = workingSet.filter((it) => !_handled.has(it.id));
+if (_missed.length) {
+  for (const it of _missed) _handled.add(it.id);
+  _leaves.push(await task({ description: "cover " + _missed.length + " missed items", subagentType: "rlm_slice_worker" }));
+}
 JSON.stringify({
   leaves: _leaves,
   leafCount: _leaves.length,
+  covered: _handled.size,
+  total: workingSet.length,
+  missed: _missed.length,
   maxSplitDepth: _splitDepths.length ? Math.max(..._splitDepths) : -1,
 });
 """.strip()
