@@ -69,7 +69,8 @@ _COMBINE_PROMPT = (
 
 
 class SynthesisChunk(BaseModel):
-    """A candidate chunk to synthesize over: its id and text (fetched by the caller from the manifest)."""
+    """A candidate chunk to synthesize over: its id and full text (rehydrated by `chunk_read`, T38,
+    from the chunk-text sidecar the ingest write leg persisted, `store/chunk_text.py`, T40)."""
 
     chunk_id: str
     text: str

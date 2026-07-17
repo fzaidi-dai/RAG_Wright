@@ -222,7 +222,8 @@ loop enforces it.
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
 | T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | unheld; build on criteria lock (thresholds + chunk_read confirmed) | T21, T22 |
-| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — thin wrapper over store.get_chunk | 4 Build read | FR-Q | todo (part of T33 eval build) | T13, T20 |
+| T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | awaiting-approval | T17, T19, T20 |
+| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | todo (needs T40; part of T33 eval build) | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
@@ -1281,6 +1282,50 @@ keep-vs-optional call stays at GATE-2b. **LLM-generated queries are rejected as 
 unusable, return to the human before any alternative.**
 **Dep:** T21, T22 (+ T38 chunk_read). License + corpus provenance verified (2026-07-12).
 
+### Task T40: Chunk-text sidecar — persist full chunk text at ingest (FR-I.3, RAC to follow)
+
+**Why:** grounding for T38 (`chunk_read`) surfaced that the full chunk **text is persisted nowhere**. The
+index is dense-over-summary by design (`ChunkRecord` = summary + vectors, no raw text), and the text is
+used once to compute the `chunk_id` content hash then **discarded** (`chunk_write.to_chunk_record`). Both
+the `ChunkRecord` docstring and the `SynthesisChunk` docstring claimed the text *"lives in the parse
+manifest keyed by chunk_id"* — **a phantom manifest that was never written** (the only parse manifest is
+the whole `DoclingDocument`, keyed by doc, not per-chunk). So the synthesis leg (FR-Q.5) was built against
+a text source that never existed; its earlier proofs (T28) ran on test-provided text. **T40 provides the
+text source synthesis has always assumed and never had** — the first pipeline-persisted-text path.
+
+**Confirmed synthesis needs text, not summary:** (1) architectural — `SynthesisChunk` is `{chunk_id, text}`
+and the extractor operates over `.text`, never reading `summary`; (2) eval — ACORD qrels are relevant
+*clause text* and citation-recall grades citing the actual clauses; summaries are lossy for legal language,
+so summary-fed synthesis would grade a mismatched measure. Summary does **not** suffice.
+
+**Design (chosen: sidecar, Option 1 of 3):** `ChunkTextStore` (`store/chunk_text.py`) — one JSON file per
+`source_doc_id`, mapping the canonical `chunk_id` string → full text. NOT part of the swappable `Store`
+seam (holds no vectors, answers no query). Rejected: adding `text` to the ArcadeDB schema (reverses the
+dense-over-summary decision, bloats the index with large legal text) and reconstruct-from-parse-manifest
+(recompute-at-retrieval the architecture avoids). Shape trimmed to `{chunk_id, text, source_doc_id}` for
+T38 (dropped `summary` — no consumer reads it).
+
+**Same-gate coupling (load-bearing):** the sidecar write is inside `write_document`, at the same loop point
+as `upsert_chunk`, driven by the **one** content-hash gate — an unchanged doc skips both, a changed chunk
+writes both, so index and sidecar cannot drift. A completeness guard rejects any `records` write whose
+`texts` map is missing a chunk_id **before any write**, so a chunk can never land in the index without its
+text in the sidecar. Delete-by-`source_doc_id` (`delete_document`) is built as the T34 lifecycle seam.
+
+**Integrity check (self-verifying store):** `ChunkTextStore.put` asserts `sha256(text) == chunk_id.content_hash`
+before persisting — the `chunk_id` already carries the hash `ChunkId.of` computed over these exact bytes at
+chunking, so the sidecar can prove it stores the faithful text for the id. A mismatch (loop index error,
+mismatched map) is the **silent-wrong-text** class that would otherwise surface only as synthesis citing a
+structurally-valid-but-wrong `chunk_id` — which citation-recall may not catch. Write-time-cheap (the hash
+was already computed at ingest; the check compares a value in hand against a value in hand) and impossible
+to add faithfully later; rejected at the store boundary so no caller can bypass it.
+
+**Files:** `src/rag_wright/store/chunk_text.py` (new), `src/rag_wright/capabilities/chunk_write.py`
+(`ChunkWriter` gains required `text_store`; `write_document` gains `texts` + gated sidecar write),
+`tests/store/test_chunk_text.py` (new), `tests/capabilities/test_chunk_write.py` (updated + same-gate and
+guard tests). Contract comments corrected in `contracts/chunk.py` and `rlm_synthesis.SynthesisChunk`.
+**Verify:** `uv run pytest tests/store/test_chunk_text.py tests/capabilities/test_chunk_write.py` (15 passed,
+1 skipped live). Full suite 395 passed + 26 skipped. **Status:** awaiting-approval. **Dep:** T17, T19, T20.
+
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
 **Description:** Confirmed during the T17 rebuild (2026-07-15): **no document-level update/upsert path
@@ -1291,11 +1336,25 @@ entries with them). This delete-and-re-chunk route is the only way a document is
 once, and it is what makes the "chunk once, persist, never recompute" ingestion lifecycle complete.
 
 **Scope (when built, not now):** on a changed document, delete all existing chunks for that `source_doc_id`
-(and their graph nodes and hybrid-index entries), then re-chunk and re-insert from scratch. Touches
-chunking (T17), the chunk write/store (T20, ArcadeDB `store/`), and the graph layer (T25). Needs a
-delete-by-`source_doc_id` on the store seam + graph, wired into a document-update entry point.
+(and their graph nodes, hybrid-index entries, **and their chunk-text sidecar entries — `ChunkTextStore.delete_document`, T40**),
+then re-chunk and re-insert from scratch. Touches chunking (T17), the chunk write/store (T20, ArcadeDB
+`store/`), the chunk-text sidecar (T40), and the graph layer (T25). Needs a delete-by-`source_doc_id` on
+the store seam + graph (+ the sidecar's `delete_document`, already built), wired into a document-update
+entry point.
 
-**Status:** todo (finding — not a T17 blocker; makes the ingestion lifecycle complete). **Dep:** T17, T20, T25.
+**Why the sidecar raises T34's priority (T40, 2026-07-17):** a re-chunk already orphans index entries today,
+so the sidecar orphaning text is the *same existing gap*, cleaned together when T34 lands — nothing
+new-orphans that wasn't already. But the orphaned thing differs in kind: an orphaned index entry is a
+stale summary + vectors (a **correctness** problem), while an orphaned sidecar entry is stale **full text**
+(correctness **plus unbounded storage growth** — text is far larger than a summary and accumulates one copy
+per re-chunked version of every updated doc). So T34 becomes **the thing that bounds sidecar storage growth**.
+**Inertness for this milestone is conditional:** the ACORD eval corpus is ingested once and never updated,
+so no orphaning triggers and T34 stays correctly deferred — but that inertness depends on the corpus not
+being updated. On an **updating corpus, T34 is required, not optional** (fine for the eval, required for
+production-with-updates).
+
+**Status:** todo (finding — not a T17 blocker; makes the ingestion lifecycle complete; bounds T40 sidecar
+growth on an updating corpus). **Dep:** T17, T20, T25, T40.
 
 ### Task T37: Deep-recursion completeness — structural coverage guarantee (T36 finding)
 

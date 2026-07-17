@@ -3,7 +3,9 @@
 One record per chunk in the hybrid retrieval index. It holds the `chunk_id`, the summary, the
 dense-over-summary vector, the sparse-over-full-text vector, extracted keywords and entities, and
 source metadata. The record does not hold the raw full chunk text: FR-I.3 enumerates the summary
-plus vectors, and the full text lives in the parse manifest keyed by `chunk_id` (FR-I.1).
+plus vectors. The text is used once at chunking to compute the `chunk_id` content hash, then persisted
+to the chunk-text sidecar (`store/chunk_text.py`, T40) keyed by `chunk_id` and rehydrated at query time
+by `chunk_read` (T38); it is deliberately kept out of the index to keep the index dense-over-summary.
 
 The load-bearing part of this contract is the vector shapes. They must match what BGE-M3 produces
 (the embedding capability, T19) and what the ArcadeDB dense `LSM_VECTOR` and sparse

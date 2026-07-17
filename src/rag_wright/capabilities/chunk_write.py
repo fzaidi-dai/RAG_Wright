@@ -17,12 +17,13 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional
 
 from rag_wright.capabilities.embedding import ChunkEmbedding
 from rag_wright.capabilities.rlm_chunking import Chunk
 from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
 from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.store.chunk_text import ChunkTextStore
 from rag_wright.store.seam import Store
 
 WriteStatus = Literal["written", "skipped", "dead_lettered"]
@@ -70,20 +71,38 @@ class ChunkWriter:
     """Writes chunk records to the store, content-hash gated with checkpoints and a dead-letter queue.
 
     Checkpoints and the dead-letter queue are files under `checkpoint_dir`; the store holds the chunk
-    records. On resume, chunks already recorded in a document's checkpoint are skipped.
+    records (summary + vectors). The full chunk text the index omits is persisted to `text_store`, the
+    chunk-text sidecar (T40), under the SAME content-hash gate, so the index and the sidecar are driven
+    by one decision and never diverge. On resume, chunks already recorded in a document's checkpoint are
+    skipped for both.
     """
 
-    def __init__(self, store: Store, *, checkpoint_dir: Path) -> None:
+    def __init__(self, store: Store, *, text_store: ChunkTextStore, checkpoint_dir: Path) -> None:
         self._store = store
+        self._text_store = text_store
         self._checkpoints = Path(checkpoint_dir) / "checkpoints"
         self._dead_letter = Path(checkpoint_dir) / "dead_letter"
         self._checkpoints.mkdir(parents=True, exist_ok=True)
         self._dead_letter.mkdir(parents=True, exist_ok=True)
 
     def write_document(
-        self, source_doc_id: str, content_hash: str, records: list[ChunkRecord]
+        self,
+        source_doc_id: str,
+        content_hash: str,
+        records: list[ChunkRecord],
+        *,
+        texts: Mapping[str, str],
     ) -> DocumentWriteResult:
-        """Write a document's chunk records, upserting by `chunk_id`. Gated, resumable, dead-lettered."""
+        """Write a document's chunk records, upserting by `chunk_id`. Gated, resumable, dead-lettered.
+
+        `texts` maps each record's `chunk_id` to its full chunk text, persisted to the sidecar alongside
+        the index upsert. A record without a matching text is rejected before any write, so a chunk can
+        never land in the index without its text in the sidecar (the lifecycle-coupling guard).
+        """
+        missing = [r.chunk_id.value for r in records if r.chunk_id.value not in texts]
+        if missing:
+            raise ValueError(f"no sidecar text supplied for chunk_ids: {missing}")
+
         checkpoint = self._load_checkpoint(source_doc_id)
         same_content = checkpoint is not None and checkpoint["content_hash"] == content_hash
         if same_content and checkpoint["status"] == "complete":
@@ -97,6 +116,7 @@ class ChunkWriter:
                 if chunk_id in written:
                     continue  # already written on an earlier run (per-chunk checkpoint)
                 self._store.upsert_chunk(record)
+                self._text_store.put(record.chunk_id, texts[chunk_id])  # sidecar, same gate as the index
                 written.add(chunk_id)
                 newly += 1
                 self._save_checkpoint(source_doc_id, content_hash, written, "in_progress")
