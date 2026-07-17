@@ -270,6 +270,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("fusion", "union", "evidence", "query"),
     ),
     CapabilityManifest(
+        slug="chunk_read",
+        kind="function",  # an in-process query-side node
+        display_name="Chunk read (rehydrate chunk_ids to full text)",
+        description=(
+            "Rehydrate a set of retrieved chunk_ids to their full chunk text — the text the retrieval "
+            "index does not hold (it is dense-over-summary) — by reading the chunk-text sidecar, "
+            "returning text per chunk_id in the requested order for synthesis. The governed "
+            "text-rehydration step between fusion (FR-Q.4) and synthesis (FR-Q.5); no id is silently "
+            "dropped."
+        ),
+        representative_queries=(
+            "rehydrate retrieved chunk ids to their full text for synthesis",
+            "fetch the full source text of chunks by chunk_id",
+            "load the text behind a set of retrieved chunk ids before answering",
+            "get the chunk text for the evidence set the retriever returned",
+        ),
+        tags=("rehydration", "chunk-text", "evidence", "query"),
+    ),
+    CapabilityManifest(
         slug="rlm_synthesis",
         kind="agent_skill",  # applies the RLM method; loaded knowledge, requires rlm_method
         display_name="RLM synthesis",

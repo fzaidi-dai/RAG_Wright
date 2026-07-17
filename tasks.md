@@ -223,7 +223,7 @@ loop enforces it.
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
 | T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | unheld; build on criteria lock (thresholds + chunk_read confirmed) | T21, T22 |
 | T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | awaiting-approval | T17, T19, T20 |
-| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | todo (needs T40; part of T33 eval build) | T40 |
+| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | awaiting-approval | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
@@ -1325,6 +1325,31 @@ to add faithfully later; rejected at the store boundary so no caller can bypass 
 guard tests). Contract comments corrected in `contracts/chunk.py` and `rlm_synthesis.SynthesisChunk`.
 **Verify:** `uv run pytest tests/store/test_chunk_text.py tests/capabilities/test_chunk_write.py` (15 passed,
 1 skipped live). Full suite 395 passed + 26 skipped. **Status:** awaiting-approval. **Dep:** T17, T19, T20.
+
+### Task T38: chunk_read — governed text-rehydration capability (FR-Q)
+
+**Why:** fusion (FR-Q.4) yields a capped set of `chunk_id`s; synthesis (FR-Q.5) extracts over full chunk
+text the index does not hold (dense-over-summary). `chunk_read` is the rehydration step between them,
+reading the T40 sidecar → text per `chunk_id`. Exposed as a **governed, discovered, bound capability**
+(the reconciliation's requirement: rehydrate is a node, not caller-side plumbing), so GraphWright's
+compiler binds a real registered capability rather than doing the lookup itself.
+
+**Design:** mirrors the `fusion` FR-Q node (function-kind, result contract, `register_*`). `chunk_read.py`:
+`ChunkText` = `{chunk_id, text, source_doc_id}` (summary dropped — no consumer reads it; `source_doc_id`
+derived from the id, no second store read), `ChunkReadResult{chunks}`, `chunk_read(chunk_ids, *, text_store)`,
+`register_chunk_read`. **No silent drop:** a `chunk_id` the sidecar cannot supply (orphan, or an id never
+received) raises `KeyError`, never skipped — the FR-Q.6 no-claim-without-citation discipline applied to
+evidence. Registered as a canonical FR-Q slug (precedent: `fusion` is FR-Q.4, not an FR-C-catalog capability
+either); the parametrized manifest test now authors + publishes chunk_read's ARD manifest.
+
+**Note (carried from T40):** this is the read side of the first **pipeline-persisted-text** path — synthesis
+had only ever run on test-provided text (phantom manifest). T38 + T40 close that loop end to end.
+
+**Files:** `src/rag_wright/capabilities/chunk_read.py` (new), `capabilities/registry.py` (+`chunk_read`
+canonical slug), `capabilities/manifests.py` (+ARD manifest spec), `tests/capabilities/test_chunk_read.py`
+(new). **Verify:** `uv run pytest tests/capabilities/test_chunk_read.py` (4 passed) + manifest/registry
+regression (55 passed). Full suite 400 passed + 26 skipped. Publish to the shared ARD root
+(`scripts/publish_manifests.py`) on approval. **Status:** awaiting-approval. **Dep:** T40.
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
