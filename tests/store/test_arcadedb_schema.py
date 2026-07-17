@@ -173,3 +173,25 @@ def test_ensure_schema_is_idempotent(arcadedb_store):
 @pytest.mark.store
 def test_store_is_reachable(arcadedb_store):
     assert arcadedb_store.ping() is True
+
+
+@pytest.mark.store
+def test_upsert_round_trips_text_with_newlines_and_control_chars(arcadedb_store):
+    """Regression (T33): ACORD's multi-paragraph clauses contain newlines; a raw newline inside a SQL
+    string literal is a token-recognition error that silently dead-lettered ~17% of the corpus. `_sql_str`
+    now escapes control whitespace, so the upsert succeeds (and the text round-trips)."""
+    from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord
+    from rag_wright.contracts.identifiers import ChunkId
+
+    arcadedb_store.ensure_schema()
+    summary = '7. Limitation of Liability.\nThe Adviser may rely\ton info; the "Adviser".\r\nDelaware law.'
+    record = ChunkRecord(
+        chunk_id=ChunkId.of("doc_nl", 0, summary),
+        summary=summary,
+        dense_vector=[0.0] * BGE_M3_DENSE_DIM,
+        sparse_vector={1: 0.5, 7: 0.2},
+    )
+    arcadedb_store.upsert_chunk(record)  # must not raise (was a SQL token-recognition error)
+    got = arcadedb_store.get_chunk(record.chunk_id.value)
+    assert got is not None
+    assert got["summary"] == summary  # faithful round-trip: newlines/tabs/quotes preserved

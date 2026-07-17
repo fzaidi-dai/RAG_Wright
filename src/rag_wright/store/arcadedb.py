@@ -42,8 +42,23 @@ _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
 
 
 def _sql_str(value: str) -> str:
-    """A single-quoted ArcadeDB SQL string literal (backslash and quote escaped)."""
-    return "'" + value.replace("\\", "\\\\").replace("'", "\\'") + "'"
+    """A single-quoted ArcadeDB SQL string literal (backslash, quote, and control whitespace escaped).
+
+    ArcadeDB's SQL tokenizer rejects a raw newline / carriage-return / tab inside a string literal (a
+    "token recognition error at ..."), so those are backslash-escaped alongside the quote and backslash.
+    Backslash is escaped first so the escapes added afterward each carry a single backslash. Discovered
+    ingesting ACORD's multi-paragraph clauses (T33): without this, every clause containing a newline
+    silently dead-lettered.
+    """
+    return (
+        "'"
+        + value.replace("\\", "\\\\")
+        .replace("'", "\\'")
+        .replace("\n", "\\n")
+        .replace("\r", "\\r")
+        .replace("\t", "\\t")
+        + "'"
+    )
 
 
 def _float_array(values: Iterable[float]) -> str:
