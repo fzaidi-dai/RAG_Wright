@@ -221,7 +221,7 @@ loop enforces it.
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
-| T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | next up; criteria + invariant locked, ready to build | T21, T22, T38, T40 |
+| T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | retrieval half EXECUTED + baseline measured (recall@50 0.379, grounded bar 0.667 not met — known limitation, T41); graded conjunction run handed to GraphWright | T21, T22, T38, T40 |
 | T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | done | T17, T19, T20 |
 | T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | done | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
@@ -1494,6 +1494,22 @@ canonical slug), `capabilities/manifests.py` (+ARD manifest spec), `tests/capabi
 (new). **Verify:** `uv run pytest tests/capabilities/test_chunk_read.py` (4 passed) + manifest/registry
 regression (55 passed). Full suite 400 passed + 26 skipped. Publish to the shared ARD root
 (`scripts/publish_manifests.py`) on approval. **Status:** awaiting-approval. **Dep:** T40.
+
+**HANDOFF to GraphWright for the graded run (2026-07-18).** RAG's half is delivered; GraphWright compiles +
+runs the query graph independently. Ready:
+- **Capabilities** — all query-side ones built, tested, registered, and ARD-published to `~/.air/registry`
+  (`hybrid_search`, `reranking`, `fusion`, `chunk_read`, `rlm_synthesis`, `graph_query`, `generation`).
+- **Store** — `ragwright_acord` DB (3,931 chunks) + the chunk-text sidecar (`data/acord/chunk_text/`) for
+  `chunk_read`. **Eval assets** — `eval/acord.py` (loader, grade≥2 floor, test split), `eval/acord_retrieval.py`
+  (recall + graded nDCG), the diagnostics under `scripts/`.
+- **Feed-cap / gate-`k` coherence — CORRECTION to my earlier proposal:** do NOT change `DEFAULT_UNION_CAP`
+  (20 is a spec value, §16.7). Instead the graded run binds `fuse(..., cap=k)` via the existing parameter so
+  `recall@k` = the arrived set (the product's retrieval term). **Open sub-choice:** `k=20` (the spec
+  production cap — most production-representative; `recall@20` is lower) vs `k=50` (PIN 3 as-set — more
+  synthesis context but above the spec production cap). Recommend the graded run set `cap` explicitly = the
+  chosen gate-`k`; flagged for GraphWright/user, not silently defaulted.
+- **Read the result as the product** `retrieval_recall × conditioned_citation_recall` (PIN 3); retrieval is
+  below its grounded bar, so the run is an honest baseline, not a forced pass. Do NOT lower E.
 
 ### Task T41: Retrieval-quality mini-project — ceiling-vs-tuning-gap, scoped workstream (T33 finding)
 
