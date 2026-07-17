@@ -1302,6 +1302,36 @@ recall gate and are excluded from the citation-recall population.)
 is the first time synthesis runs on pipeline text rather than test-provided text (earlier proofs used the
 phantom-manifest text source). Carry into the run notes.
 
+**ACORD acquired + fully mapped (2026-07-17).** Source pinned: HuggingFace `theatticusproject/acord`
+(CC-BY-4.0), `scripts/acquire_acord.py` (download + extract + attribution under gitignored `data/acord/`).
+BEIR format: `corpus.jsonl` = **3,931 clauses** `{_id, text}`; `queries.jsonl` = 114 `{_id, text, metadata}`;
+`qrels/{test,valid,train}.tsv` = `query-id, corpus-id, score`. **Test split = 57 queries**, 61,988 judged
+pairs. Grade scale **0–4** (readme 1–5 minus 1; "zero-score = irrelevant").
+
+**Locked build decisions (grounded from ACORD's own semantics, set before results):**
+- **Relevance floor = qrels grade ≥ 2** (readme 3★ "partially relevant" and up) — ACORD's OWN official bar
+  (their 3-star precision@5). Three converging grounds: official metrics use a 3★ floor; grade 1 is
+  explicitly "non-relevant but helpful"; and grade ≥ 2 gives ~10.9 relevant/query matching the readme's
+  stated ~10 (grade ≥ 1 balloons to ~31/query, contradicting the benchmark). NOT a judgment call, not
+  overridable — anything else measures against a relevance set ACORD's authors don't endorse and is
+  incomparable to ACORD's results. grade ≥ 3 is stricter than the floor; grade ≥ 1 counts non-relevants.
+- **Eval split = standard held-out test (57 queries).** The graded run is on test; train/valid are for
+  tuning, not grading (never score an easier subset).
+- **Metric roles (unambiguous):** **recall@50 binary at grade ≥ 2 is the pass/fail GATE** (recall@50 ≥ 0.70
+  = the retrieve→rerank→fusion legs surface ≥70% of the ~10.9 relevant clauses/query in the top 50 —
+  coherent with what was calibrated). **nDCG@10 uses the full graded 0–4 scale** (ACORD-official, NO
+  threshold — nDCG rewards higher grades by design), **reported-not-gated**, the ranking diagnostic.
+  recall@10 also reported. The relevance floor applies to the binary recall gate only; nDCG deliberately
+  does not threshold.
+- **Ingest mapping:** one clause = one chunk; `chunk_id` minted with `source_doc_id` = the ACORD `_id`, so a
+  retrieved `chunk_id` rsplits back to its corpus-id for scoring with **no side map** (cannot drift);
+  through the real `ChunkWriter.write_document` (index + sidecar, same-hash gate) — a real end-to-end
+  ingest, not synthetic.
+- **Dry-run before the graded run (pinned discipline):** run the retrieval legs against the grade-≥2 test
+  qrels FIRST to confirm recall@50 ≥ 0.70 is achievable, not aspirational. If off, recalibrate BEFORE the
+  graded run (never after), reasoning recorded. **Report the dry-run recall at the gate before the graded
+  measurement locks.**
+
 ### Task T40: Chunk-text sidecar — persist full chunk text at ingest (FR-I.3, RAC to follow)
 
 **Why:** grounding for T38 (`chunk_read`) surfaced that the full chunk **text is persisted nowhere**. The
