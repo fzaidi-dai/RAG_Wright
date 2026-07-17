@@ -1495,8 +1495,26 @@ canonical slug), `capabilities/manifests.py` (+ARD manifest spec), `tests/capabi
 regression (55 passed). Full suite 400 passed + 26 skipped. Publish to the shared ARD root
 (`scripts/publish_manifests.py`) on approval. **Status:** awaiting-approval. **Dep:** T40.
 
-**HANDOFF to GraphWright for the graded run (2026-07-18).** RAG's half is delivered; GraphWright compiles +
-runs the query graph independently. Ready:
+**GRAPH-LEG CORRECTION (2026-07-18) — supersedes the "ceiling" framing; pauses the premature handoff.**
+The 0.38 dry-run is **dense+sparse ONLY**: the graph leg was empty (`_EMPTY_GRAPH`) and no ACORD graph was
+ever built (`entities: 0`). Crucially, the graph is **NOT bounded to entity/`CONTRACTS_WITH`** — that is
+merely the CUAD/EDGAR instantiation. The graph capability is a **general, domain-adaptable relationship
+layer**, and constructing domain-appropriate relationships (a **clause-relation graph** for ACORD) plus a
+**clause-anchored graph retrieval**, fused into hybrid search, is the *design intent* of putting graph in
+the hybrid engine — not a new capability. (My earlier "graph leg inapplicable to ACORD / three mismatches"
+read was WRONG: it assumed the one fixed `CONTRACTS_WITH` schema.) So **0.38 is a TWO-LEG PARTIAL
+measurement, and the "capability ceiling" verdict was premature.** Completing the three-leg measurement
+precedes any ceiling/T41 judgment; the graded-run handoff pauses until retrieval is fully measured.
+**Design the graph EMPIRICALLY, not by guess:** analyze ACORD's relevance structure (for failing queries,
+what relates a query's relevant clauses to each other / connects missed relevants to retrievable anchors —
+shared entities, clause category, cross-references, semantic clusters) → construct the edges the data
+implies → wire clause-anchored graph-expansion into the candidate set → re-measure three-leg recall@50 /
+pool-nDCG. If it moves toward the grounded bar, the "ceiling" was a missing leg; if not, the ceiling is real
+across the full design and T41 stands with much stronger justification.
+
+**HANDOFF to GraphWright for the graded run (2026-07-18) — PAUSED pending the three-leg measurement above.**
+RAG's capabilities are integration-ready (below), but the retrieval half is not fully measured, so the
+graded conjunction should not lock yet. Ready when it resumes:
 - **Capabilities** — all query-side ones built, tested, registered, and ARD-published to `~/.air/registry`
   (`hybrid_search`, `reranking`, `fusion`, `chunk_read`, `rlm_synthesis`, `graph_query`, `generation`).
 - **Store** — `ragwright_acord` DB (3,931 chunks) + the chunk-text sidecar (`data/acord/chunk_text/`) for
