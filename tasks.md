@@ -1551,6 +1551,20 @@ the integration milestone (which proceeds on current retrieval; the weak leg is 
    synthesis; general dense-over-summary for real docs; this retrieval-quality gap) — all downstream of the
    clause-level-precision demand. Scope the project to ask it, not default to a model swap and hope.
 
+**RELEVANCE-STRUCTURE ANALYSIS (2026-07-18, `scripts/diagnose_acord_relstructure.py`) — STRONG positive
+signal for the graph leg; confirms 0.38 was a two-leg partial.** 57 queries: relevant-set cluster tightness
+**0.686** >> random-pair 0.561, and > query→relevant **0.534** (gap **+0.152**) — the relevant clauses
+cluster tighter among themselves than the query is to them (the query sits OUTSIDE the relevant cluster),
+the exact case a clause-anchored graph beats query-anchored retrieval. **50/57 queries have a retrieved
+anchor** to expand from (7 zero-anchor → need better base retrieval, not a graph). Missed relevants are
+reachable from retrieved anchors: **missed→anchor max cosine mean 0.706 (88% ≥0.6, 56% ≥0.7)**. So a
+clause-relation graph — clause-clause semantic kNN and/or a **category graph** (ACORD's query `category`
+metadata + `graph_extraction`'s clause-category tagging already exist) — with **clause-anchored expansion
+from retrieved anchors** should recover much of the ~70% dense/sparse miss → real headroom toward the 0.667
+grounded bar. **T41 build:** construct the graph the data implies, wire clause-anchored expansion into the
+hybrid candidate pool, re-measure three-leg recall@50 / pool-nDCG. Residual the graph cannot fix: 7
+zero-anchor queries + ~12% of missed relevants unreachable (<0.6 to any anchor).
+
 **Exit:** raise retrieval to the grounded bar (`recall@50 ≥ 0.667`, PIN 3) so the joint eval's retrieval half
 is met and the graded conjunction can pass. Until then, retrieval quality is a known, bounded, liftable
 limitation. **Status:** todo (open workstream). **Dep:** T33 (baseline measured).
