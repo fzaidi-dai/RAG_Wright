@@ -1565,6 +1565,26 @@ grounded bar. **T41 build:** construct the graph the data implies, wire clause-a
 hybrid candidate pool, re-measure three-leg recall@50 / pool-nDCG. Residual the graph cannot fix: 7
 zero-anchor queries + ~12% of missed relevants unreachable (<0.6 to any anchor).
 
+**T41 MECHANISM PROOF — the semantic-kNN graph leg does NOT deliver recall (2026-07-18)**
+(`scripts/diagnose_acord_knn_expansion.py` RRF; `scripts/diagnose_acord_knn_rerank.py` rerank).
+- **RRF** fusion of clause-anchored expansion HURTS recall@50 (0.301 → 0.23–0.28 across A∈{5..50},
+  E∈{5..20}) — expanding from mostly-irrelevant anchors floods the pool with noise RRF can't downweight.
+- **+ cross-encoder rerank** (the real precision gate): **NEUTRAL** — recall@50 0.301 → 0.303 (+0.002),
+  pool-nDCG@10 +0.03. The reranker filters the noise but can't PROMOTE the expanded relevants (query-distant).
+- **ROOT CAUSE — the query–clause representation gap.** query→relevant cosine **0.534 is BELOW** the
+  random-relevant-pair baseline **0.561**: the query embeds FARTHER from its own relevant clauses than
+  random. Clause-clause structure is strong (cluster 0.686, missed→anchor 0.706), so expansion REACHES the
+  relevants, but ranking them for the query needs a query-relevance signal that is fundamentally weak for
+  ACORD's short type-phrase queries; neither RRF nor the cross-encoder overcomes it.
+- **The lever that DOES move recall:** a bigger BASE pool + rerank (BASE 50→100 gave two-leg recall@50
+  0.301→0.379). The reranker recovers recall from the base pool; graph-expanded query-distant candidates it
+  cannot promote.
+- **IMPLICATION:** headroom is query-side (query representation; bigger base pool + rerank) and — per ACORD's
+  own Table 3 — an LLM reranker (GPT4o reached nDCG@10 0.81 vs 0.54–0.64 for bi/cross-encoders), NOT a
+  semantic-kNN graph leg. The **category graph** (direct label-retrieval, a DIFFERENT mechanism that bypasses
+  the embedding gap but is coarse + needs clause category-tagging via `graph_extraction`) is the remaining
+  system-proof test — tempered expectations, and the graph leg's role for ACORD now looks small.
+
 **Exit:** raise retrieval to the grounded bar (`recall@50 ≥ 0.667`, PIN 3) so the joint eval's retrieval half
 is met and the graded conjunction can pass. Until then, retrieval quality is a known, bounded, liftable
 limitation. **Status:** todo (open workstream). **Dep:** T33 (baseline measured).
