@@ -18,10 +18,9 @@ from dotenv import load_dotenv
 
 from eval.acord import load_test_queries
 from eval.acord_retrieval import evaluate_retrieval
-from rag_wright.capabilities.embedding import BGEM3Embedder
 from rag_wright.capabilities.fusion import fuse
 from rag_wright.capabilities.graph_query import GraphAnswer
-from rag_wright.capabilities.reranking import BGEReranker, Passage, rerank
+from rag_wright.capabilities.reranking import Passage, rerank
 from rag_wright.store.arcadedb import ArcadeDBStore
 from rag_wright.store.chunk_text import ChunkTextStore
 
@@ -30,8 +29,50 @@ TEXT_DIR = Path("data/acord/chunk_text")
 HYBRID_K = 100  # hybrid candidate pool per query (the rerank pool)
 RERANK_TOPK = 100  # rerank the whole pool — recall@50 needs >= 50 ranked
 FUSION_CAP = 100  # empty graph leg -> fusion is reranked passthrough, capped
+EMBED_MAX_LENGTH = 1024  # match the ingest so the query and corpus share the dense space
 
 _EMPTY_GRAPH = GraphAnswer(start_entity_id="", relationship_type="", evidence=[])
+
+
+class _CpuEmbedder:
+    """Single-process CPU BGE-M3 (`devices=["cpu"]`; the default multi-process pool hangs on macOS).
+
+    Same model/config as the ingest, so query and corpus vectors share one dense space.
+    """
+
+    def __init__(self) -> None:
+        from FlagEmbedding import BGEM3FlagModel
+
+        self._m = BGEM3FlagModel("BAAI/bge-m3", use_fp16=False, devices=["cpu"])
+
+    def encode_dense(self, text: str) -> list[float]:
+        out = self._m.encode([text], return_dense=True, return_sparse=False, max_length=EMBED_MAX_LENGTH)
+        return out["dense_vecs"][0].tolist()
+
+    def encode_sparse(self, text: str) -> dict[int, float]:
+        out = self._m.encode([text], return_dense=False, return_sparse=True, max_length=EMBED_MAX_LENGTH)
+        return {int(k): float(v) for k, v in out["lexical_weights"][0].items()}
+
+
+class _CpuReranker:
+    """Single-process CPU BGE-reranker-v2-m3 (`devices=["cpu"]`), satisfying the Reranker seam."""
+
+    def __init__(self) -> None:
+        from FlagEmbedding import FlagAutoReranker
+
+        self._m = FlagAutoReranker.from_finetuned(
+            "BAAI/bge-reranker-v2-m3", use_fp16=False, devices=["cpu"]
+        )
+
+    def score(self, query: str, passages: list[str]) -> list[float]:
+        if not passages:
+            return []
+        scores = self._m.compute_score(
+            [(query, p) for p in passages], max_length=512, batch_size=16
+        )
+        if not isinstance(scores, (list, tuple)):
+            scores = [scores]
+        return [float(s) for s in scores]
 
 
 def _corpus_id(chunk_id: str) -> str:
@@ -46,8 +87,8 @@ def main() -> None:
     store = ArcadeDBStore.from_env(database=ACORD_DB, reset=False)
     text_store = ChunkTextStore(TEXT_DIR)
     print(f"[dry-run] store chunk_count = {store.chunk_count()}")
-    embedder = BGEM3Embedder()
-    reranker = BGEReranker()
+    embedder = _CpuEmbedder()
+    reranker = _CpuReranker()
 
     def retrieve(query_text: str) -> list[str]:
         dense = embedder.encode_dense(query_text)

@@ -1332,6 +1332,24 @@ pairs. Grade scale **0–4** (readme 1–5 minus 1; "zero-score = irrelevant").
   graded run (never after), reasoning recorded. **Report the dry-run recall at the gate before the graded
   measurement locks.**
 
+**Ingest completed (2026-07-17):** 3,931/3,931 clauses in `ragwright_acord`, 0 dead-letters — after fixing a
+store bug the real corpus exposed: `_sql_str` didn't escape newlines, so ArcadeDB's SQL tokenizer rejected
+every multi-line clause on upsert and silently dead-lettered 685 (~17%), exactly the long content-rich ones
+(commit `51e8492`, regression test added). Two macOS operational fixes: BGE-M3 and the reranker default to a
+multi-process pool that DEADLOCKS on macOS → forced single-process CPU (`devices=["cpu"]`) in the ingest and
+the runner; embedding `max_length=1024` caps the vector compute (full text preserved in the sidecar).
+
+**DRY-RUN RESULT — BELOW THRESHOLD (2026-07-17):** on the complete 3,931-clause index, 57 test queries:
+`recall@50 = 0.379` (gate ≥ 0.70), `recall@10 = 0.137`, `nDCG@10 = 0.138`. **Diagnostic (raw hybrid, no
+rerank):** recall@{10,50,100,200} = 0.084 / 0.283 / 0.473 / 0.650. So **rerank HELPS** (0.283→0.379 @50, it
+is working) and **the bottleneck is HYBRID RETRIEVAL** — even the top-200 pool (5% of the corpus) holds only
+65% of relevant clauses. That, plus nDCG@10 below ACORD's published baselines, is a **red flag (ADR-0011:
+diagnose implausible retrieval numbers before reporting)** pointing at a retrieval config issue, not mere
+difficulty. **Per the pinned discipline the threshold is NOT recalibrated to fit 0.379, and the graded run
+does NOT proceed, until the retrieval ceiling is diagnosed** (candidate causes: corpus `max_length=1024`
+truncation of long clauses; dense-vs-sparse leg imbalance / a possibly-degraded dense leg on this DB; RRF
+balance). Next: isolate dense-only vs sparse-only recall, and test lifting the embedding `max_length`.
+
 ### Task T40: Chunk-text sidecar — persist full chunk text at ingest (FR-I.3, RAC to follow)
 
 **Why:** grounding for T38 (`chunk_read`) surfaced that the full chunk **text is persisted nowhere**. The
