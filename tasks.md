@@ -221,7 +221,9 @@ loop enforces it.
 | T-CHK | RLM chunker degenerate-split fix (T17 bug; ask-first) | 4 Build write | FR-I.1 | done | T17 |
 | T-SUM | Concurrent summarization (T17 enhancement, FR-I.6 pattern) | 4 Build write | FR-I.1, FR-I.6 | done | T17 |
 | T-DISP | `requires_dynamic_dispatch` typed flag on `skill_runtime` (RLM-rebuild groundwork) | 4 Build RLM | FR-C.10, ADR-0017 | done | ADR-0015, ADR-0017 |
-| T33 | ACORD eval (extends T9; ask-first) — LIKELY the query-graph golden set (coordinated eval, not solo) | 4 Foundations | §12 | HELD pending eval reconciliation w/ GraphWright | T21, T22 |
+| T33 | ACORD retrieval half of the JOINT query-graph golden-eval (ingest + recall bar + chunk_read) | 4 Foundations | §12, FR-Q | unheld; build on criteria lock (thresholds + chunk_read confirmed) | T21, T22 |
+| T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — thin wrapper over store.get_chunk | 4 Build read | FR-Q | todo (part of T33 eval build) | T13, T20 |
+| T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
