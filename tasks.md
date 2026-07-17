@@ -225,6 +225,7 @@ loop enforces it.
 | T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | done | T17, T19, T20 |
 | T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | done | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
+| T41 | Retrieval-quality mini-project (ceiling-vs-tuning-gap; clause-level retrieval approach) — scoped workstream, not inline | 5 Integrate | FR-C.3 | todo (open; own workstream) | T33 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
@@ -1296,15 +1297,37 @@ qwen3.7-plus/`_SECONDARY`); RAG_Wright owns the benchmark design and pins deepse
     fit-to-result). **Coherence requirement:** the recall-gate `k` MUST equal the synthesis evidence-feed cap
     (top-`k` fused → synthesis), so `recall@k` = the fraction of relevant that arrives = the product's
     retrieval term (today `DEFAULT_UNION_CAP=20` ≠ 50 — align before the graded run).
-  - **`E = 0.5` PROPOSED (bar = 0.5/0.75 = `recall@k ≥ 0.667`), pending confirmation.** Rationale: a complete
-    answer draws on the *majority* of the relevant evidence (principled, not fit — current 0.38 fails it, so
-    it is a real target, not a lowered bar). **Achievability flag:** current raw-hybrid `recall@200 = 0.65`
-    is the retrieval *ceiling* (relevant clauses present anywhere in top-200), and `recall@k ≤ recall@200`, so
-    a 0.667 bar is *above* today's ceiling — it requires improving the retriever itself (legal-tuning / a
-    stronger model / higher-recall retrieval), NOT just rerank. That gap (0.38 → 0.667, ceiling 0.65) is the
-    retrieval investment the grounded bar demands; the current 0.38 is the gap to close, not a bar to lower to.
+  - **`E = 0.5`, `k = 50` SET (grounded bar = 0.5/0.75 = `recall@50 ≥ 0.667`).** Rationale: a complete answer
+    draws on the *majority* of the relevant evidence (principled, not fit — current 0.38 fails it, so it is a
+    real target, not a lowered bar). Framing endorsed 2026-07-18; `E` adjustable but do NOT lower it to make
+    0.38 pass (0.38 fails E=0.375/0.45/0.50 alike). `k=50` chosen so the synthesis evidence-feed cap must be
+    aligned to 50 (today `DEFAULT_UNION_CAP=20` — align before the graded run so `recall@50` = the arrived set).
+    **Achievability flag:** raw-hybrid `recall@200 = 0.65` is the retrieval *ceiling*, and `recall@k ≤
+    recall@200`, so 0.667 is *above* today's ceiling — reaching it requires improving the retriever itself
+    (legal-tuning / stronger model / higher-recall retrieval), NOT just rerank. The gap (0.38 → 0.667, ceiling
+    0.65) is the retrieval investment the grounded bar demands; 0.38 is the gap to close, not a bar to lower to.
     The three earlier gate options collapse: nDCG-gate dropped (wrong metric), recall regrounded as `E/0.75`
     (grounded, not fit), retrieval-investment is the *consequence* of the grounded bar.
+
+**STRATEGY — ceiling, not bug (2026-07-18): decouple integration from retrieval quality.** Both real bugs are
+fixed (SQL-newline dead-lettering; NOTE the dense leg was never misconfigured for ACORD — summary=text — so
+0.45–0.47 pool-nDCG is BGE-M3's genuine off-the-shelf ceiling, not a post-bug residual). The remaining gap to
+ACORD's 0.54–0.64 baseline is a **capability ceiling**, which gets invest-or-scope, not more diagnosing.
+- **The query-graph INTEGRATION PROOF and the graded eval are separate achievements; retrieval quality must
+  not block the integration.** A correct graph over a known-weak retrieval leg is still a correct graph (a
+  known-weak leg, not a broken architecture) — the KI-1 move: a bounded, liftable, documented limitation,
+  proceed on the correct path around it. RAG's integration-readiness is DONE: every query-side capability is
+  built, tested, registered, and ARD-published (hybrid_search, reranking, fusion, chunk_read, rlm_synthesis),
+  so GraphWright can compile+run the query graph binding them (that graph is compiler work, not this repo's).
+- **Run the graded eval as an HONEST BASELINE, not a pass/fail to force.** Report the real conjunction:
+  retrieval below its grounded bar → the eval does not pass; and the **product** `retrieval_recall ×
+  conditioned_citation_recall` = true end-to-end evidence-use (caps low at ~0.38 regardless of synthesis).
+  "Retrieval is the bottleneck at 0.38, here is the measured state" is a valid, useful result. Do NOT lower E.
+- **Retrieval quality becomes its own scoped workstream (T41), NOT inline W10 work.** Its first question is
+  ceiling-vs-tuning-gap (below), and its broader question is whether clause-level legal retrieval wants a
+  different approach than the summary-era design — the THIRD time the summary-centric assumption has bitten
+  (synthesis needed text T40; general dense-over-summary for real docs; and this clause-level retrieval gap,
+  all downstream of the same clause-level-precision demand).
 
 **Description (build scope):** Ingest ACORD (Atticus Clause Retrieval Dataset: CC-BY-4.0, BEIR, 114
 attorney-authored queries, ~126k graded query-clause pairs, corpus of SEC/EDGAR + F500 ToS clauses) into
@@ -1471,6 +1494,32 @@ canonical slug), `capabilities/manifests.py` (+ARD manifest spec), `tests/capabi
 (new). **Verify:** `uv run pytest tests/capabilities/test_chunk_read.py` (4 passed) + manifest/registry
 regression (55 passed). Full suite 400 passed + 26 skipped. Publish to the shared ARD root
 (`scripts/publish_manifests.py`) on approval. **Status:** awaiting-approval. **Dep:** T40.
+
+### Task T41: Retrieval-quality mini-project — ceiling-vs-tuning-gap, scoped workstream (T33 finding)
+
+**Why:** after fixing the one real ingest bug (SQL-newline), ACORD retrieval sits at full-corpus recall@50
+0.379 / pool-ranking nDCG@10 0.45–0.47 vs ACORD's published retrieval-only baselines (nDCG@10: BM25 0.540,
+MiniLM 0.572, OpenAI-L 0.641). Dense was never misconfigured (summary=text for pre-segmented clauses), so
+this is a **capability ceiling, not a bug** — it gets invest-or-scope, in its OWN workstream, NOT inline in
+the integration milestone (which proceeds on current retrieval; the weak leg is documented, KI-1 style).
+
+**Scope — answer the ceiling-vs-tuning question BEFORE any model swap:**
+1. **First task (the fork):** establish *what retriever produced ACORD's 0.54–0.64 baseline*. If it used a
+   stronger/differently-tuned retriever, our gap is "weaker setup than baseline" → match it (cheaper). If it
+   used BGE-M3 or comparable and still beat 0.45–0.47, then BGE-M3 has headroom we're not reaching (chunk
+   granularity, query formulation, fusion weighting, un-capped `max_length`) → tune to its actual ceiling,
+   not swap. Determines expensive-model-change vs cheaper-tuning-close.
+2. **Cheap levers to test regardless:** drop/downweight the weak sparse leg (dense-only already beats fused:
+   pool nDCG 0.452→0.469, recall@50 0.291→0.307); un-cap embedding `max_length` (1024→full; marginal, ~1–3%
+   of clauses); higher hybrid pool feeding rerank.
+3. **Broader question to ASK (not answer now):** does clause-level legal retrieval want a different retrieval
+   approach than the summary-era design? The summary-centric assumption has now bitten three times (T40
+   synthesis; general dense-over-summary for real docs; this retrieval-quality gap) — all downstream of the
+   clause-level-precision demand. Scope the project to ask it, not default to a model swap and hope.
+
+**Exit:** raise retrieval to the grounded bar (`recall@50 ≥ 0.667`, PIN 3) so the joint eval's retrieval half
+is met and the graded conjunction can pass. Until then, retrieval quality is a known, bounded, liftable
+limitation. **Status:** todo (open workstream). **Dep:** T33 (baseline measured).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
