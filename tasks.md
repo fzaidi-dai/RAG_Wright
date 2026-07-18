@@ -24,8 +24,9 @@ not this repo's.
 > mirror or broken import does real damage. Verify (drift test + suite + no unguarded logic copy) before
 > trusting an external RLM edit.
 
-> **HELD FINDING — RLM worker query/slice threading (GraphWright grounding 2026-07-18; CONFIRMED accurate,
-> HOLD for dry-run).** The RLM leaf dispatch is **query-less AND slice-less**:
+> **LATENT HARDENING ITEM — RLM worker query/slice threading (GraphWright grounding 2026-07-18; CONFIRMED
+> accurate; DRY-RUN VERDICT: did NOT bite → parked, not urgent).** The RLM leaf dispatch is **query-less AND
+> slice-less**:
 > `task({description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker"})`
 > (`agent.py:129/137/154`) passes no query and no slice items. The worker system prompt
 > `_EXTRACT_WORKER_PROMPT` (`rlm_synthesis.py:59`) says *"extract the facts in this slice that help answer
@@ -40,7 +41,12 @@ not this repo's.
 > an unconfirmed symptom AND destroy the dry-run's evidence of the current, unmodified behavior. Sequence:
 > dry-run verdict → if it BITES, thread the query (+ slice) into the worker dispatch (a real fix that also
 > improves standalone synthesis, and add a non-stub test that asserts the worker receives the query); if it
-> does NOT, record as a latent hardening item (enforce-what-works-by-luck). Awaiting GraphWright's verdict.
+> does NOT, record as a latent hardening item (enforce-what-works-by-luck).
+> **VERDICT (GraphWright dry-run, 2026-07-18): did NOT bite.** On real "Audit Rights" data the extractions
+> were query-relevant (worker got the query) AND extract-matched-chunk (worker got the slice) — the
+> orchestrator model threaded both. So it works, but by model choice, not enforcement → **parked as a latent
+> hardening item, not urgent (integration-first).** When picked up: thread query+slice explicitly into the
+> dispatch so it's enforced, and add a non-stub test asserting the worker receives them.
 
 ---
 
@@ -1538,6 +1544,16 @@ that is **good enough to produce cited answers end to end** — which is all the
 query-graph capabilities are PUBLISHED + DISCOVERABLE in the shared root `~/.air/registry` (verified
 2026-07-18: `hybrid_search`, `reranking`, `fusion`, `chunk_read`, `rlm_synthesis` — valid URN + kind +
 representativeQueries each; none local-only) → GraphWright's discover-and-compile is unblocked. Ready:
+
+**INTEGRATION PROOF PASSED (GraphWright dry-run, 2026-07-18).** Compiled-from-discovery (5 nodes, all bound
+by registry discovery) → real retrieval over the 3,931 ingested ACORD clauses → grounded, query-relevant,
+chunk-tied citations, end to end. "Audit Rights": 10 citations, 6/6 checked resolve via `chunk_read`, 6/6
+extracts match their cited chunk, extracts topically correct. RAG's capabilities are integration-validated.
+The one low number is RETRIEVAL not synthesis (1/12 cited-are-qrel-relevant = the known recall@50 0.379 /
+query-representation gap, T41), and it's a top-10-capped dry-run sanity signal, not the citation-recall
+metric. Two RAG live-bugs surfaced only by real data along the way (SQL-newline dead-letter; `[` in extract
+text) → **standing test-discipline item: RLM/synthesis/store live tests want at least one deliberately
+messy fixture (brackets, newlines, quotes), not just clean values** — fold into the latent-hardening pass.
 - **Capabilities** — all query-side ones built, tested, registered, and ARD-published to `~/.air/registry`
   (`hybrid_search`, `reranking`, `fusion`, `chunk_read`, `rlm_synthesis`, `graph_query`, `generation`).
 - **Store** — `ragwright_acord` DB (3,931 chunks) + the chunk-text sidecar (`data/acord/chunk_text/`) for
