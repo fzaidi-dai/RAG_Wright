@@ -225,7 +225,7 @@ loop enforces it.
 | T40 | Chunk-text sidecar: persist full chunk text keyed by chunk_id at ingest, same content-hash gate as the index | 4 Build write | FR-I.3 | done | T17, T19, T20 |
 | T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | done | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
-| T41 | Retrieval-quality mini-project (ceiling-vs-tuning-gap; clause-level retrieval approach) — scoped workstream, not inline | 5 Integrate | FR-C.3 | todo (open; own workstream) | T33 |
+| T41 | Retrieval-quality: baseline-with-diagnosis recorded (0.38, query-representation gap, graph leg doesn't help); composition-experiment backlog logged (LLM reranker / category label-retrieval / base-pool sizing) | 5 Integrate | FR-C.3 | investigation concluded → parked as post-integration backlog | T33 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
@@ -1512,9 +1512,14 @@ implies → wire clause-anchored graph-expansion into the candidate set → re-m
 pool-nDCG. If it moves toward the grounded bar, the "ceiling" was a missing leg; if not, the ceiling is real
 across the full design and T41 stands with much stronger justification.
 
-**HANDOFF to GraphWright for the graded run (2026-07-18) — PAUSED pending the three-leg measurement above.**
-RAG's capabilities are integration-ready (below), but the retrieval half is not fully measured, so the
-graded conjunction should not lock yet. Ready when it resumes:
+**HANDOFF to GraphWright — UN-PAUSED for the INTEGRATION PROOF (2026-07-18, integration-first).** Strategic
+call: integration proof first, retrieval optimization later. The three-leg question is resolved (the graph
+leg does not help ACORD — mechanism proof below), so the retrieval baseline is settled at two-leg ~0.38, and
+that is **good enough to produce cited answers end to end** — which is all the integration proof needs.
+**The graded number is a BASELINE the recomposition experiments will move, NOT a pass/fail gate.** The five
+query-graph capabilities are PUBLISHED + DISCOVERABLE in the shared root `~/.air/registry` (verified
+2026-07-18: `hybrid_search`, `reranking`, `fusion`, `chunk_read`, `rlm_synthesis` — valid URN + kind +
+representativeQueries each; none local-only) → GraphWright's discover-and-compile is unblocked. Ready:
 - **Capabilities** — all query-side ones built, tested, registered, and ARD-published to `~/.air/registry`
   (`hybrid_search`, `reranking`, `fusion`, `chunk_read`, `rlm_synthesis`, `graph_query`, `generation`).
 - **Store** — `ragwright_acord` DB (3,931 chunks) + the chunk-text sidecar (`data/acord/chunk_text/`) for
@@ -1585,9 +1590,26 @@ zero-anchor queries + ~12% of missed relevants unreachable (<0.6 to any anchor).
   the embedding gap but is coarse + needs clause category-tagging via `graph_extraction`) is the remaining
   system-proof test — tempered expectations, and the graph leg's role for ACORD now looks small.
 
-**Exit:** raise retrieval to the grounded bar (`recall@50 ≥ 0.667`, PIN 3) so the joint eval's retrieval half
-is met and the graded conjunction can pass. Until then, retrieval quality is a known, bounded, liftable
-limitation. **Status:** todo (open workstream). **Dep:** T33 (baseline measured).
+**RETRIEVAL REFERENCE BASELINE (integration-first, concluded 2026-07-18).** The retrieval investigation is
+concluded for now, and recorded as a **baseline-with-diagnosis, not a shortfall**: two-leg BGE-M3 hybrid +
+cross-encoder reaches **recall@50 ~0.38 / pool-nDCG 0.45–0.47** (near BM25/MiniLM — baseline-healthy
+like-for-like); **root cause = the query-representation gap** (short type-phrase queries embed farther from
+their relevant clauses than random pairs); the **graph leg does not help** (reachability ≠ rankability under
+the weak query signal); the **indicated lever per ACORD Table 3 is an LLM reranker** (GPT4o nDCG@10 0.81 vs
+0.54–0.64 bi/cross-encoders). This is the measured starting point the later recomposition experiments move.
+
+**COMPOSITION-EXPERIMENT BACKLOG (post-integration; the compose→recompile→evaluate menu).** When the
+integration proof lands, these become the experiments the system was built to run — each an add/remove-a-
+capability, recompile, new-number loop against the ACORD baseline above:
+- **LLM reranker** — ACORD's indicated lever (Table 3): swap the cross-encoder for an LLM reranker, recompile,
+  measure the recall/nDCG lift toward the ~0.8 the paper demonstrates.
+- **Category label-retrieval** — the graph mechanism that may sidestep the query-representation gap by
+  matching on clause-category *label* (not embedding); needs clause category-tagging via `graph_extraction`.
+- **Base-pool sizing** — bigger hybrid pool feeding rerank (BASE 50→100 already showed recall@50 0.301→0.379);
+  quantify the curve. Cheap, optional, NOT gating anything under integration-first.
+
+**Status:** investigation concluded → parked as the composition-experiment backlog (own workstream, post-
+integration). **Dep:** T33 (baseline measured). base-pool+rerank is **optional, no longer a gating task**.
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
