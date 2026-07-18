@@ -24,6 +24,24 @@ not this repo's.
 > mirror or broken import does real damage. Verify (drift test + suite + no unguarded logic copy) before
 > trusting an external RLM edit.
 
+> **HELD FINDING — RLM worker query/slice threading (GraphWright grounding 2026-07-18; CONFIRMED accurate,
+> HOLD for dry-run).** The RLM leaf dispatch is **query-less AND slice-less**:
+> `task({description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker"})`
+> (`agent.py:129/137/154`) passes no query and no slice items. The worker system prompt
+> `_EXTRACT_WORKER_PROMPT` (`rlm_synthesis.py:59`) says *"extract the facts in this slice that help answer
+> the question"* but the workflow provides NEITHER the slice text NOR the question; the query lives only in
+> the orchestrator's `_request` (*"Question: {query}"*, `:231`). So whether a worker extracts
+> query-relevantly depends on the **orchestrator model choosing** to thread the query (and slice) into the
+> dispatch — model-driven, not enforced. Same silent-gap class as the working-set findings (SKILL.md
+> under-specifies; a capable model papers over it until it doesn't). **Affects standalone synthesis too, not
+> just the joint run.** My tests do NOT catch it — the sub-agent responders are stubs that return canned
+> output regardless of dispatch content. **HELD, do NOT fix now:** GraphWright's dry-run is instrumented to
+> check whether extractions are query-relevant (not just whether citations resolve). Fixing now would treat
+> an unconfirmed symptom AND destroy the dry-run's evidence of the current, unmodified behavior. Sequence:
+> dry-run verdict → if it BITES, thread the query (+ slice) into the worker dispatch (a real fix that also
+> improves standalone synthesis, and add a non-stub test that asserts the worker receives the query); if it
+> does NOT, record as a latent hardening item (enforce-what-works-by-luck). Awaiting GraphWright's verdict.
+
 ---
 
 ## Last approved / next up
