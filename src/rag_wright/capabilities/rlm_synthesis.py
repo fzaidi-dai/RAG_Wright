@@ -156,13 +156,31 @@ def _final_text(messages) -> str:
 
 
 def _parse_slice_outputs(text: str) -> list[SliceOutput]:
-    """Parse the last JSON array of {chunk_id, extract} objects from the model's final output."""
-    end = text.rfind("]")
-    start = text.rfind("[", 0, end)
-    if start == -1 or end == -1:
-        return []
-    raw = json.loads(text[start : end + 1])
-    return [SliceOutput(chunk_id=str(o["chunk_id"]), extract=str(o["extract"])) for o in raw]
+    """Parse the JSON array of {chunk_id, extract} objects from the model's final output.
+
+    Scans every ``[`` and JSON-`raw_decode`s from it, keeping the LONGEST array whose elements are all
+    ``{chunk_id, extract}`` objects. Bracket-matching from the end (rfind) is wrong: real legal clauses put
+    ``[`` inside the extract text (e.g. "as set out in [Section 5]"), so the last ``[`` before the closing
+    ``]`` lands inside a string and the slice is invalid JSON — throwing a valid answer away. A ``[`` inside
+    a string cannot itself decode into a citation array, so scanning-and-validating cannot be fooled by it.
+    Returns ``[]`` when no valid citation array is present (never raises).
+    """
+    decoder = json.JSONDecoder()
+    best: list[SliceOutput] = []
+    for i, ch in enumerate(text):
+        if ch != "[":
+            continue
+        try:
+            value, _ = decoder.raw_decode(text, i)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(value, list) or not value:
+            continue
+        if not all(isinstance(o, dict) and "chunk_id" in o and "extract" in o for o in value):
+            continue
+        if len(value) > len(best):
+            best = [SliceOutput(chunk_id=str(o["chunk_id"]), extract=str(o["extract"])) for o in value]
+    return best
 
 
 class SeamSliceExtractor:

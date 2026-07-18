@@ -28,6 +28,7 @@ from rag_wright.capabilities.rlm_synthesis import (
     SliceOutput,
     SynthesisChunk,
     SynthesisResult,
+    _parse_slice_outputs,
     _reduce,
     register_rlm_synthesis,
     rlm_synthesize,
@@ -236,3 +237,29 @@ def test_real_rlm_synthesize_answers_from_the_candidates_with_citations():
     assert result.synthesis.strip()
     assert "500" in result.synthesis and "Delaware" in result.synthesis  # facts drawn from the candidates
     assert set(result.chunk_ids) == {"deal:0:h", "deal:1:h", "deal:2:h"}  # citations preserved
+
+
+def test_parse_slice_outputs_survives_brackets_in_extract_text():
+    """Regression (2026-07-18): real legal clauses put '[' inside the extract (e.g. "[Section 5]"). A
+    from-the-end bracket match (rfind) sliced from that inner '[' and crashed with JSONDecodeError, throwing
+    a valid answer away. The scan-and-validate parser must return the real citations, brackets and all."""
+    text = 'Here is the result:\n[{"chunk_id": "c1", "extract": "audit rights per [Section 5]"}]'
+    out = _parse_slice_outputs(text)
+    assert [(o.chunk_id, o.extract) for o in out] == [("c1", "audit rights per [Section 5]")]
+
+
+def test_parse_slice_outputs_picks_the_longest_citation_array():
+    # multiple bracketed spans across several extracts, plus prose before/after
+    text = (
+        "Notes below.\n"
+        '[{"chunk_id": "a", "extract": "see [Art. 2] and [Art. 3]"},'
+        ' {"chunk_id": "b", "extract": "term [x] applies"}]\nDone.'
+    )
+    out = _parse_slice_outputs(text)
+    assert [o.chunk_id for o in out] == ["a", "b"]
+    assert out[0].extract == "see [Art. 2] and [Art. 3]"
+
+
+def test_parse_slice_outputs_returns_empty_without_a_citation_array():
+    assert _parse_slice_outputs("no array here, just prose with a stray [ bracket") == []
+    assert _parse_slice_outputs("[1, 2, 3]") == []  # a list, but not {chunk_id, extract} objects
