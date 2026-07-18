@@ -250,7 +250,7 @@ loop enforces it.
 | T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | done | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T41 | Retrieval-quality: baseline-with-diagnosis recorded (0.38, query-representation gap, graph leg doesn't help); composition-experiment backlog logged (LLM reranker / category label-retrieval / base-pool sizing) | 5 Integrate | FR-C.3 | investigation concluded → parked as post-integration backlog | T33 |
-| T42 | RLM/synthesis latent-hardening pass: enforce worker query+slice threading (works-by-model-choice today) + non-stub worker test + messy-fixture live-test discipline (brackets/newlines/quotes) | 5 Integrate | FR-Q.5 | todo (parked, post-integration; verdict: doesn't currently bite) | T28, T38 |
+| T42 | RLM/synthesis latent-hardening pass: enforce worker query+slice threading + non-stub multi-worker split test + messy-fixture discipline | 5 Integrate | FR-Q.5 | done (query→worker prompt; slice→dispatch, both files drift-synced; partition + messy tests) | T28, T38 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
@@ -1680,8 +1680,19 @@ fixture exists in the relevant live tests. **Verify:** `uv run pytest tests/capa
 tests/capabilities/test_rlm_method.py` (+ the SKILL.md↔RLM_WORKFLOW_JS drift test if option (b) is taken).
 **Files:** `capabilities/rlm_synthesis.py` (worker prompt / `_request`); possibly `skills/rlm/agent.py` +
 `skills/rlm/SKILL.md` (if (b)); `tests/capabilities/test_rlm_synthesis.py`, `test_rlm_method.py`.
-**Status:** todo (parked, post-integration; NOT urgent — dry-run verdict: doesn't currently bite).
-**Dep:** T28 (synthesis), T38 (chunk_read). Not a blocker for the composition experiments (T41 backlog).
+**Status:** DONE (2026-07-18). Implemented: **(1)** slice threaded into every leaf dispatch
+(`JSON.stringify(items)`) in `RLM_WORKFLOW_JS` AND `SKILL.md`, byte-synced (drift test green) — the
+committed pre-T42 state had NEITHER file threading the slice (both `"handle leaf depth D"`; GraphWright had
+misread `agent.py` as already serializing items). **(2)** query enforced by baking it into the synthesis
+worker's system prompt (`_build_agent(chunks, query)`) — NOT the dispatch description: the query isn't in the
+workflow's JS scope, so description-threading would reintroduce model initiative / break the general
+workflow's capability-agnosticism; system-prompt baking is the enforceable contract. **(3)** two non-stub
+tests: `…messy_slice_by_enforcement` (query in prompt + a bracketed/newlined/quoted slice reaches the worker
+— fixture discipline) and `…each_worker_only_its_own_slice` (forces a 4-worker split, asserts each worker
+got EXACTLY its own partitioned slice + the query — the multi-worker path the flat dry-run never exercised,
+GraphWright point 3). Full suite 412 passed + 27 skipped; ruff clean.
+**Dep:** T28 (synthesis), T38 (chunk_read). GraphWright's node should re-pull the hardened skill (strictly
+more robust; same output, now enforced).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 

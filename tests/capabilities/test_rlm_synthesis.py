@@ -152,7 +152,7 @@ def _stream_events(extractor: SeamSliceExtractor, chunks) -> list[dict]:
     events: list[dict] = []
     # bind the working set + its size as PTCs (T36/T37), the same way extract() does, so the workflow reads it
     interpreter = CodeInterpreterMiddleware(subagents=True, ptc=extractor._working_set_ptc(chunks))
-    agent = extractor._build_agent(chunks, interpreter=interpreter)
+    agent = extractor._build_agent(chunks, "what does the descent recurse over?", interpreter=interpreter)
     for mode, data in agent.stream(
         {"messages": [HumanMessage(content="run the workflow")]},
         stream_mode=["custom", "values"],
@@ -263,3 +263,55 @@ def test_parse_slice_outputs_picks_the_longest_citation_array():
 def test_parse_slice_outputs_returns_empty_without_a_citation_array():
     assert _parse_slice_outputs("no array here, just prose with a stray [ bracket") == []
     assert _parse_slice_outputs("[1, 2, 3]") == []  # a list, but not {chunk_id, extract} objects
+
+
+def test_t42_worker_receives_the_query_and_its_messy_slice_by_enforcement():
+    """T42 hardening: the worker MUST get the query (baked into its system prompt) and its slice (threaded
+    into the task() dispatch) — by enforcement, not orchestrator-model luck. Deliberately messy text
+    (brackets / newlines / quotes) doubles as the real-text-fixture discipline, so a bracketed/quoted slice
+    can't silently break the path."""
+    chunks = [SynthesisChunk(chunk_id="c1", text="audit rights per [Section 5],\nre 'the Agreement'")]
+    seen: list[str] = []
+
+    def worker(messages):
+        seen.append(" || ".join(str(m.content) for m in messages))
+        return AIMessage(content='[{"chunk_id": "c1", "extract": "audit"}]')
+
+    extractor = SeamSliceExtractor(
+        model=FakeChat(responder=_workflow_orchestrator()),
+        decomposer_model=FakeChat(responder=_cuts_decomposer),
+        worker_model=FakeChat(responder=worker),
+    )
+    extractor.extract("what are the audit rights?", chunks)
+
+    blob = "\n".join(seen)
+    assert seen, "worker was never dispatched"
+    assert "what are the audit rights?" in blob  # query reached the worker (system prompt) — enforced
+    assert "[Section 5]" in blob  # the slice (messy brackets/newlines) reached the worker — enforced
+    assert "the Agreement" in blob  # quotes survive too
+
+
+def test_t42_split_delivers_each_worker_only_its_own_slice():
+    """T42 (GraphWright point 3): force a real multi-worker split (the decomposer cuts to singleton leaves)
+    and assert each worker receives ONLY its own slice — not the whole set — plus the query. The single-leaf
+    dry-run couldn't show this: 6/6 extract-matches-chunk on a flat run means one worker read everything, not
+    that a partition was delivered correctly. Hermetic stubs that just prove recursion happened miss it too."""
+    chunks = [SynthesisChunk(chunk_id=f"c{i}", text=f"clause number {i}, audit rights and records") for i in range(4)]
+    seen: list[str] = []
+
+    def worker(messages):
+        seen.append(" || ".join(str(m.content) for m in messages))
+        return AIMessage(content="[]")
+
+    extractor = SeamSliceExtractor(
+        model=FakeChat(responder=_workflow_orchestrator()),
+        decomposer_model=FakeChat(responder=_cuts_decomposer),  # splits in half down to singleton leaves
+        worker_model=FakeChat(responder=worker),
+    )
+    extractor.extract("what are the audit rights?", chunks)
+
+    assert len(seen) == 4  # one worker per singleton leaf, NOT one worker over the whole set
+    per_worker = [{f"c{j}" for j in range(4) if f'"c{j}"' in blob} for blob in seen]
+    assert all(len(s) == 1 for s in per_worker)  # each worker saw exactly ONE chunk — its own slice only
+    assert set().union(*per_worker) == {"c0", "c1", "c2", "c3"}  # the slices partition the whole set
+    assert all("what are the audit rights?" in blob for blob in seen)  # query reached EVERY worker (enforced)

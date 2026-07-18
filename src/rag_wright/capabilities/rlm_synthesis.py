@@ -206,13 +206,20 @@ class SeamSliceExtractor:
         self._worker_skills = worker_skills
         self._working_set = working_set
 
-    def _build_agent(self, chunks: list[SynthesisChunk], *, interpreter=None):
+    def _build_agent(self, chunks: list[SynthesisChunk], query: str, *, interpreter=None):
         model = self._model if self._model is not None else model_for(ModelRole.STRUCTURED_REASONING)
+        # Enforce the query reaching every worker: bake it into the worker's system prompt (T42). The leaf
+        # dispatch delivers the SLICE (the workflow threads `items`); the capability delivers the QUERY here,
+        # so query-relevant extraction no longer depends on the orchestrator choosing to thread it.
+        worker_prompt = (
+            f"{_EXTRACT_WORKER_PROMPT}\n\n"
+            f"The question to answer (extract facts relevant to THIS, verbatim):\n{query}"
+        )
         return build_rlm_agent(
             reasoning_model=model,
             decomposer_model=self._decomposer_model if self._decomposer_model is not None else model,
             worker_model=self._worker_model if self._worker_model is not None else model,
-            worker_system_prompt=_EXTRACT_WORKER_PROMPT,
+            worker_system_prompt=worker_prompt,
             worker_tools=self._worker_tools,
             worker_skills=self._worker_skills,
             interpreter=interpreter,
@@ -257,7 +264,7 @@ class SeamSliceExtractor:
         # interpreter and never enters the model's context. The interpreter session is serialized
         # process-wide (KI-1, ADR-0020): build + run + teardown inside the lock.
         with rlm_interpreter_session(ptc=self._working_set_ptc(chunks)) as interpreter:
-            agent = self._build_agent(chunks, interpreter=interpreter)
+            agent = self._build_agent(chunks, query, interpreter=interpreter)
             messages = agent.invoke({"messages": [HumanMessage(content=request)]})["messages"]
         return _parse_slice_outputs(_final_text(messages))
 

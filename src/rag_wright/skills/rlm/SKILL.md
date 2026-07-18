@@ -88,7 +88,7 @@ async function decompose(items, depth) {
   if (items.length === 0) return [];    // empty slice — nothing to dispatch (no-op leaf)
   if (depth >= _MAX_DEPTH) {
     for (const it of items) _handled.add(it.id);
-    return [await task({ description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker" })];
+    return [await task({ description: "handle leaf depth " + depth + " over " + items.length + " items: " + JSON.stringify(items), subagentType: "rlm_slice_worker" })];
   }
   const decision = JSON.parse(await task({
     description: "decompose depth " + depth + " over " + items.length + " items",
@@ -96,7 +96,7 @@ async function decompose(items, depth) {
   }));
   if (decision.leaf) {
     for (const it of items) _handled.add(it.id);
-    return [await task({ description: "handle leaf depth " + depth, subagentType: "rlm_slice_worker" })];
+    return [await task({ description: "handle leaf depth " + depth + " over " + items.length + " items: " + JSON.stringify(items), subagentType: "rlm_slice_worker" })];
   }
   _splitDepths.push(depth);
   // decision.cuts partition `items` into contiguous groups (no item lost); recurse on every group.
@@ -113,7 +113,7 @@ const _leaves = await decompose(workingSet, 0);
 const _missed = workingSet.filter((it) => !_handled.has(it.id));
 if (_missed.length) {
   for (const it of _missed) _handled.add(it.id);
-  _leaves.push(await task({ description: "cover " + _missed.length + " missed items", subagentType: "rlm_slice_worker" }));
+  _leaves.push(await task({ description: "cover " + _missed.length + " missed items: " + JSON.stringify(_missed), subagentType: "rlm_slice_worker" }));
 }
 JSON.stringify({
   leaves: _leaves,
