@@ -250,6 +250,7 @@ loop enforces it.
 | T38 | `chunk_read` governed capability (rehydrate chunk_ids → chunks-with-text) — reads the T40 sidecar | 4 Build read | FR-Q | done | T40 |
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T41 | Retrieval-quality: baseline-with-diagnosis recorded (0.38, query-representation gap, graph leg doesn't help); composition-experiment backlog logged (LLM reranker / category label-retrieval / base-pool sizing) | 5 Integrate | FR-C.3 | investigation concluded → parked as post-integration backlog | T33 |
+| T42 | RLM/synthesis latent-hardening pass: enforce worker query+slice threading (works-by-model-choice today) + non-stub worker test + messy-fixture live-test discipline (brackets/newlines/quotes) | 5 Integrate | FR-Q.5 | todo (parked, post-integration; verdict: doesn't currently bite) | T28, T38 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
@@ -1644,6 +1645,43 @@ capability, recompile, new-number loop against the ACORD baseline above:
 
 **Status:** investigation concluded → parked as the composition-experiment backlog (own workstream, post-
 integration). **Dep:** T33 (baseline measured). base-pool+rerank is **optional, no longer a gating task**.
+
+### Task T42: RLM/synthesis latent-hardening pass (parked, post-integration)
+
+**Why:** two "works-by-luck / caught-only-on-real-data" items surfaced during the integration proof
+(2026-07-18). Both confirmed non-blocking (integration passed), so parked — but real hardening, promoted to a
+visible task rather than left as prose notes:
+1. **Worker query/slice threading is unenforced** (see the LATENT HARDENING ITEM note at the top of this
+   file). The RLM leaf dispatch `task({description: "handle leaf depth D", subagentType: "rlm_slice_worker"})`
+   threads NEITHER the query NOR the slice; query-relevant extraction works only because the orchestrator
+   model *chooses* to thread them (GraphWright dry-run verdict: did not bite — but it's model-luck, not
+   enforcement). Affects standalone synthesis too.
+2. **Live tests use clean fixtures**, so two real-text bugs stayed invisible until real data hit them:
+   the SQL-newline dead-letter (T33 store fix) and `[` in extract text (the `_parse_slice_outputs` fix).
+
+**Scope (design question to resolve first, then implement):**
+- **Enforce worker query + slice threading.** The RLM workflow is GENERAL (chunking has no query; synthesis
+  does), so the query cannot be hardcoded into `RLM_WORKFLOW_JS`. Decide between / combine: **(a)** the
+  synthesis capability bakes the query into the worker's system prompt (`worker_system_prompt`) — enforced,
+  capability-specific, does NOT touch the general workflow or the drift test; **(b)** the workflow threads
+  the slice `items` into the leaf-dispatch description so the worker sees its slice (consistent with "the
+  *orchestrator* never sees the whole set"; the worker MUST see its own slice) — this DOES touch
+  `RLM_WORKFLOW_JS` + `SKILL.md` (byte-identical, drift-tested, re-verify after). Prefer (a) for the query
+  (cleanest, no general-workflow change); resolve whether (b) is needed for the slice or the PTC path already
+  covers it.
+- **Non-stub worker test.** Current synthesis tests stub the sub-agent responders (they return canned output
+  regardless of dispatch content), so they never assert the worker *received* the query/slice. Add a test
+  that drives the real worker and asserts the query + slice reach it.
+- **Messy-fixture live-test discipline.** Add at least one deliberately messy fixture (brackets, newlines,
+  quotes) to the RLM/synthesis/store live tests so real-text bugs are caught by the suite, not by production.
+
+**Acceptance:** the query (and slice) reach the worker by enforcement, verifiable in a non-stub test; a messy
+fixture exists in the relevant live tests. **Verify:** `uv run pytest tests/capabilities/test_rlm_synthesis.py
+tests/capabilities/test_rlm_method.py` (+ the SKILL.md↔RLM_WORKFLOW_JS drift test if option (b) is taken).
+**Files:** `capabilities/rlm_synthesis.py` (worker prompt / `_request`); possibly `skills/rlm/agent.py` +
+`skills/rlm/SKILL.md` (if (b)); `tests/capabilities/test_rlm_synthesis.py`, `test_rlm_method.py`.
+**Status:** todo (parked, post-integration; NOT urgent — dry-run verdict: doesn't currently bite).
+**Dep:** T28 (synthesis), T38 (chunk_read). Not a blocker for the composition experiments (T41 backlog).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
