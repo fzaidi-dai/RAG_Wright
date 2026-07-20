@@ -52,6 +52,15 @@ not this repo's.
 
 ## Last approved / next up
 
+- **NEXT UP: T43 (queued, BLOCKED on GraphWright)** — emit `capabilityInterface` typed I/O on our authored ARD
+  manifests (GraphWright ADR-0030). GraphWright asked us to confirm/correct a guessed typed interface for the
+  5 query-graph capabilities; we grounded all 5 against the real callables, and are owning the emission. Reply
+  drafted at `docs/handoff/2026-07-20_graphwright_capability_interface_reply.md`. **Blocked on two asks back
+  to GraphWright** (mirror the field in their `entry.py` — both sides `extra="forbid"`; and agree scalar-vs-
+  compound type vocabulary). **Start T43 only once GraphWright replies to both and we approve.** See the T43
+  section below.
+- **LAST APPROVED (committed): T42** — RLM/synthesis latent-hardening (worker query+slice threading enforced,
+  non-stub multi-worker split test, messy fixtures). HEAD `0a5a691`. Full suite 412 passed + 27 skipped.
 - **LAST APPROVED (committed): T28 (rebuild)** — RLM synthesis = **recursive descent + kept `_reduce` ascent**.
   A `SliceExtractor` seam (`SeamSliceExtractor` via `build_rlm_agent`) decomposes the candidate set (fresh
   `rlm_decomposer` per over-large group, `rlm_slice_worker` extracts per leaf); the Python `_reduce` fan-in
@@ -251,6 +260,7 @@ loop enforces it.
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T41 | Retrieval-quality: baseline-with-diagnosis recorded (0.38, query-representation gap, graph leg doesn't help); composition-experiment backlog logged (LLM reranker / category label-retrieval / base-pool sizing) | 5 Integrate | FR-C.3 | investigation concluded → parked as post-integration backlog | T33 |
 | T42 | RLM/synthesis latent-hardening pass: enforce worker query+slice threading + non-stub multi-worker split test + messy-fixture discipline | 5 Integrate | FR-Q.5 | done (query→worker prompt; slice→dispatch, both files drift-synced; partition + messy tests) | T28, T38 |
+| T43 | Emit `capabilityInterface` typed I/O on authored ARD manifests (GraphWright ADR-0030) — schema + author path + declare the 5 (+graph_query, generation) interfaces | 5 Integrate | FR-C, ARD reg | todo — **BLOCKED on GraphWright** (mirror `entry.py` field + agreed type vocabulary; both `extra="forbid"`). Interfaces confirmed/corrected; reply drafted (`docs/handoff/2026-07-20_graphwright_capability_interface_reply.md`) | T6, T38, ADR-0005 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
@@ -1693,6 +1703,53 @@ got EXACTLY its own partitioned slice + the query — the multi-worker path the 
 GraphWright point 3). Full suite 412 passed + 27 skipped; ruff clean.
 **Dep:** T28 (synthesis), T38 (chunk_read). GraphWright's node should re-pull the hardened skill (strictly
 more robust; same output, now enforced).
+
+### Task T43: Emit `capabilityInterface` typed I/O on authored manifests (GraphWright ADR-0030) — BLOCKED
+
+**Why:** GraphWright's lowering pass verifies that a realization's capabilities actually chain (inputs/outputs
+produce what a step needs). Today our manifests carry a rich `description` + representative queries but **no
+typed I/O interface**, so their checker can only verify a *model's asserted* interface — a wrong interface
+still "verifies" (they caught exactly this: a capability force-fit to a step it cannot do). They asked us to
+confirm/correct a guessed typed interface (`capabilityInterface`) for the 5 query-graph capabilities. We
+grounded all 5 against the real bound callables and are **owning the emission** (governed data we author),
+rather than letting GraphWright hand-write into our registry files.
+
+**Grounded confirm/correct (the interfaces to emit; full detail + reply in
+`docs/handoff/2026-07-20_graphwright_capability_interface_reply.md`):**
+- `hybrid_search` in `query: text` → out `candidates: {chunk_id, source_doc_id}[]` (filters/k are config).
+- `reranking` in `query: text` + **`passages: {chunk_id, source_doc_id, text}[]`** (needs TEXT, not ids) → out
+  `ranked: {chunk_id, source_doc_id, score}[]` (top_k config). **The load-bearing correction.**
+- `fusion` in `reranked: rerank_result` + `graph: graph_answer` (two distinguishable legs, not variadic) → out
+  `fused: {chunk_id, sources[]}[]` (union, no score; cap config).
+- `chunk_read` in `chunk_ids: chunk_id[]` → out `chunks: {chunk_id, text, source_doc_id}[]` (ordered, drops nothing).
+- `rlm_synthesis` in `query: text` + `chunks: {chunk_id, text}[]` (takes text, doesn't rehydrate) → out
+  `answer: text` + `chunk_ids: chunk_id[]` (citations) + `slice_outputs: {chunk_id, extract}[]`.
+- Set completeness: **`graph_query`** (produces fusion's 2nd input) and **`generation`** (alt answer step)
+  also want interfaces if the whole graph is to be governed.
+
+**BLOCKED ON GRAPHWRIGHT (two asks, in the reply) — do NOT build until resolved + approved:**
+1. **Schema lockstep.** Both `ard.py` (`RegistryEntry`, `extra="forbid"`, `ard.py:55`) and GraphWright's
+   `entry.py` (mirror, ADR-0005) forbid extra fields. A manifest carrying `capabilityInterface` fails to load
+   on whichever side hasn't added the field. Neither side ships until both schemas accept it — agree the
+   top-level field name + nested shape verbatim.
+2. **Type vocabulary.** GraphWright's `{text, chunk_id}` scalar set can't express the compound records that
+   actually flow (`{chunk_id, source_doc_id}`, `{…, score}`, `{chunk_id, text, source_doc_id}`,
+   `{chunk_id, sources[]}`) — and that granularity is what lets their checker catch the `reranking`-needs-text
+   force-fit. Agree scalar-vs-compound and the shape so we emit something their checker can read.
+
+**Scope (when unblocked):** add an optional `CapabilityInterface` model to `ard.py`
+(`RegistryEntry.capability_interface`, camelCase `capabilityInterface`, matching the agreed wire shape); thread
+it through `ManifestSkeleton.author(...)`; declare the confirmed interfaces at the `register_*` calls for the 5
+(+ `graph_query`, optionally `generation`); re-emit the manifests. Short RAG-side ADR mirroring GraphWright
+ADR-0030 (the cross-repo coordination record, ADR-0005 style).
+**Acceptance:** a manifest carrying `capabilityInterface` round-trips through `RegistryEntry` (conformance
+test); `write_manifest` emits it; the emitted interfaces match the real signatures above.
+**Verify:** `uv run pytest tests/capabilities/` (ard conformance + registry). **Files:**
+`src/rag_wright/capabilities/ard.py`, `registry.py`, the per-capability `register_*` calls,
+`tests/capabilities/…`, a new `docs/adr/` entry, `tasks.md`.
+**Status:** todo — BLOCKED on GraphWright's reply. Interfaces confirmed/corrected; reply drafted at
+`docs/handoff/2026-07-20_graphwright_capability_interface_reply.md`. **Dep:** T6 (registration/author path),
+T38 (chunk_read, one of the 5), ADR-0005 (the schema mirror this coordinates against).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 
