@@ -84,6 +84,10 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "synthesize an answer from many partitioned sub-calls",
         ),
         tags=("rlm", "method", "divide-and-conquer"),
+        # No capability_interface (T44): rlm_method is a shared METHOD skill `require`d by rlm_chunking and
+        # rlm_synthesis (loaded knowledge), never bound as a data-processing node in a graph — it has no
+        # pipeline data I/O of its own. The applying capability (chunking / synthesis) is what carries the
+        # governed interface; governing the method here would be a type with no producer or consumer.
         # Intrinsic RLM runtime: the interpreter holds the working set and runs the code-side recursive
         # decompose(), dispatching the two real sub-agents (ADR-0015). granted_subagents is bound from the
         # skill's own roster so it cannot drift from what the skill declares/dispatches.
@@ -107,6 +111,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "turn an Office document into a clean structured representation",
         ),
         tags=("parsing", "docling", "ingestion"),
+        capability_interface=CapabilityInterface(
+            inputs={"source": "document"},
+            outputs={"parsed": "parsed_doc"},  # a handle to the cached DoclingDocument; chunking consumes it
+            success_criterion="parse a source document into a cached structured representation, parsed once",
+        ),
     ),
     CapabilityManifest(
         slug="rlm_chunking",
@@ -129,6 +138,13 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         skill_runtime=SkillRuntime(  # LLM boundary discovery via the recursive machinery; real sub-agents
             needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
         ),
+        capability_interface=CapabilityInterface(
+            # Emits the ingestion `chunk` (id + text + summary + index) — NOT the query-side chunk_with_text;
+            # embedding and graph_extraction consume this same `chunk`.
+            inputs={"parsed": "parsed_doc"},
+            outputs={"chunks": "chunk"},
+            success_criterion="split a parsed document into semantically coherent, capped, summarized chunks with stable ids",
+        ),
     ),
     CapabilityManifest(
         slug="embedding",
@@ -146,6 +162,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "vectorize chunks for hybrid retrieval",
         ),
         tags=("embedding", "bge-m3", "ingestion"),
+        capability_interface=CapabilityInterface(
+            inputs={"chunks": "chunk"},  # needs the summary the ingestion `chunk` carries (dense-over-summary)
+            outputs={"embeddings": "embedding"},
+            success_criterion="produce a dense-over-summary and sparse-over-full-text vector per chunk (BGE-M3)",
+        ),
     ),
     CapabilityManifest(
         slug="hybrid_search",
@@ -212,6 +233,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "recognize the organizations and people mentioned in a document",
         ),
         tags=("extraction", "graph", "ner", "spacy", "ingestion"),
+        capability_interface=CapabilityInterface(
+            inputs={"chunks": "chunk"},  # consumes the same ingestion `chunk` (uses its id + text)
+            outputs={"facts": "extraction"},  # chunk-anchored entity mentions + relationship facts
+            success_criterion="extract ontology-conforming entity mentions and relationship facts from a chunk, with provenance and confidence",
+        ),
     ),
     CapabilityManifest(
         slug="entity_disambiguation",
@@ -231,6 +257,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "flag parent/subsidiary near-duplicate entities for human review",
         ),
         tags=("entity", "disambiguation", "canonicalization", "graph"),
+        capability_interface=CapabilityInterface(
+            inputs={"facts": "extraction"},  # the extracted mention stream (graph_extraction's output)
+            outputs={"clusters": "entity_cluster"},
+            success_criterion="normalize, reject, and cluster extracted entity mentions into human-verifiable canonical clusters",
+        ),
     ),
     CapabilityManifest(
         slug="entity_resolution",
@@ -249,6 +280,13 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "deduplicate relationship endpoints and standalone mentions to one entity node",
         ),
         tags=("entity", "resolution", "edgar", "cik", "graph"),
+        capability_interface=CapabilityInterface(
+            # Two inputs: the clusters to link AND the original extraction (to resolve relationship endpoints
+            # as the same mention stream) — resolve_entities(clusters, results, ...).
+            inputs={"clusters": "entity_cluster", "facts": "extraction"},
+            outputs={"resolved": "resolved_entity"},  # entities + relationships linked to a canonical id (the graph)
+            success_criterion="link mention clusters to canonical EDGAR ids (closed-world) and resolve relationship endpoints as one stream",
+        ),
     ),
     CapabilityManifest(
         slug="graph_query",
@@ -395,6 +433,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "read text off a rasterized document image",
         ),
         tags=("vision-to-text", "ocr", "transcription", "ingestion"),
+        capability_interface=CapabilityInterface(
+            inputs={"image": "image"},
+            outputs={"text": "text"},  # standalone ingestion transcription for image-only sources
+            success_criterion="transcribe a scanned image to text at ingestion (image-only filings)",
+        ),
     ),
 )
 

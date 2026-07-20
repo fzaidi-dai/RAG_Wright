@@ -144,12 +144,23 @@ class SkillRuntime(_ArdModel):
 # schema mirror). Changing this set is a cross-repo coordination point with GraphWright's checker vocabulary.
 NOMINAL_TYPE_VOCABULARY: frozenset[str] = frozenset(
     {
+        # --- retrieval -> answer (T43) ---
         "text",  # a natural-language string (a query, an answer)
         "chunk_id",  # a chunk reference WITHOUT its text (id, plus provenance like source_doc_id)
         "chunk_with_text",  # a chunk reference WITH its text attached (only chunk_read produces it)
         "scored_chunk",  # a chunk reference carrying a relevance score (reranking's output)
         "graph_answer",  # the graph leg's cited answer ({answer?, evidence:[{entity_id, chunk_ids[]}]})
         "cited_extract",  # a citation: a chunk reference paired with the cited extract text ({chunk_id, extract})
+        # --- ingestion -> graph (T44); the ingestion data shapes the retrieval names don't cover ---
+        "document",  # a raw source document (a file/scan to parse) — parsing's input
+        "parsed_doc",  # a handle to the cached structured parse (DoclingDocument) — parsing out -> chunking in
+        "chunk",  # the ingestion chunk: id + full text + SUMMARY + index (distinct from chunk_with_text,
+        # which is the query-side rehydrated id+text; embedding needs the summary this carries)
+        "embedding",  # a chunk's dense+sparse vector record — embedding's output
+        "extraction",  # chunk-anchored extracted facts (entity mentions + relationship facts) — graph_extraction out
+        "entity_cluster",  # canonical mention clusters (human-verifiable proposals) — disambiguation's output
+        "resolved_entity",  # entities + relationships linked to a canonical id (the knowledge graph) — resolution out
+        "image",  # a raw image/scan (bytes) — vision_to_text's input
     }
 )
 

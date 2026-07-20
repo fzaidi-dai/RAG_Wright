@@ -83,9 +83,15 @@ def test_skill_runtime_is_rejected_on_a_non_agent_skill():
 
 # --- capabilityInterface: the governed typed I/O (GraphWright ADR-0030 vendor extension, T43) ----
 
-# The 7 query-graph capabilities GraphWright's lowering checker verifies (the 5 + graph_query + generation).
+# The governed capabilities GraphWright's lowering checker verifies: the 7 retrieval->answer caps (T43) plus
+# the 7 ingestion->graph caps (T44). rlm_method is deliberately excluded — a required shared skill, not a
+# bound data node, so it has no data I/O to govern.
 _GOVERNED_INTERFACE_SLUGS = (
+    # retrieval -> answer (T43)
     "hybrid_search", "chunk_read", "reranking", "graph_query", "fusion", "rlm_synthesis", "generation",
+    # ingestion -> graph (T44)
+    "parsing", "rlm_chunking", "embedding", "graph_extraction",
+    "entity_disambiguation", "entity_resolution", "vision_to_text",
 )
 
 # The confirmed interfaces, grounded in the real callables (the reply to GraphWright). Types are what the
@@ -105,6 +111,14 @@ _EXPECTED_INTERFACES = {
         {"query": "text", "evidence": "chunk_with_text"},
         {"answer": "text", "cited_chunk_ids": "chunk_id"},
     ),
+    # ingestion -> graph (T44)
+    "parsing": ({"source": "document"}, {"parsed": "parsed_doc"}),
+    "rlm_chunking": ({"parsed": "parsed_doc"}, {"chunks": "chunk"}),
+    "embedding": ({"chunks": "chunk"}, {"embeddings": "embedding"}),
+    "graph_extraction": ({"chunks": "chunk"}, {"facts": "extraction"}),
+    "entity_disambiguation": ({"facts": "extraction"}, {"clusters": "entity_cluster"}),
+    "entity_resolution": ({"clusters": "entity_cluster", "facts": "extraction"}, {"resolved": "resolved_entity"}),
+    "vision_to_text": ({"image": "image"}, {"text": "text"}),
 }
 
 
@@ -136,10 +150,29 @@ def test_fusion_output_type_checks_into_chunk_read(tmp_path):
     assert "fused_chunk" not in NOMINAL_TYPE_VOCABULARY
 
 
-def test_non_query_graph_capabilities_declare_no_interface():
-    # Scope: only the query→answer graph is governed for now (GraphWright's request). The rest are None.
-    for slug in ("parsing", "embedding", "graph_extraction", "vision_to_text", "rlm_method"):
-        assert author(slug).capability_interface is None
+def test_rlm_method_declares_no_interface_it_is_a_required_skill_not_a_data_node():
+    # rlm_method (T44): a shared METHOD skill required by rlm_chunking/rlm_synthesis, never bound as a
+    # data-processing node — no pipeline data I/O, so no governed interface (a type with no producer/consumer).
+    assert author("rlm_method").capability_interface is None
+
+
+def test_ingestion_graph_chain_type_checks_end_to_end():
+    # The ingestion->graph chain must type-check under nominal typing: each producer's output name equals the
+    # next consumer's input name. document -> parsed_doc -> chunk -> {embedding, extraction} -> entity_cluster
+    # -> resolved_entity. This is the whole point of governing them — the checker forces the right chain.
+    def out(slug, port):
+        return author(slug).capability_interface.outputs[port]
+
+    def inp(slug, port):
+        return author(slug).capability_interface.inputs[port]
+
+    assert out("parsing", "parsed") == inp("rlm_chunking", "parsed") == "parsed_doc"
+    assert out("rlm_chunking", "chunks") == inp("embedding", "chunks") == "chunk"
+    assert out("rlm_chunking", "chunks") == inp("graph_extraction", "chunks") == "chunk"  # both consume `chunk`
+    assert out("graph_extraction", "facts") == inp("entity_disambiguation", "facts") == "extraction"
+    assert out("entity_disambiguation", "clusters") == inp("entity_resolution", "clusters") == "entity_cluster"
+    # entity_resolution also re-consumes the original extraction (relationship endpoints), the two-input node
+    assert inp("entity_resolution", "facts") == "extraction"
 
 
 def test_declared_interface_types_are_all_in_the_agreed_vocabulary():

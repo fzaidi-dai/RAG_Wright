@@ -51,8 +51,8 @@ ignore it.
    GraphWright's `TypedInterface`, whose `extra="forbid"` loader rejects camelCased inner keys.
 5. **Scope: the query→answer graph.** Declared on the 7 capabilities GraphWright's checker verifies —
    `hybrid_search`, `chunk_read`, `reranking`, `graph_query`, `fusion`, `rlm_synthesis`, `generation`. Other
-   capabilities (parsing, embedding, extraction, disambiguation, resolution, vision_to_text, rlm_method)
-   declare no interface for now (`None`); they are not in the retrieval→answer graph. Additive later if needed.
+   capabilities declared no interface at first. **Extended in T44 (see addendum)** to the ingestion→graph caps;
+   `rlm_method` remains ungoverned by design.
 
 `generation`'s abstain outcome is a boolean `abstained` flag on the answer record (empty `citations`), not a
 distinct typed channel and nothing downstream gates on it, so it stays in the payload and is named in
@@ -73,3 +73,31 @@ distinct typed channel and nothing downstream gates on it, so it stays in the pa
   (`test_governed_capabilities_declare_the_confirmed_interface`), not silently at GraphWright's bind.
 - The vocabulary and the field shape are cross-repo coordination points; a change on either requires a
   coordinated update to both `ard.py` and GraphWright's `entry.py`.
+
+## Addendum (T44, 2026-07-20): extend governance to the ingestion→graph capabilities
+
+GraphWright found the residual force-fit hole: the "no false resolves" guarantee held only for governed caps,
+and their model force-fit an *ungoverned* cap to a step no cap does (1 run in 5). The fix is to govern the rest
+of the bound catalog, same additive pattern.
+
+- **Governed 7 more** (all bound in the ingestion/graph pipeline): `parsing`, `rlm_chunking`, `embedding`,
+  `graph_extraction`, `entity_disambiguation`, `entity_resolution`, `vision_to_text`. Grounded against the real
+  callables. The ingestion→graph chain type-checks end to end:
+  `document → parsed_doc → chunk → {embedding, extraction} → entity_cluster → resolved_entity`, and
+  `image → text`.
+- **`rlm_method` stays ungoverned by design.** It is a shared method skill `require`d by `rlm_chunking` and
+  `rlm_synthesis`, never bound as a data-processing node — no pipeline data I/O, so a governed interface would
+  be a type with no producer or consumer. (Answers GraphWright's "bound vs internal-only" ask.)
+- **Vocabulary extended 6 → 14** with the ingestion data shapes: `document`, `parsed_doc`, `chunk`, `embedding`,
+  `extraction`, `entity_cluster`, `resolved_entity`, `image`. Grounded shape decisions: the ingestion `chunk`
+  is kept **distinct** from the retrieval `chunk_with_text` (it carries the summary `embedding` needs;
+  different producers/consumers — collapsing them would let a wrong chain type-check); `parsing` outputs a
+  `parsed_doc` *handle* (not flat text); `embedding` consumes `chunk` (not `text`); `entity_resolution` is a
+  distinct-typed **two-input** fan-in (`entity_cluster` + `extraction`), like `fusion`.
+- **`vision_to_text` is a standalone `image → text` leaf** whose output is not `parsed_doc`, so it does not
+  chain into `rlm_chunking` directly. Typed truthfully so GraphWright's checker catches the gap; placing it
+  (route image-only sources through parsing's OCR, or a `text → parsed_doc` adapter) is their graph-design call.
+- **Vocabulary lockstep honored:** GraphWright mirrored the 8 new names in their `NOMINAL_TYPE_VOCABULARY`
+  (`RETRIEVAL_TYPES` ∪ `INGESTION_TYPES` = 14) and confirmed the 7 interfaces before we re-emitted. All 14
+  governed manifests are now emitted into `~/.air/registry`; their `RegistryStore` round-trips all 14. This
+  closes the last force-fit hole — "no false resolves" holds across the whole bound catalog.
