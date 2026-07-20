@@ -149,7 +149,6 @@ NOMINAL_TYPE_VOCABULARY: frozenset[str] = frozenset(
         "chunk_with_text",  # a chunk reference WITH its text attached (only chunk_read produces it)
         "scored_chunk",  # a chunk reference carrying a relevance score (reranking's output)
         "graph_answer",  # the graph leg's cited answer ({answer?, evidence:[{entity_id, chunk_ids[]}]})
-        "fused_chunk",  # one deduped evidence item from the union (id + sources[], no score)
         "cited_extract",  # a citation: a chunk reference paired with the cited extract text ({chunk_id, extract})
     }
 )

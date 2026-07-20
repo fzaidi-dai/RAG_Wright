@@ -96,7 +96,7 @@ _EXPECTED_INTERFACES = {
     "chunk_read": ({"chunk_ids": "chunk_id"}, {"chunks": "chunk_with_text"}),
     "reranking": ({"query": "text", "passages": "chunk_with_text"}, {"ranked": "scored_chunk"}),
     "graph_query": ({"query": "text"}, {"graph": "graph_answer"}),
-    "fusion": ({"reranked": "scored_chunk", "graph": "graph_answer"}, {"fused": "fused_chunk"}),
+    "fusion": ({"reranked": "scored_chunk", "graph": "graph_answer"}, {"fused": "chunk_id"}),
     "rlm_synthesis": (
         {"query": "text", "chunks": "chunk_with_text"},
         {"answer": "text", "cited_chunk_ids": "chunk_id", "cited_extracts": "cited_extract"},
@@ -125,6 +125,15 @@ def test_reranking_consumes_text_so_the_checker_forces_chunk_read_upstream():
     assert author("reranking").capability_interface.inputs["passages"] == "chunk_with_text"
     assert author("chunk_read").capability_interface.outputs["chunks"] == "chunk_with_text"
     assert author("hybrid_search").capability_interface.outputs["candidates"] == "chunk_id"
+
+
+def test_fusion_output_type_checks_into_chunk_read(tmp_path):
+    # GraphWright's resolved call (ADR-0021): fusion output is `chunk_id` (id-only, the `sources[]`
+    # provenance does not fork the type name), so `fusion -> chunk_read` type-checks under nominal typing —
+    # the fused evidence set can be rehydrated before synthesis. `fused_chunk` is retired from the vocabulary.
+    assert author("fusion").capability_interface.outputs["fused"] == "chunk_id"
+    assert author("fusion").capability_interface.outputs["fused"] == author("chunk_read").capability_interface.inputs["chunk_ids"]
+    assert "fused_chunk" not in NOMINAL_TYPE_VOCABULARY
 
 
 def test_non_query_graph_capabilities_declare_no_interface():

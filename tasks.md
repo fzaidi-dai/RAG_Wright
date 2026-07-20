@@ -53,13 +53,12 @@ not this repo's.
 ## Last approved / next up
 
 - **LAST APPROVED (committed): T43** — emit `capabilityInterface` typed I/O on our authored ARD manifests
-  (GraphWright ADR-0030 / our ADR-0021). Nominal typing: `CapabilityInterface` + `NOMINAL_TYPE_VOCABULARY` in
-  `ard.py`, threaded through the author path, declared on 7 manifests (5 + graph_query + generation), grounded
-  in the real callables. Full suite **425 passed + 27 skipped**. Confirmation to GraphWright drafted
-  (`docs/handoff/2026-07-20b_graphwright_interface_confirmation.md`). **Two follow-ups waiting on GraphWright:**
-  (a) their call on retyping fusion out `fused_chunk`→`chunk_id` so `fusion→chunk_read` type-checks; (b) re-emit
-  the manifests into `~/.air/registry` once they confirm. **NEXT UP: nothing running — user picks** (parked
-  candidates unchanged: T41 composition experiments / LLM reranker first, T30/T31/T32/T34/T35/T39/T18).
+  (GraphWright ADR-0030 / our ADR-0021). Nominal typing: `CapabilityInterface` + `NOMINAL_TYPE_VOCABULARY` (6
+  names) in `ard.py`, threaded through the author path, declared on 7 manifests (5 + graph_query + generation),
+  grounded in the real callables. **GraphWright contract CLOSED:** fusion out retyped `fused_chunk`→`chunk_id`
+  (their call; `fusion→chunk_read` type-checks); all 15 manifests re-emitted to `~/.air/registry`. Full suite
+  **426 passed + 27 skipped**. **NEXT UP: nothing running — user picks** (parked candidates unchanged: T41
+  composition experiments / LLM reranker first, T30/T31/T32/T34/T35/T39/T18).
 - **LAST APPROVED (committed): T42** — RLM/synthesis latent-hardening (worker query+slice threading enforced,
   non-stub multi-worker split test, messy fixtures). Full suite 412 passed + 27 skipped.
 - **LAST APPROVED (committed): T28 (rebuild)** — RLM synthesis = **recursive descent + kept `_reduce` ascent**.
@@ -261,7 +260,7 @@ loop enforces it.
 | T39 | Extraction-depth grading (cited-but-thin) — needs answer-span ground truth ACORD lacks | 5 Integrate | §12 | todo (logged follow-on; not this milestone) | T33 |
 | T41 | Retrieval-quality: baseline-with-diagnosis recorded (0.38, query-representation gap, graph leg doesn't help); composition-experiment backlog logged (LLM reranker / category label-retrieval / base-pool sizing) | 5 Integrate | FR-C.3 | investigation concluded → parked as post-integration backlog | T33 |
 | T42 | RLM/synthesis latent-hardening pass: enforce worker query+slice threading + non-stub multi-worker split test + messy-fixture discipline | 5 Integrate | FR-Q.5 | done (query→worker prompt; slice→dispatch, both files drift-synced; partition + messy tests) | T28, T38 |
-| T43 | Emit `capabilityInterface` typed I/O on authored ARD manifests (GraphWright ADR-0030) — schema + author path + declare the 7 (5 + graph_query + generation) interfaces | 5 Integrate | FR-C, ARD reg | done (ADR-0021) — nominal typing; `CapabilityInterface` + `NOMINAL_TYPE_VOCABULARY` in ard.py, threaded through author path, 7 manifests declared; 13 tests, suite 425+27. Confirmation to GraphWright drafted (`.../2026-07-20b_...`). Open (GraphWright's call): retype fusion out `fused_chunk`→`chunk_id` so `fusion→chunk_read` type-checks | T6, T38, ADR-0005 |
+| T43 | Emit `capabilityInterface` typed I/O on authored ARD manifests (GraphWright ADR-0030) — schema + author path + declare the 7 (5 + graph_query + generation) interfaces | 5 Integrate | FR-C, ARD reg | done (ADR-0021) — nominal typing; `CapabilityInterface` + `NOMINAL_TYPE_VOCABULARY` (6 names) in ard.py, threaded through author path, 7 manifests declared; 14 tests, suite 426+27. **Contract closed:** fusion out retyped `fused_chunk`→`chunk_id` (GraphWright's call, `fusion→chunk_read` type-checks); all 15 manifests re-emitted to `~/.air/registry` | T6, T38, ADR-0005 |
 | T34 | Document update/upsert: on doc change, delete a document's chunks + graph nodes + index entries, then re-chunk and re-insert | 5 Integrate | FR-I.5 | todo (finding) | T17, T20, T25 |
 | T35 | Concurrent-batch ingestion throughput design (KI-1 correctness floor already always-on) | 5 Integrate | OQ8, ADR-0020 | todo (throughput design; floor landed) | T17, T28 |
 | T36 | Working-set via runtime tool `tools.workingSet()` (not message-embedded JSON) + T17/T28 re-validation + skill rename | 5 Integrate | FR-C.10, FR-I.1, FR-Q.5 | done | T17, T28 |
@@ -1755,13 +1754,14 @@ snake_case inner keys) + `NOMINAL_TYPE_VOCABULARY` (mirror of their §3 table, v
 through `ManifestSkeleton.author()`; declared the 7 interfaces in `manifests.py` (5 + graph_query + generation),
 grounded in the real callables. 13 new tests (interfaces match signatures; reranking needs `chunk_with_text`;
 vocabulary rejects typos/list-sugar; snake_case inner keys on the wire; round-trips through `extra="forbid"`).
-Full suite **425 passed + 27 skipped**, ruff clean. Confirmation to GraphWright drafted at
+Full suite **426 passed + 27 skipped**, ruff clean. Confirmation to GraphWright drafted at
 `docs/handoff/2026-07-20b_graphwright_interface_confirmation.md` (confirms §4, answers abstain = boolean flag /
-synthesis citation shape, flags 2 chain-level notes). **One open item, GraphWright's call:** retype fusion out
-`fused_chunk`→`chunk_id` so `fusion→chunk_read` type-checks (one-line re-emit) — emitted `fused_chunk` as they
-named it. **Not yet re-emitted into `~/.air/registry`** (that write happens once GraphWright confirms the field
-+ the fusion retype call). **Dep:** T6 (registration/author path), T38 (chunk_read, one of the 7), ADR-0005
-(the schema mirror this coordinates against).
+synthesis citation shape, flags 2 chain-level notes). **Contract now CLOSED (2026-07-20):** GraphWright resolved
+the one open item — fusion output retypes `fused_chunk`→`chunk_id` (it is an id-only reference; the `sources[]`
+provenance does not fork the type name, so `fusion→chunk_read→synthesis` type-checks), retiring `fused_chunk`
+(vocabulary down to 6 names). Applied + all 15 manifests re-emitted to `~/.air/registry` (regenerable via
+`scripts/publish_manifests.py`). **Dep:** T6 (registration/author path), T38 (chunk_read, one of the 7),
+ADR-0005 (the schema mirror this coordinates against).
 
 ### Task T34: Document update/upsert path (finding, logged during T17) — later
 

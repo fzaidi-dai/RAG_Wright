@@ -291,9 +291,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("fusion", "union", "evidence", "query"),
         capability_interface=CapabilityInterface(
             # Two DISTINCT input types (retrieval leg vs graph leg), not a variadic id-set. Output is
-            # id-only (id + sources[], no score) — a union, not a score fusion.
+            # id-only (the union carries id + sources[], no text/score) — typed `chunk_id` so the valid
+            # fusion -> chunk_read -> synthesis tail type-checks (GraphWright's §3 provenance rule: the
+            # `sources[]` sub-field does not fork the type name; no consumer gates on it). ADR-0021.
             inputs={"reranked": "scored_chunk", "graph": "graph_answer"},
-            outputs={"fused": "fused_chunk"},
+            outputs={"fused": "chunk_id"},
             success_criterion="union and dedup the retrieval and graph evidence on chunk_id, capped",
         ),
     ),

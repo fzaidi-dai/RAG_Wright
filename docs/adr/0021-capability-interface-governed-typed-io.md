@@ -32,8 +32,9 @@ ignore it.
    will not fork it. Our finding that `{text, chunk_id}` was too coarse is fixed inside the nominal model by a
    **richer set of agreed scalar names**, not by adding structure.
 2. **The vocabulary is a mirrored shared contract.** `NOMINAL_TYPE_VOCABULARY` in `capabilities/ard.py`
-   mirrors GraphWright ADR-0030 section 3 verbatim (`text`, `chunk_id`, `chunk_with_text`, `scored_chunk`,
-   `graph_answer`, `fused_chunk`, `cited_extract`). Every declared type name is validated against it at author
+   mirrors GraphWright ADR-0030 section 3 verbatim — the six names `text`, `chunk_id`, `chunk_with_text`,
+   `scored_chunk`, `graph_answer`, `cited_extract` (see the fusion resolution below; `fused_chunk` was
+   retired). Every declared type name is validated against it at author
    time, so a typo or stray list sugar (`chunk_id[]`) fails in our own suite instead of silently breaking a
    chain check on GraphWright's side — the same deliberate-duplication + conformance-test discipline as the
    RegistryEntry schema mirror (ADR-0003/0005) and the canonical-slug set. Changing the vocabulary is a
@@ -63,9 +64,11 @@ distinct typed channel and nothing downstream gates on it, so it stays in the pa
   `reranking`-needs-text fact becomes structural: only `chunk_read` produces `chunk_with_text`, so the lowering
   must rehydrate before reranking.
 - Two chain-level placements were surfaced to GraphWright (handoff 2026-07-20b): a rehydrate must precede
-  reranking; and `fusion`'s `fused_chunk` output vs `chunk_read`'s `chunk_id` input means `fusion -> chunk_read`
-  will not type-check as-is — an open, GraphWright-side checker-design call (retype fusion output to `chunk_id`,
-  or insert a projection). We emitted `fused_chunk` as they named it; a retype is a one-line re-emit.
+  reranking; and `fusion`'s output vs `chunk_read`'s `chunk_id` input. **Resolved (GraphWright, 2026-07-20):**
+  `fusion` output retypes to `chunk_id` — it *is* an id-only reference, and by the section-3 provenance rule the
+  `sources[]` sub-field does not fork the type name (no consumer gates on it). This unblocks the valid
+  `fusion -> chunk_read -> synthesis` tail and retires `fused_chunk`, dropping the vocabulary to six names. The
+  rehydrate-before-reranking placement stands as the intended structural consequence.
 - A drift between a capability's real I/O and its governed manifest interface now fails a RAG test
   (`test_governed_capabilities_declare_the_confirmed_interface`), not silently at GraphWright's bind.
 - The vocabulary and the field shape are cross-repo coordination points; a change on either requires a
