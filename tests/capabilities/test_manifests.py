@@ -13,7 +13,13 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from rag_wright.capabilities.ard import CALLABLE_KINDS, RegistryEntry, SkillRuntime
+from rag_wright.capabilities.ard import (
+    CALLABLE_KINDS,
+    NOMINAL_TYPE_VOCABULARY,
+    CapabilityInterface,
+    RegistryEntry,
+    SkillRuntime,
+)
 from rag_wright.capabilities.manifests import MANIFEST_SPECS, author, publish
 
 
@@ -73,6 +79,96 @@ def test_skill_runtime_is_rejected_on_a_non_agent_skill():
     data["skillRuntime"] = SkillRuntime(needs_interpreter=True).model_dump(by_alias=True)
     with pytest.raises(ValidationError):  # skill_runtime is agent_skill only (like requires)
         RegistryEntry.model_validate(data)
+
+
+# --- capabilityInterface: the governed typed I/O (GraphWright ADR-0030 vendor extension, T43) ----
+
+# The 7 query-graph capabilities GraphWright's lowering checker verifies (the 5 + graph_query + generation).
+_GOVERNED_INTERFACE_SLUGS = (
+    "hybrid_search", "chunk_read", "reranking", "graph_query", "fusion", "rlm_synthesis", "generation",
+)
+
+# The confirmed interfaces, grounded in the real callables (the reply to GraphWright). Types are what the
+# checker uses; this pins them so a change to a capability's real I/O that drifts from the governed manifest
+# fails here, not silently at GraphWright's bind.
+_EXPECTED_INTERFACES = {
+    "hybrid_search": ({"query": "text"}, {"candidates": "chunk_id"}),
+    "chunk_read": ({"chunk_ids": "chunk_id"}, {"chunks": "chunk_with_text"}),
+    "reranking": ({"query": "text", "passages": "chunk_with_text"}, {"ranked": "scored_chunk"}),
+    "graph_query": ({"query": "text"}, {"graph": "graph_answer"}),
+    "fusion": ({"reranked": "scored_chunk", "graph": "graph_answer"}, {"fused": "fused_chunk"}),
+    "rlm_synthesis": (
+        {"query": "text", "chunks": "chunk_with_text"},
+        {"answer": "text", "cited_chunk_ids": "chunk_id", "cited_extracts": "cited_extract"},
+    ),
+    "generation": (
+        {"query": "text", "evidence": "chunk_with_text"},
+        {"answer": "text", "cited_chunk_ids": "chunk_id"},
+    ),
+}
+
+
+@pytest.mark.parametrize("slug", _GOVERNED_INTERFACE_SLUGS)
+def test_governed_capabilities_declare_the_confirmed_interface(slug):
+    iface = author(slug).capability_interface
+    assert iface is not None, f"{slug} must declare a capabilityInterface (governed for the query graph)"
+    expected_inputs, expected_outputs = _EXPECTED_INTERFACES[slug]
+    assert iface.inputs == expected_inputs
+    assert iface.outputs == expected_outputs
+    assert iface.success_criterion.strip()  # required, informational one-liner
+
+
+def test_reranking_consumes_text_so_the_checker_forces_chunk_read_upstream():
+    # The load-bearing fact of the whole exchange: reranking's input is chunk_with_text, and the only
+    # producer of chunk_with_text is chunk_read. Under nominal typing that mismatch (chunk_id != chunk_with_text)
+    # is exactly what forces a rehydrate between an id-only producer and reranking.
+    assert author("reranking").capability_interface.inputs["passages"] == "chunk_with_text"
+    assert author("chunk_read").capability_interface.outputs["chunks"] == "chunk_with_text"
+    assert author("hybrid_search").capability_interface.outputs["candidates"] == "chunk_id"
+
+
+def test_non_query_graph_capabilities_declare_no_interface():
+    # Scope: only the query→answer graph is governed for now (GraphWright's request). The rest are None.
+    for slug in ("parsing", "embedding", "graph_extraction", "vision_to_text", "rlm_method"):
+        assert author(slug).capability_interface is None
+
+
+def test_declared_interface_types_are_all_in_the_agreed_vocabulary():
+    for slug in _GOVERNED_INTERFACE_SLUGS:
+        iface = author(slug).capability_interface
+        for type_name in list(iface.inputs.values()) + list(iface.outputs.values()):
+            assert type_name in NOMINAL_TYPE_VOCABULARY
+
+
+def test_capability_interface_rejects_a_type_outside_the_vocabulary():
+    CapabilityInterface(inputs={"q": "text"}, outputs={"c": "chunk_id"}, success_criterion="ok")  # ok
+    with pytest.raises(ValidationError):  # list sugar / unknown name is a typo that would break a chain check
+        CapabilityInterface(inputs={"q": "text"}, outputs={"c": "chunk_id[]"}, success_criterion="ok")
+    with pytest.raises(ValidationError):
+        CapabilityInterface(inputs={"q": "not_a_type"}, outputs={"c": "chunk_id"}, success_criterion="ok")
+
+
+def test_capability_interface_serializes_snake_case_inner_keys_under_a_camelcase_manifest(tmp_path):
+    # GraphWright ADR-0030 section 2: the top-level field is capabilityInterface (camelCase), but its inner
+    # keys stay snake_case (success_criterion), because TypedInterface carries no ARD alias and their
+    # extra="forbid" loader rejects camelCased inner keys. Publish and assert the exact on-disk shape.
+    data = json.loads(publish("hybrid_search", root=tmp_path).read_text())
+    assert data["capabilityInterface"] == {
+        "inputs": {"query": "text"},
+        "outputs": {"candidates": "chunk_id"},
+        "success_criterion": "retrieve RRF-fused candidate chunk references for a natural-language query",
+    }
+    RegistryEntry.model_validate(data)  # re-validates as GraphWright's store will load it
+
+
+def test_capability_interface_round_trips_through_registry_entry(tmp_path):
+    # extra="forbid" on RegistryEntry now ACCEPTS capabilityInterface (declared) while still rejecting any
+    # other unknown field — the finding-3.2 lockstep, proven on our side.
+    for slug in _GOVERNED_INTERFACE_SLUGS:
+        data = json.loads(publish(slug, root=tmp_path).read_text())
+        assert "capabilityInterface" in data
+        reloaded = RegistryEntry.model_validate(data)
+        assert reloaded.capability_interface == author(slug).capability_interface
 
 
 @pytest.mark.parametrize("slug", sorted(MANIFEST_SPECS))

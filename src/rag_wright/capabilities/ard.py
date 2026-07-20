@@ -135,6 +135,67 @@ class SkillRuntime(_ArdModel):
         return self
 
 
+# The nominal type vocabulary GraphWright's lowering checker keys on (GraphWright ADR-0030 section 3). A
+# MIRROR of a shared cross-repo contract, like the RegistryEntry schema above and the canonical-slug set in
+# registry.py: the checker compares a port's type as an OPAQUE NAME string (two ports chain iff their type
+# names are equal, no field-level reasoning), so the producer and the consumer of a chain-compatible shape
+# MUST use the same name, and a typo silently breaks a chain check on GraphWright's side. We validate every
+# declared type name against this set so the drift is caught in our own suite (the same discipline as the ARD
+# schema mirror). Changing this set is a cross-repo coordination point with GraphWright's checker vocabulary.
+NOMINAL_TYPE_VOCABULARY: frozenset[str] = frozenset(
+    {
+        "text",  # a natural-language string (a query, an answer)
+        "chunk_id",  # a chunk reference WITHOUT its text (id, plus provenance like source_doc_id)
+        "chunk_with_text",  # a chunk reference WITH its text attached (only chunk_read produces it)
+        "scored_chunk",  # a chunk reference carrying a relevance score (reranking's output)
+        "graph_answer",  # the graph leg's cited answer ({answer?, evidence:[{entity_id, chunk_ids[]}]})
+        "fused_chunk",  # one deduped evidence item from the union (id + sources[], no score)
+        "cited_extract",  # a citation: a chunk reference paired with the cited extract text ({chunk_id, extract})
+    }
+)
+
+
+class CapabilityInterface(BaseModel):
+    """The governed typed I/O interface GraphWright's lowering checker verifies a realization against
+    (GraphWright ADR-0030; our T43). A GraphWright VENDOR EXTENSION, not part of the ARD envelope: it rides
+    on the `RegistryEntry` beside the internal governance blocks, so ARD-standard consumers ignore it. It is
+    the DATA that flows between orchestration steps as named channels (the query, chunk references, the
+    answer) — NOT the callable's config (model, keys, thresholds, top-k), which is deployment config.
+
+    Nominal typing: the checker compares the SET of input/output type NAMES (opaque strings from
+    `NOMINAL_TYPE_VOCABULARY`); port names are for readability only. So `inputs`/`outputs` are flat
+    `port -> typeName` maps, and cardinality (list vs scalar) is NOT encoded — a port carrying many
+    candidates and one carrying a single value both use the element name (`chunk_id`, never `chunk_id[]`).
+
+    Plain `BaseModel`, NOT `_ArdModel`: the inner keys stay snake_case (`success_criterion`) even though the
+    surrounding manifest is camelCase, because GraphWright's mirror (`TypedInterface`) carries no ARD alias
+    and its `extra="forbid"` loader rejects camelCased inner keys. `extra="forbid"` here mirrors that —
+    exactly the three keys, nothing else (GraphWright ADR-0030 section 2).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    inputs: dict[str, str]
+    outputs: dict[str, str]
+    success_criterion: str
+
+    @model_validator(mode="after")
+    def _check_ports(self) -> CapabilityInterface:
+        if not self.success_criterion.strip():
+            raise ValueError("success_criterion must be a non-empty one-line purpose")
+        for role, ports in (("inputs", self.inputs), ("outputs", self.outputs)):
+            for port, type_name in ports.items():
+                if not port.strip():
+                    raise ValueError(f"{role} contains a blank port name")
+                if type_name not in NOMINAL_TYPE_VOCABULARY:
+                    raise ValueError(
+                        f"{role} port {port!r} has type {type_name!r}, not in the agreed nominal type "
+                        f"vocabulary {sorted(NOMINAL_TYPE_VOCABULARY)} (GraphWright ADR-0030 section 3); "
+                        "strip any list sugar like '[]' and use the agreed element name"
+                    )
+        return self
+
+
 class RegistryEntry(_ArdModel):
     """A governed registry record: the ARD envelope plus internal-only governance and eval fields.
 
@@ -148,6 +209,10 @@ class RegistryEntry(_ArdModel):
     response_bounds: Optional[ResponseBounds] = None  # required for callable kinds
     requires: list[str] = Field(default_factory=list)  # closure; agent_skill only
     skill_runtime: Optional[SkillRuntime] = None  # intrinsic runtime; agent_skill only (like requires)
+    # GraphWright vendor extension (ADR-0030), optional: the governed typed I/O the compiler's lowering
+    # checker verifies a realization against. `capability_interface` -> `capabilityInterface` on the wire
+    # (to_camel), while the nested block keeps its snake_case keys (CapabilityInterface has no alias).
+    capability_interface: Optional[CapabilityInterface] = None
     governance: GovernanceBlock
 
     @model_validator(mode="after")

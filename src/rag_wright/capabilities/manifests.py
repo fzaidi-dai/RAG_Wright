@@ -21,6 +21,7 @@ from typing import Optional
 from rag_wright.capabilities.ard import (
     CALLABLE_KINDS,
     MEDIA_TYPE_BY_KIND,
+    CapabilityInterface,
     EntryKind,
     RegistryEntry,
     ResponseBounds,
@@ -57,6 +58,9 @@ class CapabilityManifest:
     skill_runtime: Optional[SkillRuntime] = None  # intrinsic runtime; agent_skill only
     golden_eval_ref: Optional[str] = None
     response_bounds: Optional[ResponseBounds] = None  # callable kinds only; defaults if omitted
+    # GraphWright vendor extension (ADR-0030): the governed typed I/O. Declared only for the query-graph
+    # capabilities GraphWright's checker verifies (the 5 + graph_query + generation); None elsewhere.
+    capability_interface: Optional[CapabilityInterface] = None
 
 
 # One entry per capability, added at that capability's task. T15 registers the shared RLM method
@@ -160,6 +164,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "search the chunk index and filter candidates by source document",
         ),
         tags=("retrieval", "hybrid", "rrf", "query"),
+        capability_interface=CapabilityInterface(
+            inputs={"query": "text"},
+            outputs={"candidates": "chunk_id"},  # id-only by design; rehydrate via chunk_read before any text consumer
+            success_criterion="retrieve RRF-fused candidate chunk references for a natural-language query",
+        ),
     ),
     CapabilityManifest(
         slug="reranking",
@@ -178,6 +187,13 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "select the best passages to ground an answer on",
         ),
         tags=("reranking", "cross-encoder", "bge-reranker", "query"),
+        capability_interface=CapabilityInterface(
+            # Consumes chunk_with_text (only chunk_read produces it) — this is what forces a rehydrate
+            # upstream of reranking. It never fetches text itself (reranking.py). Output carries the score.
+            inputs={"query": "text", "passages": "chunk_with_text"},
+            outputs={"ranked": "scored_chunk"},
+            success_criterion="cross-encoder re-score candidate passages against the query and cut to top-k",
+        ),
     ),
     CapabilityManifest(
         slug="graph_extraction",
@@ -251,6 +267,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "traverse contract relationships between organizations",
         ),
         tags=("graph", "query", "traversal", "multi-hop", "relational"),
+        capability_interface=CapabilityInterface(
+            inputs={"query": "text"},
+            outputs={"graph": "graph_answer"},  # the distinct type fusion's graph leg consumes
+            success_criterion="answer a relational/multi-hop question by graph traversal, returning cited evidence",
+        ),
     ),
     CapabilityManifest(
         slug="fusion",
@@ -268,6 +289,13 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "build one capped evidence set from both retrieval and the knowledge graph",
         ),
         tags=("fusion", "union", "evidence", "query"),
+        capability_interface=CapabilityInterface(
+            # Two DISTINCT input types (retrieval leg vs graph leg), not a variadic id-set. Output is
+            # id-only (id + sources[], no score) — a union, not a score fusion.
+            inputs={"reranked": "scored_chunk", "graph": "graph_answer"},
+            outputs={"fused": "fused_chunk"},
+            success_criterion="union and dedup the retrieval and graph evidence on chunk_id, capped",
+        ),
     ),
     CapabilityManifest(
         slug="chunk_read",
@@ -287,6 +315,13 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "get the chunk text for the evidence set the retriever returned",
         ),
         tags=("rehydration", "chunk-text", "evidence", "query"),
+        capability_interface=CapabilityInterface(
+            # The ONLY producer of chunk_with_text — so the checker forces it in wherever a text consumer
+            # (reranking, rlm_synthesis, generation) follows an id-only producer. Drops nothing.
+            inputs={"chunk_ids": "chunk_id"},
+            outputs={"chunks": "chunk_with_text"},
+            success_criterion="rehydrate chunk_ids to their full chunk text, order-preserving, dropping nothing",
+        ),
     ),
     CapabilityManifest(
         slug="rlm_synthesis",
@@ -309,6 +344,13 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         skill_runtime=SkillRuntime(  # recursive descent (real sub-agents) + kept _reduce ascent
             needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
         ),
+        capability_interface=CapabilityInterface(
+            # Takes chunk_with_text (already rehydrated; does not fetch text). Emits the answer AND the
+            # citations: cited_chunk_ids (the cited set) + cited_extracts (per-slice extract, each cited).
+            inputs={"query": "text", "chunks": "chunk_with_text"},
+            outputs={"answer": "text", "cited_chunk_ids": "chunk_id", "cited_extracts": "cited_extract"},
+            success_criterion="recursively extract per-slice then reduce the chunks into a cited synthesis",
+        ),
     ),
     CapabilityManifest(
         slug="generation",
@@ -326,6 +368,14 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "produce a cited answer or an abstention from retrieved passages",
         ),
         tags=("generation", "answer", "grounded", "cited", "abstention"),
+        capability_interface=CapabilityInterface(
+            # Alt answer step to rlm_synthesis; also consumes chunk_with_text (evidence, already rehydrated).
+            # Abstain is a boolean `abstained` flag on the answer record (empty citations), not a distinct
+            # typed channel and nothing downstream gates on it — so it stays in the payload, noted here.
+            inputs={"query": "text", "evidence": "chunk_with_text"},
+            outputs={"answer": "text", "cited_chunk_ids": "chunk_id"},
+            success_criterion="produce a grounded cited answer, or abstain (abstained flag, empty citations) when evidence does not support one",
+        ),
     ),
     CapabilityManifest(
         slug="vision_to_text",
@@ -374,6 +424,7 @@ def author(slug: str) -> RegistryEntry:
         list(spec.representative_queries),
         requires=list(spec.requires) or None,
         skill_runtime=spec.skill_runtime,
+        capability_interface=spec.capability_interface,
         golden_eval_ref=spec.golden_eval_ref,
     )
 

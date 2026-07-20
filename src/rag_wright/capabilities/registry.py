@@ -40,6 +40,7 @@ from rag_wright.capabilities.ard import (
     URN_PUBLISHER,
     ArdEnvelope,
     Attestation,
+    CapabilityInterface,
     EntryKind,
     GovernanceBlock,
     RegistryEntry,
@@ -113,13 +114,15 @@ class ManifestSkeleton(BaseModel):
         golden_eval_ref: Optional[str] = None,
         requires: Optional[list[str]] = None,
         skill_runtime: Optional[SkillRuntime] = None,
+        capability_interface: Optional[CapabilityInterface] = None,
         description: Optional[str] = None,
         tags: Optional[list[str]] = None,
     ) -> RegistryEntry:
         """Author the draft into a complete, validated `RegistryEntry` for the loadable path.
 
         `representative_queries` (2-5) and any trust `attestations` are the fields that could not be
-        derived at registration; the schema validators enforce them.
+        derived at registration; the schema validators enforce them. `capability_interface` is the
+        optional GraphWright vendor extension (ADR-0030), declared per capability at its own task.
         """
         envelope = ArdEnvelope(
             identifier=self.identifier,
@@ -140,6 +143,7 @@ class ManifestSkeleton(BaseModel):
             response_bounds=self.response_bounds,
             requires=requires or [],
             skill_runtime=skill_runtime,
+            capability_interface=capability_interface,
             golden_eval_ref=golden_eval_ref,
             governance=GovernanceBlock(owner=self.owner),
         )
