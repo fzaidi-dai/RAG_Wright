@@ -22,6 +22,19 @@ from langchain_openai import ChatOpenAI
 from rag_wright.models.profiles import profile_for
 
 
+# Framework-native connection resilience (grounded: ChatOpenAI.max_retries/timeout + Runnable.with_retry;
+# LangChain docs "Connection resilience" / "Fault tolerance"). Retry is configured HERE at the single model
+# construction point (ADR-0006), never hand-rolled at call sites, so every caller inherits it uniformly.
+# `max_retries` covers the OpenAI-native transient errors (429 / 5xx APIStatusError / connection / timeout);
+# the `.with_retry` on the structured runnable additionally catches the transient errors OpenRouter surfaces as
+# a plain ValueError (e.g. a 504 "operation was aborted"), which the status-code retry does not classify. The
+# okf_navigate agent's own model/sub-agent calls are covered separately by ModelRetryMiddleware.
+_MAX_RETRIES = 6  # matches the documented default connection-resilience budget for 5xx/429/network
+_TIMEOUT_S = 120.0  # per-request timeout; OpenRouter can be slow on structured calls
+_STRUCTURED_RETRY_ATTEMPTS = 3  # bounded retries for the OpenRouter-surfaced ValueError transient
+_STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (ValueError,)
+
+
 def _openrouter_config() -> dict[str, Any]:
     """OpenRouter connection config from env (default serving path; secrets only in `.env`)."""
     return {
@@ -31,12 +44,16 @@ def _openrouter_config() -> dict[str, Any]:
 
 
 def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
-    """Construct the base client for `model_id`. Carries no structured-output flag or `extra_body`."""
+    """Construct the base client for `model_id`. Carries no structured-output flag or `extra_body`.
+
+    Model-level retry/timeout (framework connection resilience) are set here; a caller may override either.
+    """
+    params: dict[str, Any] = {"max_retries": _MAX_RETRIES, "timeout": _TIMEOUT_S, **overrides}
     return ChatOpenAI(
         model=model_id,
         temperature=temperature,
         **_openrouter_config(),
-        **overrides,
+        **params,
     )
 
 
@@ -46,10 +63,16 @@ def build_structured(
     """A structured-output runnable for `model_id`, driven by its profile.
 
     The profile supplies the method and the optional structured-only `extra_body`; the `extra_body`
-    is bound to this forced structured call only. This is the sole path to `with_structured_output`.
+    is bound to this forced structured call only. This is the sole path to `with_structured_output`. The
+    runnable is wrapped with `.with_retry` so the OpenRouter-504-as-ValueError transient is retried (bounded).
     """
     profile = profile_for(model_id)
     kwargs: dict[str, Any] = {"method": profile.structured_method, "include_raw": include_raw}
     if profile.structured_extra_body is not None:
         kwargs["extra_body"] = profile.structured_extra_body
-    return build_model(model_id).with_structured_output(schema, **kwargs)
+    runnable = build_model(model_id).with_structured_output(schema, **kwargs)
+    return runnable.with_retry(
+        retry_if_exception_type=_STRUCTURED_RETRY_ON,
+        wait_exponential_jitter=True,
+        stop_after_attempt=_STRUCTURED_RETRY_ATTEMPTS,
+    )

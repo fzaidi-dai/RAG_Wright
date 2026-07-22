@@ -23,6 +23,12 @@ class _FakeStructured:
         self.base = base
         self.schema = schema
         self.kwargs = kwargs
+        self.retry_kwargs: dict | None = None
+
+    def with_retry(self, **kwargs):
+        """Model the seam's `.with_retry` wrap transparently: record the config, stay inspectable."""
+        self.retry_kwargs = kwargs
+        return self
 
 
 class _FakeChatOpenAI:
@@ -126,3 +132,19 @@ def test_build_model_uses_openrouter_base_and_key_no_hardcoded_flag(monkeypatch)
 def test_build_structured_forwards_include_raw(monkeypatch):
     runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema, include_raw=True)
     assert runnable.kwargs["include_raw"] is True
+
+
+def test_build_model_sets_connection_resilience_retry_and_timeout():
+    model = seam.build_model("vendor/whatever")
+    assert model.ctor_kwargs["max_retries"] == seam._MAX_RETRIES  # framework connection resilience, from the seam
+    assert model.ctor_kwargs["timeout"] == seam._TIMEOUT_S
+    # a caller may still override
+    assert seam.build_model("vendor/whatever", max_retries=0).ctor_kwargs["max_retries"] == 0
+
+
+def test_build_structured_wraps_with_bounded_retry():
+    runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema)
+    # the structured runnable is wrapped with a bounded retry that catches the OpenRouter-504-as-ValueError
+    assert runnable.retry_kwargs is not None
+    assert ValueError in runnable.retry_kwargs["retry_if_exception_type"]
+    assert runnable.retry_kwargs["stop_after_attempt"] == seam._STRUCTURED_RETRY_ATTEMPTS
