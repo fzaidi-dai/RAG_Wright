@@ -52,6 +52,19 @@ not this repo's.
 
 ## Last approved / next up
 
+- **SPECCED (not yet built), 2026-07-22: FR-K — embedding-free OKF navigation (T45-T53 + GATE-3a/GATE-3).**
+  New experimental capability block added to `SPEC.md` (FR-K.1-K.9) and this ledger, motivated by the T41
+  query-representation-gap diagnosis: compile the chunk corpus into an Open Knowledge Format (OKF) bundle
+  and retrieve by programmatic traversal of signposts (indexes, frontmatter, links) instead of vector
+  similarity. Corpus-neutral capability; ACORD is the first validation corpus. Categories manufactured via
+  `graph_extraction`; index descriptions reuse T-SUM summaries; bundle is a gitignored data artifact.
+  **First execution slice = T45 gold labels → T46 chunk-only compile → T47 reachability analyzer → T48
+  category-label control → GATE-3a** (per-corpus reachability kill-switch, no traversal model call spent).
+  Behind GATE-3a: T49 cross-linking, T50 `okf_navigate` traversal, T51 trace-and-iterate → GATE-3 (graduate
+  or remove) → T52 lifecycle, T53 strategy memory. Harness-profile seam from the feeder draft was dropped
+  (traversal binds the T11 model-profile seam). OKF repo cloned + graphify-indexed for grounding at
+  `/Users/farhan/work/knowledge-catalog/okf/src/graphify-out/graph.json`. ADR-0022 records the decision.
+  **NEXT UP: T45** (first FR-K task) when the user picks it up — awaiting go.
 - **LAST APPROVED (committed): T44** — govern the remaining capabilities. `capabilityInterface` on the 7
   ingestion→graph caps (parsing, rlm_chunking, embedding, graph_extraction, entity_disambiguation,
   entity_resolution, vision_to_text), grounded in the real callables; `rlm_method` stays ungoverned (required
@@ -281,6 +294,24 @@ loop enforces it.
 | T30 | Prefix + result caching | 4 Build RLM | §13 P3, §16.7 | todo | T28, T29 |
 | T31 | MCP skill surface (governed skills over MCP) | 5 Integrate | FR-S.5 | todo | T6, T22, T26 |
 | T32 | End-to-end scenarios + per-source ablation | 5 Integrate | §12, §15 | todo | T29, T31 |
+
+**FR-K — Embedding-free OKF navigation (experimental, gated). Corpus-neutral capability; ACORD is the
+first validation corpus. First execution slice is T45-T48 → GATE-3a (the per-corpus reachability
+kill-switch); the whole program is specified now but built behind that gate. Detail entries below.**
+
+| ID | Task | Phase | FR | Status | Dep |
+|---|---|---|---|---|---|
+| T45 | ACORD gold-chunk labels for reachability scoring (extends T9/T33 eval assets) | 5 Integrate | §12, FR-K.8 | todo | T33 |
+| T46 | OKF bundle compile: chunk-only, category tree via `graph_extraction`, summaries-as-descriptions (no re-chunk; sidecar-fed) | 5 Integrate | FR-K.1, FR-K.2, FR-K.4 | todo | T40, T45, T23 |
+| T47 | Reachability analyzer + signpost ablation (deterministic, model-free) | 5 Integrate | FR-K.8 | todo | T46 |
+| T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | todo | T46 |
+| **GATE-3a** | **Reachability ceiling (per-corpus kill-switch): is gold reachable through signposts, and does the coarse-label control already capture the lift?** | 5 Integrate | §13, FR-K.8 | pending | T47, T48 |
+| T49 | Cross-linking from measured clause-relation structure | 5 Integrate | FR-K.3 | todo (behind GATE-3a) | T46, T41 |
+| T50 | `okf_navigate` traversal capability (interpreter + PTC + dynamic sub-agents) | 5 Integrate | FR-K.5, FR-K.6 | todo (behind GATE-3a) | T46, T47, T49, T35 |
+| T51 | Single-query trace-and-iterate harness (the tuning loop) | 5 Integrate | FR-K.8, §12 | todo (behind GATE-3a) | T47, T50 |
+| **GATE-3** | **FR-K graduate or remove: OKF traversal vs the category-label control** | 5 Integrate | §13, §15 | pending | T47, T50, T51, T48 |
+| T52 | Bundle lifecycle: incremental recompile, update, delete (shares the T40 gate) | 5 Integrate | FR-K.7 | todo (post-GATE-3) | GATE-3, T34 |
+| T53 | Strategy memory: store and reuse verified navigation strategies | 5 Integrate | FR-K.9 | todo (post-GATE-3) | GATE-3, T50, T51 |
 
 Extras (§3.2: multi-vector, typed-functional RLM, CLIP embedder, canonical skeleton, domain
 LoRA) are **out of scope / ask-first** and are not scheduled here.
@@ -2409,6 +2440,358 @@ confirming the acceptance bar from Phase 0 (SPEC §12, §15, plan §4).
 
 ---
 
+## Phase 5 — FR-K: Embedding-free OKF navigation (experimental, gated)
+
+Corpus-neutral capability; ACORD is the first validation corpus. The T41 diagnosis (query-representation
+gap, strong clause-clause structure) is the motivation: OKF traversal is the one mechanism that never
+computes a query-to-chunk similarity. Categories are **manufactured via `graph_extraction`** (the corpus
+does not ship them; verified for ACORD, BEIR corpus is `{_id, text}` only). Index descriptions reuse
+existing chunk summaries (T-SUM). The compiled bundle is a gitignored, rebuildable data artifact.
+Grounding: OKF producer patterns ground against the cloned reference agent's `bundle/` modules
+(`/Users/farhan/work/knowledge-catalog/okf/src/graphify-out/graph.json`: `OKFDocument.parse/serialize`,
+`regenerate_indexes`, `concept_id_to_path`, `write_concept_doc`); the reference agent is Google ADK +
+Gemini + BigQuery, not our stack, so the compiler is reimplemented on langchain_openai/deepagents and
+only the format logic is mirrored. Build order: T45-T48 → GATE-3a → T49-T51 → GATE-3 → T52-T53.
+
+### Task T45: ACORD gold-chunk labels for reachability scoring
+
+**Description:** Produce the gold-chunk label set the reachability metrics score against. For ACORD this
+is cheap and deliberately so: clauses are pre-segmented, so a clause is a chunk, and the graded
+query-clause pairs (qrels) at the existing grade floor already name the gold chunks. The work is mapping
+qrel corpus-ids onto `chunk_id`s for the ingested clauses, recording gold as a set per query (ACORD
+questions routinely have several relevant clauses), and exposing both any-gold and all-gold readings. No
+span projection is needed, which is why ACORD is the first slice rather than a span-annotated corpus.
+
+**RAC-45:**
+- [ ] Every ACORD test-split query maps to its gold `chunk_id` set, derived from qrels at the same grade
+  floor `eval/acord.py` uses (`RELEVANCE_FLOOR = 2`), with unmapped qrel corpus-ids reported, not dropped.
+- [ ] Gold is a set per query; the harness exposes any-gold and all-gold readings separately.
+- [ ] The label set is regenerable by command and keyed to the ingested corpus, so a re-ingest
+  regenerates rather than invalidates it.
+- [ ] Coverage is reported against the T33 baseline population, so reachability and recall@50 are
+  computed over the same queries.
+- [ ] A debug split is declared and recorded: the queries reserved for single-query iteration (T51) are
+  named up front and held out of the headline GATE-3 number.
+
+**Verification:** `uv run pytest eval/test_okf_gold.py`. Rebuild: `uv run python -m eval.okf_gold`.
+**Dependencies:** T33. **Scope:** S. **Status:** todo.
+**Files:** `eval/okf_gold.py`, `eval/test_okf_gold.py`.
+**Note:** Corpus-neutral shape, ACORD-cheap instance. On a span-annotated corpus (for example CUAD) gold
+must be anchored to source-document coordinates and projected onto `chunk_id`s per compile; that is a
+separate task, not needed here.
+
+### Task T46: OKF bundle compile (chunk-only, category tree via graph_extraction, summaries-as-descriptions)
+
+**Description:** Compile the ingested clauses into an OKF v0.1 conformant bundle. **Not** a re-chunk:
+clauses are pre-segmented, `chunk_id`s are fixed (FR-S.2), bodies come from the chunk-text sidecar (T40)
+which already guarantees the text matches the identifier's content hash. The work is signpost
+construction: the **manufactured category signpost** (each clause classified through `graph_extraction`,
+T23, driving the directory tree root→category→clause and the `tags`), **index descriptions reused from
+existing chunk summaries** (T-SUM, not restated titles, no second model pass), non-empty `type`
+frontmatter, source-document fields, `index.md` per directory, `log.md`, and a conformance lint. The
+bundle root is stamped with `okf_version` and the compile-recipe version. Cross-links are **not** written
+here (T49, behind GATE-3a), so the first reachability read (T47) measures the hierarchy, tag, category,
+and description channels and treats links as a later lever.
+
+**RAC-46:**
+- [ ] Every ingested clause has a bundle file whose body is byte-faithful to the sidecar text for its
+  `chunk_id`, and whose frontmatter carries a non-empty `type`. No chunk identifier changes.
+- [ ] The category signpost is produced by `graph_extraction`; category coverage and confidence are
+  reported, and clauses with no confident category land in a recorded fallback subtree, not dropped.
+- [ ] `index.md` files exist at every level, each entry carrying a description drawn from the chunk
+  summary (a real discriminator, not a restated title).
+- [ ] The conformance linter passes and reports orphan rate, description coverage, and broken-link ratio
+  as numbers.
+- [ ] Bundle root records `okf_version` and the compile-recipe version.
+- [ ] Content-hash gated (recompiling an unchanged corpus does effectively no work); the bundle is
+  written under gitignored `data/`, never committed.
+- [ ] Selective recompile: a single subtree recompiles under a modified recipe without a full rebuild
+  (T51 depends on this).
+
+**Verification:** `uv run pytest tests/capabilities/test_okf_compile.py`. Compile:
+`uv run python -m rag_wright.okf.compile`.
+**Dependencies:** T40, T45, T23. **Scope:** M. **Status:** todo.
+**Files:** `src/rag_wright/okf/compile.py`, `src/rag_wright/okf/lint.py`,
+`tests/capabilities/test_okf_compile.py`.
+**ARD category:** canonical slug `okf_compile`, internal registry entry, **no ARD manifest** (category 3,
+foundation derivation, same as `ontology_registry_derivation`). Open question 14 applies: this builds the
+chunk-only bundle; a concept layer above the chunks is a lossy synthesis, deliberately not built yet.
+**Risk (flagged):** `graph_extraction`'s categories are the 41 CUAD-derived ontology categories (T4/T23);
+classifying ACORD clauses into that taxonomy is an assumption of fit. RAC measures it (coverage/
+confidence) so a poor fit surfaces as a number, not a silent low ceiling.
+
+### Task T47: Reachability analyzer and signpost ablation
+
+**Description:** The deterministic, model-free analyzer that computes whether each gold chunk is
+discoverable from the bundle root through signposts within the depth bound and frontier budget, plus the
+ablation runner that recomputes reachability with one channel removed at a time. It separates the
+compile-side ceiling from traversal-side realized recall, so a disappointing traversal number is
+diagnosable. It runs before the traversal exists and is the per-corpus reachability spike (GATE-3a): a
+ceiling below the grounded bar redirects the experiment cheaply. Evaluation software: no runtime
+capability, no registration, no manifest.
+
+**RAC-47:**
+- [ ] Reachability is computed per gold chunk, model-free and reproducible, reporting connectivity
+  reachability (present and connected at all) and signpost reachability within bounds separately.
+- [ ] Reported at both any-gold and all-gold readings, over the same query population as the T33 baseline.
+- [ ] Per successful hop, the signpost channel that carried it is recorded, so the ablation has
+  something to attribute to.
+- [ ] The ablation runner recomputes reachability with each channel removed (tags, index descriptions,
+  category tree, and — once T49 lands — cross-links), reporting the cost of each channel.
+- [ ] Signpost what-if: reachability for a single chunk is recomputable under a hypothetical frontmatter
+  or description change, without recompiling the bundle (T51 depends on this).
+- [ ] Results stamped with the compile-recipe version.
+
+**Verification:** `uv run pytest eval/test_reachability.py`. Run: `uv run python -m eval.reachability`.
+**Dependencies:** T46. **Scope:** M. **Status:** todo.
+**Files:** `eval/reachability.py`, `eval/ablation.py`, `eval/test_reachability.py`.
+**Note:** Open question 11 (within-branch full-text as a channel) and 13 (any-gold vs all-gold headline)
+are decided here in practice and recorded before the first run.
+
+### Task T48: Category label-retrieval control arm
+
+**Description:** Build the T41 backlog item and run it as the **control arm for GATE-3a and GATE-3**, not
+an independent experiment. It matches on the manufactured clause-category label directly (T46, from
+`graph_extraction`) instead of on an embedding — the cheapest mechanism that bypasses the query-
+representation gap. Its purpose is to establish how much of the lift comes from coarse label matching
+alone, so OKF traversal is measured against a fair alternative, not against the 0.379 two-leg baseline it
+will trivially differ from. Because control and bundle tree share the same manufactured labels, they
+share one point of failure (category-tagging quality); that is stated, and category quality is reported
+by T46 so the control's ceiling is known.
+
+**RAC-48:**
+- [ ] Category label-retrieval is wired into the candidate pool and measured on the same ACORD test
+  split, at the same evidence-feed cap, as every other arm.
+- [ ] Recall at the gate k and the diagnostic nDCG@10 are reported alongside the two-leg baseline.
+- [ ] Cost is reported on the same axes as T50 (latency above all), so the comparison is
+  quality-per-cost.
+
+**Verification:** `uv run pytest eval/test_category_retrieval.py`.
+**Dependencies:** T46. **Scope:** M. **Status:** todo.
+**Files:** `eval/category_retrieval.py`, `eval/test_category_retrieval.py`.
+**Note:** Running this as the control keeps the gates honest. If coarse label matching captures most of
+the lift, the OKF compile is not justified by the numbers — a valid, cheap early result.
+
+### GATE-3a: Reachability ceiling (per-corpus kill-switch)
+
+**Decision:** whether to proceed from the compile-and-measure slice (T45-T48) into the traversal capability
+(T49-T51) for this corpus.
+
+**Inputs:** T47 reachability and ablation, T48 category-label control, T45 gold labels, over the T33 ACORD
+baseline population (two-leg recall@50 0.379, grounded bar 0.667, raw-hybrid recall@200 ceiling 0.65).
+
+**Reading rules (set before the run):**
+- If gold is not signpost-reachable within bounds (ceiling below the grounded bar), the compile is the
+  bottleneck; redirect to the compile recipe (better categories/descriptions, add cross-links) before a
+  single traversal model call. Low reachability is a scaffolding verdict, not a traversal verdict.
+- If the category-label control already captures the available lift, the full OKF compile is not justified;
+  stop here and record it.
+- The ablation attributes the ceiling to channels, so a redirect targets the weak channel, not a guess.
+- This gate is the reusable per-corpus spike: for any new corpus, run T45-T48 and read GATE-3a before
+  enabling the OKF path for it.
+
+**Outcomes:** proceed (build the traversal), redirect (fix the compile recipe and re-measure), or shelve
+for this corpus (the instrument and labels are kept regardless).
+
+### Task T49: Cross-linking from measured clause-relation structure
+
+**Description:** Write the link graph into the bundle, standard markdown links absolute from the bundle
+root (not double-bracket wikilinks). Edges are derived from structure T41 measured (relevant-set cluster
+tightness 0.686, missed-to-anchor cosine 0.706; clause category as a coarser relation), not guessed. The
+T41 discipline: measurements justify the edges existing, they do **not** predict that following them helps
+(T41's finding was reachability without rankability). Links are navigation affordances for a model reading
+signposts, not similarity expansion — the thing GATE-3 tests. When links land, reachability (T47) is
+re-measured with the link channel and the ablation shows its marginal contribution.
+
+**RAC-49:**
+- [ ] Links are standard markdown, absolute from the bundle root, and resolve (broken-link ratio reported
+  by the T46 linter).
+- [ ] Edge construction is derived from measured structure, the derivation recorded, and edge density
+  bounded so the link graph does not degenerate into near-complete connectivity.
+- [ ] Link traversal degrades on a dangling link rather than faulting (OKF broken-link tolerance).
+- [ ] Cross-links are regenerable independently of the bundle compile, so link recipes can be ablated
+  without a full recompile.
+
+**Verification:** `uv run pytest tests/capabilities/test_okf_links.py`.
+**Dependencies:** T46, T41. **Scope:** M. **Status:** todo (behind GATE-3a).
+**Files:** `src/rag_wright/okf/links.py`, `tests/capabilities/test_okf_links.py`.
+
+### Task T50: `okf_navigate` traversal capability
+
+**Description:** Build the traversal: one interpreter node that reads the bundle root `index.md`, filters
+candidate subtrees by frontmatter predicate and index description, expands the frontier through links and
+index entries, dispatches one reader sub-agent per surviving body, deduplicates against a visited set, and
+stops on convergence or the depth and frontier bounds, returning a `chunk_id` shortlist plus the trace. It
+computes no query-to-chunk similarity anywhere. Structurally this is the RLM dynamic-sub-agent machinery
+(T15/T36/T37) applied to a bundle: PTC does the deterministic sift (enumerate, read index, parse
+frontmatter, filter, resolve link) so filtering costs no model call; loop-until-done with a `seen` set
+drives frontier expansion so completeness does not depend on a fixed k; fan-out-and-synthesize reads
+bodies one per sub-agent so per-call context stays bounded; recursion handles depth. Run parameters (model
+via the T11 model-profile seam, depth and frontier bounds, PTC allowlist, repeat count) are ordinary
+configuration recorded with each result — no separate harness-profile seam.
+
+**RAC-50:**
+- [ ] Returns a `chunk_id` shortlist and a full trace (nodes visited, order, prune decisions); no code
+  path computes a query-to-chunk embedding similarity.
+- [ ] Filtering by frontmatter predicate happens before any body is read, verifiable in the trace as
+  bodies-read being a small fraction of candidates-considered.
+- [ ] One interpreter session per traversal; sub-agents fan out with parallel dispatch inside a single
+  interpreter (ADR-0020, KI-1; the T35 per-process serialization floor applies).
+- [ ] Per-call token usage stays bounded as round count grows, and each reader sub-agent receives its own
+  body and the query by enforcement, not orchestrator model choice (the T42 lesson).
+- [ ] Cost telemetry per query: serial round count (primary latency proxy), total dispatches, peak
+  frontier, total and peak-per-call tokens, wall-clock latency, max depth.
+- [ ] Variance characterized: k repeated runs per query under fixed run parameters, Reached reported as
+  reached-always / reached-sometimes / never-reached plus the cost spread. Exact replay is not assumed
+  (fresh navigation code each run); the spread is the run-variance floor any tuning improvement is judged
+  against.
+- [ ] All run parameters recorded with every result.
+- [ ] Registered under canonical slug `okf_navigate` with an ARD manifest whose representative queries are
+  authored (category 1), loading under `RegistryStore(root)` with no `RegistryLoadError`.
+
+**Verification:** `uv run pytest tests/capabilities/test_okf_navigate.py`, plus an opt-in live model test
+(`-m model`) for traversal quality (branch-choice is model-dependent; stubbed responders miss it).
+**Dependencies:** T46, T47, T49, T35. **Scope:** L. **Status:** todo (behind GATE-3a).
+**Files:** `src/rag_wright/capabilities/okf_navigate.py`, `capabilities/registry.py`,
+`capabilities/manifests.py`, `tests/capabilities/test_okf_navigate.py`.
+**Note:** GraphWright needs nothing new: the node is `needs_interpreter` + a PTC allowlist + configured
+sub-agents + the optional `rlm` marker, all of which exist. Do **not** split the sift and the read into
+two interpreter nodes: the working set (frontier, visited set, shortlist) lives in interpreter variables;
+splitting forces serialize-and-rehydrate across a node boundary and loses the convergence check.
+
+### Task T51: Single-query trace-and-iterate harness
+
+**Description:** The tuning loop. Take one failing query, see exactly where and why the traversal went
+wrong, change a recipe or run parameter, re-run until it works, then confirm the change generalizes rather
+than fitting the query. This is the instrument that **produces** the data-specific signpost recipes the
+design assumes. The loop tunes the procedure (compile recipe, prompts and skills, run parameters, tool
+surface), never the data — a hand-edited bundle file makes the compile-recipe stamp a lie and evaporates
+on the next compile, so if a fix cannot be expressed as a recipe or parameter change, it is not a fix.
+
+**RAC-51:**
+- [ ] One command takes a query id and dumps every artifact: reachability verdict, traversal trace, the
+  2x2 cell, cost telemetry.
+- [ ] Reachability runs first and model-free — a gold chunk that was never reachable is reported before
+  any model call is spent.
+- [ ] Divergence point: the trace is joined against gold to report the frontier step where a gold chunk's
+  ancestor was available and not expanded, with the verbatim signpost text the model saw (index entry,
+  description, the predicate that rejected it). Distinct from a list of prune decisions.
+- [ ] Fast iteration: a signpost what-if (T47) and a selective subtree recompile (T46) both run without a
+  full rebuild.
+- [ ] Persist and diff: traces persisted with compile-recipe and run-parameter versions, two runs
+  diffable at the trace level.
+- [ ] Compare distributions, not runs: a change is evaluated as k runs before against k after (exact
+  replay unavailable, so a single before-and-after pair is not evidence).
+- [ ] Variance floor: an improvement on a single query is reported against the k-run spread from T50.
+- [ ] Regression guard: any recipe or parameter change triggers a population re-run reporting per-query
+  deltas in both directions.
+- [ ] Held-out reporting: results reported separately for the declared debug split (T45) and the held-out
+  remainder, so the generalization claim is demonstrated, not asserted.
+
+**Verification:** `uv run pytest eval/test_trace_iterate.py`. Run:
+`uv run python -m eval.trace_iterate --query <id>`.
+**Dependencies:** T47, T50. **Scope:** L. **Status:** todo (behind GATE-3a).
+**Files:** `eval/trace_iterate.py`, `eval/trace_diff.py`, `eval/test_trace_iterate.py`.
+**Note:** The held-out split turns a reasonable generalization expectation into evidence GATE-3 can score.
+The variance floor matters because navigation code is model-emitted at run time, so the tuning signal is
+noisier than for a deterministic pipeline.
+
+### GATE-3: FR-K graduate or remove
+
+**Decision:** whether the embedding-free OKF path graduates from experimental, stays a narrow capability,
+or is removed.
+
+**Inputs:** T47 reachability and ablation, T50 Reached and cost telemetry, T51 held-out results, T48
+control arm, all against the T33 ACORD baseline (two-leg recall@50 0.379, grounded bar 0.667, raw-hybrid
+recall@200 ceiling 0.65) at a single, explicitly bound evidence-feed cap.
+
+**Reading rules (set before the run):**
+- Compare arms at the **same** gate k and the same `fuse(..., cap=k)` binding.
+- Report the **2x2**: reachable-and-reached; reachable-not-reached (policy failure, fix traversal/params);
+  not-reachable-not-reached (scaffolding failure, fix the compile recipe); not-reachable-but-reached (the
+  reachability model under-counts a channel, fix the model). A single recall number without this split is
+  not interpretable.
+- Low reachability is not a traversal verdict.
+- Score the held-out split, debug split reported separately.
+- Judge against T48, not only against the baseline.
+- Report the winning compile-recipe and run-parameter versions with the number.
+- Report cost alongside quality (serial round count and latency distributions first-class), since FR-K is a
+  capability, not a default.
+- Strategy memory (T53) is off for the graded run; memory-on is measured separately, after.
+- Do not lower the grounded bar (E / 0.75 with E = 0.5).
+
+**Outcomes:** graduate (FR-K leaves experimental, a routing question opens as its own task), narrow (keep
+as a registered capability for a bounded question class, no default change), or remove (excise the FR-K
+block; the reachability instrument, the trace harness, and the ACORD gold labels are kept regardless).
+
+### Task T52: Bundle lifecycle
+
+**Description:** Incremental recompile, update, and delete for the bundle, sharing the single content-hash
+gate that already couples the index and the chunk-text sidecar (T40), so a bundle cannot drift from the
+store. Deleting a chunk removes its file and repairs or records inbound links, since a stale link silently
+lowers reachability and reports itself nowhere. Gated behind GATE-3: lifecycle work on a bundle that has
+not earned its place is wasted.
+
+**RAC-52:**
+- [ ] Bundle write is driven by the same content-hash gate as the index and sidecar writes, so an
+  unchanged document skips all three and a changed chunk writes all three.
+- [ ] A completeness guard rejects a bundle state where an indexed chunk has no bundle file, before any
+  write, mirroring the T40 guard.
+- [ ] Delete-by-`source_doc_id` removes bundle files and repairs or records inbound links; a post-delete
+  reachability regression check runs against the golden subset.
+- [ ] Recompiling an unchanged corpus does effectively no work.
+
+**Dependencies:** GATE-3, T34. **Scope:** M. **Status:** todo (post-GATE-3).
+**Files:** `src/rag_wright/okf/lifecycle.py`, `tests/capabilities/test_okf_lifecycle.py`.
+**Note:** Couples to T34 (document update/upsert), the existing lifecycle gap. If T34 lands first, the
+bundle is a third consumer of the same lifecycle seam rather than a parallel path.
+
+### Task T53: Strategy memory
+
+**Description:** Store what worked, and reuse it. When a traversal solves a query, record the originating
+query, the navigation strategy, and the outcome, so a later query of similar shape retrieves a known-good
+strategy instead of generating one. The second answer to run-to-run variance, and a better one: it does
+not make sampling deterministic, it removes the sampling step for queries that resemble solved ones.
+Placed after GATE-3 deliberately: it makes the evaluation stateful, and recognizing a strategy worth
+keeping presupposes knowing what a good one looks like (T51's output).
+
+**What is stored.** The primary artifact is a **parameterized strategy** (for queries of this shape: filter
+frontmatter by these tags, expand along these link kinds, at this depth, read bodies at these leaves), with
+the raw emitted code attached as a reference artifact, not the thing retrieved. The parameterized form is
+the transferable unit; raw code hardcodes paths and breaks on the first compile-recipe change.
+
+**Admission, two regimes.** Offline, gold is available, so admission means verified (a case enters only if
+the traversal retrieved the gold chunks). In production, gold is absent, so admission is judge-approved or
+downstream-signal-approved. Bootstrap: build memory offline from gold-verified runs, ship it seeded, let
+production accumulate under judge approval.
+
+**RAC-53:**
+- [ ] A solved query records a parameterized strategy plus the raw emitted code as an attached artifact,
+  stamped with the compile-recipe and run-parameter versions.
+- [ ] Case retrieval does not use query embeddings — cases are keyed on structural features (types and
+  tags involved, predicates that fired, subtrees that proved productive). Indexing by query embedding would
+  reintroduce the query-representation gap this path exists to avoid, one layer up.
+- [ ] Offline admission is gold-verified; production admission is judge-approved or
+  downstream-signal-approved, and the two paths are distinguishable in the stored case.
+- [ ] Staleness: a case whose compile-recipe version no longer matches the live bundle is invalidated, not
+  silently applied.
+- [ ] Exploration path: a configured fraction of runs re-derives from scratch, so a subtly wrong cached
+  strategy cannot lock the system into being reliably wrong.
+- [ ] Eval-state discipline: memory is cold- or warm-started explicitly; cold and warm runs reported
+  separately, a warm run records query order.
+- [ ] No cross-split leakage: cases from the declared debug split (T45) do not populate memory serving
+  held-out queries.
+- [ ] Variance reduction is measured: k runs memory-on vs off, reporting the change in the reached-always /
+  reached-sometimes / never-reached distribution and the cost spread.
+
+**Dependencies:** GATE-3, T50, T51. **Scope:** L. **Status:** todo (post-GATE-3).
+**Files:** `src/rag_wright/okf/strategy_memory.py`, `tests/capabilities/test_strategy_memory.py`.
+**Note:** The natural implementation stores cases as an OKF bundle navigated with the same progressive
+disclosure the corpus uses, so memory and corpus share one mechanism. Scoped to traversal strategies only;
+does not settle the general agent-memory question.
+
+---
+
 ## Requirements coverage map
 
 Every spec requirement traces to a task (or is explicitly out of scope / compiler work).
@@ -2444,6 +2827,13 @@ Every spec requirement traces to a task (or is explicitly out of scope / compile
 | FR-Q.6 grounded/cited/abstains | T29 |
 | §12 golden eval + archetypes | T7, T9, T10, GATE-1, GATE-2, T32 |
 | §8 graph relational/multi-hop | T10, T26, T32 |
+| FR-K.1, FR-K.2, FR-K.4 (OKF bundle compile) | T46 |
+| FR-K.3 (cross-linking) | T49 |
+| FR-K.5, FR-K.6 (navigation primitives + traversal) | T50 |
+| FR-K.7 (bundle lifecycle) | T52 |
+| FR-K.8 (reachability spike) | T47, T51 |
+| FR-K.9 (strategy memory) | T53 |
+| §13 Phase 5 / §15 (FR-K gates) | GATE-3a, GATE-3 |
 | §3.2 extras | Out of scope / ask-first (not scheduled) |
 | §3.2 durable memory backend | Out of scope (engine-side integration; no FR-S.6, no task) |
 
