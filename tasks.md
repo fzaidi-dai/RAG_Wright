@@ -85,8 +85,13 @@ not this repo's.
   frontier ~0. **DECISION (ADR-0022 addendum 2): 0.776 > bar 0.667 > baseline 0.379 → VIABILITY SETTLED, not
   go/no-go. T50 is mandated to REALIZE this proven ceiling by refinement+iteration; a shortfall = policy/agent bug
   to fix via T51, not a verdict against FR-K.** GATE-3a resolved = PROCEED; GATE-3 reframed to realization-vs-ceiling
-  + cost-vs-control (no "remove-for-viability"). 9 tests, full suite 460+27. **NEXT UP: T48** (category-label
-  control arm — now a cost/value comparison, not a kill-switch).
+  + cost-vs-control (no "remove-for-viability"). 9 tests, full suite 460+27.
+- **LAST APPROVED (committed): T48** — category-label control arm (`eval/category_retrieval.py`). **recall@50
+  0.134, containment 0.895** over the 57 test queries, 0 model calls. Category is a strong bucketer (gold in the
+  right category 89.5%) but a useless localizer (no intra-category ranking → 0.134, below baseline 0.379). The
+  containment→recall gap IS the within-bucket localization OKF descriptions provide → **the cheap control does
+  not capture the lift; T50's description-localization is justified.** 4 tests, full suite 464+27. **NEXT UP:
+  T49** (cross-linking) then T50 (traversal — realize the 0.776 ceiling).
 - **LAST APPROVED (committed): T44** — govern the remaining capabilities. `capabilityInterface` on the 7
   ingestion→graph caps (parsing, rlm_chunking, embedding, graph_extraction, entity_disambiguation,
   entity_resolution, vision_to_text), grounded in the real callables; `rlm_method` stays ungoverned (required
@@ -326,7 +331,7 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 | T45 | ACORD gold-chunk labels for reachability scoring (extends T9/T33 eval assets) | 5 Integrate | §12, FR-K.8 | done | T33 |
 | T46 | OKF bundle compile: chunk-only, category tree via corpus-appropriate classifier, LLM one-line descriptions (no re-chunk; sidecar-fed) | 5 Integrate | FR-K.1, FR-K.2, FR-K.4 | done | T40, T45 |
 | T47 | Reachability analyzer + signpost ablation (deterministic, model-free) | 5 Integrate | FR-K.8 | done — **ceiling proven: any-gold 0.930, per-gold recall ceiling 0.776 > bar 0.667 > baseline 0.379** (ADR-0022 addendum 2) | T46 |
-| T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | todo | T46 |
+| T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | done — **control recall@50 0.134 (containment 0.895): category is a strong bucketer, useless localizer → OKF traversal's description-localization is JUSTIFIED** | T46 |
 | **GATE-3a** | **Reachability ceiling (per-corpus kill-switch): is gold reachable through signposts, and does the coarse-label control already capture the lift?** | 5 Integrate | §13, FR-K.8 | pending | T47, T48 |
 | T49 | Cross-linking from measured clause-relation structure | 5 Integrate | FR-K.3 | todo (behind GATE-3a) | T46, T41 |
 | T50 | `okf_navigate` traversal capability (interpreter + PTC + dynamic sub-agents) | 5 Integrate | FR-K.5, FR-K.6 | todo (behind GATE-3a) | T46, T47, T49, T35 |
@@ -2615,9 +2620,18 @@ by T46 so the control's ceiling is known.
 - [ ] Cost is reported on the same axes as T50 (latency above all), so the comparison is
   quality-per-cost.
 
-**Verification:** `uv run pytest eval/test_category_retrieval.py`.
-**Dependencies:** T46. **Scope:** M. **Status:** todo.
+**Verification:** `uv run pytest eval/test_category_retrieval.py` — 4 passed. Run: `uv run python -m
+eval.category_retrieval`. **Real result (57 test queries, 0 model calls):** **recall@50 0.134**, recall@10
+0.019, nDCG@10 0.022, **containment (gold-in-bucket) 0.895**. vs two-leg baseline 0.379, reachability ceiling
+0.776. Full suite 464 passed + 27 skipped.
+**Dependencies:** T46. **Scope:** M. **Status:** done.
 **Files:** `eval/category_retrieval.py`, `eval/test_category_retrieval.py`.
+**GATE-3 read (cost/value):** the category label is RIGHT (containment 0.895 ≈ T47 depth-1) but CANNOT localize
+within large buckets (LoL 489, IP 817) with no ranking → recall@50 0.134, below even the embedding baseline
+0.379 and far below the ceiling 0.776. The whole containment→recall gap is within-bucket localization, exactly
+what OKF's description-based traversal provides. So the cheap control does NOT make OKF redundant: T50's value
+(description localization) is justified. Honest caveat: control has no intra-category ranking by design (label,
+not embedding), so 0.134 is label-only; 0.895 is its ranking-independent ceiling.
 **Note:** Running this as the control keeps the gates honest. If coarse label matching captures most of
 the lift, the OKF compile is not justified by the numbers — a valid, cheap early result. The control uses
 the same corpus-appropriate direct classifier as T46 (not graph_extraction) against the T45 induced labels.
