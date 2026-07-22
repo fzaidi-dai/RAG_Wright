@@ -79,6 +79,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "rlm_synthesis",  # FR-Q.5 (applies the RLM skill)
         "rlm_method",  # FR-C.10 (the shared RLM method skill, if registered)
         "okf_compile",  # FR-K.1-K.4 (foundation derivation: slug, but no ARD manifest; T46)
+        "okf_navigate",  # FR-K.6 (query-discovered traversal: slug + ARD manifest; T50)
     }
 )
 

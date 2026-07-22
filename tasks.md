@@ -339,7 +339,7 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 | T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | done — **control recall@50 0.134 (containment 0.895): category is a strong bucketer, useless localizer → OKF traversal's description-localization is JUSTIFIED** | T46 |
 | **GATE-3a** | **Reachability ceiling (per-corpus kill-switch): is gold reachable through signposts, and does the coarse-label control already capture the lift?** | 5 Integrate | §13, FR-K.8 | pending | T47, T48 |
 | T49 | Cross-linking from measured clause-relation structure | 5 Integrate | FR-K.3 | done — **embedding-free lexical links RAISE the ceiling: per-gold 0.776→0.845, all-gold 0.491→0.614; Option-2 kNN NOT needed** | T46, T41 |
-| T50 | `okf_navigate` traversal capability (interpreter + PTC + dynamic sub-agents) | 5 Integrate | FR-K.5, FR-K.6 | todo (behind GATE-3a) | T46, T47, T49, T35 |
+| T50 | `okf_navigate` traversal capability (interpreter + PTC + dynamic sub-agents) | 5 Integrate | FR-K.5, FR-K.6 | **in progress — WORKS: model writes the workflow from an okf_navigate Skill, reaches 11/11 recall on the tpb query; variance + hard-query generalization + ARD manifest pending** | T46, T47, T49, T35 |
 | T51 | Single-query trace-and-iterate harness (the tuning loop) | 5 Integrate | FR-K.8, §12 | todo (behind GATE-3a) | T47, T50 |
 | **GATE-3** | **FR-K graduate or remove: OKF traversal vs the category-label control** | 5 Integrate | §13, §15 | pending | T47, T50, T51, T48 |
 | T52 | Bundle lifecycle: incremental recompile, update, delete (shares the T40 gate) | 5 Integrate | FR-K.7 | todo (post-GATE-3) | GATE-3, T34 |

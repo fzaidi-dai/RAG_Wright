@@ -59,7 +59,7 @@ _INTERPRETER_SEMAPHORE = threading.BoundedSemaphore(1)
 
 @contextmanager
 def rlm_interpreter_session(
-    *, ptc: Sequence[BaseTool] = ()
+    *, ptc: Sequence[BaseTool] = (), max_result_chars: Optional[int] = None
 ) -> Iterator[CodeInterpreterMiddleware]:
     """Own the process for exactly one RLM interpreter session (KI-1, ADR-0020).
 
@@ -74,8 +74,14 @@ def rlm_interpreter_session(
     and never as top-level tools — this is how the working set is delivered as a JS value that stays out of
     the model's context (`working_set` → `tools.workingSet()`, T36 / GraphWright working-set contract).
     """
+    # `max_result_chars` overrides the interpreter's 4,000-char eval-result cap (which truncates a large
+    # JSON return mid-string). A capability whose workflow returns a big result (e.g. okf_navigate's shortlist
+    # + decision log at a high frontier budget) raises it; RLM leaves it at the default.
     _INTERPRETER_SEMAPHORE.acquire()
-    interpreter = CodeInterpreterMiddleware(subagents=True, ptc=list(ptc) or None)
+    kwargs: dict = {"subagents": True, "ptc": list(ptc) or None}
+    if max_result_chars is not None:
+        kwargs["max_result_chars"] = max_result_chars
+    interpreter = CodeInterpreterMiddleware(**kwargs)
     try:
         yield interpreter
     finally:
