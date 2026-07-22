@@ -239,13 +239,15 @@ _SKILL_PATH = Path(__file__).parents[1] / "skills" / "okf_navigate" / "SKILL.md"
 
 _SELECTOR_PROMPT = (
     "You navigate a knowledge bundle to answer a QUESTION. You are given a numbered list of signposts "
-    "(each a one-line description and whether it is a subdirectory). Choose which are worth exploring to "
-    "answer the question; prefer precision, do not select everything. You never see the underlying "
-    "documents, only the signposts."
+    "(each a name, a one-line description, and whether it is a subdirectory). Choose which are worth "
+    "exploring to answer the question; prefer precision, do not select everything. You never see the "
+    "underlying documents, only the signposts. Reply with ONLY a JSON object of the integer indices to "
+    'explore, e.g. {"keep": [0, 3, 4]}, and nothing else.'
 )
 _READER_PROMPT = (
     "You judge one document against a QUESTION: is it relevant evidence for answering it? You see one "
-    "document at a time, never the whole bundle."
+    'document at a time, never the whole bundle. Reply with ONLY a JSON object {"relevant": true} or '
+    '{"relevant": false}, and nothing else.'
 )
 
 

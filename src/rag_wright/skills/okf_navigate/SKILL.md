@@ -43,8 +43,10 @@ never call `ls`, `glob`, `read_file`, or `write_file`; they find nothing and was
 from your own knowledge; the answer only comes from running the workflow.
 
 Call the tools with an **object argument** exactly as their signatures show (for example
-`tools.readIndex({ rel_dir: dir })`, `tools.readBody({ rel_path: path })`). Use `task({...,
-responseSchema})` so a sub-agent returns a typed value (no string parsing).
+`tools.readIndex({ rel_dir: dir })`, `tools.readBody({ rel_path: path })`). A sub-agent returns a JSON
+**string** in its text; `JSON.parse` it (extract the object with a `{ ... }` match first). Do NOT pass a
+`responseSchema` to `task()` — forcing structured output makes a reasoning model reject the call; the
+sub-agents are instructed to reply with JSON, so parse their text.
 
 ```javascript
 // Navigate an OKF bundle by progressive disclosure. The bundle is read via tools.* into interpreter
@@ -58,14 +60,14 @@ const visited = new Set();                     // concept paths already read
 // Send BOTH the name (`path`) and the `description`: a directory's description may be just a count, so the
 // name carries the signal; a concept's description is its summary. The selector needs both to choose well.
 async function pick(signposts) {
-  const { keep } = await task({
+  const raw = await task({
     description: "Signposts to choose from:\n" +
       JSON.stringify(signposts.map((s, i) => ({ i, name: s.path, description: s.description, isDir: s.is_dir }))),
     subagentType: "okf_selector",
-    responseSchema: { type: "object", properties: { keep: { type: "array", items: { type: "number" } } },
-                      required: ["keep"] },
   });
-  return (keep || []).filter((i) => Number.isInteger(i) && i >= 0 && i < signposts.length).map((i) => signposts[i]);
+  let keep = [];
+  try { keep = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]).keep || []; } catch (e) { keep = []; }
+  return keep.filter((i) => Number.isInteger(i) && i >= 0 && i < signposts.length).map((i) => signposts[i]);
 }
 
 // Descend the tree to a depth bound. The selector gates DIRECTORIES (which subtrees are worth exploring),
@@ -94,11 +96,9 @@ while (frontier.length && shortlist.length < BUDGET) {
   visited.add(path);
   const body = await tools.readBody({ rel_path: path });
   if (!body) continue;
-  const { relevant } = await task({
-    description: "Document:\n" + body,
-    subagentType: "okf_reader",
-    responseSchema: { type: "object", properties: { relevant: { type: "boolean" } }, required: ["relevant"] },
-  });
+  const raw = await task({ description: "Document:\n" + body, subagentType: "okf_reader" });
+  let relevant = false;
+  try { relevant = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]).relevant === true; } catch (e) { relevant = false; }
   log.push({ path, relevant });
   if (relevant) {
     shortlist.push(await tools.conceptId({ rel_path: path }));
