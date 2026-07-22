@@ -125,3 +125,34 @@ invent missing coverage). Not required to proceed with FR-K.
 
 The diagnostic script lives at `temp/okf_category_diag.py` (gitignored); it promotes into `eval/` when T46
 lands.
+
+## Addendum 2 (2026-07-22): the reachability ceiling settles viability — realization is now a mandate, not a hypothesis
+
+T47 measured the model-free reachability ceiling over the ACORD gold (tightened lexical proxy; `eval/reachability.py`,
+`eval/ablation.py`). Over the 57-query / 620-instance population, at frontier budget 50:
+
+- **any-gold 0.930** (>=1 gold reachable per query), **per-gold-instance 0.776** (the recall-relevant ceiling),
+  all-gold 0.491, connectivity 1.000.
+- The ablation attributes the ceiling almost entirely to the **description** channel (cost 0.351); the category
+  tree is neutral-to-slightly-negative for the ceiling (-0.018, it prunes misclassified-but-findable gold), tags
+  near-redundant, frontier budget immaterial.
+
+The recall-relevant ceiling (0.776) clears both the grounded bar (0.667) and, by ~2x, the two-leg recall@50
+baseline (0.379). This is measured with NO model call — it is what a perfect signpost-reader could reach.
+
+**Decision (made, not open).** This settles viability. The compiled bundle demonstrably contains the information
+to reach the gold, so FR-K is no longer a go/no-go on whether embedding-free navigation *can* work for this corpus
+— it can. The remaining work is to **realize** the proven ceiling:
+
+- **T50 (traversal)** is mandated to realize the ceiling through refinement and iteration. Falling short of 0.776
+  is a **policy/agent failure to diagnose and fix (T51)**, not evidence against the approach. "It didn't reach it"
+  triggers a trace-and-fix loop, not a removal.
+- **GATE-3's "remove" branch is off the table** for ACORD. GATE-3 becomes "how close to the ceiling did realization
+  get, and at what cost," not "does it work."
+- **GATE-3a** (and T48, the category-label control) remain useful, but as a **cost/value** comparison — is OKF
+  traversal's complexity justified against the cheap mechanism — not as a viability kill-switch.
+- The description channel carrying the ceiling is the concrete lever: compile-recipe refinement (T51) targets
+  description quality, since the category tree buys navigation efficiency, not reach.
+
+The reachability instrument stays the reference: every T50/T51 realized number is read against this ceiling and its
+2x2 (reachable-and-reached vs reachable-not-reached = the policy gap to close).
