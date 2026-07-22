@@ -9,10 +9,12 @@ bundle or a BigQuery-table bundle unchanged.
 Structurally the RLM dynamic-sub-agent machinery (T15/T28) applied to a bundle instead of a flat working set:
 one interpreter session (ADR-0020, KI-1) runs an authored navigation workflow that (a) uses PTC navigation
 primitives -- deterministic bundle reads exposed as `tools.<name>()` -- to sift frontmatter and index entries
-WITHOUT a model call, then (b) dispatches sub-agents for the two model decisions: a `okf_selector` chooses which
-signposts to expand, and a `okf_reader` judges a concept body against the query. The query is threaded into
-every dispatch and each body into its reader by construction, not orchestrator choice (the T42 lesson). Bodies
-are read only after the frontmatter/index sift, so bodies-read is a small fraction of candidates-considered.
+WITHOUT a model call, then (b) makes the two model decisions: a `okf_selector` sub-agent chooses which
+signposts to expand, and the `judgeBodies` PTC tool judges concept bodies against the query -- a Python asyncio
+fan-out (the embed_chunks pattern) through the profile seam, not a sub-agent, because the interpreter cannot
+overlap `task()` dispatches (one JS engine per process). The query is threaded into the selector and the judge
+by construction, not orchestrator choice (the T42 lesson). Bodies are read only after the frontmatter/index
+sift, so bodies-read is a small fraction of candidates-considered.
 
 The interpreter navigation is behind a `Navigator` seam: hermetic tests inject a stub navigator to exercise the
 capability plumbing (trace, dedup, bounds, telemetry) without a model; the live `SeamNavigator` is opt-in.
@@ -20,6 +22,7 @@ capability plumbing (trace, dedup, bounds, telemetry) without a model; the live 
 
 from __future__ import annotations
 
+import asyncio
 import json
 import posixpath
 import re
@@ -28,7 +31,7 @@ from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from pydantic import BaseModel
 
@@ -36,13 +39,17 @@ from deepagents import create_deep_agent
 from deepagents.middleware.subagents import SubAgent
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_model
+from rag_wright.models.seam import build_model, build_structured
 from rag_wright.okf.document import parse_okf
 from rag_wright.skills.rlm.agent import _resolve_model, rlm_interpreter_session
 
 OKF_SELECTOR = "okf_selector"
-OKF_READER = "okf_reader"
-GRANTED_SUBAGENTS: tuple[str, str] = (OKF_SELECTOR, OKF_READER)
+# The only sub-agent is the selector. Body relevance is judged by the `judgeBodies` PTC tool (Python asyncio
+# fan-out), not a sub-agent: the interpreter cannot overlap `task()` dispatches (one JS engine per process,
+# ADR-0020 / KI-1), so reader parallelism must live in Python, the embed_chunks pattern.
+GRANTED_SUBAGENTS: tuple[str, ...] = (OKF_SELECTOR,)
+
+_READER_CONCURRENCY = 8  # in-flight reader judgments per judgeBodies batch (bound against provider rate limits)
 
 DEFAULT_MAX_DEPTH = 3
 DEFAULT_FRONTIER_BUDGET = 50  # max concept bodies a traversal may read (the recall@50 evidence cap)
@@ -244,11 +251,18 @@ _SELECTOR_PROMPT = (
     "underlying documents, only the signposts. Reply with ONLY a JSON object of the integer indices to "
     'explore, e.g. {"keep": [0, 3, 4]}, and nothing else.'
 )
-_READER_PROMPT = (
+_READER_JUDGE_PROMPT = (
     "You judge one document against a QUESTION: is it relevant evidence for answering it? You see one "
-    'document at a time, never the whole bundle. Reply with ONLY a JSON object {"relevant": true} or '
-    '{"relevant": false}, and nothing else.'
+    "document at a time, never the whole bundle. Decide relevant / not relevant."
 )
+
+
+class _Relevance(BaseModel):
+    """The reader judgment schema, forced through the profile seam (build_structured) -- the profile applies
+    DeepSeek's structured method and disables thinking on this forced call, so it never hits the reasoning-mode
+    tool_choice rejection that `task(responseSchema)` did."""
+
+    relevant: bool
 
 
 def navigate_method() -> str:
@@ -275,15 +289,11 @@ def _selector_config(query: str, model) -> SubAgent:
             "model": _resolve_model(model, ModelRole.STRUCTURED_REASONING)}
 
 
-def _reader_config(query: str, model) -> SubAgent:
-    return {"name": OKF_READER, "description": "Judges whether one OKF document is relevant to a question.",
-            "system_prompt": _with_question(_READER_PROMPT, query),
-            "model": _resolve_model(model, ModelRole.STRUCTURED_REASONING)}
-
-
-def _navigation_ptc(reader: OkfBundleReader, bounds: Bounds):
+def _navigation_ptc(reader: OkfBundleReader, bounds: Bounds, query: str, reader_model_id: str):
     """The PTC navigation primitives. The interpreter renders their signatures, so the model writes correct
-    object-argument calls (e.g. tools.readIndex({rel_dir})); the query is NOT here (it is in the sub-agents)."""
+    object-argument calls (e.g. tools.readIndex({rel_dir})). Selection lives in the selector sub-agent, but
+    body relevance is judged HERE, by `judge_bodies`, so it can fan out in Python (the interpreter cannot
+    overlap sub-agent dispatches). The query and reader model are bound in by construction, not passed by JS."""
 
     @tool
     def frontier_budget() -> int:
@@ -310,13 +320,38 @@ def _navigation_ptc(reader: OkfBundleReader, bounds: Bounds):
         """The concept's returned identifier (frontmatter chunk_id where present)."""
         return reader.concept_id(rel_path)
 
-    return [frontier_budget, read_index, read_body, related, concept_id]
+    @tool
+    async def judge_bodies(rel_paths: list[str]) -> list[bool]:
+        """Read and judge many concept bodies against the question CONCURRENTLY, returning a parallel list of
+        booleans (one per input path, order preserved). This is where reader parallelism lives: the fan-out is
+        Python asyncio (Semaphore + gather + to_thread, the embed_chunks pattern), so it is NOT bottlenecked by
+        the single-JS-engine limit that serializes sub-agent dispatches. Each judgment goes through the profile
+        seam (build_structured), never a hardcoded provider flag."""
+        judge = build_structured(reader_model_id, _Relevance)
+        system = _with_question(_READER_JUDGE_PROMPT, query)
+        semaphore = asyncio.Semaphore(_READER_CONCURRENCY)
+
+        async def _one(rel_path: str) -> bool:
+            body = reader.read_body(rel_path)
+            if not body:
+                return False
+            async with semaphore:
+                verdict = await asyncio.to_thread(
+                    judge.invoke,
+                    [SystemMessage(content=system), HumanMessage(content=f"Document:\n{body}")],
+                )
+            return bool(getattr(verdict, "relevant", False))
+
+        return list(await asyncio.gather(*(_one(p) for p in rel_paths)))
+
+    return [frontier_budget, read_index, read_body, related, concept_id, judge_bodies]
 
 
 _NAVIGATE_REQUEST = (
     "Run this as a workflow: emit the OKF navigation workflow from your instructions to the `eval` tool now, "
-    "in one call. It reads the bundle via tools.readIndex / tools.readBody and dispatches the okf_selector / "
-    "okf_reader sub-agents. The bundle is NOT on any filesystem, so do NOT use ls, glob, or read_file. Do NOT "
+    "in one call. It reads the bundle via tools.readIndex / tools.readBody, dispatches the okf_selector "
+    "sub-agent, and judges bodies with tools.judgeBodies. The bundle is NOT on any filesystem, so do NOT use "
+    "ls, glob, or read_file. Do NOT "
     'answer from your own knowledge. Return ONLY the eval result (`{"shortlist": [...]}`).'
 )
 
@@ -337,9 +372,10 @@ def _extract_shortlist(messages) -> list[str]:
 
 class SeamNavigator:
     """The live navigator: one interpreter session over which the model, taught by the okf_navigate Skill,
-    WRITES the navigation workflow (it is not hardcoded) and dispatches the okf_selector / okf_reader
-    sub-agents. Per-role models resolve through the profile seam (STRUCTURED_REASONING / DeepSeek V4 Pro) or
-    are injected (tests). Gemma is enrichment-only (ADR-0023); the navigation judgments run on the strong model."""
+    WRITES the navigation workflow (it is not hardcoded), dispatches the okf_selector sub-agent, and judges
+    bodies via the judgeBodies PTC tool. Per-role models resolve through the profile seam (STRUCTURED_REASONING
+    / DeepSeek V4 Pro) or are injected (tests). Gemma is enrichment-only (ADR-0023); the navigation judgments
+    run on the strong model."""
 
     def __init__(
         self, model: object = None, *, selector_model: object = None, reader_model: object = None,
@@ -363,16 +399,23 @@ class SeamNavigator:
 
         orchestrator = resolve(self._model)
         selector = resolve(self._selector_model if self._selector_model is not None else self._model)
-        reader_model = resolve(self._reader_model if self._reader_model is not None else self._model)
+        # The reader is a PTC tool (build_structured), which needs a model-id string, not a built model. Prefer
+        # an explicit id; fall back to the STRUCTURED_REASONING default. (A BaseChatModel injected as the reader
+        # cannot drive the seam's structured path, so only the live id/None path is supported for judging.)
+        reader_model_id = next(
+            (m for m in (self._reader_model, self._model) if isinstance(m, str)),
+            model_for(ModelRole.STRUCTURED_REASONING),
+        )
         start = time.perf_counter()
         # raise the eval-result cap: the shortlist + decision log at a high frontier budget exceeds the
         # interpreter's 4,000-char default, which would truncate the JSON mid-string and lose the shortlist.
-        with rlm_interpreter_session(ptc=_navigation_ptc(reader, bounds), max_result_chars=200_000) as interpreter:
+        ptc = _navigation_ptc(reader, bounds, query, reader_model_id)
+        with rlm_interpreter_session(ptc=ptc, max_result_chars=200_000) as interpreter:
             agent = create_deep_agent(
                 model=orchestrator,
                 tools=[],
                 system_prompt=navigate_method(),  # the Skill method (the model writes the workflow from it)
-                subagents=[_selector_config(query, selector), _reader_config(query, reader_model)],
+                subagents=[_selector_config(query, selector)],
                 middleware=[interpreter],
             )
             messages = agent.invoke({"messages": [HumanMessage(content=_NAVIGATE_REQUEST)]}, config=self._config)["messages"]
