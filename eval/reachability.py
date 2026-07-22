@@ -42,7 +42,8 @@ CATEGORY_TREE = "category_tree"
 DESCRIPTION = "description"
 TAGS = "tags"
 FRONTIER_COVER = "frontier_cover"
-ALL_CHANNELS: frozenset[str] = frozenset({CATEGORY_TREE, DESCRIPTION, TAGS, FRONTIER_COVER})
+CROSS_LINKS = "cross_links"  # a gold linked (1 hop, undirected) to a base-reachable clause (T49)
+ALL_CHANNELS: frozenset[str] = frozenset({CATEGORY_TREE, DESCRIPTION, TAGS, FRONTIER_COVER, CROSS_LINKS})
 
 _STEM_PREFIX = 5  # a shared 5-char prefix is the model-free "same word" proxy (indemnif-ies/-ication)
 _DISTINCTIVE_LEN = 8  # a token this long is rare/discriminating enough that one shared match is signal
@@ -143,6 +144,57 @@ def category_sizes(signposts: dict[str, Signpost]) -> dict[str, int]:
     return sizes
 
 
+def load_cross_links(bundle_root: Path = BUNDLE_ROOT) -> dict[str, list[str]]:
+    """Directed out-adjacency {chunk_id: [neighbour chunk_ids]} from each concept's `## Related` links (T49)."""
+    link_re = re.compile(r"\]\(([^)]+)\)")
+    path_to_id: dict[str, str] = {}
+    related_paths: dict[str, list[str]] = {}
+    for md in bundle_root.rglob("*.md"):
+        if md.name in ("index.md", "log.md"):
+            continue
+        fm, body = parse_okf(md.read_text(encoding="utf-8"))
+        chunk_id = fm.get("chunk_id")
+        if not chunk_id:
+            continue
+        rel = "/" + str(md.relative_to(bundle_root))
+        path_to_id[rel] = str(chunk_id)
+        if "## Related clauses" in body:
+            section = body.split("## Related clauses", 1)[1]
+            related_paths[str(chunk_id)] = [m.group(1).split("#", 1)[0] for m in link_re.finditer(section)]
+    return {
+        cid: [path_to_id[p] for p in paths if p in path_to_id]
+        for cid, paths in related_paths.items()
+    }
+
+
+def _reach_base(
+    query_category: str | None,
+    query_text: str,
+    sp: Signpost,
+    total: int,
+    sizes: dict[str, int],
+    frontier_budget: int,
+    channels: frozenset[str],
+) -> tuple[bool, list[str]]:
+    """Base (link-free) reachability: category routing then frontier-cover / description / tags."""
+    path: list[str] = []
+    if CATEGORY_TREE in channels:
+        if not (sp.categorized and sp.category == query_category):
+            return False, []  # the query routes to a different subtree; the gold is not under it
+        pool = sizes.get(sp.category, 0)
+        path.append(CATEGORY_TREE)
+    else:
+        pool = total  # category channel ablated -> no narrowing; the pool is the whole corpus
+
+    if FRONTIER_COVER in channels and pool <= frontier_budget:
+        return True, path + [FRONTIER_COVER]
+    if DESCRIPTION in channels and _lexical_match(query_text, sp.description):
+        return True, path + [DESCRIPTION]
+    if TAGS in channels and _lexical_match(query_text, " ".join(sp.tags)):
+        return True, path + [TAGS]
+    return False, path
+
+
 def reach_chunk(
     query_category: str | None,
     query_text: str,
@@ -152,30 +204,31 @@ def reach_chunk(
     frontier_budget: int,
     channels: frozenset[str],
     sizes: dict[str, int] | None = None,
+    cross_links: dict[str, list[str]] | None = None,
 ) -> tuple[bool, list[str]]:
-    """Is `gold_chunk_id` signpost-reachable for the query within bounds? Returns (reachable, hop channels)."""
+    """Is `gold_chunk_id` signpost-reachable for the query within bounds? Returns (reachable, hop channels).
+
+    If the base channels do not reach it and CROSS_LINKS is active, the gold is reachable when it is linked
+    (1 hop, via the passed undirected adjacency) to a clause that IS base-reachable for the query.
+    """
     sp = signposts.get(gold_chunk_id)
     if sp is None:
         return False, []  # not present in the bundle (connectivity failure)
     sizes = sizes if sizes is not None else category_sizes(signposts)
-    path: list[str] = []
+    total = len(signposts)
 
-    # depth-1: route root -> category
-    if CATEGORY_TREE in channels:
-        if not (sp.categorized and sp.category == query_category):
-            return False, []  # the query routes to a different subtree; the gold is not under it
-        pool = sizes.get(sp.category, 0)
-        path.append(CATEGORY_TREE)
-    else:
-        pool = len(signposts)  # category channel ablated -> no narrowing; the pool is the whole corpus
-
-    # depth-2: select the clause within the pool
-    if FRONTIER_COVER in channels and pool <= frontier_budget:
-        return True, path + [FRONTIER_COVER]
-    if DESCRIPTION in channels and _lexical_match(query_text, sp.description):
-        return True, path + [DESCRIPTION]
-    if TAGS in channels and _lexical_match(query_text, " ".join(sp.tags)):
-        return True, path + [TAGS]
+    reached, path = _reach_base(query_category, query_text, sp, total, sizes, frontier_budget, channels)
+    if reached:
+        return True, path
+    if CROSS_LINKS in channels and cross_links:
+        base = channels - {CROSS_LINKS}
+        for neighbour in cross_links.get(gold_chunk_id, []):
+            n_sp = signposts.get(neighbour)
+            if n_sp is None:
+                continue
+            n_ok, _ = _reach_base(query_category, query_text, n_sp, total, sizes, frontier_budget, base)
+            if n_ok:
+                return True, [CROSS_LINKS]
     return False, path
 
 
@@ -204,16 +257,29 @@ def _recipe_version(bundle_root: Path) -> str:
     return str(fm.get("compile_recipe_version") or "unknown")
 
 
+def _undirected(cross_links: dict[str, list[str]] | None) -> dict[str, list[str]] | None:
+    """Union out-links and in-links, so a gold is 'linked' to any clause that lists it or that it lists."""
+    if not cross_links:
+        return cross_links
+    adj: dict[str, set[str]] = {k: set(v) for k, v in cross_links.items()}
+    for src, nbrs in cross_links.items():
+        for nbr in nbrs:
+            adj.setdefault(nbr, set()).add(src)
+    return {k: sorted(v) for k, v in adj.items()}
+
+
 def compute_reachability(
     gold: OkfGold,
     signposts: dict[str, Signpost],
     *,
     frontier_budget: int = DEFAULT_FRONTIER_BUDGET,
     channels: frozenset[str] = ALL_CHANNELS,
+    cross_links: dict[str, list[str]] | None = None,
     bundle_root: Path = BUNDLE_ROOT,
 ) -> ReachabilityReport:
-    """Compute the reachability ceiling over the query population."""
+    """Compute the reachability ceiling over the query population (cross_links optional, T49)."""
     sizes = category_sizes(signposts)
+    adjacency = _undirected(cross_links)
     channel_histogram: dict[str, int] = {}
     per_query: dict[str, QueryReach] = {}
     gold_present_total = gold_total = 0
@@ -224,8 +290,8 @@ def compute_reachability(
             gold_total += 1
             if cid in signposts:
                 gold_present_total += 1
-            ok, path = reach_chunk(q.category, q.text, cid, signposts,
-                                   frontier_budget=frontier_budget, channels=channels, sizes=sizes)
+            ok, path = reach_chunk(q.category, q.text, cid, signposts, frontier_budget=frontier_budget,
+                                   channels=channels, sizes=sizes, cross_links=adjacency)
             if ok:
                 reachable.append(cid)
                 channel_histogram[path[-1]] = channel_histogram.get(path[-1], 0) + 1
@@ -258,13 +324,20 @@ def compute_reachability(
 def main() -> None:
     gold = build_okf_gold()
     signposts = load_signposts()
-    print(f"[reachability] {len(signposts)} bundle signposts, {gold.distinct_gold_chunks} distinct gold chunks")
+    cross_links = load_cross_links()
+    n_links = sum(len(v) for v in cross_links.values())
+    print(f"[reachability] {len(signposts)} bundle signposts, {gold.distinct_gold_chunks} distinct gold chunks, "
+          f"{n_links} cross-links over {len(cross_links)} clauses")
     for budget in (20, 50, 100):
-        r = compute_reachability(gold, signposts, frontier_budget=budget)
-        print(f"\n[reachability] recipe={r.recipe_version} frontier_budget={budget}")
-        print(f"  connectivity: {r.connectivity_rate:.3f} | any-gold: {r.any_gold_rate:.3f} | "
-              f"all-gold: {r.all_gold_rate:.3f} | per-gold (recall ceiling): {r.gold_reachable_rate:.3f}")
-        print(f"  channel histogram (depth-2 carrier): {r.channel_histogram}")
+        base = compute_reachability(gold, signposts, frontier_budget=budget, cross_links=None)
+        linked = compute_reachability(gold, signposts, frontier_budget=budget, cross_links=cross_links)
+        print(f"\n[reachability] recipe={base.recipe_version} frontier_budget={budget}")
+        print(f"  no-links : any-gold {base.any_gold_rate:.3f} | all-gold {base.all_gold_rate:.3f} | "
+              f"per-gold recall ceiling {base.gold_reachable_rate:.3f}")
+        print(f"  + links  : any-gold {linked.any_gold_rate:.3f} | all-gold {linked.all_gold_rate:.3f} | "
+              f"per-gold recall ceiling {linked.gold_reachable_rate:.3f}  "
+              f"(delta {linked.gold_reachable_rate - base.gold_reachable_rate:+.3f})")
+        print(f"  + links channel histogram: {linked.channel_histogram}")
 
 
 if __name__ == "__main__":

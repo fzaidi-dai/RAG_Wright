@@ -90,8 +90,13 @@ not this repo's.
   0.134, containment 0.895** over the 57 test queries, 0 model calls. Category is a strong bucketer (gold in the
   right category 89.5%) but a useless localizer (no intra-category ranking → 0.134, below baseline 0.379). The
   containment→recall gap IS the within-bucket localization OKF descriptions provide → **the cheap control does
-  not capture the lift; T50's description-localization is justified.** 4 tests, full suite 464+27. **NEXT UP:
-  T49** (cross-linking) then T50 (traversal — realize the 0.776 ceiling).
+  not capture the lift; T50's description-localization is justified.** 4 tests, full suite 464+27.
+- **LAST APPROVED (committed): T49** — cross-linking (`src/rag_wright/okf/links.py`), embedding-free
+  (Option-1: shared distinctive-term edges, bounded degree ≤8, df>100 skipped). 20,033 edges, mean degree 5.10,
+  broken-link 0.0000. **Links RAISE the reachability ceiling: per-gold recall 0.776→0.845, all-gold 0.491→0.614**
+  → Option-2 embedding-kNN NOT needed (unused fallback). Linter extended to scan concept-body links; reachability
+  gained a `cross_links` channel. 6 tests, full suite 470+27. **NEXT UP: T50** — the `okf_navigate` traversal
+  capability that REALIZES the 0.845 ceiling (interpreter + PTC + dynamic sub-agents; RLM machinery T15/T36/T37).
 - **LAST APPROVED (committed): T44** — govern the remaining capabilities. `capabilityInterface` on the 7
   ingestion→graph caps (parsing, rlm_chunking, embedding, graph_extraction, entity_disambiguation,
   entity_resolution, vision_to_text), grounded in the real callables; `rlm_method` stays ungoverned (required
@@ -333,7 +338,7 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 | T47 | Reachability analyzer + signpost ablation (deterministic, model-free) | 5 Integrate | FR-K.8 | done — **ceiling proven: any-gold 0.930, per-gold recall ceiling 0.776 > bar 0.667 > baseline 0.379** (ADR-0022 addendum 2) | T46 |
 | T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | done — **control recall@50 0.134 (containment 0.895): category is a strong bucketer, useless localizer → OKF traversal's description-localization is JUSTIFIED** | T46 |
 | **GATE-3a** | **Reachability ceiling (per-corpus kill-switch): is gold reachable through signposts, and does the coarse-label control already capture the lift?** | 5 Integrate | §13, FR-K.8 | pending | T47, T48 |
-| T49 | Cross-linking from measured clause-relation structure | 5 Integrate | FR-K.3 | todo (behind GATE-3a) | T46, T41 |
+| T49 | Cross-linking from measured clause-relation structure | 5 Integrate | FR-K.3 | done — **embedding-free lexical links RAISE the ceiling: per-gold 0.776→0.845, all-gold 0.491→0.614; Option-2 kNN NOT needed** | T46, T41 |
 | T50 | `okf_navigate` traversal capability (interpreter + PTC + dynamic sub-agents) | 5 Integrate | FR-K.5, FR-K.6 | todo (behind GATE-3a) | T46, T47, T49, T35 |
 | T51 | Single-query trace-and-iterate harness (the tuning loop) | 5 Integrate | FR-K.8, §12 | todo (behind GATE-3a) | T47, T50 |
 | **GATE-3** | **FR-K graduate or remove: OKF traversal vs the category-label control** | 5 Integrate | §13, §15 | pending | T47, T50, T51, T48 |
@@ -2675,18 +2680,28 @@ re-measured with the link channel and the ablation shows its marginal contributi
 - [ ] Cross-links are regenerable independently of the bundle compile, so link recipes can be ablated
   without a full recompile.
 
-**Verification:** `uv run pytest tests/capabilities/test_okf_links.py`.
-**Dependencies:** T46, T41. **Scope:** M. **Status:** todo (behind GATE-3a).
-**Files:** `src/rag_wright/okf/links.py`, `tests/capabilities/test_okf_links.py`.
+**Verification:** `uv run pytest tests/capabilities/test_okf_links.py` — 6 passed. Apply: `uv run python -m
+rag_wright.okf.links`; re-measure: `uv run python -m eval.reachability`. **Real result (Option-1 embedding-free,
+shared-distinctive-term edges):** 20,033 edges over 3,931 clauses, mean degree 5.10 (cap 8, df>100 skipped), 952
+isolated, broken-link 0.0000. **Cross-links RAISE the reachability ceiling: per-gold 0.776→0.845 (+0.069),
+all-gold 0.491→0.614 (+0.123), any-gold 0.930→0.947** (carry 43 gold instances descriptions/category missed).
+**→ Option-2 embedding-kNN NOT needed** (embedding-free links already lift it; kept as an unused fallback). Full
+suite 470 passed + 27 skipped.
+**Dependencies:** T46, T41. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/okf/links.py`, `tests/capabilities/test_okf_links.py`; `okf/lint.py` extended to scan
+concept-body links; `eval/reachability.py` gained the `cross_links` channel + `load_cross_links`.
+**Bugs the live run caught:** the linter only scanned `index.md` links (missed all cross-links — a RAC-49 hole);
+`_clause_body` newline inconsistency broke idempotent re-linking. Both fixed.
 
 ### Task T50: `okf_navigate` traversal capability
 
-**MANDATE (post-GATE-3a, ADR-0022 addendum 2):** T47 proved the bundle can reach a per-gold recall ceiling of
-**0.776** (> bar 0.667, ~2x baseline 0.379), model-free. So T50 is NOT testing whether navigation works — it is
-**realizing a known-achievable ceiling**. The success target is the reachable set: for each query, the traversal
-should reach the gold clauses T47 marked reachable. Read every run against T47's 2x2 — reachable-and-reached
-(good) vs **reachable-not-reached (the policy gap to close via T51)**. If realization lags the ceiling, iterate
-the recipe/prompt/params (T51); do not conclude the approach fails. Description quality is the proven lever.
+**MANDATE (post-GATE-3a, ADR-0022 addendum 2):** T47+T49 proved the bundle can reach a per-gold recall ceiling of
+**0.845** (T47 descriptions 0.776 + T49 cross-links; > bar 0.667, ~2.2x baseline 0.379), model-free. So T50 is NOT
+testing whether navigation works — it is **realizing a known-achievable ceiling**. The success target is the
+reachable set: for each query, the traversal should reach the gold clauses the analyzer marked reachable. Read
+every run against the 2x2 — reachable-and-reached (good) vs **reachable-not-reached (the policy gap to close via
+T51)**. If realization lags the ceiling, iterate the recipe/prompt/params (T51); do not conclude the approach
+fails. Description quality + cross-links are the proven levers.
 
 **Description:** Build the traversal: one interpreter node that reads the bundle root `index.md`, filters
 candidate subtrees by frontmatter predicate and index description, expands the frontier through links and

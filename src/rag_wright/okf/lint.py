@@ -62,33 +62,36 @@ def lint_bundle(root: Path) -> LintReport:
         if str(fm.get("type") or "").strip():
             type_ok += 1
 
-    # index entries: every `* [title](link) - desc` line across all index.md files
+    # Broken-link ratio is over ALL links (index entries AND concept-body cross-links); orphan_rate is over
+    # index links only, since an index entry is the progressive-disclosure entry point from the root.
     entries_total = entries_with_desc = 0
     links_total = links_broken = 0
-    linked_targets: set[Path] = set()
-    for index_path in root.rglob(_INDEX_NAME):
-        content = index_path.read_text(encoding="utf-8")
-        for raw in content.splitlines():
-            line = raw.strip()
-            if not line.startswith("*"):
-                continue
-            m = _LINK.search(line)
-            if not m:
-                continue
-            entries_total += 1
-            if " - " in line.split(")", 1)[-1]:
-                entries_with_desc += 1
+    index_linked_targets: set[Path] = set()
+    for md in root.rglob("*.md"):
+        content = md.read_text(encoding="utf-8")
+        is_index = md.name == _INDEX_NAME
+        if is_index:
+            for raw in content.splitlines():
+                line = raw.strip()
+                if not line.startswith("*"):
+                    continue
+                if not _LINK.search(line):
+                    continue
+                entries_total += 1
+                if " - " in line.split(")", 1)[-1]:
+                    entries_with_desc += 1
         for m in _LINK.finditer(content):
-            resolved = _resolve(m.group(1), index_path, root)
+            resolved = _resolve(m.group(1), md, root)
             if resolved is None:
                 continue
             links_total += 1
             if resolved.exists():
-                linked_targets.add(resolved.resolve())
+                if is_index:
+                    index_linked_targets.add(resolved.resolve())
             else:
                 links_broken += 1
 
-    orphans = sum(1 for c in concepts if c.resolve() not in linked_targets)
+    orphans = sum(1 for c in concepts if c.resolve() not in index_linked_targets)
     n = len(concepts) or 1
     return LintReport(
         total_concepts=len(concepts),
