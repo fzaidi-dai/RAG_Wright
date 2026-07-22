@@ -327,9 +327,14 @@ loop enforces it.
 | T31 | MCP skill surface (governed skills over MCP) | 5 Integrate | FR-S.5 | todo | T6, T22, T26 |
 | T32 | End-to-end scenarios + per-source ablation | 5 Integrate | §12, §15 | todo | T29, T31 |
 
-**FR-K — Embedding-free OKF navigation (experimental, gated). Corpus-neutral capability; ACORD is the
-first validation corpus. First execution slice is T45-T48 → GATE-3a (the per-corpus reachability
-kill-switch); the whole program is specified now but built behind that gate. Detail entries below.**
+**FR-K — Embedding-free OKF navigation (experimental, gated). SHELVED 2026-07-23 (ADR-0025):** the recall
+investigation showed the *realizable ranking* recall (~0.38, method-invariant, matching the recorded two-leg
+0.379) governs, not the *reachability* ceiling (0.776) FR-K rested on. Superseded by **FR-R** below. Committed
+T45-T50 stay in history; not built further. Original spec retained for the record.
+
+Corpus-neutral capability; ACORD is the first validation corpus. First execution slice is T45-T48 → GATE-3a (the
+per-corpus reachability kill-switch); the whole program is specified now but built behind that gate. Detail
+entries below.**
 
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
@@ -345,6 +350,21 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 | T52 | Bundle lifecycle: incremental recompile, update, delete (shares the T40 gate) | 5 Integrate | FR-K.7 | todo (post-GATE-3) | GATE-3, T34 |
 | T53 | Strategy memory: store and reuse verified navigation strategies | 5 Integrate | FR-K.9 | todo (post-GATE-3) | GATE-3, T50, T51 |
 | T54 | graph_extraction ontology extension (not FR-K): make `ClauseCategory` cover non-CUAD corpora — T8-derived or proposal-seam, NOT a crosswalk (can't invent missing coverage) | 4 Build graph | FR-C.6, FR-C.8 | deferred (ask-first; data-model change) | T8, T23, ADR-0022 |
+
+**FR-R — Function/Property retrieval (ADR-0025; supersedes FR-K).** Solve the ACORD recall bar the way a
+paralegal does: every query = a **FUNCTION** (clause type) + a **PROPERTY** (qualifier). Operative-span index →
+local function classifier → property graph → rerank for the fuzzy tail; spans + property graph in ArcadeDB
+(clauses stay source-of-truth in the clause OKF bundle). Capability-half; pipeline composition is GraphWright's.
+Built behind **GATE-R** (clears the 0.667 recall bar / beats the 0.379 two-leg baseline).
+
+| ID | Task | Phase | FR | Status | Dep |
+|---|---|---|---|---|---|
+| T55 | Operative-span segmenter: re-chunk each clause → operative spans (enumeration/semicolon markers + spaCy legal-sentence, deterministic; byte-faithful reconstruction, size floor), each pointing to its parent clause. Output = `Span` records for ArcadeDB (text, `parent_chunk_id` + parent OKF path, function slot, dense/sparse emb slot) | 5 Integrate | FR-Q, §GATE-2 | **in progress — SEGMENTER DONE (`spans/segment.py`: deterministic, byte-faithful tiling, enumeration/sentence split with abbrev/section-ref guards + sub-floor merge; 9 tests; real-clause spot-check splits run-ons into operatives). NEXT: ArcadeDB `Span` type (schema + dense/sparse indexes + upsert + span hybrid_search + parent pointer)** | T13, T40, ADR-0025 |
+| T56 | Local FUNCTION classifier over spans: single-label {41 CUAD `ClauseCategory` + NONE}; linear head on frozen embeddings (escalate to LegalBERT only if F1 lags); tag + index function-bearing spans | 5 Integrate | FR-C.3, FR-Q | todo | T55, T8 |
+| T57 | PROPERTY schema (draft from the 57 ACORD query patterns; **schema review gate**) + targeted property extractor (reuse Extractor seam / DeepSeek) → **new** property graph (clause node ↔ typed property edges; reuse graph_storage / entity_resolution, NOT the generic entity graph) | 5 Integrate | FR-C.6, FR-C.7 | todo (schema review gate) | T55, T25, T24 |
+| T58 | Query decomposition (→ function + property) + in-store retrieval: span hybrid-search filtered by function → property graph query → parent clauses | 5 Integrate | FR-Q.3, FR-Q.4 | todo | T56, T57 |
+| T59 | Reranker for the fuzzy/comparative/novel property tail: `BGEReranker` default; LLM-rerank via the seam optional | 5 Integrate | FR-Q | todo | T58, T29 |
+| **GATE-R** | **Does function + property + rerank clear the recall bar? recall@50 ≥ 0.667 (+ nDCG@10 diagnostic) vs the 0.379 two-leg baseline, ablated by stage (`eval/acord_retrieval`)** | 5 Integrate | §13, §GATE-2 | pending | T55-T59 |
 
 Extras (§3.2: multi-vector, typed-functional RLM, CLIP embedder, canonical skeleton, domain
 LoRA) are **out of scope / ask-first** and are not scheduled here.
