@@ -64,7 +64,13 @@ not this repo's.
   or remove) → T52 lifecycle, T53 strategy memory. Harness-profile seam from the feeder draft was dropped
   (traversal binds the T11 model-profile seam). OKF repo cloned + graphify-indexed for grounding at
   `/Users/farhan/work/knowledge-catalog/okf/src/graphify-out/graph.json`. ADR-0022 records the decision.
-  **NEXT UP: T45** (first FR-K task) when the user picks it up — awaiting go.
+  Pre-T45 diagnostic (ADR-0022 addendum): category signpost **decoupled** from graph_extraction (41-CUAD
+  covers only 67% of ACORD gold; a direct corpus-appropriate classifier hits 91.6%).
+- **LAST APPROVED (committed): T45** — ACORD gold-chunk labels. 57 test queries → 475 distinct gold chunks
+  (grade≥2), exact qrel-corpus-id→chunk_id map (0 unmapped, validated against the T40 sidecar), any/all-gold
+  readings, deterministic stratified debug split (7 debug / 50 held-out headline), + 475 qrels-induced silver
+  category labels (`metadata.category`) for T46/T48. 7 tests, full suite 441+27. Artifact
+  `data/eval/okf_gold.json` (gitignored, rebuildable). **NEXT UP: T46** (chunk-only OKF bundle compile).
 - **LAST APPROVED (committed): T44** — govern the remaining capabilities. `capabilityInterface` on the 7
   ingestion→graph caps (parsing, rlm_chunking, embedding, graph_extraction, entity_disambiguation,
   entity_resolution, vision_to_text), grounded in the real callables; `rlm_method` stays ungoverned (required
@@ -301,7 +307,7 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
-| T45 | ACORD gold-chunk labels for reachability scoring (extends T9/T33 eval assets) | 5 Integrate | §12, FR-K.8 | todo | T33 |
+| T45 | ACORD gold-chunk labels for reachability scoring (extends T9/T33 eval assets) | 5 Integrate | §12, FR-K.8 | done | T33 |
 | T46 | OKF bundle compile: chunk-only, category tree via `graph_extraction`, summaries-as-descriptions (no re-chunk; sidecar-fed) | 5 Integrate | FR-K.1, FR-K.2, FR-K.4 | todo | T40, T45, T23 |
 | T47 | Reachability analyzer + signpost ablation (deterministic, model-free) | 5 Integrate | FR-K.8 | todo | T46 |
 | T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | todo | T46 |
@@ -2474,9 +2480,11 @@ span projection is needed, which is why ACORD is the first slice rather than a s
 - [ ] A debug split is declared and recorded: the queries reserved for single-query iteration (T51) are
   named up front and held out of the headline GATE-3 number.
 
-**Verification:** `uv run pytest eval/test_okf_gold.py`. Rebuild: `uv run python -m eval.okf_gold`.
-**Dependencies:** T33. **Scope:** S. **Status:** todo.
-**Files:** `eval/okf_gold.py`, `eval/test_okf_gold.py`.
+**Verification:** `uv run pytest eval/test_okf_gold.py` — 7 passed. Rebuild: `uv run python -m eval.okf_gold`
+→ 57 test queries, 475 distinct gold chunks, **0 unmapped**, 475 induced category labels / 9 categories,
+debug split 7/50. Full suite 441 passed + 27 skipped.
+**Dependencies:** T33. **Scope:** S. **Status:** done.
+**Files:** `eval/okf_gold.py`, `eval/test_okf_gold.py`, `data/eval/okf_gold.json` (gitignored artifact).
 **Note:** Corpus-neutral shape, ACORD-cheap instance. Also emit the **qrels-induced silver category labels**
 here as a side artifact: read `queries.jsonl` `metadata.category` (the loader ignores it today) and induce
 a category on each gold clause from the query it is relevant to (test split: 57 queries → 475 gold clauses,
