@@ -45,6 +45,7 @@ class ModelRole(str, Enum):
     STRUCTURED_REASONING_SECONDARY = "structured_reasoning_secondary"  # same call class, selectable fallback
     GENERAL = "general"  # reasoning, generation, vision-to-text, RLM; the local-deployment default
     SUMMARIZATION = "summarization"  # a smaller model for chunking and summarization (FR-I.6 tiering)
+    OKF_ENRICHMENT = "okf_enrichment"  # cheap classify + one-line description for OKF signposts (FR-K.2, ADR-0023)
 
 
 # Default model ids per role, confirmed against the live OpenRouter catalog at T12 (ADR-0006).
@@ -53,6 +54,10 @@ DEFAULT_STRUCTURED_REASONING = "deepseek/deepseek-v4-pro"
 DEFAULT_STRUCTURED_REASONING_SECONDARY = "qwen/qwen3.7-plus"
 DEFAULT_GENERAL = "google/gemma-4-31b-it"
 DEFAULT_SUMMARIZATION = "deepseek/deepseek-v4-flash"  # the smaller/faster DeepSeek (FR-I.6)
+# OKF signpost enrichment is a simple classify-and-describe task; a cheap Gemma matched DeepSeek V4 Pro
+# on it (100% category agreement, good one-liners, ~4x cheaper/faster) at the 2026-07-22 bench (ADR-0023).
+# THIS TASK ONLY; every other call class stays on its DeepSeek/Gemma role above.
+DEFAULT_OKF_ENRICHMENT = "google/gemma-4-26b-a4b-it"
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", DEFAULT_STRUCTURED_REASONING),
@@ -62,6 +67,7 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ),
     ModelRole.GENERAL: ("RAG_MODEL_GENERAL", DEFAULT_GENERAL),
     ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", DEFAULT_SUMMARIZATION),
+    ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", DEFAULT_OKF_ENRICHMENT),
 }
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default
@@ -82,6 +88,9 @@ PROFILES: dict[str, ModelProfile] = {
     # DeepSeek V4 Flash does reasoning + structured output together, like V4 Pro (ADR-0006); no
     # thinking-disable needed.
     DEFAULT_SUMMARIZATION: ModelProfile(model_id=DEFAULT_SUMMARIZATION),
+    # Gemma 4 26b-a4b takes the forced tool call cleanly (default function_calling, no extra_body);
+    # 0 structured-output errors across the 20-clause bench (ADR-0023).
+    DEFAULT_OKF_ENRICHMENT: ModelProfile(model_id=DEFAULT_OKF_ENRICHMENT),
 }
 
 

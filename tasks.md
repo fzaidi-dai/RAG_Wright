@@ -70,7 +70,15 @@ not this repo's.
   (grade≥2), exact qrel-corpus-id→chunk_id map (0 unmapped, validated against the T40 sidecar), any/all-gold
   readings, deterministic stratified debug split (7 debug / 50 held-out headline), + 475 qrels-induced silver
   category labels (`metadata.category`) for T46/T48. 7 tests, full suite 441+27. Artifact
-  `data/eval/okf_gold.json` (gitignored, rebuildable). **NEXT UP: T46** (chunk-only OKF bundle compile).
+  `data/eval/okf_gold.json` (gitignored, rebuildable).
+- **LAST APPROVED (committed): T46** — OKF bundle compile (chunk-only). `okf/{document,enrich,compile,lint}.py`:
+  gated+concurrent enrichment (category + one-line description per clause) via the new cheap `OKF_ENRICHMENT`
+  model role (Gemma-4-26b-a4b, ADR-0023 — 100% category agreement with DeepSeek on the bench, ~4x cheaper),
+  deterministic compile (tree root→category→clause, byte-faithful bodies from the T40 sidecar, index.md per
+  level, content-hash gate, selective recompile), conformance linter. Real run: **3,931 clauses, 3,491
+  categorized** into ACORD's 9 (440 `_uncategorized`, 1 fallback); lint clean. Category signpost **decoupled
+  from graph_extraction** (ADR-0022). Registered `okf_compile` (category-3, no manifest). 10 tests, full suite
+  451+27. Bundle gitignored at `data/acord/okf/bundle`. **NEXT UP: T47** (reachability analyzer + ablation).
 - **LAST APPROVED (committed): T44** — govern the remaining capabilities. `capabilityInterface` on the 7
   ingestion→graph caps (parsing, rlm_chunking, embedding, graph_extraction, entity_disambiguation,
   entity_resolution, vision_to_text), grounded in the real callables; `rlm_method` stays ungoverned (required
@@ -308,7 +316,7 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
 | T45 | ACORD gold-chunk labels for reachability scoring (extends T9/T33 eval assets) | 5 Integrate | §12, FR-K.8 | done | T33 |
-| T46 | OKF bundle compile: chunk-only, category tree via `graph_extraction`, summaries-as-descriptions (no re-chunk; sidecar-fed) | 5 Integrate | FR-K.1, FR-K.2, FR-K.4 | todo | T40, T45, T23 |
+| T46 | OKF bundle compile: chunk-only, category tree via corpus-appropriate classifier, LLM one-line descriptions (no re-chunk; sidecar-fed) | 5 Integrate | FR-K.1, FR-K.2, FR-K.4 | done | T40, T45 |
 | T47 | Reachability analyzer + signpost ablation (deterministic, model-free) | 5 Integrate | FR-K.8 | todo | T46 |
 | T48 | Category label-retrieval control arm (T41 backlog item, run as the control) | 5 Integrate | FR-C.3 | todo | T46 |
 | **GATE-3a** | **Reachability ceiling (per-corpus kill-switch): is gold reachable through signposts, and does the coarse-label control already capture the lift?** | 5 Integrate | §13, FR-K.8 | pending | T47, T48 |
@@ -2492,7 +2500,7 @@ only 1 multi-label). These feed T46's category-quality report and T48's control.
 (for example CUAD) gold must instead be anchored to source-document coordinates and projected onto
 `chunk_id`s per compile; that is a separate task, not needed here.
 
-### Task T46: OKF bundle compile (chunk-only, category tree via graph_extraction, summaries-as-descriptions)
+### Task T46: OKF bundle compile (chunk-only, category tree + LLM one-line descriptions via a cheap model)
 
 **Description:** Compile the ingested clauses into an OKF v0.1 conformant bundle. **Not** a re-chunk:
 clauses are pre-segmented, `chunk_id`s are fixed (FR-S.2), bodies come from the chunk-text sidecar (T40)
@@ -2500,34 +2508,38 @@ which already guarantees the text matches the identifier's content hash. The wor
 construction: the **manufactured category signpost** (each clause classified into a corpus-appropriate
 label set — for ACORD, its own 9 attorney categories — via the model-profile seam, **not** bound to
 `graph_extraction`'s 41 CUAD ontology, driving the directory tree root→category→clause and the `tags`),
-**index descriptions reused from existing chunk summaries** (T-SUM, not restated titles, no second model
-pass), non-empty `type`
-frontmatter, source-document fields, `index.md` per directory, `log.md`, and a conformance lint. The
+**LLM-generated one-line descriptions** (ACORD's stored summary IS the full clause text, not a one-liner
+— verified at build — so a discriminating description is generated in the SAME gated enrichment call as the
+category, via the cheap `OKF_ENRICHMENT` model role, ADR-0023, so it is not a second model pass), non-empty
+`type` frontmatter, source-document fields, `index.md` per directory, and a conformance lint. The
 bundle root is stamped with `okf_version` and the compile-recipe version. Cross-links are **not** written
 here (T49, behind GATE-3a), so the first reachability read (T47) measures the hierarchy, tag, category,
 and description channels and treats links as a later lever.
 
 **RAC-46:**
-- [ ] Every ingested clause has a bundle file whose body is byte-faithful to the sidecar text for its
+- [x] Every ingested clause has a bundle file whose body is byte-faithful to the sidecar text for its
   `chunk_id`, and whose frontmatter carries a non-empty `type`. No chunk identifier changes.
-- [ ] The category signpost is produced by a corpus-appropriate classifier (**not** bound to
+- [x] The category signpost is produced by a corpus-appropriate classifier (**not** bound to
   `graph_extraction`'s 41 CUAD ontology); coverage and confidence are reported against the qrels-induced
   labels (T45), and clauses with no confident category land in a recorded fallback subtree, not dropped.
-- [ ] `index.md` files exist at every level, each entry carrying a description drawn from the chunk
-  summary (a real discriminator, not a restated title).
-- [ ] The conformance linter passes and reports orphan rate, description coverage, and broken-link ratio
+- [x] `index.md` files exist at every level, each entry carrying an LLM-generated one-line description
+  (a real discriminator, not a restated title). log.md is deferred to T52 (incremental-recompile lifecycle).
+- [x] The conformance linter passes and reports orphan rate, description coverage, and broken-link ratio
   as numbers.
-- [ ] Bundle root records `okf_version` and the compile-recipe version.
-- [ ] Content-hash gated (recompiling an unchanged corpus does effectively no work); the bundle is
+- [x] Bundle root records `okf_version` and the compile-recipe version.
+- [x] Content-hash gated (recompiling an unchanged corpus does effectively no work); the bundle is
   written under gitignored `data/`, never committed.
-- [ ] Selective recompile: a single subtree recompiles under a modified recipe without a full rebuild
+- [x] Selective recompile: a single subtree recompiles under a modified recipe without a full rebuild
   (T51 depends on this).
 
-**Verification:** `uv run pytest tests/capabilities/test_okf_compile.py`. Compile:
-`uv run python -m rag_wright.okf.compile`.
-**Dependencies:** T40, T45, T23. **Scope:** M. **Status:** todo.
-**Files:** `src/rag_wright/okf/compile.py`, `src/rag_wright/okf/lint.py`,
-`tests/capabilities/test_okf_compile.py`.
+**Verification:** `uv run pytest tests/capabilities/test_okf_compile.py` — 10 passed. Compile:
+`uv run python -m rag_wright.okf.compile` → **3,931 clauses, 3,491 categorized** into ACORD's 9 (440
+`_uncategorized` = honest "None of these"; 1 deterministic fallback); lint **passes=True, orphan 0.000,
+description_coverage 1.000, broken_link 0.000**. Full suite 451 passed + 27 skipped.
+**Dependencies:** T40, T45. **Scope:** M. **Status:** done.
+**Files:** `src/rag_wright/okf/{__init__,document,enrich,compile,lint}.py`, `capabilities/registry.py`
+(+slug `okf_compile`), `models/profiles.py` (+role `OKF_ENRICHMENT`, ADR-0023),
+`tests/capabilities/test_okf_compile.py`; bundle + enrichment cache under gitignored `data/acord/okf/`.
 **ARD category:** canonical slug `okf_compile`, internal registry entry, **no ARD manifest** (category 3,
 foundation derivation, same as `ontology_registry_derivation`). Open question 14 applies: this builds the
 chunk-only bundle; a concept layer above the chunks is a lossy synthesis, deliberately not built yet.
