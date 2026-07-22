@@ -21,6 +21,7 @@ capability plumbing (trace, dedup, bounds, telemetry) without a model; the live 
 from __future__ import annotations
 
 import json
+import posixpath
 import re
 import time
 from pathlib import Path
@@ -89,8 +90,23 @@ class NavigationResult(BaseModel):
 # --- generic OKF navigation primitives (FR-K.5): deterministic reads, no model call ---------------
 
 _INDEX = "index.md"
-_LINK = re.compile(r"\*\s*\[[^\]]*\]\(([^)]+)\)(?:\s*-\s*(.*))?")
-_RELATED_HEADING = "## Related clauses"
+_LINK = re.compile(r"\*\s*\[[^\]]*\]\(([^)]+)\)(?:\s*-\s*(.*))?")  # an index-entry line
+_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # any markdown link (for generic cross-link extraction)
+_RELATED_HEADING = "## Related clauses"  # our compiler's cross-link section; read_body strips it as non-content
+
+
+def _resolve_bundle_link(from_rel_path: str, link: str) -> Optional[str]:
+    """Resolve a markdown link to a root-relative bundle concept path, or None if it is not one.
+
+    Handles absolute-from-root (`/a/b.md`) and relative (`b.md`, `./b.md`, `../c/b.md`) links per OKF §5;
+    drops external URLs, `mailto:`, anchor-only, and non-`.md` targets. Domain-agnostic — works on any bundle.
+    """
+    target = link.split("#", 1)[0].strip()
+    if not target or "://" in target or target.startswith("mailto:") or not target.endswith(".md"):
+        return None
+    if target.startswith("/"):
+        return posixpath.normpath(target.lstrip("/"))
+    return posixpath.normpath(posixpath.join(posixpath.dirname(from_rel_path), target))
 
 
 class Signpost(BaseModel):
@@ -153,15 +169,25 @@ class OkfBundleReader:
         return (body[:idx] if idx != -1 else body).strip()
 
     def related(self, rel_path: str) -> list[str]:
-        """Outbound cross-links from a concept's ``## Related`` section (lateral frontier expansion, T49)."""
+        """Outbound cross-links to other concepts: ANY bundle-internal markdown link in the body (OKF §5).
+
+        Generic over any OKF bundle -- it does not depend on a ``## Related`` section (our compiler's
+        convention); it resolves every markdown link (absolute-from-root or relative), keeps the ones that
+        point at a concept file (`.md`) inside the bundle, deduplicates, and drops external/anchor/self links.
+        Returns root-relative paths (the frontier the traversal expands along)."""
         path = self._concept_path(rel_path)
         if path is None or not path.exists():
             return []
         _, body = parse_okf(path.read_text(encoding="utf-8"))
-        if _RELATED_HEADING not in body:
-            return []
-        section = body.split(_RELATED_HEADING, 1)[1]
-        return [m.group(1).split("#", 1)[0] for m in re.finditer(r"\]\(([^)]+)\)", section)]
+        src = rel_path.lstrip("/")
+        out: list[str] = []
+        seen = {src}
+        for m in _MD_LINK.finditer(body):
+            target = _resolve_bundle_link(src, m.group(1))
+            if target and target not in seen:
+                seen.add(target)
+                out.append(target)
+        return out
 
     def concept_id(self, rel_path: str) -> str:
         """The concept's returned identifier: frontmatter ``chunk_id`` if present, else its bundle path."""

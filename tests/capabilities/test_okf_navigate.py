@@ -67,9 +67,26 @@ def test_read_body_strips_related_and_frontmatter(tmp_path):
 
 def test_related_and_concept_id(tmp_path):
     reader = OkfBundleReader(_bundle(tmp_path))
-    assert reader.related("governing-law/g1.md") == ["/governing-law/g2.md"]
+    # cross-links resolve to root-relative bundle paths (from our "## Related clauses" section)
+    assert reader.related("governing-law/g1.md") == ["governing-law/g2.md"]
     assert reader.concept_id("governing-law/g1.md") == "g1:0:abc"  # frontmatter chunk_id
     assert reader.concept_id("governing-law/g2.md") == "g2:0:def"
+
+
+def test_related_is_generic_over_inline_links(tmp_path):
+    # a bundle whose cross-links are INLINE (no "## Related clauses" section) -- a generic OKF bundle
+    root = tmp_path
+    d = root / "tables"
+    d.mkdir()
+    (d / "index.md").write_text("# Tables\n\n* [orders](orders.md) - order table\n", encoding="utf-8")
+    (d / "orders.md").write_text(
+        serialize_okf({"type": "BigQuery Table", "chunk_id": "orders"},
+                      "Joined with [customers](/tables/customers.md) on id; see [neighbor](./events.md).\n"),
+        encoding="utf-8",
+    )
+    reader = OkfBundleReader(root)
+    # both an absolute-from-root and a relative inline link are found, resolved, deduped
+    assert set(reader.related("tables/orders.md")) == {"tables/customers.md", "tables/events.md"}
 
 
 # --- capability plumbing (stub navigator) -------------------------------------------------------
