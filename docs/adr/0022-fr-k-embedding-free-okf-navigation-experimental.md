@@ -81,3 +81,47 @@ FR-K.8 (reachability) and FR-K.9 (strategy memory) are evaluation and infrastruc
   verified free.
 - If FR-K is removed at GATE-3, the reachability instrument, the trace harness, and the ACORD gold labels
   are kept regardless, since they are useful to any retrieval work.
+
+## Addendum (2026-07-22): pre-T45 category-fit diagnostic and the signpost/ontology decoupling
+
+Before building T45, we ran a standalone diagnostic to test the load-bearing assumption that the category
+signpost could be manufactured via `graph_extraction`. It answered the "measure against what labels?"
+question and overturned the graph_extraction binding.
+
+**Label source (settled).** ACORD queries carry `metadata.category` (9 attorney categories); our loader
+ignored it. qrels link a query to its relevant clauses, so a gold clause inherits the category of the query
+it is relevant to — **qrels-induced silver labels**. On the test split: 57 queries → 475 distinct gold
+clauses (grade >= 2), only 1 of 475 multi-label (unusually clean). The measurable subset is 475 of 3,931,
+which is exactly the subset reachability and the control arm care about (a clause that is no query's gold
+answer does not affect recall).
+
+**Arm A (model-free crosswalk).** `graph_extraction`'s 41 CUAD categories represent only **318/475 (67%)**
+of gold mass. **157/475 (33%) have no clean CUAD home** — Indemnification (121 clauses, 14 queries, the
+second-largest class) and Affirmative Covenants (36). CUAD has no indemnification clause type at all.
+
+**Arm B (model, the ceiling).** A direct forced-choice classifier into ACORD's own 9 categories
+(deepseek-v4-pro through the model-profile seam, all 475 clauses, 0 errors) agreed with the induced labels
+**91.6%**. Per-category: Indemnification 100% (121/121), Governing Law / Term / Liquidated Damages /
+third-party-beneficiary 100%, IP 97%, Affirmative Covenants 94%, Limitation of Liability 90%; the only weak
+spot is Restrictive Covenants at 62% (bleeds into Term / Affirmative Covenants).
+
+**Decision.** The category signpost is trustworthy, but only when **decoupled from graph_extraction's fixed
+CUAD ontology**. FR-K.2 and T46/T48 now manufacture the category via a **corpus-appropriate direct
+classifier** through the model-profile seam (a corpus supplies its own label set), which is also the more
+corpus-neutral design. The OKF experiment needs no ontology change.
+
+**Skew caveat (carried into GATE-3a/GATE-3).** 318/475 gold clauses (67%) sit in two categories (Limitation
+of Liability + Indemnification), so category is a strong *bucketer* but a coarse *localizer*: it reaches the
+right branch but cannot find a query's specific gold clauses within a ~200-deep branch. Within-branch
+localization (chunk-summary descriptions, later cross-links) carries exactly the queries that dominate the
+eval. This predicts the compile-side ceiling is not threatened by category noise, while the T48 control
+likely lands in the middle (reaches the bucket, cannot localize) — the tension GATE-3 adjudicates.
+
+**Separate consequence.** The 33% ontology gap is a real `graph_query` quality issue for any non-CUAD
+corpus, independent of OKF (`ClauseFact` in the knowledge graph also cannot represent indemnification for
+ACORD). Logged as **T54** (deferred, ask-first): extend the ontology via a T8-derived taxonomy (SPEC §17,
+the aligned path) or an open-set proposal seam (the FR-C.7 / T23b pattern), never a crosswalk (which cannot
+invent missing coverage). Not required to proceed with FR-K.
+
+The diagnostic script lives at `temp/okf_category_diag.py` (gitignored); it promotes into `eval/` when T46
+lands.

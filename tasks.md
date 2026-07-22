@@ -312,6 +312,7 @@ kill-switch); the whole program is specified now but built behind that gate. Det
 | **GATE-3** | **FR-K graduate or remove: OKF traversal vs the category-label control** | 5 Integrate | §13, §15 | pending | T47, T50, T51, T48 |
 | T52 | Bundle lifecycle: incremental recompile, update, delete (shares the T40 gate) | 5 Integrate | FR-K.7 | todo (post-GATE-3) | GATE-3, T34 |
 | T53 | Strategy memory: store and reuse verified navigation strategies | 5 Integrate | FR-K.9 | todo (post-GATE-3) | GATE-3, T50, T51 |
+| T54 | graph_extraction ontology extension (not FR-K): make `ClauseCategory` cover non-CUAD corpora — T8-derived or proposal-seam, NOT a crosswalk (can't invent missing coverage) | 4 Build graph | FR-C.6, FR-C.8 | deferred (ask-first; data-model change) | T8, T23, ADR-0022 |
 
 Extras (§3.2: multi-vector, typed-functional RLM, CLIP embedder, canonical skeleton, domain
 LoRA) are **out of scope / ask-first** and are not scheduled here.
@@ -2476,18 +2477,23 @@ span projection is needed, which is why ACORD is the first slice rather than a s
 **Verification:** `uv run pytest eval/test_okf_gold.py`. Rebuild: `uv run python -m eval.okf_gold`.
 **Dependencies:** T33. **Scope:** S. **Status:** todo.
 **Files:** `eval/okf_gold.py`, `eval/test_okf_gold.py`.
-**Note:** Corpus-neutral shape, ACORD-cheap instance. On a span-annotated corpus (for example CUAD) gold
-must be anchored to source-document coordinates and projected onto `chunk_id`s per compile; that is a
-separate task, not needed here.
+**Note:** Corpus-neutral shape, ACORD-cheap instance. Also emit the **qrels-induced silver category labels**
+here as a side artifact: read `queries.jsonl` `metadata.category` (the loader ignores it today) and induce
+a category on each gold clause from the query it is relevant to (test split: 57 queries → 475 gold clauses,
+only 1 multi-label). These feed T46's category-quality report and T48's control. On a span-annotated corpus
+(for example CUAD) gold must instead be anchored to source-document coordinates and projected onto
+`chunk_id`s per compile; that is a separate task, not needed here.
 
 ### Task T46: OKF bundle compile (chunk-only, category tree via graph_extraction, summaries-as-descriptions)
 
 **Description:** Compile the ingested clauses into an OKF v0.1 conformant bundle. **Not** a re-chunk:
 clauses are pre-segmented, `chunk_id`s are fixed (FR-S.2), bodies come from the chunk-text sidecar (T40)
 which already guarantees the text matches the identifier's content hash. The work is signpost
-construction: the **manufactured category signpost** (each clause classified through `graph_extraction`,
-T23, driving the directory tree root→category→clause and the `tags`), **index descriptions reused from
-existing chunk summaries** (T-SUM, not restated titles, no second model pass), non-empty `type`
+construction: the **manufactured category signpost** (each clause classified into a corpus-appropriate
+label set — for ACORD, its own 9 attorney categories — via the model-profile seam, **not** bound to
+`graph_extraction`'s 41 CUAD ontology, driving the directory tree root→category→clause and the `tags`),
+**index descriptions reused from existing chunk summaries** (T-SUM, not restated titles, no second model
+pass), non-empty `type`
 frontmatter, source-document fields, `index.md` per directory, `log.md`, and a conformance lint. The
 bundle root is stamped with `okf_version` and the compile-recipe version. Cross-links are **not** written
 here (T49, behind GATE-3a), so the first reachability read (T47) measures the hierarchy, tag, category,
@@ -2496,8 +2502,9 @@ and description channels and treats links as a later lever.
 **RAC-46:**
 - [ ] Every ingested clause has a bundle file whose body is byte-faithful to the sidecar text for its
   `chunk_id`, and whose frontmatter carries a non-empty `type`. No chunk identifier changes.
-- [ ] The category signpost is produced by `graph_extraction`; category coverage and confidence are
-  reported, and clauses with no confident category land in a recorded fallback subtree, not dropped.
+- [ ] The category signpost is produced by a corpus-appropriate classifier (**not** bound to
+  `graph_extraction`'s 41 CUAD ontology); coverage and confidence are reported against the qrels-induced
+  labels (T45), and clauses with no confident category land in a recorded fallback subtree, not dropped.
 - [ ] `index.md` files exist at every level, each entry carrying a description drawn from the chunk
   summary (a real discriminator, not a restated title).
 - [ ] The conformance linter passes and reports orphan rate, description coverage, and broken-link ratio
@@ -2516,9 +2523,15 @@ and description channels and treats links as a later lever.
 **ARD category:** canonical slug `okf_compile`, internal registry entry, **no ARD manifest** (category 3,
 foundation derivation, same as `ontology_registry_derivation`). Open question 14 applies: this builds the
 chunk-only bundle; a concept layer above the chunks is a lossy synthesis, deliberately not built yet.
-**Risk (flagged):** `graph_extraction`'s categories are the 41 CUAD-derived ontology categories (T4/T23);
-classifying ACORD clauses into that taxonomy is an assumption of fit. RAC measures it (coverage/
-confidence) so a poor fit surfaces as a number, not a silent low ceiling.
+**Diagnostic (pre-T45, 2026-07-22 — resolved; ADR-0022 addendum):** the assumed `graph_extraction` fit
+does NOT hold — its 41 CUAD categories cover only **67%** of ACORD's gold-clause mass (Indemnification
+121 + Affirmative Covenants 36 = 157/475 have no CUAD home). A **direct classifier into ACORD's own 9
+categories agrees with the qrels-induced labels 91.6%** (deepseek-v4-pro, 475/475, per-category:
+Indemnification 100%, only Restrictive Covenants weak at 62%). Decision: **decouple the signpost from
+graph_extraction's ontology** (above). **Skew caveat:** 318/475 gold clauses (67%) sit in 2 categories, so
+category is a strong *bucketer* but a coarse *localizer* — within-branch localization (descriptions, links)
+carries the queries that dominate the eval. The graph_extraction ontology gap itself is logged as **T54**
+(deferred, ask-first); it is a graph-quality issue for non-CUAD corpora, separate from this experiment.
 
 ### Task T47: Reachability analyzer and signpost ablation
 
@@ -2570,7 +2583,11 @@ by T46 so the control's ceiling is known.
 **Dependencies:** T46. **Scope:** M. **Status:** todo.
 **Files:** `eval/category_retrieval.py`, `eval/test_category_retrieval.py`.
 **Note:** Running this as the control keeps the gates honest. If coarse label matching captures most of
-the lift, the OKF compile is not justified by the numbers — a valid, cheap early result.
+the lift, the OKF compile is not justified by the numbers — a valid, cheap early result. The control uses
+the same corpus-appropriate direct classifier as T46 (not graph_extraction) against the T45 induced labels.
+The pre-T45 diagnostic (ADR-0022) previews its ceiling: classification agreement is high (91.6%), so
+bucketing is strong, but recall is bounded by within-branch localization given the 2-category skew — the
+control likely lands in the middle, which is exactly the tension GATE-3/GATE-3a adjudicate.
 
 ### GATE-3a: Reachability ceiling (per-corpus kill-switch)
 
@@ -2789,6 +2806,24 @@ production accumulate under judge approval.
 **Note:** The natural implementation stores cases as an OKF bundle navigated with the same progressive
 disclosure the corpus uses, so memory and corpus share one mechanism. Scoped to traversal strategies only;
 does not settle the general agent-memory question.
+
+### Task T54: graph_extraction ontology extension (deferred, ask-first — NOT FR-K)
+
+**Description:** Spun off from the pre-T45 diagnostic (ADR-0022). `ClauseCategory` is a hardcoded 41-member
+CUAD enum that `ClauseFact` strictly validates against, so `graph_extraction` (and therefore `graph_query`)
+cannot represent clause types CUAD lacks — for ACORD, Indemnification (25% of the eval's gold mass) and
+Affirmative Covenants have no home. This is a **graph-quality** issue for any non-CUAD corpus, separate from
+the OKF experiment (which decouples its signpost classifier and needs none of this). Not scheduled; recorded
+so the gap is visible. The viable extension shapes (ADR-0022 addendum): **T8-derived ontology** (SPEC §17 /
+assumption 3, the aligned path), **static enum extension** (cheapest, pollutes the CUAD contract), or an
+**open-set proposal/verification seam** (the FR-C.7 / T23b pattern). A **crosswalk/hierarchy layer is ruled
+out** — it can coarsen an existing taxonomy but cannot invent missing coverage. Any option is a data-model
+change (ask-first, load-bearing) and must preserve strict-reject of the genuinely-unknown.
+
+**Dependencies:** T8, T23. **Scope:** M-L (T8-derived) / S (static). **Status:** deferred (ask-first).
+**Files (if taken up):** `src/rag_wright/contracts/ontology.py`, `src/rag_wright/ontology/derive.py`,
+their tests. **Note:** decide the shape with us before touching the ontology; do not extend it as a side
+effect of any OKF task.
 
 ---
 
