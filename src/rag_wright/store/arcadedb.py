@@ -22,6 +22,7 @@ from typing import Any, Iterable
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
+from rag_wright.contracts.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
 
@@ -29,6 +30,13 @@ CHUNK_TYPE = "Chunk"
 ENTITY_TYPE = "Entity"
 REL_EDGE_TYPE = "Relationship"  # entity -> entity relationship edge (the graph's primary content)
 MENTIONS_EDGE_TYPE = "Mentions"  # chunk -> entity provenance edge (FR-S.1: chunk and entities connect)
+
+# FR-R (ADR-0025/0026) property graph: clause node -> typed property edge -> shared property-value node.
+# Distinct from the generic Entity graph. Value nodes are deduped by (dimension,value); the controlled
+# vocabulary is already canonical, so no entity-resolution clustering is needed.
+CLAUSE_TYPE = "Clause"
+PROPVALUE_TYPE = "PropertyValue"
+PROPERTY_EDGE_TYPE = "HasProperty"  # Clause -> PropertyValue, carrying the assertion's provenance
 
 # Candidates fetched per leg before fusion. RRF reorders within this pool, so it is set well above a
 # typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then
@@ -45,6 +53,14 @@ _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
 _SPAN_ID_INDEX = f"{SPAN_TYPE}[span_id]"
 _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
+_CLAUSE_ID_INDEX = f"{CLAUSE_TYPE}[clause_id]"
+_PROPVALUE_KEY_INDEX = f"{PROPVALUE_TYPE}[value_key]"
+
+
+def _property_value_key(dimension: str, value: str) -> str:
+    """The shared `PropertyValue` node identity: the canonical (dimension, value). The controlled
+    vocabulary is already canonical, so dedup across clauses is a deterministic upsert by this key."""
+    return f"{dimension}:{value}"
 
 
 def _sql_str(value: str) -> str:
@@ -147,6 +163,19 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.dense ARRAY_OF_FLOATS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_indices ARRAY_OF_INTEGERS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_weights ARRAY_OF_FLOATS")
+        if CLAUSE_TYPE not in types:  # FR-R (ADR-0026): the property graph (clause node)
+            self._command(f"CREATE VERTEX TYPE {CLAUSE_TYPE}")
+            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.clause_id STRING")  # parent chunk / OKF pointer
+            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.function STRING")
+            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.folio_iri STRING")
+        if PROPVALUE_TYPE not in types:  # shared, deduped (dimension,value) node
+            self._command(f"CREATE VERTEX TYPE {PROPVALUE_TYPE}")
+            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value_key STRING")
+            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.dimension STRING")
+            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value STRING")
+            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.folio_iri STRING")
+        if PROPERTY_EDGE_TYPE not in types:  # Clause -> PropertyValue (carries the assertion provenance)
+            self._command(f"CREATE EDGE TYPE {PROPERTY_EDGE_TYPE}")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -173,6 +202,10 @@ class ArcadeDBStore:
             self._command(
                 f"CREATE INDEX ON {SPAN_TYPE} (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR"
             )
+        if _CLAUSE_ID_INDEX not in indexes:
+            self._command(f"CREATE INDEX ON {CLAUSE_TYPE} (clause_id) UNIQUE")
+        if _PROPVALUE_KEY_INDEX not in indexes:
+            self._command(f"CREATE INDEX ON {PROPVALUE_TYPE} (value_key) UNIQUE")
 
     def type_names(self) -> set[str]:
         return {row["name"] for row in self._query("SELECT name FROM schema:types")}
@@ -404,6 +437,64 @@ class ArcadeDBStore:
                     "path_confidences": [row["e1cf"], row["e2cf"]], "hops": 2,
                 })
         return paths
+
+    # --- property graph (T57c, FR-R) ------------------------------------------------------------
+
+    def write_property_graph(self, record: ClausePropertyRecord) -> None:
+        """Write the clause node + its property-value nodes + the typed property edges in ONE transaction
+        (FR-S.1). Value nodes are shared/deduped by (dimension,value) -- the vocabulary is canonical, so no
+        entity-resolution clustering is needed. Idempotent by a content-hash gate: `clause_id` embeds the
+        content hash (FR-S.2), so a committed clause node means identical content and hence identical
+        assertions (a changed clause is a NEW node); if the clause already exists we skip -- which also
+        means the edge writes only ever run once per clause, so plain `CREATE EDGE` cannot duplicate. Every
+        edge carries the assertion's confidence + span_id + chunk_id provenance (FR-S.4 / FR-Q.6)."""
+        cid = _sql_str(record.clause_id)
+        if self._query(f"SELECT clause_id FROM {CLAUSE_TYPE} WHERE clause_id = {cid} LIMIT 1"):
+            return  # already populated (content-hash gate): a committed clause_id -> identical assertions
+        statements: list[str] = [
+            f"UPDATE {CLAUSE_TYPE} SET clause_id = {cid}, function = {_sql_str(record.function)},"
+            f" folio_iri = {_sql_str(record.folio_iri)} UPSERT WHERE clause_id = {cid}",
+        ]
+        for a in record.assertions:
+            key = _property_value_key(a.dimension.value, a.value)
+            key_sql = _sql_str(key)
+            statements.append(  # shared value node: upsert by canonical (dimension,value) key
+                f"UPDATE {PROPVALUE_TYPE} SET value_key = {key_sql},"
+                f" dimension = {_sql_str(a.dimension.value)}, value = {_sql_str(a.value)},"
+                f" folio_iri = {_sql_str(FOLIO_SUBJECT_IRI.get(a.value, ''))}"
+                f" UPSERT WHERE value_key = {key_sql}"
+            )
+            statements.append(
+                f"CREATE EDGE {PROPERTY_EDGE_TYPE}"
+                f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {cid})"
+                f" TO (SELECT FROM {PROPVALUE_TYPE} WHERE value_key = {key_sql})"
+                f" SET confidence = {_sql_str(a.confidence.value)}, span_id = {_sql_str(a.span_id)},"
+                f" chunk_id = {_sql_str(str(a.provenance.chunk_id))},"
+                f" source_doc_id = {_sql_str(a.provenance.source_doc_id)}"
+            )
+        self._db.execute_transaction(statements)
+
+    def property_graph_counts(self) -> dict[str, int]:
+        """Counts for introspection/tests: clauses, shared property-value nodes, and property edges."""
+        clauses = self._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
+        values = self._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
+        edges = self._query(f"SELECT count(*) AS n FROM {PROPERTY_EDGE_TYPE}")
+        return {
+            "clauses": int(clauses[0]["n"]) if clauses else 0,
+            "property_values": int(values[0]["n"]) if values else 0,
+            "property_edges": int(edges[0]["n"]) if edges else 0,
+        }
+
+    def clause_property_values(self, clause_id: str) -> list[dict]:
+        """The property values a clause asserts, each with the edge's provenance (dimension, value,
+        confidence, span_id) -- the readback for tests and the shape T58's query builds on."""
+        q = (
+            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id = " + _sql_str(clause_id) + ")}"
+            ".outE('" + PROPERTY_EDGE_TYPE + "'){as: e}.inV(){as: v}"
+            " RETURN v.dimension AS dimension, v.value AS value, e.confidence AS confidence,"
+            " e.span_id AS span_id"
+        )
+        return self._query(q)
 
     def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
         if not chunk_ids:
