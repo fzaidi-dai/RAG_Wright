@@ -22,6 +22,7 @@ from typing import Any, Iterable
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
+from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
 
 CHUNK_TYPE = "Chunk"
@@ -34,11 +35,16 @@ MENTIONS_EDGE_TYPE = "Mentions"  # chunk -> entity provenance edge (FR-S.1: chun
 # cut to `k`. Tuned at GATE-2 against the golden set if recall calls for it.
 DEFAULT_CANDIDATE_POOL = 100
 
+SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
+
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
 _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
 _SPARSE_INDEX = f"{CHUNK_TYPE}[sparse_indices,sparse_weights]"
 _CHUNK_ID_INDEX = f"{CHUNK_TYPE}[chunk_id]"
 _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
+_SPAN_ID_INDEX = f"{SPAN_TYPE}[span_id]"
+_SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
+_SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 
 
 def _sql_str(value: str) -> str:
@@ -130,6 +136,17 @@ class ArcadeDBStore:
             self._command(f"CREATE EDGE TYPE {REL_EDGE_TYPE}")
         if MENTIONS_EDGE_TYPE not in types:
             self._command(f"CREATE EDGE TYPE {MENTIONS_EDGE_TYPE}")
+        if SPAN_TYPE not in types:  # FR-R (ADR-0025): operative-span hybrid index
+            self._command(f"CREATE VERTEX TYPE {SPAN_TYPE}")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.span_id STRING")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.parent_chunk_id STRING")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.parent_okf_path STRING")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.span_index INTEGER")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.text STRING")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.function STRING")  # the function-classifier tag (T56)
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.dense ARRAY_OF_FLOATS")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_indices ARRAY_OF_INTEGERS")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_weights ARRAY_OF_FLOATS")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -145,6 +162,17 @@ class ArcadeDBStore:
             )
         if _ENTITY_ID_INDEX not in indexes:
             self._command(f"CREATE INDEX ON {ENTITY_TYPE} (entity_id) UNIQUE")
+        if _SPAN_ID_INDEX not in indexes:
+            self._command(f"CREATE INDEX ON {SPAN_TYPE} (span_id) UNIQUE")
+        if _SPAN_DENSE_INDEX not in indexes:
+            self._command(
+                f"CREATE INDEX ON {SPAN_TYPE} (dense) LSM_VECTOR "
+                f"METADATA {{ dimensions: {BGE_M3_DENSE_DIM}, similarity: 'COSINE' }}"
+            )
+        if _SPAN_SPARSE_INDEX not in indexes:
+            self._command(
+                f"CREATE INDEX ON {SPAN_TYPE} (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR"
+            )
 
     def type_names(self) -> set[str]:
         return {row["name"] for row in self._query("SELECT name FROM schema:types")}
@@ -195,6 +223,56 @@ class ArcadeDBStore:
             f"WHERE chunk_id = {_sql_str(chunk_id)}"
         )
         return rows[0] if rows else None
+
+    # --- operative-span write/search (FR-R, ADR-0025) -------------------------------------------
+
+    def upsert_span(self, record: SpanRecord) -> None:
+        """Upsert an operative-span record by `span_id` (dense + sparse over the span text). Same sparse
+        decomposition into the two parallel arrays the `LSM_SPARSE_VECTOR` index binds as `upsert_chunk`."""
+        token_ids = sorted(record.sparse_vector)  # deterministic order across the paired arrays
+        dense = _float_array(record.dense_vector)
+        sparse_indices = "[" + ",".join(str(i) for i in token_ids) + "]"
+        sparse_weights = _float_array(record.sparse_vector[i] for i in token_ids)
+        self._command(
+            f"UPDATE {SPAN_TYPE} SET"
+            f" span_id = {_sql_str(record.span_id)},"
+            f" parent_chunk_id = {_sql_str(record.parent_chunk_id)},"
+            f" parent_okf_path = {_sql_str(record.parent_okf_path)},"
+            f" span_index = {int(record.span_index)},"
+            f" text = {_sql_str(record.text)},"
+            f" function = {_sql_str(record.function)},"
+            f" dense = {dense},"
+            f" sparse_indices = {sparse_indices},"
+            f" sparse_weights = {sparse_weights}"
+            f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
+        )
+
+    def span_hybrid_search(
+        self,
+        dense_query: list[float],
+        sparse_query: dict[int, float],
+        *,
+        k: int,
+        function: str | None = None,
+    ) -> list[dict]:
+        """RRF-fused dense+sparse search over the `Span` index, optionally restricted to one `function` tag
+        (the function-classifier's routing filter, FR-R). Mirrors `hybrid_search`; returns span_id + the
+        parent pointer so the caller can follow the span back to its clause for the rerank stage."""
+        leg_k = max(k, DEFAULT_CANDIDATE_POOL)
+        token_ids = sorted(sparse_query)
+        sparse_indices = "[" + ",".join(str(i) for i in token_ids) + "]"
+        sparse_weights = _float_array(sparse_query[i] for i in token_ids)
+        dense = _float_array(dense_query)
+        fused = (
+            "SELECT expand(`vector.fuse`("
+            f"`vector.neighbors`('{_SPAN_DENSE_INDEX}', {dense}, {leg_k}), "
+            f"`vector.sparseNeighbors`('{_SPAN_SPARSE_INDEX}', {sparse_indices}, {sparse_weights}, {leg_k}), "
+            "{ fusion: 'RRF' }))"
+        )
+        where = f" WHERE function = {_sql_str(function)}" if function else ""
+        return self._query(
+            f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({fused}){where} LIMIT {k}"
+        )
 
     def chunk_count(self) -> int:
         rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")
