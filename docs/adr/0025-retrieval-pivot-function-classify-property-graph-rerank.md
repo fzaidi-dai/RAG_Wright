@@ -61,6 +61,17 @@ function tag, dense+sparse embeddings, parent pointer) and the property graph li
   reverted (findings recorded here); `scikit-learn` is retained (the function classifier's linear head).
 - New identifier: `span_id` (embeds `parent_chunk_id`) is the join key across the span store and property graph;
   fix before building (identifier rule).
+- **FUNCTION classifier = fine-tuned LegalBERT (adopted 2026-07-23, T56).** The frozen-embedding linear head
+  reached macro-F1 0.43 but scored Cap-on-Liability vs Insurance at F1 0 — total confusion, which is the exact
+  function-confusion this pivot targets (insurance/indemnity clauses saying "liability" swamping gold liability
+  caps). Class-weight tuning cannot fix a representation limit, so the feature side was escalated to a fine-tuned
+  `nlpaueb/legal-bert-base-uncased` (sequence classification, class-weighted cross-entropy, 4 epochs on MPS;
+  trained by `scripts/train_legalbert_function.py` on CUAD operative spans, contract-disjoint split). Held-out
+  macro-F1 **0.544** / micro 0.706; Insurance F1 0.91, Cap 0.71, Governing Law 0.92, and the **Cap↔Insurance
+  confusion is eliminated** (Cap→Insurance 0, Insurance→Cap 3/95). Deliberately made a controlled high-accuracy
+  variable so a downstream recall shortfall is attributable to the property/rerank stages, not the classifier.
+  The linear head (`function_classifier.py`) is retained as the seam/baseline; LegalBERT weights are a gitignored
+  data artifact under `data/models/legalbert_function`.
 
 ## References
 

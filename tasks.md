@@ -52,6 +52,13 @@ not this repo's.
 
 ## Last approved / next up
 
+- **APPROVED 2026-07-23: T55 + T56 (FR-R, ADR-0025).** Operative-span segmenter + ArcadeDB `Span` store (T55),
+  and the local FUNCTION classifier (T56) — LegalBERT fine-tune, macro-F1 0.544, Cap↔Insurance confusion
+  eliminated (the failure mode the pivot targets). The classifier is now a controlled high-accuracy variable, so
+  a downstream recall shortfall is attributable to the property/rerank stages, not function-confusion.
+  **Next up: T57** — draft the PROPERTY schema from the 57 ACORD query patterns (**schema review gate**), then
+  the targeted property extractor → property graph.
+
 - **SPECCED (not yet built), 2026-07-22: FR-K — embedding-free OKF navigation (T45-T53 + GATE-3a/GATE-3).**
   New experimental capability block added to `SPEC.md` (FR-K.1-K.9) and this ledger, motivated by the T41
   query-representation-gap diagnosis: compile the chunk corpus into an Open Knowledge Format (OKF) bundle
@@ -360,7 +367,7 @@ Built behind **GATE-R** (clears the 0.667 recall bar / beats the 0.379 two-leg b
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
 | T55 | Operative-span segmenter: re-chunk each clause → operative spans (enumeration/semicolon markers + spaCy legal-sentence, deterministic; byte-faithful reconstruction, size floor), each pointing to its parent clause. Output = `Span` records for ArcadeDB (text, `parent_chunk_id` + parent OKF path, function slot, dense/sparse emb slot) | 5 Integrate | FR-Q, §GATE-2 | **done — (a) `spans/segment.py`: deterministic, byte-faithful tiling, enumeration/sentence split with abbrev/section-ref guards + sub-floor merge (9 tests; run-ons split into operatives). (b) ArcadeDB `Span` type: dense `LSM_VECTOR` + sparse `LSM_SPARSE_VECTOR`, `upsert_span`, `span_hybrid_search` (RRF-fused, parent pointer, `function` filter) + `SpanRecord` contract (live-tested; Chunk path intact). Store POPULATION (embed+classify+upsert) is downstream (uses T56)** | T13, T40, ADR-0025 |
-| T56 | Local FUNCTION classifier over spans: single-label {41 CUAD `ClauseCategory` + NONE}; linear head on frozen embeddings (escalate to LegalBERT only if F1 lags); tag + index function-bearing spans | 5 Integrate | FR-C.3, FR-Q | todo | T55, T8 |
+| T56 | Local FUNCTION classifier over spans: single-label {41 CUAD `ClauseCategory` + NONE}; linear head on frozen embeddings (escalate to LegalBERT only if F1 lags); tag + index function-bearing spans | 5 Integrate | FR-C.3, FR-Q | **done — CUAD→operative-span labels (`cuad_labels.py`, max-overlap type else NONE, contract-disjoint split). Frozen linear head (`function_classifier.py`) macro-F1 0.43 but Cap-vs-Insurance F1=0 (frozen embeddings can't separate them) → escalated to **LegalBERT** (`legalbert_classifier.py`, fine-tuned `legal-bert-base-uncased`, class-weighted CE, 4 epochs MPS). Held-out macro-F1 **0.544** / micro 0.706; Insurance F1 0.91, Cap 0.71, Governing Law 0.92; **Cap↔Insurance confusion eliminated** (Cap→Insurance 0, Insurance→Cap 3/95). Adopted as the function classifier (ADR-0025). Hermetic tests green (both classifiers); weights gitignored. Span store POPULATION is downstream (T58)** | T55, T8 |
 | T57 | PROPERTY schema (draft from the 57 ACORD query patterns; **schema review gate**) + targeted property extractor (reuse Extractor seam / DeepSeek) → **new** property graph (clause node ↔ typed property edges; reuse graph_storage / entity_resolution, NOT the generic entity graph) | 5 Integrate | FR-C.6, FR-C.7 | todo (schema review gate) | T55, T25, T24 |
 | T58 | Query decomposition (→ function + property) + in-store retrieval: span hybrid-search filtered by function → property graph query → parent clauses | 5 Integrate | FR-Q.3, FR-Q.4 | todo | T56, T57 |
 | T59 | Reranker for the fuzzy/comparative/novel property tail: `BGEReranker` default; LLM-rerank via the seam optional | 5 Integrate | FR-Q | todo | T58, T29 |
