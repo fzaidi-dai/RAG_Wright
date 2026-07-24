@@ -52,6 +52,11 @@ not this repo's.
 
 ## Last approved / next up
 
+- **APPROVED 2026-07-23: T58a (FR-Q, ADR-0025).** Full-corpus phase-1 population (14,553 spans) + the
+  single-function gate ceiling: **best-single 0.939 / union-top-2 0.992** (bar 0.667, baseline 0.379); only 4/57
+  below bar, all recovered by union-top-2. KEY: reachability is NOT the ceiling — the 0.379 wall was RANKING, not
+  reachability; recall is now a small-pool ranking problem (rerank + HyDE-dense). **Next: phase 2 property
+  extraction (~3,887 clauses), then T58b retrieval composition → GATE-R.**
 - **APPROVED 2026-07-23: T57c (FR-C.6/FR-C.7, ADR-0025/0026).** Property-graph write-path: ArcadeDB
   `Clause`/`PropertyValue`/`HasProperty`, `write_property_graph` (provenance on every edge), shared value nodes
   deduped by canonical (dimension,value) — no entity_resolution clustering; content-hash-gated idempotency. 5
@@ -383,6 +388,17 @@ local function classifier → property graph → rerank for the fuzzy tail; span
 (clauses stay source-of-truth in the clause OKF bundle). Capability-half; pipeline composition is GraphWright's.
 Built behind **GATE-R** (clears the 0.667 recall bar / beats the 0.379 two-leg baseline).
 
+**Retrieval design (T58, converged 2026-07-23 — see memory `retrieval-design-t58`):** query decomposition = ONE
+LLM structured call → `functions` (enum-bound to the 44 FUNCTION_LABELS, top-1..2), `properties` (enum-bound to
+CLOSED_VOCAB), and a **HyDE hypothetical clause**. Flow: function-filtered ranked hybrid search → spans → parent
+clauses → property **soft-boost** (hard-filter is an ablation only, never hard-AND-reject) → rerank → recall@50.
+**The function gate is a HARD recall ceiling** = (gold bucketed into the query's function) × (query→function
+correct), bounded by classifier per-class RECALL not F1 (Warranty 0.98 / Cap 0.79 / Uncapped 0.66); **measure the
+single-function ceiling FIRST** (model-free), then **union confusable siblings** (T60 confusion matrix, e.g.
+Cap↔Uncapped) where needed. **HyDE for BOTH** (do not miss either): (a) dense ranking in step 2 (only moves
+recall@50 on pools >50 clauses — the big LoL/Indemnification pools); (b) a boundary-aligned Function vote by
+feeding the hypothetical clause to the local LegalBERT classifier. HyDE folded into the one decomposition call.
+
 | ID | Task | Phase | FR | Status | Dep |
 |---|---|---|---|---|---|
 | T55 | Operative-span segmenter: re-chunk each clause → operative spans (enumeration/semicolon markers + spaCy legal-sentence, deterministic; byte-faithful reconstruction, size floor), each pointing to its parent clause. Output = `Span` records for ArcadeDB (text, `parent_chunk_id` + parent OKF path, function slot, dense/sparse emb slot) | 5 Integrate | FR-Q, §GATE-2 | **done — (a) `spans/segment.py`: deterministic, byte-faithful tiling, enumeration/sentence split with abbrev/section-ref guards + sub-floor merge (9 tests; run-ons split into operatives). (b) ArcadeDB `Span` type: dense `LSM_VECTOR` + sparse `LSM_SPARSE_VECTOR`, `upsert_span`, `span_hybrid_search` (RRF-fused, parent pointer, `function` filter) + `SpanRecord` contract (live-tested; Chunk path intact). Store POPULATION (embed+classify+upsert) is downstream (uses T56)** | T13, T40, ADR-0025 |
@@ -391,7 +407,8 @@ Built behind **GATE-R** (clears the 0.667 recall bar / beats the 0.379 two-leg b
 | T60 | Extend function taxonomy + **retrain T56** over the 44 classes: source labels for the 3 new classes (LLM-labeled bootstrap over CUAD indemnification/waiver/disclaimer spans + ACORD graded pairs), retrain LegalBERT, re-measure per-type F1 + confusion (sub-gate: the 3 new classes reach usable F1; Cap↔Insurance stays clean) | 5 Integrate | FR-C.3, FR-Q | **done — label bootstrap over CUAD (`label_new_functions.py`: keyword pre-filter + DeepSeek confirm via seam, contract-disjoint; 400 Indemnification / 400 Warranty Disclaimer / 73 Damages Waiver — ACORD untouched). 45-class LegalBERT (44 fn + NONE). Sub-gate MET: Indemnification F1 0.70, Warranty Disclaimer 0.95, Damages Waiver 0.70; Cap→Insurance 0, Insurance→Cap 1/95. macro-F1 0.586 / micro 0.744; all 57 query functions covered. **Production trainer** (`train_legalbert_function.py`): best-model retention (`load_best_model_at_end`+eval_loss), early stopping, resume-from-weights (constant low LR) + adopt-only-if-better guard, dry-run isolation — validated by a continuation (eval_loss 1.31→1.196, kept ep2 over worse ep3). Reusable `util/concurrent.map_concurrent`+`Progress`. Weights/backup gitignored** | T56, T57a |
 | T57b | Targeted PROPERTY extractor (reuse Extractor seam / DeepSeek via model-profile) → emits `ClausePropertyRecord` per clause span | 5 Integrate | FR-C.6 | **done — `spans/property_extractor.py`: function-aware `FUNCTION_DIMENSIONS` map; pure `build_record` (scope-filter + out-of-vocab→AMBIGUOUS coercion + provenance/span-cite/FOLIO); `SeamPropertyExtractor` (DeepSeek via seam, None-retry, injectable runnable). 5 hermetic tests + live smoke (mutual cap → mutuality/carve_out×2/cap_basis/cap_quantum, all correct). Reuses `map_concurrent` at ingestion (T57c)** | T57a, T60 |
 | T57c | Property-graph population: Clause node ↔ typed property edges + shared value nodes (`Exception`/`Subject`/`PartyScope`), reuse graph_storage / entity_resolution, NOT the generic entity graph | 5 Integrate | FR-C.6, FR-C.7 | **done (write-path) — ArcadeDB `Clause`/`PropertyValue`/`HasProperty` schema; `write_property_graph` (one txn, provenance on every edge), `property_graph_counts` + `clause_property_values` readback. ONE `PropertyValue` type keyed by (dimension,value); dedup is a deterministic upsert (controlled vocab already canonical → NO entity_resolution clustering needed). Idempotent via content-hash gate (clause_id embeds hash) — this dialect rejects `DELETE EDGE`/`CREATE EDGE UPSERT` (recorded). 1 hermetic + 4 live `-m store` (schema, write+readback+provenance, shared-node dedup, idempotent). Full-corpus population RUN is T58's first step** | T57b, T25, T24 |
-| T58 | Query decomposition (→ function + property) + in-store retrieval: span hybrid-search filtered by function → property graph query → parent clauses | 5 Integrate | FR-Q.3, FR-Q.4 | todo | T56, T57c |
+| T58a | Full-corpus population (`populate_property_store.py`: segment→classify→embed→upsert_span, then extract→write_property_graph; clause-level; PHASE=spans/extract/all; batched embed) + **single-function gate ceiling** (`eval/function_ceiling.py`, model-free) | 5 Integrate | FR-Q | **done (phase 1 + ceiling) — phase 1: 14,553 spans / 3,931 clauses / 3,887 non-NONE cached. CEILING = best-single 0.939 / union-top-2 0.992 (bar 0.667, baseline 0.379); only 4/57 below bar, ALL recovered by union-top-2 (confusion pairs match T60: No-Solicit↔Non-Compete, non-reliance↔Warranty-Disclaimer, bodily-injury↔Uncapped). Reachability is NOT the ceiling → recall is now a RANKING problem in small pools. Phase 2 (extraction) running next** | T56, T57c |
+| T58b | Query decomposition (ONE LLM call → functions enum top-1..2 + property constraints + HyDE clause) + retrieval composition: function-filtered (union-top-2) hybrid search → property soft-boost → HyDE-dense + rerank → recall@50 | 5 Integrate | FR-Q.3, FR-Q.4 | todo | T58a, T29 |
 | T59 | Reranker for the fuzzy/comparative/novel property tail: `BGEReranker` default; LLM-rerank via the seam optional | 5 Integrate | FR-Q | todo | T58, T29 |
 | **GATE-R** | **Does function + property + rerank clear the recall bar? recall@50 ≥ 0.667 (+ nDCG@10 diagnostic) vs the 0.379 two-leg baseline, ablated by stage (`eval/acord_retrieval`)** | 5 Integrate | §13, §GATE-2 | pending | T55-T59 |
 

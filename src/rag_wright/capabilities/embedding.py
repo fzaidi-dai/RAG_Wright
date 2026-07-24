@@ -79,6 +79,16 @@ class BGEM3Embedder:
         # lexical_weights is a Dict[str, float] keyed by string token ids; convert to int keys (T3).
         return {int(k): float(v) for k, v in out["lexical_weights"][0].items()}
 
+    def encode_batch(self, texts: list[str]) -> tuple[list[list[float]], list[dict[int, float]]]:
+        """Batched dense+sparse over many texts in ONE model call (the ingestion/population path):
+        same per-text format as `encode_dense`/`encode_sparse`, amortizing the model overhead."""
+        if not texts:
+            return [], []
+        out = self._model.encode(texts, return_dense=True, return_sparse=True)
+        dense = [v.tolist() for v in out["dense_vecs"]]
+        sparse = [{int(k): float(v) for k, v in lw.items()} for lw in out["lexical_weights"]]
+        return dense, sparse
+
 
 async def embed_chunks(
     chunks: list[Chunk],
