@@ -96,8 +96,12 @@ PROFILES: dict[str, ModelProfile] = {
     ),
     DEFAULT_GENERAL: ModelProfile(model_id=DEFAULT_GENERAL),
     # DeepSeek V4 Flash does reasoning + structured output together, like V4 Pro (ADR-0006); no
-    # thinking-disable needed.
-    DEFAULT_SUMMARIZATION: ModelProfile(model_id=DEFAULT_SUMMARIZATION),
+    # thinking-disable needed. As the T58 BULK property extractor (Flash->Pro cascade, ADR-0028) it routes
+    # by THROUGHPUT too, to dodge the cheapest-provider throttle (ADR-0027).
+    DEFAULT_SUMMARIZATION: ModelProfile(
+        model_id=DEFAULT_SUMMARIZATION,
+        extra_body={"provider": {"sort": "throughput"}},
+    ),
     # Gemma 4 26b-a4b takes the forced tool call cleanly (default function_calling, no extra_body);
     # 0 structured-output errors across the 20-clause bench (ADR-0023).
     DEFAULT_OKF_ENRICHMENT: ModelProfile(model_id=DEFAULT_OKF_ENRICHMENT),
