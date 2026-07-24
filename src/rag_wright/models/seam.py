@@ -44,11 +44,16 @@ def _openrouter_config() -> dict[str, Any]:
 
 
 def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
-    """Construct the base client for `model_id`. Carries no structured-output flag or `extra_body`.
+    """Construct the base client for `model_id`, carrying the profile's base `extra_body` (request-level
+    provider routing, e.g. OpenRouter throughput sort -- a config-driven provider flag, ADR-0027).
 
     Model-level retry/timeout (framework connection resilience) are set here; a caller may override either.
     """
-    params: dict[str, Any] = {"max_retries": _MAX_RETRIES, "timeout": _TIMEOUT_S, **overrides}
+    params: dict[str, Any] = {"max_retries": _MAX_RETRIES, "timeout": _TIMEOUT_S}
+    profile = profile_for(model_id)
+    if profile.extra_body is not None:
+        params["extra_body"] = profile.extra_body
+    params.update(overrides)  # caller overrides win
     return ChatOpenAI(
         model=model_id,
         temperature=temperature,

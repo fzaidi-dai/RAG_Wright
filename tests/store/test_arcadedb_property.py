@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import pytest
 
+from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.arcadedb import ArcadeDBStore, _property_value_key
 
 _TEST_DB = "ragwright_test_property"
@@ -80,6 +82,19 @@ def test_shared_value_node_deduped_across_clauses(store):
     store.write_property_graph(b)
     counts = store.property_graph_counts()
     assert counts == {"clauses": 2, "property_values": 1, "property_edges": 2}  # ONE shared value node
+
+
+@pytest.mark.store
+def test_clear_property_graph_keeps_spans(store):
+    store.upsert_span(SpanRecord(span_id="s#0", parent_chunk_id="s", span_index=0, text="x",
+                                 dense_vector=[0.0] * BGE_M3_DENSE_DIM, sparse_vector={1: 1.0}))
+    rec, _ = _record("capA", "Cap On Liability", [(PropertyDimension.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
+    store.write_property_graph(rec)
+    assert store.property_graph_counts()["clauses"] == 1
+    store.clear_property_graph()
+    assert store.property_graph_counts() == {"clauses": 0, "property_values": 0, "property_edges": 0}
+    # the span index is untouched (re-extraction does not re-embed)
+    assert store._query("SELECT count(*) AS n FROM Span")[0]["n"] == 1
 
 
 @pytest.mark.store

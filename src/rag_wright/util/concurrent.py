@@ -29,20 +29,24 @@ class Progress:
     so a caller can tail it (stdout through a pipe is often block-buffered). Ticks are serialized on the
     event loop, so the counter needs no lock. With no `path`, it just counts (no I/O)."""
 
-    def __init__(self, total: int, *, path: Optional[Path] = None, label: str = "", every: int = 1) -> None:
+    def __init__(
+        self, total: int, *, path: Optional[Path] = None, label: str = "", every: int = 1, echo: bool = False
+    ) -> None:
         self.total = total
         self.done = 0
         self._path = Path(path) if path else None
         self._label = label
         self._every = max(1, every)
+        self._echo = echo  # also print X/N to stdout (flushed) -- progress "in front", not just in a file
         self._t0 = time.perf_counter()
         if self._path is not None:
             self._path.parent.mkdir(parents=True, exist_ok=True)
+        if self._path is not None or self._echo:
             self._write()
 
     def tick(self) -> None:
         self.done += 1
-        if self._path is not None and (self.done % self._every == 0 or self.done == self.total):
+        if self.done % self._every == 0 or self.done == self.total:
             self._write()
 
     def _write(self) -> None:
@@ -52,10 +56,12 @@ class Progress:
         line = f"{self._label} {self.done}/{self.total} ({pct:.0f}%)  elapsed={elapsed:.0f}s  rate={rate:.1f}/s"
         if rate > 0 and self.done < self.total:
             line += f"  eta={(self.total - self.done) / rate:.0f}s"
-        assert self._path is not None
-        with open(self._path, "w", encoding="utf-8") as f:
-            f.write(line + "\n")
-            f.flush()
+        if self._path is not None:
+            with open(self._path, "w", encoding="utf-8") as f:
+                f.write(line + "\n")
+                f.flush()
+        if self._echo:
+            print(line, flush=True)
 
 
 async def map_concurrent_async(
@@ -87,9 +93,14 @@ def map_concurrent(
     progress_path: Optional[Path] = None,
     label: str = "",
     every: int = 1,
+    echo: bool = False,
 ) -> list[R]:
-    """Synchronous convenience for callers not already in an event loop: bounded-concurrent map with an
-    optional flushed progress file (`done/total`, rate, ETA)."""
+    """Synchronous convenience for callers not already in an event loop: bounded-concurrent map with a
+    flushed progress file and/or a stdout echo (`done/total`, rate, ETA), so progress is visible live."""
     items = list(items)
-    progress = Progress(len(items), path=progress_path, label=label, every=every) if progress_path else None
+    progress = (
+        Progress(len(items), path=progress_path, label=label, every=every, echo=echo)
+        if (progress_path or echo)
+        else None
+    )
     return asyncio.run(map_concurrent_async(items, fn, max_concurrency=max_concurrency, progress=progress))

@@ -119,6 +119,23 @@ def test_no_extra_body_kwarg_when_profile_has_none():
     assert runnable.kwargs["method"] == "function_calling"
 
 
+# --- base extra_body (provider routing, ADR-0027): binds to the BASE client, every call --------
+
+
+def test_base_extra_body_binds_to_the_base_client(monkeypatch):
+    profile = ModelProfile(model_id="vendor/routed", extra_body={"provider": {"sort": "throughput"}})
+    monkeypatch.setitem(profiles.PROFILES, "vendor/routed", profile)
+    client = seam.build_model("vendor/routed")
+    assert client.ctor_kwargs["extra_body"] == {"provider": {"sort": "throughput"}}  # on the base client
+
+
+def test_deepseek_v4_pro_profile_routes_by_throughput():
+    # the extraction default (DeepSeek V4 Pro) prefers the fastest provider, not the cheapest (ADR-0027)
+    p = profiles.profile_for(profiles.DEFAULT_STRUCTURED_REASONING)
+    assert p.extra_body == {"provider": {"sort": "throughput"}}
+    assert seam.build_model(profiles.DEFAULT_STRUCTURED_REASONING).ctor_kwargs["extra_body"] == p.extra_body
+
+
 def test_build_model_uses_openrouter_base_and_key_no_hardcoded_flag(monkeypatch):
     model = seam.build_model("vendor/whatever")
     assert model.ctor_kwargs["model"] == "vendor/whatever"

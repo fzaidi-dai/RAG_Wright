@@ -36,6 +36,11 @@ class ModelProfile(BaseModel):
     structured_method: StructuredMethod = "function_calling"
     # Applied by the seam only to the forced structured call, never to the base client.
     structured_extra_body: Optional[dict[str, Any]] = Field(default=None)
+    # Applied by the seam to the BASE client (every call to this model). Carries request-level provider
+    # routing (e.g. OpenRouter `{"provider": {"sort": "throughput"}}`) -- a provider flag, so it lives in
+    # config + a dated ADR, never in node/agent code (ADR-0027). Grounded: `extra_body` is a real
+    # `BaseChatOpenAI` field for exactly this purpose.
+    extra_body: Optional[dict[str, Any]] = Field(default=None)
 
 
 class ModelRole(str, Enum):
@@ -75,8 +80,13 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
 # Structured-output methods and extra bodies below are empirical, confirmed by a live forced-schema
 # call at T12 and recorded in ADR-0006.
 PROFILES: dict[str, ModelProfile] = {
-    # DeepSeek V4 Pro honors the forced tool call while reasoning; no thinking-disable needed.
-    DEFAULT_STRUCTURED_REASONING: ModelProfile(model_id=DEFAULT_STRUCTURED_REASONING),
+    # DeepSeek V4 Pro honors the forced tool call while reasoning; no thinking-disable needed. Route by
+    # THROUGHPUT so OpenRouter prefers the fastest provider over the cheapest (which throttled the bulk
+    # property extraction, T58); keeps V4 Pro, model rule intact (ADR-0027).
+    DEFAULT_STRUCTURED_REASONING: ModelProfile(
+        model_id=DEFAULT_STRUCTURED_REASONING,
+        extra_body={"provider": {"sort": "throughput"}},
+    ),
     # Qwen 3.7 Plus rejects `tool_choice` object/required in thinking mode ("<400> ... does not
     # support being set to required or object in thinking mode"); disabling reasoning on the forced
     # structured call alone fixes it, leaving its free-text/reasoning calls untouched (ADR-0006).

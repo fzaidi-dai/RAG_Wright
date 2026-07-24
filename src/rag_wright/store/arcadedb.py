@@ -474,6 +474,14 @@ class ArcadeDBStore:
             )
         self._db.execute_transaction(statements)
 
+    def clear_property_graph(self) -> None:
+        """Delete all property-graph records (Clause / PropertyValue / HasProperty) while LEAVING the span
+        index intact -- so a property re-extraction can start from scratch without re-embedding (T58 resume
+        control). Edges first (UNSAFE bypasses the edge-safety check this dialect requires), then vertices."""
+        self._command(f"DELETE FROM {PROPERTY_EDGE_TYPE} UNSAFE")
+        self._command(f"DELETE FROM {CLAUSE_TYPE}")
+        self._command(f"DELETE FROM {PROPVALUE_TYPE}")
+
     def property_graph_counts(self) -> dict[str, int]:
         """Counts for introspection/tests: clauses, shared property-value nodes, and property edges."""
         clauses = self._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")

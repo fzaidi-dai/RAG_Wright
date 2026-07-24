@@ -7,8 +7,17 @@ write_property_graph (T57c). CLAUSE-LEVEL property records (the ACORD corpus ite
 clauses); the clause function is the classifier's read of the full clause text. `parent_okf_path` keeps
 the original ACORD id so retrieval/eval can map a span back to its qrels clause.
 
-  LIMIT=5 uv run python -m scripts.populate_property_store    # dry-run: prove the chain (own DB)
-  uv run python -m scripts.populate_property_store            # full population
+  LIMIT=5 uv run python -m scripts.populate_property_store               # dry-run: prove the chain (own DB)
+  PHASE=spans uv run python -m scripts.populate_property_store           # phase 1 only (span index + cache)
+  PHASE=extract uv run python -m scripts.populate_property_store         # phase 2, RESUME (skip done clauses)
+  FRESH=1 PHASE=extract uv run python -m scripts.populate_property_store # phase 2 from the top (keep spans)
+  EXTRACT_MODEL=deepseek/deepseek-v4-flash PHASE=extract uv run ...      # switch the extraction LLM; RESUME
+  uv run python -m scripts.populate_property_store                       # full (phase 1 + 2)
+
+Phase-2 controls: (1) X/N progress echoed to stdout AND `populate_progress.log` (flushed, never buffered);
+(2) DeepSeek routes by OpenRouter throughput (profile, ADR-0027); (3) each clause is written to ArcadeDB the
+moment it is extracted (crash-safe); (4) RESUME by default / FRESH=1 to restart / PHASE=all to redo phase 1
+too -- full control; (5) EXTRACT_MODEL switches the LLM at any run, RESUME finishes the rest with it.
 """
 
 from __future__ import annotations
@@ -16,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 from pathlib import Path
 
@@ -41,6 +51,13 @@ LIMIT = int(os.environ.get("LIMIT", "0"))
 PHASE = os.environ.get("PHASE", "all")
 DB = os.environ.get("PIVOT_DB", "ragwright_pivot_dryrun" if LIMIT else "ragwright_acord_pivot")
 CONCURRENCY = int(os.environ.get("CONCURRENCY", "8"))
+# FRESH=1 (PHASE=extract): clear the property graph (KEEP spans) and re-extract every clause from the top.
+# Default (FRESH=0): RESUME -- skip clauses already written, so we continue exactly where we left off.
+FRESH = os.environ.get("FRESH", "0") == "1"
+# EXTRACT_MODEL: override the extraction model id at will (switch/pause/resume with a different LLM). Empty
+# => the STRUCTURED_REASONING default (DeepSeek V4 Pro). Combined with RESUME, a re-run finishes the REST
+# with whatever model is set now -- so different clauses can be done by different models across runs.
+EXTRACT_MODEL = os.environ.get("EXTRACT_MODEL", "")
 _SLUG = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -119,24 +136,37 @@ def main() -> None:
             store.close()
             return
 
-    # --- Phase 2: properties (API: extract concurrently, then write sequentially) ----------------
-    extractor = SeamPropertyExtractor()
+    # --- Phase 2: properties (extract concurrently + write each clause AS IT COMPLETES) ----------
+    # Durable + resumable: each clause is written the moment it is extracted (a stall/crash loses only
+    # in-flight work), and a re-run skips clauses already in the graph. DB writes are serialized by a
+    # lock (one store client); extraction stays concurrent.
+    from rag_wright.store.arcadedb import CLAUSE_TYPE
 
-    def _extract(item: tuple[ChunkId, str, str]):
+    if FRESH:  # start property extraction over from the top, keeping the (expensive) span index
+        store.clear_property_graph()
+        _progress("[extract] FRESH: cleared the property graph (spans kept)")
+    extractor = SeamPropertyExtractor(model_id=EXTRACT_MODEL or None)
+    model_label = EXTRACT_MODEL or "default (DeepSeek V4 Pro)"
+    existing = {r["clause_id"] for r in store._query(f"SELECT clause_id FROM {CLAUSE_TYPE}")}
+    todo = [t for t in to_extract if str(t[0]) not in existing]
+    _progress(f"[extract] {len(todo)} clauses to do ({len(existing)} already written, resume-skipped)  "
+              f"model={model_label}  concurrency={CONCURRENCY}")
+    write_lock = threading.Lock()
+
+    def _extract_and_write(item: tuple[ChunkId, str, str]) -> int:
         cid, function, text = item
-        return extractor(chunk_id=cid, function=function, text=text, span_id="")
+        rec = extractor(chunk_id=cid, function=function, text=text, span_id="")
+        with write_lock:  # serialize the DB write (one client); extraction is the concurrent part
+            store.write_property_graph(rec)  # each clause lands as it completes -> crash-safe / resumable
+        return len(rec.assertions)
 
-    records = map_concurrent(
-        to_extract, _extract, max_concurrency=CONCURRENCY, progress_path=PROGRESS,
-        label="[extract]", every=5,  # fine-grained progress file (done/total/rate/eta)
+    per = map_concurrent(
+        todo, _extract_and_write, max_concurrency=CONCURRENCY, progress_path=PROGRESS,
+        label="[extract]", every=1, echo=True,  # X/N in front (stdout) AND in the flushed progress file
     )
-    n_assertions = 0
-    for rec in records:  # sequential DB writes (one store client)
-        store.write_property_graph(rec)
-        n_assertions += len(rec.assertions)
 
     counts = store.property_graph_counts()
-    print(f"\nDONE db={DB}  spans={n_spans}  clauses_extracted={len(records)}  assertions={n_assertions}",
+    print(f"\nDONE db={DB}  spans={n_spans}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}",
           flush=True)
     print(f"property graph: {counts}", flush=True)
     store.close()

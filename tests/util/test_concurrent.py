@@ -37,3 +37,10 @@ def test_progress_counts_without_a_path():
     for _ in range(3):
         p.tick()
     assert p.done == 3
+
+
+def test_progress_echoes_x_over_n_to_stdout(capsys):
+    # echo=True prints X/N to stdout (progress "in front", not just a file)
+    map_concurrent(range(4), lambda x: x, max_concurrency=2, label="[job]", echo=True, every=1)
+    out = capsys.readouterr().out
+    assert "[job] 4/4 (100%)" in out and "[job] 1/4" in out
