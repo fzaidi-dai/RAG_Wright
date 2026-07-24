@@ -165,19 +165,26 @@ def main() -> None:
               f"model={model_label}  gate={GATE}  concurrency={CONCURRENCY}")
     write_lock = threading.Lock()
     escalations = [0]
+    errors = [0]
 
     def _extract_and_write(item: tuple[ChunkId, str, str]) -> int:
         cid, function, text = item
-        rec = extractor(chunk_id=cid, function=function, text=text, span_id="")
-        if escalate is not None and needs_escalation(rec, text):  # judge flagged -> re-extract with Pro
-            rec = escalate(chunk_id=cid, function=function, text=text, span_id="")
+        try:  # one bad clause must never kill the whole (long, resumable) run -- log and skip it
+            rec = extractor(chunk_id=cid, function=function, text=text, span_id="")
+            if escalate is not None and needs_escalation(rec, text):  # judge flagged -> re-extract with Pro
+                rec = escalate(chunk_id=cid, function=function, text=text, span_id="")
+                with write_lock:
+                    escalations[0] += 1
+            if GATE:  # quality gate (double duty): downgrade residual ungrounded EXTRACTED -> AMBIGUOUS
+                rec = reground(rec, text)
+            with write_lock:  # serialize the DB write (one client); extraction is the concurrent part
+                store.write_property_graph(rec)  # each clause lands as it completes -> crash-safe/resumable
+            return len(rec.assertions)
+        except Exception as e:  # noqa: BLE001 - isolate a per-clause failure; resume re-attempts it later
             with write_lock:
-                escalations[0] += 1
-        if GATE:  # quality gate (double duty): downgrade residual ungrounded EXTRACTED -> AMBIGUOUS
-            rec = reground(rec, text)
-        with write_lock:  # serialize the DB write (one client); extraction is the concurrent part
-            store.write_property_graph(rec)  # each clause lands as it completes -> crash-safe / resumable
-        return len(rec.assertions)
+                errors[0] += 1
+            print(f"  [skip] {cid} ({function}): {type(e).__name__}: {str(e)[:100]}", flush=True)
+            return 0
 
     per = map_concurrent(
         todo, _extract_and_write, max_concurrency=CONCURRENCY, progress_path=PROGRESS,
@@ -186,8 +193,8 @@ def main() -> None:
 
     counts = store.property_graph_counts()
     esc = f"  escalated_to_{ESCALATE_MODEL}={escalations[0]}/{len(todo)}" if escalate else ""
-    print(f"\nDONE db={DB}  spans={n_spans}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}{esc}",
-          flush=True)
+    print(f"\nDONE db={DB}  spans={n_spans}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}{esc}"
+          f"  errors={errors[0]}", flush=True)
     print(f"property graph: {counts}", flush=True)
     store.close()
 

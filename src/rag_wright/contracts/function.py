@@ -39,3 +39,15 @@ FUNCTION_LABELS: tuple[str, ...] = tuple(
     [c.value for c in ClauseCategory] + [f.value for f in ExtendedFunction]
 )
 FUNCTION_LABEL_SET: frozenset[str] = frozenset(FUNCTION_LABELS)
+
+# The classifier was trained on CUAD's label strings, which differ in CASE from the canonical taxonomy for
+# a few labels (e.g. CUAD "Ip Ownership Assignment" vs the canonical "IP Ownership Assignment"). Normalize
+# the classifier output to the canonical label at the boundary (memory: normalize at the boundary), keyed
+# case-insensitively.
+_FUNCTION_BY_CASEFOLD: dict[str, str] = {label.casefold(): label for label in FUNCTION_LABELS}
+
+
+def canonical_function(label: str) -> str | None:
+    """Map a (possibly differently-cased) function label to its canonical `FUNCTION_LABELS` entry, or None
+    if it matches none. Case-insensitive: fixes the classifier's CUAD-cased labels (e.g. 'Ip' -> 'IP')."""
+    return _FUNCTION_BY_CASEFOLD.get(label.strip().casefold())

@@ -18,6 +18,7 @@ from typing import Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel, ValidationError
 
+from rag_wright.contracts.function import canonical_function
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import (
     CLOSED_VOCAB,
@@ -102,6 +103,7 @@ def build_record(
     Scope-filters to the function's dimensions (drops any invented out-of-scope dimension), and coerces an
     out-of-vocabulary value to an AMBIGUOUS assertion (the schema's `other` escape) instead of dropping it.
     """
+    function = canonical_function(function) or function  # normalize classifier casing (e.g. 'Ip' -> 'IP')
     prov = Provenance.of(chunk_id)
     applicable = set(dimensions_for(function))
     assertions: list[PropertyAssertion] = []

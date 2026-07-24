@@ -6,6 +6,7 @@ from rag_wright.contracts.function import (
     FUNCTION_LABEL_SET,
     FUNCTION_LABELS,
     ExtendedFunction,
+    canonical_function,
 )
 from rag_wright.contracts.ontology import ClauseCategory
 
@@ -18,6 +19,15 @@ def test_function_labels_are_cuad_41_plus_the_3_extensions():
     assert {"Indemnification", "Indirect/Consequential Damages Waiver", "Warranty Disclaimer"} <= FUNCTION_LABEL_SET
     # a representative CUAD type the classifier already separates
     assert "Cap On Liability" in FUNCTION_LABEL_SET
+
+
+def test_canonical_function_normalizes_classifier_casing():
+    # the classifier emits CUAD's casing ('Ip'); the contract wants the canonical 'IP'
+    assert canonical_function("Ip Ownership Assignment") == "IP Ownership Assignment"
+    assert canonical_function("Joint Ip Ownership") == "Joint IP Ownership"
+    assert canonical_function("cap on liability") == "Cap On Liability"  # any casing
+    assert canonical_function("Indemnification") == "Indemnification"  # already canonical
+    assert canonical_function("Not A Function") is None
 
 
 def test_none_sentinel_is_not_a_function_type():
