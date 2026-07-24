@@ -52,6 +52,11 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-24: PHASE-2 POPULATION COMPLETE (Flash→Pro cascade + GATE, ~41 min).** Property graph populated:
+  3,886 clauses / 393 value nodes / 8,597 edges; confidence EXTRACTED 72% / INFERRED 20% / AMBIGUOUS 7.4%
+  (judge+GATE). Full run report + baselines checkpoint: **`docs/results/2026-07-24-t58-property-graph-population.md`**
+  (this is the store state the GATE-R recall@50 is measured against). **NEXT: run the full function+property+rerank
+  recall@50 measurement.**
 - **2026-07-24: T61 grounding judge built (ADR-0028); phase-2 cascade wired, awaiting go.** 3-model extraction
   bench (Pro/Flash/Gemma): Flash ~5x faster, highest coverage, but occasional confident hallucination
   (`carve_out=fraud`); Pro precise but throttled (24s) + one total-failure; Gemma noisy AMBIGUOUS. Deterministic
