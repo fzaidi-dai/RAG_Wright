@@ -12,6 +12,8 @@ the original ACORD id so retrieval/eval can map a span back to its qrels clause.
   PHASE=extract uv run python -m scripts.populate_property_store         # phase 2, RESUME (skip done clauses)
   FRESH=1 PHASE=extract uv run python -m scripts.populate_property_store # phase 2 from the top (keep spans)
   EXTRACT_MODEL=deepseek/deepseek-v4-flash PHASE=extract uv run ...      # switch the extraction LLM; RESUME
+  EXTRACT_MODEL=deepseek/deepseek-v4-flash ESCALATE_MODEL=deepseek/deepseek-v4-pro PHASE=extract uv run ...
+                                                                        # Flash main + Pro fallback cascade (ADR-0028)
   uv run python -m scripts.populate_property_store                       # full (phase 1 + 2)
 
 Phase-2 controls: (1) X/N progress echoed to stdout AND `populate_progress.log` (flushed, never buffered);
@@ -58,6 +60,13 @@ FRESH = os.environ.get("FRESH", "0") == "1"
 # => the STRUCTURED_REASONING default (DeepSeek V4 Pro). Combined with RESUME, a re-run finishes the REST
 # with whatever model is set now -- so different clauses can be done by different models across runs.
 EXTRACT_MODEL = os.environ.get("EXTRACT_MODEL", "")
+# ESCALATE_MODEL: the Flash->Pro cascade (ADR-0028). Empty => no cascade. When set, a clause whose main-model
+# extraction the deterministic grounding judge flags (an ungrounded EXTRACTED value) is RE-extracted with this
+# precise model -- concentrating the throttled Pro calls on the suspect minority.
+ESCALATE_MODEL = os.environ.get("ESCALATE_MODEL", "")
+# GATE=1: also apply the grounding quality gate (reground) before writing -- downgrade any residual ungrounded
+# EXTRACTED value to AMBIGUOUS regardless of model (the judge's double duty).
+GATE = os.environ.get("GATE", "0") == "1"
 _SLUG = re.compile(r"[^A-Za-z0-9._-]+")
 
 
@@ -142,20 +151,30 @@ def main() -> None:
     # lock (one store client); extraction stays concurrent.
     from rag_wright.store.arcadedb import CLAUSE_TYPE
 
+    from rag_wright.spans.property_grounding import needs_escalation, reground
+
     if FRESH:  # start property extraction over from the top, keeping the (expensive) span index
         store.clear_property_graph()
         _progress("[extract] FRESH: cleared the property graph (spans kept)")
     extractor = SeamPropertyExtractor(model_id=EXTRACT_MODEL or None)
-    model_label = EXTRACT_MODEL or "default (DeepSeek V4 Pro)"
+    escalate = SeamPropertyExtractor(model_id=ESCALATE_MODEL) if ESCALATE_MODEL else None
+    model_label = (EXTRACT_MODEL or "default (DeepSeek V4 Pro)") + (f" -> escalate:{ESCALATE_MODEL}" if escalate else "")
     existing = {r["clause_id"] for r in store._query(f"SELECT clause_id FROM {CLAUSE_TYPE}")}
     todo = [t for t in to_extract if str(t[0]) not in existing]
     _progress(f"[extract] {len(todo)} clauses to do ({len(existing)} already written, resume-skipped)  "
-              f"model={model_label}  concurrency={CONCURRENCY}")
+              f"model={model_label}  gate={GATE}  concurrency={CONCURRENCY}")
     write_lock = threading.Lock()
+    escalations = [0]
 
     def _extract_and_write(item: tuple[ChunkId, str, str]) -> int:
         cid, function, text = item
         rec = extractor(chunk_id=cid, function=function, text=text, span_id="")
+        if escalate is not None and needs_escalation(rec, text):  # judge flagged -> re-extract with Pro
+            rec = escalate(chunk_id=cid, function=function, text=text, span_id="")
+            with write_lock:
+                escalations[0] += 1
+        if GATE:  # quality gate (double duty): downgrade residual ungrounded EXTRACTED -> AMBIGUOUS
+            rec = reground(rec, text)
         with write_lock:  # serialize the DB write (one client); extraction is the concurrent part
             store.write_property_graph(rec)  # each clause lands as it completes -> crash-safe / resumable
         return len(rec.assertions)
@@ -166,7 +185,8 @@ def main() -> None:
     )
 
     counts = store.property_graph_counts()
-    print(f"\nDONE db={DB}  spans={n_spans}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}",
+    esc = f"  escalated_to_{ESCALATE_MODEL}={escalations[0]}/{len(todo)}" if escalate else ""
+    print(f"\nDONE db={DB}  spans={n_spans}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}{esc}",
           flush=True)
     print(f"property graph: {counts}", flush=True)
     store.close()

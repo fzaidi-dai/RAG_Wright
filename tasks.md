@@ -52,6 +52,12 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-24: T61 grounding judge built (ADR-0028); phase-2 cascade wired, awaiting go.** 3-model extraction
+  bench (Pro/Flash/Gemma): Flash ~5x faster, highest coverage, but occasional confident hallucination
+  (`carve_out=fraud`); Pro precise but throttled (24s) + one total-failure; Gemma noisy AMBIGUOUS. Deterministic
+  local judge (`spans/property_grounding.py`) catches lexical hallucinations → Flash→Pro escalation cascade
+  (`EXTRACT_MODEL=…-flash ESCALATE_MODEL=…-pro`), judge also does double duty as a permanent quality gate
+  (`reground`/`GATE=1`). **NEXT (awaiting explicit go): full phase-2 run = Flash main + Pro fallback cascade.**
 - **APPROVED 2026-07-23: T58a (FR-Q, ADR-0025).** Full-corpus phase-1 population (14,553 spans) + the
   single-function gate ceiling: **best-single 0.939 / union-top-2 0.992** (bar 0.667, baseline 0.379); only 4/57
   below bar, all recovered by union-top-2. KEY: reachability is NOT the ceiling — the 0.379 wall was RANKING, not
@@ -410,6 +416,7 @@ feeding the hypothetical clause to the local LegalBERT classifier. HyDE folded i
 | T58a | Full-corpus population (`populate_property_store.py`: segment→classify→embed→upsert_span, then extract→write_property_graph; clause-level; PHASE=spans/extract/all; batched embed) + **single-function gate ceiling** (`eval/function_ceiling.py`, model-free) | 5 Integrate | FR-Q | **done (phase 1 + ceiling) — phase 1: 14,553 spans / 3,931 clauses / 3,887 non-NONE cached. CEILING = best-single 0.939 / union-top-2 0.992 (bar 0.667, baseline 0.379); only 4/57 below bar, ALL recovered by union-top-2 (confusion pairs match T60: No-Solicit↔Non-Compete, non-reliance↔Warranty-Disclaimer, bodily-injury↔Uncapped). Reachability is NOT the ceiling → recall is now a RANKING problem in small pools. Phase 2 (extraction) running next** | T56, T57c |
 | T58b | Query decomposition (ONE LLM call → functions enum top-1..2 + property constraints + HyDE clause) + retrieval composition: function-filtered (union-top-2) hybrid search → property soft-boost → HyDE-dense + rerank → recall@50 | 5 Integrate | FR-Q.3, FR-Q.4 | **in-progress — ABLATION `eval/function_rerank.py` (oracle function, pure filter → BGE-rerank, no property): recall@50 ≈ 0.52 (vs baseline 0.379, bar 0.667). Finding: function+rerank beats baseline but the property leg is LOAD-BEARING — bare-function large-pool queries collapse to ~k/pool because the reranker can't split gold from same-type non-gold; property discriminates within-pool. Robust phase-2 runner built (5 controls: live stdout X/N echo, provider throughput routing ADR-0027, per-clause crash-safe writes, RESUME/FRESH, EXTRACT_MODEL switch) + `store.clear_property_graph`. Property extraction PAUSED at 34/3887 (durable/resumable); awaiting go for the full run** | T58a, T29 |
 | T59 | Reranker for the fuzzy/comparative/novel property tail: `BGEReranker` default; LLM-rerank via the seam optional | 5 Integrate | FR-Q | todo | T58, T29 |
+| T61 | Deterministic property-grounding judge (`spans/property_grounding.py`, ADR-0028): checks an EXTRACTED value's surface cue is in the clause text. **DOUBLE DUTY** — (1) Flash→Pro escalation trigger for the extraction cascade (wired: `ESCALATE_MODEL`); (2) **permanent quality gate** on the final graph (`reground`, runner `GATE=1`) — a STANDING gate to keep value nodes clean, not just a Flash mitigation. Lexically-anchored dims only (semantic dims not checkable) | 5 Integrate | FR-C.6 | **done (judge + cascade wiring) — 5 hermetic tests (catches Flash's `fraud` hallucination); 3-model bench `scripts/compare_extraction_models.py`. OPEN: decide whether to make the `reground` quality gate STANDING on every write** | T57b |
 | **GATE-R** | **Does function + property + rerank clear the recall bar? recall@50 ≥ 0.667 (+ nDCG@10 diagnostic) vs the 0.379 two-leg baseline, ablated by stage (`eval/acord_retrieval`)** | 5 Integrate | §13, §GATE-2 | pending | T55-T59 |
 
 Extras (§3.2: multi-vector, typed-functional RLM, CLIP embedder, canonical skeleton, domain
