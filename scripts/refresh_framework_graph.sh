@@ -13,7 +13,10 @@
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
-PKGS="docling docling_core FlagEmbedding langchain_openai mcp spacy arcadedb_python"
+# The 7 capability libraries (ADR-0001) + `modal` (training-infra grounding, added 2026-07-25 for the
+# distilled cross-encoder path: ground the Modal SDK API we write training scripts against, per the
+# library-grounding rule). modal_proto (low-level gRPC stubs) is intentionally excluded as noise.
+PKGS="docling docling_core FlagEmbedding langchain_openai mcp spacy arcadedb_python modal"
 SP="$(uv run python -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
 STAGE="$HOME/.graphify/rag-wright-framework/src"
 OUT="graphify-out/framework/graph.json"

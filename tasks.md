@@ -52,6 +52,31 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-25: T-DISTILL STARTED (FR-C reranking) — distilled cross-encoder as the query-time reranker
+  (0 query-time LLM).** Motivation chain: per-clause LLM rerank = O(N) calls, impractical latency; LTR over
+  [BGE + KG features] via GBM AND LambdaMART both cap at ~BGE (nDCG@10 ~0.52), far below the Gemma LLM (0.726)
+  — the gap is a SEMANTIC-TEXT-READING gap that hand-features can't reach; but KG features ARE the best RECALL
+  signal (recall@20 0.80 vs BGE 0.74). So: **KG features = recall stage; distilled cross-encoder = precision
+  stage.** Plan: **P1** text-only MiniLM & LegalBERT cross-encoders fine-tuned on ACORD grades, query-disjoint
+  CV, vs BGE 0.526 / LTR 0.52 / Gemma 0.726 (bar: match 0.726 at ~0 query-time cost; Gemma is a REFERENCE not
+  a ceiling — trained on human grades the student can surpass it); **P2** add KG features (text-append) →
+  precision lift?; **P3** LLM-teacher distillation for cross-corpus generalization (no gold grades). Training
+  on **Modal A10** (grounded: modal SDK now in the framework graph + official modal skill installed). Deps
+  added: sentence-transformers (runtime), modal (dev). **NEXT: build P1 export + Modal training + eval; needs
+  `! modal setup` auth (token via .env MODAL_TOKEN_ID/SECRET).**
+- **2026-07-25: NEXT DIRECTION — relational clause KG (directional liability/favorability) to solve the
+  genuine-misrank 2/3 at INGESTION time.** Research (this session): the *vocabulary+machinery* exist and are
+  reusable — LKIF-Core (deontic/liability/role primitives, OWL), FOLIO (party-role/clause-type IRIs, CC-BY,
+  already aligned in T57a), CUAD-41 (clause types); the *directional who-is-liable-to-whom / favorability
+  relational schema* is NOT off-the-shelf (not FOLIO=taxonomy, not CUAD/ACORD=labels, the standard LLM+Pydantic
+  contract-KG flattens it to text) -> it's a THIN bespoke layer (~6 edge types + party-role map) we author on
+  top, populate with Gemma structured extraction (OpenIE optional recall net), verify with a T61-style
+  grounding judge on the ROLE/DIRECTION edges. Expert review reduced to validating a ~1-page schema (last
+  resort). Prototype (schema + Gemma dry-run on hard contrastive clauses) IN PROGRESS.
+  **RETRIEVAL COVERAGE DECISION: use UNION-TOP-2 function outputs, not top-1** (ceiling 0.992 vs 0.939, T58a).
+  NOTE: `LegalBertFunctionClassifier.classify()` currently returns argmax/top-1 only; the model exposes logits
+  so top-2 is a small `classify_topk` addition (do when wiring the real retrieval path). See memory
+  `topk-ordering-levers-t58b`, `retrieval-design-t58`.
 - **2026-07-25: TOP-10 ORDERING GAP DIAGNOSED + LEVERS MEASURED (T58b stage 2).** Clean condensed harness
   `eval/condensed_pipeline.py` (judged-only, PERSISTED discriminators, no-cache-on-failure). Pointwise Gemma
   operating point: **recall@10 0.674 / recall@20 0.885 / nDCG@10 0.706** (condensed). Diagnosis of the
