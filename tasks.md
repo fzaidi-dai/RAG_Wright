@@ -71,6 +71,18 @@ not this repo's.
   dataset,train_ce,train_modal,eval_ce}.py). LegalBERT (domain) = marginally better base. **NEXT: P1.5 HARD-
   NEGATIVE MINING — per gold, sample negatives from its OWN function pool (the high-BGE same-function non-gold
   = the eval distractors) + optional per-query ranking loss; LegalBERT base. This is the gated lever.**
+  **P1.5/P2/P3 DONE — honest conclusion: cheap CE plateaus near BGE, far below the LLM.** Best = LegalBERT +
+  HARD NEGATIVES (gold): all-57 nDCG@10 0.649 / contrastive 0.542 (BGE 0.624/0.503, Gemma 0.737/0.758). P2 KG
+  features (text-append) HURT (0.614/0.463 — displaces clause text in the 512-token budget; 3rd time features
+  fail to lift ranking). P3 distillation (Gemma teacher, NO gold) WORKS as a mechanism but is WEAKER than gold
+  (0.591/0.480, ~BGE) — viable for ungraded corpora, doesn't beat grades, doesn't reach the LLM. **NONE of the
+  zero-query-time-LLM paths (LTR, hard-neg CE, KG features, distillation) closes the ~0.10-0.20 contrastive gap
+  to the LLM.** Scripts: scripts/distill/{relational_features,extract_features,eval_all}.py + train_modal
+  features/distill modes. Caches: data/models/ce/{pools.json,bge_scores.jsonl,clause_features.jsonl}. Modal
+  total ~$3-4. **OPEN DECISION (not chosen): (a) accept LegalBERT+hard-neg CE (0.649, >BGE, 0 query-LLM) as the
+  operating point; (b) cheap query-time LLM (ONE listwise call on the top-K, not per-clause); (c) push the CE
+  harder (full-pool Gemma teacher labeling for MORE distill data + ranking loss + bigger student) — uncertain
+  payoff.**
 - **2026-07-25: NEXT DIRECTION — relational clause KG (directional liability/favorability) to solve the
   genuine-misrank 2/3 at INGESTION time.** Research (this session): the *vocabulary+machinery* exist and are
   reusable — LKIF-Core (deontic/liability/role primitives, OWL), FOLIO (party-role/clause-type IRIs, CC-BY,
