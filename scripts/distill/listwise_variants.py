@@ -68,6 +68,19 @@ def _feat_prompt(test, clauses, feats):
             f"Candidates:\n{body}\n\nOutput ALL {len(clauses)} numbers exactly once, best first.")
 
 
+def _score_feat_prompt(test, clauses, feats):  # STACK: per-candidate scoring + features in prompt
+    body = "\n".join(f"[{i + 1}] <{feats[i]}> {c[:520]}" for i, c in enumerate(clauses))
+    return ("You are a contract attorney. Each candidate is annotated with its extracted structural features "
+            "in <>. Score each candidate from 0.00 to 1.00 for how FULLY it satisfies this decisive test (use "
+            f"fine gradations; a same-type clause whose decisive part is partial/arguable scores lower):\n{test}\n\n"
+            f"Use the features plus the text. Output one score per candidate IN THE SAME ORDER as listed "
+            f"({len(clauses)} scores).\n\nCandidates:\n{body}")
+
+
+def _score_order(v, k):
+    return [i + 1 for i, _ in sorted(enumerate(v.scores[:k]), key=lambda x: -x[1])]
+
+
 def _base_prompt(test, clauses, feats=None):  # 3-arg wrapper over the imported 2-arg prompt
     return _listwise_prompt(test, clauses)
 
@@ -80,6 +93,11 @@ VARIANTS = {  # name -> (schema, prompt_fn, order_fn, K, use_feats)
     "feat_k40": (Ranking, _feat_prompt, lambda v, k: v.order, 40, True),
     "baseline_k25": (Ranking, _base_prompt, lambda v, k: v.order, 25, False),
     "baseline_k60": (Ranking, _base_prompt, lambda v, k: v.order, 60, False),
+    # STACK experiments: combine the winners (scoring + K=25 + features)
+    "score_k25": (Scores, _score_prompt, _score_order, 25, False),
+    "feat_k25": (Ranking, _feat_prompt, lambda v, k: v.order, 25, True),
+    "score_feat_k40": (Scores, _score_feat_prompt, _score_order, 40, True),
+    "score_feat_k25": (Scores, _score_feat_prompt, _score_order, 25, True),
 }
 
 
