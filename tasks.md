@@ -52,6 +52,18 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-25: TOP-10 ORDERING GAP DIAGNOSED + LEVERS MEASURED (T58b stage 2).** Clean condensed harness
+  `eval/condensed_pipeline.py` (judged-only, PERSISTED discriminators, no-cache-on-failure). Pointwise Gemma
+  operating point: **recall@10 0.674 / recall@20 0.885 / nDCG@10 0.706** (condensed). Diagnosis of the
+  recall@10<recall@20 gap: **67% genuine misrank** (>=10 judged clauses strictly outscore gold) + **33% ties**;
+  heavy ties (median 8 distinct scores/pool); contrastive/within-family queries are the weak spot (misrank).
+  Levers head-to-head: **full listwise re-order HURTS (-0.015)**; **listwise TIE-BREAK helps +0.018** (only
+  positive, 1 serve call); **property tie-break NEUTRAL -0.001** (too sparse: ~1 qconstraint/query, 73% clauses
+  0-match). The 2/3 misrank is unmoved by reshuffling Gemma's own scores. Report:
+  **`docs/results/2026-07-25-t58b-topk-ordering-levers.md`**. **DECISION: adopt pointwise (+optional
+  listwise-tiebreak) as the retrieval operating point; stop chasing misrank with re-rank tricks. NEXT (open,
+  not run): measured Pro-escalation ONLY on the ~10 hard compound-contrastive queries (carveout-to-cap, mutual
+  cap, exception-to-waiver), like the extraction cascade.**
 - **2026-07-25: FULL-PIPELINE RERANK MEASURED (T58b, Gemma 4 31b throughout, 57 queries, 17,715 grades).**
   oracle-function pool → Gemma decompose (hardened discriminator) → Gemma continuous-score rerank.
   **(a) condensed nDCG@10 = 0.702, recall@10 = 0.677, recall@20 = 0.900** (judged-only, the honest signal);
