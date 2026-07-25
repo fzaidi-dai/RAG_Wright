@@ -62,8 +62,15 @@ not this repo's.
   a ceiling — trained on human grades the student can surpass it); **P2** add KG features (text-append) →
   precision lift?; **P3** LLM-teacher distillation for cross-corpus generalization (no gold grades). Training
   on **Modal A10** (grounded: modal SDK now in the framework graph + official modal skill installed). Deps
-  added: sentence-transformers (runtime), modal (dev). **NEXT: build P1 export + Modal training + eval; needs
-  `! modal setup` auth (token via .env MODAL_TOKEN_ID/SECRET).**
+  added: sentence-transformers (runtime), modal (dev).
+  **P1 DONE (text-only, RANDOM negatives), honest result:** MiniLM CE nDCG@10 0.628 / LegalBERT 0.642 vs
+  BGE 0.629 vs Gemma 0.733 (contrastive: CE ~0.46-0.50 vs BGE 0.503 vs Gemma 0.758). Text-only CE with random
+  negatives only MATCHES BGE, far below the LLM. DIAGNOSIS: strided negatives are cross-function (easy); eval
+  needs WITHIN-function discrimination -> CE learned coarse relevance (BGE-level saturation), not hard within-
+  pool ranking. Modal pipeline validated (~$2, ~80s/fold MiniLM, ~250s LegalBERT; scripts/distill/{export_ce_
+  dataset,train_ce,train_modal,eval_ce}.py). LegalBERT (domain) = marginally better base. **NEXT: P1.5 HARD-
+  NEGATIVE MINING — per gold, sample negatives from its OWN function pool (the high-BGE same-function non-gold
+  = the eval distractors) + optional per-query ranking loss; LegalBERT base. This is the gated lever.**
 - **2026-07-25: NEXT DIRECTION — relational clause KG (directional liability/favorability) to solve the
   genuine-misrank 2/3 at INGESTION time.** Research (this session): the *vocabulary+machinery* exist and are
   reusable — LKIF-Core (deontic/liability/role primitives, OWL), FOLIO (party-role/clause-type IRIs, CC-BY,
