@@ -52,6 +52,16 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-26: ADOPTED — improved (b) is the query-time reranker operating point.** Pipeline: function filter
+  (union-top-2) → first-stage LegalBERT hard-neg CE (a) → **ONE Gemma listwise call** over the top-K, with
+  **per-candidate scoring + KG-features-in-prompt + K=25** (`scripts/distill/listwise_variants.py`
+  `score_feat_k25`). Condensed **nDCG@10 0.702 (all) / 0.634 (contrastive)**, recall@20 ~0.86 — one call/query.
+  The measured cost/quality ladder: **(a) 0-LLM CE 0.649/0.542  <  (b) 1-call listwise 0.702/0.634  <
+  pointwise-Gemma ~N-call 0.737/0.758.** ZERO-query-LLM paths (LTR, hard-neg CE, KG features, distillation) all
+  plateau ~BGE; the 1 listwise call is the pragmatic sweet spot. Prompt/format levers plateaued (~1/3 of the
+  gap to pointwise closed; contrastive still the weak axis). **OPEN to push further (not started): DSPy
+  few-shot demos for contrastive; Pro for the listwise call (likely biggest lever); (c) full-pool Gemma
+  teacher labeling → proper distillation for a zero-query-LLM path.** See memory `reranker-operating-point-b`.
 - **2026-07-25: T-DISTILL STARTED (FR-C reranking) — distilled cross-encoder as the query-time reranker
   (0 query-time LLM).** Motivation chain: per-clause LLM rerank = O(N) calls, impractical latency; LTR over
   [BGE + KG features] via GBM AND LambdaMART both cap at ~BGE (nDCG@10 ~0.52), far below the Gemma LLM (0.726)
