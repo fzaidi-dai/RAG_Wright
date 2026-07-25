@@ -52,6 +52,13 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-25: FULL-PIPELINE RERANK MEASURED (T58b, Gemma 4 31b throughout, 57 queries, 17,715 grades).**
+  oracle-function pool → Gemma decompose (hardened discriminator) → Gemma continuous-score rerank.
+  **(a) condensed nDCG@10 = 0.702, recall@10 = 0.677, recall@20 = 0.900** (judged-only, the honest signal);
+  **(b) full-pool nDCG@10 = 0.179** (ACORD protocol, confounded by pooling — un-judged genuine matches crowd
+  top-10 at 0 gain); full recall@50 = 0.548. Report: **`docs/results/2026-07-25-t58b-full-pipeline-rerank.md`**.
+  Decision: optimize the **condensed** number (practical downstream-retrieval quality), NOT full-corpus
+  leaderboard parity. **NEXT: attack the top-10 ordering gap (recall@10 0.677 vs recall@20 0.900).**
 - **2026-07-24: PHASE-2 POPULATION COMPLETE (Flash→Pro cascade + GATE, ~41 min).** Property graph populated:
   3,886 clauses / 393 value nodes / 8,597 edges; confidence EXTRACTED 72% / INFERRED 20% / AMBIGUOUS 7.4%
   (judge+GATE). Full run report + baselines checkpoint: **`docs/results/2026-07-24-t58-property-graph-population.md`**
