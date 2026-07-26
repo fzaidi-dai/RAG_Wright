@@ -16,12 +16,14 @@ introspection: create only what is absent.
 
 from __future__ import annotations
 
+import json
 import os
 from typing import Any, Iterable
 
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
+from rag_wright.contracts.contract_meta import ContractRecord
 from rag_wright.contracts.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
@@ -44,6 +46,7 @@ PROPERTY_EDGE_TYPE = "HasProperty"  # Clause -> PropertyValue, carrying the asse
 DEFAULT_CANDIDATE_POOL = 100
 
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
+CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
 _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
@@ -55,6 +58,7 @@ _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 _CLAUSE_ID_INDEX = f"{CLAUSE_TYPE}[clause_id]"
 _PROPVALUE_KEY_INDEX = f"{PROPVALUE_TYPE}[value_key]"
+_CONTRACT_ID_INDEX = f"{CONTRACT_TYPE}[contract_id]"
 
 
 def _property_value_key(dimension: str, value: str) -> str:
@@ -179,6 +183,17 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.folio_iri STRING")
         if PROPERTY_EDGE_TYPE not in types:  # Clause -> PropertyValue (carries the assertion provenance)
             self._command(f"CREATE EDGE TYPE {PROPERTY_EDGE_TYPE}")
+        if CONTRACT_TYPE not in types:  # CU-B3: contract metadata (the CUAD document lookup unit)
+            self._command(f"CREATE VERTEX TYPE {CONTRACT_TYPE}")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.contract_id STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.name STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.agreement_type STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.parties_json STRING")  # json.dumps(parties)
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.agreement_date STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.effective_date STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.source_doc_id STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.content_hash STRING")
+            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.page_count INTEGER")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -209,6 +224,8 @@ class ArcadeDBStore:
             self._command(f"CREATE INDEX ON {CLAUSE_TYPE} (clause_id) UNIQUE")
         if _PROPVALUE_KEY_INDEX not in indexes:
             self._command(f"CREATE INDEX ON {PROPVALUE_TYPE} (value_key) UNIQUE")
+        if _CONTRACT_ID_INDEX not in indexes:
+            self._command(f"CREATE INDEX ON {CONTRACT_TYPE} (contract_id) UNIQUE")
 
     def type_names(self) -> set[str]:
         return {row["name"] for row in self._query("SELECT name FROM schema:types")}
@@ -286,6 +303,46 @@ class ArcadeDBStore:
             f" doc_start = {doc_start},"
             f" doc_end = {doc_end}"
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
+        )
+
+    def upsert_contract(self, record: ContractRecord) -> None:
+        """CU-B3: upsert a contract's metadata by `contract_id` (the CUAD document lookup unit). `parties`
+        is stored JSON-encoded; `page_count` may be null."""
+        page = "null" if record.page_count is None else int(record.page_count)
+        self._command(
+            f"UPDATE {CONTRACT_TYPE} SET"
+            f" contract_id = {_sql_str(record.contract_id)},"
+            f" name = {_sql_str(record.name)},"
+            f" agreement_type = {_sql_str(record.agreement_type)},"
+            f" parties_json = {_sql_str(json.dumps(record.parties))},"
+            f" agreement_date = {_sql_str(record.agreement_date)},"
+            f" effective_date = {_sql_str(record.effective_date)},"
+            f" source_doc_id = {_sql_str(record.source_doc_id)},"
+            f" content_hash = {_sql_str(record.content_hash)},"
+            f" page_count = {page}"
+            f" UPSERT WHERE contract_id = {_sql_str(record.contract_id)}"
+        )
+
+    def contract_by_id(self, contract_id: str) -> dict | None:
+        """CU-B3: look up a contract's metadata by id (the row, or None if absent)."""
+        rows = self._query(
+            f"SELECT contract_id, name, agreement_type, parties_json, agreement_date, effective_date,"
+            f" source_doc_id, content_hash, page_count FROM {CONTRACT_TYPE}"
+            f" WHERE contract_id = {_sql_str(contract_id)}"
+        )
+        return rows[0] if rows else None
+
+    def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
+        """CU-B3: the within-contract typed filter -- every span in `contract_id` whose `function` is in
+        `functions`, ordered by document position (the CUAD serve retrieval; empty `functions` -> []).
+        Returns citation-ready rows (span_id, parent pointer, text, function, doc offsets)."""
+        if not functions:
+            return []
+        return self._query(
+            f"SELECT span_id, parent_chunk_id, parent_okf_path, span_index, text, function,"
+            f" contract_id, doc_start, doc_end FROM {SPAN_TYPE}"
+            f" WHERE contract_id = {_sql_str(contract_id)} AND function IN {_str_array(functions)}"
+            f" ORDER BY doc_start"
         )
 
     def span_hybrid_search(
