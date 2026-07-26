@@ -345,6 +345,17 @@ class ArcadeDBStore:
             f" ORDER BY doc_start"
         )
 
+    def all_spans_by_contract(self, contract_id: str) -> list[dict]:
+        """CU-C2: EVERY span in a contract (all functions incl NONE), with its dense vector, ordered by
+        document position. For the out-of-taxonomy semantic fallback: the contract is small (hundreds of
+        spans), so ranking happens in Python -- a global ANN + contract filter would miss, since one
+        contract is ~1% of the corpus. Returns citation-ready rows plus `dense`."""
+        return self._query(
+            f"SELECT span_id, parent_chunk_id, span_index, text, function, contract_id,"
+            f" doc_start, doc_end, dense FROM {SPAN_TYPE}"
+            f" WHERE contract_id = {_sql_str(contract_id)} ORDER BY doc_start"
+        )
+
     def span_hybrid_search(
         self,
         dense_query: list[float],
