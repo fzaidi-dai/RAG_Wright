@@ -13,9 +13,13 @@ it generalizes across legal contracts, and what it would take to move it to a di
 financial reports), assuming a reasonable eval set is obtained by some means.
 
 The pipeline end to end:
-- **Ingestion (once):** parse (docling) -> segment into operative spans -> **function classifier** (LegalBERT,
-  45-class = CUAD-41 + 3) -> BGE-M3 dense+sparse embed -> **KG structural-feature extraction** (Gemma into the
-  `RelationalClauseV2` schema).
+- **Ingestion (once):** parse (docling) -> **RLM semantic chunking** (the FR-C.10 RLM skill + recursive dynamic
+  sub-agents; deterministic-gated per FR-I.1/I.5 with temperature-zero/structured output + boundary validation
+  + content-hash gate; preserves semantic boundaries -> **clauses**) -> **span segmenter** splits each clause
+  into **operative spans** -> **function classifier** (LegalBERT, 45-class = CUAD-41 + 3) -> BGE-M3 dense+sparse
+  embed -> **KG structural-feature extraction** (Gemma into the `RelationalClauseV2` schema). The two-level
+  semantic segmentation (RLM -> clauses, then spans) is what yields the clause/span units the rest of the
+  pipeline operates on.
 - **Query:** decompose -> discriminator (Gemma) -> **function filter** (union-top-2) -> **first-stage cross-
   encoder (a)** (LegalBERT, fine-tuned on ACORD grades with hard negatives) -> **one Gemma listwise call**
   (per-candidate scoring + features-in-prompt, K=25) -> return top-N with provenance.
@@ -26,14 +30,16 @@ Record, as a standing architectural characterization, that **all logic, prompts,
 harness, and infrastructure in this pipeline are domain-agnostic. 100% of the domain coupling lives in (1) two
 trained artifacts and (2) two schemas** -- never in code paths. Concretely:
 
-**Domain-agnostic (reuse anywhere, zero change):** BGE-M3 embeddings; ArcadeDB store; the decompose prompt
-("rewrite the query as the decisive test a clause must pass"); the listwise-rerank prompt logic ("score each
-candidate against the test"); the cross-encoder architecture; the Modal training harness
+**Domain-agnostic (reuse anywhere, zero change):** the **RLM semantic-chunking machinery** (recursive dynamic
+sub-agents / the semantic-boundary engine -- LLM-driven, so it ports); BGE-M3 embeddings; ArcadeDB store; the
+decompose prompt ("rewrite the query as the decisive test a clause must pass"); the listwise-rerank prompt
+logic ("score each candidate against the test"); the cross-encoder architecture; the Modal training harness
 (`scripts/distill/train_modal.py`); the eval harness; the LLM (Gemma/Pro) itself.
 
-**Legal-domain-coupled (not CUAD/ACORD-specific, but legal):** the span segmenter ("operative span" is a legal
-notion); the **KG feature schema** `RelationalClauseV2` (mutuality, favorability, carve-outs, indemnity-bearer
--- liability/indemnity/warranty structure); the LegalBERT base weights.
+**Legal-domain-coupled (not CUAD/ACORD-specific, but legal):** the **RLM chunking `SKILL.md`** (authored
+content that defines what a semantic clause is -- lightly tunable, like a prompt); the span segmenter
+("operative span" is a legal notion); the **KG feature schema** `RelationalClauseV2` (mutuality, favorability,
+carve-outs, indemnity-bearer -- liability/indemnity/warranty structure); the LegalBERT base weights.
 
 **CUAD/ACORD-specific (the trained artifacts + tuned config):** the function classifier's 45-class taxonomy and
 weights (the taxonomy IS CUAD-41+3); the first-stage cross-encoder weights (fine-tuned on ACORD grades); the
@@ -45,18 +51,21 @@ clause categories; the liability/indemnity/warranty schema and generic prompts a
 sub-domains (M&A, employment, real-estate, regulatory, IP-litigation) need taxonomy + schema extension.
 
 **Adaptation recipe for a NEW domain (given an eval set of (query, chunk, grade) triples):**
-1. **Reuse verbatim (~0 effort):** embeddings, store, decompose prompt, listwise prompt logic, LLM, the Modal
-   training harness, and the eval harness (repoint at the new grades). The pipeline SHAPE transfers unchanged.
+1. **Reuse verbatim (~0 effort):** the RLM semantic-chunking machinery, embeddings, store, decompose prompt,
+   listwise prompt logic, LLM, the Modal training harness, and the eval harness (repoint at the new grades).
+   The pipeline SHAPE transfers unchanged.
 2. **Retrain two models (mechanism reused, only data + base swapped):** (a) the function classifier -- define
    the domain's section/function taxonomy, bootstrap labels with an LLM or from existing schemas (e.g. SEC
    item numbers / XBRL for financial), retrain with a domain base (e.g. FinBERT); a cheaper interim is
    dense-retrieval or LLM zero-shot routing with no training. (b) the first-stage cross-encoder -- fine-tune on
    the new graded pairs with hard-negative mining via the same harness, OR, when grades are sparse, **distill
    from the LLM teacher** (the P3 path) so no human grading beyond the eval set is needed.
-3. **Redesign two schemas (domain-knowledge task, small):** the KG feature schema (demand-derive the domain's
-   discriminative structural fields from the eval queries -- e.g. metric/period/segment/direction for
-   financials; the extraction MECHANISM is reused), and the segmentation unit (report section / paragraph /
-   table row instead of operative span).
+3. **Retarget the schemas + segmentation (domain-knowledge task, small):** the KG feature schema (demand-derive
+   the domain's discriminative structural fields from the eval queries -- e.g. metric/period/segment/direction
+   for financials; the extraction MECHANISM is reused); and the **two-level semantic segmentation** -- retune
+   the RLM chunking `SKILL.md` to the domain's semantic unit (report section / paragraph / table row instead of
+   clause) and the span segmenter accordingly. These are authored-content edits, not retrains; the RLM
+   machinery and the LLM do the work.
 4. **Re-tune the config (low):** re-run the `listwise_variants.py` sweep (K, scoring, features) on the new eval
    to re-find the best (b) config; the legal winners may not carry over verbatim.
 
