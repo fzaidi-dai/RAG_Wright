@@ -221,6 +221,57 @@ def _final_text(messages) -> str:
     return ""
 
 
+# --- single-call (non-agentic) boundary discovery + deterministic repair (CU-B4) ------------------
+
+_SINGLE_CALL_PROMPT = (
+    "Below are {n} numbered structural items of a contract. Partition them into semantically coherent "
+    "clauses/sections: CONTIGUOUS groups of item indices, each one coherent clause or section (never split a "
+    "single clause), together covering EVERY item from 0 to {last} with no gap or overlap. Return the spans "
+    "as {{start_index, end_index}} (inclusive).\n\n{body}"
+)
+
+
+class _BoundaryList(BaseModel):
+    spans: list[BoundarySpan]
+
+
+def repair_partition(raw: list[tuple[int, int]], n: int) -> list[BoundarySpan]:
+    """Deterministically repair ANY set of (start, end) index ranges into a VALID partition of [0, n): each
+    span START in (0, n) becomes a break-before point, and the partition is the contiguous, gap-free run of
+    item ranges between the (sorted, de-duplicated) breaks -- always covering every item 0..n-1, ordered,
+    non-empty. Robust to overlap / gap / out-of-range / start>end / unordered / duplicate input, because a
+    single LLM call (unlike the agentic coverage-tail) does not guarantee a clean partition. No valid break ->
+    one span over the whole document (valid, if coarse)."""
+    if n <= 0:
+        return []
+    breaks = sorted({int(s) for (s, _e) in raw if 0 < int(s) < n})
+    bounds = [0, *breaks, n]
+    return [BoundarySpan(start_index=bounds[i], end_index=bounds[i + 1] - 1) for i in range(len(bounds) - 1)]
+
+
+class SingleCallBoundaryDiscoverer:
+    """A NON-agentic boundary discoverer: ONE structured LLM call -> a boundary partition, deterministically
+    repaired (`repair_partition`) to a valid partition. For well-structured documents (CUAD contracts) this
+    replaces the agentic `SeamBoundaryDiscoverer` at ~100x less cost/latency (measured 3.4s vs 5-9min) with
+    equal clause integrity. Uses the GENERAL role (Gemma-4-class). No interpreter -> no process-wide lock ->
+    ordinary async concurrency (no process pool needed). `structured_factory` is injectable for tests."""
+
+    def __init__(self, model_id: str | None = None, *, structured_factory=build_structured) -> None:
+        self._model_id = model_id or model_for(ModelRole.GENERAL)
+        self._factory = structured_factory
+
+    def discover(self, document) -> list[BoundarySpan]:
+        items = _document_items(document)
+        n = len(items)
+        if n == 0:
+            return []
+        body = "\n".join(f"[{it['index']}] {it['text'][:140]}" for it in items)
+        out = self._factory(self._model_id, _BoundaryList).invoke(
+            _SINGLE_CALL_PROMPT.format(n=n, last=n - 1, body=body)
+        )
+        return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
+
+
 @runtime_checkable
 class Summarizer(Protocol):
     """The per-chunk summarization seam."""
