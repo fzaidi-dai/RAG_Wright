@@ -52,10 +52,14 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-26: CU-C1 DONE (approved).** NL->type front door (`capabilities/query_understanding.py`): one
+  structured call -> normalize-at-boundary -> `QueryIntent`. 14 hermetic + live smoke. NOT canonical-slug
+  registered (NL->type is not an FR-C/FR-Q spec capability; built as query-graph glue). **Next up: CU-C2** —
+  serve + citation: typed span filter -> set, field-extract (value intents), discriminator stub, out-of-
+  taxonomy semantic fallback + low-confidence flag, assemble `HighlightResult`.
 - **2026-07-26: CU-B4 DONE (approved).** CUAD ingestion driver over the full SEED=0 holdout: single-call
   chunker + deterministic repair (ADR-0031), two-phase concurrent-chunk/sequential-store. 102 contracts,
-  27,074 spans, offset round-trip clean on all 27,074. **Next up: CU-C1** — NL->type query-understanding
-  front door (`build_structured` -> `QueryIntent`; multi-type; out-of-taxonomy detection).
+  27,074 spans, offset round-trip clean on all 27,074.
 - **2026-07-26: NEW WORKSTREAM — CUAD clause-highlighting pipeline (plan approved).** Within-doc
   retrieval-as-classification for a real MVP: NL query about a KNOWN contract -> highlighted, cited spans.
   NL->type is a first-class front door (not deferred); citation = exact doc location (offsets, dropped at 3
@@ -69,7 +73,7 @@ not this repo's.
   | CU-B2 | Document-absolute span offsets + persist (segment->SpanRecord->Span schema->upsert_span) | 4 Build | FR-I | **done** — `to_span_record()` composes doc_start=chunk.doc_start+op.start (RAW text so canonical[doc_start:doc_end]==text); Span schema + upsert_span persist contract_id/doc_start/doc_end (null on the ACORD leg). Hermetic round-trip + LIVE ArcadeDB round-trip (4 -m store pass, ACORD leg backward-compat) |
   | CU-B3 | Contract vertex + upsert_contract + typed filter spans_by_contract(contract_id, functions) | 4 Build | FR-S/FR-Q | **done** — Contract vertex+schema+unique index; upsert_contract (parties JSON, page_count nullable) + contract_by_id lookup; spans_by_contract = WHERE contract_id AND function IN [...] ORDER BY doc_start. Live tests: round-trip, multi-type, cross-contract isolation, absent->empty; 16 -m store green |
   | CU-B4 | CUAD ingestion driver `scripts/ingest_cuad.py` (parse->chunk->segment->classify->embed->store, holdout) | 5 Integrate | FR-I | **done** (ADR-0031) — SingleCallBoundaryDiscoverer + deterministic repair_partition (plugs into chunk() via the discoverer seam; agentic RLM unchanged); two-phase driver (concurrent single-call chunk / sequential local classify+embed+store). Chunk-model comparison: agentic RLM 5-9min ALL models vs single-call 3.4s integrity 1.0 -> single-call for structured contracts, async not process-pool (no interpreter lock). Repair tested thoroughly first: 17 tests incl 3000-iter property test (any garbage -> valid partition). Full SEED=0 holdout: 102 contracts, 27,074 spans (31% typed), **offset round-trip clean 27074/27074** in-memory + fresh store read; phase1 156s @conc6. 35 hermetic tests green |
-  | CU-C1 | NL->type query-understanding capability (build_structured -> QueryIntent; multi-type; out-of-taxonomy) | 4 Build | FR-Q | todo |
+  | CU-C1 | NL->type query-understanding capability (build_structured -> QueryIntent; multi-type; out-of-taxonomy) | 4 Build | FR-Q | **done** — `capabilities/query_understanding.py` `understand_query()`: one STRUCTURED_REASONING call -> LOOSE schema -> normalize at boundary into strict QueryIntent (canonicalize case-insensitively, drop unmappable, dedupe, DERIVE in_taxonomy from what maps -> mapping miss degrades to fallback not error). 14 hermetic tests + live smoke (colloquial "walk away"->Termination For Convenience; force majeure->out-of-taxonomy fallback; multi-type; extract-value routing). NOT registered under a canonical slug: NL->type is not an FR-C/FR-Q capability in the closed spec catalog (registering would invent a requirement); built as query-graph glue. Flagged at gate; user approved |
   | CU-C2 | Serve + citation (typed filter -> set; field-extract; discriminator stub; fallback+flag; HighlightResult) | 5 Integrate | FR-Q | todo |
   | CU-D1 | CUAD highlighting eval (held-out, given-type): presence acc + macro span-overlap F1 | 5 Integrate | FR-Q | todo |
   | CU-D2 | NL->type eval (LLM-generated NL queries + spot-check; type accuracy + out-of-taxonomy) | 5 Integrate | FR-Q | todo |
