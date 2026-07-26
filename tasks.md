@@ -60,7 +60,8 @@ not this repo's.
   stubbed; NL->type eval = LLM-generated + spot-check; eval only on the SEED=0 20% CUAD holdout (leak-free).
   Tasks (contract-first, one-at-a-time gate):
   | CU-A1 | Contracts: extend SpanRecord (contract_id/doc_start/doc_end/page/bbox) + new ContractRecord, QueryIntent, HighlightResult | 3 Contracts | FR-C | **done** — `contracts/{span(extended),contract_meta,query_intent,highlight}.py`; QueryIntent canonicalizes clause_types to FUNCTION_LABELS; SpanRecord CUAD fields optional (ACORD leg untouched); parent_chunk_id serves as clause_id (no redundant field); 13 tests, 57 span/store/chunk regressions green |
-  | CU-B1 | Offset-preserving parse->chunk (thread Docling char-range/page/bbox onto Chunk) | 4 Build | FR-I | todo |
+  | CU-B1 | Offset-preserving parse->chunk: Chunk.doc_start/doc_end + canonical_document_text() | 4 Build | FR-I | **done** — canonical text = _SEP-join of finalized chunk texts (chunker strips/merges/splits, so NOT raw Docling text); byte-faithful round-trip test; bbox source retained in the DoclingDocument (CU-B5). RLM boundary discovery untouched |
+  | CU-B5 | (DEFERRED) page/bbox overlay: map canonical char-offset -> DoclingDocument item -> page+bbox for PDF-overlay highlight | 5 Integrate | FR-Q | todo (deferred) |
   | CU-B2 | Document-absolute span offsets + persist (segment->SpanRecord->Span schema->upsert_span) | 4 Build | FR-I | todo |
   | CU-B3 | Contract vertex + upsert_contract + typed filter spans_by_contract(contract_id, functions) | 4 Build | FR-S/FR-Q | todo |
   | CU-B4 | CUAD ingestion driver `scripts/ingest_cuad.py` (parse->chunk->segment->classify->embed->store, holdout) | 5 Integrate | FR-I | todo |

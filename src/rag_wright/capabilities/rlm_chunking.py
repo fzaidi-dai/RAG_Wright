@@ -56,7 +56,19 @@ class BoundaryValidationError(ValueError):
 
 
 class Chunk(BaseModel):
-    """One chunk: its stable id, position, text span, summary, and token estimate."""
+    """One chunk: its stable id, position, text span, summary, and token estimate.
+
+    CU-B1 (ADR-0029): `doc_start`/`doc_end` are this chunk's character range in the CANONICAL document text
+    (`canonical_document_text()` = the `_SEP`-join of the finalized chunk texts), so
+    `canonical_document_text(chunks)[doc_start:doc_end] == text` byte-faithfully. This is the citation
+    coordinate the CUAD highlight pipeline indexes into (span offsets, CU-B2, compose as chunk.doc_start +
+    the clause-relative span offset). The chunker strips/merges/splits item text, so the canonical text is
+    the reconstruction from chunks (what the app renders + highlights), not the raw parsed text. Page/bbox
+    overlay is a separate, DEFERRED concern (CU-B5) but NOT lost: the parsed `DoclingDocument` (persisted at
+    parse) retains per-item page+bbox provenance, so a later canonical-char-offset -> Docling-item -> bbox
+    mapping stays possible. Optional/defaulted so old cached manifests still validate (a re-chunk regenerates
+    the offsets).
+    """
 
     model_config = {"frozen": True}
 
@@ -65,6 +77,8 @@ class Chunk(BaseModel):
     text: str
     summary: str
     token_estimate: int
+    doc_start: int | None = None  # CU-B1: char offset in the canonical document text
+    doc_end: int | None = None  # CU-B1: exclusive; canonical_document_text(chunks)[doc_start:doc_end] == text
 
 
 class ChunkManifest(BaseModel):
@@ -247,6 +261,25 @@ def _hard_split(text: str, token_cap: int) -> list[str]:
 _SEP = "\n\n"
 
 
+def _chunk_offsets(texts: list[str]) -> list[tuple[int, int]]:
+    """CU-B1: the (start, end) char range of each finalized chunk text in the canonical document text
+    (the `_SEP`-join of the chunk texts). Deterministic cumulative positions; by construction
+    `_SEP.join(texts)[start:end] == texts[i]`."""
+    offsets: list[tuple[int, int]] = []
+    pos = 0
+    for text in texts:
+        offsets.append((pos, pos + len(text)))
+        pos += len(text) + len(_SEP)  # the trailing +_SEP on the last is unused (no trailing separator)
+    return offsets
+
+
+def canonical_document_text(chunks: list[Chunk]) -> str:
+    """CU-B1: the document text the highlight offsets index into -- the `_SEP`-join of the finalized chunk
+    texts. The app renders and highlights on THIS (whitespace-normalized) reconstruction; each chunk/span's
+    `doc_start`/`doc_end` slice it byte-faithfully. Not the raw parsed text (the chunker strips/merges)."""
+    return _SEP.join(c.text for c in chunks)
+
+
 def _validate_partition(spans: list[BoundarySpan], n_items: int) -> None:
     """The discoverer must return a contiguous, gap-free partition covering every item (no lost text)."""
     if n_items == 0:
@@ -382,6 +415,7 @@ def chunk(
     spans = discoverer.discover(document)
     _validate_partition(spans, len(document.texts))
     texts = _finalize_chunks(document, spans, token_cap)
+    offsets = _chunk_offsets(texts)  # CU-B1: char ranges in the canonical document text
     summaries = asyncio.run(_summarize_all(texts, summarizer, max_concurrency))
     chunks = [
         Chunk(
@@ -390,6 +424,8 @@ def chunk(
             text=text,
             summary=summary,
             token_estimate=_estimate_tokens(text),
+            doc_start=offsets[index][0],
+            doc_end=offsets[index][1],
         )
         for index, (text, summary) in enumerate(zip(texts, summaries))
     ]

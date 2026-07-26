@@ -39,6 +39,7 @@ from rag_wright.capabilities.rlm_chunking import (
     _summarize_all,
     _validate_boundaries,
     _validate_partition,
+    canonical_document_text,
     chunk,
     register_rlm_chunking,
 )
@@ -142,6 +143,23 @@ def test_content_hash_gate_skips_rechunk_and_the_llm_call(tmp_path):
 
     assert discoverer.calls == 1  # the gate skips the (expensive) LLM boundary discovery on re-chunk
     assert summarizer.calls == 2  # two summaries once; the second run summarizes nothing
+
+
+# --- CU-B1: chunk offsets slice the canonical document text byte-faithfully ------------------------
+
+
+def test_chunk_offsets_slice_the_canonical_text(tmp_path):
+    parsed = _parsed(tmp_path, _two_section_doc())
+    manifest = chunk(parsed, summarizer=_StubSummarizer(), discoverer=_section_discoverer(),
+                     cache_dir=tmp_path / "chunks")
+    canonical = canonical_document_text(manifest.chunks)
+    for c in manifest.chunks:  # every chunk's doc_start:doc_end slices back to its text
+        assert c.doc_start is not None and c.doc_end is not None
+        assert canonical[c.doc_start:c.doc_end] == c.text
+    assert manifest.chunks[0].doc_start == 0
+    # chunks are contiguous with exactly the separator between them
+    assert manifest.chunks[1].doc_start == manifest.chunks[0].doc_end + len("\n\n")
+    assert manifest.chunks[-1].doc_end == len(canonical)
 
 
 # --- the deterministic-given-boundaries layer ----------------------------------------------------
