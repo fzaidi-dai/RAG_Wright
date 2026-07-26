@@ -60,8 +60,15 @@ not this repo's.
   best-model download to staging, adopt-if-better) + `train_legalbert_function.py` refactor (`build_split`,
   `build_holdout_spans`). Validated end-to-end. (3) Step-2 logit-bias calibration = NEGATIVE (NONE-downweight
   b*=0 no help; logit-adjust +0.03 macroF1 only by collapsing NONE precision 0.26->1.00 leak = unacceptable).
-  **Next: step 4** -- mine/augment REAL data for the 3 scarce classes (LLM-label from EDGAR + paraphrase real
-  spans), retrain on Modal, adopt-only-if-better on the SEED=0 holdout. Then step 5 (family structure).
+  (4) STEP 4 (mine silver) = NEGATIVE, not adopted. Reused the T60 CUAD-NONE pattern:
+  `spans/scarce_function_labels.py` + `scripts/mine_scarce_functions.py` (keyword pre-filter -> GEMMA confirm;
+  A/B: Gemma 0.57 recall / 0.98 precision ~= DeepSeek 0.58/0.98, so Gemma kept). Mined 139 silver spans
+  (Third-Party +81, Notice-Period +23, Non-Disparagement +15, Unlimited/Irrevocable +9, MFN +2), folded
+  train-only (leak-safe). Modal retrain: mean non-NONE recall 0.631->0.648 (+0.017 DIFFUSE, within run-variance)
+  but the TARGET scarce classes did NOT move (Notice-Period 0->0, Irrevocable 0->0, Third-Party 0.71->0.71) --
+  the 2 zeros are CONFUSABILITY (->Renewal-Term/->License-Grant), not scarcity, so data can't fix them. Kept
+  the current production model (staging not promoted). **Next: step 5** -- family structure / sibling
+  hard-negatives for the confusability classes (the real lever the diagnosis + step 4 both point to).
 - **2026-07-26: CU-D2 DONE (approved) -- CUAD highlighting workstream COMPLETE (CU-A1..CU-D2).** NL->type eval
   drove a benchmarked model switch: `understand_query` is now TWO-STEP reason->emit on **Gemma** (ADR-0032;
   single-call Gemma failed like Qwen -> split + profile thinking-disable). Gemma-two-step ties/beats Pro at 3x

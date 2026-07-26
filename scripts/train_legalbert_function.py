@@ -81,6 +81,8 @@ class WeightedTrainer(Trainer):
 MODEL = "nlpaueb/legal-bert-base-uncased"
 CUAD = Path("data/cuad/extracted/CUAD_v1.json")
 NEW_FUNCS = Path("data/models/new_function_spans.jsonl")  # T60 LLM-bootstrapped extended-class spans
+SCARCE_FUNCS = Path("data/models/scarce_function_spans.jsonl")  # step-4 mined silver for scarce CUAD classes
+_SILVER_FILES = (NEW_FUNCS, SCARCE_FUNCS)
 SEED = 0
 LIMIT = int(os.environ.get("LIMIT", "0"))
 # A dry-run (LIMIT) is fully ISOLATED to its own dir so it can NEVER clobber the production model.
@@ -102,23 +104,25 @@ PER_TYPE = 20 if LIMIT else 400  # cap positives per type; NONE capped to the no
 
 
 def _add_new_functions(tr_texts, tr_labels, te_texts, te_labels, test_ids: set[str]) -> tuple[int, int]:
-    """Fold the T60 new-function spans into the split by their source contract (same contract-disjoint
-    rule as the CUAD spans -- a span from a test contract goes to test, so there is no leakage)."""
-    if not NEW_FUNCS.exists():
-        return 0, 0
+    """Fold the silver spans (T60 extended-class + step-4 scarce-class) into the split by their source
+    contract (same contract-disjoint rule as the CUAD spans -- a span from a test contract goes to test, so
+    there is no leakage). The scarce silver is mined from train contracts only, so it lands in train."""
     n_tr = n_te = 0
-    for line in NEW_FUNCS.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
+    for path in _SILVER_FILES:
+        if not path.exists():
             continue
-        row = json.loads(line)
-        if row["contract_id"] in test_ids:
-            te_texts.append(row["text"])
-            te_labels.append(row["label"])
-            n_te += 1
-        else:
-            tr_texts.append(row["text"])
-            tr_labels.append(row["label"])
-            n_tr += 1
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            row = json.loads(line)
+            if row["contract_id"] in test_ids:
+                te_texts.append(row["text"])
+                te_labels.append(row["label"])
+                n_te += 1
+            else:
+                tr_texts.append(row["text"])
+                tr_labels.append(row["label"])
+                n_tr += 1
     return n_tr, n_te
 
 
