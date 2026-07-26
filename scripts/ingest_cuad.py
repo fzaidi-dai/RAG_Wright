@@ -40,6 +40,7 @@ from rag_wright.capabilities.rlm_chunking import (
     chunk,
 )
 from rag_wright.contracts.contract_meta import ContractRecord
+from rag_wright.contracts.function import canonical_function
 from rag_wright.spans.cuad_labels import parse_cuad
 from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
 from rag_wright.spans.segment import segment_clause, to_span_record
@@ -181,6 +182,7 @@ def main() -> None:
             fns = clf.classify([ch.text] + span_texts, batch_size=32)  # index 0 = clause; 1: = spans
             dense_vecs, sparse_vecs = embedder.encode_batch(span_texts)
             for op, fn, dense, sparse in zip(ops, fns[1:], dense_vecs, sparse_vecs):
+                fn = canonical_function(fn) or fn  # normalize classifier casing at the boundary (e.g. Ip->IP)
                 rec = to_span_record(op, contract_id=sid, chunk_doc_start=ch.doc_start,
                                      dense_vector=dense, sparse_vector=sparse, function=fn)
                 if canonical[rec.doc_start:rec.doc_end] != op.text:  # the citation invariant, checked live
