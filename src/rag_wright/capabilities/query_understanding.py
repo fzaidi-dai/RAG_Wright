@@ -23,24 +23,31 @@ from pydantic import BaseModel
 from rag_wright.contracts.function import FUNCTION_LABELS, canonical_function
 from rag_wright.contracts.query_intent import QueryIntent
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_structured
+from rag_wright.models.seam import build_model, build_structured
 
 _INTENTS = ("highlight", "extract", "discriminate")
 
-_PROMPT = (
-    "You map a user's natural-language question about a SINGLE known contract to a structured retrieval "
-    "intent. The contract's clauses are typed by this fixed taxonomy:\n\n{taxonomy}\n\n"
-    "Return:\n"
-    "- clause_types: the taxonomy label(s) the question is about, using the EXACT strings above. Multiple "
-    "are allowed. If the question is about a clause type NOT in the taxonomy, return an EMPTY list.\n"
-    "- intent: 'highlight' to locate/show the clause(s); 'extract' if the user asks for a specific VALUE "
-    "inside the clause (a date, a state, a party, an amount); 'discriminate' if the user wants the ONE "
-    "clause matching a condition among several of the same type.\n"
-    "- value_to_extract: for intent=extract, the value asked for (e.g. 'governing law state'); else null.\n"
-    "- value_condition: for intent=discriminate, the selecting condition; else null.\n"
-    "- in_taxonomy: false iff the question is about a clause type not in the taxonomy above.\n"
-    "- confidence: 0..1, your confidence in this mapping.\n\n"
-    "Question: {query}"
+# Two-step (reason -> emit), the sanctioned pattern for a model that cannot combine reasoning with a forced
+# structured call (CLAUDE.md standing rule; ADR-0006 Qwen precedent; ADR-0032). Step 1 reasons in free text
+# (a GENERAL-model strength -- no forced tool, so no thinking-mode tool rejection); step 2 emits the schema
+# from that reasoning (the profile disables thinking on this forced call for the models that need it, e.g.
+# Gemma). This makes NL->type work on the cheap GENERAL model, not just DeepSeek Pro (benchmarked in CU-D2).
+_REASON_PROMPT = (
+    "You match a user's natural-language question about a SINGLE known contract to clause types from a fixed "
+    "taxonomy. Reason briefly about which type(s) the question concerns and what the user wants, then END "
+    "with EXACTLY these three lines:\n"
+    "TYPES: <comma-separated EXACT taxonomy labels the question is about, or NONE if the concept is absent "
+    "from the taxonomy>\n"
+    "INTENT: <highlight to locate the clause | extract if the user asks for a specific value inside it | "
+    "discriminate if the user wants the one clause matching a condition among several of the same type>\n"
+    "VALUE: <the value to extract or the selecting condition, or NONE>\n\n"
+    "Taxonomy:\n{taxonomy}\n\nQuestion: {query}"
+)
+_EMIT_PROMPT = (
+    "Convert this analysis into the structured intent. clause_types = the EXACT labels listed after TYPES "
+    "(empty list if TYPES is NONE). intent = the word after INTENT. value_to_extract = the VALUE when "
+    "intent is extract, else null; value_condition = the VALUE when intent is discriminate, else null. "
+    "in_taxonomy = false iff TYPES is NONE.\n\nAnalysis:\n{reasoning}"
 )
 
 
@@ -62,16 +69,24 @@ def _taxonomy_block() -> str:
 def understand_query(
     query: str,
     *,
+    reason_factory=build_model,
     structured_factory=build_structured,
     model_id: str | None = None,
 ) -> QueryIntent:
-    """Parse a natural-language question into a `QueryIntent`: one structured LLM call, then boundary
-    normalization. `in_taxonomy` is DERIVED from what actually maps (so a mapping miss degrades gracefully to
-    semantic fallback, never a hard error). Uses STRUCTURED_REASONING (DeepSeek V4 Pro) via the seam."""
-    model_id = model_id or model_for(ModelRole.STRUCTURED_REASONING)
-    raw = structured_factory(model_id, _RawIntent).invoke(
-        _PROMPT.format(taxonomy=_taxonomy_block(), query=query)
-    )
+    """Parse a natural-language question into a `QueryIntent` via the two-step reason->emit (see the prompts
+    above): step 1 reasons in free text, step 2 emits the schema from that reasoning. Then boundary
+    normalization: `in_taxonomy` is DERIVED from what actually maps (a mapping miss degrades gracefully to
+    semantic fallback, never a hard error); a failed emit (None) degrades to out-of-taxonomy low-confidence.
+    Defaults to the GENERAL model (Gemma): the two-step ties/beats DeepSeek Pro on NL->type at ~3x less
+    latency and cost, and is not throttled (benchmarked CU-D2 / ADR-0032). Factories are injectable for
+    hermetic tests."""
+    model_id = model_id or model_for(ModelRole.GENERAL)
+    reasoning = reason_factory(model_id).invoke(
+        _REASON_PROMPT.format(taxonomy=_taxonomy_block(), query=query)
+    ).content
+    raw = structured_factory(model_id, _RawIntent).invoke(_EMIT_PROMPT.format(reasoning=reasoning))
+    if raw is None:  # the forced structured emit failed -> out-of-taxonomy, low confidence (never a hard error)
+        return QueryIntent(clause_types=[], intent="highlight", in_taxonomy=False, confidence=0.0)
     canon: list[str] = []
     for label in raw.clause_types:
         mapped = canonical_function(label)

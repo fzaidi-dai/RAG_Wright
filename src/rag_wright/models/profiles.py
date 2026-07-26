@@ -94,7 +94,15 @@ PROFILES: dict[str, ModelProfile] = {
         model_id=DEFAULT_STRUCTURED_REASONING_SECONDARY,
         structured_extra_body={"reasoning": {"enabled": False}},
     ),
-    DEFAULT_GENERAL: ModelProfile(model_id=DEFAULT_GENERAL),
+    # Gemma 4, like Qwen, rejects/returns-None on forced structured output when its reasoning mode is on for
+    # richer schemas (nullable fields): the CU-C1 NL->type emit returned None on every call until reasoning was
+    # disabled on the forced structured call. Same fix as the secondary (structured-only, so free-text/reasoning
+    # calls -- and the two-step reason node -- are untouched); simpler schemas (chunking _BoundaryList/_Summary)
+    # verified still valid with it. Empirical, dated: CU-D2 / ADR-0032.
+    DEFAULT_GENERAL: ModelProfile(
+        model_id=DEFAULT_GENERAL,
+        structured_extra_body={"reasoning": {"enabled": False}},
+    ),
     # DeepSeek V4 Flash does reasoning + structured output together, like V4 Pro (ADR-0006); no
     # thinking-disable needed. As the T58 BULK property extractor (Flash->Pro cascade, ADR-0028) it routes
     # by THROUGHPUT too, to dodge the cheapest-provider throttle (ADR-0027).

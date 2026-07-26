@@ -1,7 +1,9 @@
-"""CU-C1: NL->type query understanding. Tests the boundary normalization (loose LLM schema -> strict
-QueryIntent) hermetically -- a fake structured_factory returns crafted `_RawIntent`s; no LLM, no network."""
+"""CU-C1: NL->type query understanding. Tests the boundary normalization (loose emit schema -> strict
+QueryIntent) hermetically -- a fake reason_factory + structured_factory drive the two-step; no LLM, no network."""
 
 from __future__ import annotations
+
+from types import SimpleNamespace
 
 import pytest
 
@@ -9,8 +11,19 @@ from rag_wright.capabilities.query_understanding import _RawIntent, understand_q
 from rag_wright.contracts.function import canonical_function
 
 
-def _factory(raw: _RawIntent):
-    """A structured_factory stand-in: ignores model/schema, returns a runnable whose .invoke gives `raw`."""
+def _reason_factory():
+    """A reason_factory stand-in: returns a runnable whose .invoke(...).content is ignored by the fake emit."""
+
+    class _R:
+        def invoke(self, _prompt):
+            return SimpleNamespace(content="TYPES: ...\nINTENT: ...\nVALUE: ...")
+
+    return lambda _model: _R()
+
+
+def _factory(raw):
+    """A structured_factory (emit) stand-in: ignores model/schema, returns a runnable whose .invoke gives `raw`.
+    `raw=None` simulates a failed forced structured emit."""
 
     class _Runnable:
         def invoke(self, _prompt):
@@ -19,8 +32,13 @@ def _factory(raw: _RawIntent):
     return lambda _model, _schema: _Runnable()
 
 
-def _understand(raw: _RawIntent):
-    return understand_query("q", structured_factory=_factory(raw))
+def _understand(raw):
+    return understand_query("q", reason_factory=_reason_factory(), structured_factory=_factory(raw))
+
+
+def test_failed_emit_degrades_to_out_of_taxonomy_low_confidence():
+    intent = _understand(None)  # forced structured emit returned None
+    assert intent.clause_types == [] and intent.in_taxonomy is False and intent.confidence == 0.0
 
 
 def test_single_in_taxonomy_type():
