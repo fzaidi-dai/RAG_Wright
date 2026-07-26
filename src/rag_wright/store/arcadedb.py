@@ -163,6 +163,9 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.dense ARRAY_OF_FLOATS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_indices ARRAY_OF_INTEGERS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_weights ARRAY_OF_FLOATS")
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.contract_id STRING")  # CU-B2: within-contract filter
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_start INTEGER")  # CU-B2: doc-absolute char offset
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_end INTEGER")  # CU-B2: exclusive (citation)
         if CLAUSE_TYPE not in types:  # FR-R (ADR-0026): the property graph (clause node)
             self._command(f"CREATE VERTEX TYPE {CLAUSE_TYPE}")
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.clause_id STRING")  # parent chunk / OKF pointer
@@ -266,6 +269,8 @@ class ArcadeDBStore:
         dense = _float_array(record.dense_vector)
         sparse_indices = "[" + ",".join(str(i) for i in token_ids) + "]"
         sparse_weights = _float_array(record.sparse_vector[i] for i in token_ids)
+        doc_start = "null" if record.doc_start is None else int(record.doc_start)
+        doc_end = "null" if record.doc_end is None else int(record.doc_end)
         self._command(
             f"UPDATE {SPAN_TYPE} SET"
             f" span_id = {_sql_str(record.span_id)},"
@@ -276,7 +281,10 @@ class ArcadeDBStore:
             f" function = {_sql_str(record.function)},"
             f" dense = {dense},"
             f" sparse_indices = {sparse_indices},"
-            f" sparse_weights = {sparse_weights}"
+            f" sparse_weights = {sparse_weights},"
+            f" contract_id = {_sql_str(record.contract_id)},"  # CU-B2: citation + within-contract filter
+            f" doc_start = {doc_start},"
+            f" doc_end = {doc_end}"
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
         )
 

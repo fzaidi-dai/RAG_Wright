@@ -53,7 +53,8 @@ def test_span_schema_and_indexes_created(store):
     idx = store.index_names()
     assert {"Span[dense]", "Span[sparse_indices,sparse_weights]", "Span[span_id]"} <= idx
     assert {"span_id", "parent_chunk_id", "parent_okf_path", "function", "dense",
-            "sparse_indices", "sparse_weights"} <= store.property_names("Span")
+            "sparse_indices", "sparse_weights",
+            "contract_id", "doc_start", "doc_end"} <= store.property_names("Span")  # CU-B2
 
 
 @pytest.mark.store
@@ -87,3 +88,20 @@ def test_function_filter_restricts_despite_identical_vectors(store):
 
     hits = store.span_hybrid_search(_dense(0), {1: 1.0}, k=5, function="Cap On Liability")
     assert {h["span_id"] for h in hits} == {"a#0"}  # b excluded despite identical vectors
+
+
+@pytest.mark.store
+def test_cuad_offset_columns_persist_and_round_trip(store):
+    # CU-B2: the doc-absolute citation offsets + contract_id persist and slice the canonical text back.
+    canonical = "PREAMBLE.\n\n(a) No consequential damages. (b) Cap: fees paid.\n\nEXHIBIT"
+    text = "(a) No consequential damages. "
+    start = canonical.index(text)
+    rec = SpanRecord(span_id="cu1:0:h#0", parent_chunk_id="cu1:0:h", span_index=0, text=text,
+                     function="Cap On Liability", dense_vector=_dense(3), sparse_vector={4: 1.0},
+                     contract_id="cu1", doc_start=start, doc_end=start + len(text))
+    store.upsert_span(rec)
+
+    row = store._query("SELECT contract_id, doc_start, doc_end, text FROM Span WHERE span_id = 'cu1:0:h#0'")[0]
+    assert row["contract_id"] == "cu1"
+    assert (row["doc_start"], row["doc_end"]) == (start, start + len(text))
+    assert canonical[row["doc_start"] : row["doc_end"]] == row["text"] == text  # citation invariant persists
