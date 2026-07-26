@@ -52,6 +52,16 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-26: Classifier rare-class improvement (in progress).** (1) DIAGNOSIS: failures split into SCARCITY
+  (3 classes <35 train spans at 0.00 recall: Unlimited-License 15, Irrevocable/Perpetual-License 28,
+  Notice-Period-To-Terminate-Renewal 32) and CONFUSABILITY (well-resourced siblings: Uncapped↔Cap-on-Liability,
+  Change-of-Control↔Anti-Assignment, the license family). Class-weighting + per-type cap ALREADY in training.
+  (2) Migrated training to Modal per ADR-0030: `scripts/train_legalbert_modal.py` (A10 train + bulk logits,
+  best-model download to staging, adopt-if-better) + `train_legalbert_function.py` refactor (`build_split`,
+  `build_holdout_spans`). Validated end-to-end. (3) Step-2 logit-bias calibration = NEGATIVE (NONE-downweight
+  b*=0 no help; logit-adjust +0.03 macroF1 only by collapsing NONE precision 0.26->1.00 leak = unacceptable).
+  **Next: step 4** -- mine/augment REAL data for the 3 scarce classes (LLM-label from EDGAR + paraphrase real
+  spans), retrain on Modal, adopt-only-if-better on the SEED=0 holdout. Then step 5 (family structure).
 - **2026-07-26: CU-D2 DONE (approved) -- CUAD highlighting workstream COMPLETE (CU-A1..CU-D2).** NL->type eval
   drove a benchmarked model switch: `understand_query` is now TWO-STEP reason->emit on **Gemma** (ADR-0032;
   single-call Gemma failed like Qwen -> split + profile thinking-disable). Gemma-two-step ties/beats Pro at 3x

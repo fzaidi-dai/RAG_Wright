@@ -139,22 +139,51 @@ def _collect(contracts, per_type: int) -> tuple[list[str], list[str]]:
     return texts, labels
 
 
-def main() -> None:
+def build_split(limit: int = 0) -> dict:
+    """Contract-disjoint SEED=0 split -> capped/labeled train+test spans. The rag_wright DATA PREP (runs
+    locally; the Modal A10 image stays rag_wright-free and just consumes this). Returns the tr/te texts+labels
+    and the sorted label space. `limit` mirrors the LIMIT dry-run (smaller corpus + per-type cap)."""
+    per_type = 20 if limit else 400
     contracts = list(parse_cuad(CUAD))
     random.Random(SEED).shuffle(contracts)
-    if LIMIT:
-        contracts = contracts[:LIMIT]
+    if limit:
+        contracts = contracts[:limit]
     n_test = max(1, len(contracts) // 5)
     test_c, train_c = contracts[:n_test], contracts[n_test:]
-    tr_texts, tr_labels = _collect(train_c, PER_TYPE)
-    te_texts, te_labels = _collect(test_c, max(1, PER_TYPE // 3))
+    tr_texts, tr_labels = _collect(train_c, per_type)
+    te_texts, te_labels = _collect(test_c, max(1, per_type // 3))
     test_ids = {c.contract_id for c in test_c}
     n_new_tr, n_new_te = _add_new_functions(tr_texts, tr_labels, te_texts, te_labels, test_ids)
     labs = sorted(set(tr_labels) | set(te_labels))
+    return {"tr_texts": tr_texts, "tr_labels": tr_labels, "te_texts": te_texts, "te_labels": te_labels,
+            "labs": labs, "n_new_tr": n_new_tr, "n_new_te": n_new_te,
+            "n_train_c": len(train_c), "n_test_c": len(test_c)}
+
+
+def build_holdout_spans() -> tuple[list[str], list[str], list[int]]:
+    """ALL operative spans of the SEED=0 holdout with gold label + contract index -- the bulk-eval / logit-
+    calibration input (step 2). Not per-type-capped: every span, so recall/confusion is measured honestly."""
+    contracts = list(parse_cuad(CUAD))
+    random.Random(SEED).shuffle(contracts)
+    test_c = contracts[: max(1, len(contracts) // 5)]
+    texts, gold, cidx = [], [], []
+    for ci, c in enumerate(test_c):
+        for ls in label_operative_spans(c):
+            texts.append(ls.text)
+            gold.append(ls.label)
+            cidx.append(ci)
+    return texts, gold, cidx
+
+
+def main() -> None:
+    s = build_split(LIMIT)
+    tr_texts, tr_labels, te_texts, te_labels, labs = (
+        s["tr_texts"], s["tr_labels"], s["te_texts"], s["te_labels"], s["labs"])
     label2id = {label: i for i, label in enumerate(labs)}
     id2label = {i: label for label, i in label2id.items()}
-    print(f"contracts train/test={len(train_c)}/{len(test_c)}  spans={len(tr_texts)}/{len(te_texts)}  "
-          f"labels={len(labs)}  epochs={EPOCHS}  (new-function spans tr/te={n_new_tr}/{n_new_te})", flush=True)
+    print(f"contracts train/test={s['n_train_c']}/{s['n_test_c']}  spans={len(tr_texts)}/{len(te_texts)}  "
+          f"labels={len(labs)}  epochs={EPOCHS}  (new-function spans tr/te={s['n_new_tr']}/{s['n_new_te']})",
+          flush=True)
 
     init_from = INIT_FROM or MODEL  # base model, or a fine-tuned checkpoint to continue from (weights only)
     tok = AutoTokenizer.from_pretrained(init_from)
