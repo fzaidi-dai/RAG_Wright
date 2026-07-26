@@ -52,6 +52,22 @@ not this repo's.
 
 ## Last approved / next up
 
+- **2026-07-26: NEW WORKSTREAM — CUAD clause-highlighting pipeline (plan approved).** Within-doc
+  retrieval-as-classification for a real MVP: NL query about a KNOWN contract -> highlighted, cited spans.
+  NL->type is a first-class front door (not deferred); citation = exact doc location (offsets, dropped at 3
+  hops today). Plan: `~/.claude/plans/precious-enchanting-kahan.md`. Decisions: out-of-taxonomy = semantic
+  fallback + low-confidence flag; multi-type allowed; value-as-discriminator (case b) detected-now/stage-
+  stubbed; NL->type eval = LLM-generated + spot-check; eval only on the SEED=0 20% CUAD holdout (leak-free).
+  Tasks (contract-first, one-at-a-time gate):
+  | CU-A1 | Contracts: extend SpanRecord (contract_id/doc_start/doc_end/page/bbox) + new ContractRecord, QueryIntent, HighlightResult | 3 Contracts | FR-C | **done** — `contracts/{span(extended),contract_meta,query_intent,highlight}.py`; QueryIntent canonicalizes clause_types to FUNCTION_LABELS; SpanRecord CUAD fields optional (ACORD leg untouched); parent_chunk_id serves as clause_id (no redundant field); 13 tests, 57 span/store/chunk regressions green |
+  | CU-B1 | Offset-preserving parse->chunk (thread Docling char-range/page/bbox onto Chunk) | 4 Build | FR-I | todo |
+  | CU-B2 | Document-absolute span offsets + persist (segment->SpanRecord->Span schema->upsert_span) | 4 Build | FR-I | todo |
+  | CU-B3 | Contract vertex + upsert_contract + typed filter spans_by_contract(contract_id, functions) | 4 Build | FR-S/FR-Q | todo |
+  | CU-B4 | CUAD ingestion driver `scripts/ingest_cuad.py` (parse->chunk->segment->classify->embed->store, holdout) | 5 Integrate | FR-I | todo |
+  | CU-C1 | NL->type query-understanding capability (build_structured -> QueryIntent; multi-type; out-of-taxonomy) | 4 Build | FR-Q | todo |
+  | CU-C2 | Serve + citation (typed filter -> set; field-extract; discriminator stub; fallback+flag; HighlightResult) | 5 Integrate | FR-Q | todo |
+  | CU-D1 | CUAD highlighting eval (held-out, given-type): presence acc + macro span-overlap F1 | 5 Integrate | FR-Q | todo |
+  | CU-D2 | NL->type eval (LLM-generated NL queries + spot-check; type accuracy + out-of-taxonomy) | 5 Integrate | FR-Q | todo |
 - **2026-07-26: ADOPTED — improved (b) is the query-time reranker operating point.** Pipeline: function filter
   (union-top-2) → first-stage LegalBERT hard-neg CE (a) → **ONE Gemma listwise call** over the top-K, with
   **per-candidate scoring + KG-features-in-prompt + K=25** (`scripts/distill/listwise_variants.py`

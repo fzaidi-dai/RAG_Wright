@@ -11,24 +11,47 @@ from __future__ import annotations
 
 import math
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
 
 
 class SpanRecord(BaseModel):
-    """One operative-span record for the `Span` hybrid index (dense + sparse over the span text)."""
+    """One operative-span record for the `Span` hybrid index (dense + sparse over the span text).
+
+    CUAD-highlighting fields (CU-A1, ADR-0029) are OPTIONAL/defaulted so the ACORD span leg (which does not
+    set them) is unaffected: `contract_id` is the source-document id used by the within-contract typed filter
+    (derivable from `parent_chunk_id` but stored explicitly for an indexed WHERE); `doc_start`/`doc_end` are
+    document-absolute character offsets of the span (the citation the app highlights on); `page`/`bbox` are the
+    optional PDF-overlay provenance (Docling-supplied where available). `parent_chunk_id` is the parent-clause
+    pointer (a clause == a chunk), so no separate clause_id field is added.
+    """
 
     model_config = {"frozen": True}
 
     span_id: str  # "{parent_chunk_id}#{span_index}"
-    parent_chunk_id: str
+    parent_chunk_id: str  # the parent CLAUSE id (a clause is a chunk); the span<->clause link
     parent_okf_path: str = ""  # where the parent clause lives in the clause OKF bundle
     span_index: int
     text: str
     function: str = ""  # the function-classifier tag (T56); "" until classified
     dense_vector: list[float]  # dense over the span; length == BGE_M3_DENSE_DIM
     sparse_vector: dict[int, float]  # sparse over the span: token-id -> non-negative weight
+    contract_id: str = ""  # CU-A1: source contract/document id (within-contract typed filter)
+    doc_start: int | None = None  # CU-A1: document-absolute char offset (citation); None on the ACORD leg
+    doc_end: int | None = None  # CU-A1: exclusive
+    page: int | None = None  # CU-A1: 1-based page for PDF-overlay highlight (optional)
+    bbox: tuple[float, float, float, float] | None = None  # CU-A1: (left, top, right, bottom) on `page`
+
+    @model_validator(mode="after")
+    def _check_offsets(self) -> "SpanRecord":
+        if self.doc_start is not None and self.doc_start < 0:
+            raise ValueError("doc_start must be non-negative")
+        if self.doc_start is not None and self.doc_end is not None and self.doc_end < self.doc_start:
+            raise ValueError(f"doc_end ({self.doc_end}) must be >= doc_start ({self.doc_start})")
+        if self.page is not None and self.page < 1:
+            raise ValueError("page is 1-based; must be >= 1")
+        return self
 
     @field_validator("dense_vector")
     @classmethod
