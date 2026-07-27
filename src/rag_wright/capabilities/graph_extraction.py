@@ -202,6 +202,29 @@ class LlmEscalationExtractor:
         return ExtractionResult(chunk_id=chunk_id, relationship_facts=relationships)
 
 
+def parties_to_extraction(chunk_id: ChunkId, parties: list[str]) -> ExtractionResult:
+    """The no-LLM party path (GP-1(A)): known signing parties -> ORGANIZATION mentions + a CONTRACTS_WITH
+    fact between each pair, EXTRACTED. Same fact shape as `ContractExtractor` minus the model call -- the
+    cheap first-light edge source when the signatories are already known (e.g. the CUAD 'Parties'
+    annotation). Strips + dedups (order-stable); a lone party yields a mention but no edge. ADR-0012:
+    the parties are the actual signatories, so CONTRACTS_WITH is structural, not a proximity guess."""
+    provenance = Provenance.of(chunk_id)
+    names = list(dict.fromkeys(p.strip() for p in parties if p.strip()))
+    mentions = [
+        EntityMention(text=name, entity_type=EntityType.ORGANIZATION, confidence=ConfidenceTag.EXTRACTED)
+        for name in names
+    ]
+    relationships = [
+        RelationshipFact(
+            provenance=provenance, confidence=ConfidenceTag.EXTRACTED,
+            source_ref=names[i], relationship_type=RelationshipType.CONTRACTS_WITH, target_ref=names[j],
+        )
+        for i in range(len(names))
+        for j in range(i + 1, len(names))
+    ]
+    return ExtractionResult(chunk_id=chunk_id, entity_mentions=mentions, relationship_facts=relationships)
+
+
 def default_extractors() -> list[Extractor]:
     """The default hybrid stack: spaCy NER + contract + LLM escalation (the live wiring)."""
     return [SpacyNerExtractor(SpacyPipeline()), ContractExtractor(), LlmEscalationExtractor()]
