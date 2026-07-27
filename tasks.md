@@ -81,6 +81,18 @@ not this repo's.
   work) at ~few-hundred Gemma calls/ingest, no query-time cost, zero risk to common classes. Classifier arc
   (steps 1-5b) COMPLETE. **Next: await direction** (CU-D1 aggregate bounded by common classes + chunking, not
   the rare tail; other levers = chunking quality, serve/retrieval; or GATE-2).
+- **2026-07-27: Classifier base-model A/B DONE (grounded-research follow-up).** 4 bases, one recipe, same
+  SEED=0 holdout, on Modal per the new `model-training-recipe` skill (resumable checkpointing +
+  continue-until-convergence + tagged always-save + adopt-only-if-better; `scripts/train_legalbert_modal.py`
+  gained `eval` mode + `eval_fn` to re-score saved weights, function timeout 90m->4h for the slow Qwen). Result
+  (holdout mean non-NONE recall): **deberta-v3 0.618 ~ legal-bert 0.614** (identical macro-F1 0.596) >
+  contracts-bert 0.601 >> **qwen-0.5B 0.552** (small-decoder-LLM hypothesis empirically rejected). Ensemble
+  math (`scripts/ab_model_overlap.py`): majority-vote 0.600 (< best single), **ORACLE any-of-4 = 0.732
+  (+0.114)** -- encoders miss DIFFERENT classes (per-class complementarity), naive vote can't capture it.
+  **DECISIONS:** keep **legal-bert** as production (DeBERTa's +0.004 = noise + fp32-fragile); drop the small-LLM
+  idea; **defer** the 2-encoder ensemble until the legal-bert CU-D1 baseline is reconfirmed. All 4 saved to
+  `data/models/<slug>/` + preds in `data/models/ab_preds/`. Results: **`docs/eval/classifier_model_ab.md`**.
+  (SKILL is installed at `~/.claude/skills/model-training-recipe/`, outside the repo.) **Next: reconfirm CU-D1.**
 - **2026-07-26: CU-D2 DONE (approved) -- CUAD highlighting workstream COMPLETE (CU-A1..CU-D2).** NL->type eval
   drove a benchmarked model switch: `understand_query` is now TWO-STEP reason->emit on **Gemma** (ADR-0032;
   single-call Gemma failed like Qwen -> split + profile thinking-disable). Gemma-two-step ties/beats Pro at 3x
