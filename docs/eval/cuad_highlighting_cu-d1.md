@@ -13,11 +13,11 @@
 
 | metric | value | reading |
 |---|---|---|
-| **Coverage** | **0.704** (1942/2758) | fraction of gold answers contained in a returned span -- the headline highlighting number |
+| **Coverage** | **0.700** (1931/2758) | fraction of gold answers contained in a returned span -- the headline highlighting number |
 | Presence recall | 0.864 | typed filter fires when the category is present |
-| Presence precision | 0.601 | firings that land on a truly-present category (rest = classifier over-trigger) |
-| Presence F1 | 0.709 | (tp=1184 fp=785 fn=187 tn=2026) |
-| Token recall / F1 | 0.752 / 0.489 | secondary; F1 low BY DESIGN (whole-clause highlight >> short gold answers) |
+| Presence precision | 0.603 | firings that land on a truly-present category (rest = classifier over-trigger) |
+| Presence F1 | 0.710 | (tp=1184 fp=779 fn=187 tn=2032) |
+| Token recall / F1 | 0.750 / 0.492 | secondary; F1 low BY DESIGN (whole-clause highlight >> short gold answers) |
 
 ## What bounds it
 
@@ -34,8 +34,8 @@
 | Parties | 445/491 | 0.91 |
 | Audit Rights | 96/111 | 0.86 |
 | Rofr/Rofo/Rofn | 75/87 | 0.86 |
-| Termination For Convenience | 30/35 | 0.86 |
 | Warranty Duration | 44/53 | 0.83 |
+| Termination For Convenience | 29/35 | 0.83 |
 | Anti-Assignment | 106/128 | 0.83 |
 | Expiration Date | 77/93 | 0.83 |
 | IP Ownership Assignment | 56/70 | 0.80 |
@@ -45,28 +45,28 @@
 | Source Code Escrow | 3/4 | 0.75 |
 | Covenant Not To Sue | 27/37 | 0.73 |
 | Volume Restriction | 28/39 | 0.72 |
-| Exclusivity | 60/87 | 0.69 |
+| Exclusivity | 59/87 | 0.68 |
 | Joint IP Ownership | 21/31 | 0.68 |
-| Non-Compete | 46/69 | 0.67 |
 | Third Party Beneficiary | 4/6 | 0.67 |
 | Cap On Liability | 103/155 | 0.66 |
-| Renewal Term | 35/53 | 0.66 |
 | Post-Termination Services | 59/90 | 0.66 |
 | Uncapped Liability | 21/33 | 0.64 |
 | No-Solicit Of Employees | 10/16 | 0.62 |
-| License Grant | 97/156 | 0.62 |
+| Non-Compete | 42/69 | 0.61 |
 | Most Favored Nation | 3/5 | 0.60 |
+| License Grant | 92/156 | 0.59 |
 | Non-Disparagement | 10/17 | 0.59 |
 | Change Of Control | 33/63 | 0.52 |
 | Agreement Date | 48/96 | 0.50 |
+| No-Solicit Of Customers | 5/10 | 0.50 |
 | Liquidated Damages | 8/17 | 0.47 |
-| No-Solicit Of Customers | 3/10 | 0.30 |
-| Price Restrictions | 2/7 | 0.29 |
+| Renewal Term | 23/53 | 0.43 |
+| Price Restrictions | 3/7 | 0.43 |
 | Effective Date | 25/97 | 0.26 |
+| Notice Period To Terminate Renewal | 6/25 | 0.24 |
 | Affiliate License-Licensor | 2/9 | 0.22 |
 | Affiliate License-Licensee | 4/20 | 0.20 |
 | Competitive Restriction Exception | 6/34 | 0.18 |
-| Non-Transferable License | 9/62 | 0.15 |
-| Irrevocable Or Perpetual License | 0/34 | 0.00 |
-| Notice Period To Terminate Renewal | 0/25 | 0.00 |
+| Non-Transferable License | 8/62 | 0.13 |
+| Irrevocable Or Perpetual License | 4/34 | 0.12 |
 | Unlimited/All-You-Can-Eat-License | 0/6 | 0.00 |

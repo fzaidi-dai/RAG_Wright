@@ -28,13 +28,31 @@ image = (
 vol = modal.Volume.from_name("legalbert-function", create_if_missing=True)
 DATA = "/data"
 BASE = "nlpaueb/legal-bert-base-uncased"
+
+# Step-5: confusable-sibling families derived data-drivenly from the current model's holdout confusion
+# (>=0.12 of a class's gold spans predicted as the sibling; connected components). The sibling-margin loss
+# forces separation on exactly these pairs. Labels are the training label space (CUAD casing, e.g. "Ip").
+SIBLING_GROUPS = [
+    ["Affiliate License-Licensee", "Competitive Restriction Exception", "Exclusivity",
+     "Irrevocable Or Perpetual License", "License Grant", "Non-Transferable License"],
+    ["Anti-Assignment", "Change Of Control"],
+    ["Effective Date", "Expiration Date"],
+    ["Unlimited/All-You-Can-Eat-License", "Volume Restriction"],
+    ["Affiliate License-Licensor", "Ip Ownership Assignment", "Joint Ip Ownership"],
+    ["Notice Period To Terminate Renewal", "Price Restrictions", "Renewal Term", "Termination For Convenience"],
+    ["Most Favored Nation", "No-Solicit Of Customers", "Non-Compete"],
+    ["Cap On Liability", "Uncapped Liability"],
+    ["Liquidated Damages", "Revenue/Profit Sharing"],
+    ["Indemnification", "No-Solicit Of Employees", "Third Party Beneficiary"],
+]
 LOCAL_MODEL = Path("data/models/legalbert_function")
 STAGING = Path("data/models/legalbert_function_staging")
 LOGITS_NPZ = Path("data/models/holdout_logits.npz")
 
 
 @app.function(image=image, gpu="A10", volumes={DATA: vol}, timeout=5400)
-def train_fn(epochs: int, lr: float, warmup: float, lr_sched: str, patience: int, resume: bool) -> dict:
+def train_fn(epochs: int, lr: float, warmup: float, lr_sched: str, patience: int, resume: bool,
+             sib_lambda: float = 0.0, sib_margin: float = 2.0) -> dict:
     """Train on the uploaded split; keep the best-eval-loss checkpoint; on resume adopt only if it beats the
     start. Saves the adopted model to the Volume at /model and returns metrics + the progress log."""
     import time
@@ -80,15 +98,35 @@ def train_fn(epochs: int, lr: float, warmup: float, lr_sched: str, patience: int
                 self._a(f"EVAL epoch {(state.epoch or 0):.2f} macro_f1={metrics.get('eval_macro_f1', 0):.4f} "
                         f"eval_loss={metrics.get('eval_loss', 0):.4f}")
 
+    # sibling adjacency mask (K,K): sib_mask[c] = the confusable siblings of class c (step-5 hard negatives)
+    sib_mask = torch.zeros(len(labs), len(labs))
+    for group in SIBLING_GROUPS:
+        ids = [label2id[l] for l in group if l in label2id]
+        for a in ids:
+            for b in ids:
+                if a != b:
+                    sib_mask[a, b] = 1.0
+
     class WeightedTrainer(Trainer):
-        def __init__(self, *a, class_weights, **k):
+        def __init__(self, *a, class_weights, sibling_mask, sib_lambda, sib_margin, **k):
             super().__init__(*a, **k)
             self._w = class_weights
+            self._sib = sibling_mask
+            self._lam = sib_lambda
+            self._margin = sib_margin
 
         def compute_loss(self, model, inputs, return_outputs=False, **k):
             labels = inputs.pop("labels")
             out = model(**inputs)
-            loss = torch.nn.functional.cross_entropy(out.logits, labels, weight=self._w.to(out.logits.device))
+            logits = out.logits
+            loss = torch.nn.functional.cross_entropy(logits, labels, weight=self._w.to(logits.device))
+            if self._lam > 0:
+                # sibling-margin hinge: push logit[true] >= logit[sibling] + margin over each example's siblings
+                sib = self._sib.to(logits.device)[labels]  # (B, K) 1 where a sibling of the true class
+                true_logit = logits.gather(1, labels.unsqueeze(1))  # (B, 1)
+                hinge = torch.nn.functional.relu(self._margin - (true_logit - logits))  # (B, K)
+                denom = sib.sum(1).clamp(min=1.0)
+                loss = loss + self._lam * ((hinge * sib).sum(1) / denom).mean()
             return (loss, out) if return_outputs else loss
 
     init_from = f"{DATA}/model" if resume else BASE
@@ -117,6 +155,7 @@ def train_fn(epochs: int, lr: float, warmup: float, lr_sched: str, patience: int
     trainer = WeightedTrainer(
         model, args, train_dataset=tr, eval_dataset=te, data_collator=DataCollatorWithPadding(tok),
         compute_metrics=metrics, class_weights=torch.tensor(weights, dtype=torch.float),
+        sibling_mask=sib_mask, sib_lambda=sib_lambda, sib_margin=sib_margin,
         callbacks=[FileProgress(), EarlyStoppingCallback(early_stopping_patience=patience)])
 
     start_loss = trainer.evaluate()["eval_loss"] if resume else None
@@ -177,7 +216,8 @@ def _download_model(dest: Path) -> None:
 
 
 @app.local_entrypoint()
-def main(mode: str = "train", smoke: bool = False, resume: bool = False, epochs: int = 0):
+def main(mode: str = "train", smoke: bool = False, resume: bool = False, epochs: int = 0,
+         sib_lambda: float = 0.0, sib_margin: float = 2.0):  # sib_lambda>0 = step-5 sibling-margin (no effect; OFF)
     if mode == "logits":
         from scripts.train_legalbert_function import build_holdout_spans
         import numpy as np
@@ -208,8 +248,8 @@ def main(mode: str = "train", smoke: bool = False, resume: bool = False, epochs:
     warmup = 0.0 if resume else 0.1
     sched = "constant" if resume else "linear"
     print(f"[train] spans tr/te={len(s['tr_texts'])}/{len(s['te_texts'])} labels={len(s['labs'])} "
-          f"epochs={ep} resume={resume} smoke={smoke}", flush=True)
-    res = train_fn.remote(ep, lr, warmup, sched, 1, resume)
+          f"epochs={ep} resume={resume} smoke={smoke} sib_lambda={sib_lambda} sib_margin={sib_margin}", flush=True)
+    res = train_fn.remote(ep, lr, warmup, sched, 1, resume, sib_lambda, sib_margin)
     print(f"\n[train] macro_f1={res['macro_f1']:.3f} best_loss={res['best_loss']} adopted={res['adopted']} "
           f"({res['secs']}s)", flush=True)
     if not res["adopted"]:

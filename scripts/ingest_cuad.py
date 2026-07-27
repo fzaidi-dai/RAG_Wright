@@ -42,6 +42,8 @@ from rag_wright.capabilities.rlm_chunking import (
 from rag_wright.contracts.contract_meta import ContractRecord
 from rag_wright.contracts.function import canonical_function
 from rag_wright.spans.cuad_labels import parse_cuad
+from rag_wright.spans.function_families import RARE_TARGETS
+from rag_wright.spans.hybrid_classifier import HybridFunctionClassifier
 from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
 from rag_wright.spans.segment import segment_clause, to_span_record
 
@@ -160,7 +162,10 @@ def main() -> None:
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     embedder = BGEM3Embedder()
-    clf = LegalBertFunctionClassifier.load(MODEL_PATH, device=_device())
+    # TARGETED LLM hybrid: LegalBERT everywhere, Gemma fallback only when a rare-target class is in the
+    # top-2 (a fraction of a percent of spans) -- rescues the rare clause types, zero risk to the rest.
+    clf = HybridFunctionClassifier(
+        LegalBertFunctionClassifier.load(MODEL_PATH, device=_device()), targets=RARE_TARGETS)
     store = ArcadeDBStore.from_env(database=DB, reset=RESET)
     store.ensure_schema()
     _progress(f"[phase2] device={_device()} store={DB}")

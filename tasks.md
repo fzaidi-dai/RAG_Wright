@@ -67,8 +67,20 @@ not this repo's.
   train-only (leak-safe). Modal retrain: mean non-NONE recall 0.631->0.648 (+0.017 DIFFUSE, within run-variance)
   but the TARGET scarce classes did NOT move (Notice-Period 0->0, Irrevocable 0->0, Third-Party 0.71->0.71) --
   the 2 zeros are CONFUSABILITY (->Renewal-Term/->License-Grant), not scarcity, so data can't fix them. Kept
-  the current production model (staging not promoted). **Next: step 5** -- family structure / sibling
-  hard-negatives for the confusability classes (the real lever the diagnosis + step 4 both point to).
+  the current production model (staging not promoted).
+  (5) STEP 5 (sibling-margin) = NO EFFECT. Derived confusable FAMILIES from the holdout confusion; added a
+  sibling-margin hinge to the Modal WeightedTrainer. Identical to step-4 (0.648) -- the margin acts on TRAIN
+  examples the model already separates, so it can't fix HELD-OUT generalization. Left as a tried lever,
+  defaulted OFF (`sib_lambda=0`).
+  (5b) STEP 5b (LLM hybrid) = ADOPTED (targeted). `spans/hybrid_classifier.py` HybridFunctionClassifier =
+  LegalBERT + Gemma fallback only when a RARE_TARGET (`spans/function_families.py`) is in the top-2 AND the
+  top-2 are confusable siblings in a dev-validated ROUTE family (Gemma beats LegalBERT there; A/B). Dev-
+  validated +0.014 mean non-NONE recall (leak-free test half). Wired into `ingest_cuad.py`. CU-D1 (applied to
+  the store, 221/27074=0.8% re-labeled): the two 0.00 classes become highlightable -- **Notice-Period 0->0.24,
+  Irrevocable 0->0.12**, No-Solicit 0.50 -- AGGREGATE holds (0.704->0.700). A capability gain (rare types now
+  work) at ~few-hundred Gemma calls/ingest, no query-time cost, zero risk to common classes. Classifier arc
+  (steps 1-5b) COMPLETE. **Next: await direction** (CU-D1 aggregate bounded by common classes + chunking, not
+  the rare tail; other levers = chunking quality, serve/retrieval; or GATE-2).
 - **2026-07-26: CU-D2 DONE (approved) -- CUAD highlighting workstream COMPLETE (CU-A1..CU-D2).** NL->type eval
   drove a benchmarked model switch: `understand_query` is now TWO-STEP reason->emit on **Gemma** (ADR-0032;
   single-call Gemma failed like Qwen -> split + profile thinking-disable). Gemma-two-step ties/beats Pro at 3x

@@ -51,3 +51,21 @@ class LegalBertFunctionClassifier:
             logits = self._model(**enc).logits
             out.extend(str(id2label[int(i)]) for i in logits.argmax(dim=-1).tolist())
         return out
+
+    @torch.no_grad()
+    def classify_topk(self, texts: list[str], *, k: int = 2, batch_size: int = 32) -> list[list[str]]:
+        """The top-`k` labels per span (highest logit first). Feeds the hybrid classifier's routing decision
+        (route to the LLM when the top-2 are confusable siblings). Empty input -> empty output."""
+        if not texts:
+            return []
+        id2label = self._model.config.id2label
+        out: list[list[str]] = []
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start : start + batch_size]
+            enc = self._tokenizer(
+                batch, truncation=True, max_length=self._max_length, padding=True, return_tensors="pt"
+            ).to(self._device)
+            logits = self._model(**enc).logits
+            topk = logits.topk(min(k, logits.shape[-1]), dim=-1).indices.tolist()
+            out.extend([str(id2label[int(i)]) for i in row] for row in topk)
+        return out
