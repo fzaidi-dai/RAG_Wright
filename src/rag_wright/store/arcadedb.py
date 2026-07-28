@@ -24,7 +24,11 @@ from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
 from rag_wright.contracts.contract_meta import ContractRecord
-from rag_wright.contracts.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
+from rag_wright.contracts.property import (
+    FOLIO_SUBJECT_IRI,
+    ClausePropertyRecord,
+    PropertyDimension,
+)
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
 
@@ -38,7 +42,47 @@ MENTIONS_EDGE_TYPE = "Mentions"  # chunk -> entity provenance edge (FR-S.1: chun
 # vocabulary is already canonical, so no entity-resolution clustering is needed.
 CLAUSE_TYPE = "Clause"
 PROPVALUE_TYPE = "PropertyValue"
-PROPERTY_EDGE_TYPE = "HasProperty"  # Clause -> PropertyValue, carrying the assertion's provenance
+PROPERTY_EDGE_TYPE = "HasProperty"  # legacy flat edge (ADR-0025/0026); superseded by the KG-3 typed edges
+
+# KG-3 (ADR-0033): the TYPED property-edge layer that replaces the single generic HasProperty edge (KG-0
+# gate Q3: build typed, retire the flat edge). Each PropertyDimension maps to its sanctioned typed edge; the
+# shared PropertyValue node (deduped by value_key) is UNCHANGED -- identity preserved, so the upgrade is
+# additive on nodes and rebuilt on edges. Every typed edge still carries the assertion provenance (FR-S.4)
+# plus a predicate IRI (ODRL for the deontic edges, our bridge IRI otherwise).
+_TYPED_DIMENSION_EDGE: dict[PropertyDimension, str] = {
+    PropertyDimension.MUTUALITY: "HAS_MUTUALITY",
+    PropertyDimension.FAVORABILITY: "HAS_FAVORABILITY",
+    PropertyDimension.PARTY_ASYMMETRY: "HAS_ASYMMETRY",
+    PropertyDimension.WARRANTY_SCOPE: "HAS_WARRANTY_SCOPE",
+    PropertyDimension.CLAIM_SCOPE: "HAS_CLAIM_SCOPE",
+    PropertyDimension.IP_OWNERSHIP: "HAS_IP_OWNERSHIP",
+    PropertyDimension.RENEWAL_MECHANISM: "HAS_RENEWAL",
+    PropertyDimension.CARVE_OUT: "EXCEPTS",
+    PropertyDimension.COVERED_SUBJECT: "COVERS",
+    PropertyDimension.COVERED_PARTIES: "COVERS",
+    PropertyDimension.DAMAGE_TYPE: "PROHIBITS",
+    PropertyDimension.NONSOLICIT_TARGET: "PROHIBITS",
+    PropertyDimension.PROCEDURAL: "REQUIRES",
+    PropertyDimension.CAP_BASIS: "CAPS",
+    PropertyDimension.CAP_QUANTUM: "CAPS",
+    PropertyDimension.JURISDICTION: "GOVERNED_BY",
+    PropertyDimension.LAW_MULTIPLICITY: "GOVERNED_BY",
+    PropertyDimension.TEMPORAL_BOUND: "BOUNDED_BY",
+    PropertyDimension.NOTICE_PERIOD: "BOUNDED_BY",
+}
+# distinct edge types, insertion-ordered (for DDL + counts)
+TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(dict.fromkeys(_TYPED_DIMENSION_EDGE.values()))
+_ODRL_NS = "http://www.w3.org/ns/odrl/2/"
+_CBR_NS = "https://ragwright.local/ontology/contract-bridge#"
+_DEONTIC_ODRL = {"PROHIBITS": "prohibition", "REQUIRES": "obligation", "GRANTS": "permission"}
+
+
+def _edge_predicate_iri(edge_type: str) -> str:
+    """The predicate IRI stamped on a typed edge: ODRL for the deontic edges (the W3C rights/duties spine),
+    our bridge IRI otherwise (ADR-0033 grounding)."""
+    if edge_type in _DEONTIC_ODRL:
+        return _ODRL_NS + _DEONTIC_ODRL[edge_type]
+    return _CBR_NS + edge_type
 
 # Candidates fetched per leg before fusion. RRF reorders within this pool, so it is set well above a
 # typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then
@@ -102,6 +146,39 @@ def _sql_literal(value: MetadataValue) -> str:
     if isinstance(value, (int, float)):
         return repr(value)
     return _sql_str(str(value))
+
+
+def _clause_kg_statements(record: ClausePropertyRecord) -> list[str]:
+    """KG-3 (ADR-0033): the pure SQL for the TYPED clause KG -- the Clause node + one shared PropertyValue
+    node per (dimension,value) + one TYPED edge per assertion. Each typed edge carries the dimension, a
+    predicate IRI (ODRL for the deontic edges, our bridge IRI otherwise), and the assertion provenance
+    (confidence + span_id + chunk_id + source_doc_id; FR-S.4 / FR-Q.6). Value-node identity (`value_key`) is
+    unchanged from the flat graph. Separated from the DB call so the mapping is unit-tested with no store."""
+    cid = _sql_str(record.clause_id)
+    statements: list[str] = [
+        f"UPDATE {CLAUSE_TYPE} SET clause_id = {cid}, function = {_sql_str(record.function)},"
+        f" folio_iri = {_sql_str(record.folio_iri)} UPSERT WHERE clause_id = {cid}",
+    ]
+    for a in record.assertions:
+        edge_type = _TYPED_DIMENSION_EDGE[a.dimension]
+        key_sql = _sql_str(_property_value_key(a.dimension.value, a.value))
+        statements.append(  # shared value node: upsert by canonical (dimension,value) key + FOLIO grounding
+            f"UPDATE {PROPVALUE_TYPE} SET value_key = {key_sql},"
+            f" dimension = {_sql_str(a.dimension.value)}, value = {_sql_str(a.value)},"
+            f" folio_iri = {_sql_str(FOLIO_SUBJECT_IRI.get(a.value, ''))}"
+            f" UPSERT WHERE value_key = {key_sql}"
+        )
+        statements.append(
+            f"CREATE EDGE {edge_type}"
+            f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {cid})"
+            f" TO (SELECT FROM {PROPVALUE_TYPE} WHERE value_key = {key_sql})"
+            f" SET dimension = {_sql_str(a.dimension.value)},"
+            f" predicate_iri = {_sql_str(_edge_predicate_iri(edge_type))},"
+            f" confidence = {_sql_str(a.confidence.value)}, span_id = {_sql_str(a.span_id)},"
+            f" chunk_id = {_sql_str(str(a.provenance.chunk_id))},"
+            f" source_doc_id = {_sql_str(a.provenance.source_doc_id)}"
+        )
+    return statements
 
 
 class ArcadeDBStore:
@@ -181,8 +258,11 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.dimension STRING")
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value STRING")
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.folio_iri STRING")
-        if PROPERTY_EDGE_TYPE not in types:  # Clause -> PropertyValue (carries the assertion provenance)
+        if PROPERTY_EDGE_TYPE not in types:  # legacy flat edge; kept for back-compat, superseded by typed
             self._command(f"CREATE EDGE TYPE {PROPERTY_EDGE_TYPE}")
+        for typed_edge in TYPED_PROPERTY_EDGE_TYPES:  # KG-3: the typed property-edge layer (ADR-0033)
+            if typed_edge not in types:
+                self._command(f"CREATE EDGE TYPE {typed_edge}")
         if CONTRACT_TYPE not in types:  # CU-B3: contract metadata (the CUAD document lookup unit)
             self._command(f"CREATE VERTEX TYPE {CONTRACT_TYPE}")
             self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.contract_id STRING")
@@ -579,6 +659,56 @@ class ArcadeDBStore:
             " e.span_id AS span_id"
         )
         return self._query(q)
+
+    # --- KG-3 (ADR-0033): the TYPED unified clause KG (replaces the flat HasProperty write path) ---------
+
+    def write_clause_kg(self, record: ClausePropertyRecord) -> None:
+        """Write the clause + its TYPED property edges + shared value nodes in ONE transaction (FR-S.1).
+        The KG-3 counterpart of `write_property_graph`: one sanctioned typed edge per assertion
+        (HAS_*/EXCEPTS/COVERS/PROHIBITS/REQUIRES/CAPS/BOUNDED_BY/GOVERNED_BY), each grounded with a predicate
+        IRI (ODRL for the deontic edges) and carrying provenance (FR-S.4/FR-Q.6). Idempotent by the same
+        content-hash gate: `clause_id` embeds the content hash, so a committed clause means identical content
+        -> identical assertions; we skip, and the typed `CREATE EDGE` therefore runs at most once per clause
+        (no duplicates). Value-node identity (`value_key`) is preserved from the flat graph."""
+        cid = _sql_str(record.clause_id)
+        if self._query(f"SELECT clause_id FROM {CLAUSE_TYPE} WHERE clause_id = {cid} LIMIT 1"):
+            return  # content-hash gate: a committed clause_id -> identical typed assertions
+        self._db.execute_transaction(_clause_kg_statements(record))
+
+    def clause_kg_counts(self) -> dict[str, int]:
+        """Counts for the typed KG (introspection/tests): clauses, shared value nodes, and the total of the
+        typed property edges across all typed edge types."""
+        clauses = self._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
+        values = self._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
+        typed = 0
+        for edge_type in TYPED_PROPERTY_EDGE_TYPES:
+            rows = self._query(f"SELECT count(*) AS n FROM {edge_type}")
+            typed += int(rows[0]["n"]) if rows else 0
+        return {
+            "clauses": int(clauses[0]["n"]) if clauses else 0,
+            "property_values": int(values[0]["n"]) if values else 0,
+            "typed_edges": typed,
+        }
+
+    def clause_typed_edges(self, clause_id: str) -> list[dict]:
+        """The clause's typed property edges: the edge TYPE, dimension, value, predicate IRI, and provenance
+        (confidence, span_id) -- the readback for tests and the shape the Leg-A/B scoped queries build on."""
+        q = (
+            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id = " + _sql_str(clause_id) + ")}"
+            ".outE(){as: e}.inV(){as: v}"
+            " RETURN e.@type AS edge_type, e.predicate_iri AS predicate_iri, v.dimension AS dimension,"
+            " v.value AS value, v.folio_iri AS folio_iri, e.confidence AS confidence, e.span_id AS span_id"
+        )
+        return self._query(q)
+
+    def clear_clause_kg(self) -> None:
+        """Delete the typed clause KG (all typed edges + the legacy flat edge + Clause + PropertyValue),
+        leaving the span index intact -- the KG-3 counterpart of `clear_property_graph` for a clean
+        re-extraction into the typed schema. Edges first (UNSAFE bypasses the edge-safety check)."""
+        for edge_type in (*TYPED_PROPERTY_EDGE_TYPES, PROPERTY_EDGE_TYPE):
+            self._command(f"DELETE FROM {edge_type} UNSAFE")
+        self._command(f"DELETE FROM {CLAUSE_TYPE}")
+        self._command(f"DELETE FROM {PROPVALUE_TYPE}")
 
     def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
         if not chunk_ids:

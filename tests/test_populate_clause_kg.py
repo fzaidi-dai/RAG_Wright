@@ -1,0 +1,62 @@
+"""KG-3: the typed-KG population driver's crash-safe per-clause loop (hermetic; no LLM, no store)."""
+
+from __future__ import annotations
+
+import threading
+
+from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from scripts.populate_clause_kg import extract_and_write
+
+
+class _FakeStore:
+    def __init__(self) -> None:
+        self.written: list[str] = []
+
+    def write_clause_kg(self, record: ClausePropertyRecord) -> None:
+        self.written.append(record.clause_id)
+
+
+def _item(seed: str = "capA") -> tuple[ChunkId, str, str]:
+    return ChunkId.of(seed, 0, seed + " body"), "Cap On Liability", "some clause text"
+
+
+def _record(cid: ChunkId) -> ClausePropertyRecord:
+    prov = Provenance.of(cid)
+    return ClausePropertyRecord(
+        clause_id=str(cid), function="Cap On Liability",
+        assertions=[PropertyAssertion(
+            provenance=prov, confidence=ConfidenceTag.EXTRACTED,
+            dimension=PropertyDimension.MUTUALITY, value="mutual", span_id="",
+        )],
+    )
+
+
+def test_extract_and_write_writes_typed_record() -> None:
+    cid, function, text = _item()
+    store = _FakeStore()
+    errors = [0]
+    n = extract_and_write(
+        (cid, function, text),
+        extractor=lambda *, chunk_id, function, text, span_id: _record(chunk_id),
+        store=store, write_lock=threading.Lock(), errors=errors,
+    )
+    assert n == 1
+    assert store.written == [str(cid)]
+    assert errors == [0]
+
+
+def test_a_failing_clause_is_isolated_not_fatal() -> None:
+    """A per-clause extraction error is logged + counted, never fatal to the resumable run."""
+    def _boom(**_kwargs):
+        raise RuntimeError("model timeout")
+
+    store = _FakeStore()
+    errors = [0]
+    n = extract_and_write(
+        _item(), extractor=_boom, store=store, write_lock=threading.Lock(), errors=errors,
+    )
+    assert n == 0
+    assert store.written == []
+    assert errors == [1]
