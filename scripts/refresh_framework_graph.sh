@@ -15,8 +15,11 @@ cd "$(git rev-parse --show-toplevel)"
 
 # The 7 capability libraries (ADR-0001) + `modal` (training-infra grounding, added 2026-07-25 for the
 # distilled cross-encoder path: ground the Modal SDK API we write training scripts against, per the
-# library-grounding rule). modal_proto (low-level gRPC stubs) is intentionally excluded as noise.
-PKGS="docling docling_core FlagEmbedding langchain_openai mcp spacy arcadedb_python modal"
+# library-grounding rule) + `docling_graph` (added 2026-07-28 for the unified-contract-KG path: the
+# schema-driven KG extractor GP-1B adopted and KG-0..KG-6 lean on heavily — `template from-ontology`,
+# the extraction runners, the model seam; ground its API first-class alongside the `kg-extraction-recipe`
+# Skill + live CLI, so nothing is guessed). modal_proto (low-level gRPC stubs) is excluded as noise.
+PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal"
 SP="$(uv run python -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
 STAGE="$HOME/.graphify/rag-wright-framework/src"
 OUT="graphify-out/framework/graph.json"

@@ -42,9 +42,10 @@ one contract KG; the legs are scopes over it.
 1. **Compile** the bridge OWL → a Pydantic clause template via docling-graph `template from-ontology`
    (deterministic, no LLM; accepts OWL/RDFS/SKOS/LinkML).
 2. **Extract** per-clause typed triples from the **operative spans** (the right granularity — a span is a
-   clause) via docling-graph. **Model = benchmark, not assumed**: re-A/B **granite-4.1-8b vs DeepSeek** for the
-   *harder, more semantic* clause-property/role extraction (entity extraction chose granite; clause structure
-   may differ), gated by the **property-grounding judge (ADR-0028)**.
+   clause) via docling-graph, with **granite-4.1-8b** — the Leg-C model (GP-1B entity KG, real recall 0.991).
+   **No granite-vs-DeepSeek A/B** (decided 2026-07-28, KG-0 gate): the same extractor built a near-perfect
+   entity KG, so it is expected to carry clause-property extraction; DeepSeek is a **KG-6 below-par contingency
+   only**. Gated by the **property-grounding judge (ADR-0028)**.
 3. **Resolve + ground:** parties → EDGAR CIK (+ `PRIVATE:<key>` sentinel, the GP-1B lever); clause values/
    predicates → FOLIO/ODRL IRIs. Reuse `resolve_extracted` + the sentinel-alignment pattern.
 4. **Write** the unified KG to ArcadeDB (Contract/Party/Clause/value nodes + typed edges), content-hash gated.
@@ -75,8 +76,8 @@ one contract KG; the legs are scopes over it.
   clause-type classes, property dimensions → typed edges, value nodes, PROV-O). **Schema-review gate** (this is
   an ask-first data-model change).
 - **KG-1** — Compile the bridge OWL → Pydantic clause template (`template from-ontology`); lint hermetically.
-- **KG-2** — Per-clause typed extraction from spans; **model A/B (granite vs DeepSeek)**; grounding-judge gate;
-  hermetic tests + a live smoke.
+- **KG-2** — Per-clause typed extraction from spans with **granite-4.1-8b (no A/B; DeepSeek = KG-6 below-par
+  contingency only)**; grounding-judge gate; hermetic tests + a live smoke.
 - **KG-3** — Resolution/grounding (parties→CIK/PRIVATE; values/predicates→FOLIO/ODRL IRIs) → write the unified
   KG to ArcadeDB; store schema + write path.
 - **KG-4** — **Leg A**: intra-contract scoped-query serving (structured, relational, cited QnA); enhance the

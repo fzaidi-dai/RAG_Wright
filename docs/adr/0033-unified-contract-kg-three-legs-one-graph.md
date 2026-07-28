@@ -30,8 +30,9 @@ Ground in three layers: **FOLIO** (type IRIs, already aligned) + **ODRL** (W3C, 
 spine) + a **small custom OWL bridge** that promotes the existing flat `PropertyDimension`s into typed edges
 to closed-vocab value nodes and declares clause-types `subClassOf` their FOLIO IRIs (PROV-O for provenance).
 Construct with the GP-1B recipe (the `kg-extraction-recipe` Skill): `docling-graph template from-ontology` ->
-Pydantic template -> per-span extraction (model = benchmark granite-4.1-8b vs DeepSeek, gated by the
-property-grounding judge ADR-0028) -> resolve/ground (CIK + `PRIVATE:` sentinel; values -> FOLIO/ODRL IRIs) ->
+Pydantic template -> per-span extraction (granite-4.1-8b, the Leg-C model; no A/B, DeepSeek = below-par
+contingency only -- KG-0 gate 2026-07-28; gated by the property-grounding judge ADR-0028) -> resolve/ground
+(CIK + `PRIVATE:` sentinel; values -> FOLIO/ODRL IRIs) ->
 write. Plan: `docs/unified_contract_kg_plan.md` (tasks KG-0..KG-6).
 
 ## Consequences
@@ -45,6 +46,11 @@ write. Plan: `docs/unified_contract_kg_plan.md` (tasks KG-0..KG-6).
   engine (that is compliance/orchestration scope, near the two-halves boundary).
 - **The win is precision/composition/citation, not raw recall** — measured on multi-constraint/relational
   queries (grade≥2 floor), not simple lookups. Clause-internal extraction is harder (semantic) than party
-  extraction; the grounding judge is the gate and the model is a benchmark.
+  extraction; the grounding judge is the gate and the model is fixed to granite-4.1-8b (no A/B).
 - **Ask-first data-model change** (new nodes/edges + ODRL/bridge ontology) — KG-0 goes through a schema-review
   gate. New dependency (ODRL/rdflib for the bridge) is ask-first.
+- **KG-0 gate resolved (2026-07-28):** approved the bridge schema — distinct `HAS_*` edges; `HAS_*`/`EXCEPTS`/
+  `BOUNDED_BY` naming; **build typed, retire the flat `HasProperty` graph** (not a fallback); ODRL adopted at
+  **full depth** (deontic core + `odrl:constraint` for cap/temporal bounds); the `.ttl` authored+validated at
+  KG-1; **KG-2 extracts with granite-4.1-8b, no A/B** (DeepSeek = below-par contingency only). Design:
+  `docs/unified_contract_kg_ontology_bridge.md`.
