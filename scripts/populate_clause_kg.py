@@ -13,6 +13,9 @@ or FRESH=1 to rebuild; concurrent extraction, serialized typed writes.
   uv run python -m scripts.populate_clause_kg                      # full run (RESUME) -> ragwright_acord_pivot
   FRESH=1 uv run python -m scripts.populate_clause_kg              # rebuild the typed graph from the top
   EXTRACT_MODEL=ibm-granite/granite-4.1-8b uv run ...             # override the OpenRouter model id (default)
+  # CUAD (Leg A) via the self-hosted Granite-on-Modal server (free credits):
+  CLAUSE_KG_CACHE=data/models/cuad_clause_cache.jsonl CLAUSE_KG_DB=ragwright_cuad \
+    MODAL_GRANITE_URL=https://<modal-url> uv run python -m scripts.populate_clause_kg
 
 Model = granite-4.1-8b via OpenRouter (the Leg-C winner; no A/B -- DeepSeek is a KG-6 below-par contingency).
 The grounding-judge gate (ADR-0028) is standing -- it is applied inside the extractor on every clause.
@@ -29,18 +32,24 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from rag_wright.capabilities.dg_extraction import extract_clause, openrouter_model
+from rag_wright.capabilities.dg_extraction import extract_clause, ollama_model, openrouter_model
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
 from rag_wright.util.concurrent import map_concurrent
 
-EXTRACT_CACHE = Path("data/models/populate_to_extract.jsonl")  # T58a phase-1 handoff: non-NONE clauses
+# Cache: the (clause_id, function, text[, span_id]) handoff. Default = the ACORD T58a cache; override with
+# CLAUSE_KG_CACHE (e.g. the CUAD cache from scripts/build_cuad_clause_cache.py for Leg A).
+EXTRACT_CACHE = Path(os.environ.get("CLAUSE_KG_CACHE", "data/models/populate_to_extract.jsonl"))
 PROGRESS = Path("data/models/populate_clause_kg_progress.log")
 LIMIT = int(os.environ.get("LIMIT", "0"))
 DB = os.environ.get("CLAUSE_KG_DB", "ragwright_clause_kg_dryrun" if LIMIT else "ragwright_acord_pivot")
 CONCURRENCY = int(os.environ.get("CONCURRENCY", "8"))
 FRESH = os.environ.get("FRESH", "0") == "1"
 EXTRACT_MODEL = os.environ.get("EXTRACT_MODEL", "ibm-granite/granite-4.1-8b")
+# MODAL_GRANITE_URL: point at a self-hosted Granite-on-Modal Ollama server (uses free Modal credits) instead
+# of OpenRouter; MODAL_GRANITE_TAG is its Ollama tag. Empty => OpenRouter granite-4.1-8b (the default).
+MODAL_GRANITE_URL = os.environ.get("MODAL_GRANITE_URL", "")
+MODAL_GRANITE_TAG = os.environ.get("MODAL_GRANITE_TAG", "granite4.1:8b-bf16")
 
 
 def _chunk_id_from_value(value: str) -> ChunkId:
@@ -56,21 +65,25 @@ def _progress(msg: str) -> None:
 
 
 def build_extractor() -> DGClausePropertyExtractor:
-    """The typed clause extractor: granite-4.1-8b via OpenRouter (EXTRACT_MODEL override), grounding-gated."""
-    model = openrouter_model("granite-4.1-8b", EXTRACT_MODEL)
+    """The typed clause extractor: granite-4.1-8b, grounding-gated. Self-hosted on Modal (Ollama) when
+    MODAL_GRANITE_URL is set (free credits), else OpenRouter (EXTRACT_MODEL). Same seam either way."""
+    if MODAL_GRANITE_URL:
+        model = ollama_model("granite-4.1-8b", MODAL_GRANITE_TAG, base_url=MODAL_GRANITE_URL)
+    else:
+        model = openrouter_model("granite-4.1-8b", EXTRACT_MODEL)
     return DGClausePropertyExtractor(lambda text: extract_clause(text, model))
 
 
 def extract_and_write(
-    item: tuple[ChunkId, str, str], *, extractor: Any, store: Any,
+    item: tuple[ChunkId, str, str, str], *, extractor: Any, store: Any,
     write_lock: threading.Lock, errors: list[int],
 ) -> int:
     """Extract one clause's typed properties and write it (crash-safe: a per-clause failure is logged and
     skipped, never fatal to the long resumable run; the DB write is serialized, extraction is concurrent).
     Returns the assertion count. Injectable `extractor`/`store` so the loop is hermetically testable."""
-    cid, function, text = item
+    cid, function, text, span_id = item
     try:
-        rec = extractor(chunk_id=cid, function=function, text=text, span_id="")
+        rec = extractor(chunk_id=cid, function=function, text=text, span_id=span_id)
         with write_lock:
             store.write_clause_kg(rec)  # typed edges; lands as it completes -> crash-safe / resumable
         return len(rec.assertions)
@@ -88,7 +101,9 @@ def main() -> None:
     rows = [json.loads(line) for line in EXTRACT_CACHE.read_text(encoding="utf-8").splitlines() if line.strip()]
     if LIMIT:
         rows = rows[:LIMIT]
-    to_extract = [(_chunk_id_from_value(r["clause_id"]), r["function"], r["text"]) for r in rows]
+    to_extract = [
+        (_chunk_id_from_value(r["clause_id"]), r["function"], r["text"], r.get("span_id", "")) for r in rows
+    ]
 
     store = ArcadeDBStore.from_env(database=DB, reset=False)
     store.ensure_schema()

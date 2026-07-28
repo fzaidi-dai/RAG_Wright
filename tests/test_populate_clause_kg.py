@@ -18,8 +18,8 @@ class _FakeStore:
         self.written.append(record.clause_id)
 
 
-def _item(seed: str = "capA") -> tuple[ChunkId, str, str]:
-    return ChunkId.of(seed, 0, seed + " body"), "Cap On Liability", "some clause text"
+def _item(seed: str = "capA") -> tuple[ChunkId, str, str, str]:
+    return ChunkId.of(seed, 0, seed + " body"), "Cap On Liability", "some clause text", "span-1"
 
 
 def _record(cid: ChunkId) -> ClausePropertyRecord:
@@ -34,16 +34,18 @@ def _record(cid: ChunkId) -> ClausePropertyRecord:
 
 
 def test_extract_and_write_writes_typed_record() -> None:
-    cid, function, text = _item()
+    item = _item()
+    cid = item[0]
     store = _FakeStore()
     errors = [0]
-    n = extract_and_write(
-        (cid, function, text),
-        extractor=lambda *, chunk_id, function, text, span_id: _record(chunk_id),
-        store=store, write_lock=threading.Lock(), errors=errors,
-    )
+    seen: dict = {}
+    def _extract(*, chunk_id, function, text, span_id):
+        seen["span_id"] = span_id  # the cache's span_id must reach the extractor (CUAD citation)
+        return _record(chunk_id)
+    n = extract_and_write(item, extractor=_extract, store=store, write_lock=threading.Lock(), errors=errors)
     assert n == 1
     assert store.written == [str(cid)]
+    assert seen["span_id"] == "span-1"
     assert errors == [0]
 
 

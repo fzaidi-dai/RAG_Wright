@@ -5,8 +5,9 @@ the Endpoints catalog -- only Qwen/Gemma/DeepSeek/GLM/Nemotron/gpt-oss/Kimi). So
 custom `@app.server` running Ollama on a GPU, exposing Ollama's HTTP API. Our extraction seam already talks
 to a remote Ollama via `ollama_model(base_url=<url>)`, so nothing else changes.
 
-Reusable for any Ollama Granite variant (set MODEL): here `granite4:small-h` (32B MoE / 9B active, ~19GB Q4)
-to see whether a bigger Granite beats DeepSeek / granite-4.1-8b, and to become Modal-ready.
+Reusable for any Ollama Granite variant (set GRANITE_MODEL). Default `granite4.1:8b-bf16` -- the adopted
+production model (KG-2/KG-4 clause extraction): unquantized 8B (~16GB), fits A10, matches the precision we
+validated on OpenRouter. (The earlier 32B `granite4:small-h` A/B is done; generation 4.1 > size 4.0.)
 
 Flow:
   1. `uv run --no-sync modal run scripts/modal_granite_server.py::prepull`   # one-time: model -> Volume (CPU)
@@ -22,7 +23,7 @@ import urllib.request
 
 import modal
 
-MODEL = os.environ.get("GRANITE_MODEL", "granite4:small-h")
+MODEL = os.environ.get("GRANITE_MODEL", "granite4.1:8b-bf16")
 OLLAMA_DIR = "/root/.ollama"
 
 app = modal.App("rw-granite-ollama")
