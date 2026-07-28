@@ -1,0 +1,164 @@
+"""KG-2 (FR-C.6, ADR-0033/0028): per-clause typed property extraction into the unified contract KG.
+
+The extraction MODEL is granite-4.1-8b (the Leg-C winner, GP-1B; no A/B -- DeepSeek is a KG-6 below-par
+contingency only). The MECHANISM is the GP-1B recipe (`kg-extraction-recipe` Skill): docling-graph +
+`ontology.clause_template.Clause` (the KG-1 bridge template) via the `capabilities.dg_extraction` seam.
+
+This module holds the two pieces that turn a raw extraction into a gated, contract-shaped record:
+
+1. `clause_to_record` -- the PURE, unit-tested adapter from the KG-1 template (`Clause`, typed fields:
+   enums + lists + nested odrl:Constraint models) to the existing property contract (`ClausePropertyRecord`
+   / `PropertyAssertion`, T57a). Each filled field becomes one assertion (dimension, value) carrying
+   provenance (FR-S.4) + the span citation (FR-Q.6). The OTHER escape means "not asserted" -> dropped;
+   `CapBasis.cap_other` maps to the canonical `other` (the one documented KG-1 vocab divergence). Every
+   emitted closed value is in `property.py::CLOSED_VOCAB` (the KG-1 test pins the two vocabularies equal).
+
+2. `DGClausePropertyExtractor` -- composes an (injectable) Clause-extraction fn with the adapter and the
+   deterministic grounding-judge gate (`property_grounding.reground`, ADR-0028): an EXTRACTED value on a
+   lexically-anchored dimension whose cue is absent from the text is downgraded to AMBIGUOUS. The extraction
+   fn is injected so the mapping + gate are testable with no model call; the live default is granite-4.1-8b.
+"""
+
+from __future__ import annotations
+
+from enum import Enum
+from typing import Any, Callable, Optional
+
+from rag_wright.contracts.function import canonical_function
+from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.contracts.property import (
+    FOLIO_CLAUSE_IRI,
+    ClausePropertyRecord,
+    PropertyAssertion,
+    PropertyDimension,
+)
+from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.spans.property_grounding import reground
+
+_D = PropertyDimension
+_OTHER = "Other"  # the compiler's auto-added OTHER escape sentinel -> "not asserted"
+
+# scalar enum field on Clause -> the dimension it asserts
+_SCALAR_ENUM_DIMS: dict[str, PropertyDimension] = {
+    "has_mutuality": _D.MUTUALITY,
+    "has_favorability": _D.FAVORABILITY,
+    "has_asymmetry": _D.PARTY_ASYMMETRY,
+    "has_warranty_scope": _D.WARRANTY_SCOPE,
+    "has_claim_scope": _D.CLAIM_SCOPE,
+    "has_ip_ownership": _D.IP_OWNERSHIP,
+    "has_renewal": _D.RENEWAL_MECHANISM,
+    "covers_party_scope": _D.COVERED_PARTIES,
+    "prohibits_solicit": _D.NONSOLICIT_TARGET,
+    "requires_duty": _D.PROCEDURAL,
+}
+# list enum field on Clause -> the (multi-valued) dimension it asserts
+_LIST_ENUM_DIMS: dict[str, PropertyDimension] = {
+    "covers": _D.COVERED_SUBJECT,
+    "excepts": _D.CARVE_OUT,
+    "prohibits_damage": _D.DAMAGE_TYPE,
+}
+
+
+def _canonical_value(member: Any) -> str | None:
+    """An enum member's canonical value, or None if it is the OTHER escape (not asserted).
+    `CapBasis.cap_other` -> canonical `other` (the documented KG-1 divergence)."""
+    value = member.value if isinstance(member, Enum) else str(member)
+    if value == _OTHER:
+        return None
+    return "other" if value == "cap_other" else value
+
+
+def _clean(text: Optional[str]) -> str | None:
+    """A non-empty stripped open-valued literal, or None."""
+    if text is None:
+        return None
+    stripped = text.strip()
+    return stripped or None
+
+
+def clause_to_record(
+    clause: Any, *, chunk_id: ChunkId, function: str, span_id: str = ""
+) -> ClausePropertyRecord:
+    """Map an extracted `Clause` (KG-1 template) to a validated `ClausePropertyRecord` (pure; no gate, no
+    model). `function` is the KNOWN clause type (from the T56 classifier), not the LLM's `clause_type`.
+    Every assertion starts EXTRACTED; the grounding gate (applied by the extractor) downgrades the
+    ungrounded ones. Closed-vocab values are guaranteed in-vocabulary by the KG-1 template."""
+    prov = Provenance.of(chunk_id)
+    assertions: list[PropertyAssertion] = []
+
+    def add(dimension: PropertyDimension, value: str | None) -> None:
+        if value is None or not str(value).strip():
+            return
+        assertions.append(
+            PropertyAssertion(
+                provenance=prov, confidence=ConfidenceTag.EXTRACTED,
+                dimension=dimension, value=value, span_id=span_id,
+            )
+        )
+
+    for field, dim in _SCALAR_ENUM_DIMS.items():
+        add(dim, _canonical_value(getattr(clause, field, None)))
+    for field, dim in _LIST_ENUM_DIMS.items():
+        for member in getattr(clause, field, None) or []:
+            add(dim, _canonical_value(member))
+
+    caps = getattr(clause, "caps", None)
+    if caps is not None:
+        add(_D.CAP_BASIS, _canonical_value(caps.cap_basis))
+        add(_D.CAP_QUANTUM, _clean(caps.cap_quantum))  # open-valued
+
+    bound = getattr(clause, "bounded_by", None)
+    if bound is not None:
+        duration = _clean(bound.temporal_duration)
+        if duration is not None:
+            kind = (bound.temporal_kind or "").strip().lower()
+            add(_D.NOTICE_PERIOD if kind == "notice_period" else _D.TEMPORAL_BOUND, duration)
+
+    law = getattr(clause, "governed_by", None)
+    if law is not None:
+        add(_D.JURISDICTION, _clean(law.jurisdiction_name))  # open-valued
+        add(_D.LAW_MULTIPLICITY, _canonical_value(law.law_multiplicity))
+
+    return ClausePropertyRecord(
+        clause_id=str(chunk_id),
+        function=canonical_function(function) or function,
+        folio_iri=FOLIO_CLAUSE_IRI.get(function, ""),
+        assertions=assertions,
+    )
+
+
+ClauseExtractFn = Callable[[str], Any]
+"""text -> an extracted `Clause` instance (or None). Injected so the adapter + gate test with no model."""
+
+
+class DGClausePropertyExtractor:
+    """Extract a clause's typed properties end to end: run the Clause extraction (granite-4.1-8b via
+    docling-graph, injected), adapt to `ClausePropertyRecord`, then apply the deterministic
+    grounding-judge gate (ADR-0028). Matches the `PropertyExtractor` call shape (T57b) so it drops into
+    the ingestion driver. A None extraction yields an empty (but valid) record for that clause."""
+
+    def __init__(self, extract_fn: ClauseExtractFn) -> None:
+        self._extract = extract_fn
+
+    def __call__(
+        self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = ""
+    ) -> ClausePropertyRecord:
+        clause = self._extract(text)
+        if clause is None:
+            return ClausePropertyRecord(
+                clause_id=str(chunk_id),
+                function=canonical_function(function) or function,
+                folio_iri=FOLIO_CLAUSE_IRI.get(function, ""),
+                assertions=[],
+            )
+        record = clause_to_record(clause, chunk_id=chunk_id, function=function, span_id=span_id)
+        return reground(record, text)  # ADR-0028 grounding-judge gate
+
+
+def granite_clause_extractor(model: Any = None) -> DGClausePropertyExtractor:
+    """The live default: granite-4.1-8b via OpenRouter (the Leg-C winner; no A/B). Pass a different
+    `ExtractionModel` (e.g. the Modal-hosted Granite `@app.server`) to override the seam."""
+    from rag_wright.capabilities.dg_extraction import extract_clause, openrouter_model
+
+    chosen = model or openrouter_model("granite-4.1-8b", "ibm-granite/granite-4.1-8b")
+    return DGClausePropertyExtractor(lambda text: extract_clause(text, chosen))

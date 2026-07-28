@@ -244,3 +244,21 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
     ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens),
                        mode="api")
     return ctx.extracted_models[0] if ctx.extracted_models else None
+
+
+# --- KG-2: per-clause typed property extraction (the same seam, the KG-1 clause template) ---
+
+_CLAUSE_MAX_TOKENS = 2000  # a Clause has ~18 typed fields -> more output than a parties list
+_CLAUSE_TEXT_CHARS = 12000  # one operative span is short; a generous cap that never truncates a real clause
+
+
+def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAUSE_MAX_TOKENS) -> Any | None:
+    """Extract one clause's typed properties from span `text` with `model`, using the KG-1 bridge template
+    (`ontology.clause_template.Clause`). Same docling-graph API-mode seam + reliability fixes as
+    `extract_parties`; returns the extracted `Clause` (typed properties) or None. The Clause -> our
+    `ClausePropertyRecord` contract mapping + the grounding-judge gate live in `spans.clause_kg_extractor`."""
+    from rag_wright.ontology.clause_template import Clause
+
+    return extract_parties(
+        text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS
+    )
