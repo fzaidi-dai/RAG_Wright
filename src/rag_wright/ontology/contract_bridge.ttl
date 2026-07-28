@@ -1,0 +1,188 @@
+# Unified Contract KG — the bridge ontology (KG-1, ADR-0033).
+# Design: docs/unified_contract_kg_ontology_bridge.md (KG-0, schema-review gate approved 2026-07-28).
+#
+# Small, closed-vocabulary bridge. Three grounding layers: FOLIO (clause-type IRIs), ODRL 2.2 (rights/duties
+# spine + odrl:constraint for cap/temporal bounds), and PROV-O (provenance). Compiled to a Pydantic clause
+# extraction template via `docling-graph template from-ontology ... --root Clause` (deterministic, zero-LLM).
+#
+# The EXTRACTION template root is Clause: given one clause span (its function is already known from the T56
+# classifier), the LLM emits the clause's typed properties. Structural edges (HAS_CLAUSE / PARTY_TO /
+# CONTRACTS_WITH) are STORE edges written at KG-3, not extracted here — they are declared for documentation
+# but have domain Contract/Party, so a BFS from Clause never pulls them into the template.
+#
+# REGEN pipeline (SPEC is the source of truth after the first compile — re-running from-ontology CLOBBERS it):
+#   1. edit this .ttl                -> the ontology (also the KG-3 store-schema + FOLIO/ODRL grounding origin)
+#   2. from-ontology --root Clause   -> regenerates contract_bridge.spec.yaml (ONCE; overwrites SPEC edits)
+#   3. edit contract_bridge.spec.yaml -> add examples / LOOK-FOR descriptions (these reach the LLM prompt)
+#   4. from-spec  -> clause_template.py ; then: docling-graph template lint rag_wright.ontology.clause_template.Clause
+# The closed-vocab enums MUST equal contracts/property.py::CLOSED_VOCAB (tests/ontology/test_clause_template.py).
+# One documented divergence: CapBasis individual `cap_other` maps to the canonical "other" at KG-3 (OWL cannot
+# reuse the value "other" without colliding with the compiler's auto-added OTHER escape member).
+
+@prefix cbr:   <https://ragwright.local/ontology/contract-bridge#> .
+@prefix folio: <https://folio.openlegalstandard.org/> .
+@prefix odrl:  <http://www.w3.org/ns/odrl/2/> .
+@prefix prov:  <http://www.w3.org/ns/prov#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+<https://ragwright.local/ontology/contract-bridge> a owl:Ontology ;
+    rdfs:label "RAG_Wright unified contract KG bridge" ;
+    rdfs:comment "Closed-vocab bridge: FOLIO clause types + ODRL rights/duties + PROV-O provenance." .
+
+# =============================================================================
+# Structural classes (store-level; not part of the Clause extraction template)
+# =============================================================================
+cbr:Contract a owl:Class ; skos:prefLabel "Contract" .
+cbr:Party    a owl:Class ; skos:prefLabel "Party" .
+
+# =============================================================================
+# Root: Clause (the extraction unit)
+# =============================================================================
+cbr:Clause a owl:Class ;
+    skos:prefLabel "Clause" ;
+    rdfs:comment "One operative contract clause. Its function/type is known from the classifier; this template extracts the clause's typed properties, each read verbatim from the clause text." .
+
+# clause type (the function label — known/confirmable), kept as a free string, not a 44-way enum
+cbr:clauseType a owl:DatatypeProperty, owl:FunctionalProperty ;
+    rdfs:domain cbr:Clause ; rdfs:range xsd:string ;
+    rdfs:comment "The clause function/type label (e.g. 'Cap on Liability', 'Governing Law', 'Non-Solicit of Employees')." .
+
+# =============================================================================
+# Closed-vocabulary value classes (owl:oneOf -> Pydantic str-Enum with an OTHER escape)
+# =============================================================================
+cbr:Mutuality a owl:Class ; skos:prefLabel "Mutuality" ; owl:oneOf ( cbr:mutual cbr:unilateral ) .
+cbr:mutual a cbr:Mutuality . cbr:unilateral a cbr:Mutuality .
+
+cbr:Favorability a owl:Class ; owl:oneOf ( cbr:buyer_favorable cbr:seller_favorable ) .
+cbr:buyer_favorable a cbr:Favorability . cbr:seller_favorable a cbr:Favorability .
+
+cbr:Exception a owl:Class ; skos:prefLabel "Carve-out / Exception" ;
+    owl:oneOf ( cbr:indemnification cbr:confidentiality cbr:third_party_ip_infringement cbr:fraud
+                cbr:gross_negligence cbr:willful_misconduct cbr:bodily_injury cbr:applicable_law ) .
+cbr:indemnification a cbr:Exception . cbr:confidentiality a cbr:Exception ; skos:exactMatch folio:ROqkYuzXx4hg7XafuJWBfJ .
+cbr:third_party_ip_infringement a cbr:Exception .
+cbr:fraud a cbr:Exception ; skos:exactMatch folio:RqGxSnAp9vX42GRKHqwvBe .
+cbr:gross_negligence a cbr:Exception ; skos:exactMatch folio:RB2XGaLZqJPXLJOm052Pwrf .
+cbr:willful_misconduct a cbr:Exception ; skos:exactMatch folio:RCuhDmyUHjn92exJ8dx1zO1 .
+cbr:bodily_injury a cbr:Exception . cbr:applicable_law a cbr:Exception .
+
+# Subject reuses the canonical fraud / gross_negligence individuals (also Exception members) so the
+# extraction vocab == property.py CLOSED_VOCAB (no KG-3 remap for these).
+cbr:Subject a owl:Class ; skos:prefLabel "Covered subject" ;
+    owl:oneOf ( cbr:ip_infringement cbr:trademark cbr:copyright cbr:violation_of_law cbr:fraud cbr:gross_negligence ) .
+cbr:ip_infringement a cbr:Subject . cbr:trademark a cbr:Subject . cbr:copyright a cbr:Subject .
+cbr:violation_of_law a cbr:Subject .
+cbr:fraud a cbr:Subject . cbr:gross_negligence a cbr:Subject .
+
+cbr:PartyScope a owl:Class ; owl:oneOf ( cbr:affiliates cbr:licensor_affiliates cbr:licensee_affiliates ) .
+cbr:affiliates a cbr:PartyScope . cbr:licensor_affiliates a cbr:PartyScope . cbr:licensee_affiliates a cbr:PartyScope .
+
+cbr:Asymmetry a owl:Class ; owl:oneOf ( cbr:symmetric cbr:different_per_party ) .
+cbr:symmetric a cbr:Asymmetry . cbr:different_per_party a cbr:Asymmetry .
+
+cbr:CapBasis a owl:Class ; owl:oneOf ( cbr:fixed_fee cbr:multiple_of_fees cbr:cap_other ) .
+cbr:fixed_fee a cbr:CapBasis . cbr:multiple_of_fees a cbr:CapBasis . cbr:cap_other a cbr:CapBasis .
+
+cbr:DamageType a owl:Class ; owl:oneOf ( cbr:indirect cbr:consequential cbr:incidental cbr:punitive cbr:special ) .
+cbr:indirect a cbr:DamageType . cbr:consequential a cbr:DamageType . cbr:incidental a cbr:DamageType .
+cbr:punitive a cbr:DamageType . cbr:special a cbr:DamageType .
+
+cbr:WarrantyScope a owl:Class ; owl:oneOf ( cbr:implied cbr:express cbr:as_is cbr:non_reliance ) .
+cbr:implied a cbr:WarrantyScope . cbr:express a cbr:WarrantyScope . cbr:as_is a cbr:WarrantyScope . cbr:non_reliance a cbr:WarrantyScope .
+
+cbr:ClaimScope a owl:Class ; owl:oneOf ( cbr:first_party cbr:third_party cbr:broad_based ) .
+cbr:first_party a cbr:ClaimScope . cbr:third_party a cbr:ClaimScope . cbr:broad_based a cbr:ClaimScope .
+
+cbr:ProceduralDuty a owl:Class ; owl:oneOf ( cbr:duty_to_defend cbr:control_of_defense ) .
+cbr:duty_to_defend a cbr:ProceduralDuty . cbr:control_of_defense a cbr:ProceduralDuty .
+
+cbr:LawMultiplicity a owl:Class ; owl:oneOf ( cbr:single cbr:multiple ) .
+cbr:single a cbr:LawMultiplicity . cbr:multiple a cbr:LawMultiplicity .
+
+cbr:IpOwnership a owl:Class ; owl:oneOf ( cbr:assigned cbr:joint cbr:retained ) .
+cbr:assigned a cbr:IpOwnership . cbr:joint a cbr:IpOwnership . cbr:retained a cbr:IpOwnership .
+
+cbr:NonsolicitTarget a owl:Class ; owl:oneOf ( cbr:employees cbr:customers ) .
+cbr:employees a cbr:NonsolicitTarget . cbr:customers a cbr:NonsolicitTarget .
+
+cbr:RenewalMechanism a owl:Class ; owl:oneOf ( cbr:auto cbr:requires_notice ) .
+cbr:auto a cbr:RenewalMechanism . cbr:requires_notice a cbr:RenewalMechanism .
+
+# =============================================================================
+# ODRL constraint models (Q5 depth) — cap + temporal bounds carry an operator + open literal
+# =============================================================================
+cbr:CapConstraint a owl:Class ; rdfs:subClassOf odrl:Constraint ; skos:prefLabel "Liability cap" ;
+    rdfs:comment "The liability cap: its basis plus the open quantum (e.g. '12 months of fees', '$1,000,000')." .
+cbr:capBasis a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:CapConstraint ; rdfs:range cbr:CapBasis .
+cbr:capOperator a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:CapConstraint ; rdfs:range xsd:string ;
+    rdfs:comment "The comparison operator, e.g. 'lteq' (at most), 'eq' (fixed)." .
+cbr:capQuantum a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:CapConstraint ; rdfs:range xsd:string ;
+    rdfs:comment "The cap amount verbatim, e.g. '12_months', '1x_fees', '$1,000,000'." .
+
+cbr:TemporalConstraint a owl:Class ; rdfs:subClassOf odrl:Constraint ; skos:prefLabel "Temporal bound" ;
+    rdfs:comment "A time bound on the clause: a term/duration or a notice period." .
+cbr:temporalKind a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:TemporalConstraint ; rdfs:range xsd:string ;
+    rdfs:comment "What is bounded: 'term' (temporal_bound) or 'notice_period'." .
+cbr:temporalOperator a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:TemporalConstraint ; rdfs:range xsd:string .
+cbr:temporalDuration a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:TemporalConstraint ; rdfs:range xsd:string ;
+    rdfs:comment "The duration verbatim, e.g. '12_months', '30_days', 'unbounded'." .
+
+cbr:Jurisdiction a owl:Class ; skos:prefLabel "Governing law" ;
+    rdfs:comment "The governing-law jurisdiction(s): the name plus whether one or multiple laws govern." .
+cbr:jurisdictionName a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:Jurisdiction ; rdfs:range xsd:string ;
+    rdfs:comment "The jurisdiction verbatim, e.g. 'New York', 'England and Wales', 'Delaware'." .
+cbr:lawMultiplicity a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Jurisdiction ; rdfs:range cbr:LawMultiplicity .
+
+# =============================================================================
+# Typed edges: Clause -> value class / constraint model (the property layer)
+#   Functional (scalar, at most one) unless a list is intended (carve-outs, subjects, damage types).
+# =============================================================================
+cbr:hasMutuality a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:Mutuality ;
+    rdfs:comment "Whether the clause's obligation runs both ways (mutual) or one way (unilateral)." .
+cbr:hasFavorability a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:Favorability .
+cbr:hasAsymmetry a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:Asymmetry .
+cbr:hasWarrantyScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:WarrantyScope .
+cbr:hasClaimScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:ClaimScope .
+cbr:hasIpOwnership a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:IpOwnership .
+cbr:hasRenewal a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:RenewalMechanism .
+cbr:coversPartyScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:PartyScope .
+
+# multi-valued (a clause can carry several) -> list fields (non-functional)
+cbr:excepts a owl:ObjectProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:Exception ;
+    rdfs:comment "Carve-outs / exceptions the clause lists (may be several)." .
+cbr:covers a owl:ObjectProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:Subject ;
+    rdfs:comment "Subjects the clause covers (ODRL target; may be several)." .
+cbr:prohibitsDamage a owl:ObjectProperty ; rdfs:subPropertyOf odrl:prohibition ; rdfs:domain cbr:Clause ; rdfs:range cbr:DamageType ;
+    rdfs:comment "Damage types the clause waives/excludes (may be several)." .
+
+# ODRL deontic + constraint edges
+cbr:prohibitsSolicit a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:prohibition ;
+    rdfs:domain cbr:Clause ; rdfs:range cbr:NonsolicitTarget ;
+    rdfs:comment "Whom the clause forbids soliciting (employees / customers)." .
+cbr:requiresDuty a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:obligation ;
+    rdfs:domain cbr:Clause ; rdfs:range cbr:ProceduralDuty ;
+    rdfs:comment "A procedural duty the clause imposes (duty to defend / control of defense)." .
+cbr:caps a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:CapConstraint ;
+    rdfs:comment "The liability cap, if any." .
+cbr:boundedBy a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:TemporalConstraint ;
+    rdfs:comment "A temporal bound (term or notice period), if any." .
+cbr:governedBy a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:Jurisdiction ;
+    rdfs:comment "The governing-law jurisdiction, if the clause states one." .
+
+# =============================================================================
+# Structural edges (store-level, KG-3; domain Contract/Party so excluded from the Clause template)
+# =============================================================================
+cbr:hasClause a owl:ObjectProperty ; rdfs:domain cbr:Contract ; rdfs:range cbr:Clause .
+cbr:partyTo a owl:ObjectProperty ; rdfs:domain cbr:Party ; rdfs:range cbr:Contract .
+cbr:contractsWith a owl:ObjectProperty ; rdfs:domain cbr:Party ; rdfs:range cbr:Party .
+cbr:affiliateOf a owl:ObjectProperty ; rdfs:domain cbr:Party ; rdfs:range cbr:Party .
+
+# =============================================================================
+# Provenance (PROV-O) — every extracted fact cites its span/chunk (FR-Q.6). Carried on store edges (KG-3).
+# =============================================================================
+cbr:Assertion a owl:Class ; rdfs:subClassOf prov:Entity ;
+    rdfs:comment "A provenance-carrying assertion: confidence (EXTRACTED/INFERRED/AMBIGUOUS) + span_id + chunk_id." .

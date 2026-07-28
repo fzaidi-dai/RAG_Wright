@@ -9,6 +9,7 @@ dependencies = [
     "deepagents==0.6.12", # pinned exactly: dynamic sub-agents are beta, floating = silent breakage (ADR-0015)
     "docling>=2.109.0",
     "docling-core>=2.86.0",
+    "docling-graph[templategen]==1.9.1",
     "en-core-web-sm",
     "flagembedding>=1.4.0",
     "langchain-openai>=1.3.3",

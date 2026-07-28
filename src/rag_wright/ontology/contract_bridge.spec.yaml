@@ -1,0 +1,488 @@
+module_docstring: 'Closed-vocab bridge: FOLIO clause types + ODRL rights/duties +
+  PROV-O provenance.'
+root: Clause
+enums:
+- name: Subject
+  members:
+  - ip_infringement
+  - trademark
+  - copyright
+  - violation_of_law
+  - fraud
+  - gross_negligence
+  synonyms: {}
+  include_other: true
+- name: PartyScope
+  members:
+  - affiliates
+  - licensor_affiliates
+  - licensee_affiliates
+  synonyms: {}
+  include_other: true
+- name: ExceptionModel
+  members:
+  - indemnification
+  - confidentiality
+  - third_party_ip_infringement
+  - fraud
+  - gross_negligence
+  - willful_misconduct
+  - bodily_injury
+  - applicable_law
+  synonyms: {}
+  include_other: true
+- name: Asymmetry
+  members:
+  - symmetric
+  - different_per_party
+  synonyms: {}
+  include_other: true
+- name: ClaimScope
+  members:
+  - first_party
+  - third_party
+  - broad_based
+  synonyms: {}
+  include_other: true
+- name: Favorability
+  members:
+  - buyer_favorable
+  - seller_favorable
+  synonyms: {}
+  include_other: true
+- name: IpOwnership
+  members:
+  - assigned
+  - joint
+  - retained
+  synonyms: {}
+  include_other: true
+- name: Mutuality
+  members:
+  - mutual
+  - unilateral
+  synonyms: {}
+  include_other: true
+- name: RenewalMechanism
+  members:
+  - auto
+  - requires_notice
+  synonyms: {}
+  include_other: true
+- name: WarrantyScope
+  members:
+  - implied
+  - express
+  - as_is
+  - non_reliance
+  synonyms: {}
+  include_other: true
+- name: DamageType
+  members:
+  - indirect
+  - consequential
+  - incidental
+  - punitive
+  - special
+  synonyms: {}
+  include_other: true
+- name: NonsolicitTarget
+  members:
+  - employees
+  - customers
+  synonyms: {}
+  include_other: true
+- name: ProceduralDuty
+  members:
+  - duty_to_defend
+  - control_of_defense
+  synonyms: {}
+  include_other: true
+- name: CapBasis
+  members:
+  - fixed_fee
+  - multiple_of_fees
+  - cap_other
+  synonyms: {}
+  include_other: true
+- name: LawMultiplicity
+  members:
+  - single
+  - multiple
+  synonyms: {}
+  include_other: true
+models:
+- name: Clause
+  kind: root
+  docstring: One operative contract clause. Its function/type is known from the classifier;
+    this template extracts the clause's typed properties, each read verbatim from
+    the clause text.
+  identity_fields:
+  - document_reference
+  max_instances: null
+  fields:
+  - name: document_reference
+    type: str
+    is_list: false
+    description: A short handle for this clause — its section number or heading, verbatim from the text.
+    examples:
+    - Section 8
+    - 8.1 Limitation of Liability
+    - Governing Law
+    - Article 12 (Non-Solicitation)
+    role: identity
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: bounded_by
+    type: TemporalConstraint
+    is_list: false
+    description: A temporal bound (term or notice period), if any.
+    examples: []
+    role: edge
+    edge_label: BOUNDED_BY
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: caps
+    type: CapConstraint
+    is_list: false
+    description: The liability cap, if any.
+    examples: []
+    role: edge
+    edge_label: HAS_CAPS
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: clause_type
+    type: str
+    is_list: false
+    description: The clause function/type label (e.g. 'Cap on Liability', 'Governing
+      Law', 'Non-Solicit of Employees').
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: covers
+    type: Subject
+    is_list: true
+    description: Subjects the clause covers (ODRL target; may be several).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: covers_party_scope
+    type: PartyScope
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: excepts
+    type: ExceptionModel
+    is_list: true
+    description: Carve-outs / exceptions the clause lists (may be several).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: governed_by
+    type: Jurisdiction
+    is_list: false
+    description: The governing-law jurisdiction, if the clause states one.
+    examples: []
+    role: edge
+    edge_label: GOVERNED_BY
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: has_asymmetry
+    type: Asymmetry
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_claim_scope
+    type: ClaimScope
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_favorability
+    type: Favorability
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_ip_ownership
+    type: IpOwnership
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_mutuality
+    type: Mutuality
+    is_list: false
+    description: Whether the clause's obligation runs both ways (mutual) or one way
+      (unilateral).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_renewal
+    type: RenewalMechanism
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_warranty_scope
+    type: WarrantyScope
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: prohibits_damage
+    type: DamageType
+    is_list: true
+    description: Damage types the clause waives/excludes (may be several).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: prohibits_solicit
+    type: NonsolicitTarget
+    is_list: false
+    description: Whom the clause forbids soliciting (employees / customers).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: requires_duty
+    type: ProceduralDuty
+    is_list: false
+    description: A procedural duty the clause imposes (duty to defend / control of
+      defense).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  canonical_home: null
+  provenance: ontology
+  source_ref: https://ragwright.local/ontology/contract-bridge#Clause
+- name: CapConstraint
+  kind: component
+  docstring: 'The liability cap: its basis plus the open quantum (e.g. ''12 months
+    of fees'', ''$1,000,000'').'
+  identity_fields: []
+  max_instances: null
+  fields:
+  - name: cap_basis
+    type: CapBasis
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: cap_operator
+    type: str
+    is_list: false
+    description: The comparison operator, e.g. 'lteq' (at most), 'eq' (fixed).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: cap_quantum
+    type: str
+    is_list: false
+    description: The cap amount verbatim, e.g. '12_months', '1x_fees', '$1,000,000'.
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  canonical_home: null
+  provenance: ontology
+  source_ref: https://ragwright.local/ontology/contract-bridge#CapConstraint
+- name: Jurisdiction
+  kind: entity
+  docstring: 'The governing-law jurisdiction(s): the name plus whether one or multiple
+    laws govern.'
+  identity_fields:
+  - jurisdiction_name
+  max_instances: null
+  fields:
+  - name: jurisdiction_name
+    type: str
+    is_list: false
+    description: The jurisdiction verbatim, e.g. 'New York', 'England and Wales',
+      'Delaware'.
+    examples:
+    - New York
+    - England and Wales
+    - Delaware
+    role: identity
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: law_multiplicity
+    type: LawMultiplicity
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  canonical_home: null
+  provenance: ontology
+  source_ref: https://ragwright.local/ontology/contract-bridge#Jurisdiction
+- name: TemporalConstraint
+  kind: component
+  docstring: 'A time bound on the clause: a term/duration or a notice period.'
+  identity_fields: []
+  max_instances: null
+  fields:
+  - name: temporal_duration
+    type: str
+    is_list: false
+    description: The duration verbatim, e.g. '12_months', '30_days', 'unbounded'.
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: temporal_kind
+    type: str
+    is_list: false
+    description: 'What is bounded: ''term'' (temporal_bound) or ''notice_period''.'
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: temporal_operator
+    type: str
+    is_list: false
+    description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  canonical_home: null
+  provenance: ontology
+  source_ref: https://ragwright.local/ontology/contract-bridge#TemporalConstraint
+needs_root_list_dedup:
+- covers
+- excepts
+- prohibits_damage
+generator:
+  format: owl
+  source: src/rag_wright/ontology/contract_bridge.ttl
+  root: https://ragwright.local/ontology/contract-bridge#Clause
+  notes: []

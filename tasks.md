@@ -52,7 +52,13 @@ not this repo's.
 
 ## Last approved / next up
 
-- **>>> RESUME POINT (2026-07-28): KG-0 DONE (schema-review gate passed); NEXT = KG-1.** Building the UNIFIED
+- **>>> RESUME POINT (2026-07-28): KG-0 + KG-1 DONE; NEXT = KG-2 (per-clause typed extraction, granite-4.1-8b).**
+  KG-1 shipped the clause extraction template (`src/rag_wright/ontology/`: `contract_bridge.ttl` +
+  `contract_bridge.spec.yaml` + compiled `clause_template.py`; lint clean; 9 tests; `docling-graph[templategen]`
+  added). KG-2 = run docling-graph + granite-4.1-8b over the operative spans with `clause_template.Clause` to
+  emit typed clause properties; grounding-judge (ADR-0028) gate; hermetic tests + live smoke. Reuse the GP-1B
+  recipe (`kg-extraction-recipe` Skill, `dg_extraction.py` model seam, Granite-on-Modal `@app.server`).
+- **(prior) RESUME POINT (2026-07-28): KG-0 DONE (schema-review gate passed).** Building the UNIFIED
   CONTRACT KG (`docs/unified_contract_kg_plan.md` + **ADR-0033**): ONE KG (Contract/Party/Clause/value nodes +
   typed edges) served as 3 scoped queries (A = one contract_id; B = clauses cross-corpus as a filter/rerank
   feature; C = done, real recall 0.991). **KG-0 DONE:** ontology bridge designed + approved —
@@ -161,8 +167,8 @@ not this repo's.
   resolve/ground CIK+PRIVATE+FOLIO/ODRL IRIs -> write). Replaces the flat property graph (ADR-0025/0026) with
   typed ER (flat retired, not kept). Tasks:
   | KG-0 | Ontology bridge design (FOLIO align audit + ODRL + small custom OWL: clause-type classes, property-dimensions->typed edges, value nodes, PROV-O). **Ask-first data-model change -> schema-review gate** | 5 Integrate | FR-Q/FR-S | **DONE (2026-07-28, approved) — `docs/unified_contract_kg_ontology_bridge.md`. Gate resolutions: distinct `HAS_*` edges (Q1); `HAS_*`/`EXCEPTS`/`BOUNDED_BY` naming (Q2); build typed, RETIRE the flat `HasProperty` graph, not a fallback (Q3); `.ttl` authored+validated at KG-1 (Q4); ODRL at FULL depth = deontic core + `odrl:constraint` for cap/temporal bounds (Q5); KG-2 model = granite-4.1-8b, NO A/B. Also: `docling_graph` added to the framework grounding graph (2402 nodes; `refresh_framework_graph.sh`)** |
-  | KG-1 | Compile bridge OWL -> Pydantic clause template (`docling-graph template from-ontology`); hermetic lint | 5 Integrate | FR-C | **todo (NEXT — resume here); adds `rdflib`/`linkml-runtime` via the `templategen` extra (ask-first dep)** |
-  | KG-2 | Per-clause typed extraction from spans with **granite-4.1-8b (no A/B; DeepSeek = KG-6 below-par contingency only)**; grounding-judge (ADR-0028) gate; hermetic tests + live smoke | 5 Integrate | FR-C | **todo** |
+  | KG-1 | Compile bridge OWL -> Pydantic clause template (`docling-graph template from-ontology`); hermetic lint | 5 Integrate | FR-C | **DONE (2026-07-28, approved) — `src/rag_wright/ontology/`: `contract_bridge.ttl` (335 triples, rdflib-clean; FOLIO exactMatch + ODRL subPropertyOf + `odrl:Constraint` cap/temporal models + 15 `owl:oneOf` vocabs + PROV-O), `contract_bridge.spec.yaml` (editable SPEC source), `clause_template.py` (compiled root `Clause`, 18 fields: 10 enum props + 3 list props covers/excepts/prohibits_damage + 3 nested constraint models caps/bounded_by/governed_by). `docling-graph template lint` = exit 0 / 0 gaps. 9 hermetic tests (`tests/ontology/test_clause_template.py`) incl. the invariant: every enum == `property.py::CLOSED_VOCAB` (one shared vocab); `CapBasis.cap_other`->canonical `other` at KG-3 (documented). Dep: `docling-graph[templategen]==1.9.1` (brings rdflib 7.6.0 + linkml-runtime 1.11.1; also formalizes docling-graph in pyproject). 164 tests green** |
+  | KG-2 | Per-clause typed extraction from spans with **granite-4.1-8b (no A/B; DeepSeek = KG-6 below-par contingency only)**; grounding-judge (ADR-0028) gate; hermetic tests + live smoke | 5 Integrate | FR-C | **todo (NEXT — resume here)** |
   | KG-3 | Resolution/grounding (parties->CIK/PRIVATE; values/predicates->FOLIO/ODRL IRIs) -> write the TYPED unified KG to ArcadeDB (new typed edge types, drop flat `HasProperty`; node identities + provenance schema preserved) | 5 Integrate | FR-C/FR-S | **todo** |
   | KG-4 | Leg A: intra-contract scoped-query serving (structured, relational, cited QnA); upgrade `highlight_serve` backend | 5 Integrate | FR-Q | **todo** |
   | KG-5 | Leg B: typed-edge constraint match as filter/rerank feature over the BGE base pool + pointwise-Gemma reranker (into `eval/function_property_rerank.py`) | 5 Integrate | FR-Q | **todo** |
