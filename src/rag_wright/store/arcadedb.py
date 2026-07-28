@@ -722,6 +722,51 @@ class ArcadeDBStore:
         self._command(f"DELETE FROM {CLAUSE_TYPE}")
         self._command(f"DELETE FROM {PROPVALUE_TYPE}")
 
+    # --- KG-4 (Leg A): intra-contract scoped queries over the typed KG ------------------------------
+    # A clause_id is `<contract_id>:<index>:<hash>` (FR-S.2), and contract_id is delimiter-safe, so a
+    # contract's clauses are exactly the half-open key range [`<cid>:`, `<cid>;`) (';' = ':'+1). This is an
+    # exact prefix scan -- no LIKE (whose `_` would wildcard the underscores in CUAD contract ids).
+
+    def _contract_bounds(self, contract_id: str) -> tuple[str, str]:
+        return _sql_str(contract_id + ":"), _sql_str(contract_id + ";")
+
+    def clauses_in_contract(self, contract_id: str) -> list[dict]:
+        """Every clause in one contract (Leg-A scope): clause_id, function, folio_iri -- including clauses
+        with no typed properties (still queryable by type)."""
+        lo, hi = self._contract_bounds(contract_id)
+        return self._query(
+            f"SELECT clause_id, function, folio_iri FROM {CLAUSE_TYPE} "
+            f"WHERE clause_id >= {lo} AND clause_id < {hi} ORDER BY clause_id"
+        )
+
+    def contract_clause_kg(self, contract_id: str) -> list[dict]:
+        """The per-contract typed subgraph: one row per typed edge (clause -> value), carrying the clause
+        function, the edge type + dimension + value + predicate IRI, and the provenance (confidence, span_id).
+        The shape Leg-A aggregation / disambiguation / citation build on."""
+        lo, hi = self._contract_bounds(contract_id)
+        q = (
+            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id >= " + lo
+            + " AND clause_id < " + hi + ")}.outE(){as: e}.inV(){as: v}"
+            " RETURN c.clause_id AS clause_id, c.function AS function, e.@type AS edge_type,"
+            " e.dimension AS dimension, v.value AS value, v.folio_iri AS folio_iri,"
+            " e.predicate_iri AS predicate_iri, e.confidence AS confidence, e.span_id AS span_id"
+        )
+        return self._query(q)
+
+    def clauses_with_property(self, contract_id: str, dimension: str, value: str) -> list[dict]:
+        """Disambiguation: the clauses in one contract that assert (dimension, value) -- e.g. the *mutual*
+        cap clause, or every clause that covers *fraud*. Returns clause_id + function + the edge provenance."""
+        lo, hi = self._contract_bounds(contract_id)
+        q = (
+            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id >= " + lo
+            + " AND clause_id < " + hi + ")}"
+            ".outE(){as: e, where: (dimension = " + _sql_str(dimension) + ")}"
+            ".inV(){as: v, where: (value = " + _sql_str(value) + ")}"
+            " RETURN c.clause_id AS clause_id, c.function AS function, e.@type AS edge_type,"
+            " e.confidence AS confidence, e.span_id AS span_id"
+        )
+        return self._query(q)
+
     def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
         if not chunk_ids:
             return set()
