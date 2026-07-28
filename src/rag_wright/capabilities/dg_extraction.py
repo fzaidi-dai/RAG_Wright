@@ -15,7 +15,11 @@ GraphConverter reads (`edge_label`, `graph_reference`, `reference_closed_catalog
 
 from __future__ import annotations
 
+import os
 import re
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -113,3 +117,89 @@ def resolve_extracted(
         chunk_id = ChunkId.of(_slug(contract_id), 0, "|".join(names) or contract_id)
         results.append(parties_to_extraction(chunk_id, names))
     return resolve_entities(disambiguate(results), results, registry=registry)
+
+
+# --- GP-1B.3: the extraction-model seam (Granite / Gemma / DeepSeek via docling-graph's LiteLLM config) ---
+#
+# docling-graph's model routing is its own config seam (provider/model/connection), which we drive from our
+# env -- compatible with the "no provider flag in node code" rule (the flags live in config + a dated ADR).
+# Two reliability fixes are baked in (GP-1B.1/.2 findings): structured_output=False (json_object -- the strict
+# nested json_schema trips DeepSeek and mis-formats others; json_object is reliable for all) and a max_tokens
+# cap (the unknown-provider generic 8192-token context window else makes docling-graph SKIP the LLM).
+
+_DEFAULT_MAX_TOKENS = 1500
+_DEFAULT_PREAMBLE_CHARS = 8000  # parties are named in the preamble; keeps `direct` within the context window
+
+
+@dataclass(frozen=True)
+class ExtractionModel:
+    """One extraction-model choice for the A/B: a label + docling-graph provider + model id + connection.
+    `provider` is 'openrouter' (Gemma/DeepSeek) or 'ollama' (Granite, local or Modal-hosted)."""
+
+    label: str
+    provider: str
+    model: str
+    base_url: str
+    api_key: str | None = None
+    inference: str = "remote"
+
+
+def openrouter_model(label: str, model: str) -> ExtractionModel:
+    """A Gemma/DeepSeek model via OpenRouter (our seam's provider), keyed from the OPENROUTER_* env."""
+    return ExtractionModel(
+        label=label, provider="openrouter", model=model,
+        base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+        api_key=os.environ.get("OPENROUTER_API_KEY"), inference="remote",
+    )
+
+
+def ollama_model(label: str, model: str, base_url: str | None = None) -> ExtractionModel:
+    """A local (or Modal-hosted) Granite model via Ollama -- no API key. `base_url` overrides OLLAMA_BASE_URL
+    (used for the Modal-hosted fallback when local memory exceeds the threshold)."""
+    return ExtractionModel(
+        label=label, provider="ollama", model=model,
+        base_url=base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
+        api_key=None, inference="local",
+    )
+
+
+def build_pipeline_config(source_path: str, model: ExtractionModel, *, template: type = ContractParties,
+                          max_tokens: int = _DEFAULT_MAX_TOKENS) -> Any:
+    """The docling-graph `PipelineConfig` for a model choice, with the reliability fixes baked in
+    (structured_output=False + max_tokens cap). Kept import-light so hermetic tests need no LLM."""
+    from docling_graph import PipelineConfig
+    from docling_graph.llm_clients.config import (
+        ConnectionOverrides,
+        GenerationOverrides,
+        LlmRuntimeOverrides,
+    )
+    from pydantic import SecretStr
+
+    connection = ConnectionOverrides(
+        base_url=model.base_url,
+        api_key=SecretStr(model.api_key) if model.api_key else None,
+    )
+    return PipelineConfig(
+        source=source_path, template=template, backend="llm", inference=model.inference,
+        extraction_contract="direct", processing_mode="many-to-one",
+        structured_output=False,  # reliability fix: json_object, not the strict nested json_schema
+        provider_override=model.provider, model_override=model.model,
+        llm_overrides=LlmRuntimeOverrides(
+            generation=GenerationOverrides(max_tokens=max_tokens), connection=connection,
+        ),
+    )
+
+
+def extract_parties(text: str, model: ExtractionModel, *, template: type = ContractParties,
+                    max_tokens: int = _DEFAULT_MAX_TOKENS,
+                    preamble_chars: int = _DEFAULT_PREAMBLE_CHARS) -> Any | None:
+    """Extract parties from contract `text` with `model` via docling-graph (API mode). Writes the preamble to
+    a temp .md (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first
+    extracted model (a `ContractParties`) or None if extraction yielded nothing."""
+    from docling_graph import run_pipeline
+
+    md = Path(tempfile.mkdtemp(prefix="dg_extract_")) / "contract.md"
+    md.write_text(text[:preamble_chars], encoding="utf-8")
+    ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens),
+                       mode="api")
+    return ctx.extracted_models[0] if ctx.extracted_models else None
