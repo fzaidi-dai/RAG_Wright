@@ -15,9 +15,19 @@ GraphConverter reads (`edge_label`, `graph_reference`, `reference_closed_catalog
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from rag_wright.capabilities.disambiguation import disambiguate
+from rag_wright.capabilities.entity_resolution import ResolutionResult, resolve_entities
+from rag_wright.capabilities.graph_extraction import parties_to_extraction
+from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.corpus.edgar import normalize_cik
+from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
+
+_PRIVATE_RESOLUTIONS = {"PRIVATE", "SKIP"}
 
 
 def edge(
@@ -64,3 +74,42 @@ class ContractParties(BaseModel):
         "PARTY_TO", default_factory=list,
         description="The organizations that are the signing parties to this agreement (usually two)",
     )
+
+
+def _slug(contract_id: str) -> str:
+    """Sanitize a contract id into a valid `ChunkId.source_doc_id` ([A-Za-z0-9._-])."""
+    return re.sub(r"[^A-Za-z0-9._-]", "-", contract_id) or "contract"
+
+
+def build_verified_registry(vset: dict) -> EntityRegistry:
+    """An `EntityRegistry` from the human-verified set: each CIK-resolved entity becomes a
+    `RegistryRecord(CIK, representative, aliases=variants)`, so an extracted party surface form that matches
+    a verified variant resolves to the CIK. PRIVATE/SKIP entities are not in the closed CIK registry
+    (`resolve -> None -> unlinked`). This keeps resolution recall high for verified filers, so in the A/B a
+    miss reflects EXTRACTION quality (the model didn't produce a matching name), not resolution weakness."""
+    registry = EntityRegistry()
+    for entity in vset["entities"]:
+        resolution = entity["resolution"]
+        if resolution in _PRIVATE_RESOLUTIONS:
+            continue
+        registry.add(RegistryRecord(
+            entity_id=normalize_cik(resolution), canonical_name=entity["representative"],
+            aliases=list(entity.get("variants", [])),
+        ))
+    return registry
+
+
+def resolve_extracted(
+    items: list[tuple[str, ContractParties]], *, registry: EntityRegistry
+) -> ResolutionResult:
+    """Bridge docling-graph extractions into our resolution pipeline: each contract's extracted parties ->
+    `parties_to_extraction` (CONTRACTS_WITH between them, no LLM) -> `disambiguate` -> `resolve_entities`
+    (-> EDGAR CIK). `items` = (contract_id, extracted `ContractParties`). The `ResolutionResult` feeds
+    `to_graph` -> `store.write_graph` (GP-1B.5). This is the only new glue vs the gold-anchored GP-1(A):
+    the parties now come from docling-graph's LLM extraction instead of the verified `coparty_keys`."""
+    results = []
+    for contract_id, cp in items:
+        names = [p.name for p in cp.parties]
+        chunk_id = ChunkId.of(_slug(contract_id), 0, "|".join(names) or contract_id)
+        results.append(parties_to_extraction(chunk_id, names))
+    return resolve_entities(disambiguate(results), results, registry=registry)
