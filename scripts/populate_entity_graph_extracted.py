@@ -24,6 +24,9 @@ from dotenv import load_dotenv
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")
 
 from rag_wright.capabilities.dg_extraction import (
+    ContractParties,
+    Party,
+    build_private_map,
     build_verified_registry,
     extract_parties,
     openrouter_model,
@@ -34,6 +37,7 @@ from rag_wright.spans.cuad_labels import parse_cuad
 
 CUAD = Path("data/cuad/extracted/CUAD_v1.json")
 VSET = Path("data/edgar/verification_set.json")
+CACHE = Path("data/cache/dg_extracted_parties.json")  # {contract_id: [party names]} -- avoids re-extraction
 LIMIT = int(os.environ.get("LIMIT", "10"))
 DB = os.environ.get("DB", "ragwright_cuad")
 CONCURRENCY = int(os.environ.get("CONCURRENCY", "8"))
@@ -65,14 +69,27 @@ def main() -> None:
         contracts = contracts[:LIMIT]
     print(f"[extract] {len(contracts)} contracts via {MODEL.model} (conc={CONCURRENCY})", flush=True)
 
-    t0 = time.perf_counter()
-    results = asyncio.run(_extract_all(contracts))
-    items = [(cid, cp) for cid, cp in results if cp is not None and cp.parties]
-    print(f"[extract] {len(items)}/{len(contracts)} contracts yielded >=1 party in "
-          f"{time.perf_counter() - t0:.0f}s", flush=True)
+    CACHE.parent.mkdir(parents=True, exist_ok=True)
+    if CACHE.exists() and not os.environ.get("FRESH"):  # reuse the extraction (FRESH=1 to re-extract)
+        cached = json.loads(CACHE.read_text(encoding="utf-8"))
+        if LIMIT:
+            cached = dict(list(cached.items())[:LIMIT])
+        items = [(cid, ContractParties(title="", parties=[Party(name=n) for n in names]))
+                 for cid, names in cached.items() if names]
+        print(f"[extract] loaded {len(items)} contracts from cache", flush=True)
+    else:
+        t0 = time.perf_counter()
+        results = asyncio.run(_extract_all(contracts))
+        CACHE.write_text(json.dumps({cid: [p.name for p in cp.parties] for cid, cp in results if cp}),
+                         encoding="utf-8")
+        items = [(cid, cp) for cid, cp in results if cp is not None and cp.parties]
+        print(f"[extract] {len(items)}/{len(contracts)} contracts yielded >=1 party in "
+              f"{time.perf_counter() - t0:.0f}s (cached)", flush=True)
 
-    registry = build_verified_registry(json.loads(VSET.read_text(encoding="utf-8")))
-    resolution = resolve_extracted(items, registry=registry)
+    vset = json.loads(VSET.read_text(encoding="utf-8"))
+    registry = build_verified_registry(vset)
+    private_map = build_private_map(vset)  # GP-1B.5a: verified-private parties -> golden PRIVATE:<key>
+    resolution = resolve_extracted(items, registry=registry, private_map=private_map)
     nodes, edges = to_graph(resolution)
     linked = sum(1 for n in nodes if n.entity_id)
     print(f"[graph] {len(nodes)} nodes ({linked} CIK-linked) + {len(edges)} CONTRACTS_WITH edges", flush=True)

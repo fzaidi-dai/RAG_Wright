@@ -28,7 +28,7 @@ from rag_wright.capabilities.disambiguation import disambiguate
 from rag_wright.capabilities.entity_resolution import ResolutionResult, resolve_entities
 from rag_wright.capabilities.graph_extraction import parties_to_extraction
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.corpus.edgar import normalize_cik
+from rag_wright.corpus.edgar import normalize_cik, normalize_name
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 
 _PRIVATE_RESOLUTIONS = {"PRIVATE", "SKIP"}
@@ -104,19 +104,60 @@ def build_verified_registry(vset: dict) -> EntityRegistry:
 
 
 def resolve_extracted(
-    items: list[tuple[str, ContractParties]], *, registry: EntityRegistry
+    items: list[tuple[str, ContractParties]], *, registry: EntityRegistry,
+    private_map: dict[str, str] | None = None,
 ) -> ResolutionResult:
     """Bridge docling-graph extractions into our resolution pipeline: each contract's extracted parties ->
     `parties_to_extraction` (CONTRACTS_WITH between them, no LLM) -> `disambiguate` -> `resolve_entities`
     (-> EDGAR CIK). `items` = (contract_id, extracted `ContractParties`). The `ResolutionResult` feeds
     `to_graph` -> `store.write_graph` (GP-1B.5). This is the only new glue vs the gold-anchored GP-1(A):
-    the parties now come from docling-graph's LLM extraction instead of the verified `coparty_keys`."""
+    the parties now come from docling-graph's LLM extraction instead of the verified `coparty_keys`.
+
+    `private_map` (GP-1B.5a): assign verified-PRIVATE parties their golden `PRIVATE:<key>` id (which the CIK
+    registry can't produce) so private anchors/answers are recoverable in the relational eval."""
     results = []
     for contract_id, cp in items:
         names = [p.name for p in cp.parties]
         chunk_id = ChunkId.of(_slug(contract_id), 0, "|".join(names) or contract_id)
         results.append(parties_to_extraction(chunk_id, names))
-    return resolve_entities(disambiguate(results), results, registry=registry)
+    resolution = resolve_entities(disambiguate(results), results, registry=registry)
+    if private_map:
+        resolution = _apply_private_identities(resolution, private_map)
+    return resolution
+
+
+def build_private_map(vset: dict) -> dict[str, str]:
+    """`{normalize_name(surface) -> 'PRIVATE:<entity_key>'}` for verified-PRIVATE entities. Lets an extracted
+    private party (a non-filer the CIK registry can't resolve) take the golden `PRIVATE:<key>` node id
+    (matching `eval.multihop._identity`), instead of an `UNLINKED:<surface>` that misses the golden answer.
+    SKIP entities are excluded (they are excluded from the golden set)."""
+    private_map: dict[str, str] = {}
+    for entity in vset["entities"]:
+        if entity["resolution"] != "PRIVATE":
+            continue
+        pid = f"PRIVATE:{entity['entity_key']}"
+        for surface in (entity["representative"], entity["entity_key"], *entity.get("variants", [])):
+            key = normalize_name(surface)
+            if key:
+                private_map.setdefault(key, pid)
+    return private_map
+
+
+def _apply_private_identities(resolution: ResolutionResult, private_map: dict[str, str]) -> ResolutionResult:
+    """Fill in `PRIVATE:<key>` ids for still-unlinked (entity_id None) entities/relationship endpoints whose
+    surface matches a verified-private entity; drop any edge that becomes a self-loop after the remap."""
+    entities = [
+        e.model_copy(update={"entity_id": e.entity_id or private_map.get(normalize_name(e.representative))})
+        for e in resolution.entities
+    ]
+    relationships = []
+    for rel in resolution.relationships:
+        source_id = rel.source_id or private_map.get(normalize_name(rel.source_ref))
+        target_id = rel.target_id or private_map.get(normalize_name(rel.target_ref))
+        if source_id is not None and source_id == target_id:
+            continue
+        relationships.append(rel.model_copy(update={"source_id": source_id, "target_id": target_id}))
+    return resolution.model_copy(update={"entities": entities, "relationships": relationships})
 
 
 # --- GP-1B.3: the extraction-model seam (Granite / Gemma / DeepSeek via docling-graph's LiteLLM config) ---
