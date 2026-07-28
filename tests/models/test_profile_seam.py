@@ -113,8 +113,17 @@ def test_structured_only_extra_body_binds_to_structured_call_not_base(monkeypatc
     assert "extra_body" not in runnable.base.ctor_kwargs
 
 
-def test_no_extra_body_kwarg_when_profile_has_none():
-    runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema)
+def test_no_extra_body_kwarg_when_profile_has_none(monkeypatch):
+    """A profile with no structured_extra_body adds no extra_body kwarg to the forced structured call.
+
+    Uses an isolated plain profile rather than a real role: real roles may carry a structured_extra_body per
+    their own ADR (e.g. the GENERAL/Gemma-4 profile disables reasoning on the forced structured call, CU-D2/
+    ADR-0032), so this invariant must not assume any role has none."""
+    monkeypatch.setitem(
+        profiles.PROFILES, "vendor/plain",
+        ModelProfile(model_id="vendor/plain", structured_method="function_calling"),
+    )
+    runnable = seam.build_structured("vendor/plain", _Schema)
     assert "extra_body" not in runnable.kwargs
     assert runnable.kwargs["method"] == "function_calling"
 
