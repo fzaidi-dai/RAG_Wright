@@ -174,6 +174,66 @@ cbr:governedBy a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Cl
     rdfs:comment "The governing-law jurisdiction, if the clause states one." .
 
 # =============================================================================
+# CUAD-family extension value classes + edges (KG-4: full CUAD clause coverage).
+# Closed-vocab -> owl:oneOf enums; open-valued (audit_frequency / commitment_quantum / ld_trigger) ->
+# datatype string properties. consent_required / notice_only are shared individuals across the two consent
+# classes (unique OWL IRIs, both enums list them). Store edge mapping (ADR-0033): exclusivity/ROFR -> GRANTS,
+# non-compete -> PROHIBITS, the rest -> HAS_* (in `store/arcadedb.py::_TYPED_DIMENSION_EDGE`).
+# =============================================================================
+cbr:ExclusivityType a owl:Class ; owl:oneOf ( cbr:exclusive cbr:sole cbr:non_exclusive ) .
+cbr:exclusive a cbr:ExclusivityType . cbr:sole a cbr:ExclusivityType . cbr:non_exclusive a cbr:ExclusivityType .
+
+cbr:RightOfFirstType a owl:Class ; owl:oneOf ( cbr:rofr cbr:rofo cbr:rofn ) .
+cbr:rofr a cbr:RightOfFirstType . cbr:rofo a cbr:RightOfFirstType . cbr:rofn a cbr:RightOfFirstType .
+
+cbr:RestrictionScope a owl:Class ; owl:oneOf ( cbr:geographic cbr:activity cbr:geographic_and_activity ) .
+cbr:geographic a cbr:RestrictionScope . cbr:activity a cbr:RestrictionScope . cbr:geographic_and_activity a cbr:RestrictionScope .
+
+cbr:CocConsent a owl:Class ; owl:oneOf ( cbr:consent_required cbr:notice_only cbr:unrestricted ) .
+cbr:AssignmentConsent a owl:Class ; owl:oneOf ( cbr:consent_required cbr:notice_only cbr:free ) .
+cbr:consent_required a cbr:CocConsent, cbr:AssignmentConsent .   # shared individual (both consent regimes)
+cbr:notice_only a cbr:CocConsent, cbr:AssignmentConsent .
+cbr:unrestricted a cbr:CocConsent . cbr:free a cbr:AssignmentConsent .
+
+cbr:EscrowReleaseTrigger a owl:Class ; owl:oneOf ( cbr:bankruptcy cbr:breach cbr:discontinuance ) .
+cbr:bankruptcy a cbr:EscrowReleaseTrigger . cbr:breach a cbr:EscrowReleaseTrigger . cbr:discontinuance a cbr:EscrowReleaseTrigger .
+
+cbr:MfnScope a owl:Class ; owl:oneOf ( cbr:price cbr:terms cbr:price_and_terms ) .
+cbr:price a cbr:MfnScope . cbr:terms a cbr:MfnScope . cbr:price_and_terms a cbr:MfnScope .
+
+cbr:TerminationRight a owl:Class ; owl:oneOf ( cbr:either_party cbr:one_party ) .
+cbr:either_party a cbr:TerminationRight . cbr:one_party a cbr:TerminationRight .
+
+# edges (Clause -> value class). Functional = at most one per clause.
+cbr:hasExclusivityType a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:permission ;
+    rdfs:domain cbr:Clause ; rdfs:range cbr:ExclusivityType ;
+    rdfs:comment "The exclusivity a licensing/distribution clause grants (exclusive / sole / non-exclusive)." .
+cbr:hasRightOfFirstType a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:permission ;
+    rdfs:domain cbr:Clause ; rdfs:range cbr:RightOfFirstType ;
+    rdfs:comment "The first-refusal/offer/negotiation right the clause grants (ROFR / ROFO / ROFN)." .
+cbr:hasRestrictionScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:prohibition ;
+    rdfs:domain cbr:Clause ; rdfs:range cbr:RestrictionScope ;
+    rdfs:comment "What a non-compete restricts: geographic area, activity, or both." .
+cbr:hasCocConsent a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:CocConsent ;
+    rdfs:comment "How a change-of-control clause treats consent (required / notice-only / unrestricted)." .
+cbr:hasAssignmentConsent a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:AssignmentConsent ;
+    rdfs:comment "How an anti-assignment clause treats consent (required / notice-only / free)." .
+cbr:hasEscrowReleaseTrigger a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:EscrowReleaseTrigger ;
+    rdfs:comment "What triggers a source-code escrow release (bankruptcy / breach / discontinuance)." .
+cbr:hasMfnScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:MfnScope ;
+    rdfs:comment "What a most-favored-nation clause covers (price / terms / both)." .
+cbr:hasTerminationRight a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range cbr:TerminationRight ;
+    rdfs:comment "Who may terminate for convenience (either party / one party)." .
+
+# open-valued CUAD dims -> datatype string properties
+cbr:auditFrequency a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range xsd:string ;
+    rdfs:comment "How often an audit-rights clause permits audits, e.g. 'annual', 'quarterly', 'once per year'." .
+cbr:commitmentQuantum a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range xsd:string ;
+    rdfs:comment "The minimum-commitment / volume amount verbatim, e.g. '$1,000,000', '100 units/year'." .
+cbr:ldTrigger a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:Clause ; rdfs:range xsd:string ;
+    rdfs:comment "What triggers liquidated damages, e.g. 'late delivery', 'early termination'." .
+
+# =============================================================================
 # Structural edges (store-level, KG-3; domain Contract/Party so excluded from the Clause template)
 # =============================================================================
 cbr:hasClause a owl:ObjectProperty ; rdfs:domain cbr:Contract ; rdfs:range cbr:Clause .

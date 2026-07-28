@@ -127,6 +127,15 @@ class ExceptionModel(str, Enum):
     OTHER = "Other"
 
 
+class AssignmentConsent(str, Enum):
+    """Controlled vocabulary for assignment_consent values. Unmapped values normalize to OTHER."""
+
+    CONSENT_REQUIRED = "consent_required"
+    NOTICE_ONLY = "notice_only"
+    FREE = "free"
+    OTHER = "Other"
+
+
 class Asymmetry(str, Enum):
     """Controlled vocabulary for asymmetry values. Unmapped values normalize to OTHER."""
 
@@ -141,6 +150,33 @@ class ClaimScope(str, Enum):
     FIRST_PARTY = "first_party"
     THIRD_PARTY = "third_party"
     BROAD_BASED = "broad_based"
+    OTHER = "Other"
+
+
+class CocConsent(str, Enum):
+    """Controlled vocabulary for coc_consent values. Unmapped values normalize to OTHER."""
+
+    CONSENT_REQUIRED = "consent_required"
+    NOTICE_ONLY = "notice_only"
+    UNRESTRICTED = "unrestricted"
+    OTHER = "Other"
+
+
+class EscrowReleaseTrigger(str, Enum):
+    """Controlled vocabulary for escrow_release_trigger values. Unmapped values normalize to OTHER."""
+
+    BANKRUPTCY = "bankruptcy"
+    BREACH = "breach"
+    DISCONTINUANCE = "discontinuance"
+    OTHER = "Other"
+
+
+class ExclusivityType(str, Enum):
+    """Controlled vocabulary for exclusivity_type values. Unmapped values normalize to OTHER."""
+
+    EXCLUSIVE = "exclusive"
+    SOLE = "sole"
+    NON_EXCLUSIVE = "non_exclusive"
     OTHER = "Other"
 
 
@@ -161,6 +197,15 @@ class IpOwnership(str, Enum):
     OTHER = "Other"
 
 
+class MfnScope(str, Enum):
+    """Controlled vocabulary for mfn_scope values. Unmapped values normalize to OTHER."""
+
+    PRICE = "price"
+    TERMS = "terms"
+    PRICE_AND_TERMS = "price_and_terms"
+    OTHER = "Other"
+
+
 class Mutuality(str, Enum):
     """Controlled vocabulary for mutuality values. Unmapped values normalize to OTHER."""
 
@@ -174,6 +219,32 @@ class RenewalMechanism(str, Enum):
 
     AUTO = "auto"
     REQUIRES_NOTICE = "requires_notice"
+    OTHER = "Other"
+
+
+class RestrictionScope(str, Enum):
+    """Controlled vocabulary for restriction_scope values. Unmapped values normalize to OTHER."""
+
+    GEOGRAPHIC = "geographic"
+    ACTIVITY = "activity"
+    GEOGRAPHIC_AND_ACTIVITY = "geographic_and_activity"
+    OTHER = "Other"
+
+
+class RightOfFirstType(str, Enum):
+    """Controlled vocabulary for right_of_first_type values. Unmapped values normalize to OTHER."""
+
+    ROFR = "rofr"
+    ROFO = "rofo"
+    ROFN = "rofn"
+    OTHER = "Other"
+
+
+class TerminationRight(str, Enum):
+    """Controlled vocabulary for termination_right values. Unmapped values normalize to OTHER."""
+
+    EITHER_PARTY = "either_party"
+    ONE_PARTY = "one_party"
     OTHER = "Other"
 
 
@@ -347,11 +418,26 @@ class Clause(BaseModel):
         ],
     )
 
+    audit_frequency: Optional[str] = Field(
+        None,
+        description=(
+            "How often an audit-rights clause permits audits, e.g. 'annual', 'quarterly', 'once "
+            "per year'."
+        ),
+    )
+
     clause_type: Optional[str] = Field(
         None,
         description=(
             "The clause function/type label (e.g. 'Cap on Liability', 'Governing Law', "
             "'Non-Solicit of Employees')."
+        ),
+    )
+
+    commitment_quantum: Optional[str] = Field(
+        None,
+        description=(
+            "The minimum-commitment / volume amount verbatim, e.g. '$1,000,000', '100 units/year'."
         ),
     )
 
@@ -370,6 +456,11 @@ class Clause(BaseModel):
         description="Carve-outs / exceptions the clause lists (may be several).",
     )
 
+    has_assignment_consent: AssignmentConsent = Field(
+        AssignmentConsent.OTHER,
+        description="How an anti-assignment clause treats consent (required / notice-only / free).",
+    )
+
     has_asymmetry: Asymmetry = Field(
         Asymmetry.OTHER,
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
@@ -380,6 +471,28 @@ class Clause(BaseModel):
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
+    has_coc_consent: CocConsent = Field(
+        CocConsent.OTHER,
+        description=(
+            "How a change-of-control clause treats consent (required / notice-only / unrestricted)."
+        ),
+    )
+
+    has_escrow_release_trigger: EscrowReleaseTrigger = Field(
+        EscrowReleaseTrigger.OTHER,
+        description=(
+            "What triggers a source-code escrow release (bankruptcy / breach / discontinuance)."
+        ),
+    )
+
+    has_exclusivity_type: ExclusivityType = Field(
+        ExclusivityType.OTHER,
+        description=(
+            "The exclusivity a licensing/distribution clause grants (exclusive / sole / "
+            "non-exclusive)."
+        ),
+    )
+
     has_favorability: Favorability = Field(
         Favorability.OTHER,
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
@@ -388,6 +501,11 @@ class Clause(BaseModel):
     has_ip_ownership: IpOwnership = Field(
         IpOwnership.OTHER,
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+    )
+
+    has_mfn_scope: MfnScope = Field(
+        MfnScope.OTHER,
+        description="What a most-favored-nation clause covers (price / terms / both).",
     )
 
     has_mutuality: Mutuality = Field(
@@ -402,9 +520,31 @@ class Clause(BaseModel):
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
+    has_restriction_scope: RestrictionScope = Field(
+        RestrictionScope.OTHER,
+        description="What a non-compete restricts: geographic area, activity, or both.",
+    )
+
+    has_right_of_first_type: RightOfFirstType = Field(
+        RightOfFirstType.OTHER,
+        description=(
+            "The first-refusal/offer/negotiation right the clause grants (ROFR / ROFO / ROFN)."
+        ),
+    )
+
+    has_termination_right: TerminationRight = Field(
+        TerminationRight.OTHER,
+        description="Who may terminate for convenience (either party / one party).",
+    )
+
     has_warranty_scope: WarrantyScope = Field(
         WarrantyScope.OTHER,
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+    )
+
+    ld_trigger: Optional[str] = Field(
+        None,
+        description="What triggers liquidated damages, e.g. 'late delivery', 'early termination'.",
     )
 
     prohibits_damage: List[DamageType] = Field(
@@ -459,6 +599,12 @@ class Clause(BaseModel):
             return [_normalize_enum(ExceptionModel, item) for item in v]
         return _normalize_enum(ExceptionModel, v)
 
+    @field_validator("has_assignment_consent", mode="before")
+    @classmethod
+    def _normalize_has_assignment_consent(cls, v: Any) -> Any:
+        """Map free-text values onto AssignmentConsent members (falls back to OTHER)."""
+        return _normalize_enum(AssignmentConsent, v)
+
     @field_validator("has_asymmetry", mode="before")
     @classmethod
     def _normalize_has_asymmetry(cls, v: Any) -> Any:
@@ -470,6 +616,24 @@ class Clause(BaseModel):
     def _normalize_has_claim_scope(cls, v: Any) -> Any:
         """Map free-text values onto ClaimScope members (falls back to OTHER)."""
         return _normalize_enum(ClaimScope, v)
+
+    @field_validator("has_coc_consent", mode="before")
+    @classmethod
+    def _normalize_has_coc_consent(cls, v: Any) -> Any:
+        """Map free-text values onto CocConsent members (falls back to OTHER)."""
+        return _normalize_enum(CocConsent, v)
+
+    @field_validator("has_escrow_release_trigger", mode="before")
+    @classmethod
+    def _normalize_has_escrow_release_trigger(cls, v: Any) -> Any:
+        """Map free-text values onto EscrowReleaseTrigger members (falls back to OTHER)."""
+        return _normalize_enum(EscrowReleaseTrigger, v)
+
+    @field_validator("has_exclusivity_type", mode="before")
+    @classmethod
+    def _normalize_has_exclusivity_type(cls, v: Any) -> Any:
+        """Map free-text values onto ExclusivityType members (falls back to OTHER)."""
+        return _normalize_enum(ExclusivityType, v)
 
     @field_validator("has_favorability", mode="before")
     @classmethod
@@ -483,6 +647,12 @@ class Clause(BaseModel):
         """Map free-text values onto IpOwnership members (falls back to OTHER)."""
         return _normalize_enum(IpOwnership, v)
 
+    @field_validator("has_mfn_scope", mode="before")
+    @classmethod
+    def _normalize_has_mfn_scope(cls, v: Any) -> Any:
+        """Map free-text values onto MfnScope members (falls back to OTHER)."""
+        return _normalize_enum(MfnScope, v)
+
     @field_validator("has_mutuality", mode="before")
     @classmethod
     def _normalize_has_mutuality(cls, v: Any) -> Any:
@@ -494,6 +664,24 @@ class Clause(BaseModel):
     def _normalize_has_renewal(cls, v: Any) -> Any:
         """Map free-text values onto RenewalMechanism members (falls back to OTHER)."""
         return _normalize_enum(RenewalMechanism, v)
+
+    @field_validator("has_restriction_scope", mode="before")
+    @classmethod
+    def _normalize_has_restriction_scope(cls, v: Any) -> Any:
+        """Map free-text values onto RestrictionScope members (falls back to OTHER)."""
+        return _normalize_enum(RestrictionScope, v)
+
+    @field_validator("has_right_of_first_type", mode="before")
+    @classmethod
+    def _normalize_has_right_of_first_type(cls, v: Any) -> Any:
+        """Map free-text values onto RightOfFirstType members (falls back to OTHER)."""
+        return _normalize_enum(RightOfFirstType, v)
+
+    @field_validator("has_termination_right", mode="before")
+    @classmethod
+    def _normalize_has_termination_right(cls, v: Any) -> Any:
+        """Map free-text values onto TerminationRight members (falls back to OTHER)."""
+        return _normalize_enum(TerminationRight, v)
 
     @field_validator("has_warranty_scope", mode="before")
     @classmethod
@@ -567,7 +755,7 @@ class Clause(BaseModel):
         return self
 
     def __str__(self) -> str:
-        parts = [self.document_reference, self.clause_type]
+        parts = [self.document_reference, self.audit_frequency]
         return " ".join(str(p) for p in parts if p) or "Unknown"
 
 

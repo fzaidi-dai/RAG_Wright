@@ -72,6 +72,27 @@ GROUNDING_CUES: dict[PropertyDimension, dict[str, tuple[str, ...]]] = {
     _D.CLAIM_SCOPE: {
         "third_party": ("third party", "third-party"),
     },
+    # tier 3 -- CUAD-family extensions (KG-4). Only the strongly lexically-anchored values; the semantic
+    # ones (consent regimes, mfn_scope, termination_right) are not checkable and pass through.
+    _D.EXCLUSIVITY_TYPE: {
+        "exclusive": ("exclusive",),
+        "sole": ("sole",),
+        "non_exclusive": ("non-exclusive", "nonexclusive", "non exclusive"),
+    },
+    _D.RIGHT_OF_FIRST_TYPE: {
+        "rofr": ("first refusal",),
+        "rofo": ("first offer",),
+        "rofn": ("first negotiation",),
+    },
+    _D.ESCROW_RELEASE_TRIGGER: {
+        "bankruptcy": ("bankrupt", "insolven"),
+        "breach": ("breach", "default"),
+        "discontinuance": ("discontinu", "cease", "no longer"),
+    },
+    _D.RESTRICTION_SCOPE: {
+        "geographic": ("geographic", "territor", "worldwide", "region"),
+        "activity": ("activit", "business", "compet"),
+    },
 }
 
 

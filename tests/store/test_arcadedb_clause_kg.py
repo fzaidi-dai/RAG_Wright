@@ -46,9 +46,13 @@ def test_every_dimension_maps_to_a_typed_edge() -> None:
 def test_sanctioned_edge_set() -> None:
     """The distinct edge types are exactly the ADR-0033 sanctioned property edges."""
     assert set(TYPED_PROPERTY_EDGE_TYPES) == {
+        # ACORD-derived (KG-3)
         "HAS_MUTUALITY", "HAS_FAVORABILITY", "HAS_ASYMMETRY", "HAS_WARRANTY_SCOPE", "HAS_CLAIM_SCOPE",
         "HAS_IP_OWNERSHIP", "HAS_RENEWAL", "EXCEPTS", "COVERS", "PROHIBITS", "REQUIRES", "CAPS",
         "BOUNDED_BY", "GOVERNED_BY",
+        # CUAD-family extensions (KG-4): deontic -> GRANTS/PROHIBITS; the rest -> HAS_*
+        "GRANTS", "HAS_COC_CONSENT", "HAS_ASSIGNMENT_CONSENT", "HAS_ESCROW_TRIGGER", "HAS_MFN_SCOPE",
+        "HAS_TERMINATION_RIGHT", "HAS_AUDIT_FREQUENCY", "HAS_COMMITMENT_QUANTUM", "HAS_LD_TRIGGER",
     }
 
 
@@ -83,6 +87,18 @@ def test_value_nodes_get_folio_grounding() -> None:
     rec, _cid = _record("x", "Cap On Liability", [(_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED)])
     sql = "\n".join(_clause_kg_statements(rec))
     assert "https://folio.openlegalstandard.org/RqGxSnAp9vX42GRKHqwvBe" in sql  # fraud FOLIO IRI
+
+
+def test_cuad_extension_dims_route_to_grants_and_has_edges() -> None:
+    """KG-4: exclusivity -> GRANTS (ODRL permission IRI); an open dim -> its HAS_* edge."""
+    rec, _cid = _record("excl", "Exclusivity", [
+        (_D.EXCLUSIVITY_TYPE, "exclusive", ConfidenceTag.EXTRACTED),
+        (_D.AUDIT_FREQUENCY, "annual", ConfidenceTag.EXTRACTED),
+    ])
+    sql = "\n".join(_clause_kg_statements(rec))
+    assert "CREATE EDGE GRANTS" in sql
+    assert "http://www.w3.org/ns/odrl/2/permission" in sql  # GRANTS grounds to ODRL permission
+    assert "CREATE EDGE HAS_AUDIT_FREQUENCY" in sql
 
 
 def test_empty_record_writes_only_the_clause_node() -> None:

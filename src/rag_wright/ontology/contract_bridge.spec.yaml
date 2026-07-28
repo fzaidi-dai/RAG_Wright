@@ -31,6 +31,13 @@ enums:
   - applicable_law
   synonyms: {}
   include_other: true
+- name: AssignmentConsent
+  members:
+  - consent_required
+  - notice_only
+  - free
+  synonyms: {}
+  include_other: true
 - name: Asymmetry
   members:
   - symmetric
@@ -42,6 +49,27 @@ enums:
   - first_party
   - third_party
   - broad_based
+  synonyms: {}
+  include_other: true
+- name: CocConsent
+  members:
+  - consent_required
+  - notice_only
+  - unrestricted
+  synonyms: {}
+  include_other: true
+- name: EscrowReleaseTrigger
+  members:
+  - bankruptcy
+  - breach
+  - discontinuance
+  synonyms: {}
+  include_other: true
+- name: ExclusivityType
+  members:
+  - exclusive
+  - sole
+  - non_exclusive
   synonyms: {}
   include_other: true
 - name: Favorability
@@ -57,6 +85,13 @@ enums:
   - retained
   synonyms: {}
   include_other: true
+- name: MfnScope
+  members:
+  - price
+  - terms
+  - price_and_terms
+  synonyms: {}
+  include_other: true
 - name: Mutuality
   members:
   - mutual
@@ -67,6 +102,26 @@ enums:
   members:
   - auto
   - requires_notice
+  synonyms: {}
+  include_other: true
+- name: RestrictionScope
+  members:
+  - geographic
+  - activity
+  - geographic_and_activity
+  synonyms: {}
+  include_other: true
+- name: RightOfFirstType
+  members:
+  - rofr
+  - rofo
+  - rofn
+  synonyms: {}
+  include_other: true
+- name: TerminationRight
+  members:
+  - either_party
+  - one_party
   synonyms: {}
   include_other: true
 - name: WarrantyScope
@@ -137,6 +192,19 @@ models:
     normalizer: none
     unit: null
     evidence: []
+  - name: audit_frequency
+    type: str
+    is_list: false
+    description: How often an audit-rights clause permits audits, e.g. 'annual', 'quarterly',
+      'once per year'.
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
   - name: bounded_by
     type: TemporalConstraint
     is_list: false
@@ -166,6 +234,19 @@ models:
     is_list: false
     description: The clause function/type label (e.g. 'Cap on Liability', 'Governing
       Law', 'Non-Solicit of Employees').
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
+    unit: null
+    evidence: []
+  - name: commitment_quantum
+    type: str
+    is_list: false
+    description: The minimum-commitment / volume amount verbatim, e.g. '$1,000,000',
+      '100 units/year'.
     examples: []
     role: property
     edge_label: null
@@ -222,6 +303,19 @@ models:
     normalizer: none
     unit: null
     evidence: []
+  - name: has_assignment_consent
+    type: AssignmentConsent
+    is_list: false
+    description: How an anti-assignment clause treats consent (required / notice-only
+      / free).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
   - name: has_asymmetry
     type: Asymmetry
     is_list: false
@@ -246,6 +340,45 @@ models:
     normalizer: enum
     unit: null
     evidence: []
+  - name: has_coc_consent
+    type: CocConsent
+    is_list: false
+    description: How a change-of-control clause treats consent (required / notice-only
+      / unrestricted).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_escrow_release_trigger
+    type: EscrowReleaseTrigger
+    is_list: false
+    description: What triggers a source-code escrow release (bankruptcy / breach /
+      discontinuance).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_exclusivity_type
+    type: ExclusivityType
+    is_list: false
+    description: The exclusivity a licensing/distribution clause grants (exclusive
+      / sole / non-exclusive).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
   - name: has_favorability
     type: Favorability
     is_list: false
@@ -262,6 +395,18 @@ models:
     type: IpOwnership
     is_list: false
     description: ''
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_mfn_scope
+    type: MfnScope
+    is_list: false
+    description: What a most-favored-nation clause covers (price / terms / both).
     examples: []
     role: property
     edge_label: null
@@ -295,6 +440,43 @@ models:
     normalizer: enum
     unit: null
     evidence: []
+  - name: has_restriction_scope
+    type: RestrictionScope
+    is_list: false
+    description: 'What a non-compete restricts: geographic area, activity, or both.'
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_right_of_first_type
+    type: RightOfFirstType
+    is_list: false
+    description: The first-refusal/offer/negotiation right the clause grants (ROFR
+      / ROFO / ROFN).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
+  - name: has_termination_right
+    type: TerminationRight
+    is_list: false
+    description: Who may terminate for convenience (either party / one party).
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: enum
+    unit: null
+    evidence: []
   - name: has_warranty_scope
     type: WarrantyScope
     is_list: false
@@ -305,6 +487,18 @@ models:
     reference: false
     closed_catalog: false
     normalizer: enum
+    unit: null
+    evidence: []
+  - name: ld_trigger
+    type: str
+    is_list: false
+    description: What triggers liquidated damages, e.g. 'late delivery', 'early termination'.
+    examples: []
+    role: property
+    edge_label: null
+    reference: false
+    closed_catalog: false
+    normalizer: none
     unit: null
     evidence: []
   - name: prohibits_damage

@@ -50,6 +50,21 @@ _SCALAR_ENUM_DIMS: dict[str, PropertyDimension] = {
     "covers_party_scope": _D.COVERED_PARTIES,
     "prohibits_solicit": _D.NONSOLICIT_TARGET,
     "requires_duty": _D.PROCEDURAL,
+    # tier 3 -- CUAD-family extensions (KG-4)
+    "has_exclusivity_type": _D.EXCLUSIVITY_TYPE,
+    "has_right_of_first_type": _D.RIGHT_OF_FIRST_TYPE,
+    "has_restriction_scope": _D.RESTRICTION_SCOPE,
+    "has_coc_consent": _D.COC_CONSENT,
+    "has_assignment_consent": _D.ASSIGNMENT_CONSENT,
+    "has_escrow_release_trigger": _D.ESCROW_RELEASE_TRIGGER,
+    "has_mfn_scope": _D.MFN_SCOPE,
+    "has_termination_right": _D.TERMINATION_RIGHT,
+}
+# open-valued CUAD dims: direct string fields on Clause -> dimension
+_OPEN_STR_DIMS: dict[str, PropertyDimension] = {
+    "audit_frequency": _D.AUDIT_FREQUENCY,
+    "commitment_quantum": _D.COMMITMENT_QUANTUM,
+    "ld_trigger": _D.LD_TRIGGER,
 }
 # list enum field on Clause -> the (multi-valued) dimension it asserts
 _LIST_ENUM_DIMS: dict[str, PropertyDimension] = {
@@ -101,6 +116,8 @@ def clause_to_record(
     for field, dim in _LIST_ENUM_DIMS.items():
         for member in getattr(clause, field, None) or []:
             add(dim, _canonical_value(member))
+    for field, dim in _OPEN_STR_DIMS.items():  # open-valued CUAD dims (direct string fields)
+        add(dim, _clean(getattr(clause, field, None)))
 
     caps = getattr(clause, "caps", None)
     if caps is not None:

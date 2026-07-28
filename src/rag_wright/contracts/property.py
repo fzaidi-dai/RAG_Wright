@@ -58,6 +58,18 @@ class PropertyDimension(str, Enum):
     TEMPORAL_BOUND = "temporal_bound"  # open-valued (e.g. "12_months", "unbounded")
     RENEWAL_MECHANISM = "renewal_mechanism"
     NOTICE_PERIOD = "notice_period"  # open-valued
+    # tier 3 -- CUAD-family extensions (KG-4: full CUAD clause coverage beyond the ACORD-derived set)
+    EXCLUSIVITY_TYPE = "exclusivity_type"
+    RIGHT_OF_FIRST_TYPE = "right_of_first_type"
+    RESTRICTION_SCOPE = "restriction_scope"  # non-compete scope
+    COC_CONSENT = "coc_consent"  # change-of-control consent regime
+    ASSIGNMENT_CONSENT = "assignment_consent"  # anti-assignment consent regime
+    ESCROW_RELEASE_TRIGGER = "escrow_release_trigger"  # source-code escrow
+    MFN_SCOPE = "mfn_scope"
+    TERMINATION_RIGHT = "termination_right"  # termination-for-convenience
+    AUDIT_FREQUENCY = "audit_frequency"  # open-valued (e.g. "annual", "quarterly")
+    COMMITMENT_QUANTUM = "commitment_quantum"  # open-valued (minimum commitment / volume restriction)
+    LD_TRIGGER = "ld_trigger"  # open-valued (liquidated-damages trigger)
 
 
 # Closed controlled vocabularies (approved OQ3). A dimension NOT in this map is open-valued
@@ -97,6 +109,16 @@ CLOSED_VOCAB: dict[PropertyDimension, frozenset[str]] = {
     PropertyDimension.IP_OWNERSHIP: frozenset({"assigned", "joint", "retained"}),
     PropertyDimension.NONSOLICIT_TARGET: frozenset({"employees", "customers"}),
     PropertyDimension.RENEWAL_MECHANISM: frozenset({"auto", "requires_notice"}),
+    # tier 3 -- CUAD-family extensions (KG-4). audit_frequency / commitment_quantum / ld_trigger are
+    # open-valued (NOT listed here). `both`-style values are disambiguated to keep OWL individuals unique.
+    PropertyDimension.EXCLUSIVITY_TYPE: frozenset({"exclusive", "sole", "non_exclusive"}),
+    PropertyDimension.RIGHT_OF_FIRST_TYPE: frozenset({"rofr", "rofo", "rofn"}),
+    PropertyDimension.RESTRICTION_SCOPE: frozenset({"geographic", "activity", "geographic_and_activity"}),
+    PropertyDimension.COC_CONSENT: frozenset({"consent_required", "notice_only", "unrestricted"}),
+    PropertyDimension.ASSIGNMENT_CONSENT: frozenset({"consent_required", "notice_only", "free"}),
+    PropertyDimension.ESCROW_RELEASE_TRIGGER: frozenset({"bankruptcy", "breach", "discontinuance"}),
+    PropertyDimension.MFN_SCOPE: frozenset({"price", "terms", "price_and_terms"}),
+    PropertyDimension.TERMINATION_RIGHT: frozenset({"either_party", "one_party"}),
 }
 
 _FOLIO_BASE = "https://folio.openlegalstandard.org/"

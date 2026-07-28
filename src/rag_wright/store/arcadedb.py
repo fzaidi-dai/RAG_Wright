@@ -69,6 +69,18 @@ _TYPED_DIMENSION_EDGE: dict[PropertyDimension, str] = {
     PropertyDimension.LAW_MULTIPLICITY: "GOVERNED_BY",
     PropertyDimension.TEMPORAL_BOUND: "BOUNDED_BY",
     PropertyDimension.NOTICE_PERIOD: "BOUNDED_BY",
+    # tier 3 -- CUAD-family extensions (KG-4). Deontic -> GRANTS/PROHIBITS; the rest -> HAS_*.
+    PropertyDimension.EXCLUSIVITY_TYPE: "GRANTS",
+    PropertyDimension.RIGHT_OF_FIRST_TYPE: "GRANTS",
+    PropertyDimension.RESTRICTION_SCOPE: "PROHIBITS",
+    PropertyDimension.COC_CONSENT: "HAS_COC_CONSENT",
+    PropertyDimension.ASSIGNMENT_CONSENT: "HAS_ASSIGNMENT_CONSENT",
+    PropertyDimension.ESCROW_RELEASE_TRIGGER: "HAS_ESCROW_TRIGGER",
+    PropertyDimension.MFN_SCOPE: "HAS_MFN_SCOPE",
+    PropertyDimension.TERMINATION_RIGHT: "HAS_TERMINATION_RIGHT",
+    PropertyDimension.AUDIT_FREQUENCY: "HAS_AUDIT_FREQUENCY",
+    PropertyDimension.COMMITMENT_QUANTUM: "HAS_COMMITMENT_QUANTUM",
+    PropertyDimension.LD_TRIGGER: "HAS_LD_TRIGGER",
 }
 # distinct edge types, insertion-ordered (for DDL + counts)
 TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(dict.fromkeys(_TYPED_DIMENSION_EDGE.values()))

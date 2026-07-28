@@ -39,6 +39,15 @@ _ENUM_TO_DIMENSION = {
     t.IpOwnership: PropertyDimension.IP_OWNERSHIP,
     t.NonsolicitTarget: PropertyDimension.NONSOLICIT_TARGET,
     t.RenewalMechanism: PropertyDimension.RENEWAL_MECHANISM,
+    # tier 3 -- CUAD-family extensions (KG-4)
+    t.ExclusivityType: PropertyDimension.EXCLUSIVITY_TYPE,
+    t.RightOfFirstType: PropertyDimension.RIGHT_OF_FIRST_TYPE,
+    t.RestrictionScope: PropertyDimension.RESTRICTION_SCOPE,
+    t.CocConsent: PropertyDimension.COC_CONSENT,
+    t.AssignmentConsent: PropertyDimension.ASSIGNMENT_CONSENT,
+    t.EscrowReleaseTrigger: PropertyDimension.ESCROW_RELEASE_TRIGGER,
+    t.MfnScope: PropertyDimension.MFN_SCOPE,
+    t.TerminationRight: PropertyDimension.TERMINATION_RIGHT,
 }
 
 
