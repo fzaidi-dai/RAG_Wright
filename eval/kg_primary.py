@@ -66,9 +66,11 @@ MATCH = os.environ.get("MATCH", "count")  # count | idf
 # the typed-KG ranking is A/B'd against, per query-hardness bucket (#constraints). `kg` = the adopted match.
 RANK = os.environ.get("RANK", "kg")  # kg | dense
 VARIANT = os.environ.get("VARIANT", "v2")  # v2 (arbitrary tiebreak) | v4 (BGE embedding-cosine tiebreak)
-QMODEL = os.environ.get("QUERY_MODEL", "ibm-granite/granite-4.1-8b")
-QCACHE = Path("data/models/kg_query_constraints.jsonl")
 _SLUG = re.compile(r"[^A-Za-z0-9._-]+")
+QMODEL = os.environ.get("QUERY_MODEL", "ibm-granite/granite-4.1-8b")
+# Model-keyed so a query-side model comparison (granite vs deepseek-pro vs kimi) re-extracts per model
+# rather than silently reusing another model's cached constraints.
+QCACHE = Path(f"data/models/kg_query_constraints_{_SLUG.sub('-', QMODEL)}.jsonl")
 
 # KG-5e lever b: taxonomy-constrained LLM query->function classifier (a SECOND, separate granite call)
 LLM_FUNCTION_MODEL = os.environ.get("LLM_FUNCTION_MODEL", "ibm-granite/granite-4.1-8b")
@@ -111,7 +113,10 @@ def query_constraints(queries) -> dict[str, set]:
         model = openrouter_model("granite-query", QMODEL)
 
         def _extract(q):
-            cl = extract_clause(q.text, model)
+            try:  # a single query's extraction failure (e.g. docling-graph "no models") must not crash the eval
+                cl = extract_clause(q.text, model)
+            except Exception:  # noqa: BLE001 - treat an extraction failure as no constraints for this query
+                return []
             if cl is None:
                 return []
             rec = clause_to_record(cl, chunk_id=ChunkId.of("q", 0, q.text), function="Cap On Liability")

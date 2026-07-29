@@ -121,6 +121,13 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="ibm-granite/granite-4.1-8b",
         structured_method="json_schema",
     ),
+    # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
+    # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not
+    # adopted). Empirical, KG-6 / ADR-0034.
+    "moonshotai/kimi-k3": ModelProfile(
+        model_id="moonshotai/kimi-k3",
+        structured_method="json_schema",
+    ),
 }
 
 
