@@ -62,6 +62,9 @@ CLEAN = os.environ.get("CLEAN", "none")  # none | oracle
 # whose value matches MANY corpus clauses (non-discriminative, e.g. a near-universal enum) counts less than a
 # rare one; `count` is the plain integer #-satisfied (default).
 MATCH = os.environ.get("MATCH", "count")  # count | idf
+# KG-6: `RANK=dense` ignores the KG constraint match (rank by BGE embedding only) -- the dense-only baseline
+# the typed-KG ranking is A/B'd against, per query-hardness bucket (#constraints). `kg` = the adopted match.
+RANK = os.environ.get("RANK", "kg")  # kg | dense
 VARIANT = os.environ.get("VARIANT", "v2")  # v2 (arbitrary tiebreak) | v4 (BGE embedding-cosine tiebreak)
 QMODEL = os.environ.get("QUERY_MODEL", "ibm-granite/granite-4.1-8b")
 QCACHE = Path("data/models/kg_query_constraints.jsonl")
@@ -295,6 +298,8 @@ def main() -> None:
         print(f"[kg-5d idf] weighted {len(distinct)} distinct constraints over N={N} clauses", flush=True)
 
     def _match(qid, props) -> float:
+        if RANK == "dense":  # KG-6 dense-only baseline: no constraint match, rank by embedding tiebreak alone
+            return 0.0
         qc = eff_constraints[qid]
         if MATCH == "idf":
             return sum(idf[c] for c in qc if constraint_match_count({c}, props) >= 1)
@@ -356,21 +361,31 @@ def main() -> None:
         ranked_of = {q.query_id: r for q, r in zip(queries, reordered)}
 
     r10, r20, ndcg = [], [], []
+    # KG-6: bucket by query hardness (# extracted constraints) to test whether the typed-KG advantage scales
+    buckets: dict[str, list] = {"0 (KG-inert)": [], "1 (single)": [], ">=2 (multi)": []}
     for q in queries:
         ranked = ranked_of[q.query_id]
         cond = [c for c in ranked if c in q.graded]
-        r10.append(recall_at_k(cond, q.relevant, 10))
-        r20.append(recall_at_k(cond, q.relevant, 20))
-        ndcg.append(ndcg_at_k(cond, q.graded, 10))
+        m = (recall_at_k(cond, q.relevant, 10), recall_at_k(cond, q.relevant, 20),
+             ndcg_at_k(cond, q.graded, 10))
+        r10.append(m[0]); r20.append(m[1]); ndcg.append(m[2])
+        n = len(constraints[q.query_id])
+        buckets["0 (KG-inert)" if n == 0 else "1 (single)" if n == 1 else ">=2 (multi)"].append(m)
 
     tb = "embedding-cosine" if VARIANT in ("v4", "v3") else "arbitrary"
     calls = "2 (query extract + 1 listwise, no per-clause reranker)" if VARIANT == "v3" else \
             "1 (query extract; no reranker)"
     print(f"\n=== KG-PRIMARY {VARIANT.upper()} (graded rank, {tb} tiebreak{'+listwise' if VARIANT=='v3' else ''})  "
-          f"queries={len(queries)}  MODE={MODE}  LLM calls/query = {calls} ===", flush=True)
+          f"queries={len(queries)}  MODE={MODE}  RANK={RANK}  LLM calls/query = {calls} ===", flush=True)
     print(f"  recall@10 = {statistics.mean(r10):.3f}", flush=True)
     print(f"  recall@20 = {statistics.mean(r20):.3f}", flush=True)
     print(f"  nDCG@10   = {statistics.mean(ndcg):.3f}", flush=True)
+    print(f"  -- KG-6 by query hardness (RANK={RANK}) --", flush=True)
+    for name, ms in buckets.items():
+        if ms:
+            print(f"  [{name:14s} n={len(ms):2d}]  r@10={statistics.mean(m[0] for m in ms):.3f}  "
+                  f"r@20={statistics.mean(m[1] for m in ms):.3f}  nDCG@10={statistics.mean(m[2] for m in ms):.3f}",
+                  flush=True)
     store.close()
 
 
