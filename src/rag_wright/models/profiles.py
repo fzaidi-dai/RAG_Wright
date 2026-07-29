@@ -113,6 +113,14 @@ PROFILES: dict[str, ModelProfile] = {
     # Gemma 4 26b-a4b takes the forced tool call cleanly (default function_calling, no extra_body);
     # 0 structured-output errors across the 20-clause bench (ADR-0023).
     DEFAULT_OKF_ENRICHMENT: ModelProfile(model_id=DEFAULT_OKF_ENRICHMENT),
+    # IBM Granite 4.1-8b silently returns an EMPTY/degenerate structured result under `function_calling`
+    # (the KG-5e query->function classifier got `[]` for even "England Governing Law"); `json_schema` fixes
+    # it cleanly (correct labels on every probe). Method-only override -- free-text and the docling-graph
+    # (json_object) extraction path are untouched. Empirical, dated: KG-5e / ADR-0034.
+    "ibm-granite/granite-4.1-8b": ModelProfile(
+        model_id="ibm-granite/granite-4.1-8b",
+        structured_method="json_schema",
+    ),
 }
 
 

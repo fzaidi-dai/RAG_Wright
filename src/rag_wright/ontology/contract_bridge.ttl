@@ -234,6 +234,16 @@ cbr:ldTrigger a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cbr:C
     rdfs:comment "What triggers liquidated damages, e.g. 'late delivery', 'early termination'." .
 
 # =============================================================================
+# Value subsumption (KG-5a): a more-specific closed value rolls up to the broader query value it satisfies.
+# Recorded here in the KG schema; the match uses it via contracts/value_match.py::VALUE_ROLLUP. The three
+# clear cases only. FUTURE: cbr:trademark / cbr:copyright skos:broader cbr:ip_infringement.
+# =============================================================================
+cbr:licensor_affiliates skos:broader cbr:affiliates .
+cbr:licensee_affiliates skos:broader cbr:affiliates .
+cbr:geographic_and_activity skos:broader cbr:geographic, cbr:activity .
+cbr:price_and_terms skos:broader cbr:price, cbr:terms .
+
+# =============================================================================
 # Structural edges (store-level, KG-3; domain Contract/Party so excluded from the Clause template)
 # =============================================================================
 cbr:hasClause a owl:ObjectProperty ; rdfs:domain cbr:Contract ; rdfs:range cbr:Clause .

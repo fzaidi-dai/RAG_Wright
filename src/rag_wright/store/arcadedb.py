@@ -270,6 +270,7 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.dimension STRING")
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value STRING")
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.folio_iri STRING")
+            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.canonical_value STRING")  # KG-5a
         if PROPERTY_EDGE_TYPE not in types:  # legacy flat edge; kept for back-compat, superseded by typed
             self._command(f"CREATE EDGE TYPE {PROPERTY_EDGE_TYPE}")
         for typed_edge in TYPED_PROPERTY_EDGE_TYPES:  # KG-3: the typed property-edge layer (ADR-0033)
@@ -693,7 +694,10 @@ class ArcadeDBStore:
         clauses = self._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
         values = self._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
         typed = 0
+        present = self.type_names()  # a DB populated before a schema extension lacks the newer edge types
         for edge_type in TYPED_PROPERTY_EDGE_TYPES:
+            if edge_type not in present:
+                continue
             rows = self._query(f"SELECT count(*) AS n FROM {edge_type}")
             typed += int(rows[0]["n"]) if rows else 0
         return {
@@ -717,10 +721,35 @@ class ArcadeDBStore:
         """Delete the typed clause KG (all typed edges + the legacy flat edge + Clause + PropertyValue),
         leaving the span index intact -- the KG-3 counterpart of `clear_property_graph` for a clean
         re-extraction into the typed schema. Edges first (UNSAFE bypasses the edge-safety check)."""
+        present = self.type_names()  # skip edge types a pre-extension DB never created
         for edge_type in (*TYPED_PROPERTY_EDGE_TYPES, PROPERTY_EDGE_TYPE):
-            self._command(f"DELETE FROM {edge_type} UNSAFE")
+            if edge_type in present:
+                self._command(f"DELETE FROM {edge_type} UNSAFE")
         self._command(f"DELETE FROM {CLAUSE_TYPE}")
         self._command(f"DELETE FROM {PROPVALUE_TYPE}")
+
+    def patch_canonical_jurisdictions(self) -> dict[str, int]:
+        """KG-5a: additively canonicalize the `jurisdiction` value nodes -- write a `canonical_value` on each
+        (surface `value` untouched, kept for citation), deterministically (no LLM, no re-extraction). Fixes
+        the retrieval-match loss from surface variants (England / England and Wales / English law). Idempotent.
+        Returns {seen, canonicalized}."""
+        from rag_wright.contracts.jurisdiction import canonicalize_jurisdiction
+
+        if "canonical_value" not in self.property_names(PROPVALUE_TYPE):
+            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.canonical_value STRING")
+        rows = self._query(
+            f"SELECT value_key, value FROM {PROPVALUE_TYPE} WHERE dimension = 'jurisdiction'"
+        )
+        n = 0
+        for r in rows:
+            canon = canonicalize_jurisdiction(r["value"])
+            if canon:
+                self._command(
+                    f"UPDATE {PROPVALUE_TYPE} SET canonical_value = {_sql_str(canon)} "
+                    f"WHERE value_key = {_sql_str(r['value_key'])}"
+                )
+                n += 1
+        return {"seen": len(rows), "canonicalized": n}
 
     # --- KG-4 (Leg A): intra-contract scoped queries over the typed KG ------------------------------
     # A clause_id is `<contract_id>:<index>:<hash>` (FR-S.2), and contract_id is delimiter-safe, so a
