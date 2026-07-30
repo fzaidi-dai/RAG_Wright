@@ -630,6 +630,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("qa", "relational", "graph", "subgraph", "langgraph", "composite"),
     ),
+    CapabilityManifest(
+        slug="intra_document_qa",
+        kind="subgraph",
+        display_name="Intra-document QA (cited answer scoped to one contract)",
+        description=(
+            "Answer a question scoped to ONE contract with a grounded, cited answer, as a composite LangGraph "
+            "subgraph: run the intra-contract scoped KG query (KG-4; classify the question to its clause "
+            "function(s) and serve those clauses with their typed properties, each cited), rehydrate each "
+            "clause's real operative-span text and append its typed facts as cited evidence (worst-case "
+            "confidence surfaced, FR-S.4), then generate a grounded, abstaining, cited answer (generate_answer, "
+            "FR-Q.6). Query-side hardening: a transient serve failure degrades to empty evidence (the generator "
+            "abstains, the query survives); an orphaned span_id dead-letters rather than fabricating."
+        ),
+        representative_queries=(
+            "answer a question about a single contract with cited clauses",
+            "what does this contract say about the liability cap, with citations",
+            "disambiguate and answer over one contract's typed clause KG",
+        ),
+        tags=("qa", "intra-document", "contract", "subgraph", "langgraph", "composite"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
