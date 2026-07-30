@@ -82,6 +82,17 @@ def test_reclassified_models_and_subgraph_stay_callable_with_bounds():
         assert author(slug).response_bounds is not None  # model / subgraph are callable kinds
 
 
+def test_semantic_chunking_is_a_deterministic_subgraph():
+    # CAP-REG-1b Option A: the single-call chunker is a deterministic subgraph, distinct from the
+    # dynamic RLM chunker (rlm_chunking stays an agent_skill).
+    entry = author("semantic_chunking")
+    assert entry.kind == "subgraph"
+    assert entry.skill_runtime is None  # deterministic; no RLM dynamic dispatch
+    assert entry.response_bounds is not None  # subgraph is callable
+    assert entry.capability_interface is not None
+    assert entry.capability_interface.outputs == {"chunks": "chunk"}  # same ingestion `chunk` as rlm_chunking
+
+
 def test_skill_runtime_serializes_camelcase_on_the_wire(tmp_path):
     data = json.loads(publish("rlm_method", root=tmp_path).read_text())
     assert data["skillRuntime"] == {

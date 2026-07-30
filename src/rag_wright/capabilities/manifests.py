@@ -147,6 +147,30 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
     ),
     CapabilityManifest(
+        slug="semantic_chunking",
+        kind="subgraph",  # single-call boundary discovery + deterministic repair + hash-gate (CU-B4); CAP-REG-1b
+        display_name="Semantic chunking (single-call)",
+        description=(
+            "Split a parsed document into semantically coherent, token-capped chunks via a SINGLE-CALL "
+            "boundary discoverer (non-agentic) plus deterministic boundary repair, a minimum-size floor, "
+            "and a content-hash gate — the deterministic alternative to the RLM chunker (`rlm_chunking`). "
+            "Emits the ingestion `chunk` (id + text + summary + index) with stable chunk_ids (FR-I.1, ADR-0031)."
+        ),
+        representative_queries=(
+            "chunk a parsed document with a single boundary-discovery call plus deterministic repair",
+            "split a document into capped, semantically coherent chunks without the RLM machinery",
+            "produce stable chunk ids and a per-chunk summary deterministically",
+            "re-chunk a document only when its content changes",
+        ),
+        tags=("chunking", "ingestion", "deterministic"),
+        capability_interface=CapabilityInterface(
+            # Same ingestion `chunk` output as rlm_chunking; embedding and graph_extraction consume it.
+            inputs={"parsed": "parsed_doc"},
+            outputs={"chunks": "chunk"},
+            success_criterion="split a parsed document into semantically coherent, capped, summarized chunks with stable ids",
+        ),
+    ),
+    CapabilityManifest(
         slug="embedding",
         kind="model",  # BGE-M3 inference (CAP-REG-1)
         display_name="Embedding (BGE-M3)",

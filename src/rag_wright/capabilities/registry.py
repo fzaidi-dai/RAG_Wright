@@ -75,7 +75,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "vision_to_text",  # FR-C.9 (scanned-image transcription; split from generation, ADR-0014)
         "fusion",  # FR-Q.4
         "chunk_read",  # FR-Q (text rehydration between fusion and synthesis; T38)
-        "rlm_chunking",  # FR-I.1 (applies the RLM skill)
+        "rlm_chunking",  # FR-I.1 (applies the RLM skill; dynamic RLM discoverer -> agent_skill)
+        "semantic_chunking",  # FR-I.1 (single-call deterministic discoverer -> subgraph; CAP-REG-1b)
         "rlm_synthesis",  # FR-Q.5 (applies the RLM skill)
         "rlm_method",  # FR-C.10 (the shared RLM method skill, if registered)
         "okf_compile",  # FR-K.1-K.4 (foundation derivation: slug, but no ARD manifest; T46)

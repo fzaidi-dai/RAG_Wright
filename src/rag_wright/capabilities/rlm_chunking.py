@@ -500,3 +500,15 @@ def register_rlm_chunking(registry: CapabilityRegistry) -> None:
         kind="agent_skill",
         display_name="RLM chunking",
     )
+
+
+def register_semantic_chunking(registry: CapabilityRegistry) -> None:
+    """Register the single-call semantic chunking capability (FR-I.1) as a `subgraph` — the deterministic
+    (non-RLM) chunker: single-call boundary discovery + deterministic repair + content-hash gate (CU-B4).
+    Distinct from `rlm_chunking` (the dynamic RLM discoverer, an agent_skill); CAP-REG-1b."""
+    registry.register(
+        "semantic_chunking",
+        contract=ChunkManifest,
+        kind="subgraph",
+        display_name="Semantic chunking (single-call)",
+    )
