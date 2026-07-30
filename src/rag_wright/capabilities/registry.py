@@ -92,6 +92,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         # --- LG-1/LG-2: hardened LangGraph subgraphs ---
         "typed_clause_extraction",  # subgraph: extract -> adapt -> reground -> escalate -> [HITL] -> dead-letter
         "query_constraint_extraction",  # subgraph: query-side typed constraint extraction (graceful-empty)
+        # --- LG-3: composite pipeline subgraphs (compose the component subgraphs + registered capabilities) ---
+        "relational_qa",  # subgraph: graph_query -> chunk_read -> generate_answer (entity question -> cited answer)
     }
 )
 

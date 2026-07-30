@@ -610,6 +610,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("extraction", "query-side", "subgraph", "langgraph"),
     ),
+    # --- LG-3: composite pipeline subgraphs ---
+    CapabilityManifest(
+        slug="relational_qa",
+        kind="subgraph",
+        display_name="Relational QA (cited answer from graph traversal)",
+        description=(
+            "Answer a relational/multi-hop entity question with a grounded, cited answer, as a composite "
+            "LangGraph subgraph: traverse the knowledge graph (graph_query, FR-C.5) for cited evidence, "
+            "rehydrate the evidence chunk_ids to full text (chunk_read, T38), then generate a grounded, "
+            "abstaining, cited answer (generate_answer, FR-Q.6). Query-side hardening: a transient traversal "
+            "failure degrades to empty evidence (the generator abstains, the query survives); an orphaned "
+            "chunk_id dead-letters rather than fabricating. Confidence tags surface graph->evidence->answer."
+        ),
+        representative_queries=(
+            "answer a relational question about an entity with a cited answer",
+            "who does this party contract with, and cite the clauses",
+            "traverse the graph from an entity and generate a grounded answer",
+        ),
+        tags=("qa", "relational", "graph", "subgraph", "langgraph", "composite"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
