@@ -593,6 +593,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("extraction", "ingestion", "subgraph", "langgraph"),
     ),
+    CapabilityManifest(
+        slug="query_constraint_extraction",
+        kind="subgraph",
+        display_name="Query constraint extraction",
+        description=(
+            "Extract a query's typed (dimension, value) constraints with the SAME granite + clause_template "
+            "extractor used on clauses (KG-5b), hardened as a LangGraph subgraph with graceful degradation: a "
+            "failed extraction yields an empty constraint set (embedding-only fallback), so the query is never "
+            "dropped. No reground on queries (KG-5d: it false-flags real constraints)."
+        ),
+        representative_queries=(
+            "extract the typed constraints a retrieval query is asking for",
+            "turn an attorney's query into (dimension, value) constraints for KG matching",
+            "parse a query into typed property constraints, same schema as the clauses",
+        ),
+        tags=("extraction", "query-side", "subgraph", "langgraph"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
