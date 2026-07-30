@@ -158,3 +158,13 @@ def to_span_record(
         doc_start=chunk_doc_start + op.start,
         doc_end=chunk_doc_start + op.end,
     )
+
+
+def register_operative_span_segmentation(registry) -> None:
+    """CAP-REG-2: register `operative_span_segmentation` (function; chunk -> operative spans)."""
+    registry.register(
+        "operative_span_segmentation",
+        contract=SpanRecord,
+        kind="function",
+        display_name="Operative span segmentation",
+    )

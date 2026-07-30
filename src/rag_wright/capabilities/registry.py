@@ -81,6 +81,14 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "rlm_method",  # FR-C.10 (the shared RLM method skill, if registered)
         "okf_compile",  # FR-K.1-K.4 (foundation derivation: slug, but no ARD manifest; T46)
         "okf_navigate",  # FR-K.6 (query-discovered traversal: slug + ARD manifest; T50)
+        # --- CAP-REG-2: the built contract-KG capabilities ---
+        "typed_value_normalization",  # function: canonicalization + subsumption (KG-5a)
+        "extraction_grounding_judge",  # function: ADR-0028 lexical grounding gate
+        "operative_span_segmentation",  # function: chunk -> operative spans
+        "intra_document_scoped_query",  # function: intra-contract scoped KG serving (Leg A)
+        "clause_disambiguation",  # function: disambiguation by property (Leg A)
+        "clause_function_classification",  # model: LegalBERT function classifier (T56)
+        "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
     }
 )
 

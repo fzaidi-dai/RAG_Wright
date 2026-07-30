@@ -20,7 +20,17 @@ from __future__ import annotations
 
 from enum import Enum
 
+from pydantic import BaseModel
+
 from rag_wright.contracts.ontology import ClauseCategory
+
+
+class FunctionClassification(BaseModel):
+    """CAP-REG-2: the ranked FUNCTION_LABELS a span or query is classified into (most relevant first).
+    The shared output contract of the LegalBERT `clause_function_classification` (model) and the
+    taxonomy-constrained `query_function_classification` (agent_skill)."""
+
+    labels: list[str]
 
 
 class ExtendedFunction(str, Enum):

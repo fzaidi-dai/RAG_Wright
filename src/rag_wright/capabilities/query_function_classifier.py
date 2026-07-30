@@ -77,3 +77,15 @@ def route_query(
         constraints = [(a.dimension.value, a.value) for a in rec.assertions]
     functions = classify_query_functions(query, function_model_id, k=k)
     return constraints, functions
+
+
+def register_query_function_classification(registry) -> None:
+    """CAP-REG-2: register `query_function_classification` (agent_skill; taxonomy-constrained LLM classifier)."""
+    from rag_wright.contracts.function import FunctionClassification
+
+    registry.register(
+        "query_function_classification",
+        contract=FunctionClassification,
+        kind="agent_skill",
+        display_name="Query function classification",
+    )

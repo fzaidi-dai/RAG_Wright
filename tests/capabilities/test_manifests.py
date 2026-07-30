@@ -82,6 +82,52 @@ def test_reclassified_models_and_subgraph_stay_callable_with_bounds():
         assert author(slug).response_bounds is not None  # model / subgraph are callable kinds
 
 
+# --- CAP-REG-2: register the built contract-KG capabilities -----------------------------------
+
+_CAP_REG_2_KINDS = {
+    "extraction_grounding_judge": "function",
+    "operative_span_segmentation": "function",
+    "intra_document_scoped_query": "function",
+    "clause_disambiguation": "function",
+    "typed_value_normalization": "function",
+    "clause_function_classification": "model",
+    "query_function_classification": "agent_skill",
+}
+
+
+@pytest.mark.parametrize("slug,kind", sorted(_CAP_REG_2_KINDS.items()))
+def test_cap_reg_2_capabilities_author_with_the_right_kind(slug, kind):
+    entry = author(slug)
+    assert entry.kind == kind
+    # callable kinds (function/model) carry bounds; the agent_skill does not
+    assert (entry.response_bounds is not None) == (kind != "agent_skill")
+
+
+def test_cap_reg_2_register_functions_register_the_right_kind():
+    from rag_wright.capabilities.contract_kg_serve import (
+        register_clause_disambiguation,
+        register_intra_document_scoped_query,
+    )
+    from rag_wright.capabilities.query_function_classifier import register_query_function_classification
+    from rag_wright.capabilities.registry import CapabilityRegistry
+    from rag_wright.contracts.value_match import register_typed_value_normalization
+    from rag_wright.spans.legalbert_classifier import register_clause_function_classification
+    from rag_wright.spans.property_grounding import register_extraction_grounding_judge
+    from rag_wright.spans.segment import register_operative_span_segmentation
+
+    reg = CapabilityRegistry()
+    register_typed_value_normalization(reg)
+    register_extraction_grounding_judge(reg)
+    register_operative_span_segmentation(reg)
+    register_intra_document_scoped_query(reg)
+    register_clause_disambiguation(reg)
+    register_clause_function_classification(reg)
+    register_query_function_classification(reg)
+    assert len(reg) == 7
+    for slug, kind in _CAP_REG_2_KINDS.items():
+        assert reg.get(slug).kind == kind
+
+
 def test_semantic_chunking_is_a_deterministic_subgraph():
     # CAP-REG-1b Option A: the single-call chunker is a deterministic subgraph, distinct from the
     # dynamic RLM chunker (rlm_chunking stays an agent_skill).

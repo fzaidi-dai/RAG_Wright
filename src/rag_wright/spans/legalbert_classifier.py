@@ -69,3 +69,15 @@ class LegalBertFunctionClassifier:
             topk = logits.topk(min(k, logits.shape[-1]), dim=-1).indices.tolist()
             out.extend([str(id2label[int(i)]) for i in row] for row in topk)
         return out
+
+
+def register_clause_function_classification(registry) -> None:
+    """CAP-REG-2: register `clause_function_classification` (model; fine-tuned LegalBERT classifier)."""
+    from rag_wright.contracts.function import FunctionClassification
+
+    registry.register(
+        "clause_function_classification",
+        contract=FunctionClassification,
+        kind="model",
+        display_name="Clause function classification (LegalBERT)",
+    )

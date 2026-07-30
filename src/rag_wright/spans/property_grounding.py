@@ -138,3 +138,13 @@ def reground(record: ClausePropertyRecord, text: str) -> ClausePropertyRecord:
         for a in record.assertions
     ]
     return record.model_copy(update={"assertions": new})
+
+
+def register_extraction_grounding_judge(registry) -> None:
+    """CAP-REG-2: register `extraction_grounding_judge` (function; ADR-0028 lexical grounding gate)."""
+    registry.register(
+        "extraction_grounding_judge",
+        contract=ClausePropertyRecord,
+        kind="function",
+        display_name="Extraction grounding judge",
+    )

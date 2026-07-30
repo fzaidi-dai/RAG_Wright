@@ -112,3 +112,23 @@ def grounded_only(clauses: list[CitedClause]) -> list[CitedClause]:
         c.model_copy(update={"properties": [p for p in c.properties if p.confidence != "AMBIGUOUS"]})
         for c in clauses
     ]
+
+
+def register_intra_document_scoped_query(registry) -> None:
+    """CAP-REG-2: register `intra_document_scoped_query` (function; intra-contract scoped KG serving)."""
+    registry.register(
+        "intra_document_scoped_query",
+        contract=CitedClause,
+        kind="function",
+        display_name="Intra-document scoped query",
+    )
+
+
+def register_clause_disambiguation(registry) -> None:
+    """CAP-REG-2: register `clause_disambiguation` (function; disambiguation by typed property)."""
+    registry.register(
+        "clause_disambiguation",
+        contract=CitedClause,
+        kind="function",
+        display_name="Clause disambiguation",
+    )

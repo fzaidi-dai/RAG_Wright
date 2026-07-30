@@ -463,6 +463,118 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             success_criterion="transcribe a scanned image to text at ingestion (image-only filings)",
         ),
     ),
+    # --- CAP-REG-2: the built contract-KG capabilities (capability_interface added when GraphWright-governed) ---
+    CapabilityManifest(
+        slug="typed_value_normalization",
+        kind="function",
+        display_name="Typed value normalization",
+        description=(
+            "Normalize a typed property value to its canonical form for matching (KG-5a): jurisdiction "
+            "canonicalization (England / England and Wales / English law -> england) and closed-value "
+            "subsumption rollup, so a query constraint matches equivalent or more-specific clause values."
+        ),
+        representative_queries=(
+            "canonicalize a jurisdiction surface form to its canonical value",
+            "roll a more specific closed value up to the broader value it satisfies",
+            "normalize a typed property value for subsumption-aware matching",
+        ),
+        tags=("normalization", "matching", "deterministic"),
+    ),
+    CapabilityManifest(
+        slug="extraction_grounding_judge",
+        kind="function",
+        display_name="Extraction grounding judge",
+        description=(
+            "Deterministically gate an extracted typed record against its source text (ADR-0028): downgrade "
+            "an EXTRACTED value to AMBIGUOUS when its lexical cue is absent from the text. A quality gate on "
+            "the extraction subgraph and a permanent gate on the final graph; lexically-anchored dims only."
+        ),
+        representative_queries=(
+            "flag an extracted property value whose cue is not in the source text",
+            "downgrade ungrounded EXTRACTED assertions to AMBIGUOUS",
+            "ground a typed clause record against its clause text",
+        ),
+        tags=("grounding", "quality-gate", "deterministic"),
+    ),
+    CapabilityManifest(
+        slug="operative_span_segmentation",
+        kind="function",
+        display_name="Operative span segmentation",
+        description=(
+            "Split a chunk into operative spans (the clause-level units the function classifier and property "
+            "extraction operate on), deterministically, with stable span ids."
+        ),
+        representative_queries=(
+            "split a chunk into operative clause-level spans",
+            "segment a contract chunk into the units for function classification",
+            "produce stable span ids for downstream extraction",
+        ),
+        tags=("segmentation", "ingestion", "deterministic"),
+    ),
+    CapabilityManifest(
+        slug="intra_document_scoped_query",
+        kind="function",
+        display_name="Intra-document scoped query",
+        description=(
+            "Answer scoped questions over ONE contract's typed KG (intra-contract): the clause index, the "
+            "clauses of a given function, and aggregation by property — each cited (clause_id + span_id + "
+            "confidence). The intra-contract serving capability over the typed KG."
+        ),
+        representative_queries=(
+            "list every clause in this contract with its function and citation",
+            "return the clauses of a given function within one contract",
+            "aggregate a contract's clauses by a typed property",
+        ),
+        tags=("serving", "intra-contract", "cited"),
+    ),
+    CapabilityManifest(
+        slug="clause_disambiguation",
+        kind="function",
+        display_name="Clause disambiguation",
+        description=(
+            "Within one contract, select the specific clause matching a typed condition among several of the "
+            "same function (e.g. the mutual cap; the covenant-not-to-sue that is unbounded), by typed property "
+            "filter over the KG. Cited."
+        ),
+        representative_queries=(
+            "find the mutual cap clause among several cap clauses in this contract",
+            "select the clause matching a typed condition among same-function clauses",
+            "disambiguate same-type clauses by a typed property",
+        ),
+        tags=("serving", "disambiguation", "cited"),
+    ),
+    CapabilityManifest(
+        slug="clause_function_classification",
+        kind="model",
+        display_name="Clause function classification (LegalBERT)",
+        description=(
+            "Classify an operative span into its CUAD-type function label(s) with a fine-tuned LegalBERT "
+            "sequence classifier (T56); supports top-k for confusable-sibling routing. Model inference "
+            "(CPU/GPU)."
+        ),
+        representative_queries=(
+            "classify a contract span into its CUAD function type",
+            "predict the top-k function labels for an operative span",
+            "route a span to its clause type with a fine-tuned classifier",
+        ),
+        tags=("classification", "legalbert", "model"),
+    ),
+    CapabilityManifest(
+        slug="query_function_classification",
+        kind="agent_skill",
+        display_name="Query function classification",
+        description=(
+            "Classify a natural-language query into the closed FUNCTION taxonomy via a single "
+            "taxonomy-constrained structured LLM call, normalized to canonical labels at the boundary "
+            "(KG-5e). The in-distribution query-side counterpart to the clause classifier."
+        ),
+        representative_queries=(
+            "map a query to the clause function(s) it is about, constrained to the taxonomy",
+            "classify an attorney's question into the closed function taxonomy",
+            "route a query to functions for candidate-pool selection",
+        ),
+        tags=("classification", "query-side", "routing"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
