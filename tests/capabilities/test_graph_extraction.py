@@ -188,7 +188,7 @@ def test_registers_under_fr_c_6():
     reg = registry.get("graph_extraction")
     assert reg.name == "graph_extraction"
     assert reg.contract is ExtractionResult
-    assert reg.kind == "function"
+    assert reg.kind == "subgraph"  # CAP-REG-1: multi-step LLM extractor stack
 
 
 # --- live spaCy (opt-in): the real NER model ------------------------------------------------------

@@ -54,8 +54,32 @@ def test_granted_subagents_matches_the_names_the_skill_actually_declares():
 
 
 def test_function_manifests_have_no_skill_runtime():
-    for slug in ("parsing", "generation", "vision_to_text", "hybrid_search"):
+    for slug in ("parsing", "vision_to_text", "hybrid_search"):
         assert author(slug).skill_runtime is None
+
+
+# --- CAP-REG-1: reclassify mis-kinded manifests to the settled taxonomy ---------------------------
+# (docs/product/capability_profiles.md). rlm_chunking is intentionally NOT here: it carries a
+# dynamic-dispatch skill_runtime (agent-decides RLM recursion), so a deterministic `subgraph` kind
+# would be wrong -- that reclassification is a separate design decision.
+
+
+def test_reclassified_capability_kinds():
+    assert author("embedding").kind == "model"  # BGE-M3 inference
+    assert author("reranking").kind == "model"  # BGE cross-encoder inference
+    assert author("graph_extraction").kind == "subgraph"  # multi-step LLM extractor stack
+    assert author("generation").kind == "agent_skill"  # a single grounded LLM act
+
+
+def test_generation_is_a_loaded_skill_without_runtime_or_bounds():
+    entry = author("generation")
+    assert entry.skill_runtime is None  # a plain LLM skill: no interpreter / RLM machinery
+    assert entry.response_bounds is None  # agent_skill is loaded, not called -> carries no bounds
+
+
+def test_reclassified_models_and_subgraph_stay_callable_with_bounds():
+    for slug in ("embedding", "reranking", "graph_extraction"):
+        assert author(slug).response_bounds is not None  # model / subgraph are callable kinds
 
 
 def test_skill_runtime_serializes_camelcase_on_the_wire(tmp_path):

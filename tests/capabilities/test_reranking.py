@@ -118,7 +118,7 @@ def test_registers_under_fr_c_4():
     reg = registry.get("reranking")
     assert reg.name == "reranking"
     assert reg.contract is RerankResult
-    assert reg.kind == "function"
+    assert reg.kind == "model"  # CAP-REG-1: BGE cross-encoder inference
 
 
 # --- live BGE-reranker (opt-in) ------------------------------------------------------------------

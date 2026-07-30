@@ -127,6 +127,6 @@ def register_embedding(registry: CapabilityRegistry) -> None:
     registry.register(
         "embedding",
         contract=ChunkEmbedding,
-        kind="function",
+        kind="model",  # BGE-M3 inference (CAP-REG-1)
         display_name="Embedding (BGE-M3)",
     )

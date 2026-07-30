@@ -105,6 +105,6 @@ def register_generation(registry: CapabilityRegistry) -> None:
     registry.register(
         "generation",
         contract=GeneratedAnswer,
-        kind="function",
+        kind="agent_skill",  # a single grounded/cited LLM act (CAP-REG-1)
         display_name="Answer generation (grounded, cited, abstains)",
     )

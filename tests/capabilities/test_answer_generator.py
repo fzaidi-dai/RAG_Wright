@@ -86,7 +86,7 @@ def test_registers_under_fr_c_9():
     reg = registry.get("generation")
     assert reg.name == "generation"
     assert reg.contract is GeneratedAnswer
-    assert reg.kind == "function"
+    assert reg.kind == "agent_skill"  # CAP-REG-1: a single grounded/cited LLM act
 
 
 # --- vision-to-text ------------------------------------------------------------------------------

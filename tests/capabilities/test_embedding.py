@@ -119,11 +119,11 @@ def test_concurrent_is_faster_than_serial():
     assert concurrent < serial  # non-blocking: work overlaps
 
 
-def test_embedding_registers_under_frc2_as_a_function():
+def test_embedding_registers_under_frc2_as_a_model():
     reg = CapabilityRegistry()
     register_embedding(reg)
     registration = reg.get("embedding")
-    assert registration.kind == "function"
+    assert registration.kind == "model"  # CAP-REG-1: BGE-M3 inference
     assert registration.contract is ChunkEmbedding
     assert registration.skeleton.identifier == "urn:air:dreamai.io:rag_wright:embedding"
 

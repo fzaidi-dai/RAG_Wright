@@ -262,6 +262,6 @@ def register_graph_extraction(registry: CapabilityRegistry) -> None:
     registry.register(
         "graph_extraction",
         contract=ExtractionResult,
-        kind="function",
+        kind="subgraph",  # multi-step LLM extractor stack (CAP-REG-1)
         display_name="Graph extraction (hybrid: spaCy NER + contract + LLM escalation)",
     )

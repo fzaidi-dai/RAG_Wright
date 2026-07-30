@@ -148,7 +148,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="embedding",
-        kind="function",
+        kind="model",  # BGE-M3 inference (CAP-REG-1)
         display_name="Embedding (BGE-M3)",
         description=(
             "From one BGE-M3 model, produce a dense vector over the chunk summary and a native sparse "
@@ -193,7 +193,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="reranking",
-        kind="function",  # an in-process query-side node
+        kind="model",  # BGE cross-encoder inference (CAP-REG-1)
         display_name="Reranking (BGE cross-encoder precision gate)",
         description=(
             "Re-score retrieved candidate passages against the query with a BGE-reranker "
@@ -218,7 +218,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="graph_extraction",
-        kind="function",  # an in-process ingestion-side node
+        kind="subgraph",  # multi-step LLM extractor stack (NER + OpenIE + LLM); CAP-REG-1
         display_name="Graph extraction (hybrid: spaCy NER + contract + LLM escalation)",
         description=(
             "Extract ontology-conforming graph facts from a parsed chunk with a hybrid stack: spaCy "
@@ -394,7 +394,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="generation",
-        kind="function",  # in-process callable; the compiler binds it, not over MCP (T31 note)
+        kind="agent_skill",  # a single grounded/cited LLM act; loaded, not called (CAP-REG-1)
         display_name="Answer generation (grounded, cited, abstains)",
         description=(
             "Produce a grounded, cited answer from the retrieved evidence — no claim without a citation, "

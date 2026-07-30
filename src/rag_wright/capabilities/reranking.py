@@ -115,6 +115,6 @@ def register_reranking(registry: CapabilityRegistry) -> None:
     registry.register(
         "reranking",
         contract=RerankResult,
-        kind="function",
+        kind="model",  # BGE cross-encoder inference (CAP-REG-1)
         display_name="Reranking (BGE cross-encoder precision gate)",
     )
