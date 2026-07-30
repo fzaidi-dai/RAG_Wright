@@ -575,6 +575,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("classification", "query-side", "routing"),
     ),
+    # --- LG-1: hardened LangGraph subgraphs ---
+    CapabilityManifest(
+        slug="typed_clause_extraction",
+        kind="subgraph",
+        display_name="Typed clause extraction",
+        description=(
+            "Extract a clause's typed (dimension, value) property record from its text, hardened as a LangGraph "
+            "subgraph: docling-graph + granite extraction (retry on transient), adapt to the record, "
+            "grounding-judge gate (ADR-0028), a Flash->Pro escalation on low-confidence, an optional human gate, "
+            "and a dead-letter terminal so one bad clause never kills a batch."
+        ),
+        representative_queries=(
+            "extract the typed property record for a contract clause",
+            "turn a clause's text into confidence-tagged (dimension, value) assertions",
+            "run schema-driven clause extraction with grounding and escalation",
+        ),
+        tags=("extraction", "ingestion", "subgraph", "langgraph"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

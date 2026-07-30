@@ -89,6 +89,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "clause_disambiguation",  # function: disambiguation by property (Leg A)
         "clause_function_classification",  # model: LegalBERT function classifier (T56)
         "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
+        # --- LG-1: hardened LangGraph subgraphs ---
+        "typed_clause_extraction",  # subgraph: extract -> adapt -> reground -> escalate -> [HITL] -> dead-letter
     }
 )
 
