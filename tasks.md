@@ -3,6 +3,21 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **RESUME / NEXT UP (2026-07-30):** The ARD-registration + LangGraph-hardening arc is in flight.
+> **DONE & committed:** CAP-REG-1/1b/2 (reclassify + register contract-KG capabilities), LG-0 (langgraph dep +
+> `subgraphs/scaffold.py` + vendor-neutral OTel `subgraphs/observability.py` per GraphWright's
+> `temp/observability-contract.md`), and **LG-1 + LG-2 COMPLETE** — the 4 hardened subgraphs
+> `typed_clause_extraction` (reference), `query_constraint_extraction`, `semantic_chunking`, `graph_extraction`
+> in `src/rag_wright/subgraphs/`, all registered, 783 hermetic green.
+> **NEXT = LG-3** (below): wrap the composite pipelines (`contract_ingestion_pipeline`, `intra_document_qa`,
+> `cross_corpus_retrieval`, `relational_qa`) as LangGraph subgraphs composing the LG-1/LG-2 subgraphs + the
+> registered capabilities. Then **CAP-REG-3** (package the eval-resident retrieval core) and the compliance
+> subgraphs (roadmap §13). Follow the LG-1/LG-2 pattern: build on `subgraphs/scaffold.py`, harden with
+> retry→dead-letter via `runtime.execution_info.node_attempt` (langgraph 1.2.9's error_handler is called
+> node-style), observability via `subgraphs/observability.py` (raw_llm_span only for raw-SDK/docling-graph
+> calls; seam/`ChatOpenAI` calls auto-capture), inject seams for hermetic tests. Real `uv add`/`lock`/`sync`
+> need the Bash sandbox DISABLED (see [[uv-network-ops-need-sandbox-disabled]]).
+
 This is the **capability half** only. Each task builds and registers one FR-C / FR-I / FR-Q
 capability, or a foundation seam, as ordinary tested software. Registration is twofold and is part
 of every capability's definition of done: internal registration (T6, which the Model Context
