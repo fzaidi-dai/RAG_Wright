@@ -28,6 +28,7 @@ from __future__ import annotations
 from typing import Any, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
+from langgraph.runtime import Runtime
 from langgraph.types import interrupt
 
 from rag_wright.contracts.property import ClausePropertyRecord
@@ -51,11 +52,19 @@ class ClauseExtractionState(TypedDict, total=False):
     dead_letter: Optional[dict]
 
 
-def _cheap_node(record_fn: RecordFn, model_id: str):
-    def extract_cheap(state: ClauseExtractionState) -> ClauseExtractionState:
+def _cheap_node(record_fn: RecordFn, model_id: str, max_attempts: int):
+    def extract_cheap(state: ClauseExtractionState, runtime: Runtime) -> ClauseExtractionState:
+        # node_attempt is 1-indexed; a transient failure re-raises so the RetryPolicy retries, EXCEPT on the
+        # final attempt where it dead-letters (the clause is dropped, never lost as an unhandled raise).
+        attempt = runtime.execution_info.node_attempt
         with raw_llm_span("typed_clause_extraction.extract", model=model_id):
-            record = record_fn(state["clause_text"], model_id)  # raises Transient -> retried; None -> dead-letter
-        if record is None:
+            try:
+                record = record_fn(state["clause_text"], model_id)
+            except Exception as exc:  # noqa: BLE001 - transient -> retry, or dead-letter on exhaustion
+                if attempt >= max_attempts:
+                    return {"dead_letter": dead_letter("extraction_failed", model=model_id, error=str(exc))}
+                raise
+        if record is None:  # genuine no-model result -> dead-letter (no wasted retries)
             return {"dead_letter": dead_letter("extraction_produced_no_models", model=model_id)}
         return {"record": reground(record, state["clause_text"])}  # ADR-0028 grounding gate
 
@@ -85,9 +94,12 @@ def build_typed_clause_extraction(
     escalate_fn: EscalateFn = needs_escalation,
     enable_human_gate: bool = False,
     checkpointer: Any = None,
+    retry_policy: Any = DEFAULT_RETRY,
 ):
     """Compile the `typed_clause_extraction` subgraph. `record_fn` / `escalate_fn` are injected for testing;
-    `checkpointer` is required only when `enable_human_gate` is True (interrupt() needs persistence)."""
+    `checkpointer` is required only when `enable_human_gate` is True (interrupt() needs persistence);
+    `retry_policy` is the cheap-extract node's policy (overridable for fast tests)."""
+    max_attempts = int(getattr(retry_policy, "max_attempts", 3))
 
     def route_after_cheap(state: ClauseExtractionState) -> str:
         if state.get("dead_letter"):
@@ -103,7 +115,7 @@ def build_typed_clause_extraction(
         return {}
 
     g = StateGraph(ClauseExtractionState)
-    g.add_node("extract_cheap", _cheap_node(record_fn, cheap_model), retry_policy=DEFAULT_RETRY)
+    g.add_node("extract_cheap", _cheap_node(record_fn, cheap_model, max_attempts), retry_policy=retry_policy)
     g.add_node("extract_strong", _strong_node(record_fn, strong_model))
     g.add_edge(START, "extract_cheap")
 

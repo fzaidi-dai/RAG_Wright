@@ -7,6 +7,7 @@ genuine no-model result, conditional Flash->Pro escalation, and the optional HIT
 from __future__ import annotations
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.types import RetryPolicy
 
 from rag_wright.contracts.property import ClausePropertyRecord
 from rag_wright.subgraphs.typed_clause_extraction import (
@@ -16,6 +17,7 @@ from rag_wright.subgraphs.typed_clause_extraction import (
 
 _NO_ESCALATE = lambda record, text: False  # noqa: E731
 _ALWAYS_ESCALATE = lambda record, text: True  # noqa: E731
+_FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)  # no backoff sleeps in tests
 
 
 def _record(function: str = "Cap On Liability") -> ClausePropertyRecord:
@@ -42,12 +44,28 @@ def test_retry_policy_recovers_a_transient_blip():
         return _record()
 
     graph = build_typed_clause_extraction(
-        flaky, cheap_model="cheap", strong_model="strong", escalate_fn=_NO_ESCALATE
+        flaky, cheap_model="cheap", strong_model="strong", escalate_fn=_NO_ESCALATE, retry_policy=_FAST_RETRY
     )
     out = graph.invoke({"clause_text": "x"})
     assert isinstance(out["record"], ClausePropertyRecord)
     assert calls["n"] == 2  # failed once, retried, succeeded
     assert out.get("dead_letter") is None
+
+
+def test_persistent_transient_dead_letters_after_retries():
+    calls = {"n": 0}
+
+    def always_flaky(text: str, model: str):
+        calls["n"] += 1
+        raise TransientExtraction("provider down")
+
+    graph = build_typed_clause_extraction(
+        always_flaky, cheap_model="cheap", strong_model="strong", escalate_fn=_NO_ESCALATE, retry_policy=_FAST_RETRY
+    )
+    out = graph.invoke({"clause_text": "x"})
+    assert out["dead_letter"]["reason"] == "extraction_failed"  # dropped, not raised
+    assert out.get("record") is None
+    assert calls["n"] == 3  # retried up to max_attempts, then dead-lettered
 
 
 def test_genuine_no_model_dead_letters_without_raising():
