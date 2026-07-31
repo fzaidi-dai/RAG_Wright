@@ -198,15 +198,26 @@ def ollama_model(label: str, model: str, base_url: str | None = None) -> Extract
     )
 
 
+# INGEST-GRAPH-LATENCY: docling-graph's default per-call timeout is 300s (ReliabilityDefaults.timeout_s), which
+# let one stuck extract_parties call block a document for ~5 min. A single granite call is ~10s, so cap it far
+# lower and bound the retry exposure -- a hang now fails fast and the caller's per-item tolerance skips it.
+_DEFAULT_TIMEOUT_S = 90
+_DEFAULT_MAX_RETRIES = 1
+
+
 def build_pipeline_config(source_path: str, model: ExtractionModel, *, template: type = ContractParties,
-                          max_tokens: int = _DEFAULT_MAX_TOKENS) -> Any:
+                          max_tokens: int = _DEFAULT_MAX_TOKENS,
+                          timeout_s: int = _DEFAULT_TIMEOUT_S,
+                          max_retries: int = _DEFAULT_MAX_RETRIES) -> Any:
     """The docling-graph `PipelineConfig` for a model choice, with the reliability fixes baked in
-    (structured_output=False + max_tokens cap). Kept import-light so hermetic tests need no LLM."""
+    (structured_output=False + max_tokens cap + a sane per-call `timeout_s`/`max_retries`, NOT docling-graph's
+    300s default). Kept import-light so hermetic tests need no LLM."""
     from docling_graph import PipelineConfig
     from docling_graph.llm_clients.config import (
         ConnectionOverrides,
         GenerationOverrides,
         LlmRuntimeOverrides,
+        ReliabilityOverrides,
     )
     from pydantic import SecretStr
 
@@ -220,14 +231,17 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
         structured_output=False,  # reliability fix: json_object, not the strict nested json_schema
         provider_override=model.provider, model_override=model.model,
         llm_overrides=LlmRuntimeOverrides(
-            generation=GenerationOverrides(max_tokens=max_tokens), connection=connection,
+            generation=GenerationOverrides(max_tokens=max_tokens),
+            reliability=ReliabilityOverrides(timeout_s=timeout_s, max_retries=max_retries),
+            connection=connection,
         ),
     )
 
 
 def extract_parties(text: str, model: ExtractionModel, *, template: type = ContractParties,
                     max_tokens: int = _DEFAULT_MAX_TOKENS,
-                    preamble_chars: int = _DEFAULT_PREAMBLE_CHARS) -> Any | None:
+                    preamble_chars: int = _DEFAULT_PREAMBLE_CHARS,
+                    timeout_s: int = _DEFAULT_TIMEOUT_S) -> Any | None:
     """Extract parties from contract `text` with `model` via docling-graph (API mode). Writes the preamble to
     a temp .md (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first
     extracted model (a `ContractParties`) or None if extraction yielded nothing."""
@@ -235,7 +249,8 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
 
     md = Path(tempfile.mkdtemp(prefix="dg_extract_")) / "contract.md"
     md.write_text(text[:preamble_chars], encoding="utf-8")
-    ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens),
+    ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens,
+                                             timeout_s=timeout_s),
                        mode="api")
     return ctx.extracted_models[0] if ctx.extracted_models else None
 
