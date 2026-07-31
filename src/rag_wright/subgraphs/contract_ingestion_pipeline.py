@@ -161,25 +161,45 @@ def build_document_ingest(
     return g.compile()
 
 
+def _print_progress(message: str) -> None:
+    print(message, flush=True)
+
+
 def run_corpus_ingestion(
-    adapter: CorpusAdapter, ingest_graph: Any, *, link_fn: LinkFn = lambda: 0
+    adapter: CorpusAdapter, ingest_graph: Any, *, link_fn: LinkFn = lambda: 0,
+    progress: Callable[[str], None] = _print_progress,
 ) -> IngestionReport:
     """Map every document from `adapter` through the per-document `ingest_graph`, then run `link_fn`
     (party_clause_linking, KG-7) ONCE to connect parties to clauses. A dead-lettered document is recorded and
     skipped -- the corpus ingest survives one bad document. The link runs after all writes so the PARTY_TO edges
-    see every contract."""
+    see every contract.
+
+    Streams `X/N` progress via `progress` (flushed print by default; pass a no-op to silence) per the CLAUDE.md
+    long-running-work rule -- a corpus ingest is long-running and MUST be monitorable."""
+    documents = list(adapter.documents())  # materialize so we know N up front (for X/N progress)
+    total = len(documents)
+    progress(f"[ingest] starting: {total} documents")
+
     ingested = 0
     dead_lettered: list[dict] = []
     per_document: list[dict] = []
-    for document in adapter.documents():
+    for i, document in enumerate(documents, 1):
         out = ingest_graph.invoke({"document": document})
         if out.get("dead_letter"):
             dead_lettered.append(out["dead_letter"])
+            progress(f"[ingest] {i}/{total} {document.source_doc_id} DEAD-LETTER "
+                     f"({out['dead_letter'].get('stage')}: {out['dead_letter'].get('reason')})")
             continue
         ingested += 1
-        per_document.append({"source_doc_id": document.source_doc_id, "written": out.get("written", {})})
+        written = out.get("written", {})
+        per_document.append({"source_doc_id": document.source_doc_id, "written": written})
+        progress(f"[ingest] {i}/{total} {document.source_doc_id} OK "
+                 f"clauses={written.get('clauses')} entities={written.get('entities')}")
 
+    progress(f"[ingest] {ingested}/{total} written, {len(dead_lettered)} dead-lettered; linking parties (KG-7)...")
     party_links = link_fn()
+    progress(f"[ingest] done: {ingested}/{total} ingested, {len(dead_lettered)} dead-lettered, "
+             f"{party_links} PARTY_TO edges")
     return IngestionReport(
         documents_ingested=ingested, dead_lettered=dead_lettered,
         party_links=party_links, per_document=per_document)
@@ -211,14 +231,165 @@ class CuadAdapter:
             )
 
 
-# Wiring the production stage seams (deployment glue -- store/models/adapter specific, so not a fixed function):
-#   chunk_fn      -> semantic_chunking (build_semantic_chunking) over the doc text
-#   clauses_fn    -> segment_clause per chunk + typed_clause_extraction (build_typed_clause_extraction) per span
-#   graph_fn      -> graph_extraction (build_graph_extraction(default_extractors())) per chunk
-#   resolve_fn    -> disambiguate + entity_resolution.resolve_entities over the ExtractionResults
-#   write_fn      -> store.write_clause_kg (clause records) + store.write_graph (resolved entities)
-#   link_fn       -> party_clause_linking(store)  (KG-7, run once by run_corpus_ingestion)
-# Test on a FEW docs first (CuadAdapter(path, limit=N)); never a full re-ingest without intent (CUAD-FULL-COVERAGE).
+def _parsed_from_text(source_doc_id: str, text: str, parse_dir: Any):
+    """text -> a `ParsedDocument` (one TextItem per non-blank line), cached -- so the standard `chunk()` path
+    (which loads a real DoclingDocument) works from a text corpus. INGEST-REFACTOR: the shared version of the
+    per-script `_build_parsed`."""
+    import hashlib
+
+    from docling_core.types.doc.document import DoclingDocument
+    from docling_core.types.doc.labels import DocItemLabel
+
+    from rag_wright.capabilities.parsing import ParsedDocument
+
+    content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    manifest_path = parse_dir / f"{source_doc_id}.{content_hash[:16]}.json"
+    if not manifest_path.exists():
+        doc = DoclingDocument(name=source_doc_id)
+        for line in text.split("\n"):
+            if line.strip():
+                doc.add_text(label=DocItemLabel.TEXT, text=line)
+        doc.save_as_json(manifest_path)
+    return ParsedDocument(source_doc_id=source_doc_id, content_hash=content_hash, manifest_path=str(manifest_path))
+
+
+class _NoSummary:
+    """A no-op summarizer -- the ingest smoke targets the typed KG + entity graph, not chunk summaries."""
+
+    def summarize(self, text: str) -> str:  # noqa: ARG002
+        return ""
+
+
+def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any):
+    """INGEST-REFACTOR: wire the six per-document stage seams to the real capabilities (the two-halves glue).
+    All heavy imports are lazy. Clause extraction is function-classified for real (LegalBERT, local); the one
+    simplification for the proof (see tasks.md INGEST-REFACTOR) is no span/embedding retrieval index (a separate
+    concern). `store.ensure_schema()` must have been called; `registry` is the EDGAR EntityRegistry."""
+    import hashlib
+    from pathlib import Path
+
+    from rag_wright.capabilities.disambiguation import disambiguate
+    from rag_wright.capabilities.entity_resolution import resolve_entities
+    from rag_wright.capabilities.graph_extraction import default_extractors
+    from rag_wright.capabilities.graph_storage import to_graph
+    from rag_wright.capabilities.rlm_chunking import SingleCallBoundaryDiscoverer, chunk
+    import json
+
+    from rag_wright.contracts.contract_meta import ContractRecord
+    from rag_wright.contracts.function import canonical_function
+    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.contracts.property import ClausePropertyRecord
+    from rag_wright.ontology.clause_template import Clause
+    from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
+    from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
+    from rag_wright.spans.segment import segment_clause
+    from rag_wright.util.concurrent import map_concurrent
+
+    parse_dir = Path(cache_dir) / "parsed"
+    chunk_dir = Path(cache_dir) / "chunks"
+    clause_cache_dir = Path(cache_dir) / "clause_extract"  # per-span granite result cache (bump/re-run safe)
+    for directory in (parse_dir, chunk_dir, clause_cache_dir):
+        directory.mkdir(parents=True, exist_ok=True)
+    discoverer = SingleCallBoundaryDiscoverer()
+    summarizer = _NoSummary()
+    clause_extractor = granite_clause_extractor()
+    extractors = default_extractors()
+    classifier = LegalBertFunctionClassifier.load(Path("data/models/legalbert_function"), device="cpu")
+    # the extraction cache is keyed by the Clause template's schema, so a template change (e.g. new field
+    # constraints) auto-invalidates it -- a re-run re-extracts instead of serving stale records.
+    template_version = hashlib.sha256(
+        json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]
+
+    def _chunk_id(value: str) -> ChunkId:
+        source, index, content_hash = value.rsplit(":", 2)
+        return ChunkId(source_doc_id=source, chunk_index=int(index), content_hash=content_hash)
+
+    def chunk_fn(doc: SourceDocument) -> list:
+        parsed = _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
+        return list(chunk(parsed, summarizer=summarizer, cache_dir=chunk_dir, discoverer=discoverer).chunks)
+
+    def clauses_fn(doc: SourceDocument, chunks: list) -> list:
+        # segment every chunk into operative spans, classify each span's function (LegalBERT, local), then
+        # extract the typed record only for spans that classify to a REAL function (NONE / off-taxonomy spans
+        # are not clauses -- the same filter the corpus's clause cache applies). Extraction is CONCURRENT
+        # (map_concurrent, like populate_clause_kg): granite is ~10s/single-call, so sequential would be minutes
+        # per document -- the CLAUDE.md parallelize-LLM rule.
+        spans = [s for ch in chunks for s in segment_clause(ch.chunk_id, ch.text) if s.text.strip()]
+        if not spans:
+            return []
+        functions = classifier.classify([s.text for s in spans])
+        jobs = [
+            (index, span, canonical_function(raw))
+            for index, (span, raw) in enumerate(zip(spans, functions))
+            if canonical_function(raw) is not None  # NONE / off-taxonomy span -> not a clause
+        ]
+        if not jobs:
+            return []
+
+        def _extract(job):
+            index, span, function = job
+            clause_cid = ChunkId.of(doc.source_doc_id, index, span.text)
+            cache_file = clause_cache_dir / (hashlib.sha256(
+                f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
+            if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no granite re-call
+                return ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
+            try:
+                record = clause_extractor(
+                    chunk_id=clause_cid, function=function, text=span.text, span_id=span.span_id)
+            except Exception:  # noqa: BLE001 - a per-span failure (truncated/invalid JSON) is SKIPPED (matches
+                return None    # populate_clause_kg) and NOT cached, so a max_tokens bump re-run re-extracts it
+            cache_file.write_text(record.model_dump_json(), encoding="utf-8")  # cache successes only
+            return record
+
+        return [record for record in map_concurrent(jobs, _extract, max_concurrency=8) if record is not None]
+
+    def graph_fn(doc: SourceDocument, chunks: list) -> list:
+        jobs = [(ch, ex) for ch in chunks for ex in extractors]  # concurrent per chunk (docling-graph)
+
+        def _extract(job):
+            chunk_obj, extractor = job
+            try:
+                return extractor.extract(_chunk_id(chunk_obj.chunk_id), chunk_obj.text)
+            except Exception:  # noqa: BLE001 - one bad extraction must not sink the document (matches GP-1B)
+                return None
+
+        return [result for result in map_concurrent(jobs, _extract, max_concurrency=8) if result is not None]
+
+    def resolve_fn(extraction_results: list):
+        resolution = resolve_entities(disambiguate(extraction_results), extraction_results, registry=registry)
+        return to_graph(resolution)  # (nodes, edges)
+
+    def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
+        store.upsert_contract(ContractRecord(
+            contract_id=doc.source_doc_id, name=doc.metadata.get("raw_title", ""),
+            source_doc_id=doc.source_doc_id,
+            content_hash=hashlib.sha256(doc.text.encode("utf-8")).hexdigest()))
+        for record in clause_records:
+            store.write_clause_kg(record)
+        nodes, edges = resolution
+        store.write_graph(nodes, edges)
+        return {"clauses": len(clause_records), "entities": len(nodes), "edges": len(edges)}
+
+    return build_document_ingest(chunk_fn, clauses_fn, graph_fn, resolve_fn, write_fn)
+
+
+def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:
+    """INGEST-REFACTOR proof: ingest CUAD through the GENERIC pipeline + `CuadAdapter` -- one call, no
+    `ingest_cuad()`. Builds the EDGAR registry, ensures the schema, ingests `limit` documents, and runs
+    party_clause_linking (KG-7) once. Point `store` at a SCRATCH database for a non-destructive smoke."""
+    import json
+    from pathlib import Path
+
+    from rag_wright.capabilities.dg_extraction import build_verified_registry
+    from rag_wright.capabilities.party_clause_linking import party_clause_linking
+
+    store.ensure_schema()
+    vset = json.loads(Path("data/edgar/verification_set.json").read_text(encoding="utf-8"))
+    ingest_graph = production_document_ingest(
+        store, cache_dir=cache_dir, registry=build_verified_registry(vset))
+    return run_corpus_ingestion(
+        CuadAdapter(cuad_path, limit=limit), ingest_graph,
+        link_fn=lambda: len(party_clause_linking(store).links))
 
 
 def register_contract_ingestion_pipeline(registry) -> None:

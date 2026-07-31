@@ -242,7 +242,9 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
 
 # --- KG-2: per-clause typed property extraction (the same seam, the KG-1 clause template) ---
 
-_CLAUSE_MAX_TOKENS = 2000  # a Clause has ~18 typed fields -> more output than a parties list
+_CLAUSE_MAX_TOKENS = 2000  # a Clause has ~30 typed dims; a well-constrained extraction fits well under this.
+# (INGEST-REFACTOR: truncation was NOT a size problem -- unconstrained free-text fields like `document_reference`
+# were dumping verbatim clause prose and ballooning the JSON; the fix is field constraints, not a higher cap.)
 _CLAUSE_TEXT_CHARS = 12000  # one operative span is short; a generous cap that never truncates a real clause
 
 

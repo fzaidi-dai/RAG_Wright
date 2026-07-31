@@ -84,6 +84,15 @@ These reduce rework and keep diffs clean. They bias toward caution over speed; u
 - Change surgically. Touch only what the task requires. Do not improve, reformat, or refactor adjacent code that is not part of the task. Match the existing style even if you would do it differently. Remove only the imports or names your own change orphaned; if you spot unrelated dead code, mention it rather than delete it. Every changed line should trace to the task.
 - Parallelize LLM calls in evals, tests, scripts, and agentic workflows. Whenever such a loop sends more than one model/LLM call, drive it concurrently with the async + semaphore pattern in the outer loop (`asyncio.Semaphore(N)` for backpressure + `asyncio.to_thread(...)` + `asyncio.gather(...)`, as in `embed_chunks` and `_summarize_all`), never sequentially. LLM calls are network-bound, so this is the same tokens and the same cost but far less wall-clock (sequential loops cost real dead time, e.g. the hour-long re-ingest). `gather` preserves order, so determinism holds; bound N against provider rate limits.
 
+## Long-running background work: stream X/N progress and monitor it (never launch-and-forget)
+
+This is the rule we keep having to repeat, now standing and non-optional. Any task run in the background that can take more than ~30 seconds (a corpus ingest, an eval, model training, a bulk LLM loop, a migration, a framework rebuild) MUST do BOTH of these, every single time:
+
+1. **Emit periodic `X/N` progress to its log/stdout.** A start line stating the total `N`, then `[stage] i/N <what>` (flushed) at a sane cadence (per item or small batch), then an end summary. If the script or function you are about to run does not already stream `X/N` progress, ADD it before running (e.g. a `log(f"[ingest] {i}/{n} {doc_id}")` in the loop). A run whose only output is at the very end is not acceptable, because it is unmonitorable.
+2. **Actively monitor it and report to us in `X/N` form.** Poll the log at sensible intervals (a Monitor until-loop, or periodic reads), and tell us where it is (`ingest 4/12, ~2m elapsed`). Never launch a background job and then sit silently waiting for the exit notification. If it stalls or errors, surface it with the offending log line.
+
+This generalizes ADR-0030's training-run rule (progress + loss + checkpoints, always-monitored) to ALL long-running work. It is the fix for the repeated "you launched a background job with no visible progress" failure. When in doubt, over-report.
+
 ## Cross-session memory and decisions
 
 State lives in committed files so any session can resume cleanly.
@@ -143,9 +152,9 @@ Commits are how the memory above becomes durable. Git history is the parallel re
 
 ## Boundaries
 
-- Always: ground library calls before writing them; run the task's tests before presenting it; keep deterministic work deterministic; keep secrets in `.env`; use the project stack (`Python with uv, pytest, and Pydantic`) for everything; stop for our approval after each task; commit each approved task, starting from a clean working tree.
+- Always: ground library calls before writing them; run the task's tests before presenting it; keep deterministic work deterministic; keep secrets in `.env`; use the project stack (`Python with uv, pytest, and Pydantic`) for everything; stream `X/N` progress from every long-running background task and actively monitor it, reporting progress to us (never launch-and-forget); stop for our approval after each task; commit each approved task, starting from a clean working tree.
 - Ask first: changing `RAG_Capability_Spec.md`, adding a dependency, changing the data model or schema, switching models, or attempting any Phase 4 case-by-case component (multi-vector, typed-functional RLM, multimodal embedder, canonical skeleton).
-- Never: mark a task done without our approval; start a new task without our approval; on the default stack, run a bare `python`, `python3`, `pip`, or `pip install` command (always `uv run` / `uv add`); declare the environment broken or suggest reinstalling libraries or recreating the env when a command fails (re-run with `uv run` or `uv add` instead); hardcode a provider-specific or model-specific flag (for example a reasoning-disable flag) in node or agent code, or assume an open model supports a forced structured-output choice in thinking mode (use the model-profile seam); commit secrets; violate any standing architecture rule (for example changing an identifier scheme, letting a claim out without a citation, or putting analytical data in the graph).
+- Never: mark a task done without our approval; start a new task without our approval; launch a long-running background task without `X/N` progress logging and active monitoring (launch-and-forget); on the default stack, run a bare `python`, `python3`, `pip`, or `pip install` command (always `uv run` / `uv add`); declare the environment broken or suggest reinstalling libraries or recreating the env when a command fails (re-run with `uv run` or `uv add` instead); hardcode a provider-specific or model-specific flag (for example a reasoning-disable flag) in node or agent code, or assume an open model supports a forced structured-output choice in thinking mode (use the model-profile seam); commit secrets; violate any standing architecture rule (for example changing an identifier scheme, letting a claim out without a citation, or putting analytical data in the graph).
 
 ---
 

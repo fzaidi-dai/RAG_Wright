@@ -319,12 +319,15 @@ class CapConstraint(BaseModel):
 
     cap_operator: Optional[str] = Field(
         None,
-        description="The comparison operator, e.g. 'lteq' (at most), 'eq' (fixed).",
+        max_length=40,
+        description="The comparison operator ONLY (a few words), e.g. 'lteq' (at most), 'eq' (fixed).",
     )
 
     cap_quantum: Optional[str] = Field(
         None,
-        description="The cap amount verbatim, e.g. '12_months', '1x_fees', '$1,000,000'.",
+        max_length=80,
+        description="The cap amount ONLY (a short value, not a sentence), e.g. '12_months', '1x_fees', "
+        "'$1,000,000'.",
     )
 
     @field_validator("cap_basis", mode="before")
@@ -345,16 +348,19 @@ class TemporalConstraint(BaseModel):
 
     temporal_duration: Optional[str] = Field(
         None,
-        description="The duration verbatim, e.g. '12_months', '30_days', 'unbounded'.",
+        max_length=60,
+        description="The duration ONLY (a short value), e.g. '12_months', '30_days', 'unbounded'.",
     )
 
     temporal_kind: Optional[str] = Field(
         None,
+        max_length=40,
         description="What is bounded: 'term' (temporal_bound) or 'notice_period'.",
     )
 
     temporal_operator: Optional[str] = Field(
         None,
+        max_length=40,
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
@@ -373,7 +379,9 @@ class Jurisdiction(BaseModel):
 
     jurisdiction_name: str = Field(
         ...,
-        description="The jurisdiction verbatim, e.g. 'New York', 'England and Wales', 'Delaware'.",
+        max_length=100,
+        description="The jurisdiction NAME ONLY (a few words, not a sentence), e.g. 'New York', "
+        "'England and Wales', 'Delaware'.",
         examples=["New York", "England and Wales", "Delaware"],
     )
 
@@ -404,40 +412,46 @@ class Clause(BaseModel):
 
     model_config = ConfigDict(graph_id_fields=["document_reference"])
 
-    document_reference: str = Field(
-        ...,
+    document_reference: Optional[str] = Field(
+        None,
+        max_length=80,
         description=(
-            "A short handle for this clause — its section number or heading, verbatim from the "
-            "text."
+            "OPTIONAL. ONLY the clause's own section number or short heading if one is written in the "
+            "text (e.g. 'Section 8', '8.1 Limitation of Liability'). If there is NO explicit section "
+            "number or heading, leave this null/empty -- do NOT invent one and NEVER quote the clause "
+            "body or any sentence of it here."
         ),
         examples=[
             "Section 8",
             "8.1 Limitation of Liability",
             "Governing Law",
-            "Article 12 (Non-Solicitation)",
         ],
     )
 
     audit_frequency: Optional[str] = Field(
         None,
+        max_length=60,
         description=(
-            "How often an audit-rights clause permits audits, e.g. 'annual', 'quarterly', 'once "
-            "per year'."
+            "How often an audit-rights clause permits audits, a short value ONLY, e.g. 'annual', "
+            "'quarterly', 'once per year'."
         ),
     )
 
     clause_type: Optional[str] = Field(
         None,
+        max_length=80,
         description=(
-            "The clause function/type label (e.g. 'Cap on Liability', 'Governing Law', "
-            "'Non-Solicit of Employees')."
+            "The clause function/type LABEL ONLY (a few words), e.g. 'Cap on Liability', "
+            "'Governing Law', 'Non-Solicit of Employees'."
         ),
     )
 
     commitment_quantum: Optional[str] = Field(
         None,
+        max_length=80,
         description=(
-            "The minimum-commitment / volume amount verbatim, e.g. '$1,000,000', '100 units/year'."
+            "The minimum-commitment / volume amount ONLY (a short value), e.g. '$1,000,000', "
+            "'100 units/year'."
         ),
     )
 
