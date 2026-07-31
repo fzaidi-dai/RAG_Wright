@@ -290,12 +290,83 @@ class _NoSummary:
         return ""
 
 
-def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None):
+def seed_party_cache(party_dir: Any, legacy_path: Any) -> int:
+    """INGEST-REFACTOR (a): pre-populate the per-contract party cache from GP-1B's `dg_extracted_parties.json`
+    (a `{raw_title: [party names]}` map) so a full ingest REUSES those ~482 extractions instead of re-calling
+    granite. The legacy key is the raw title; it is canonicalized (HYG-1) to match the pipeline's
+    `source_doc_id`. Idempotent: never overwrites an existing (possibly fresher) entry. Returns #seeded."""
+    import json
+    from pathlib import Path
+
+    from rag_wright.contracts.identifiers import canonical_source_doc_id
+
+    if not Path(legacy_path).exists():
+        return 0
+    legacy = json.loads(Path(legacy_path).read_text(encoding="utf-8"))
+    Path(party_dir).mkdir(parents=True, exist_ok=True)
+    seeded = 0
+    for raw_title, names in legacy.items():
+        cache_file = Path(party_dir) / f"{canonical_source_doc_id(raw_title)}.json"
+        if not cache_file.exists():
+            cache_file.write_text(json.dumps(names), encoding="utf-8")
+            seeded += 1
+    return seeded
+
+
+def seed_chunk_cache(chunk_dir: Any, legacy_chunk_dir: Any) -> int:
+    """INGEST-REFACTOR (a): copy existing `chunk()` manifests into the run's chunk cache so a full ingest skips
+    re-chunking already-chunked documents. The manifest name embeds the content hash, so a copied manifest is
+    only ever REUSED when the pipeline's text hashes to the same key (a text change misses, as it must).
+    Idempotent (skips existing). Returns #copied."""
+    import shutil
+    from pathlib import Path
+
+    if not Path(legacy_chunk_dir).exists():
+        return 0
+    Path(chunk_dir).mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for manifest in Path(legacy_chunk_dir).glob("*.chunks.json"):
+        dest = Path(chunk_dir) / manifest.name
+        if not dest.exists():
+            shutil.copyfile(manifest, dest)
+            copied += 1
+    return copied
+
+
+def per_contract_graph_extraction(doc: SourceDocument, *, party_dir: Any, names_fn: Callable[[str], list]) -> list:
+    """INGEST-REFACTOR (a) / GP-1B (ADR-0035): extract the signing parties ONCE PER CONTRACT, not per chunk.
+    Parties are named once in the preamble (the extractor bounds to `_DEFAULT_PREAMBLE_CHARS`), so one call per
+    contract is both the proven-fidelity design AND ~10x cheaper than the former per-chunk fan-out. Reuses cached
+    party names (seeded from `dg_extracted_parties.json` or a prior run) when present, else calls `names_fn` and
+    caches the result. `parties_to_extraction` rebuilds the exact `ExtractionResult` the live extractor would
+    (its own body is `names = [p.name for p in parties]; parties_to_extraction(...)`), so the cache is lossless.
+    Returns `[ExtractionResult]` (empty when no parties)."""
+    import json
+    from pathlib import Path
+
+    from rag_wright.capabilities.graph_extraction import parties_to_extraction
+    from rag_wright.contracts.identifiers import ChunkId
+
+    cache_file = Path(party_dir) / f"{doc.source_doc_id}.json"
+    if cache_file.exists():
+        names = json.loads(cache_file.read_text(encoding="utf-8"))
+    else:
+        names = names_fn(doc.text)
+        Path(party_dir).mkdir(parents=True, exist_ok=True)
+        cache_file.write_text(json.dumps(names), encoding="utf-8")
+    if not names:
+        return []
+    return [parties_to_extraction(ChunkId.of(doc.source_doc_id, 0, doc.text), names)]
+
+
+def production_document_ingest(
+    store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None, party_seed_path: Any = None):
     """INGEST-REFACTOR: wire the per-document stage seams to the real capabilities (the two-halves glue).
     All heavy imports are lazy. Segmentation + LegalBERT function classification is a SHARED stage feeding both
-    clause extraction and the dense/sparse Span retrieval index (INGEST-REFACTOR phase 2a). `store.ensure_schema()`
-    must have been called; `registry` is the EDGAR EntityRegistry; `embedder` defaults to a BGE-M3 embedder for
-    the span index."""
+    clause extraction and the dense/sparse Span retrieval index (INGEST-REFACTOR phase 2a). Graph extraction runs
+    GP-1B ONCE PER CONTRACT (ADR-0035), reusing the party cache seeded from `party_seed_path` when given (a).
+    `store.ensure_schema()` must have been called; `registry` is the EDGAR EntityRegistry; `embedder` defaults to
+    a BGE-M3 embedder for the span index."""
     import hashlib
     import json
     from pathlib import Path
@@ -303,7 +374,7 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, emb
     from rag_wright.capabilities.disambiguation import disambiguate
     from rag_wright.capabilities.embedding import BGEM3Embedder
     from rag_wright.capabilities.entity_resolution import resolve_entities
-    from rag_wright.capabilities.graph_extraction import default_extractors
+    from rag_wright.capabilities.graph_extraction import production_extract_fn
     from rag_wright.capabilities.graph_storage import to_graph
     from rag_wright.capabilities.rlm_chunking import SingleCallBoundaryDiscoverer, chunk
     from rag_wright.contracts.contract_meta import ContractRecord
@@ -319,12 +390,15 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, emb
     parse_dir = Path(cache_dir) / "parsed"
     chunk_dir = Path(cache_dir) / "chunks"
     clause_cache_dir = Path(cache_dir) / "clause_extract"  # per-span granite result cache (bump/re-run safe)
-    for directory in (parse_dir, chunk_dir, clause_cache_dir):
+    party_dir = Path(cache_dir) / "graph_parties"  # per-contract GP-1B party-name cache (seeded + re-run safe)
+    for directory in (parse_dir, chunk_dir, clause_cache_dir, party_dir):
         directory.mkdir(parents=True, exist_ok=True)
+    if party_seed_path is not None:  # (a) reuse GP-1B's dg_extracted_parties instead of re-extracting ~482
+        seed_party_cache(party_dir, party_seed_path)
     discoverer = SingleCallBoundaryDiscoverer()
     summarizer = _NoSummary()
     clause_extractor = granite_clause_extractor()
-    extractors = default_extractors()
+    extract_parties_fn = production_extract_fn()  # (text) -> ContractParties | None (GP-1B granite, ADR-0035)
     classifier = LegalBertFunctionClassifier.load(Path("data/models/legalbert_function"), device="cpu")
     embedder = embedder if embedder is not None else BGEM3Embedder()  # BGE-M3 dense+sparse for the span index
     # the extraction cache is keyed by the Clause template's schema, so a template change (e.g. new field
@@ -332,9 +406,9 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, emb
     template_version = hashlib.sha256(
         json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]
 
-    def _chunk_id(value: str) -> ChunkId:
-        source, index, content_hash = value.rsplit(":", 2)
-        return ChunkId(source_doc_id=source, chunk_index=int(index), content_hash=content_hash)
+    def _party_names(text: str) -> list:
+        parties = extract_parties_fn(text)
+        return [p.name for p in parties.parties] if parties is not None else []
 
     def chunk_fn(doc: SourceDocument) -> list:
         parsed = _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
@@ -398,17 +472,11 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, emb
                 continue
         return count
 
-    def graph_fn(doc: SourceDocument, chunks: list) -> list:
-        jobs = [(ch, ex) for ch in chunks for ex in extractors]  # concurrent per chunk (docling-graph)
-
-        def _extract(job):
-            chunk_obj, extractor = job
-            try:
-                return extractor.extract(_chunk_id(chunk_obj.chunk_id), chunk_obj.text)
-            except Exception:  # noqa: BLE001 - one bad extraction must not sink the document (matches GP-1B)
-                return None
-
-        return [result for result in map_concurrent(jobs, _extract, max_concurrency=8) if result is not None]
+    def graph_fn(doc: SourceDocument, chunks: list) -> list:  # noqa: ARG001 - GP-1B is per-CONTRACT, not per-chunk
+        # Per-contract GP-1B (ADR-0035): the parties are named once in the preamble, so extract once over the
+        # document (the extractor bounds to the preamble) -- correct fidelity AND ~10x cheaper than the former
+        # per-chunk fan-out -- reusing the seeded/cached party names when present.
+        return per_contract_graph_extraction(doc, party_dir=party_dir, names_fn=_party_names)
 
     def resolve_fn(extraction_results: list):
         resolution = resolve_entities(disambiguate(extraction_results), extraction_results, registry=registry)
@@ -432,7 +500,12 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, emb
 def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:
     """INGEST-REFACTOR proof: ingest CUAD through the GENERIC pipeline + `CuadAdapter` -- one call, no
     `ingest_cuad()`. Builds the EDGAR registry, ensures the schema, ingests `limit` documents, and runs
-    party_clause_linking (KG-7) once. Point `store` at a SCRATCH database for a non-destructive smoke."""
+    party_clause_linking (KG-7) once. Point `store` at a SCRATCH database for a non-destructive smoke.
+
+    INGEST-REFACTOR (a) cache reuse (the ONLY CUAD-specific wiring): the pipeline reuses GP-1B's party
+    extractions (`dg_extracted_parties.json`, ~482) via `party_seed_path`, and prior `chunk()` manifests
+    (`data/cache/cuad/chunks`, content-hash keyed so only true matches are reused) copied into the run's cache.
+    The unavoidable cost that remains is clause property extraction (the template changed since those were cached)."""
     import json
     from pathlib import Path
 
@@ -440,9 +513,11 @@ def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int
     from rag_wright.capabilities.party_clause_linking import party_clause_linking
 
     store.ensure_schema()
+    seed_chunk_cache(Path(cache_dir) / "chunks", Path("data/cache/cuad/chunks"))
     vset = json.loads(Path("data/edgar/verification_set.json").read_text(encoding="utf-8"))
     ingest_graph = production_document_ingest(
-        store, cache_dir=cache_dir, registry=build_verified_registry(vset))
+        store, cache_dir=cache_dir, registry=build_verified_registry(vset),
+        party_seed_path="data/cache/dg_extracted_parties.json")
     return run_corpus_ingestion(
         CuadAdapter(cuad_path, limit=limit), ingest_graph,
         link_fn=lambda: len(party_clause_linking(store).links))

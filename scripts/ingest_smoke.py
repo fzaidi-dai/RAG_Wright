@@ -1,8 +1,13 @@
 """INGEST-REFACTOR smoke: ingest a few CUAD docs through the GENERIC LG-3d pipeline into a SCRATCH database.
 
 Proves `run_cuad_ingestion(CuadAdapter(), store)` populates + connects a real KG end-to-end -- one call, no
-`ingest_cuad()`. Non-destructive: a fresh scratch db (`reset=True`), never the live `ragwright_cuad`.
-Simplifications (INGEST-REFACTOR scope): function="" clause extraction, no span/embedding index.
+`ingest_cuad()`. Non-destructive: a fresh scratch db (`reset=True`), never the live `ragwright_cuad`. The
+pipeline runs the full stack: chunk -> segment -> [clause extract || dense/sparse Span index || per-contract
+GP-1B graph] -> resolve -> write -> link.
+
+INGEST-REFACTOR (a): before the run, it PROVES the cache reuse (no LLM) -- for each doc to be ingested, whether
+its GP-1B party names are seeded from `dg_extracted_parties.json` and whether a prior `chunk()` manifest is
+reused -- so a full run only pays the unavoidable clause-extraction pass.
 
   SMOKE_DB=ragwright_ingest_smoke LIMIT=2 uv run python -m scripts.ingest_smoke
 """
@@ -15,6 +20,26 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
+def _prove_cache_reuse(cuad_path: Path, cache_dir: Path, limit: int) -> None:
+    """(a) verify: seed the caches (as run_cuad_ingestion does) and report per-doc reuse -- no LLM, no DB."""
+    from rag_wright.subgraphs.contract_ingestion_pipeline import (
+        CuadAdapter,
+        seed_chunk_cache,
+        seed_party_cache,
+    )
+
+    party_dir = cache_dir / "graph_parties"
+    chunk_dir = cache_dir / "chunks"
+    seeded = seed_party_cache(party_dir, Path("data/cache/dg_extracted_parties.json"))
+    copied = seed_chunk_cache(chunk_dir, Path("data/cache/cuad/chunks"))
+    print(f"[reuse] seeded {seeded} party-name files (GP-1B), copied {copied} chunk manifests into {cache_dir}",
+          flush=True)
+    docs = list(CuadAdapter(cuad_path, limit=limit).documents())
+    party_hits = sum((party_dir / f"{d.source_doc_id}.json").exists() for d in docs)
+    print(f"[reuse] party-cache reuse for the {len(docs)} docs to ingest: {party_hits}/{len(docs)} "
+          f"(no granite party call); the rest extract per-contract once", flush=True)
+
+
 def main() -> None:
     load_dotenv()
     from rag_wright.store.arcadedb import PARTY_TO_EDGE_TYPE, ArcadeDBStore
@@ -22,6 +47,8 @@ def main() -> None:
 
     db = os.environ.get("SMOKE_DB", "ragwright_ingest_smoke")
     limit = int(os.environ.get("LIMIT", "2"))
+    cache_dir = Path("data/cache/ingest_smoke")
+    _prove_cache_reuse(Path("data/cuad/extracted/CUAD_v1.json"), cache_dir, limit)
     store = ArcadeDBStore.from_env(database=db, reset=True)  # fresh scratch db -- non-destructive
     print(f"[smoke] ingesting {limit} CUAD docs through the generic pipeline into scratch db {db!r}", flush=True)
 
