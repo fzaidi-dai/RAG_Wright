@@ -369,6 +369,7 @@ def production_document_ingest(
     a BGE-M3 embedder for the span index."""
     import hashlib
     import json
+    import os
     from pathlib import Path
 
     from rag_wright.capabilities.disambiguation import disambiguate
@@ -405,6 +406,9 @@ def production_document_ingest(
     # constraints) auto-invalidates it -- a re-run re-extracts instead of serving stale records.
     template_version = hashlib.sha256(
         json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    # Clause extraction is network-bound (granite via OpenRouter); concurrency is env-tunable (CLAUDE.md
+    # parallelize-LLM rule) -- 8 by default (populate_clause_kg's CONCURRENCY), higher for a large corpus.
+    clause_concurrency = int(os.environ.get("CLAUSE_CONCURRENCY", "8"))
 
     def _party_names(text: str) -> list:
         parties = extract_parties_fn(text)
@@ -453,7 +457,8 @@ def production_document_ingest(
             cache_file.write_text(record.model_dump_json(), encoding="utf-8")  # cache successes only
             return record
 
-        return [record for record in map_concurrent(jobs, _extract, max_concurrency=8) if record is not None]
+        return [record for record in map_concurrent(jobs, _extract, max_concurrency=clause_concurrency)
+                if record is not None]
 
     def index_fn(doc: SourceDocument, segments: list) -> int:
         # The dense/sparse Span retrieval index (FR-R): embed every span (BGE-M3, one batch) and upsert a
