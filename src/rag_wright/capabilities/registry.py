@@ -89,6 +89,10 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "clause_disambiguation",  # function: disambiguation by property (Leg A)
         "clause_function_classification",  # model: LegalBERT function classifier (T56)
         "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
+        # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
+        "candidate_routing",  # function: union combiner -> candidate pool (KG-5e)
+        "typed_constraint_match_rank",  # function: KG-5a graded constraint match (recall-safe, subsumption)
+        "dense_rank_tiebreak",  # function: cosine order for meaningful tie-breaking (KG-6/V4)
         # --- LG-1/LG-2: hardened LangGraph subgraphs ---
         "typed_clause_extraction",  # subgraph: extract -> adapt -> reground -> escalate -> [HITL] -> dead-letter
         "query_constraint_extraction",  # subgraph: query-side typed constraint extraction (graceful-empty)
