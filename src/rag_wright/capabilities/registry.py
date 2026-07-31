@@ -93,6 +93,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "candidate_routing",  # function: union combiner -> candidate pool (KG-5e)
         "typed_constraint_match_rank",  # function: KG-5a graded constraint match (recall-safe, subsumption)
         "dense_rank_tiebreak",  # function: cosine order for meaningful tie-breaking (KG-6/V4)
+        # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
+        "party_clause_linking",  # function: PARTY_TO edges (Entity -> Contract) by normalized-name join
         # --- LG-1/LG-2: hardened LangGraph subgraphs ---
         "typed_clause_extraction",  # subgraph: extract -> adapt -> reground -> escalate -> [HITL] -> dead-letter
         "query_constraint_extraction",  # subgraph: query-side typed constraint extraction (graceful-empty)

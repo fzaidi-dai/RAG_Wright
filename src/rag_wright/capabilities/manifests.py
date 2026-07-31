@@ -515,6 +515,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("retrieval", "ranking", "embedding", "deterministic"),
     ),
+    # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
+    CapabilityManifest(
+        slug="party_clause_linking",
+        kind="function",
+        display_name="Party-clause linking (PARTY_TO edges over the unified contract KG)",
+        description=(
+            "Add the missing Party<->Contract link over the one contract KG, joining the party graph to the "
+            "typed Clause KG WITHOUT re-ingest: a pure pass over the already-populated Contract and Entity "
+            "nodes that matches each contract's parties_json names to Entity nodes by normalized name and "
+            "writes PARTY_TO edges (Entity -> Contract). Many-to-many, so an edge (not an id field); a party "
+            "reaches its clauses via PARTY_TO then the clause_id key-range. Unmatched (private/unlinked) "
+            "parties are counted, not dropped (ADR-0036)."
+        ),
+        representative_queries=(
+            "link the parties of a contract to their Entity nodes",
+            "connect the party graph to the clause KG so a party reaches its clauses",
+            "add PARTY_TO edges between resolved parties and their contracts",
+        ),
+        tags=("graph", "linking", "parties", "unification", "deterministic"),
+    ),
     # --- CAP-REG-2: the built contract-KG capabilities (capability_interface added when GraphWright-governed) ---
     CapabilityManifest(
         slug="typed_value_normalization",

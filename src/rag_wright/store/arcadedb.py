@@ -103,6 +103,7 @@ DEFAULT_CANDIDATE_POOL = 100
 
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
 CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
+PARTY_TO_EDGE_TYPE = "PartyTo"  # KG-7 (ADR-0036): Entity(party) -> Contract, the unifying link
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
 _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
@@ -287,6 +288,9 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.source_doc_id STRING")
             self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.content_hash STRING")
             self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.page_count INTEGER")
+
+        if PARTY_TO_EDGE_TYPE not in types:  # KG-7 (ADR-0036): Entity(party) -> Contract unifying link
+            self._command(f"CREATE EDGE TYPE {PARTY_TO_EDGE_TYPE}")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -549,6 +553,28 @@ class ArcadeDBStore:
                 f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
                 f" SET relationship_type = {_sql_str(edge.relationship_type)},"
                 f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)}"
+            )
+        if statements:
+            self._db.execute_transaction(statements)
+
+    def all_contracts(self) -> list[dict]:
+        """KG-7: every contract's id + its authoritative party names (the join source for PARTY_TO edges)."""
+        return self._query(f"SELECT contract_id, parties_json FROM {CONTRACT_TYPE}")
+
+    def all_entities(self) -> list[dict]:
+        """KG-7: every party `Entity`'s node key + name (matched to parties_json by normalized name)."""
+        return self._query(f"SELECT entity_id, name FROM {ENTITY_TYPE}")
+
+    def write_party_contract_links(self, links: list) -> None:
+        """KG-7 (ADR-0036): write the `PARTY_TO` edges (Entity -> Contract). Idempotent: clears the existing
+        PARTY_TO layer first, so re-linking over the populated graph is safe and re-derivable. One transaction."""
+        statements = [f"DELETE FROM {PARTY_TO_EDGE_TYPE} UNSAFE"] if PARTY_TO_EDGE_TYPE in self.type_names() else []
+        for link in links:
+            statements.append(
+                f"CREATE EDGE {PARTY_TO_EDGE_TYPE}"
+                f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(link.entity_id)})"
+                f" TO (SELECT FROM {CONTRACT_TYPE} WHERE contract_id = {_sql_str(link.contract_id)})"
+                f" SET party_name = {_sql_str(link.party_name)}"
             )
         if statements:
             self._db.execute_transaction(statements)
