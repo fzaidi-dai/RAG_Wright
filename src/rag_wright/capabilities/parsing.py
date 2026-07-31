@@ -23,6 +23,7 @@ from docling_core.types.doc.document import DoclingDocument
 from pydantic import BaseModel, field_validator
 
 from rag_wright.capabilities.registry import CapabilityRegistry
+from rag_wright.contracts.identifiers import canonical_source_doc_id
 
 # Reused from the ChunkId scheme (T1): the delimiter-safe charset for a source_doc_id, so the id is
 # citation/provenance-safe and consistent with `chunk_id`.
@@ -71,8 +72,8 @@ class DoclingParser:
 
 
 def _source_doc_id(source: Path) -> str:
-    """A delimiter-safe id from the file stem (spaces/punctuation -> '_')."""
-    return _SAFE.sub("_", source.stem)
+    """A delimiter-safe id from the file stem via the ONE canonical slug (HYG-1)."""
+    return canonical_source_doc_id(source.stem)
 
 
 def _content_hash(source: Path) -> str:

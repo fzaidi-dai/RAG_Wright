@@ -18,7 +18,29 @@ from pydantic import BaseModel, ConfigDict, field_validator
 
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE_DOC_ID = re.compile(r"^[A-Za-z0-9._-]+$")
+_SOURCE_DOC_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 _CANONICAL_CIK = re.compile(r"^\d{10}$")
+
+
+def canonical_source_doc_id(raw: str) -> str:
+    """The ONE canonical filename/title -> `source_doc_id` slug (FR-S.2; HYG-1).
+
+    Every ingestion path MUST derive a `source_doc_id` through this function so the same document gets the
+    same id everywhere. Any run of characters outside the delimiter-safe set ``[A-Za-z0-9._-]`` (notably
+    spaces, ``&``, commas) collapses to a single ``_``; leading/trailing ``_`` are stripped. Existing safe
+    delimiters (``-``, ``.``, ``_`` -- e.g. inside ``EX-10.1`` / ``10-Q``) are preserved. Idempotent on an
+    already-canonical id.
+
+    The ``_`` replacement (never ``-``) is the fix for the HYG-1 divergence: two ingestion paths slugged the
+    same title with different characters (``FLEET_MAINTENANCE`` vs ``FLEET-MAINTENANCE``), breaking the
+    cross-graph join. An empty result raises rather than silently colliding every empty title into one id.
+    """
+    slug = _SOURCE_DOC_UNSAFE.sub("_", raw).strip("_") if isinstance(raw, str) else ""
+    if not slug:
+        raise ValueError(
+            f"source_doc_id slug is empty for {raw!r}; supply a non-empty, sluggable document id"
+        )
+    return slug
 
 
 class ChunkId(BaseModel):

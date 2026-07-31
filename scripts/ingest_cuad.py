@@ -41,6 +41,7 @@ from rag_wright.capabilities.rlm_chunking import (
 )
 from rag_wright.contracts.contract_meta import ContractRecord
 from rag_wright.contracts.function import canonical_function
+from rag_wright.contracts.identifiers import canonical_source_doc_id
 from rag_wright.spans.cuad_labels import parse_cuad
 from rag_wright.spans.function_families import RARE_TARGETS
 from rag_wright.spans.hybrid_classifier import HybridFunctionClassifier
@@ -58,15 +59,8 @@ RESET = os.environ.get("RESET", "1") == "1"
 CONCURRENCY = int(os.environ.get("CONCURRENCY", "6"))
 MINSZ, MAXSZ = int(os.environ.get("MINSZ", "0")), int(os.environ.get("MAXSZ", "0"))
 
-_SAFE = __import__("re").compile(r"[^A-Za-z0-9._-]+")
-
-
 def _progress(m: str) -> None:
     print(m, flush=True)
-
-
-def _slug(contract_id: str) -> str:
-    return _SAFE.sub("_", contract_id).strip("_") or "contract"
 
 
 def _device() -> str:
@@ -113,7 +107,7 @@ def _build_parsed(contract_id: str, context: str) -> ParsedDocument:
 def _chunk_one(c, discoverer, summarizer) -> dict:
     """Phase-1 unit (runs in a worker thread): build doc, single-call chunk, persist canonical text."""
     t0 = time.perf_counter()
-    sid = _slug(c.contract_id)
+    sid = canonical_source_doc_id(c.contract_id)
     parsed = _build_parsed(sid, c.context)
     manifest = chunk(parsed, summarizer=summarizer, cache_dir=CHUNK_DIR, discoverer=discoverer)
     canonical = canonical_document_text(list(manifest.chunks))
@@ -133,7 +127,7 @@ async def _phase1(contracts, discoverer, summarizer) -> list[dict]:
                 r = await asyncio.to_thread(_chunk_one, c, discoverer, summarizer)
             except Exception as e:  # noqa: BLE001 -- one bad contract must not crash the holdout run
                 done += 1
-                _progress(f"[chunk] {done}/{len(contracts)} {_slug(c.contract_id)[:44]} "
+                _progress(f"[chunk] {done}/{len(contracts)} {canonical_source_doc_id(c.contract_id)[:44]} "
                           f"FAILED {type(e).__name__}: {str(e)[:80]}")
                 return None
         done += 1

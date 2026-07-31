@@ -87,7 +87,8 @@ def test_changed_content_is_reparsed(tmp_path):
 def test_source_doc_id_is_sanitized_to_the_citation_safe_charset(tmp_path):
     src = _pdf(tmp_path / "Some Contract (v2).pdf")
     parsed = parse(src, cache_dir=tmp_path / "parsed", parser=_StubParser())
-    assert parsed.source_doc_id == "Some_Contract_v2_"  # runs of spaces/parens collapse to '_'
+    # HYG-1: the ONE canonical slug -- runs of spaces/parens collapse to '_', trailing '_' stripped
+    assert parsed.source_doc_id == "Some_Contract_v2"
 
 
 def test_load_document_reloads_the_structured_representation(tmp_path):

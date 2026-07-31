@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import threading
 import time
 from pathlib import Path
@@ -36,7 +35,7 @@ from dotenv import load_dotenv
 
 from eval.acord import load_corpus
 from rag_wright.capabilities.embedding import BGEM3Embedder
-from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.contracts.identifiers import ChunkId, canonical_source_doc_id
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.spans.function_classifier import NONE_LABEL
 from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
@@ -67,7 +66,6 @@ ESCALATE_MODEL = os.environ.get("ESCALATE_MODEL", "")
 # GATE=1: also apply the grounding quality gate (reground) before writing -- downgrade any residual ungrounded
 # EXTRACTED value to AMBIGUOUS regardless of model (the judge's double duty).
 GATE = os.environ.get("GATE", "0") == "1"
-_SLUG = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _device() -> str:
@@ -111,7 +109,7 @@ def main() -> None:
         t0 = time.perf_counter()
         n_spans = 0
         for i, clause in enumerate(clauses, 1):
-            cid = ChunkId.of("acord-" + _SLUG.sub("-", clause.clause_id), 0, clause.text)
+            cid = ChunkId.of("acord-" + canonical_source_doc_id(clause.clause_id), 0, clause.text)
             spans = [s for s in segment_clause(str(cid), clause.text) if s.text.strip()]
             if not spans:
                 continue

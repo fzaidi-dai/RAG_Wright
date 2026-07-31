@@ -16,7 +16,6 @@ GraphConverter reads (`edge_label`, `graph_reference`, `reference_closed_catalog
 from __future__ import annotations
 
 import os
-import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,7 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from rag_wright.capabilities.disambiguation import disambiguate
 from rag_wright.capabilities.entity_resolution import ResolutionResult, resolve_entities
 from rag_wright.capabilities.graph_extraction import parties_to_extraction
-from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.contracts.identifiers import ChunkId, canonical_source_doc_id
 from rag_wright.corpus.edgar import normalize_cik, normalize_name
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 
@@ -80,11 +79,6 @@ class ContractParties(BaseModel):
     )
 
 
-def _slug(contract_id: str) -> str:
-    """Sanitize a contract id into a valid `ChunkId.source_doc_id` ([A-Za-z0-9._-])."""
-    return re.sub(r"[^A-Za-z0-9._-]", "-", contract_id) or "contract"
-
-
 def build_verified_registry(vset: dict) -> EntityRegistry:
     """An `EntityRegistry` from the human-verified set: each CIK-resolved entity becomes a
     `RegistryRecord(CIK, representative, aliases=variants)`, so an extracted party surface form that matches
@@ -118,7 +112,7 @@ def resolve_extracted(
     results = []
     for contract_id, cp in items:
         names = [p.name for p in cp.parties]
-        chunk_id = ChunkId.of(_slug(contract_id), 0, "|".join(names) or contract_id)
+        chunk_id = ChunkId.of(canonical_source_doc_id(contract_id), 0, "|".join(names) or contract_id)
         results.append(parties_to_extraction(chunk_id, names))
     resolution = resolve_entities(disambiguate(results), results, registry=registry)
     if private_map:
