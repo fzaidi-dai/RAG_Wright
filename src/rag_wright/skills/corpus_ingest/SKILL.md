@@ -86,8 +86,10 @@ fresh `.py` from a new ontology, then hand-maintain it — ADR-0037), a **retrai
 - **The pipeline internals** (`build_document_ingest` graph, dead-letter, the extraction seams) — LG-3d.
 - **The extraction capabilities** — semantic_chunking, the function classifier, clause extraction (docling-graph
   + granite, ADR-0037 template), GP-1B graph_extraction (ADR-0035), entity_resolution, `party_clause_linking`.
-- **The span/embedding retrieval index** — not yet wired into the generic `write` (INGEST-REFACTOR phase 2); a
-  corpus currently gets the typed KG + entity graph + link, but not the dense/sparse retrieval index.
+- **The span/embedding retrieval index** — wired into the pipeline as a parallel `index_spans` branch off the
+  shared `segment` node (INGEST-REFACTOR phase 2a); a corpus now gets the typed KG + entity graph + link + the
+  dense/sparse retrieval index in one pass. Indexing is best-effort (a failed index degrades to 0 spans, never
+  dead-letters the document's KG).
 
 The method is: parse behind the adapter, one canonical id, run the generic pipeline, connect once. Keep this
 file about that shape; the pipeline supplies the flow, the capabilities, and the tests.
