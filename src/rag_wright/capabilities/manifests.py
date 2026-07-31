@@ -242,21 +242,22 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="graph_extraction",
-        kind="subgraph",  # multi-step LLM extractor stack (NER + OpenIE + LLM); CAP-REG-1
-        display_name="Graph extraction (hybrid: spaCy NER + contract + LLM escalation)",
+        kind="subgraph",  # multi-step extractor workflow; CAP-REG-1
+        display_name="Graph extraction (GP-1B docling-graph party/relational)",
         description=(
-            "Extract ontology-conforming graph facts from a parsed chunk with a hybrid stack: spaCy "
-            "NER for typed entity mentions, Pydantic-contract extraction for clause categories and "
-            "signing-party CONTRACTS_WITH edges, and an LLM escalation for hard-case relationships. "
-            "Every fact carries chunk_id provenance and a confidence tag (FR-C.6, FR-I.4)."
+            "Extract ontology-conforming graph facts from a parsed chunk with the GP-1B docling-graph "
+            "extractor (granite-4.1-8b): the signing parties as ORGANIZATION mentions plus the structural "
+            "CONTRACTS_WITH edges between them, EXTRACTED. This is the entity/relational extractor that "
+            "populated the relational (Leg C) graph at real recall 0.991; the earlier spaCy-NER + "
+            "contract-LLM + escalation hybrid is retired (ADR-0035). Every fact carries chunk_id provenance "
+            "and a confidence tag (FR-C.6, FR-I.4)."
         ),
         representative_queries=(
-            "extract entities and relationships from a contract chunk",
-            "identify the signing parties and which clause types a chunk contains",
-            "produce ontology-conforming graph facts with provenance and confidence",
-            "recognize the organizations and people mentioned in a document",
+            "extract the signing parties and their relationships from a contract chunk",
+            "identify the organizations party to an agreement and the CONTRACTS_WITH edges between them",
+            "produce ontology-conforming party/relational graph facts with provenance and confidence",
         ),
-        tags=("extraction", "graph", "ner", "spacy", "ingestion"),
+        tags=("extraction", "graph", "parties", "relational", "docling-graph", "ingestion"),
         capability_interface=CapabilityInterface(
             inputs={"chunks": "chunk"},  # consumes the same ingestion `chunk` (uses its id + text)
             outputs={"facts": "extraction"},  # chunk-anchored entity mentions + relationship facts
