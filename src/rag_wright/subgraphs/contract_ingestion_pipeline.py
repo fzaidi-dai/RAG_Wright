@@ -4,17 +4,18 @@ Source documents -> a populated, connected contract KG, composing the LG-1/LG-2 
 ingest-side capabilities. The pipeline is corpus-AGNOSTIC; each per-document ingest runs:
 
         START --> chunk [RetryPolicy]        (semantic_chunking: text -> chunks)
-                    |
-              +-----+-----+                  (the two extraction paths fan out in parallel)
-              v           v
-        extract_clauses  extract_graph       (segment + typed_clause_extraction || graph_extraction)
-              +-----+-----+
                     v
+                 segment                      (SHARED: segment + LegalBERT function-classify -> spans)
+              /     |     \\                    (three branches fan out in parallel from the shared spans)
+        extract   index    extract_graph      (clause extraction | dense/sparse Span index | graph extraction)
+        _clauses  _spans
+              \\     |     /
                  resolve                      (entity_resolution: mentions -> canonical entities)
                     v
-                  write                       (typed_kg_write + write_graph)  --> END
+                  write                       (write_clause_kg + write_graph; span index already written) --> END
                     |  (any stage fails)
-                    +--> dead_letter --> END  (one bad document never kills the corpus ingest)
+                    +--> dead_letter --> END  (one bad document never kills the corpus ingest; the span
+                                               index is best-effort -- its failure never dead-letters the doc)
 
 **The corpus seam (the whole point).** A `CorpusAdapter` yields `SourceDocument`s -- the ONLY per-corpus code.
 Adding a corpus = writing one adapter (`documents() -> SourceDocument{canonical id, text, optional metadata}`),
@@ -70,7 +71,9 @@ class CorpusAdapter(Protocol):
 
 # The injected per-document stage seams (each wraps a built subgraph / capability; stubbed in tests).
 ChunkFn = Callable[[SourceDocument], list]  # doc -> chunks
-ClausesFn = Callable[[SourceDocument, list], list]  # (doc, chunks) -> typed clause records
+SegmentFn = Callable[[SourceDocument, list], list]  # (doc, chunks) -> segments [(op, function, chunk_doc_start)]
+ClausesFn = Callable[[SourceDocument, list], list]  # (doc, segments) -> typed clause records
+IndexFn = Callable[[SourceDocument, list], int]  # (doc, segments) -> #Span records written (retrieval index)
 GraphFn = Callable[[SourceDocument, list], list]  # (doc, chunks) -> ExtractionResults
 ResolveFn = Callable[[list], Any]  # extraction results -> resolution
 WriteFn = Callable[[SourceDocument, list, Any], dict]  # (doc, clause records, resolution) -> counts
@@ -80,7 +83,9 @@ LinkFn = Callable[[], int]  # corpus-level: party_clause_linking -> #PARTY_TO ed
 class IngestionState(TypedDict, total=False):
     document: SourceDocument
     chunks: list
+    segments: list  # shared segmentation: [(OperativeSpan, function, chunk_doc_start)] for clauses + span index
     clause_records: list
+    span_count: int  # Span records written to the retrieval index (best-effort)
     extraction_results: list
     resolution: Any
     written: dict
@@ -89,7 +94,9 @@ class IngestionState(TypedDict, total=False):
 
 def build_document_ingest(
     chunk_fn: ChunkFn,
+    segment_fn: SegmentFn,
     clauses_fn: ClausesFn,
+    index_fn: IndexFn,
     graph_fn: GraphFn,
     resolve_fn: ResolveFn,
     write_fn: WriteFn,
@@ -116,10 +123,27 @@ def build_document_ingest(
         doc = state["document"]
         return _guard("chunk", lambda: {"chunks": chunk_fn(doc)}, runtime, doc)
 
+    def segment(state: IngestionState, runtime: Runtime) -> IngestionState:
+        # Shared segmentation + function classification, consumed by BOTH clause extraction and the span index.
+        doc = state["document"]
+        return _guard("segment", lambda: {"segments": segment_fn(doc, state.get("chunks", []))}, runtime, doc)
+
     def extract_clauses(state: IngestionState, runtime: Runtime) -> IngestionState:
         doc = state["document"]
         return _guard("extract_clauses",
-                      lambda: {"clause_records": clauses_fn(doc, state.get("chunks", []))}, runtime, doc)
+                      lambda: {"clause_records": clauses_fn(doc, state.get("segments", []))}, runtime, doc)
+
+    def index_spans(state: IngestionState) -> IngestionState:
+        # The dense/sparse retrieval index (Span records). BEST-EFFORT: a failed index must NOT lose the
+        # document's clause KG / entity graph, so it degrades to 0 rather than dead-lettering.
+        if state.get("dead_letter"):
+            return {}
+        doc = state["document"]
+        with business_span("contract_ingestion.index_spans"):
+            try:
+                return {"span_count": index_fn(doc, state.get("segments", []))}
+            except Exception:  # noqa: BLE001 - the retrieval index is a separate, best-effort output
+                return {"span_count": 0}
 
     def extract_graph(state: IngestionState, runtime: Runtime) -> IngestionState:
         doc = state["document"]
@@ -137,24 +161,30 @@ def build_document_ingest(
             return {}
         doc = state["document"]
         with business_span("contract_ingestion.write", source_doc_id=doc.source_doc_id):
-            return {"written": write_fn(doc, state.get("clause_records", []), state.get("resolution"))}
+            counts = write_fn(doc, state.get("clause_records", []), state.get("resolution"))
+            counts["spans"] = state.get("span_count", 0)  # the retrieval index count, for the report
+            return {"written": counts}
 
-    def _route_after_chunk(state: IngestionState):
-        # chunk failed -> dead-letter straight to END; else fan out to BOTH extraction paths (parallel)
-        return "end" if state.get("dead_letter") else ["clauses", "graph"]
+    def _route(key: str):
+        return lambda state: "end" if state.get("dead_letter") else key
 
     g = StateGraph(IngestionState)
     g.add_node("chunk", chunk, retry_policy=retry_policy)
+    g.add_node("segment", segment, retry_policy=retry_policy)
     g.add_node("extract_clauses", extract_clauses, retry_policy=retry_policy)
+    g.add_node("index_spans", index_spans)
     g.add_node("extract_graph", extract_graph, retry_policy=retry_policy)
     g.add_node("resolve", resolve)
     g.add_node("write", write)
 
     g.add_edge(START, "chunk")
+    g.add_conditional_edges("chunk", _route("segment"), {"segment": "segment", "end": END})
+    # after segmentation, fan out (parallel): clause extraction, the span index, and graph extraction
     g.add_conditional_edges(
-        "chunk", _route_after_chunk,
-        {"clauses": "extract_clauses", "graph": "extract_graph", "end": END})
-    g.add_edge("extract_clauses", "resolve")  # resolve joins both extraction paths
+        "segment", lambda s: "end" if s.get("dead_letter") else ["clauses", "index", "graph"],
+        {"clauses": "extract_clauses", "index": "index_spans", "graph": "extract_graph", "end": END})
+    g.add_edge("extract_clauses", "resolve")  # resolve joins all three parallel branches
+    g.add_edge("index_spans", "resolve")
     g.add_edge("extract_graph", "resolve")
     g.add_edge("resolve", "write")
     g.add_edge("write", END)
@@ -260,21 +290,22 @@ class _NoSummary:
         return ""
 
 
-def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any):
-    """INGEST-REFACTOR: wire the six per-document stage seams to the real capabilities (the two-halves glue).
-    All heavy imports are lazy. Clause extraction is function-classified for real (LegalBERT, local); the one
-    simplification for the proof (see tasks.md INGEST-REFACTOR) is no span/embedding retrieval index (a separate
-    concern). `store.ensure_schema()` must have been called; `registry` is the EDGAR EntityRegistry."""
+def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None):
+    """INGEST-REFACTOR: wire the per-document stage seams to the real capabilities (the two-halves glue).
+    All heavy imports are lazy. Segmentation + LegalBERT function classification is a SHARED stage feeding both
+    clause extraction and the dense/sparse Span retrieval index (INGEST-REFACTOR phase 2a). `store.ensure_schema()`
+    must have been called; `registry` is the EDGAR EntityRegistry; `embedder` defaults to a BGE-M3 embedder for
+    the span index."""
     import hashlib
+    import json
     from pathlib import Path
 
     from rag_wright.capabilities.disambiguation import disambiguate
+    from rag_wright.capabilities.embedding import BGEM3Embedder
     from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.capabilities.graph_extraction import default_extractors
     from rag_wright.capabilities.graph_storage import to_graph
     from rag_wright.capabilities.rlm_chunking import SingleCallBoundaryDiscoverer, chunk
-    import json
-
     from rag_wright.contracts.contract_meta import ContractRecord
     from rag_wright.contracts.function import canonical_function
     from rag_wright.contracts.identifiers import ChunkId
@@ -282,7 +313,7 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any):
     from rag_wright.ontology.clause_template import Clause
     from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
     from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
-    from rag_wright.spans.segment import segment_clause
+    from rag_wright.spans.segment import segment_clause, to_span_record
     from rag_wright.util.concurrent import map_concurrent
 
     parse_dir = Path(cache_dir) / "parsed"
@@ -295,6 +326,7 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any):
     clause_extractor = granite_clause_extractor()
     extractors = default_extractors()
     classifier = LegalBertFunctionClassifier.load(Path("data/models/legalbert_function"), device="cpu")
+    embedder = embedder if embedder is not None else BGEM3Embedder()  # BGE-M3 dense+sparse for the span index
     # the extraction cache is keyed by the Clause template's schema, so a template change (e.g. new field
     # constraints) auto-invalidates it -- a re-run re-extracts instead of serving stale records.
     template_version = hashlib.sha256(
@@ -308,40 +340,63 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any):
         parsed = _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
         return list(chunk(parsed, summarizer=summarizer, cache_dir=chunk_dir, discoverer=discoverer).chunks)
 
-    def clauses_fn(doc: SourceDocument, chunks: list) -> list:
-        # segment every chunk into operative spans, classify each span's function (LegalBERT, local), then
-        # extract the typed record only for spans that classify to a REAL function (NONE / off-taxonomy spans
-        # are not clauses -- the same filter the corpus's clause cache applies). Extraction is CONCURRENT
-        # (map_concurrent, like populate_clause_kg): granite is ~10s/single-call, so sequential would be minutes
-        # per document -- the CLAUDE.md parallelize-LLM rule.
-        spans = [s for ch in chunks for s in segment_clause(ch.chunk_id, ch.text) if s.text.strip()]
-        if not spans:
+    def segment_fn(doc: SourceDocument, chunks: list) -> list:
+        # SHARED segmentation + function classification (LegalBERT, local), fed to BOTH clause extraction and the
+        # span index. Every span is kept (the index needs them all); its `function` is the classifier's label,
+        # canonicalized where possible (NONE / off-taxonomy stays as-is -- the ingest_cuad convention).
+        ops = [(op, ch.doc_start) for ch in chunks
+               for op in segment_clause(ch.chunk_id, ch.text) if op.text.strip()]
+        if not ops:
             return []
-        functions = classifier.classify([s.text for s in spans])
+        functions = classifier.classify([op.text for op, _ in ops])
+        return [(op, canonical_function(raw) or raw, chunk_doc_start)
+                for (op, chunk_doc_start), raw in zip(ops, functions)]
+
+    def clauses_fn(doc: SourceDocument, segments: list) -> list:
+        # Extract the typed record only for spans that classify to a REAL function (NONE / off-taxonomy spans are
+        # not clauses -- but they ARE still indexed by index_fn). CONCURRENT (map_concurrent, like
+        # populate_clause_kg): granite is ~10s/single-call, so sequential would be minutes per document.
         jobs = [
-            (index, span, canonical_function(raw))
-            for index, (span, raw) in enumerate(zip(spans, functions))
-            if canonical_function(raw) is not None  # NONE / off-taxonomy span -> not a clause
+            (index, op, canonical_function(function))
+            for index, (op, function, _cds) in enumerate(segments)
+            if canonical_function(function) is not None
         ]
         if not jobs:
             return []
 
         def _extract(job):
-            index, span, function = job
-            clause_cid = ChunkId.of(doc.source_doc_id, index, span.text)
+            index, op, function = job
+            clause_cid = ChunkId.of(doc.source_doc_id, index, op.text)
             cache_file = clause_cache_dir / (hashlib.sha256(
                 f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
             if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no granite re-call
                 return ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
             try:
                 record = clause_extractor(
-                    chunk_id=clause_cid, function=function, text=span.text, span_id=span.span_id)
+                    chunk_id=clause_cid, function=function, text=op.text, span_id=op.span_id)
             except Exception:  # noqa: BLE001 - a per-span failure (truncated/invalid JSON) is SKIPPED (matches
-                return None    # populate_clause_kg) and NOT cached, so a max_tokens bump re-run re-extracts it
+                return None    # populate_clause_kg) and NOT cached, so a template-fix re-run re-extracts it
             cache_file.write_text(record.model_dump_json(), encoding="utf-8")  # cache successes only
             return record
 
         return [record for record in map_concurrent(jobs, _extract, max_concurrency=8) if record is not None]
+
+    def index_fn(doc: SourceDocument, segments: list) -> int:
+        # The dense/sparse Span retrieval index (FR-R): embed every span (BGE-M3, one batch) and upsert a
+        # SpanRecord with document-absolute offsets + function tag. Per-span write is best-effort (skip on error).
+        if not segments:
+            return 0
+        dense_vecs, sparse_vecs = embedder.encode_batch([op.text.strip() for op, _, _ in segments])
+        count = 0
+        for (op, function, chunk_doc_start), dense, sparse in zip(segments, dense_vecs, sparse_vecs):
+            try:
+                store.upsert_span(to_span_record(
+                    op, contract_id=doc.source_doc_id, chunk_doc_start=chunk_doc_start,
+                    dense_vector=list(dense), sparse_vector=sparse, function=function))
+                count += 1
+            except Exception:  # noqa: BLE001 - a per-span index write must not sink the document's KG
+                continue
+        return count
 
     def graph_fn(doc: SourceDocument, chunks: list) -> list:
         jobs = [(ch, ex) for ch in chunks for ex in extractors]  # concurrent per chunk (docling-graph)
@@ -370,7 +425,8 @@ def production_document_ingest(store: Any, *, cache_dir: Any, registry: Any):
         store.write_graph(nodes, edges)
         return {"clauses": len(clause_records), "entities": len(nodes), "edges": len(edges)}
 
-    return build_document_ingest(chunk_fn, clauses_fn, graph_fn, resolve_fn, write_fn)
+    return build_document_ingest(
+        chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn)
 
 
 def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:

@@ -34,6 +34,19 @@ def main() -> None:
     print(f"[smoke] entity graph: {store.graph_counts()}", flush=True)
     n = store._query(f"SELECT count(*) AS n FROM {PARTY_TO_EDGE_TYPE}")[0]["n"]
     print(f"[smoke] PARTY_TO edges connecting the two: {n}", flush=True)
+
+    # INGEST-REFACTOR phase 2a: the dense/sparse Span retrieval index -- prove it landed AND that hybrid
+    # retrieval returns hits over it.
+    from rag_wright.capabilities.embedding import BGEM3Embedder
+    from rag_wright.store.arcadedb import SPAN_TYPE
+
+    spans = store._query(f"SELECT count(*) AS n FROM {SPAN_TYPE}")[0]["n"]
+    print(f"[smoke] Span retrieval index: {spans} spans", flush=True)
+    emb = BGEM3Embedder()
+    q = "limitation of the parties' liability under the agreement"
+    hits = store.span_hybrid_search(emb.encode_dense(q), emb.encode_sparse(q), k=3)
+    print(f"[smoke] hybrid_search({q!r}) -> {len(hits)} hits "
+          f"(top function={hits[0].get('function') if hits else None})", flush=True)
     store.close()
 
 

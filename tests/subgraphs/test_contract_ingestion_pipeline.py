@@ -20,8 +20,8 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
 
 
-def _stub_stages(*, fail_chunk_for=()):
-    calls = {"chunk": [], "clauses": [], "graph": [], "resolve": 0, "write": []}
+def _stub_stages(*, fail_chunk_for=(), fail_index_for=()):
+    calls = {"chunk": [], "segment": [], "clauses": [], "index": [], "graph": [], "resolve": 0, "write": []}
 
     def chunk_fn(doc):
         calls["chunk"].append(doc.source_doc_id)
@@ -29,9 +29,19 @@ def _stub_stages(*, fail_chunk_for=()):
             raise RuntimeError("chunk blip")
         return [f"{doc.source_doc_id}::chunk0"]
 
-    def clauses_fn(doc, chunks):
+    def segment_fn(doc, chunks):  # SHARED segmentation: one stub segment (op, function, chunk_doc_start)
+        calls["segment"].append(doc.source_doc_id)
+        return [(f"span::{doc.source_doc_id}", "Cap On Liability", 0)]
+
+    def clauses_fn(doc, segments):
         calls["clauses"].append(doc.source_doc_id)
         return [f"clause::{doc.source_doc_id}"]
+
+    def index_fn(doc, segments):  # the span retrieval index -> #Span records written
+        calls["index"].append(doc.source_doc_id)
+        if doc.source_doc_id in fail_index_for:
+            raise RuntimeError("index blip")
+        return len(segments)
 
     def graph_fn(doc, chunks):
         calls["graph"].append(doc.source_doc_id)
@@ -45,7 +55,7 @@ def _stub_stages(*, fail_chunk_for=()):
         calls["write"].append(doc.source_doc_id)
         return {"clauses": len(clause_records), "entities": len(resolution["resolved"])}
 
-    return (chunk_fn, clauses_fn, graph_fn, resolve_fn, write_fn), calls
+    return (chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn), calls
 
 
 class _FakeAdapter:
@@ -65,10 +75,11 @@ def test_ingests_a_document_through_all_stages_in_order():
     stages, calls = _stub_stages()
     out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
 
-    assert calls["chunk"] == ["C1"]
-    assert calls["clauses"] == ["C1"] and calls["graph"] == ["C1"]  # both extraction paths ran
+    assert calls["chunk"] == ["C1"] and calls["segment"] == ["C1"]
+    # segmentation feeds all three parallel branches
+    assert calls["clauses"] == ["C1"] and calls["index"] == ["C1"] and calls["graph"] == ["C1"]
     assert calls["resolve"] == 1
-    assert out["written"] == {"clauses": 1, "entities": 1}
+    assert out["written"] == {"clauses": 1, "entities": 1, "spans": 1}  # incl. the retrieval-index count
     assert "dead_letter" not in out
 
 
@@ -79,7 +90,17 @@ def test_bad_document_dead_letters_without_raising():
     assert out["dead_letter"]["reason"] == "ingest_failed"
     assert out["dead_letter"]["source_doc_id"] == "C1"
     assert "written" not in out  # downstream stages skipped
-    assert calls["write"] == []
+    assert calls["segment"] == [] and calls["clauses"] == [] and calls["write"] == []
+
+
+def test_index_failure_is_best_effort_and_does_not_dead_letter():
+    stages, calls = _stub_stages(fail_index_for={"C1"})
+    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+
+    # a failed span index must NOT lose the document's clause KG / entity graph
+    assert "dead_letter" not in out
+    assert out["written"] == {"clauses": 1, "entities": 1, "spans": 0}  # spans degraded to 0, rest written
+    assert calls["write"] == ["C1"]
 
 
 def test_run_corpus_ingestion_maps_all_docs_and_links_once():
