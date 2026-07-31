@@ -102,6 +102,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "relational_qa",  # subgraph: graph_query -> chunk_read -> generate_answer (entity question -> cited answer)
         "intra_document_qa",  # subgraph: scoped KG query -> generate_answer (contract + question -> cited answer)
         "cross_corpus_retrieval",  # subgraph: constraints+functions -> route -> match_rank -> tiebreak -> cited clauses
+        "contract_ingestion_pipeline",  # subgraph: generic corpus ingest (chunk->extract->resolve->write->link)
     }
 )
 

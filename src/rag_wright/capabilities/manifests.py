@@ -742,6 +742,27 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("retrieval", "cross-corpus", "ranking", "subgraph", "langgraph", "composite"),
     ),
+    CapabilityManifest(
+        slug="contract_ingestion_pipeline",
+        kind="subgraph",
+        display_name="Contract ingestion pipeline (corpus -> populated, connected KG)",
+        description=(
+            "Ingest a corpus of contracts into a populated, connected contract KG, as one GENERIC composite "
+            "LangGraph subgraph: per document, chunk (semantic_chunking) -> extract clauses "
+            "(typed_clause_extraction) and the party/relational graph (graph_extraction) in parallel -> resolve "
+            "entities (entity_resolution) -> write (typed clause KG + entity graph), with a per-document "
+            "dead-letter so one bad document never kills the ingest; then party_clause_linking (KG-7) runs once "
+            "to connect parties to clauses. Corpus-agnostic: a CorpusAdapter supplies the documents (parsing + "
+            "the one canonical source_doc_id + any corpus metadata), so adding a corpus is one adapter, never a "
+            "re-implemented ingest_xyz()."
+        ),
+        representative_queries=(
+            "ingest a corpus of contracts into the knowledge graph",
+            "populate and connect the typed clause KG and party graph from source documents",
+            "run the generic contract ingestion pipeline over a new corpus adapter",
+        ),
+        tags=("ingestion", "pipeline", "corpus", "subgraph", "langgraph", "composite"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
