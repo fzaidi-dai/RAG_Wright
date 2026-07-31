@@ -558,12 +558,12 @@ class ArcadeDBStore:
             self._db.execute_transaction(statements)
 
     def all_contracts(self) -> list[dict]:
-        """KG-7: every contract's id + its authoritative party names (the join source for PARTY_TO edges)."""
-        return self._query(f"SELECT contract_id, parties_json FROM {CONTRACT_TYPE}")
+        """KG-7: every contract id (the set a PARTY_TO edge's Entity provenance must land in)."""
+        return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
 
     def all_entities(self) -> list[dict]:
-        """KG-7: every party `Entity`'s node key + name (matched to parties_json by normalized name)."""
-        return self._query(f"SELECT entity_id, name FROM {ENTITY_TYPE}")
+        """KG-7: every party `Entity`'s node key, name, and `chunk_id` (its extraction-provenance contract)."""
+        return self._query(f"SELECT entity_id, name, chunk_id FROM {ENTITY_TYPE}")
 
     def write_party_contract_links(self, links: list) -> None:
         """KG-7 (ADR-0036): write the `PARTY_TO` edges (Entity -> Contract). Idempotent: clears the existing

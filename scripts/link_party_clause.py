@@ -36,12 +36,11 @@ def main() -> None:
 
     # Always derive + report first (this is the smoke; it writes nothing).
     result = derive_party_contract_links(contracts, entities)
-    total_parties = result.unmatched_parties + len({(l.entity_id, l.contract_id) for l in result.links})
-    matched = len(result.links)
-    rate = (matched / total_parties * 100) if total_parties else 0.0
-    print(f"[kg-7] DRY: {matched} PARTY_TO links across {result.contracts_processed} contracts; "
-          f"{result.unmatched_parties} unmatched (private/unlinked) parties "
-          f"({rate:.0f}% of party slots matched an Entity)", flush=True)
+    contracts_reached = len({link.contract_id for link in result.links})
+    print(f"[kg-7] DRY: {len(result.links)} PARTY_TO links (Entity -> Contract by extraction provenance) "
+          f"across {contracts_reached}/{result.contracts_processed} contracts; "
+          f"{result.unmatched_parties} entities whose contract has no node (coverage gap, expected)",
+          flush=True)
 
     if not WRITE:
         print("[kg-7] DRY only (set WRITE=1 to add the edges). No changes made.", flush=True)

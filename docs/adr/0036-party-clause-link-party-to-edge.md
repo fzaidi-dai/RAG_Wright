@@ -28,14 +28,22 @@ are already populated, so this must be derivable WITHOUT re-ingesting either.
   scalar field can only encode a single owner (as `Clause` does); a list field is not range-queryable and
   breaks the dedup. An edge is the correct representation, and it stays extensible for a future per-clause party
   ROLE attribute.
-- **Join by canonical name.** `Contract.parties_json` (the authoritative party names) and `Entity.name` both
-  pass through `normalize_entity_name`, so surface variants match the one CIK node. First-wins on a normalized
-  collision; a `(entity_id, contract_id)` pair is deduped.
+- **Join by provenance, on the canonical id.** Each `Entity.chunk_id` (`<source_doc_id>:idx:hash`) carries the
+  `source_doc_id` of the contract GP-1B extracted the party from; post-HYG-1/HYG-2 every graph shares the one
+  canonical `_` slug, so that `source_doc_id` is an exact match for a `Contract.contract_id`. A
+  `(entity_id, contract_id)` pair is deduped. (The original design matched `Contract.parties_json` names to
+  `Entity.name` by `normalize_entity_name`, but the live `parties_json` is empty on every contract, so it
+  linked nothing -- the smoke run caught this; the provenance id join is what the data supports.)
 - **No re-ingest.** The derivation only reads the populated `Contract` + `Entity` nodes and writes edges; it
   parses/chunks/extracts nothing. `write_party_contract_links` clears the `PARTY_TO` layer first, so re-linking
   is idempotent and re-derivable.
-- **Honest gap surfaced.** A party in `parties_json` with no matching `Entity` (private / unlinked, resolved to
-  no node) is COUNTED (`unmatched_parties`), never silently dropped -- the same gap as the GP-1B graph.
+- **Honest gap surfaced.** An `Entity` whose contract has no `Contract` node -- the corpus-coverage gap: most
+  CUAD contracts are party-extracted but not clause-ingested (CUAD-FULL-COVERAGE) -- is COUNTED
+  (`unmatched_parties`), never silently dropped.
+- **Known limitation.** GP-1B upserts one `Entity` node per resolved party, so a multi-contract party keeps
+  only its last-written `chunk_id`; the provenance join links it to that one extraction-source contract, not
+  every contract it signed. Full many-to-many coverage needs the per-(contract, party) mention data (the GP-1B
+  cache) -- a later enhancement alongside the party-role layer.
 - **Registered** as the `party_clause_linking` `function` (twofold: canonical slug + ARD manifest + register).
 
 ## Consequences

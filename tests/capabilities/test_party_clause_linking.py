@@ -1,13 +1,13 @@
-"""KG-7: the Party<->Contract unifying link (`party_clause_linking`), derived over already-populated nodes.
+"""KG-7 (revised): the Party<->Contract link, derived by a PROVENANCE join over already-populated nodes.
 
-Hermetic: the derivation is pure (plain contract/entity dicts, no store), and the capability runs against a
-fake store. No re-ingest -- KG-7 only reads the populated Contract + Entity nodes and adds PARTY_TO edges,
-joining the party graph to the typed Clause KG (a clause's contract is implicit in its clause_id).
+The original name-match join was dead on the live data (`Contract.parties_json` is empty on every contract).
+The real association lives in `Entity.chunk_id` (`<source_doc_id>:idx:hash`, where `source_doc_id` is the
+contract) -- stamped by GP-1B at extraction. Post-HYG-1/2 all graphs share the canonical `_` id, so this is a
+clean exact id join. Hermetic: the derivation is pure (plain dicts, no store); the capability runs against a
+fake store. No re-ingest -- KG-7 only reads populated Contract + Entity nodes and adds PARTY_TO edges.
 """
 
 from __future__ import annotations
-
-import json
 
 from rag_wright.capabilities.party_clause_linking import (
     PartyClauseLinkResult,
@@ -19,55 +19,60 @@ from rag_wright.capabilities.party_clause_linking import (
 from rag_wright.capabilities.registry import CapabilityRegistry
 
 
-def _entities(*pairs):
-    return [{"entity_id": eid, "name": name} for eid, name in pairs]
+def _entity(entity_id, name, contract_id):
+    # chunk_id = <source_doc_id>:<index>:<hash>; source_doc_id is the contract
+    return {"entity_id": entity_id, "name": name, "chunk_id": f"{contract_id}:0:{'a' * 16}"}
 
 
-def _contract(contract_id, parties):
-    return {"contract_id": contract_id, "parties_json": json.dumps(parties)}
+# --- derive_party_contract_links: pure, provenance (chunk_id source_doc == contract_id) join --------
 
 
-# --- derive_party_contract_links: pure, normalized-name join --------------------------------------
-
-
-def test_links_parties_to_contracts_by_normalized_name():
-    entities = _entities(("CIK1", "Bank of America, N.A."), ("CIK2", "Acme Corporation"))
-    contracts = [_contract("C1", ["Bank of America", "Acme Corp"])]  # surface variants of the same entities
+def test_links_entities_to_contracts_by_provenance():
+    contracts = [{"contract_id": "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"}]
+    entities = [
+        _entity("CIK1", "Acme Corporation", "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"),
+        _entity("UNLINKED:beta", "Beta LLC", "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"),
+    ]
 
     result = derive_party_contract_links(contracts, entities)
 
     assert isinstance(result, PartyClauseLinkResult)
-    assert {(l.entity_id, l.contract_id) for l in result.links} == {("CIK1", "C1"), ("CIK2", "C1")}
+    assert {(l.entity_id, l.contract_id) for l in result.links} == {
+        ("CIK1", "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"),
+        ("UNLINKED:beta", "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"),
+    }
     assert result.unmatched_parties == 0
     assert result.contracts_processed == 1
 
 
-def test_unmatched_party_is_counted_not_linked():
-    entities = _entities(("CIK1", "Acme Corporation"))
-    contracts = [_contract("C1", ["Acme Corp", "Private Family Trust"])]  # the trust has no Entity node
+def test_party_name_is_carried_from_the_entity():
+    contracts = [{"contract_id": "C1"}]
+    result = derive_party_contract_links(contracts, [_entity("CIK1", "Acme Corporation", "C1")])
+    assert result.links[0].party_name == "Acme Corporation"
+
+
+def test_entity_whose_contract_has_no_node_is_counted_not_linked():
+    # the coverage gap: an entity from a contract that was never ingested as a Contract node
+    contracts = [{"contract_id": "C1"}]
+    entities = [_entity("CIK1", "Acme", "C1"), _entity("CIK2", "Zeta", "UNINGESTED_CONTRACT")]
 
     result = derive_party_contract_links(contracts, entities)
 
     assert {(l.entity_id, l.contract_id) for l in result.links} == {("CIK1", "C1")}
-    assert result.unmatched_parties == 1  # the honest gap (private/unlinked party), surfaced not dropped
+    assert result.unmatched_parties == 1  # Zeta's contract has no node -> counted, never fabricated
 
 
-def test_dedups_repeated_party_within_a_contract():
-    entities = _entities(("CIK1", "Acme Corporation"))
-    contracts = [_contract("C1", ["Acme Corp", "Acme Corporation", "  acme  corp "])]  # 3 surfaces, 1 entity
-
+def test_dedups_repeated_entity_contract_pair():
+    contracts = [{"contract_id": "C1"}]
+    entities = [_entity("CIK1", "Acme", "C1"), _entity("CIK1", "Acme", "C1")]
     result = derive_party_contract_links(contracts, entities)
+    assert len(result.links) == 1  # one (entity, contract) edge
 
-    assert len(result.links) == 1  # one (entity, contract) edge, not three
 
-
-def test_party_across_multiple_contracts_gets_multiple_links():
-    entities = _entities(("CIK1", "Acme Corporation"))
-    contracts = [_contract("C1", ["Acme Corp"]), _contract("C2", ["Acme Corporation"])]  # many-to-many
-
-    result = derive_party_contract_links(contracts, entities)
-
-    assert {(l.entity_id, l.contract_id) for l in result.links} == {("CIK1", "C1"), ("CIK1", "C2")}
+def test_entity_with_no_chunk_id_is_unmatched_not_error():
+    contracts = [{"contract_id": "C1"}]
+    result = derive_party_contract_links(contracts, [{"entity_id": "X", "name": "N", "chunk_id": ""}])
+    assert result.links == [] and result.unmatched_parties == 1
 
 
 # --- party_clause_linking: reads populated nodes, derives, writes PARTY_TO edges -------------------
@@ -91,14 +96,14 @@ class _FakeStore:
 
 def test_capability_reads_derives_and_writes_the_links():
     store = _FakeStore(
-        contracts=[_contract("C1", ["Acme Corp"])],
-        entities=_entities(("CIK1", "Acme Corporation")),
+        contracts=[{"contract_id": "C1"}],
+        entities=[_entity("CIK1", "Acme Corporation", "C1")],
     )
 
     result = party_clause_linking(store)
 
     assert [(l.entity_id, l.contract_id) for l in result.links] == [("CIK1", "C1")]
-    assert store.written == result.links  # the derived links were written to the store
+    assert store.written == result.links
     assert all(isinstance(l, PartyContractLink) for l in store.written)
 
 
