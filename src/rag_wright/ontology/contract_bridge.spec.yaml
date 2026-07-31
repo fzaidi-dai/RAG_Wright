@@ -179,11 +179,7 @@ models:
   - name: document_reference
     type: str
     is_list: false
-    # NOTE: the compiled clause_template.py makes this Optional (default null) with a max_length and a
-    # "leave null if no explicit section number/heading; never quote the clause" instruction. That hand
-    # refinement (INGEST-REFACTOR: it was the truncation-runaway sink) cannot be expressed in this spec and
-    # would be LOST on regeneration -- clause_template.py is authoritative for the field constraints.
-    description: An OPTIONAL short handle for this clause — its section number or heading only if written in the text; null otherwise (never a verbatim quote).
+    description: A short handle for this clause — its section number or heading, verbatim from the text.
     examples:
     - Section 8
     - 8.1 Limitation of Liability
