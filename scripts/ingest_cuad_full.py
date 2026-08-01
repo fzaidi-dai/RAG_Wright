@@ -26,7 +26,8 @@ def main() -> None:
 
     db = os.environ.get("FULL_DB", "ragwright_cuad_full")
     cache_dir = Path("data/cache/cuad_full")  # persistent: a re-run reuses everything already extracted
-    store = ArcadeDBStore.from_env(database=db, reset=True)  # FRESH build -- live ragwright_cuad untouched
+    reset = os.environ.get("RESET", "1") == "1"  # RESET=0 to RESUME onto an existing partial db (don't wipe it)
+    store = ArcadeDBStore.from_env(database=db, reset=reset)  # FRESH build -- live ragwright_cuad untouched
     print(f"[full] CUAD-FULL-COVERAGE: ingesting ALL CUAD docs through the generic pipeline into {db!r}",
           flush=True)
 

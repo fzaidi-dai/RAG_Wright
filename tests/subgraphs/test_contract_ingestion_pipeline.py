@@ -23,7 +23,7 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
 
 
-def _stub_stages(*, fail_chunk_for=(), fail_index_for=()):
+def _stub_stages(*, fail_chunk_for=(), fail_index_for=(), fail_write_for=()):
     calls = {"chunk": [], "segment": [], "clauses": [], "index": [], "graph": [], "resolve": 0, "write": []}
 
     def chunk_fn(doc):
@@ -56,6 +56,8 @@ def _stub_stages(*, fail_chunk_for=(), fail_index_for=()):
 
     def write_fn(doc, clause_records, resolution):
         calls["write"].append(doc.source_doc_id)
+        if doc.source_doc_id in fail_write_for:
+            raise RuntimeError("write blip")
         return {"clauses": len(clause_records), "entities": len(resolution["resolved"])}
 
     return (chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn), calls
@@ -104,6 +106,29 @@ def test_index_failure_is_best_effort_and_does_not_dead_letter():
     assert "dead_letter" not in out
     assert out["written"] == {"clauses": 1, "entities": 1, "spans": 0}  # spans degraded to 0, rest written
     assert calls["write"] == ["C1"]
+
+
+def test_write_failure_dead_letters_instead_of_crashing():
+    # a DB write error (e.g. an ArcadeDB lock timeout) must dead-letter the doc, never propagate + kill the run
+    stages, calls = _stub_stages(fail_write_for={"C1"})
+    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+
+    assert out["dead_letter"]["stage"] == "write"
+    assert out["dead_letter"]["source_doc_id"] == "C1"
+    assert "written" not in out
+    assert calls["write"] == ["C1", "C1"]  # retried under _FAST_RETRY (2 attempts) before dead-lettering
+
+
+def test_run_corpus_ingestion_skips_already_done_docs():
+    stages, calls = _stub_stages()
+    # C1 is "already ingested" (a prior run wrote its Contract); only C2 should run through the graph
+    report = run_corpus_ingestion(
+        _FakeAdapter(["C1", "C2"]), _graph(stages),
+        is_done=lambda doc: doc.source_doc_id == "C1")
+
+    assert report.documents_ingested == 2  # both counted present...
+    assert calls["chunk"] == ["C2"] and calls["write"] == ["C2"]  # ...but C1 was skipped, not re-processed
+    assert [d["source_doc_id"] for d in report.per_document] == ["C2"]
 
 
 def test_run_corpus_ingestion_maps_all_docs_and_links_once():

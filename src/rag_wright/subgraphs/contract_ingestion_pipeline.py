@@ -156,14 +156,19 @@ def build_document_ingest(
         with business_span("contract_ingestion.resolve"):
             return {"resolution": resolve_fn(state.get("extraction_results", []))}
 
-    def write(state: IngestionState) -> IngestionState:
+    def write(state: IngestionState, runtime: Runtime) -> IngestionState:
         if state.get("dead_letter"):
             return {}
         doc = state["document"]
-        with business_span("contract_ingestion.write", source_doc_id=doc.source_doc_id):
+
+        def _do() -> dict:
             counts = write_fn(doc, state.get("clause_records", []), state.get("resolution"))
             counts["spans"] = state.get("span_count", 0)  # the retrieval index count, for the report
             return {"written": counts}
+
+        # guarded like every other stage: a transient DB write failure (e.g. an ArcadeDB lock timeout under load)
+        # retries, then dead-letters THIS document -- it must never crash the whole corpus ingest.
+        return _guard("write", _do, runtime, doc)
 
     def _route(key: str):
         return lambda state: "end" if state.get("dead_letter") else key
@@ -175,7 +180,7 @@ def build_document_ingest(
     g.add_node("index_spans", index_spans)
     g.add_node("extract_graph", extract_graph, retry_policy=retry_policy)
     g.add_node("resolve", resolve)
-    g.add_node("write", write)
+    g.add_node("write", write, retry_policy=retry_policy)
 
     g.add_edge(START, "chunk")
     g.add_conditional_edges("chunk", _route("segment"), {"segment": "segment", "end": END})
@@ -198,11 +203,16 @@ def _print_progress(message: str) -> None:
 def run_corpus_ingestion(
     adapter: CorpusAdapter, ingest_graph: Any, *, link_fn: LinkFn = lambda: 0,
     progress: Callable[[str], None] = _print_progress,
+    is_done: Callable[[SourceDocument], bool] = lambda _doc: False,
 ) -> IngestionReport:
     """Map every document from `adapter` through the per-document `ingest_graph`, then run `link_fn`
     (party_clause_linking, KG-7) ONCE to connect parties to clauses. A dead-lettered document is recorded and
     skipped -- the corpus ingest survives one bad document. The link runs after all writes so the PARTY_TO edges
     see every contract.
+
+    `is_done(doc)` lets a RESUME skip already-fully-written documents (the write node commits the Contract node
+    last, so a present Contract means the whole document landed) -- so a re-run after an interruption re-does only
+    what remains, never re-embedding/re-writing the corpus. Default: process everything.
 
     Streams `X/N` progress via `progress` (flushed print by default; pass a no-op to silence) per the CLAUDE.md
     long-running-work rule -- a corpus ingest is long-running and MUST be monitorable."""
@@ -211,9 +221,16 @@ def run_corpus_ingestion(
     progress(f"[ingest] starting: {total} documents")
 
     ingested = 0
+    skipped = 0
     dead_lettered: list[dict] = []
     per_document: list[dict] = []
     for i, document in enumerate(documents, 1):
+        if is_done(document):  # RESUME: already fully written in a prior run -> skip (no re-embed/re-write)
+            ingested += 1
+            skipped += 1
+            if skipped % 25 == 0 or i == total:
+                progress(f"[ingest] {i}/{total} resume-skipping already-done docs ({skipped} skipped so far)")
+            continue
         out = ingest_graph.invoke({"document": document})
         if out.get("dead_letter"):
             dead_lettered.append(out["dead_letter"])
@@ -226,10 +243,11 @@ def run_corpus_ingestion(
         progress(f"[ingest] {i}/{total} {document.source_doc_id} OK "
                  f"clauses={written.get('clauses')} entities={written.get('entities')}")
 
-    progress(f"[ingest] {ingested}/{total} written, {len(dead_lettered)} dead-lettered; linking parties (KG-7)...")
+    progress(f"[ingest] {ingested}/{total} present ({skipped} resume-skipped), {len(dead_lettered)} "
+             f"dead-lettered; linking parties (KG-7)...")
     party_links = link_fn()
-    progress(f"[ingest] done: {ingested}/{total} ingested, {len(dead_lettered)} dead-lettered, "
-             f"{party_links} PARTY_TO edges")
+    progress(f"[ingest] done: {ingested}/{total} ingested ({skipped} resume-skipped), "
+             f"{len(dead_lettered)} dead-lettered, {party_links} PARTY_TO edges")
     return IngestionReport(
         documents_ingested=ingested, dead_lettered=dead_lettered,
         party_links=party_links, per_document=per_document)
@@ -488,14 +506,17 @@ def production_document_ingest(
         return to_graph(resolution)  # (nodes, edges)
 
     def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
-        store.upsert_contract(ContractRecord(
-            contract_id=doc.source_doc_id, name=doc.metadata.get("raw_title", ""),
-            source_doc_id=doc.source_doc_id,
-            content_hash=hashlib.sha256(doc.text.encode("utf-8")).hexdigest()))
+        # clauses + graph first, the Contract node LAST -- so a present Contract is a true "fully written" marker
+        # the resume-skip (run_cuad_ingestion) can trust: a doc that dies mid-write leaves no Contract and is
+        # re-processed, never half-skipped.
         for record in clause_records:
             store.write_clause_kg(record)
         nodes, edges = resolution
         store.write_graph(nodes, edges)
+        store.upsert_contract(ContractRecord(
+            contract_id=doc.source_doc_id, name=doc.metadata.get("raw_title", ""),
+            source_doc_id=doc.source_doc_id,
+            content_hash=hashlib.sha256(doc.text.encode("utf-8")).hexdigest()))
         return {"clauses": len(clause_records), "entities": len(nodes), "edges": len(edges)}
 
     return build_document_ingest(
@@ -525,7 +546,9 @@ def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int
         party_seed_path="data/cache/dg_extracted_parties.json")
     return run_corpus_ingestion(
         CuadAdapter(cuad_path, limit=limit), ingest_graph,
-        link_fn=lambda: len(party_clause_linking(store).links))
+        link_fn=lambda: len(party_clause_linking(store).links),
+        # RESUME-skip: a present Contract node means the whole document already landed (Contract is written last).
+        is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)
 
 
 def register_contract_ingestion_pipeline(registry) -> None:
