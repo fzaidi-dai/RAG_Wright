@@ -391,7 +391,7 @@ def production_document_ingest(
     from pathlib import Path
 
     from rag_wright.capabilities.disambiguation import disambiguate
-    from rag_wright.capabilities.embedding import BGEM3Embedder
+    from rag_wright.capabilities.embedding import BGEM3Embedder, _resolve_device
     from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.capabilities.graph_extraction import production_extract_fn
     from rag_wright.capabilities.graph_storage import to_graph
@@ -418,7 +418,8 @@ def production_document_ingest(
     summarizer = _NoSummary()
     clause_extractor = granite_clause_extractor()
     extract_parties_fn = production_extract_fn()  # (text) -> ContractParties | None (GP-1B granite, ADR-0035)
-    classifier = LegalBertFunctionClassifier.load(Path("data/models/legalbert_function"), device="cpu")
+    classifier = LegalBertFunctionClassifier.load(
+        Path("data/models/legalbert_function"), device=_resolve_device(None))  # GPU when available (EMBED_DEVICE)
     embedder = embedder if embedder is not None else BGEM3Embedder()  # BGE-M3 dense+sparse for the span index
     # the extraction cache is keyed by the Clause template's schema, so a template change (e.g. new field
     # constraints) auto-invalidates it -- a re-run re-extracts instead of serving stale records.

@@ -77,7 +77,9 @@ def _resolve_device(device: str | None) -> str:
 
         if torch.backends.mps.is_available():
             return "mps"
-    except Exception:  # noqa: BLE001 - torch/mps probing must never break embedder construction
+        if torch.cuda.is_available():  # a GPU box (e.g. the bulk-ingestion VM) -> use the GPU
+            return "cuda"
+    except Exception:  # noqa: BLE001 - torch/device probing must never break model construction
         pass
     return "cpu"
 
