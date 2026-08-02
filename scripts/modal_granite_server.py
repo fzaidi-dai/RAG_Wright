@@ -60,6 +60,65 @@ def prepull() -> None:
     raise RuntimeError(f"ollama pull {MODEL} failed after retries")
 
 
+@app.function(image=image, gpu="A10", volumes={OLLAMA_DIR: vol}, timeout=1800)
+def measure_gpu_memory() -> None:
+    """GPU-memory occupancy of granite-4.1-8b (bf16) on an A10: baseline -> weights loaded -> a forward pass.
+
+    Complements the earlier throughput note ([[local-vs-hosted-granite-throughput]]) with VRAM. Reports both
+    `nvidia-smi` process memory and Ollama's own `size`/`size_vram` for the loaded model.
+      uv run --no-sync modal run scripts/modal_granite_server.py::measure_gpu_memory
+    """
+    import json
+
+    def gpu_used_mib() -> int:
+        out = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.used,memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True, text=True).stdout.strip().splitlines()[0]
+        used, total = (int(x.strip()) for x in out.split(","))
+        gpu_used_mib.total = total  # stash for the caller
+        return used
+
+    def ollama_ps() -> list:
+        try:
+            return json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/ps", timeout=5)).get("models", [])
+        except Exception:  # noqa: BLE001
+            return []
+
+    _serve_and_wait("0.0.0.0:11434")
+    # ensure the model is in the Volume (prepull normally does this; pull here if missing)
+    tags = json.load(urllib.request.urlopen("http://127.0.0.1:11434/api/tags")).get("models", [])
+    if not any(MODEL in m.get("name", "") for m in tags):
+        subprocess.run(["ollama", "pull", MODEL], check=True)
+        vol.commit()
+
+    base = gpu_used_mib()
+    total = gpu_used_mib.total
+    print(f"[mem] A10: {total} MiB total | baseline (server up, weights NOT loaded): {base} MiB", flush=True)
+
+    # a single forward pass -- this loads the weights into VRAM and runs one generation
+    prompt = ("Extract the governing law as JSON. Clause: 'This Agreement shall be governed by and construed "
+              "in accordance with the laws of the State of Delaware, without regard to conflict-of-law rules.'")
+    t0 = time.time()
+    req = urllib.request.Request(
+        "http://127.0.0.1:11434/api/generate",
+        data=json.dumps({"model": MODEL, "prompt": prompt, "stream": False,
+                         "options": {"num_predict": 128, "num_ctx": 4096}}).encode(),
+        headers={"Content-Type": "application/json"})
+    json.load(urllib.request.urlopen(req, timeout=900))
+    dt = time.time() - t0
+
+    loaded = gpu_used_mib()
+    print(f"[mem] after 1 forward pass ({dt:.1f}s): {loaded} MiB used "
+          f"| model+KV footprint (delta from baseline): {loaded - base} MiB", flush=True)
+    for m in ollama_ps():
+        sz = m.get("size", 0) // (1024 * 1024)
+        vram = m.get("size_vram", 0) // (1024 * 1024)
+        print(f"[mem] ollama /api/ps: {m.get('name')} | size={sz} MiB | size_vram={vram} MiB "
+              f"(this is the weights+KV Ollama reserved on GPU)", flush=True)
+    print(f"[mem] SUMMARY: granite-4.1-8b (bf16) on A10 -> ~{loaded} MiB in use of {total} MiB "
+          f"({100.0 * loaded / total:.0f}% of the A10) for load + a forward pass", flush=True)
+
+
 @app.server(image=image, gpu="A10", port=11434, volumes={OLLAMA_DIR: vol},
             unauthenticated=True, startup_timeout=600, scaledown_window=300)
 class GraniteServer:
