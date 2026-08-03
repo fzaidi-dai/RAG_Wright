@@ -38,7 +38,7 @@ def serve() -> None:
         "vllm", "serve", MODEL_HF,
         "--host", "0.0.0.0", "--port", "8000",
         "--served-model-name", MODEL_HF,
-        "--max-model-len", "8192",
+        "--max-model-len", "16384",
         "--gpu-memory-utilization", "0.90",
         "--api-key", API_KEY,
     ])
