@@ -71,3 +71,38 @@ def test_reground_downgrades_only_the_ungrounded_extracted():
     assert by[(PropertyDimension.CARVE_OUT, "confidentiality")] is ConfidenceTag.EXTRACTED
     assert by[(PropertyDimension.CARVE_OUT, "fraud")] is ConfidenceTag.AMBIGUOUS  # downgraded
     assert by[(PropertyDimension.MUTUALITY, "mutual")] is ConfidenceTag.EXTRACTED  # semantic untouched
+
+
+# --- GROUNDING-OPENVALUED (ADR-0040): open-valued scalars are token-checked ---
+
+
+def test_open_valued_jurisdiction_with_no_textual_basis_is_flagged():
+    # jurisdiction is open-valued: a value whose tokens never appear in the clause is a fabrication
+    text = "this agreement is governed by the laws of the State of New York"
+    assert not is_grounded(PropertyDimension.JURISDICTION, "delaware", text)
+    assert is_grounded(PropertyDimension.JURISDICTION, "new_york", text)  # both tokens present
+
+
+def test_open_valued_numeric_normalization_survives_via_a_unit_token():
+    # a normalized value like 12_months is grounded by the "months" token even when the digit is spelled out
+    assert is_grounded(PropertyDimension.TEMPORAL_BOUND, "12_months", "for a period of twelve (12) months")
+    assert is_grounded(PropertyDimension.NOTICE_PERIOD, "30_days", "upon thirty days prior written notice")
+    assert not is_grounded(PropertyDimension.NOTICE_PERIOD, "30_days", "either party may terminate at will")
+
+
+def test_open_valued_ungrounded_is_downgraded_but_grounded_is_kept():
+    text = "audited annually by an independent accountant; governed by the laws of England"
+    rec = _record(
+        "Audit Rights",
+        (PropertyDimension.AUDIT_FREQUENCY, "annual", ConfidenceTag.EXTRACTED),  # "annual" in "annually" -> kept
+        (PropertyDimension.JURISDICTION, "california", ConfidenceTag.EXTRACTED),  # no basis -> downgraded
+    )
+    by = {a.dimension: a.confidence for a in reground(rec, text).assertions}
+    assert by[PropertyDimension.AUDIT_FREQUENCY] is ConfidenceTag.EXTRACTED
+    assert by[PropertyDimension.JURISDICTION] is ConfidenceTag.AMBIGUOUS
+
+
+def test_semantic_closed_dim_is_not_token_checked():
+    # mutuality is a closed SEMANTIC dim (Layer 3's job), NOT open-valued: the word "mutual" need not appear
+    assert is_grounded(PropertyDimension.MUTUALITY, "mutual", "each party shall indemnify the other")
+    assert is_grounded(PropertyDimension.CAP_BASIS, "multiple_of_fees", "liability is limited to the amounts paid")

@@ -13,17 +13,36 @@ Two uses (double duty):
    to `AMBIGUOUS` (kept, but marked unverified so soft-boost down-weights it) regardless of which model
    produced it -- so the shared property-value nodes stay clean.
 
-LIMITATION: this only sees the lexically-anchored dimensions. The SEMANTIC dimensions (mutuality,
-favorability, party_asymmetry, cap basis/quantum interpretation) carry no keyword and are NOT checkable here;
-their errors pass through unflagged.
+Coverage: lexically-anchored closed values (cue check), plus open-valued scalars (token overlap,
+GROUNDING-OPENVALUED). LIMITATION: the closed SEMANTIC dimensions (mutuality, favorability, party_asymmetry,
+cap_basis, the consent regimes) carry no surface form and are NOT checkable here; their errors pass through
+unflagged and are the target of the Layer-3 semantic judge (ADR-0040, JUDGE-SEMANTIC).
 """
 
 from __future__ import annotations
 
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+import re
+
+from rag_wright.contracts.property import (
+    CLOSED_VOCAB,
+    ClausePropertyRecord,
+    PropertyAssertion,
+    PropertyDimension,
+)
 from rag_wright.contracts.provenance import ConfidenceTag
 
 _D = PropertyDimension
+
+# Open-valued dimensions carry a free-text scalar (jurisdiction, cap_quantum, temporal_bound, notice_period,
+# audit_frequency, commitment_quantum, ld_trigger) rather than a closed vocabulary. GROUNDING-OPENVALUED
+# (ADR-0040): unlike a closed SEMANTIC dim (mutuality/etc., which stays Layer-3's job), an open value SHOULD
+# have a textual anchor -- an EXTRACTED `jurisdiction=Delaware` on a clause that never mentions Delaware is a
+# fabrication. Checked by TOKEN OVERLAP (lenient: grounded if ANY significant token of the value appears), so
+# normalized forms survive (`12_months` grounded by "months" in "twelve (12) months") while pure inventions
+# with no overlapping token are flagged.
+OPEN_VALUED_DIMENSIONS: frozenset[PropertyDimension] = frozenset(
+    d for d in PropertyDimension if d not in CLOSED_VOCAB
+)
 
 # dimension -> value -> surface cues (lowercased substrings). A value ABSENT from this map is NOT
 # lexically anchored (semantic/open-valued) and is treated as grounded (the judge cannot disprove it).
@@ -101,14 +120,27 @@ def is_lexically_anchored(dimension: PropertyDimension, value: str) -> bool:
     return value in GROUNDING_CUES.get(dimension, {})
 
 
-def is_grounded(dimension: PropertyDimension, value: str, text: str) -> bool:
-    """True if the value is supported by the text. Lexically-anchored values require their cue to appear;
-    non-anchored (semantic/open) values are treated as grounded -- the judge cannot disprove them."""
-    cues = GROUNDING_CUES.get(dimension, {}).get(value)
-    if cues is None:
-        return True
+def _open_value_grounded(value: str, text: str) -> bool:
+    """An open-valued scalar is grounded if ANY significant token of its (normalized) value appears in the
+    text -- lenient so normalized forms survive, strict enough to flag a value with no textual anchor at all."""
     low = text.lower()
-    return any(cue in low for cue in cues)
+    tokens = [t for t in re.split(r"[^a-z0-9]+", value.lower()) if len(t) >= 2]
+    if not tokens:  # nothing checkable (e.g. a single-char value) -> cannot disprove
+        return True
+    return any(t in low for t in tokens)
+
+
+def is_grounded(dimension: PropertyDimension, value: str, text: str) -> bool:
+    """True if the value is supported by the text. Lexically-anchored (closed-vocab) values require their cue
+    to appear; open-valued scalars require a token overlap (GROUNDING-OPENVALUED); closed SEMANTIC values
+    (mutuality/etc.) carry no surface form and are treated as grounded -- the judge cannot disprove them."""
+    cues = GROUNDING_CUES.get(dimension, {}).get(value)
+    if cues is not None:
+        low = text.lower()
+        return any(cue in low for cue in cues)
+    if dimension in OPEN_VALUED_DIMENSIONS:
+        return _open_value_grounded(value, text)
+    return True
 
 
 def ungrounded_assertions(record: ClausePropertyRecord, text: str) -> list[PropertyAssertion]:
