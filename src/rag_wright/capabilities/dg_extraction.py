@@ -208,7 +208,8 @@ _DEFAULT_MAX_RETRIES = 1
 def build_pipeline_config(source_path: str, model: ExtractionModel, *, template: type = ContractParties,
                           max_tokens: int = _DEFAULT_MAX_TOKENS,
                           timeout_s: int = _DEFAULT_TIMEOUT_S,
-                          max_retries: int = _DEFAULT_MAX_RETRIES) -> Any:
+                          max_retries: int = _DEFAULT_MAX_RETRIES,
+                          temperature: float | None = None) -> Any:
     """The docling-graph `PipelineConfig` for a model choice, with the reliability fixes baked in
     (structured_output=False + max_tokens cap + a sane per-call `timeout_s`/`max_retries`, NOT docling-graph's
     300s default). Kept import-light so hermetic tests need no LLM."""
@@ -231,7 +232,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
         structured_output=False,  # reliability fix: json_object, not the strict nested json_schema
         provider_override=model.provider, model_override=model.model,
         llm_overrides=LlmRuntimeOverrides(
-            generation=GenerationOverrides(max_tokens=max_tokens),
+            generation=GenerationOverrides(max_tokens=max_tokens, temperature=temperature),
             reliability=ReliabilityOverrides(timeout_s=timeout_s, max_retries=max_retries),
             connection=connection,
         ),
@@ -241,7 +242,8 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
 def extract_parties(text: str, model: ExtractionModel, *, template: type = ContractParties,
                     max_tokens: int = _DEFAULT_MAX_TOKENS,
                     preamble_chars: int = _DEFAULT_PREAMBLE_CHARS,
-                    timeout_s: int = _DEFAULT_TIMEOUT_S) -> Any | None:
+                    timeout_s: int = _DEFAULT_TIMEOUT_S,
+                    temperature: float | None = None) -> Any | None:
     """Extract parties from contract `text` with `model` via docling-graph (API mode). Writes the preamble to
     a temp .md (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first
     extracted model (a `ContractParties`) or None if extraction yielded nothing."""
@@ -250,7 +252,7 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
     md = Path(tempfile.mkdtemp(prefix="dg_extract_")) / "contract.md"
     md.write_text(text[:preamble_chars], encoding="utf-8")
     ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens,
-                                             timeout_s=timeout_s),
+                                             timeout_s=timeout_s, temperature=temperature),
                        mode="api")
     return ctx.extracted_models[0] if ctx.extracted_models else None
 
@@ -263,7 +265,8 @@ _CLAUSE_MAX_TOKENS = 2000  # a Clause has ~30 typed dims; a well-constrained ext
 _CLAUSE_TEXT_CHARS = 12000  # one operative span is short; a generous cap that never truncates a real clause
 
 
-def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAUSE_MAX_TOKENS) -> Any | None:
+def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAUSE_MAX_TOKENS,
+                   temperature: float | None = None) -> Any | None:
     """Extract one clause's typed properties from span `text` with `model`, using the KG-1 bridge template
     (`ontology.clause_template.Clause`). Same docling-graph API-mode seam + reliability fixes as
     `extract_parties`; returns the extracted `Clause` (typed properties) or None. The Clause -> our
@@ -271,5 +274,6 @@ def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAU
     from rag_wright.ontology.clause_template import Clause
 
     return extract_parties(
-        text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS
+        text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS,
+        temperature=temperature,
     )
