@@ -14,11 +14,22 @@ per function, listing the applicable dimension paths) and validated with `pyshac
 neuro-symbolic. A non-applicable assertion is downgraded to AMBIGUOUS (kept but flagged), exactly like
 `reground`, so the shared property-value nodes stay clean and soft-boost down-weights it.
 
-Deterministic, no model, no network. Downgrade is confidence-independent (a type error is wrong whether
-EXTRACTED or INFERRED); an already-AMBIGUOUS assertion is left as is. A function NOT in the map is
-PERMISSIVE (unvalidated) -- coverage is expanded deliberately, never by guessing a closed set we are
-unsure of. Parts 2/3 (JUDGE-ONTOLOGY-2/3: cardinality, cross-dimension, deontic) add more shapes to the
-same shapes graph and reuse this record->RDF->pyshacl harness.
+The gate also enforces CARDINALITY (JUDGE-ONTOLOGY-2): a SCALAR dimension asserted with two conflicting
+values (e.g. granite hedging `cap_basis` = both `fixed_fee` and `multiple_of_fees`) violates `sh:maxCount 1`
+and both values are downgraded -- the real intra-clause "contradiction" class, since the dimensions are
+orthogonal facets and same-dimension conflict is where extraction actually contradicts itself. The 3
+multi-valued dimensions (`_LIST_ENUM_DIMS`: carve_out / covered_subject / damage_type) are left unbounded.
+
+Deliberately NOT enforced here (JUDGE-ONTOLOGY-2 scoping): value-in-vocabulary (`sh:in`) is already
+enforced at the Pydantic contract boundary (`property.PropertyAssertion._value_in_vocab_or_ambiguous`), so a
+SHACL shape would duplicate a working validator; and cross-DIMENSION `sh:sparql` rules are omitted because
+this schema's dimensions are orthogonal facets with no hard intra-clause cross-dimension contradiction (the
+one genuine cross-signal rule -- deontic polarity vs rule type -- is JUDGE-ONTOLOGY-3).
+
+Deterministic, no model, no network. Downgrade is confidence-independent (a type/cardinality error is wrong
+whether EXTRACTED or INFERRED); an already-AMBIGUOUS assertion is left as is. A function NOT in the map is
+PERMISSIVE (unvalidated) -- coverage is expanded deliberately, never by guessing a closed set we are unsure
+of. JUDGE-ONTOLOGY-3 (deontic) adds more shapes to the same graph and reuses this record->RDF->pyshacl harness.
 """
 
 from __future__ import annotations
@@ -119,6 +130,14 @@ FUNCTION_APPLICABLE_DIMS: dict[str, frozenset[PropertyDimension]] = {
 }
 
 
+# The multi-valued dimensions (`clause_kg_extractor._LIST_ENUM_DIMS`): a clause may carry several. Every
+# other dimension is SCALAR (at most one value) -> `sh:maxCount 1`. Kept in code, referencing enum members,
+# for the same no-ttl-drift reason as FUNCTION_APPLICABLE_DIMS.
+MULTI_VALUED_DIMENSIONS: frozenset[PropertyDimension] = frozenset(
+    {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE}
+)
+
+
 def _function_class(function: str) -> URIRef:
     """A stable CBR class IRI for a function label (RDF has no spaces; encode deterministically)."""
     return _CBR[f"Function_{function.replace(' ', '_')}"]
@@ -146,6 +165,8 @@ def _shapes_graph() -> Graph:
             prop = URIRef(f"{shape}_prop_{dim.value}")
             g.add((shape, SH.property, prop))
             g.add((prop, SH.path, _dim_property(dim)))
+            if dim not in MULTI_VALUED_DIMENSIONS:  # scalar dim -> at most one value (JUDGE-ONTOLOGY-2)
+                g.add((prop, SH.maxCount, Literal(1)))
     return g
 
 
@@ -160,9 +181,11 @@ def _record_to_rdf(record: ClausePropertyRecord) -> Graph:
     return g
 
 
-def nonapplicable_dimensions(record: ClausePropertyRecord) -> set[PropertyDimension]:
-    """The dimensions asserted on the record that are NOT applicable to its function, per the SHACL shapes.
-    Empty if the function is unmodeled (permissive) or every assertion is applicable."""
+def flagged_dimensions(record: ClausePropertyRecord) -> set[PropertyDimension]:
+    """The dimensions on the record that violate a SHACL shape: NOT applicable to the function (`sh:closed`)
+    OR a scalar dimension asserted with more than one value (`sh:maxCount 1`). A violation of either reports
+    `sh:resultPath` = the dimension predicate, so both fold into one flagged set. Empty if the function is
+    unmodeled (permissive) or every assertion is valid."""
     if record.function not in FUNCTION_APPLICABLE_DIMS or not record.assertions:
         return set()
     from pyshacl import validate
@@ -182,10 +205,11 @@ def nonapplicable_dimensions(record: ClausePropertyRecord) -> set[PropertyDimens
 
 
 def symbolic_validate(record: ClausePropertyRecord) -> ClausePropertyRecord:
-    """Quality gate (ADR-0040 layer 2): downgrade every assertion whose dimension is NOT applicable to the
-    clause's function to AMBIGUOUS (kept but flagged, model-agnostic, confidence-independent). A no-op when
-    the function is unmodeled or every dimension applies -- mirrors `property_grounding.reground`."""
-    bad = nonapplicable_dimensions(record)
+    """Quality gate (ADR-0040 layer 2): downgrade every assertion whose dimension violates a shape -- not
+    applicable to the clause's function, or a scalar dimension asserted with conflicting values -- to
+    AMBIGUOUS (kept but flagged, model-agnostic, confidence-independent). A no-op when the function is
+    unmodeled or every dimension is valid -- mirrors `property_grounding.reground`."""
+    bad = flagged_dimensions(record)
     if not bad:
         return record
     new: list[PropertyAssertion] = [

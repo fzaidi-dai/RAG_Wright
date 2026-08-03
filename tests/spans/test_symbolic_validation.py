@@ -8,7 +8,7 @@ from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertio
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.spans.symbolic_validation import (
     FUNCTION_APPLICABLE_DIMS,
-    nonapplicable_dimensions,
+    flagged_dimensions,
     symbolic_validate,
 )
 
@@ -32,7 +32,7 @@ def test_the_map_covers_exactly_the_function_taxonomy():
 def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():
     # the observed error class: nonsolicit_target (valid value, in-vocab) asserted on Anti-Assignment, where
     # only assignment_consent / party_asymmetry apply. The lexical judge cannot see this; the SHACL gate can.
-    assert nonapplicable_dimensions(
+    assert flagged_dimensions(
         _record(
             "Anti-Assignment",
             (_D.ASSIGNMENT_CONSENT, "consent_required", ConfidenceTag.EXTRACTED),
@@ -67,7 +67,7 @@ def test_a_fully_applicable_record_is_returned_unchanged():
 
 def test_metadata_function_rejects_any_property_dimension():
     # Document Name carries NO property dimensions -> any asserted dimension is a type error
-    assert nonapplicable_dimensions(
+    assert flagged_dimensions(
         _record("Document Name", (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED))
     ) == {_D.MUTUALITY}
 
@@ -105,9 +105,38 @@ def test_unmodeled_function_is_permissive():
     # a function absent from the map is not closed-validated (coverage is expanded deliberately, never guessed)
     rec = _record("Anti-Assignment", (_D.NONSOLICIT_TARGET, "employees", ConfidenceTag.EXTRACTED))
     unmodeled = rec.model_copy(update={"function": "Some Future Unmodeled Function"})
-    assert nonapplicable_dimensions(unmodeled) == set()
+    assert flagged_dimensions(unmodeled) == set()
     assert symbolic_validate(unmodeled) is unmodeled  # identity: no change
 
 
 def test_empty_record_is_a_noop():
-    assert nonapplicable_dimensions(_record("Anti-Assignment")) == set()
+    assert flagged_dimensions(_record("Anti-Assignment")) == set()
+
+
+def test_scalar_dimension_with_two_conflicting_values_is_flagged_and_both_downgraded():
+    # JUDGE-ONTOLOGY-2 cardinality: cap_basis is scalar (sh:maxCount 1). granite hedging two enum values for
+    # it is a self-contradiction -> both are suspect and downgraded (we cannot tell which is right).
+    rec = _record(
+        "Cap On Liability",
+        (_D.CAP_BASIS, "fixed_fee", ConfidenceTag.EXTRACTED),
+        (_D.CAP_BASIS, "multiple_of_fees", ConfidenceTag.EXTRACTED),
+        (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED),  # applicable, single -> untouched
+    )
+    assert flagged_dimensions(rec) == {_D.CAP_BASIS}
+    out = symbolic_validate(rec)
+    by_val = {a.value: a.confidence for a in out.assertions}
+    assert by_val["fixed_fee"] == ConfidenceTag.AMBIGUOUS
+    assert by_val["multiple_of_fees"] == ConfidenceTag.AMBIGUOUS
+    assert by_val["mutual"] == ConfidenceTag.EXTRACTED
+
+
+def test_multivalued_dimension_with_several_values_is_not_a_cardinality_violation():
+    # carve_out is multi-valued: a clause may carve out fraud AND confidentiality -> both kept
+    rec = _record(
+        "Cap On Liability",
+        (_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED),
+        (_D.CARVE_OUT, "confidentiality", ConfidenceTag.EXTRACTED),
+        (_D.CARVE_OUT, "gross_negligence", ConfidenceTag.EXTRACTED),
+    )
+    assert flagged_dimensions(rec) == set()
+    assert [a.confidence for a in symbolic_validate(rec).assertions] == [ConfidenceTag.EXTRACTED] * 3
