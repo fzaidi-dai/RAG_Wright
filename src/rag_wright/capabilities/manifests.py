@@ -569,6 +569,24 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("grounding", "quality-gate", "deterministic"),
     ),
     CapabilityManifest(
+        slug="extraction_semantic_judge",
+        kind="function",
+        display_name="Extraction semantic judge",
+        description=(
+            "Layer 3 of the neuro-symbolic extraction-fidelity cascade (ADR-0040): an LLM verify-or-refute "
+            "judge for the closed SEMANTIC dimensions (mutuality, favorability, party_asymmetry, cap_basis, "
+            "the consent regimes) that carry no surface form -- what the lexical and symbolic gates cannot "
+            "reach. Downgrades a refuted reading to AMBIGUOUS. Model-neutral through the seam (self-hosted "
+            "Granite); ingestion-side only."
+        ),
+        representative_queries=(
+            "verify whether a clause supports an extracted mutuality reading",
+            "refute a semantic property that a faithful reading of the clause does not support",
+            "LLM-audit the closed semantic dimensions the deterministic gates cannot check",
+        ),
+        tags=("grounding", "quality-gate", "semantic", "llm"),
+    ),
+    CapabilityManifest(
         slug="operative_span_segmentation",
         kind="function",
         display_name="Operative span segmentation",

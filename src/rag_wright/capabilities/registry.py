@@ -84,6 +84,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         # --- CAP-REG-2: the built contract-KG capabilities ---
         "typed_value_normalization",  # function: canonicalization + subsumption (KG-5a)
         "extraction_grounding_judge",  # function: ADR-0028 lexical grounding gate
+        "extraction_semantic_judge",  # function: ADR-0040 Layer 3 LLM semantic gate
         "operative_span_segmentation",  # function: chunk -> operative spans
         "intra_document_scoped_query",  # function: intra-contract scoped KG serving (Leg A)
         "clause_disambiguation",  # function: disambiguation by property (Leg A)
