@@ -101,7 +101,12 @@ class Stack:
             enc = self._lb_tok(texts, padding=True, truncation=True, max_length=256, return_tensors="pt").to("cuda")
             with self._torch.no_grad():
                 logits = self._lb(**enc).logits
-            return {"labels": [self._id2label[int(i)] for i in logits.argmax(-1).tolist()]}
+            resp = {"labels": [self._id2label[int(i)] for i in logits.argmax(-1).tolist()]}
+            k = int(body.get("k", 0))  # top-k routing (LegalBERT KG-5e); omitted -> top-1 labels only
+            if k > 1:
+                topk = logits.topk(min(k, logits.shape[-1]), dim=-1).indices.tolist()
+                resp["topk"] = [[self._id2label[int(i)] for i in row] for row in topk]
+            return resp
 
         @api.api_route("/v1/{path:path}", methods=["GET", "POST"])
         async def proxy(path: str, request: Request):
