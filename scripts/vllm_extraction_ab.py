@@ -60,8 +60,11 @@ def main() -> None:
         print("[ab] warming vLLM ...", flush=True)
         _warm(vllm_base, key)
 
+    structured = os.environ.get("STRUCTURED", "0") == "1"  # vLLM guided decoding (xgrammar) on the TEST side
+    print(f"[ab] test-side structured_output (guided decoding): {structured}", flush=True)
     ref_ext = DGClausePropertyExtractor(lambda t: extract_clause(t, or_model, temperature=temp))
-    test_ext = DGClausePropertyExtractor(lambda t: extract_clause(t, test_model, temperature=temp))
+    test_ext = DGClausePropertyExtractor(
+        lambda t: extract_clause(t, test_model, temperature=temp, structured_output=structured))
 
     def _extract(ext, c):
         cid = ChunkId.of(c["clause_id"].rsplit(":", 2)[0], 0, c["text"])
