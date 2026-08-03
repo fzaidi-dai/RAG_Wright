@@ -40,6 +40,24 @@ for pkg in $PKGS; do
     ${extra[@]+"${extra[@]}"} "$SP/$pkg" "$STAGE/"
 done
 
+# vllm (ADR-0039: the product substrate's inference engine) is NOT pip-installed on this Mac (CUDA/Linux),
+# so it is staged from a shallow source clone at ~/.graphify-src/vllm. SCOPED to the surfaces our code + the
+# self-hosted stack actually drive -- the OpenAI serving layer, sampling params, structured/guided-output +
+# reasoning config, request/response protocol -- NOT the huge model-executor/attention/kernel internals.
+# Refresh the clone with: git -C ~/.graphify-src/vllm pull  (or re-clone).
+VLLM_SRC="$HOME/.graphify-src/vllm/vllm"
+if [ -d "$VLLM_SRC" ]; then
+  echo "[framework] staging vllm (scoped serving/sampling/structured-output surfaces) from clone..."
+  mkdir -p "$STAGE/vllm"
+  for sub in __init__.py version.py sampling_params.py pooling_params.py outputs.py inputs \
+             entrypoints config reasoning; do
+    [ -e "$VLLM_SRC/$sub" ] && rsync -a --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyi' \
+      --exclude='tests' --exclude='test' "$VLLM_SRC/$sub" "$STAGE/vllm/"
+  done
+else
+  echo "[framework] NOTE: vllm clone not at $VLLM_SRC -> skipped (git clone --depth 1 https://github.com/vllm-project/vllm.git ~/.graphify-src/vllm)"
+fi
+
 echo "[framework] extracting (AST only, no LLM)..."
 graphify update "$STAGE" >/dev/null 2>&1 || { echo "[framework] graphify update failed"; exit 1; }
 
