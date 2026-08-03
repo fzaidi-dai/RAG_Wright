@@ -64,15 +64,20 @@ DEFAULT_SUMMARIZATION = "deepseek/deepseek-v4-flash"  # the smaller/faster DeepS
 # THIS TASK ONLY; every other call class stays on its DeepSeek/Gemma role above.
 DEFAULT_OKF_ENRICHMENT = "google/gemma-4-26b-a4b-it"
 
+# MS1-2 (ADR-0039): the product substrate is a SINGLE self-hosted model on the A100. EVERY role defaults to
+# Granite -- Gemma/DeepSeek are DROPPED from the product default but stay REGISTERED in `PROFILES` below, so a
+# dev run can still select any of them via the `RAG_MODEL_*` / `RAG_MODEL_ALL` env overrides. The DEFAULT_*
+# constants above are kept as those foundation-model profile keys + documented dev-override values. (OKF
+# signpost enrichment -- the one-time ADR-0023 Gemma exception -- is NOT wired into the ingestion/query
+# pipeline (only `okf/enrich.py`), so it too defaults to Granite; ADR-0023's Gemma choice is now vestigial.)
+_PRODUCT_LLM = "ibm-granite/granite-4.1-8b"
+
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
-    ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", DEFAULT_STRUCTURED_REASONING),
-    ModelRole.STRUCTURED_REASONING_SECONDARY: (
-        "RAG_MODEL_STRUCTURED_REASONING_SECONDARY",
-        DEFAULT_STRUCTURED_REASONING_SECONDARY,
-    ),
-    ModelRole.GENERAL: ("RAG_MODEL_GENERAL", DEFAULT_GENERAL),
-    ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", DEFAULT_SUMMARIZATION),
-    ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", DEFAULT_OKF_ENRICHMENT),
+    ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", _PRODUCT_LLM),
+    ModelRole.STRUCTURED_REASONING_SECONDARY: ("RAG_MODEL_STRUCTURED_REASONING_SECONDARY", _PRODUCT_LLM),
+    ModelRole.GENERAL: ("RAG_MODEL_GENERAL", _PRODUCT_LLM),
+    ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", _PRODUCT_LLM),
+    ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", _PRODUCT_LLM),
 }
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default
@@ -132,9 +137,12 @@ PROFILES: dict[str, ModelProfile] = {
 
 
 def model_for(role: ModelRole) -> str:
-    """Resolve a role to a model id: the env override if set, else the documented default."""
+    """Resolve a role to a model id. Precedence (all config, MS1-2): the ROLE-SPECIFIC override
+    (`RAG_MODEL_<ROLE>`) > the ALL-ROLES override (`RAG_MODEL_ALL`, to point every role at one model for a
+    quick cross-model test) > the documented default. So a run can swap one role, or every role, purely by env.
+    """
     env_var, default = _ROLE_ENV[role]
-    return os.getenv(env_var, default)
+    return os.getenv(env_var) or os.getenv("RAG_MODEL_ALL") or default
 
 
 def profile_for(model_id: str) -> ModelProfile:

@@ -76,10 +76,11 @@ def test_unknown_model_gets_safe_default_profile():
 # --- role resolution (priority lives in config, not capability code) ---------------------------
 
 
-def test_roles_resolve_to_the_ledgered_models():
-    assert "deepseek" in profiles.model_for(ModelRole.STRUCTURED_REASONING).lower()
-    assert "qwen" in profiles.model_for(ModelRole.STRUCTURED_REASONING_SECONDARY).lower()
-    assert "gemma" in profiles.model_for(ModelRole.GENERAL).lower()
+def test_every_role_defaults_to_single_granite():
+    # MS1-2 (ADR-0039): the product substrate is a single self-hosted Granite for EVERY role (OKF included --
+    # it is not in the ingestion/query pipeline). Gemma/DeepSeek dropped from the default (still registered).
+    for role in ModelRole:
+        assert "granite" in profiles.model_for(role).lower()
 
 
 def test_role_is_env_overridable(monkeypatch):
@@ -87,9 +88,32 @@ def test_role_is_env_overridable(monkeypatch):
     assert profiles.model_for(ModelRole.STRUCTURED_REASONING) == "vendor/custom-primary"
 
 
-def test_structured_reasoning_default_is_deepseek_with_a_registered_profile():
-    model_id = profiles.model_for(ModelRole.STRUCTURED_REASONING)
-    assert profiles.profile_for(model_id).model_id == model_id  # a real registered profile, not the fallback
+def test_all_roles_override_points_every_role_at_one_model(monkeypatch):
+    monkeypatch.setenv("RAG_MODEL_ALL", "vendor/experiment")
+    for role in ModelRole:
+        assert profiles.model_for(role) == "vendor/experiment"
+
+
+def test_role_specific_override_wins_over_all_roles_override(monkeypatch):
+    monkeypatch.setenv("RAG_MODEL_ALL", "vendor/experiment")
+    monkeypatch.setenv("RAG_MODEL_GENERAL", "vendor/just-general")
+    assert profiles.model_for(ModelRole.GENERAL) == "vendor/just-general"  # per-role wins
+    assert profiles.model_for(ModelRole.SUMMARIZATION) == "vendor/experiment"  # others take the all-roles value
+
+
+def test_dropped_foundation_models_stay_registered_for_dev_override(monkeypatch):
+    # the product default is Granite, but a dev run can still select a foundation model and get its REAL
+    # profile (not the safe fallback) -- the profiles are dropped from the default, not deregistered.
+    for model_id in (
+        profiles.DEFAULT_STRUCTURED_REASONING,  # deepseek
+        profiles.DEFAULT_GENERAL,  # gemma
+        profiles.DEFAULT_STRUCTURED_REASONING_SECONDARY,  # qwen
+    ):
+        assert profiles.profile_for(model_id).model_id == model_id
+    # and the product default itself is a registered profile (json_schema), not the fallback
+    granite = profiles.model_for(ModelRole.STRUCTURED_REASONING)
+    assert profiles.profile_for(granite).model_id == granite
+    assert profiles.profile_for(granite).structured_method == "json_schema"
 
 
 # --- the seam is the only path to with_structured_output, and extra_body is structured-only ----
