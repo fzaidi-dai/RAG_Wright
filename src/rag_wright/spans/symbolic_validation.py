@@ -20,16 +20,24 @@ and both values are downgraded -- the real intra-clause "contradiction" class, s
 orthogonal facets and same-dimension conflict is where extraction actually contradicts itself. The 3
 multi-valued dimensions (`_LIST_ENUM_DIMS`: carve_out / covered_subject / damage_type) are left unbounded.
 
-Deliberately NOT enforced here (JUDGE-ONTOLOGY-2 scoping): value-in-vocabulary (`sh:in`) is already
-enforced at the Pydantic contract boundary (`property.PropertyAssertion._value_in_vocab_or_ambiguous`), so a
-SHACL shape would duplicate a working validator; and cross-DIMENSION `sh:sparql` rules are omitted because
-this schema's dimensions are orthogonal facets with no hard intra-clause cross-dimension contradiction (the
-one genuine cross-signal rule -- deontic polarity vs rule type -- is JUDGE-ONTOLOGY-3).
+The gate also enforces DEONTIC consistency (JUDGE-ONTOLOGY-3, ODRL): a consent-regime dimension carries a
+permission↔restriction polarity in its VALUES (`free`/`unrestricted` = "may freely"; `consent_required` =
+restricted). A function whose defining purpose is to RESTRICT (Anti-Assignment / Non-Transferable License /
+Change Of Control) contradicts a permission-polarity value -- the observed `assignment_consent=free` on a
+"shall not assign" clause. The clause's rule type is DERIVED from its function (reliable, non-circular; not
+parsed from the text), and the check is a `sh:in` (allowed = vocab minus the permission-polarity values) on
+the scoped property shape.
 
-Deterministic, no model, no network. Downgrade is confidence-independent (a type/cardinality error is wrong
-whether EXTRACTED or INFERRED); an already-AMBIGUOUS assertion is left as is. A function NOT in the map is
-PERMISSIVE (unvalidated) -- coverage is expanded deliberately, never by guessing a closed set we are unsure
-of. JUDGE-ONTOLOGY-3 (deontic) adds more shapes to the same graph and reuses this record->RDF->pyshacl harness.
+Deliberately NOT enforced here (JUDGE-ONTOLOGY-2 scoping): value-in-vocabulary (`sh:in` over the full vocab)
+is already enforced at the Pydantic contract boundary (`property.PropertyAssertion._value_in_vocab_or_ambiguous`),
+so a whole-vocab SHACL shape would duplicate a working validator; and cross-DIMENSION `sh:sparql` rules are
+omitted because this schema's dimensions are orthogonal facets with no hard intra-clause cross-dimension
+contradiction (deferred to a post-MVP / beta-customer iteration on real production data).
+
+Deterministic, no model, no network. Downgrade is confidence-independent (a type/cardinality/deontic error is
+wrong whether EXTRACTED or INFERRED); an already-AMBIGUOUS assertion is left as is. A function NOT in the map
+is PERMISSIVE (unvalidated) -- coverage is expanded deliberately, never by guessing a closed set we are unsure
+of. All three checks reuse one record->RDF->pyshacl harness.
 """
 
 from __future__ import annotations
@@ -40,7 +48,12 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.collection import Collection
 from rdflib.namespace import RDF, SH
 
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.contracts.property import (
+    CLOSED_VOCAB,
+    ClausePropertyRecord,
+    PropertyAssertion,
+    PropertyDimension,
+)
 from rag_wright.contracts.provenance import ConfidenceTag
 
 _D = PropertyDimension
@@ -137,6 +150,22 @@ MULTI_VALUED_DIMENSIONS: frozenset[PropertyDimension] = frozenset(
     {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE}
 )
 
+# Deontic consistency (JUDGE-ONTOLOGY-3, ODRL). The consent-regime VALUES that assert NO restriction
+# (permission polarity) -- `free`/`unrestricted` are the "may freely" endpoints of their vocabularies
+# (contract_bridge.ttl: cbr:free a cbr:AssignmentConsent ; cbr:unrestricted a cbr:CocConsent).
+PERMISSION_POLARITY_VALUES: dict[PropertyDimension, frozenset[str]] = {
+    _D.ASSIGNMENT_CONSENT: frozenset({"free"}),
+    _D.COC_CONSENT: frozenset({"unrestricted"}),
+}
+# Functions whose defining purpose is to RESTRICT the thing their consent dimension governs. A
+# permission-polarity value on such a function is a deontic inversion (the observed
+# `assignment_consent=free` on a "shall not assign" clause) -- the clause's rule type is DERIVED from its
+# function (reliable, non-circular), not parsed from the text. Realized as `sh:in` (allowed = vocab minus
+# the permission-polarity values) on the scoped property shape.
+RESTRICTIVE_FUNCTIONS: frozenset[str] = frozenset(
+    {"Anti-Assignment", "Non-Transferable License", "Change Of Control"}
+)
+
 
 def _function_class(function: str) -> URIRef:
     """A stable CBR class IRI for a function label (RDF has no spaces; encode deterministically)."""
@@ -167,6 +196,11 @@ def _shapes_graph() -> Graph:
             g.add((prop, SH.path, _dim_property(dim)))
             if dim not in MULTI_VALUED_DIMENSIONS:  # scalar dim -> at most one value (JUDGE-ONTOLOGY-2)
                 g.add((prop, SH.maxCount, Literal(1)))
+            if function in RESTRICTIVE_FUNCTIONS and dim in PERMISSION_POLARITY_VALUES:
+                # deontic (JUDGE-ONTOLOGY-3): a restrictive function forbids the permission-polarity values
+                allowed = sorted(CLOSED_VOCAB[dim] - PERMISSION_POLARITY_VALUES[dim])
+                lst = Collection(g, URIRef(f"{prop}_allowed"), [Literal(v) for v in allowed])
+                g.add((prop, SH["in"], lst.uri))
     return g
 
 
@@ -182,10 +216,10 @@ def _record_to_rdf(record: ClausePropertyRecord) -> Graph:
 
 
 def flagged_dimensions(record: ClausePropertyRecord) -> set[PropertyDimension]:
-    """The dimensions on the record that violate a SHACL shape: NOT applicable to the function (`sh:closed`)
-    OR a scalar dimension asserted with more than one value (`sh:maxCount 1`). A violation of either reports
-    `sh:resultPath` = the dimension predicate, so both fold into one flagged set. Empty if the function is
-    unmodeled (permissive) or every assertion is valid."""
+    """The dimensions on the record that violate a SHACL shape: NOT applicable to the function (`sh:closed`),
+    a scalar dimension asserted with more than one value (`sh:maxCount 1`), or a permission-polarity value on
+    a restrictive function (`sh:in`, deontic). Every violation reports `sh:resultPath` = the dimension
+    predicate, so all fold into one flagged set. Empty if the function is unmodeled (permissive) or valid."""
     if record.function not in FUNCTION_APPLICABLE_DIMS or not record.assertions:
         return set()
     from pyshacl import validate

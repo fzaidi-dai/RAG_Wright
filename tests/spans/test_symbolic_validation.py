@@ -140,3 +140,30 @@ def test_multivalued_dimension_with_several_values_is_not_a_cardinality_violatio
     )
     assert flagged_dimensions(rec) == set()
     assert [a.confidence for a in symbolic_validate(rec).assertions] == [ConfidenceTag.EXTRACTED] * 3
+
+
+def test_permission_polarity_value_on_a_restrictive_function_is_a_deontic_inversion():
+    # JUDGE-ONTOLOGY-3: the observed error -- assignment_consent=free (a "may freely assign" value) on an
+    # Anti-Assignment clause (whose purpose is to RESTRICT assignment) is a deontic contradiction.
+    rec = _record(
+        "Anti-Assignment",
+        (_D.ASSIGNMENT_CONSENT, "free", ConfidenceTag.EXTRACTED),
+        (_D.PARTY_ASYMMETRY, "symmetric", ConfidenceTag.EXTRACTED),  # applicable, valid -> untouched
+    )
+    assert flagged_dimensions(rec) == {_D.ASSIGNMENT_CONSENT}
+    by_dim = {a.dimension: a.confidence for a in symbolic_validate(rec).assertions}
+    assert by_dim[_D.ASSIGNMENT_CONSENT] == ConfidenceTag.AMBIGUOUS
+    assert by_dim[_D.PARTY_ASYMMETRY] == ConfidenceTag.EXTRACTED
+
+
+def test_restriction_polarity_consent_value_on_a_restrictive_function_passes():
+    # consent_required IS consistent with Anti-Assignment (it restricts) -> not flagged
+    rec = _record("Anti-Assignment", (_D.ASSIGNMENT_CONSENT, "consent_required", ConfidenceTag.EXTRACTED))
+    assert flagged_dimensions(rec) == set()
+    assert symbolic_validate(rec) is rec
+
+
+def test_coc_unrestricted_on_change_of_control_is_a_deontic_inversion():
+    rec = _record("Change Of Control", (_D.COC_CONSENT, "unrestricted", ConfidenceTag.EXTRACTED))
+    assert flagged_dimensions(rec) == {_D.COC_CONSENT}
+    assert symbolic_validate(rec).assertions[0].confidence == ConfidenceTag.AMBIGUOUS
