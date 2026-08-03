@@ -34,6 +34,7 @@ from rag_wright.contracts.property import (
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.spans.property_grounding import reground
+from rag_wright.spans.semantic_judge import semantic_judge
 from rag_wright.spans.symbolic_validation import symbolic_validate
 
 _D = PropertyDimension
@@ -155,8 +156,11 @@ class DGClausePropertyExtractor:
     grounding-judge gate (ADR-0028). Matches the `PropertyExtractor` call shape (T57b) so it drops into
     the ingestion driver. A None extraction yields an empty (but valid) record for that clause."""
 
-    def __init__(self, extract_fn: ClauseExtractFn) -> None:
+    def __init__(self, extract_fn: ClauseExtractFn, *, semantic_judge_fn: Any = None) -> None:
         self._extract = extract_fn
+        # ADR-0040 Layer 3: an optional LLM semantic judge. Injected (default None -> deterministic-only) so
+        # existing callers + hermetic tests are unaffected; the production pipeline wires the real granite judge.
+        self._semantic_judge_fn = semantic_judge_fn
 
     def __call__(
         self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = ""
@@ -171,13 +175,19 @@ class DGClausePropertyExtractor:
             )
         record = clause_to_record(clause, chunk_id=chunk_id, function=function, span_id=span_id)
         # ADR-0028 lexical grounding gate, then ADR-0040 symbolic (function->dimension applicability) gate
-        return symbolic_validate(reground(record, text))
+        record = symbolic_validate(reground(record, text))
+        if self._semantic_judge_fn is not None:  # ADR-0040 Layer 3 LLM semantic gate (production only)
+            record = semantic_judge(record, text, self._semantic_judge_fn)
+        return record
 
 
-def granite_clause_extractor(model: Any = None) -> DGClausePropertyExtractor:
-    """The live default: granite-4.1-8b via OpenRouter (the Leg-C winner; no A/B). Pass a different
-    `ExtractionModel` (e.g. the Modal-hosted Granite `@app.server`) to override the seam."""
-    from rag_wright.capabilities.dg_extraction import extract_clause, openrouter_model
+def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None) -> DGClausePropertyExtractor:
+    """The live default: granite-4.1-8b via the SELECTED serving backend (`default_extraction_model` reads
+    `RAG_SERVING` -> vLLM-Granite in product, OpenRouter-Granite in dev; MS1-3). Pass a different
+    `ExtractionModel` to override, or a `semantic_judge_fn` to enable the ADR-0040 Layer-3 gate."""
+    from rag_wright.capabilities.dg_extraction import default_extraction_model, extract_clause
 
-    chosen = model or openrouter_model("granite-4.1-8b", "ibm-granite/granite-4.1-8b")
-    return DGClausePropertyExtractor(lambda text: extract_clause(text, chosen))
+    chosen = model or default_extraction_model("granite-4.1-8b", "ibm-granite/granite-4.1-8b")
+    return DGClausePropertyExtractor(
+        lambda text: extract_clause(text, chosen), semantic_judge_fn=semantic_judge_fn
+    )

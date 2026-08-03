@@ -43,14 +43,22 @@ def _openrouter_config() -> dict[str, Any]:
     }
 
 
+def serving_backend() -> str:
+    """The selected serving backend name (`openrouter` | `vllm`) from `RAG_SERVING` (default `openrouter`).
+    The single source of the serving switch -- the seam AND the docling-graph extraction path (a separate
+    model surface, `dg_extraction.default_extraction_model`, MS1-3) both read it, so one env flips everything.
+    """
+    return os.getenv("RAG_SERVING", "openrouter").lower()
+
+
 def _serving_config() -> dict[str, Any]:
     """OpenAI-compatible connection config for the SELECTED serving backend, chosen by env WITHOUT hardcoding
-    a provider (MS1-1, ADR-0039). `RAG_SERVING` = `openrouter` (default; dev + fallback) or `vllm` (the
-    self-hosted Granite product substrate). vLLM needs `VLLM_BASE_URL` (an OpenAI-compatible base, e.g.
+    a provider (MS1-1, ADR-0039). `openrouter` (default; dev + fallback) or `vllm` (the self-hosted Granite
+    product substrate). vLLM needs `VLLM_BASE_URL` (an OpenAI-compatible base, e.g.
     `https://<app>.modal.run/v1`); `VLLM_API_KEY` is vLLM's `--api-key` bearer. The rest of the seam
     (per-model profile `structured_method`, `extra_body`, retries/timeout) is backend-agnostic and unchanged.
     """
-    serving = os.getenv("RAG_SERVING", "openrouter").lower()
+    serving = serving_backend()
     if serving == "openrouter":
         return _openrouter_config()
     if serving == "vllm":

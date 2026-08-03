@@ -414,9 +414,14 @@ def production_document_ingest(
         directory.mkdir(parents=True, exist_ok=True)
     if party_seed_path is not None:  # (a) reuse GP-1B's dg_extracted_parties instead of re-extracting ~482
         seed_party_cache(party_dir, party_seed_path)
-    discoverer = SingleCallBoundaryDiscoverer()
+    discoverer = SingleCallBoundaryDiscoverer()  # GENERAL role -> granite via the seam (MS1-2/3)
     summarizer = _NoSummary()
-    clause_extractor = granite_clause_extractor()
+    # ADR-0040 Layer 3: the granite semantic judge runs INLINE in production ingestion (after the deterministic
+    # gates), through the seam (RAG_SERVING). build_* is lazy -> no network at construction (MS1-3).
+    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.spans.semantic_judge import build_semantic_judge_fn
+    clause_extractor = granite_clause_extractor(
+        semantic_judge_fn=build_semantic_judge_fn(model_for(ModelRole.STRUCTURED_REASONING)))
     extract_parties_fn = production_extract_fn()  # (text) -> ContractParties | None (GP-1B granite, ADR-0035)
     classifier = LegalBertFunctionClassifier.load(
         Path("data/models/legalbert_function"), device=_resolve_device(None))  # GPU when available (EMBED_DEVICE)

@@ -198,6 +198,28 @@ def ollama_model(label: str, model: str, base_url: str | None = None) -> Extract
     )
 
 
+def vllm_model(label: str, model: str) -> ExtractionModel:
+    """A self-hosted Granite model via the vLLM OpenAI-compatible server (litellm `hosted_vllm` provider);
+    base_url/key from the `VLLM_*` env (MS1-3, ADR-0039). This is the product-substrate extraction path."""
+    return ExtractionModel(
+        label=label, provider="hosted_vllm", model=model,
+        base_url=os.environ["VLLM_BASE_URL"], api_key=os.getenv("VLLM_API_KEY", "rw-vllm-dev-key"),
+        inference="remote",
+    )
+
+
+def default_extraction_model(
+    label: str = "clause-extract", model: str = "ibm-granite/granite-4.1-8b"
+) -> ExtractionModel:
+    """The clause/party extraction model for the SELECTED serving backend (MS1-3, ADR-0039). The docling-graph
+    extraction is a SEPARATE model surface from the seam, so it reads the same `RAG_SERVING` switch here:
+    vLLM-Granite (product) when `RAG_SERVING=vllm`, else OpenRouter-Granite (dev/default). One env flips all
+    three LLM surfaces (chunk + extract + judge) together."""
+    from rag_wright.models.seam import serving_backend
+
+    return vllm_model(label, model) if serving_backend() == "vllm" else openrouter_model(label, model)
+
+
 # INGEST-GRAPH-LATENCY: docling-graph's default per-call timeout is 300s (ReliabilityDefaults.timeout_s), which
 # let one stuck extract_parties call block a document for ~5 min. A single granite call is ~10s, so cap it far
 # lower and bound the retry exposure -- a hang now fails fast and the caller's per-item tolerance skips it.
