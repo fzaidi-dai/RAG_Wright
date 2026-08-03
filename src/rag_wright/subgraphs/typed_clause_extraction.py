@@ -33,6 +33,7 @@ from langgraph.types import interrupt
 
 from rag_wright.contracts.property import ClausePropertyRecord
 from rag_wright.spans.property_grounding import needs_escalation, reground
+from rag_wright.spans.symbolic_validation import symbolic_validate
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, dead_letter, raw_llm_span
 
 # record_fn: (clause_text, model_id) -> an ADAPTED ClausePropertyRecord (pre-grounding), or None when
@@ -66,7 +67,8 @@ def _cheap_node(record_fn: RecordFn, model_id: str, max_attempts: int):
                 raise
         if record is None:  # genuine no-model result -> dead-letter (no wasted retries)
             return {"dead_letter": dead_letter("extraction_produced_no_models", model=model_id)}
-        return {"record": reground(record, state["clause_text"])}  # ADR-0028 grounding gate
+        # ADR-0028 lexical grounding gate, then ADR-0040 symbolic applicability gate
+        return {"record": symbolic_validate(reground(record, state["clause_text"]))}
 
     return extract_cheap
 
@@ -81,7 +83,7 @@ def _strong_node(record_fn: RecordFn, model_id: str):
             return {"escalated": True}
         if record is None:
             return {"escalated": True}
-        return {"record": reground(record, state["clause_text"]), "escalated": True}
+        return {"record": symbolic_validate(reground(record, state["clause_text"])), "escalated": True}
 
     return extract_strong
 

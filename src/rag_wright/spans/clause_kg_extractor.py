@@ -34,6 +34,7 @@ from rag_wright.contracts.property import (
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.spans.property_grounding import reground
+from rag_wright.spans.symbolic_validation import symbolic_validate
 
 _D = PropertyDimension
 _OTHER = "Other"  # the compiler's auto-added OTHER escape sentinel -> "not asserted"
@@ -169,7 +170,8 @@ class DGClausePropertyExtractor:
                 assertions=[],
             )
         record = clause_to_record(clause, chunk_id=chunk_id, function=function, span_id=span_id)
-        return reground(record, text)  # ADR-0028 grounding-judge gate
+        # ADR-0028 lexical grounding gate, then ADR-0040 symbolic (function->dimension applicability) gate
+        return symbolic_validate(reground(record, text))
 
 
 def granite_clause_extractor(model: Any = None) -> DGClausePropertyExtractor:
