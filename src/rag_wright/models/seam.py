@@ -36,11 +36,29 @@ _STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (ValueError,)
 
 
 def _openrouter_config() -> dict[str, Any]:
-    """OpenRouter connection config from env (default serving path; secrets only in `.env`)."""
+    """OpenRouter connection config from env (default/dev + fallback serving path; secrets only in `.env`)."""
     return {
         "api_key": os.environ["OPENROUTER_API_KEY"],
         "base_url": os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     }
+
+
+def _serving_config() -> dict[str, Any]:
+    """OpenAI-compatible connection config for the SELECTED serving backend, chosen by env WITHOUT hardcoding
+    a provider (MS1-1, ADR-0039). `RAG_SERVING` = `openrouter` (default; dev + fallback) or `vllm` (the
+    self-hosted Granite product substrate). vLLM needs `VLLM_BASE_URL` (an OpenAI-compatible base, e.g.
+    `https://<app>.modal.run/v1`); `VLLM_API_KEY` is vLLM's `--api-key` bearer. The rest of the seam
+    (per-model profile `structured_method`, `extra_body`, retries/timeout) is backend-agnostic and unchanged.
+    """
+    serving = os.getenv("RAG_SERVING", "openrouter").lower()
+    if serving == "openrouter":
+        return _openrouter_config()
+    if serving == "vllm":
+        return {
+            "api_key": os.getenv("VLLM_API_KEY", "rw-vllm-dev-key"),
+            "base_url": os.environ["VLLM_BASE_URL"].rstrip("/"),
+        }
+    raise ValueError(f"RAG_SERVING must be 'openrouter' or 'vllm', got {serving!r}")
 
 
 def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
@@ -57,7 +75,7 @@ def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) ->
     return ChatOpenAI(
         model=model_id,
         temperature=temperature,
-        **_openrouter_config(),
+        **_serving_config(),  # OpenRouter (default) or vLLM-Granite, selected by RAG_SERVING (MS1-1)
         **params,
     )
 
