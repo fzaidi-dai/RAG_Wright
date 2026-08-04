@@ -542,7 +542,6 @@ def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int
     from pathlib import Path
 
     from rag_wright.capabilities.dg_extraction import build_verified_registry
-    from rag_wright.capabilities.party_clause_linking import party_clause_linking
 
     store.ensure_schema()
     seed_chunk_cache(Path(cache_dir) / "chunks", Path("data/cache/cuad/chunks"))
@@ -552,9 +551,30 @@ def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int
         party_seed_path="data/cache/dg_extracted_parties.json")
     return run_corpus_ingestion(
         CuadAdapter(cuad_path, limit=limit), ingest_graph,
-        link_fn=lambda: len(party_clause_linking(store).links),
+        # PARTY-TO-MANY-TO-MANY (ADR-0036): default to the mention-cache many-to-many derivation, so a re-ingest
+        # keeps every party linked to every contract it signed instead of silently reverting to the 1-to-1 join.
+        link_fn=_corpus_party_link_fn(store, "data/cache/dg_extracted_parties.json"),
         # RESUME-skip: a present Contract node means the whole document already landed (Contract is written last).
         is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)
+
+
+def _corpus_party_link_fn(store: Any, mentions_path: Any) -> LinkFn:
+    """The corpus-level PARTY_TO link step (KG-7, run ONCE after ingestion). Defaults to the TRUE many-to-many
+    derivation (PARTY-TO-MANY-TO-MANY, ADR-0036): loads the GP-1B per-contract mention cache so a party links to
+    EVERY contract it signed -- the same path as `scripts/link_party_clause.py MANY=1`. Falls back to the
+    single-provenance KG-7 join only when the cache is absent. Loaded lazily (at link time) so it reflects the
+    cache on disk when the corpus finishes."""
+    import json
+    from pathlib import Path
+
+    from rag_wright.capabilities.party_clause_linking import party_clause_linking
+
+    def _link() -> int:
+        path = Path(mentions_path)
+        mentions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+        return len(party_clause_linking(store, mentions=mentions).links)
+
+    return _link
 
 
 def register_contract_ingestion_pipeline(registry) -> None:
