@@ -1,0 +1,76 @@
+# compliance_bridge.ttl — the compliance-module ontology (CC-1, roadmap §13.1).
+#
+# A small AUTHORED sibling to contract_bridge.ttl (NOT an edit of it — different domain, kept separate).
+# Reuses the public deontic backbone (ODRL permission/prohibition/duty; LKIF obligation/permission/prohibition
+# family) + PROV-O provenance + the same odrl:Constraint typed-dimension pattern the contract bridge uses for
+# applicability. The thin advertising vocab (ClaimType) is authored here (closed). The rule/claim INSTANCES are
+# extracted from text (CC-2/CC-3); this file is only the schema.
+
+@prefix cmp:   <https://ragwright.local/ontology/compliance-bridge#> .
+@prefix odrl:  <http://www.w3.org/ns/odrl/2/> .
+@prefix lkif:  <http://www.estrellaproject.org/lkif-core/norm.owl#> .
+@prefix prov:  <http://www.w3.org/ns/prov#> .
+@prefix owl:   <http://www.w3.org/2002/07/owl#> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix xsd:   <http://www.w3.org/2001/XMLSchema#> .
+
+<https://ragwright.local/ontology/compliance-bridge> a owl:Ontology ;
+    rdfs:label "RAG_Wright compliance bridge" ;
+    rdfs:comment "Two-sided compliance schema: deontic Requirement rules (ODRL/LKIF) + subject Claims, PROV-O provenance. Grounds the requirement_extraction / claim_extraction / compliance_judgment capabilities." .
+
+# =============================================================================
+# Deontic backbone — the rule's force. Reuse the public standards (ODRL/LKIF); our closed values map to them.
+# =============================================================================
+cmp:DeonticType a owl:Class ; skos:prefLabel "Deontic force" ;
+    owl:oneOf ( cmp:obligation cmp:prohibition cmp:permission ) .
+cmp:obligation  a cmp:DeonticType ; rdfs:subClassOf lkif:Obligation, odrl:Duty        ; skos:prefLabel "obligation" .
+cmp:prohibition a cmp:DeonticType ; rdfs:subClassOf lkif:Prohibition, odrl:Prohibition ; skos:prefLabel "prohibition" .
+cmp:permission  a cmp:DeonticType ; rdfs:subClassOf lkif:Permission, odrl:Permission  ; skos:prefLabel "permission" .
+
+# =============================================================================
+# Requirement — a single regulatory rule (the rulebook side). requirement_id = <source_reg>:<section>:<hash>.
+# =============================================================================
+cmp:Requirement a owl:Class ; skos:prefLabel "Requirement" ;
+    rdfs:comment "One deontic rule extracted from a regulatory corpus; always carries a citation (PROV)." .
+cmp:deonticType a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:Requirement ; rdfs:range cmp:DeonticType .
+cmp:actor a owl:DatatypeProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string ;
+    skos:prefLabel "bound actor" ; rdfs:comment "Who the rule binds: advertiser, endorser, ..." .
+cmp:requirementText a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string .
+cmp:citation a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string ;
+    rdfs:subPropertyOf prov:wasDerivedFrom ; rdfs:comment "Section/paragraph provenance; always present (FR-Q.6)." .
+cmp:evidenceStandard a owl:DatatypeProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string .
+cmp:severity a owl:DatatypeProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string .
+
+# Applicability — typed (dimension, value) conditions the rule applies under. Same odrl:Constraint pattern as
+# the contract bridge, matched against a Claim's scope by the reused retrieval router (CC-6).
+cmp:ApplicabilityConstraint a owl:Class ; rdfs:subClassOf odrl:Constraint ; skos:prefLabel "Applicability condition" .
+cmp:dimension a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:ApplicabilityConstraint ; rdfs:range xsd:string .
+cmp:value a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:ApplicabilityConstraint ; rdfs:range xsd:string .
+cmp:hasApplicabilityScope a owl:ObjectProperty ; rdfs:domain cmp:Requirement ; rdfs:range cmp:ApplicabilityConstraint .
+
+# =============================================================================
+# Claim — a checkable element from the SUBJECT document (the ad side). claim_id + span = provenance.
+# =============================================================================
+cmp:Claim a owl:Class ; skos:prefLabel "Claim" ;
+    rdfs:comment "One checkable assertion extracted from a subject document (ad), cited to its span (PROV)." .
+cmp:ClaimType a owl:Class ; skos:prefLabel "Claim type" ;
+    owl:oneOf ( cmp:efficacy cmp:comparative cmp:pricing cmp:health cmp:environmental cmp:endorsement cmp:performance cmp:guarantee ) .
+cmp:efficacy a cmp:ClaimType . cmp:comparative a cmp:ClaimType . cmp:pricing a cmp:ClaimType .
+cmp:health a cmp:ClaimType . cmp:environmental a cmp:ClaimType . cmp:endorsement a cmp:ClaimType .
+cmp:performance a cmp:ClaimType . cmp:guarantee a cmp:ClaimType .
+cmp:claimType a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:Claim ; rdfs:range cmp:ClaimType .
+cmp:assertionText a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:Claim ; rdfs:range xsd:string .
+cmp:disclosurePresent a owl:DatatypeProperty ; rdfs:domain cmp:Claim ; rdfs:range xsd:string .
+cmp:evidenceReferenced a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:Claim ; rdfs:range xsd:boolean .
+cmp:medium a owl:DatatypeProperty ; rdfs:domain cmp:Claim ; rdfs:range xsd:string .
+cmp:hasSpan a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:Claim ; rdfs:range prov:Entity ;
+    rdfs:comment "The subject-document span the claim was read from (provenance, cited)." .
+
+# =============================================================================
+# Verdict — the judgment output (CC-4). Closed vocab; every 'violation' is human-gated before it leaves.
+# =============================================================================
+cmp:Verdict a owl:Class ; skos:prefLabel "Compliance verdict" ;
+    owl:oneOf ( cmp:compliant cmp:violation cmp:needs_review ) .
+cmp:compliant a cmp:Verdict . cmp:violation a cmp:Verdict . cmp:needs_review a cmp:Verdict .
