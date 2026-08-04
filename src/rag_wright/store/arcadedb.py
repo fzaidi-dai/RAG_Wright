@@ -480,6 +480,27 @@ class ArcadeDBStore:
             f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({fused}){where} LIMIT {k}"
         )
 
+    def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:
+        """The typed property assertions on each span, joined via the ADR-0025 `span_id` key that the clause
+        KG persists on every property edge (`edge.span_id == Span.span_id`; SPAN-CLAUSE-RERANK). This is the
+        clause<->span link the retrieval rerank needs: a span retrieved from the BGE index gets its clause's
+        typed (dimension, value) constraints here. Batched over `span_ids`; returns {span_id: {(dimension,
+        value)}}. Queries each typed edge type once with an IN filter (ArcadeDB has no shared edge base), so
+        round-trips are bounded by the edge-type count, not the pool size. `value` is the target
+        PropertyValue's value (`inV().value`)."""
+        out: dict[str, set[tuple[str, str]]] = {s: set() for s in span_ids}
+        if not span_ids:
+            return out
+        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
+        for edge_type in sorted(set(_TYPED_DIMENSION_EDGE.values())):
+            rows = self._query(
+                f"SELECT span_id, dimension, inV().value AS value FROM {edge_type} WHERE span_id IN {id_list}")
+            for r in rows:
+                sid, dim, val = r.get("span_id"), r.get("dimension"), r.get("value")
+                if sid in out and dim and val is not None:
+                    out[sid].add((str(dim), str(val)))
+        return out
+
     def chunk_count(self) -> int:
         rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")
         return int(rows[0]["n"]) if rows else 0

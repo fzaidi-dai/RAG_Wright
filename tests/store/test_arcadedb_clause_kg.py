@@ -170,3 +170,28 @@ def test_clear_clause_kg_empties_the_typed_graph(store) -> None:
     store.write_clause_kg(rec)
     store.clear_clause_kg()
     assert store.clause_kg_counts() == {"clauses": 0, "property_values": 0, "typed_edges": 0}
+
+
+def test_span_properties_joins_typed_edges_by_span_id():
+    """SPAN-CLAUSE-RERANK: `span_properties` aggregates (dimension, value) per span across the typed edge
+    types via the `edge.span_id == Span.span_id` join. Hermetic -- a fake `_query` returns canned edge rows."""
+    store = ArcadeDBStore.__new__(ArcadeDBStore)
+    rows = {
+        "HAS_MUTUALITY": [{"span_id": "s1", "dimension": "mutuality", "value": "mutual"}],
+        "CAPS": [{"span_id": "s1", "dimension": "cap_basis", "value": "fixed_fee"},
+                 {"span_id": "s2", "dimension": "cap_quantum", "value": None}],  # None value -> skipped
+        "GOVERNED_BY": [{"span_id": "sX", "dimension": "jurisdiction", "value": "england"}],  # span not in batch
+    }
+
+    def fake_query(sql):
+        for edge_type, r in rows.items():
+            if f"FROM {edge_type} " in sql:
+                return r
+        return []
+
+    store._query = fake_query
+    out = store.span_properties(["s1", "s2"])
+    assert out["s1"] == {("mutuality", "mutual"), ("cap_basis", "fixed_fee")}  # aggregated across edge types
+    assert out["s2"] == set()  # its only row had value=None -> nothing recorded
+    assert "sX" not in out  # rows for spans outside the requested batch are ignored
+    assert store.span_properties([]) == {}  # empty in -> empty out, no query
