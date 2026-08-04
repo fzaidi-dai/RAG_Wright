@@ -857,6 +857,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("compliance", "extraction", "claims", "advertising", "citation"),
     ),
+    CapabilityManifest(
+        slug="compliance_judgment",
+        kind="function",
+        display_name="Compliance judgment (claim x requirement -> cited verdict)",
+        description=(
+            "Judge a (claim, applicable-requirement) pair into a compliant/violation/needs_review verdict with "
+            "a rationale and BOTH-SIDED citation (CC-4, compliance §13.2): extends the grounding judge from "
+            "'is X supported?' to 'does claim X satisfy/violate requirement Y?', through the model seam "
+            "(Granite, ADR-0039). Conservative by design -- a judge failure, an off-vocab verdict, or genuine "
+            "uncertainty defaults to needs_review, never a silent compliant/violation; every violation and "
+            "needs_review is human-gated. The judgment node is the one new capability of the compliance module."
+        ),
+        representative_queries=(
+            "judge whether an ad claim violates a regulatory requirement",
+            "decide compliant / violation / needs-review for a claim against a rule, with citations",
+            "audit a marketing claim against an FTC endorsement requirement",
+        ),
+        tags=("compliance", "judgment", "verdict", "citation", "human-in-the-loop"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

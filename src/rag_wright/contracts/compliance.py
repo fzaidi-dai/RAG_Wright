@@ -146,3 +146,40 @@ class Claim(BaseModel):
     @staticmethod
     def make_id(source_doc: str, claim_index: int, assertion_text: str) -> str:
         return _content_id(source_doc, str(claim_index), assertion_text)
+
+
+class Verdict(str, Enum):
+    """The compliance judgment output (CC-4, §13.2). Closed vocab; matches `compliance_bridge.ttl` cmp:Verdict.
+    `needs_review` is the conservative default under uncertainty (never a silent compliant/violation)."""
+
+    COMPLIANT = "compliant"
+    VIOLATION = "violation"
+    NEEDS_REVIEW = "needs_review"
+
+
+class ComplianceFinding(BaseModel):
+    """One `(claim, requirement)` judgment (CC-4, §13.2): a verdict + rationale + BOTH-SIDED citation +
+    confidence. The citations are the trust product -- an auditor sees the exact ad span AND the exact reg
+    clause. Every `violation`/`needs_review` is human-gated (`needs_human_review`); false-negatives are
+    liability, so uncertainty never silently clears."""
+
+    claim_id: str
+    requirement_id: str
+    verdict: Verdict
+    rationale: str = ""
+    citation_claim: str  # the subject span text (provenance, cited -- FR-Q.6)
+    citation_requirement: str  # the reg clause / section (provenance, cited)
+    confidence: float = 0.0
+
+    @field_validator("confidence")
+    @classmethod
+    def _confidence_in_unit(cls, v: float) -> float:
+        if not 0.0 <= v <= 1.0:
+            raise ValueError(f"confidence must be in [0, 1], got {v}")
+        return v
+
+    @property
+    def needs_human_review(self) -> bool:
+        """Every violation requires human confirmation before it leaves the tool; needs_review always does.
+        A `compliant` finding does not gate (§13.2)."""
+        return self.verdict in (Verdict.VIOLATION, Verdict.NEEDS_REVIEW)
