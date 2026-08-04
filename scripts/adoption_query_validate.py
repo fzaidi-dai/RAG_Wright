@@ -21,7 +21,9 @@ def _line(s=""):
 def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.contract_kg_serve import clauses_of_function
-    from rag_wright.capabilities.query_function_classifier import classify_query_functions
+    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
+    from rag_wright.capabilities.query_function_classifier import route_query
     from rag_wright.capabilities.remote_encoders import query_classifier, query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.models.seam import build_model
@@ -32,26 +34,24 @@ def main() -> None:
     classifier = query_classifier()   # -> A100 /classify
     llm_model = model_for(ModelRole.GENERAL)  # -> granite via the seam (RAG_SERVING=vllm)
 
-    def _span_text(span_id: str) -> str:
-        r = store._query(f"SELECT text, function FROM Span WHERE span_id = '{span_id}' LIMIT 1")
-        return (r[0]["text"][:120].strip() if r else "").replace("\n", " ")
-
     _line("=" * 90)
-    _line("LEG B -- typed retrieval (A100 LegalBERT + granite routing, A100 BGE hybrid search, local KG)")
-    for q in ["clauses that cap liability at a multiple of the fees paid",
-              "non-solicitation of employees for a fixed period"]:
-        lb = classifier.classify_topk([q], k=3)[0]                       # A100 LegalBERT
-        llm = classify_query_functions(q, llm_model, k=3)                # A100 granite
-        routed = list(dict.fromkeys([*llm, *lb]))                        # KG-5e llm-union
+    _line("LEG B -- PROPERTY-BOOSTED typed retrieval (SPAN-CLAUSE-RERANK: granite constraints + granite/LegalBERT "
+          "routing + A100 BGE pool -> edge.span_id join -> typed rerank; local KG)")
+    extract_model = default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b")  # A100 vLLM
+    for q in ["anti-assignment clauses that allow a party to freely assign without consent",
+              "cap on liability set at a multiple of the fees paid"]:
+        constraints, llm_fns = route_query(q, extract_model=extract_model, function_model_id=llm_model, k=3)
+        lb_fns = classifier.classify_topk([q], k=3)[0]                    # A100 LegalBERT
+        functions = list(dict.fromkeys([*llm_fns, *lb_fns]))             # KG-5e llm-union
         _line(f"\n  Q: {q!r}")
-        _line(f"     LegalBERT top-3: {lb}")
-        _line(f"     granite router:  {llm}")
-        # A100 BGE embed (query) -> span_hybrid_search (Span index, RRF dense+sparse) restricted to the routed fn
-        dense, sparse = embedder.encode_dense(q), embedder.encode_sparse(q)
-        hits = store.span_hybrid_search(dense, sparse, k=4, function=routed[0] if routed else None)
-        _line(f"     -> span_hybrid_search (function={routed[0] if routed else None!r}), top {len(hits)} cited spans:")
-        for h in hits[:4]:
-            _line(f"        [{h['span_id'][-16:]}] {_span_text(h['span_id'])}...")
+        _line(f"     granite constraints: {constraints}")
+        _line(f"     routed functions (granite ∪ LegalBERT): {functions}")
+        results = property_boosted_retrieval(
+            q, store=store, embedder=embedder, functions=functions, constraints=constraints, k=5)
+        _line(f"     -> property_boosted_retrieval, top {len(results)} cited spans:")
+        for r in results:
+            tag = f"  [MATCH {r.matched}]" if r.matched else ""
+            _line(f"        {r.rank}. [{r.span_id[-14:]}] ({r.function}) {r.text[:80].strip()}...{tag}")
 
     _line("\n" + "=" * 90)
     _line("LEG A -- intra-contract scoped QnA (local Clause KG cited clauses + granite cited answer via A100)")
