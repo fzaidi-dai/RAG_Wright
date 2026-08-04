@@ -228,3 +228,84 @@ ingestion pipeline build (§16.8); serving/infra and local-mode GPU (§16.9); do
 The ingestion graph and the query graph (compiled from the Orchestration Spec by the GraphWright
 compiler); any node/edge/orchestration wiring; and the spec Phase 4 extras until a use case and
 the eval set justify them (ask-first).
+
+## 7. Compliance module (roadmap §13) — plan for the compliance subgraphs
+
+A second module of the same product, not a second product: compliance checking = **two-sided
+retrieval + entailment**. Take a *subject document*, extract its checkable **claims**, retrieve the
+*applicable* **requirements** from a *regulatory corpus*, and **judge** each `(claim, requirement)`
+pair -> `compliant / violation / needs-review`, cited on **both** sides, ending in a gap report. It
+is the same neuro-symbolic machine as the contract legs, pointed at two corpora with a **judgment
+node** where the contract legs have a rank node.
+
+### 7.1 "Similar yet different" (why it is mostly reuse)
+
+| Axis | Contract legs (built) | Compliance (new) |
+|---|---|---|
+| Data | CUAD/ACORD contracts | a **regulatory** corpus (FTC guides) + **subject docs** (ad campaigns) |
+| Ingestion | Clause KG via `contract_ingestion_pipeline` | **same generic pipeline** + a `RegulationAdapter` + new `Requirement`/`Claim` templates |
+| Query | retrieve clauses -> **rank** | retrieve *applicable* requirements -> **judge** (verdict) |
+
+Reuse map: the Requirements KG = the generic ingestion pipeline (`contract_ingestion_pipeline`) + a
+new adapter/template; the applicability match (claim -> applicable requirements) = **reuse** Leg-B
+`typed_property_retrieval` + the `llm_union` router (claim scope <-> `applicability_scope`); the
+**judgment node is the ONE genuinely new capability**, extending the grounding judge
+(`spans/semantic_judge.py`, ADR-0028/0040) from "is X supported?" to "does claim X satisfy/violate
+requirement Y?". The judgment core is already **de-risked** (C-6: ContractNLI, Flash 0.780, no class
+collapse).
+
+### 7.2 The rung ladder (climb low-risk -> high-value; ad-campaign is the through-line)
+
+- **Rung 1 (this plan, low risk): stand up the ad-compliance ENGINE.** CC-0..CC-7 below — schemas,
+  requirement/claim extraction, the judgment node, the two subgraphs — ingesting FTC Endorsement
+  Guides (16 CFR 255) as the one standard, judgment validated on the existing ContractNLI de-risk.
+  Deliverable: a working, both-sided-cited `compliance_check` subgraph for ad claims vs FTC rules.
+  Uses ttl + de-risk data we already have; FTC rules are public.
+- **Rung 2 (the beachhead, real gold — next, roadmap C-7): ad-claims domain gold.** Mine public
+  NAD/BBB + FTC decisions into `(claim -> rule -> verdict)` examples; measure precision/recall
+  separately; tune the judge. This is what makes the ad product measured and shippable. Same use
+  case as rung 1 — rung 1 builds the engine, rung 2 makes it trustworthy.
+- **Rung 3 (optional fast-follow): privacy vertical.** The same engine on GDPR/CCPA, exploiting the
+  richest public gold (OPP-115/GDPR120Q/CLAUDETTE) + public ontologies (DPV/GDPRtEXT). Not the
+  beachhead (crowded market); a later vertical or extra cheap validation.
+
+### 7.3 Ontology (schema) vs. dataset (instances)
+
+No ad-campaign ttl exists and there is no single public one to drop in. Our `contract_bridge.ttl` is
+a contract-clause ontology (right machinery, wrong domain). So:
+
+- **Ontology = a small authored sibling `compliance_bridge.ttl`** (NOT an enhancement of the contract
+  one — keep siblings): reuse public deontic standards (ODRL, which we already prefix; LKIF;
+  LegalRuleML) for the obligation/prohibition/permission backbone + PROV for provenance + the same
+  `Constraint[]` typed-dimension pattern (`applicability_scope` is that shape); **author** the thin
+  advertising domain vocab (closed `claim_type` / `deontic_type` / `actor` enums, sketched in §13.1).
+- **Dataset = extracted from text**, same split as the Clause KG (small authored schema -> many
+  extracted instances): Requirement instances extracted from the FTC guide text (public: eCFR /
+  FTC.gov); Claim instances extracted from subject docs; gold verdicts mined from NAD/FTC decisions
+  (rung 2 only).
+
+### 7.4 Model & substrate
+
+Same process as the contract legs: the judgment node (and all LLM work) runs on **self-hosted
+Granite on the Modal A100** through the model-profile seam (`RAG_SERVING=vllm`); the Flash->Pro
+cascade concept becomes **Granite-default with a configurable escalation tier**, OpenRouter dev/eval
+only (ADR-0039). The generic ingestion pipeline is substrate-agnostic via the seam, so the
+`RegulationAdapter` ingest runs wherever Granite is — local Mac for the small FTC corpus, or
+co-located on the Modal A100 (the CUAD-full pattern) once subject-doc volume grows.
+
+### 7.5 Two-halves boundary
+
+In this (capability) repo we build + register the **capabilities** (`requirement_extraction`,
+`claim_extraction`, `compliance_judgment`) and the **two hardened LangGraph subgraphs**
+(`compliance_ingestion`, `compliance_check`), each on `subgraphs/scaffold.py`, registered twofold
+(slug + ARD manifest), following the LG-3 pattern. The MCP tools (`ingest_regulations` /
+`extract_claims` / `check_compliance` / `compliance_report`) and the GraphWright-composed
+`check_compliance` workflow (roadmap C-8) are the **compiler half** — not built here.
+
+### 7.6 Rung-1 task ladder
+
+See `tasks.md` (CC-0..CC-7). Order: CC-0 (acquire FTC text) -> CC-1 (author `compliance_bridge.ttl`
++ `Requirement`/`Claim` contracts) -> CC-2/CC-3 (extraction capabilities) -> CC-4 (judgment node) ->
+CC-5 (`compliance_ingestion` subgraph) -> CC-6 (`compliance_check` subgraph) -> CC-7 (Track-1 eval
+gate: Pro-ceiling on ContractNLI + a smoke `check_compliance` on the FTC KG). Each task is
+contract-first TDD with the approval gate.
