@@ -212,6 +212,7 @@ class ArcadeDBStore:
         client = SyncClient(
             os.environ["ARCADEDB_HOST"],
             os.environ["ARCADEDB_PORT"],
+            protocol=os.getenv("ARCADEDB_PROTOCOL", "http"),  # `https` for the Modal-hosted KG (EC-2)
             username=os.environ["ARCADEDB_USER"],
             password=os.environ["ARCADEDB_PASSWORD"],
         )
