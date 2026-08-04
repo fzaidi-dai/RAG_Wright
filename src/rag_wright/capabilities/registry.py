@@ -106,6 +106,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "cross_corpus_retrieval",  # subgraph: constraints+functions -> route -> match_rank -> tiebreak -> cited clauses
         "typed_property_retrieval",  # subgraph: front-door + property_boosted_retrieval (Leg B, LEGB-SUBGRAPH)
         "contract_ingestion_pipeline",  # subgraph: generic corpus ingest (chunk->extract->resolve->write->link)
+        # --- Compliance module rung 1 (roadmap §13): the ad-compliance engine ---
+        "requirement_extraction",  # function: regulatory section text -> deontic Requirement[] (CC-2)
     }
 )
 

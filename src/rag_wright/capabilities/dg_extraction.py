@@ -232,10 +232,17 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
                           timeout_s: int = _DEFAULT_TIMEOUT_S,
                           max_retries: int = _DEFAULT_MAX_RETRIES,
                           temperature: float | None = None,
-                          structured_output: bool = False) -> Any:
+                          structured_output: bool = False,
+                          extraction_contract: str = "direct") -> Any:
     """The docling-graph `PipelineConfig` for a model choice, with the reliability fixes baked in
     (structured_output=False + max_tokens cap + a sane per-call `timeout_s`/`max_retries`, NOT docling-graph's
-    300s default). Kept import-light so hermetic tests need no LLM."""
+    300s default). Kept import-light so hermetic tests need no LLM.
+
+    `extraction_contract` defaults to "direct" (one full-document call -- right for CONTRACTS: the parties
+    live in the 8k preamble). LONG documents (regulations) must pass "auto"/"dense": on a doc that dwarfs the
+    output budget, "direct" SILENTLY self-rations (measured: FTC §255.5 -> 6 rules direct vs 31 dense), whereas
+    "dense" is skeleton-then-fill over chunks and auto-retries truncation by splitting. See
+    [[docling-graph-extraction-contract]]."""
     from docling_graph import PipelineConfig
     from docling_graph.llm_clients.config import (
         ConnectionOverrides,
@@ -251,7 +258,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
     )
     return PipelineConfig(
         source=source_path, template=template, backend="llm", inference=model.inference,
-        extraction_contract="direct", processing_mode="many-to-one",
+        extraction_contract=extraction_contract, processing_mode="many-to-one",
         # default json_object (OpenRouter's strict json_schema returns nothing, GP-1B.2); but vLLM's guided
         # decoding (xgrammar) CONSTRAINS the decoder to the schema, so structured_output=True works + is stricter.
         structured_output=structured_output,
@@ -269,17 +276,20 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
                     preamble_chars: int = _DEFAULT_PREAMBLE_CHARS,
                     timeout_s: int = _DEFAULT_TIMEOUT_S,
                     temperature: float | None = None,
-                    structured_output: bool = False) -> Any | None:
-    """Extract parties from contract `text` with `model` via docling-graph (API mode). Writes the preamble to
-    a temp .md (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first
-    extracted model (a `ContractParties`) or None if extraction yielded nothing."""
+                    structured_output: bool = False,
+                    extraction_contract: str = "direct") -> Any | None:
+    """Extract from `text` with `model` via docling-graph (API mode). Writes the preamble to a temp .md
+    (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first extracted model or
+    None. `extraction_contract` defaults to "direct" (contracts); pass "auto"/"dense" for long docs
+    (regulations) so a single call does not silently self-ration -- see build_pipeline_config."""
     from docling_graph import run_pipeline
 
     md = Path(tempfile.mkdtemp(prefix="dg_extract_")) / "contract.md"
     md.write_text(text[:preamble_chars], encoding="utf-8")
     ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens,
                                              timeout_s=timeout_s, temperature=temperature,
-                                             structured_output=structured_output),
+                                             structured_output=structured_output,
+                                             extraction_contract=extraction_contract),
                        mode="api")
     return ctx.extracted_models[0] if ctx.extracted_models else None
 

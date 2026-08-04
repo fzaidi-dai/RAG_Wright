@@ -818,6 +818,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("ingestion", "pipeline", "corpus", "subgraph", "langgraph", "composite"),
     ),
+    # --- Compliance module rung 1 (roadmap §13): the ad-compliance engine ---
+    CapabilityManifest(
+        slug="requirement_extraction",
+        kind="function",
+        display_name="Requirement extraction (regulatory text -> deontic rules)",
+        description=(
+            "Extract the deontic rules a regulatory section states into typed Requirement nodes (CC-2, "
+            "compliance §13.1): reuses the docling-graph extraction seam with a Requirement template + the "
+            "model seam (Granite, ADR-0039), then adapts each rule to the closed CC-1 vocab -- deontic force "
+            "(obligation/prohibition/permission), bound actor, applicability_scope (claim_type constraints), "
+            "and the requirement text, each cited to its section. An off-vocab deontic downgrades to AMBIGUOUS; "
+            "an off-vocab claim_type is dropped, never fabricated. The regulatory side of the compliance check."
+        ),
+        representative_queries=(
+            "extract the rules a regulation section states as typed requirements",
+            "turn FTC endorsement-guide text into cited deontic requirement nodes",
+            "parse a regulatory corpus into obligation/prohibition/permission rules",
+        ),
+        tags=("compliance", "extraction", "deontic", "regulatory", "citation"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
