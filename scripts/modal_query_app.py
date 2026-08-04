@@ -34,10 +34,22 @@ image = (
 )
 
 
+def _a100_ready() -> bool:
+    """One quick check that hits the A100 /health -- this ALSO triggers the scale-to-zero container to spin up
+    (a request wakes it), so a cold check kicks off the ~4-min warm-up autonomously (vLLM keeps loading, and
+    scaledown_window holds the container until it is ready). Returns True only once vLLM is actually serving."""
+    import httpx
+    try:
+        return bool(httpx.get(f"{A100_URL}/health", timeout=8).json().get("vllm_up"))
+    except Exception:  # noqa: BLE001 - cold / not up yet
+        return False
+
+
 @app.function(image=image, timeout=900, scaledown_window=300)
 @modal.asgi_app()
 def query():
     from fastapi import FastAPI, Request
+    from fastapi.concurrency import run_in_threadpool
 
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_classifier, query_embedder
@@ -59,15 +71,19 @@ def query():
         except Exception as exc:  # noqa: BLE001
             return {"kg": "error", "detail": str(exc)[:200]}
 
-    @web.post("/query")
-    async def q(req: Request):
-        body = await req.json()
-        question = body["question"]
+    def _run(question: str, k: int) -> dict:
+        # EC-3 warm-on-request (serverless cold-start UX): a cold check triggers the A100 + returns fast, so the
+        # request never exceeds Modal's web-request timeout. The client retries; once warm, the answer is fast.
+        # ADR-0039: "not real-time; first-query warm-up tolerated".
+        if not _a100_ready():
+            return {"status": "warming",
+                    "detail": "the A100 was cold; this request triggered it (~4 min). Retry shortly.",
+                    "retry_after_s": 60}
         store = _store()
         leg_b = production_typed_property_retrieval(
             store=store, embedder=query_embedder(), classifier=query_classifier(),
             extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"),
-            function_model_id=model_for(ModelRole.GENERAL), k=int(body.get("k", 5)))
+            function_model_id=model_for(ModelRole.GENERAL), k=k)
         state = leg_b.invoke({"query": question})
         r = state["retrieval"]
         return {
@@ -80,5 +96,11 @@ def query():
                 for s in r.results
             ],
         }
+
+    @web.post("/query")
+    async def q(req: Request):
+        body = await req.json()
+        # warm-up + the sync leg run off the event loop (a cold first query may block ~4 min)
+        return await run_in_threadpool(_run, body["question"], int(body.get("k", 5)))
 
     return web
