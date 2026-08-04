@@ -515,6 +515,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("retrieval", "ranking", "embedding", "deterministic"),
     ),
+    CapabilityManifest(
+        slug="property_boosted_retrieval",
+        kind="function",
+        display_name="Property-boosted typed retrieval",
+        description=(
+            "Typed retrieval over the CUAD-full KG (SPAN-CLAUSE-RERANK, ADR-0033): a bounded BGE base pool "
+            "(span_hybrid_search over the routed functions) is joined to each span's clause props via the "
+            "operative-span edge.span_id link, then reranked by typed-constraint match (BGE order as the "
+            "tiebreak). Returns top-k cited spans with the constraints each satisfied."
+        ),
+        representative_queries=(
+            "retrieve clauses matching a typed constraint, ranked over a BGE pool",
+            "find spans whose clause satisfies the query's typed properties",
+            "property-boosted retrieval with citations over the contract KG",
+        ),
+        tags=("retrieval", "ranking", "typed", "citation"),
+    ),
     # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
     CapabilityManifest(
         slug="party_clause_linking",

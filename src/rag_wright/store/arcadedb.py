@@ -501,6 +501,14 @@ class ArcadeDBStore:
                     out[sid].add((str(dim), str(val)))
         return out
 
+    def span_texts(self, span_ids: list[str]) -> dict[str, str]:
+        """The operative-span text for each span_id (batched), for citing a retrieved span. {span_id: text}."""
+        if not span_ids:
+            return {}
+        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
+        rows = self._query(f"SELECT span_id, text FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
+        return {r["span_id"]: r.get("text", "") for r in rows}
+
     def chunk_count(self) -> int:
         rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")
         return int(rows[0]["n"]) if rows else 0
