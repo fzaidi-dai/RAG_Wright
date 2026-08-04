@@ -240,8 +240,8 @@ def run_corpus_ingestion(
         ingested += 1
         written = out.get("written", {})
         per_document.append({"source_doc_id": document.source_doc_id, "written": written})
-        progress(f"[ingest] {i}/{total} {document.source_doc_id} OK "
-                 f"clauses={written.get('clauses')} entities={written.get('entities')}")
+        summary = " ".join(f"{k}={v}" for k, v in written.items()) or "ok"  # corpus-generic (clauses/entities OR requirements/…)
+        progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
 
     progress(f"[ingest] {ingested}/{total} present ({skipped} resume-skipped), {len(dead_lettered)} "
              f"dead-lettered; linking parties (KG-7)...")

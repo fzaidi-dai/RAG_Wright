@@ -23,6 +23,7 @@ from typing import Any, Iterable
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
+from rag_wright.contracts.compliance import Requirement
 from rag_wright.contracts.contract_meta import ContractRecord
 from rag_wright.contracts.property import (
     FOLIO_SUBJECT_IRI,
@@ -104,6 +105,7 @@ DEFAULT_CANDIDATE_POOL = 100
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
 CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
 PARTY_TO_EDGE_TYPE = "PartyTo"  # KG-7 (ADR-0036): Entity(party) -> Contract, the unifying link
+REQUIREMENT_TYPE = "Requirement"  # CC-5 (compliance §13): a deontic regulatory rule (its own DB, ragwright_compliance)
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
 _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
@@ -429,6 +431,50 @@ class ArcadeDBStore:
             f" WHERE contract_id = {_sql_str(contract_id)}"
         )
         return rows[0] if rows else None
+
+    # --- Compliance module (CC-5, §13): the Requirement KG, in its OWN database (ragwright_compliance) ---
+
+    def ensure_compliance_schema(self) -> None:
+        """Create the compliance schema: the `Requirement` vertex type + a UNIQUE index on `requirement_id`.
+        Additive + idempotent (create only what is absent, by introspection). Intended for a SEPARATE database
+        (`ragwright_compliance`) so the contract KG stays clean; touches no existing type or identifier."""
+        if REQUIREMENT_TYPE in self.type_names():
+            return
+        self._command(f"CREATE VERTEX TYPE {REQUIREMENT_TYPE}")
+        for prop in ("requirement_id", "source", "citation", "deontic_type", "actor", "requirement_text",
+                     "evidence_standard", "severity", "applicability_json", "confidence"):
+            self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.{prop} STRING")
+        self._command(f"CREATE INDEX ON {REQUIREMENT_TYPE} (requirement_id) UNIQUE")
+
+    def write_requirements(self, requirements: Iterable[Requirement]) -> int:
+        """Upsert `Requirement` nodes by `requirement_id` (idempotent -- a re-ingest is a no-op on unchanged
+        rules). `applicability_scope` is stored JSON-encoded ([[dimension, value], ...]); returns the count."""
+        count = 0
+        for req in requirements:
+            scope = json.dumps([[c.dimension, c.value] for c in req.applicability_scope])
+            self._command(
+                f"UPDATE {REQUIREMENT_TYPE} SET"
+                f" requirement_id = {_sql_str(req.requirement_id)},"
+                f" source = {_sql_str(req.source)},"
+                f" citation = {_sql_str(req.citation)},"
+                f" deontic_type = {_sql_str(req.deontic_type.value)},"
+                f" actor = {_sql_str(req.actor)},"
+                f" requirement_text = {_sql_str(req.requirement_text)},"
+                f" evidence_standard = {_sql_str(req.evidence_standard or '')},"
+                f" severity = {_sql_str(req.severity.value if req.severity else '')},"
+                f" applicability_json = {_sql_str(scope)},"
+                f" confidence = {_sql_str(req.confidence.value)}"
+                f" UPSERT WHERE requirement_id = {_sql_str(req.requirement_id)}"
+            )
+            count += 1
+        return count
+
+    def all_requirements(self) -> list[dict]:
+        """Every stored `Requirement` row (CC-6 loads these to match a claim's scope against applicability)."""
+        return self._query(
+            f"SELECT requirement_id, source, citation, deontic_type, actor, requirement_text,"
+            f" evidence_standard, severity, applicability_json, confidence FROM {REQUIREMENT_TYPE}"
+        )
 
     def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
         """CU-B3: the within-contract typed filter -- every span in `contract_id` whose `function` is in

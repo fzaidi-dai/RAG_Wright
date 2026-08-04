@@ -876,6 +876,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("compliance", "judgment", "verdict", "citation", "human-in-the-loop"),
     ),
+    CapabilityManifest(
+        slug="compliance_ingestion",
+        kind="subgraph",
+        display_name="Compliance ingestion (regulatory corpus -> Requirement KG)",
+        description=(
+            "Ingest a regulatory corpus into a Requirement KG as a hardened LangGraph subgraph (CC-5, "
+            "compliance §13): per section, extract the deontic rules (requirement_extraction) and write them "
+            "as Requirement nodes, with a per-section retry -> dead-letter so one bad section never kills the "
+            "ingest. Reuses the generic corpus driver (SourceDocument + run_corpus_ingestion) via a thin "
+            "RegulationAdapter; the Requirement KG lives in its own database so the contract KG stays clean. "
+            "The regulatory-corpus side of the compliance module's ingestion."
+        ),
+        representative_queries=(
+            "ingest a regulation into a requirement knowledge graph",
+            "load the FTC endorsement guides as typed deontic requirement nodes",
+            "build the requirements KG from a regulatory corpus",
+        ),
+        tags=("compliance", "ingestion", "regulatory", "subgraph", "langgraph"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
