@@ -33,6 +33,8 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
+from rag_wright.contracts.identifiers import canonical_source_doc_id
+from rag_wright.corpus.canonicalize import normalize_entity_name
 
 
 class PartyContractLink(BaseModel):
@@ -91,10 +93,63 @@ def derive_party_contract_links(
         links=links, unmatched_parties=unmatched, contracts_processed=len(contracts))
 
 
-def party_clause_linking(store: Any) -> PartyClauseLinkResult:
-    """The registered capability: read the populated `Contract` + `Entity` nodes, derive the `PARTY_TO` links
-    (by extraction provenance), write them, and return the result. No re-ingest -- a link pass only."""
-    result = derive_party_contract_links(store.all_contracts(), store.all_entities())
+def _name_to_entity(entities: list[dict]) -> dict[str, tuple[str, str]]:
+    """Canonical party-name -> (entity_id, name), first-wins -- the name-resolution map for the mention join."""
+    by_name: dict[str, tuple[str, str]] = {}
+    for entity in entities:
+        key = normalize_entity_name(entity.get("name") or "")
+        if key and key not in by_name:
+            by_name[key] = (entity["entity_id"], entity.get("name") or "")
+    return by_name
+
+
+def derive_party_contract_links_from_mentions(
+    contracts: list[dict], entities: list[dict], mentions: dict[str, list[str]]
+) -> PartyClauseLinkResult:
+    """Pure, TRUE MANY-TO-MANY (PARTY-TO-MANY-TO-MANY): link EVERY party mentioned in a contract to that
+    contract, from the GP-1B per-(contract, party) mention data (`mentions` = {contract_key: [party_names]}).
+    This fixes the KG-7 last-write-only provenance join (ADR-0036): a party that signed N contracts now gets
+    N `PARTY_TO` links, not one. Contract keys are canonicalized (HYG-1, `canonical_source_doc_id`) to match
+    `contract_id`s; party names resolve to `entity_id`s by canonical name (`normalize_entity_name`, first-wins).
+    One link per (entity, contract), deduped. A name with no resolved entity is counted `unmatched`; a contract
+    key with no `Contract` node (e.g. a dead-lettered doc) is skipped."""
+    contract_ids = {contract["contract_id"] for contract in contracts}
+    by_name = _name_to_entity(entities)
+
+    links: list[PartyContractLink] = []
+    seen: set[tuple[str, str]] = set()
+    unmatched = 0
+    processed: set[str] = set()
+    for contract_key, names in mentions.items():
+        contract_id = canonical_source_doc_id(contract_key)
+        if contract_id not in contract_ids:
+            continue
+        processed.add(contract_id)
+        for name in names:
+            hit = by_name.get(normalize_entity_name(name))
+            if hit is None:
+                unmatched += 1
+                continue
+            entity_id, _ = hit
+            pair = (entity_id, contract_id)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            links.append(PartyContractLink(entity_id=entity_id, contract_id=contract_id, party_name=name))
+
+    return PartyClauseLinkResult(
+        links=links, unmatched_parties=unmatched, contracts_processed=len(processed))
+
+
+def party_clause_linking(store: Any, *, mentions: dict[str, list[str]] | None = None) -> PartyClauseLinkResult:
+    """The registered capability: read the populated `Contract` + `Entity` nodes, derive the `PARTY_TO` links,
+    write them, and return the result. No re-ingest -- a link pass only. When `mentions` (the GP-1B per-contract
+    party cache) is supplied, derives TRUE MANY-TO-MANY links (PARTY-TO-MANY-TO-MANY: a party -> every contract
+    it signed); otherwise the single-provenance join (KG-7, one contract per party)."""
+    if mentions is not None:
+        result = derive_party_contract_links_from_mentions(store.all_contracts(), store.all_entities(), mentions)
+    else:
+        result = derive_party_contract_links(store.all_contracts(), store.all_entities())
     store.write_party_contract_links(result.links)
     return result
 

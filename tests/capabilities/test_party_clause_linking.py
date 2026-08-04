@@ -13,6 +13,7 @@ from rag_wright.capabilities.party_clause_linking import (
     PartyClauseLinkResult,
     PartyContractLink,
     derive_party_contract_links,
+    derive_party_contract_links_from_mentions,
     party_clause_linking,
     register_party_clause_linking,
 )
@@ -37,7 +38,7 @@ def test_links_entities_to_contracts_by_provenance():
     result = derive_party_contract_links(contracts, entities)
 
     assert isinstance(result, PartyClauseLinkResult)
-    assert {(l.entity_id, l.contract_id) for l in result.links} == {
+    assert {(link.entity_id, link.contract_id) for link in result.links} == {
         ("CIK1", "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"),
         ("UNLINKED:beta", "ACME_2020-EX-10.1-SUPPLY_AGREEMENT"),
     }
@@ -58,7 +59,7 @@ def test_entity_whose_contract_has_no_node_is_counted_not_linked():
 
     result = derive_party_contract_links(contracts, entities)
 
-    assert {(l.entity_id, l.contract_id) for l in result.links} == {("CIK1", "C1")}
+    assert {(link.entity_id, link.contract_id) for link in result.links} == {("CIK1", "C1")}
     assert result.unmatched_parties == 1  # Zeta's contract has no node -> counted, never fabricated
 
 
@@ -102,9 +103,9 @@ def test_capability_reads_derives_and_writes_the_links():
 
     result = party_clause_linking(store)
 
-    assert [(l.entity_id, l.contract_id) for l in result.links] == [("CIK1", "C1")]
+    assert [(link.entity_id, link.contract_id) for link in result.links] == [("CIK1", "C1")]
     assert store.written == result.links
-    assert all(isinstance(l, PartyContractLink) for l in store.written)
+    assert all(isinstance(link, PartyContractLink) for link in store.written)
 
 
 def test_registers_as_a_function():
@@ -112,3 +113,72 @@ def test_registers_as_a_function():
     register_party_clause_linking(reg)
     assert reg.get("party_clause_linking").kind == "function"
     assert reg.get("party_clause_linking").contract is PartyClauseLinkResult
+
+
+# --- derive_party_contract_links_from_mentions: TRUE many-to-many (PARTY-TO-MANY-TO-MANY, ADR-0036) -----
+
+
+def _ent(entity_id, name):
+    return {"entity_id": entity_id, "name": name, "chunk_id": ""}
+
+
+def test_mention_join_links_a_party_to_every_contract_it_signed():
+    # the fix: a party mentioned in TWO contracts gets TWO PARTY_TO links (vs the KG-7 last-write-only join)
+    contracts = [{"contract_id": "C1_AGREEMENT"}, {"contract_id": "C2_AGREEMENT"}]
+    entities = [_ent("CIK1", "Acme Corporation"), _ent("UNLINKED:beta", "Beta LLC"),
+                _ent("UNLINKED:gamma", "Gamma Inc")]
+    mentions = {"C1_AGREEMENT": ["Acme Corporation", "Beta LLC"],
+                "C2_AGREEMENT": ["Acme Corporation", "Gamma Inc"]}
+    result = derive_party_contract_links_from_mentions(contracts, entities, mentions)
+    by_entity: dict = {}
+    for link in result.links:
+        by_entity.setdefault(link.entity_id, set()).add(link.contract_id)
+    assert by_entity["CIK1"] == {"C1_AGREEMENT", "C2_AGREEMENT"}  # multi-contract party -> BOTH
+    assert by_entity["UNLINKED:beta"] == {"C1_AGREEMENT"}
+    assert by_entity["UNLINKED:gamma"] == {"C2_AGREEMENT"}
+    assert result.contracts_processed == 2
+
+
+def test_mention_key_canonicalizes_and_name_resolves_by_canonical_name():
+    # cache key has a space (HYG-1 canonicalizes to `_`); a name variant resolves via normalize_entity_name
+    contracts = [{"contract_id": "ACME_SUPPLY_AGREEMENT"}]
+    result = derive_party_contract_links_from_mentions(
+        contracts, [_ent("CIK1", "Acme Corporation")], {"ACME SUPPLY AGREEMENT": ["ACME CORP."]})
+    assert [(link.entity_id, link.contract_id) for link in result.links] == [("CIK1", "ACME_SUPPLY_AGREEMENT")]
+
+
+def test_mention_name_with_no_entity_is_unmatched_not_dropped():
+    result = derive_party_contract_links_from_mentions(
+        [{"contract_id": "C1"}], [_ent("CIK1", "Acme Corporation")],
+        {"C1": ["Acme Corporation", "Nonexistent Party"]})
+    assert len(result.links) == 1 and result.unmatched_parties == 1
+
+
+def test_mention_contract_with_no_node_is_skipped():
+    result = derive_party_contract_links_from_mentions(
+        [{"contract_id": "C1"}], [_ent("CIK1", "Acme Corporation")], {"GHOST_CONTRACT": ["Acme Corporation"]})
+    assert result.links == [] and result.contracts_processed == 0
+
+
+def test_same_party_contract_pair_is_deduped():
+    result = derive_party_contract_links_from_mentions(
+        [{"contract_id": "C1"}], [_ent("CIK1", "Acme Corporation")],
+        {"C1": ["Acme Corporation", "Acme Corporation"]})  # listed twice
+    assert len(result.links) == 1
+
+
+def test_capability_uses_mentions_for_many_to_many():
+    written: dict = {}
+
+    class _Store:
+        def all_contracts(self):
+            return [{"contract_id": "C1"}, {"contract_id": "C2"}]
+
+        def all_entities(self):
+            return [_ent("CIK1", "Acme Corporation")]
+
+        def write_party_contract_links(self, links):
+            written["links"] = links
+
+    party_clause_linking(_Store(), mentions={"C1": ["Acme Corporation"], "C2": ["Acme Corporation"]})
+    assert {(link.entity_id, link.contract_id) for link in written["links"]} == {("CIK1", "C1"), ("CIK1", "C2")}

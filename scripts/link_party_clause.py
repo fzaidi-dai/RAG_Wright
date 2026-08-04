@@ -12,17 +12,23 @@ manages are `PARTY_TO` (cleared + rewritten so re-linking is idempotent).
 
 from __future__ import annotations
 
+import json
 import os
 
 from dotenv import load_dotenv
 
 from rag_wright.capabilities.party_clause_linking import (
     derive_party_contract_links,
+    derive_party_contract_links_from_mentions,
     party_clause_linking,
 )
 
-DB = os.environ.get("DB", "ragwright_cuad")
+DB = os.environ.get("DB", "ragwright_cuad_full")
 WRITE = os.environ.get("WRITE") == "1"
+# PARTY-TO-MANY-TO-MANY (ADR-0036): default to the TRUE many-to-many derivation from the GP-1B per-contract
+# mention cache (a party -> every contract it signed). MANY=0 falls back to the KG-7 single-provenance join.
+MANY = os.environ.get("MANY", "1") == "1"
+MENTIONS_PATH = os.environ.get("MENTIONS", "data/cache/dg_extracted_parties.json")
 
 
 def main() -> None:
@@ -32,14 +38,17 @@ def main() -> None:
     store = ArcadeDBStore.from_env(database=DB)
     contracts = store.all_contracts()
     entities = store.all_entities()
-    print(f"[kg-7] {DB}: {len(contracts)} Contract nodes, {len(entities)} Entity nodes", flush=True)
+    mentions = json.load(open(MENTIONS_PATH, encoding="utf-8")) if (MANY and os.path.exists(MENTIONS_PATH)) else None
+    mode = "MANY-TO-MANY (mention cache)" if mentions is not None else "single-provenance (KG-7)"
+    print(f"[party-link] {DB}: {len(contracts)} Contract, {len(entities)} Entity nodes | mode={mode}", flush=True)
 
     # Always derive + report first (this is the smoke; it writes nothing).
-    result = derive_party_contract_links(contracts, entities)
+    result = (derive_party_contract_links_from_mentions(contracts, entities, mentions)
+              if mentions is not None else derive_party_contract_links(contracts, entities))
     contracts_reached = len({link.contract_id for link in result.links})
-    print(f"[kg-7] DRY: {len(result.links)} PARTY_TO links (Entity -> Contract by extraction provenance) "
-          f"across {contracts_reached}/{result.contracts_processed} contracts; "
-          f"{result.unmatched_parties} entities whose contract has no node (coverage gap, expected)",
+    print(f"[party-link] DRY: {len(result.links)} PARTY_TO links (Entity -> Contract) across "
+          f"{contracts_reached}/{result.contracts_processed} contracts; "
+          f"{result.unmatched_parties} unmatched (name with no entity / contract with no node, expected)",
           flush=True)
 
     if not WRITE:
@@ -48,7 +57,7 @@ def main() -> None:
         return
 
     store.ensure_schema()  # adds the PartyTo edge type if missing (non-destructive; existing types untouched)
-    written = party_clause_linking(store)  # derive again + write the edges
+    written = party_clause_linking(store, mentions=mentions)  # derive again + write the edges (idempotent)
     edge_count = store._query(f"SELECT count(*) AS n FROM {PARTY_TO_EDGE_TYPE}")
     n = int(edge_count[0]["n"]) if edge_count else 0
     print(f"[kg-7] WROTE {len(written.links)} PARTY_TO edges; store now reports {n} PARTY_TO edges "
