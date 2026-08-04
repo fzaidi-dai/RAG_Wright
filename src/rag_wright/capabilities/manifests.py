@@ -778,6 +778,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("retrieval", "cross-corpus", "ranking", "subgraph", "langgraph", "composite"),
     ),
     CapabilityManifest(
+        slug="typed_property_retrieval",
+        kind="subgraph",
+        display_name="Typed property-boosted retrieval (Leg B)",
+        description=(
+            "The property-boosted Leg B as a composite LangGraph subgraph (LEGB-SUBGRAPH, ADR-0033): extract the "
+            "query's typed constraints and route its functions (granite + LegalBERT) in parallel, then run the "
+            "property_boosted_retrieval capability -- a bounded BGE base pool joined to each span's clause props "
+            "via the operative-span edge.span_id link, reranked by typed-constraint match (BGE tiebreak) -- and "
+            "emit top-k spans cited by span_id with the constraints each satisfied. Query-side hardening: a "
+            "transient failure degrades to empty, never a crash. Wraps the registered property_boosted_retrieval "
+            "function so the WORKFLOW is a registered subgraph, not an imperative script."
+        ),
+        representative_queries=(
+            "retrieve clauses matching the query's typed constraints, ranked over a BGE pool, cited",
+            "property-boosted typed retrieval as a hardened LangGraph workflow",
+            "route + constrain + property-boost rerank the contract clause corpus",
+        ),
+        tags=("retrieval", "typed", "ranking", "subgraph", "langgraph", "composite"),
+    ),
+    CapabilityManifest(
         slug="contract_ingestion_pipeline",
         kind="subgraph",
         display_name="Contract ingestion pipeline (corpus -> populated, connected KG)",
