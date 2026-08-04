@@ -838,6 +838,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("compliance", "extraction", "deontic", "regulatory", "citation"),
     ),
+    CapabilityManifest(
+        slug="claim_extraction",
+        kind="function",
+        display_name="Claim extraction (subject ad -> checkable claims)",
+        description=(
+            "Extract the checkable assertions a subject advertisement makes into typed Claim nodes (CC-3, "
+            "compliance §13.1): reuses the docling-graph extraction seam with a Claim template + the model "
+            "seam (Granite, ADR-0039), then adapts each assertion to the closed CC-1 vocab -- claim_type "
+            "(efficacy/health/comparative/endorsement/...), actor, subject_product, disclosures present, and "
+            "whether evidence is referenced, each cited to its subject span. An off-vocab claim_type is kept "
+            "but flagged AMBIGUOUS (a checkable assertion is never dropped). The subject side of the check."
+        ),
+        representative_queries=(
+            "extract the checkable claims an ad makes",
+            "turn a marketing campaign into typed claims with disclosures and evidence flags",
+            "identify the health/efficacy/endorsement claims in a subject document",
+        ),
+        tags=("compliance", "extraction", "claims", "advertising", "citation"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
