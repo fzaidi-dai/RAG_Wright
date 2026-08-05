@@ -840,22 +840,39 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="claim_extraction",
-        kind="function",
-        display_name="Claim extraction (subject ad -> checkable claims)",
+        kind="agent_skill",  # a single docling-graph LLM extraction act, authored as skills/claim_extraction/
+        display_name="Claim extraction (subject ad -> checkable claims; authored skill)",
         description=(
-            "Extract the checkable assertions a subject advertisement makes into typed Claim nodes (CC-3, "
-            "compliance §13.1): reuses the docling-graph extraction seam with a Claim template + the model "
-            "seam (Granite, ADR-0039), then adapts each assertion to the closed CC-1 vocab -- claim_type "
-            "(efficacy/health/comparative/endorsement/...), actor, subject_product, disclosures present, and "
-            "whether evidence is referenced, each cited to its subject span. An off-vocab claim_type is kept "
-            "but flagged AMBIGUOUS (a checkable assertion is never dropped). The subject side of the check."
+            "The subject-document claim-extraction METHOD (CC-3, compliance §13.1), authored as an agent skill "
+            "(skills/claim_extraction/: SKILL.md + the template.py schema asset ExtractedAd/ExtractedClaim) and "
+            "applied through the docling-graph + model seam (Granite, ADR-0039): read an ad and pull out its "
+            "distinct CHECKABLE assertions, each with its kind, the disclosures present near it, and whether the "
+            "ad references evidence. One 'direct' call (ads are short). The deterministic mapping to the closed "
+            "Claim vocab is the claim_adaptation FUNCTION's job, not the skill's."
         ),
         representative_queries=(
             "extract the checkable claims an ad makes",
-            "turn a marketing campaign into typed claims with disclosures and evidence flags",
+            "turn a marketing campaign into claims with disclosures and evidence flags",
             "identify the health/efficacy/endorsement claims in a subject document",
         ),
-        tags=("compliance", "extraction", "claims", "advertising", "citation"),
+        tags=("compliance", "extraction", "claims", "advertising", "skill"),
+    ),
+    CapabilityManifest(
+        slug="claim_adaptation",
+        kind="function",
+        display_name="Claim adaptation (extracted ad -> validated Claims)",
+        description=(
+            "DETERMINISTIC adaptation (CC-3, SKILL-SPLIT): map the claim_extraction skill's raw ExtractedAd to "
+            "validated CC-1 Claim nodes -- claim_type coerced to the closed vocab (an off-vocab value kept but "
+            "flagged AMBIGUOUS, a checkable assertion is never dropped), disclosures/evidence/medium carried, "
+            "the content-hash claim_id + span provenance attached. No model."
+        ),
+        representative_queries=(
+            "adapt an extracted ad into validated typed claims",
+            "coerce extracted claim types to the closed vocab with a conservative fallback",
+            "attach span provenance and ids to extracted ad claims",
+        ),
+        tags=("compliance", "adaptation", "claims", "deterministic"),
     ),
     CapabilityManifest(
         slug="compliance_judgment",

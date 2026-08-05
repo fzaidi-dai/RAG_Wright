@@ -108,7 +108,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "contract_ingestion_pipeline",  # subgraph: generic corpus ingest (chunk->extract->resolve->write->link)
         # --- Compliance module rung 1 (roadmap §13): the ad-compliance engine ---
         "requirement_extraction",  # function: regulatory section text -> deontic Requirement[] (CC-2)
-        "claim_extraction",  # function: subject ad text -> checkable Claim[] (CC-3)
+        "claim_extraction",  # agent_skill: single LLM extraction act (ad -> ExtractedAd); SKILL-SPLIT
+        "claim_adaptation",  # function: ExtractedAd -> validated Claim[] (deterministic)
         "compliance_judgment",  # agent_skill: single LLM judgment act ((claim, requirement) -> verdict); SKILL-SPLIT
         "compliance_finding_assembly",  # function: raw verdict + inputs -> cited ComplianceFinding (deterministic)
         "compliance_ingestion",  # subgraph: regulatory corpus -> Requirement KG (CC-5)

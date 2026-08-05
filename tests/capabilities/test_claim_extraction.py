@@ -12,6 +12,7 @@ from rag_wright.capabilities.claim_extraction import (
     ExtractedAd,
     ExtractedClaim,
     claim_extraction,
+    register_claim_adaptation,
     register_claim_extraction,
     to_claims,
 )
@@ -100,8 +101,23 @@ def test_extraction_none_yields_empty_list():
 # --- registration --------------------------------------------------------------------------------
 
 
-def test_registers_as_a_function():
+def test_registers_the_skill_and_the_function_split():
+    # SKILL-SPLIT: the LLM extraction is an agent_skill; the deterministic adaptation is a function
     reg = CapabilityRegistry()
     register_claim_extraction(reg)
-    entry = reg.get("claim_extraction")
-    assert entry.kind == "function" and entry.contract is Claim
+    register_claim_adaptation(reg)
+    skill = reg.get("claim_extraction")
+    assert skill.kind == "agent_skill" and skill.contract is ExtractedAd
+    fn = reg.get("claim_adaptation")
+    assert fn.kind == "function" and fn.contract is Claim
+
+
+def test_skill_folder_has_the_method_and_the_schema_asset():
+    # a Skill is a folder: SKILL.md (the method) + the co-located schema asset (template.py)
+    from pathlib import Path
+
+    import rag_wright.skills.claim_extraction as skill_pkg
+    folder = Path(skill_pkg.__file__).parent
+    assert (folder / "SKILL.md").exists() and (folder / "template.py").exists()
+    method = (folder / "SKILL.md").read_text(encoding="utf-8")
+    assert "template.py" in method and "checkable" in method.lower()
