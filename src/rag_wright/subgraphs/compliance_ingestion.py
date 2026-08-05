@@ -38,10 +38,15 @@ class RegulationAdapter:
     ([{section, heading, text}]) -> one `SourceDocument` per § section, carrying the section number and source
     as metadata (the extract stage reads them for the citation). The ONLY regulation-specific code in the path."""
 
-    def __init__(self, sections_path: Any, source: str, *, limit: int = 0) -> None:
+    def __init__(self, sections_path: Any, source: str, *, limit: int = 0, skip_definitions: bool = True) -> None:
         self._path = sections_path
         self._source = source
         self._limit = limit
+        # EXTRACT-TUNE: a "Purpose and definitions" section states NO operative deontic rules -- extracting it
+        # over-generates spurious "requirements" (61 from FTC §255.0, ~40% of the KG, a leak surface into
+        # judging). Skip any section whose heading indicates definitions (universally non-operative). The robust
+        # general version is a deontic-cue/SHACL validity gate ([[ontology-lever-vs-extraction-lever]]).
+        self._skip_definitions = skip_definitions
 
     def documents(self) -> Iterable[SourceDocument]:
         sections = json.loads(Path(self._path).read_text(encoding="utf-8"))
@@ -50,6 +55,8 @@ class RegulationAdapter:
         for sec in sections:
             if not sec.get("text", "").strip():
                 continue
+            if self._skip_definitions and "definition" in sec.get("heading", "").lower():
+                continue  # skip a definitions section (no operative rules)
             yield SourceDocument(
                 source_doc_id=canonical_source_doc_id(f"{self._source}_{sec['section']}"),
                 text=sec["text"],

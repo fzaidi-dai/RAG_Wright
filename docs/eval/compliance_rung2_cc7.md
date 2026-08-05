@@ -106,3 +106,19 @@ problem -- not a prompt-tuning gap.** The lever is architectural (give the judge
 substantiation evidence) or procedural (an objective claim with no in-text substantiation -> needs_review +
 human verifies), not more prompt-tuning on this gold. Recall (11 real violations, 0 missed) remains the
 trustworthy, shippable-direction signal.
+
+## EXTRACT-TUNE — drop the definitions section (KG hygiene, confirms it wasn't the FP driver)
+
+Diagnostic on the 155-rule KG: §255.0 "Purpose and definitions" over-generated 61 "requirements"; 32 of them
+carried a granite-extracted `endorsement` scope, so they DID leak into the applicable pool for endorsement
+claims (a real leak surface + ~40% KG bloat) -- though narrowing's top-k already filtered them out of judging
+(they rank low in cosine to real claims). Fix: `RegulationAdapter(skip_definitions=True)` skips any section whose
+heading contains "definition" (universally non-operative; the robust general version is a deontic-cue/SHACL
+validity gate). Re-ingested `ragwright_compliance`: **155 -> 96 requirements** (0 dead-lettered).
+
+Re-eval on the 96-rule KG (19-case gold, tuned judge): **recall 1.00 HELD (11/11, 0 missed)**; precision 0.69
+(vs 0.73 on the 155 KG -- flat within judge run-to-run variance + the shifted narrowing pool). So the
+definitions-skip is a **KG-hygiene / robustness / cost win** (leaner KG, no leak surface, fewer candidate rules
+per query) that **confirmed the definitions were NOT driving the false positives** -- the precision ceiling is
+the external-substantiation problem above, not the definitions. Part (b), empty applicability scope (now 31/96),
+is already handled at query time by the section->claim_type map (CC-8) -- no change needed.

@@ -129,3 +129,17 @@ def test_registers_as_a_subgraph():
     register_compliance_ingestion(reg)
     entry = reg.get("compliance_ingestion")
     assert entry.kind == "subgraph" and entry.contract is IngestionReport
+
+
+def test_adapter_skips_definitions_sections(tmp_path):
+    import json
+    p = tmp_path / "reg.sections.json"
+    p.write_text(json.dumps([
+        {"section": "255.0", "heading": "§ 255.0 Purpose and definitions.", "text": "Endorsement means any..."},
+        {"section": "255.5", "heading": "§ 255.5 Disclosure of material connections.", "text": "Must disclose."},
+    ]), encoding="utf-8")
+    secs = [d.metadata["section"] for d in RegulationAdapter(p, source="FTC 16 CFR 255").documents()]
+    assert secs == ["255.5"]  # the definitions section (255.0) is skipped; operative rules kept
+    # opt out preserves it
+    secs2 = [d.metadata["section"] for d in RegulationAdapter(p, source="x", skip_definitions=False).documents()]
+    assert secs2 == ["255.0", "255.5"]
