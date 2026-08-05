@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from rag_wright.capabilities.compliance_judgment import (
     JudgeVerdict,
+    assemble_finding,
     build_compliance_judge_fn,
     compliance_judgment,
     judge_pairs,
+    register_compliance_finding_assembly,
     register_compliance_judgment,
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
@@ -121,11 +123,32 @@ def test_build_judge_fn_passes_both_sides_through_the_seam():
     assert "erase deep wrinkles" in captured["prompt"] and "material connection" in captured["prompt"].lower()
 
 
-def test_registers_as_a_function():
+def test_registers_the_skill_and_the_function_split():
+    # SKILL-SPLIT: the LLM judgment is an agent_skill; the deterministic assembly is a function
     reg = CapabilityRegistry()
     register_compliance_judgment(reg)
-    entry = reg.get("compliance_judgment")
-    assert entry.kind == "function" and entry.contract is ComplianceFinding
+    register_compliance_finding_assembly(reg)
+    skill = reg.get("compliance_judgment")
+    assert skill.kind == "agent_skill" and skill.contract is JudgeVerdict
+    fn = reg.get("compliance_finding_assembly")
+    assert fn.kind == "function" and fn.contract is ComplianceFinding
+
+
+def test_assemble_finding_is_deterministic_and_conservative():
+    # the FUNCTION: no model; None ruling -> conservative needs_review; citations from the inputs
+    claim, req = _claim(), _req()
+    none_finding = assemble_finding(claim, req, None)
+    assert none_finding.verdict is Verdict.NEEDS_REVIEW and none_finding.claim_id == claim.claim_id
+    viol = assemble_finding(claim, req, JudgeVerdict(verdict="violation", rationale="x", confidence=0.9))
+    assert viol.verdict is Verdict.VIOLATION and req.citation in viol.citation_requirement
+
+
+def test_skill_method_loads_from_the_skill_md():
+    # the SKILL.md is the authored method; it teaches the three verdicts + the ad-text-only constraint
+    from rag_wright.capabilities.compliance_judgment import judgment_method
+    method = judgment_method()
+    assert "needs_review" in method and "only the ad text" in method.lower()
+    assert not method.startswith("---")  # frontmatter stripped
 
 
 def test_judge_pairs_timeout_becomes_conservative_needs_review(monkeypatch):

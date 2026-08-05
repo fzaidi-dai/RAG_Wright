@@ -859,22 +859,42 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="compliance_judgment",
-        kind="function",
-        display_name="Compliance judgment (claim x requirement -> cited verdict)",
+        kind="agent_skill",  # a single grounded LLM judgment act, authored as skills/compliance_judgment/SKILL.md
+        display_name="Compliance judgment (claim x requirement -> verdict; authored skill)",
         description=(
-            "Judge a (claim, applicable-requirement) pair into a compliant/violation/needs_review verdict with "
-            "a rationale and BOTH-SIDED citation (CC-4, compliance §13.2): extends the grounding judge from "
-            "'is X supported?' to 'does claim X satisfy/violate requirement Y?', through the model seam "
-            "(Granite, ADR-0039). Conservative by design -- a judge failure, an off-vocab verdict, or genuine "
-            "uncertainty defaults to needs_review, never a silent compliant/violation; every violation and "
-            "needs_review is human-gated. The judgment node is the one new capability of the compliance module."
+            "The advertising-compliance judgment METHOD (CC-4, compliance §13.2), authored as an agent skill "
+            "(skills/compliance_judgment/SKILL.md) and applied through the model seam (Granite, ADR-0039): given "
+            "one claim + one requirement and ONLY the ad text, decide violation (clearly wrong from the text -- "
+            "overclaimed proof without a cited study, missing disclosure, fake review), needs_review (an "
+            "objective claim whose substantiation cannot be verified from the text -- escalate), or compliant "
+            "(puffery / disclosure present / evidence cited). Reserves violation for clear breaches and escalates "
+            "the unverifiable; never a silent pass. The deterministic vocab/citation is the "
+            "compliance_finding_assembly FUNCTION's job, not the skill's."
         ),
         representative_queries=(
             "judge whether an ad claim violates a regulatory requirement",
-            "decide compliant / violation / needs-review for a claim against a rule, with citations",
+            "decide compliant / violation / needs-review for a claim against a rule",
             "audit a marketing claim against an FTC endorsement requirement",
         ),
-        tags=("compliance", "judgment", "verdict", "citation", "human-in-the-loop"),
+        tags=("compliance", "judgment", "verdict", "skill", "human-in-the-loop"),
+    ),
+    CapabilityManifest(
+        slug="compliance_finding_assembly",
+        kind="function",
+        display_name="Compliance finding assembly (verdict + inputs -> cited finding)",
+        description=(
+            "DETERMINISTIC assembly (CC-4, SKILL-SPLIT): map the compliance_judgment skill's raw verdict string "
+            "to the closed Verdict vocab (an unreadable or missing verdict -> needs_review, the conservative "
+            "default), and attach the BOTH-SIDED citation (the exact claim span + the exact requirement clause) "
+            "FROM THE INPUTS -- the model never authors a citation -- returning a ComplianceFinding. No model: "
+            "the trust guarantees the LLM judgment must not own live here."
+        ),
+        representative_queries=(
+            "assemble a cited compliance finding from a raw judgment verdict",
+            "map a verdict string to the closed vocab with a conservative default",
+            "attach both-sided citations to a compliance verdict from the inputs",
+        ),
+        tags=("compliance", "assembly", "deterministic", "citation", "conservative-default"),
     ),
     CapabilityManifest(
         slug="compliance_ingestion",

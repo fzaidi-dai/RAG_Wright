@@ -1,25 +1,25 @@
-"""CC-4 (compliance §13.2): `compliance_judgment` -- the judgment node, the one genuinely new capability.
+"""CC-4 (compliance §13.2), SKILL-SPLIT: the judgment node, split into a SKILL + a deterministic FUNCTION.
 
-Per `(claim, applicable_requirement)` -> a `ComplianceFinding`: verdict {compliant, violation, needs_review} +
-rationale + BOTH-SIDED citation + confidence. Extends the grounding judge (`spans/semantic_judge.py`,
-ADR-0028/0040) from "is X supported?" to "does claim X satisfy/violate requirement Y?". Model-neutral through
-the model-profile seam (product = self-hosted Granite, ADR-0039); the `structured_factory` is injected for
-hermetic tests. Judge calls parallelize (async + semaphore, per the parallel-LLM rule).
+Per the capability-architecture principle (a `function` is deterministic and takes no model; a single LLM act is
+an authored `agent_skill`; a workflow is a `subgraph`), the judgment is two capabilities:
 
-TRUST DESIGN (§13.2):
-- Conservative default: a judge failure, an off-vocab verdict, or genuine uncertainty -> `needs_review`, NEVER a
-  silent compliant/violation (a false-negative is liability; a false-positive is alert fatigue).
-- Both-sided citation comes from the INPUTS (the claim's assertion span + the requirement's section), not the
-  LLM -- the model rules, but the citations are ground truth.
-- Every violation/needs_review is human-gated (`ComplianceFinding.needs_human_review`).
+- **`compliance_judgment` (agent_skill)** -- the LLM judgment METHOD, authored as `skills/compliance_judgment/
+  SKILL.md` and applied through the model seam (product = Granite, ADR-0039). Given one claim + one requirement
+  and ONLY the ad text, it returns a raw `JudgeVerdict` (verdict / rationale / confidence). `build_compliance_
+  judge_fn` is its runtime; `structured_factory` is injected for hermetic tests.
+- **`compliance_finding_assembly` (function)** -- `assemble_finding`: DETERMINISTIC, no model. Maps the raw
+  verdict to the closed vocab (unreadable/missing -> needs_review, the conservative default), attaches the
+  BOTH-SIDED citation FROM THE INPUTS (the model never authors a citation), and returns the `ComplianceFinding`.
 
-The Flash->Pro escalation tier and rule-anchored deterministic pre-checks (§13.2) are designed extension points
-on this seam; the core here is the single Granite judge + the conservative mapping.
+`compliance_judgment(...)` composes them (skill -> function) for callers; `judge_pairs` runs the composition
+concurrently (async + semaphore + LLM-CALL-TIMEOUT). The applying capability owns the guarantees the skill does
+not (verdict vocab, conservative default, citation) -- the SKILL.md teaches only the reading.
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Callable, Optional
 
 from pydantic import BaseModel
@@ -29,11 +29,13 @@ from rag_wright.models.seam import build_structured
 from rag_wright.util.concurrent import map_concurrent
 
 _VERDICTS = {v.value for v in Verdict}
+_SKILL_PATH = Path(__file__).parents[1] / "skills" / "compliance_judgment" / "SKILL.md"
 
 
 class JudgeVerdict(BaseModel):
-    """The raw structured output of one judge call. `verdict` is a loose string mapped to the closed `Verdict`
-    by the capability (an unreadable value -> needs_review); citations are added from the inputs, not here."""
+    """The raw structured output of one judge call (the `compliance_judgment` SKILL's typed output). `verdict`
+    is a loose string mapped to the closed `Verdict` by the FUNCTION (an unreadable value -> needs_review);
+    citations are added from the inputs by the function, never authored here."""
 
     verdict: str
     rationale: str = ""
@@ -43,35 +45,33 @@ class JudgeVerdict(BaseModel):
 # judge_fn: (claim, requirement) -> JudgeVerdict, or None if the judge could not rule (-> conservative default).
 JudgeFn = Callable[[Claim, Requirement], Optional[JudgeVerdict]]
 
-_PROMPT = (
-    "You are an advertising-compliance auditor. Judge the ADVERTISING CLAIM against the REGULATORY REQUIREMENT. "
-    "You can see ONLY the ad text -- you CANNOT see the advertiser's evidence/studies. Answer one verdict:\n"
-    "- violation: reserve for what is CLEARLY wrong from the text ITSELF -- (a) the claim OVERCLAIMS proof "
-    "('clinically proven', 'scientifically proven', 'science backed', 'guaranteed', 'doctor proven') WITHOUT "
-    "pointing to an actual study/data; (b) an endorsement is missing a required DISCLOSURE (no '#ad' / 'paid "
-    "partnership' in disclosures_present); or (c) a review/testimonial is fake or deceptive.\n"
-    "- needs_review: an OBJECTIVE efficacy / health / performance / factual claim that may well be true but the "
-    "ad shows NO evidence and makes NO overclaim -- you cannot verify its substantiation from the text alone, so "
-    "ESCALATE it for a human to check the advertiser's substantiation file. Do NOT call this a violation (you do "
-    "not have the evidence) and do NOT clear it as compliant (you cannot confirm it either).\n"
-    "- compliant: the claim is mere SUBJECTIVE opinion or taste/experience PUFFERY ('smooth flavor', 'relaxing', "
-    "'I like it'); OR the required DISCLOSURE is present (disclosures_present, e.g. '#ad'); OR the ad actually "
-    "POINTS TO real evidence (a specific study/data/citation) for an objective claim; OR there is no objective "
-    "claim to substantiate.\n"
-    "Only 'violation' when the text clearly shows the breach; only 'compliant' when the text clearly clears it; "
-    "otherwise 'needs_review'. Give a one-sentence rationale and a confidence in [0,1].\n\n"
-    "REQUIREMENT ({deontic}, {citation}; applies to {actor}):\n{requirement_text}\n\n"
+# The per-call appendix bound onto the SKILL method (the static method teaches the reading; the specific
+# requirement + claim are appended at call time, the okf_navigate `_with_question` pattern).
+_PROMPT_TAIL = (
+    "\n\nREQUIREMENT ({deontic}, {citation}; applies to {actor}):\n{requirement_text}\n\n"
     "CLAIM (type={claim_type}; disclosures_present={disclosures}; evidence_referenced={evidence}):\n{assertion}"
 )
 
 
+def judgment_method() -> str:
+    """The compliance-judgment method (the `compliance_judgment` SKILL body, YAML frontmatter stripped) used as
+    the judge's system/method prompt. Authored knowledge (skills/compliance_judgment/SKILL.md), not hardcoded."""
+    text = _SKILL_PATH.read_text(encoding="utf-8")
+    if text.startswith("---"):
+        marker = text.find("\n---", 3)
+        if marker != -1:
+            text = text[marker + 4 :]
+    return text.strip()
+
+
 def build_compliance_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
-    """Wire a Granite-backed judge `JudgeFn` through the model seam (product = vLLM-Granite; ADR-0039).
-    `structured_factory` is injected for hermetic testing. Both sides go into the prompt; the claim's
-    disclosure/evidence signals are surfaced so the model can rule on lexically-anchored rules."""
+    """The `compliance_judgment` SKILL's runtime: a Granite-backed judge `JudgeFn` through the model seam
+    (product = vLLM-Granite; ADR-0039). The SKILL.md method is the system prompt; the specific requirement +
+    claim (with the disclosure/evidence signals) are appended. `structured_factory` is injected for tests."""
+    method = judgment_method()
 
     def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
-        prompt = _PROMPT.format(
+        prompt = method + _PROMPT_TAIL.format(
             deontic=requirement.deontic_type.value,
             citation=requirement.citation,
             actor=requirement.actor,
@@ -92,10 +92,12 @@ def _to_verdict(raw: str) -> Verdict:
     return Verdict(value) if value in _VERDICTS else Verdict.NEEDS_REVIEW
 
 
-def compliance_judgment(claim: Claim, requirement: Requirement, *, judge_fn: JudgeFn) -> ComplianceFinding:
-    """Judge one `(claim, requirement)` pair -> a `ComplianceFinding`. A None verdict (judge failure) or an
-    off-vocab verdict conservatively defaults to `needs_review`. Citations are taken from the inputs."""
-    ruling = judge_fn(claim, requirement)
+def assemble_finding(
+    claim: Claim, requirement: Requirement, ruling: Optional[JudgeVerdict]
+) -> ComplianceFinding:
+    """`compliance_finding_assembly` (FUNCTION -- deterministic, no model): map the skill's raw `JudgeVerdict`
+    (or None) to a `ComplianceFinding`. None or an off-vocab verdict conservatively defaults to `needs_review`;
+    the BOTH-SIDED citation is taken from the INPUTS (the model never authors a citation)."""
     if ruling is None:
         verdict, rationale, confidence = Verdict.NEEDS_REVIEW, "judge did not return a ruling", 0.0
     else:
@@ -113,6 +115,12 @@ def compliance_judgment(claim: Claim, requirement: Requirement, *, judge_fn: Jud
     )
 
 
+def compliance_judgment(claim: Claim, requirement: Requirement, *, judge_fn: JudgeFn) -> ComplianceFinding:
+    """Compose the SKILL (LLM judgment) and the FUNCTION (deterministic assembly): run `judge_fn` then
+    `assemble_finding`. A None ruling conservatively defaults to `needs_review`. Citations come from the inputs."""
+    return assemble_finding(claim, requirement, judge_fn(claim, requirement))
+
+
 _JUDGE_TIMEOUT_S = float(os.environ.get("RAG_JUDGE_TIMEOUT_S", "90"))  # per-pair wall-clock bound (LLM-CALL-TIMEOUT)
 
 
@@ -120,8 +128,9 @@ def judge_pairs(
     pairs: list[tuple[Claim, Requirement]], *, judge_fn: JudgeFn, max_concurrency: int = 8,
     timeout_s: float | None = _JUDGE_TIMEOUT_S,
 ) -> list[ComplianceFinding]:
-    """Judge many `(claim, requirement)` pairs concurrently (async + semaphore, per the parallel-LLM rule).
-    Order is preserved. CC-6 drives this over a subject doc's claims x their applicable requirements.
+    """Run the skill->function composition over many `(claim, requirement)` pairs concurrently (async +
+    semaphore, per the parallel-LLM rule). Order is preserved. CC-6 drives this over a subject doc's claims x
+    their applicable requirements.
 
     `timeout_s` (LLM-CALL-TIMEOUT) bounds each judgment with a hard wall-clock deadline so a stalled provider
     response never hangs the batch; a timed-out pair (map_concurrent -> None) becomes a conservative
@@ -132,16 +141,28 @@ def judge_pairs(
     )
     return [
         result if result is not None
-        else compliance_judgment(claim, requirement, judge_fn=lambda _c, _r: None)  # timed out -> needs_review
+        else assemble_finding(claim, requirement, None)  # timed out -> conservative needs_review
         for (claim, requirement), result in zip(pairs, results)
     ]
 
 
 def register_compliance_judgment(registry) -> None:
-    """Register `compliance_judgment` (function; CC-4, compliance §13.2). Contract = `ComplianceFinding`."""
+    """Register `compliance_judgment` as an AGENT_SKILL (CC-4): a single grounded LLM judgment act, authored as
+    `skills/compliance_judgment/SKILL.md` and applied via the seam. Typed output = `JudgeVerdict`."""
     registry.register(
         "compliance_judgment",
+        contract=JudgeVerdict,
+        kind="agent_skill",
+        display_name="Compliance judgment (claim x requirement -> verdict; authored skill)",
+    )
+
+
+def register_compliance_finding_assembly(registry) -> None:
+    """Register `compliance_finding_assembly` (FUNCTION -- deterministic): the skill's raw verdict + the inputs
+    -> a cited `ComplianceFinding` (conservative default, both-sided citation from the inputs)."""
+    registry.register(
+        "compliance_finding_assembly",
         contract=ComplianceFinding,
         kind="function",
-        display_name="Compliance judgment (claim x requirement -> cited verdict)",
+        display_name="Compliance finding assembly (verdict + inputs -> cited finding)",
     )
