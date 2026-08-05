@@ -14,6 +14,7 @@ coerced to an abstention. The model choice is the `GENERAL` role (no flag here).
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel
@@ -23,11 +24,19 @@ from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
 
 _ABSTENTION = "The retrieved context does not support an answer."
-_ANSWER_PROMPT = (
-    "Answer the question using ONLY the evidence below. Cite the bracketed chunk id that supports each "
-    "claim in `citations`. If the evidence does not support an answer, set abstained=true and do not "
-    "guess. When you rely on a graph-derived fact, respect its confidence tag."
-)
+_SKILL_PATH = Path(__file__).parents[1] / "skills" / "generation" / "SKILL.md"
+
+
+def generation_method() -> str:
+    """The grounded-answer method (the `generation` SKILL body, YAML frontmatter stripped) used as the
+    generator's instruction. Authored knowledge (skills/generation/SKILL.md), not a hardcoded string. The
+    citation/abstention GUARANTEES are still enforced in code around the model (see `generate_answer`)."""
+    text = _SKILL_PATH.read_text(encoding="utf-8")
+    if text.startswith("---"):
+        marker = text.find("\n---", 3)
+        if marker != -1:
+            text = text[marker + 4 :]
+    return text.strip()
 
 
 class EvidenceItem(BaseModel):
@@ -88,7 +97,7 @@ def generate_answer(
     if not evidence:
         return _abstain()
 
-    prompt = f"{_ANSWER_PROMPT}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
+    prompt = f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
     raw = model.generate(prompt)
     if raw.abstained:
         return _abstain(raw.answer or _ABSTENTION)

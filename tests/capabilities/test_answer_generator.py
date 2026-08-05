@@ -89,6 +89,15 @@ def test_registers_under_fr_c_9():
     assert reg.kind == "agent_skill"  # CAP-REG-1: a single grounded/cited LLM act
 
 
+def test_generation_method_loads_the_skill_body_without_frontmatter():
+    # prompt-parity: the generation instruction is authored in skills/generation/SKILL.md, not hardcoded
+    from rag_wright.capabilities.answer_generator import generation_method
+
+    method = generation_method()
+    assert method and not method.startswith("---")  # YAML frontmatter stripped
+    assert "abstain" in method.lower() and "citation" in method.lower()  # the method's load-bearing rules
+
+
 # --- vision-to-text ------------------------------------------------------------------------------
 
 
