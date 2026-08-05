@@ -3,6 +3,25 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **RESUME / NEXT UP (2026-08-05):** **SKILL-SPLIT arc CLOSED (ADR-0041), pushed to origin/main.** Every
+> LLM-bearing capability is now correctly kinded per the rubric (function=deterministic/no-model ·
+> agent_skill=a single LLM act authored as a SKILL.md folder · subgraph=a multi-step workflow · model=inference):
+> split `compliance_judgment`/`claim_extraction`/`requirement_extraction`(→subgraph)/`extraction_semantic_judge`
+> into skill+function; `vision_to_text`→agent_skill; `generation` prompt→`skills/generation/SKILL.md`
+> (prompt-parity — every agent_skill's prompt now lives in its SKILL.md); kinds are CI-pinned by the manifest
+> tests. **Naming audit:** relocated `CuadAdapter`/`run_cuad_ingestion` out of the GENERIC
+> `subgraphs/contract_ingestion_pipeline.py` → `corpus/cuad_ingestion.py` (generic pipeline stays corpus-agnostic).
+> Runtime-tiers decision recorded (single-shot=seam+SKILL.md; heavy=create_agent/Deep-Agent, already built +
+> tested: `rlm`/`okf_navigate`; SkillsMiddleware progressive-disclosure deferred to real need). **993 green,
+> whole-src ruff 100% clean.** NOTE: the whole LG arc (LG-0..LG-3, incl. the 4 composite subgraphs) shipped
+> 2026-07-31 — any "LG-3 next" note is STALE.
+>
+> **NEXT (open):** rung-2 = **EXPERT-GRADE the compliance gold** (legal SME reviews the 19 labels + grow the real
+> negative class into a benchmark). The residual precision limit (~0.73) is the external-substantiation reality +
+> small/weak gold labels, NOT tuning or code. Contract-side **EC-5** (enterprise packaging) deferred, fully in-code.
+>
+> ---
+>
 > **RESUME / NEXT UP (2026-08-04):** ENTERPRISE-CONTAINER deployable system done; **RECOVER-4-DOCS DONE**
 > (local canonical KG now uniform at **510**: Contract 510 / Span 136,460 / clauses 42,314 / entities 1,181 /
 > PARTY_TO 1,287). The 4 dead-letters were TRANSIENT (the doc-~387 heap-OOM cascade), not a chunker defect —
@@ -16,8 +35,9 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > Capabilities/subgraphs: requirement_extraction, claim_extraction, compliance_judgment (the new judgment node),
 > compliance_ingestion (subgraph), compliance_check (subgraph) + Requirement/Claim/Verdict contracts +
 > compliance_bridge.ttl. **Track-1 GATE CLEARED** (`docs/eval/compliance_gate_cc7.md`): product judge Granite acc
-> 0.773 ≈ ceiling, safest on the liability FN; engine 4/4 on the labeled ads. **NEXT: CC-6 semantic narrowing
-> (Leg-B top-k, cuts the redundant-rule noise) + rung-2 real NAD/FTC ad-claims gold (C-7).** Two findings recorded
+> 0.773 ≈ ceiling, safest on the liability FN; engine 4/4 on the labeled ads. **NEXT (superseded — see the
+> 2026-08-05 banner above): CC-6/CC-8 semantic narrowing are DONE; rung-2 gold increments (RG-5/RG-6/NEG-GOLD/
+> EXTRACT-TUNE) DONE; the open item is now EXPERT-GRADE the gold.** Two findings recorded
 > in [[ontology-lever-vs-extraction-lever]] + [[docling-graph-extraction-contract]].
 >
 > **RESUME / NEXT UP (2026-07-30):** The ARD-registration + LangGraph-hardening arc is in flight.
