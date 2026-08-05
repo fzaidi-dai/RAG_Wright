@@ -75,3 +75,34 @@ Iterated eval-driven, twice:
 These are general principles, not overfit to specific cases -- but the gold is still small (12, partly
 constructed), so a robust precision number needs a larger real negative set. Recall (8 real violations, 0
 missed) is the trustworthy signal.
+
+## NEG-GOLD — grow the REAL negative class (19 cases) and the ceiling it revealed
+
+Grew the gold to 19 (11 violation / 8 compliant), and crucially the REAL negative class 1 -> 5 by adding NAD
+press-release decisions: NAD-**supported** claims = compliant (VKTRY "worn by pro/college athletes", "backed by
+15 yrs R&D", "accepted by APMA"), NAD-**discontinue** = violation (Pamprin "clinically tested" [flawed study],
+Willow semaglutide, VKTRY superiority), plus a second FTC closing letter (Life's Vigor).
+
+Scores (tuned v2 judge, granite-4.1-8b):
+
+| Subset | n | Recall | Precision | Acc |
+|---|---|---|---|---|
+| ALL | 19 | **1.00** (11/11, 0 missed) | 0.73 | 0.79 |
+| constructed (substantiation visible in text) | 3 | — | — | **1.00** |
+
+**Recall stays 1.00** -- every one of the 11 real violations flagged. **Precision fell to 0.73** on the bigger
+negative class, and the 4 false positives are a REAL, non-tunable finding:
+- 2 are NAD-**supported** OBJECTIVE claims ("worn by pro athletes", "accepted by APMA"). The engine judges the
+  claim vs the rule FROM THE AD TEXT ALONE, but whether an objective claim is actually SUBSTANTIATED depends on
+  EXTERNAL evidence the advertiser holds (the studies NAD reviewed). A supported objective claim looks identical
+  to an unsubstantiated one in the ad text, so it is flagged -- arguably CORRECT assistive behavior (flag the
+  objective claim for a human to verify the substantiation file; all are human-gated), but a FP against a
+  "supported" label. The 3 CONSTRUCTED negatives (substantiation/disclosure visible in the text) all pass,
+  confirming the judge is right when it can see the evidence.
+- 2 are FTC no-action CLOSING LETTERS -- weak "compliant" labels (closed != affirmatively cleared).
+
+So **0.73 is the honest precision ceiling on real compliant claims, limited by the external-substantiation
+problem -- not a prompt-tuning gap.** The lever is architectural (give the judge access to the advertiser's
+substantiation evidence) or procedural (an objective claim with no in-text substantiation -> needs_review +
+human verifies), not more prompt-tuning on this gold. Recall (11 real violations, 0 missed) remains the
+trustworthy, shippable-direction signal.

@@ -68,7 +68,44 @@ CASES: list[dict] = [
      "expected_verdict": "violation", "target_rule": "255.2 (fake/incentivized reviews)",
      "ftc_finding": "Amplified claims with fake and incentivized reviews presented as independent consumer experiences.",
      "subject_text": "See our thousands of verified 5-star reviews from real parents whose kids grew taller with TruHeight!"},
-    # --- negative class: one real FTC no-action closing letter (on-domain) ---
+    # --- real NAD violations (advertiser's evidence found insufficient -> discontinue) ---
+    {"id": "nad_pamprin_clinically_tested", "provenance": "nad_case", "case": "NAD - Pamprin Botanicals (2024)",
+     "source": "https://bbbprograms.org/media/newsroom/decisions",
+     "expected_verdict": "violation", "target_rule": "255.1 (substantiation - flawed study)",
+     "ftc_finding": "NAD found the supporting study flawed (no control group, among other reasons) and recommended discontinuing the 'clinically tested'/'scientifically tested' claims.",
+     "subject_text": "Pamprin Botanicals is clinically tested and scientifically tested to relieve your PMS symptoms."},
+    {"id": "nad_willow_semaglutide", "provenance": "nad_case", "case": "NAD - Willow Health Services (2025)",
+     "source": "https://bbbprograms.org/media/newsroom/decisions",
+     "expected_verdict": "violation", "target_rule": "255.1 (health-claim substantiation)",
+     "ftc_finding": "NAD determined the evidence was insufficient to support the health claims and recommended modifying/discontinuing them.",
+     "subject_text": "Our compounded semaglutide tablets deliver dramatic, doctor-designed weight loss results."},
+    {"id": "nad_vktry_superiority", "provenance": "nad_case", "case": "NAD - VKTRY Performance Insoles (2025), unsupported claims",
+     "source": "https://bbbprograms.org/media/newsroom/decisions/vktry",
+     "expected_verdict": "violation", "target_rule": "255.1 (superiority/performance substantiation)",
+     "ftc_finding": "NAD recommended discontinuing the superiority/performance and instantaneous-results claims; the studies did not assess jump height or running speed.",
+     "subject_text": "VKTRY insoles instantly make you jump higher and run faster than any other insole on the market."},
+    # --- real NAD compliant: claims NAD determined were SUPPORTED (genuine substantiated claims) ---
+    {"id": "nad_vktry_athletes_supported", "provenance": "nad_case", "case": "NAD - VKTRY (2025), supported claim",
+     "source": "https://bbbprograms.org/media/newsroom/decisions/vktry",
+     "expected_verdict": "compliant", "target_rule": "255.2 (testimonial/usage claim - supported)",
+     "ftc_finding": "NAD determined the claim 'Worn by pro and college athletes' was SUPPORTED.",
+     "subject_text": "VKTRY Performance Insoles are worn by pro and college athletes."},
+    {"id": "nad_vktry_rnd_supported", "provenance": "nad_case", "case": "NAD - VKTRY (2025), supported claim",
+     "source": "https://bbbprograms.org/media/newsroom/decisions/vktry",
+     "expected_verdict": "compliant", "target_rule": "255.1 (objective claim - supported)",
+     "ftc_finding": "NAD determined the claim 'Backed by 15 years of research & development' was SUPPORTED.",
+     "subject_text": "VKTRY Performance Insoles are backed by 15 years of research and development."},
+    {"id": "nad_vktry_apma_supported", "provenance": "nad_case", "case": "NAD - VKTRY (2025), supported claim",
+     "source": "https://bbbprograms.org/media/newsroom/decisions/vktry",
+     "expected_verdict": "compliant", "target_rule": "255.4 (organization acceptance - literal claim supported)",
+     "ftc_finding": "NAD determined the literal claim 'Accepted by the American Podiatric Medical Association' was SUPPORTED (only the implied 'APMA recommends' was not conveyed).",
+     "subject_text": "VKTRY Performance Insoles are accepted by the American Podiatric Medical Association."},
+    # --- negative class: real FTC no-action closing letters (on-domain) ---
+    {"id": "lifes_vigor_closed", "provenance": "ftc_case", "case": "FTC closing letter - Life's Vigor",
+     "source": "https://www.ftc.gov/system/files/documents/closing_letters/lifes-vigor-et-al./010410lifevigorletter.pdf",
+     "expected_verdict": "compliant", "target_rule": "255.1 (substantiation - no action)",
+     "ftc_finding": "FTC staff closed the investigation into the herbal product's claims (no enforcement action). No-action != affirmative clearance; weak positive signal.",
+     "subject_text": "Our chaparral herbal supplement is a traditional botanical that supports your overall wellness."},
     {"id": "advanced_bionutritionals_closed", "provenance": "ftc_case", "case": "FTC closing letter - Advanced Bionutritionals",
      "source": "https://www.ftc.gov/sites/default/files/documents/closing_letters/advanced-bionutritionals-et-al./050711advancedbio.pdf",
      "expected_verdict": "compliant", "target_rule": "255.1 (substantiation - no action)",
@@ -98,15 +135,20 @@ def main() -> None:
     for c in CASES:
         (OUT / f"{c['id']}.txt").write_text(c["subject_text"].strip() + "\n", encoding="utf-8")
     manifest = {
-        "note": "RG-2 FIRST-PASS ad-claims gold (roadmap C-7). LLM-assisted from public FTC decisions; "
-                "labels are my best-judgment first pass, EXPERT-REVIEW PENDING (not a shippable legal benchmark). "
-                "Violation-skewed (the FTC acts on violations); the compliant class is one real no-action case + "
-                "constructed-per-FTC-guidance examples (provenance='constructed'). Sources cited per case.",
+        "note": "FIRST-PASS ad-claims gold (roadmap C-7, RG-2 + NEG-GOLD). LLM-assisted from public FTC actions/"
+                "closing letters + NAD press-release summaries (NAD 'supported' = compliant, 'discontinue' = "
+                "violation); labels are my best-judgment first pass, EXPERT-REVIEW PENDING (not a shippable legal "
+                "benchmark). NEG-GOLD grew the REAL negative class with NAD-supported claims + an FTC closing "
+                "letter. provenance: ftc_case / nad_case (real, cited) vs constructed (authored for the negative "
+                "class). Sources cited per case.",
         "standard": "FTC 16 CFR Part 255 (Endorsement Guides) + FTC substantiation doctrine",
         "counts": {"violation": sum(c["expected_verdict"] == "violation" for c in CASES),
                    "compliant": sum(c["expected_verdict"] == "compliant" for c in CASES),
                    "ftc_case": sum(c["provenance"] == "ftc_case" for c in CASES),
-                   "constructed": sum(c["provenance"] == "constructed" for c in CASES)},
+                   "nad_case": sum(c["provenance"] == "nad_case" for c in CASES),
+                   "constructed": sum(c["provenance"] == "constructed" for c in CASES),
+                   "real_compliant": sum(c["expected_verdict"] == "compliant" and c["provenance"] != "constructed"
+                                         for c in CASES)},
         "cases": [{k: v for k, v in c.items() if k != "subject_text"} for c in CASES],
     }
     (OUT / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
