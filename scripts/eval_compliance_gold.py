@@ -7,7 +7,16 @@ SEPARATELY, per roadmap §13.4. Ad-level predicted = "violation" if the report h
 FIRST-PASS gold (expert-review pending) -> directional numbers, not a shippable legal benchmark. Also broken out
 by provenance (real FTC cases vs constructed compliant) so the thin/constructed negative class is visible.
 
+The store, judge/extraction models, and the CC-8 narrowing embedder are all env-selected, so the SAME script
+runs local or fully on Modal (KG on the rw-arcadedb Volume + Granite/BGE on the A100), MODAL-COMPLIANCE.
+
+  # local (dev):
   RAG_SERVING=openrouter EMBED_DEVICE=cpu uv run --no-sync python -m scripts.eval_compliance_gold
+  # fully on Modal (A100 Granite + A100 BGE + Modal compliance KG):
+  ARCADEDB_HOST=farhan-zaidi--rw-arcadedb-serve.modal.run ARCADEDB_PORT=443 ARCADEDB_PROTOCOL=https \
+    ARCADEDB_USER=root ARCADEDB_PASSWORD=rag_wright_dev_2026 \
+    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=rw-vllm-dev-key STACK_URL=<a100> \
+    uv run --no-sync python -m scripts.eval_compliance_gold
 """
 
 from __future__ import annotations
@@ -21,7 +30,7 @@ from dotenv import load_dotenv
 def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.capabilities.embedding import BGEM3Embedder
+    from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.compliance_check import production_compliance_check
@@ -31,7 +40,7 @@ def main() -> None:
     print(f"[gold-eval] {len(gold)} cases | {len(store.all_requirements())} requirements | narrowing k=5", flush=True)
     graph = production_compliance_check(
         store, extract_model=default_extraction_model("claim-extract", "ibm-granite/granite-4.1-8b"),
-        judge_model_id=model_for(ModelRole.STRUCTURED_REASONING), embedder=BGEM3Embedder(), k=5)
+        judge_model_id=model_for(ModelRole.STRUCTURED_REASONING), embedder=query_embedder(), k=5)
 
     rows = []
     for i, c in enumerate(gold, 1):

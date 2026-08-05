@@ -1,7 +1,9 @@
 """EC-1 (ENTERPRISE-CONTAINER, ADR-0039): ArcadeDB serving the adopted KG on Modal, Volume-backed + ALWAYS-WARM.
 
-The live contract KG (`ragwright_cuad_full`, incl. the PARTY-TO-MANY-TO-MANY 1278 edges) lives on the
-`rw-arcadedb-data` Modal Volume (the restored backup, unpacked once on first boot). ArcadeDB is a pure-Java
+The live contract KG (`ragwright_cuad_full`, incl. the PARTY-TO-MANY-TO-MANY 1278 edges) AND the compliance
+Requirement KG (`ragwright_compliance`, FTC 16 CFR 255, MODAL-COMPLIANCE) both live on the `rw-arcadedb-data`
+Modal Volume (each restored once from its `<db>-backup.zip` on first boot; one server serves every DB in the
+mount). ArcadeDB is a pure-Java
 server; the stock `arcadedata/arcadedb` image is Alpine (musl) which Modal's Python runner can't run on, so we
 build a debian + JRE image and drop the ArcadeDB 26.7.1 distribution into it, then run the server against the
 Volume-mounted databases dir and expose the HTTP API (2480). `min_containers=1` keeps it always warm (cheap
@@ -24,8 +26,11 @@ import modal
 ROOT_PW = "rag_wright_dev_2026"  # matches the local ARCADEDB_PASSWORD (dev); the query app uses it as basic auth
 ARCADE_HOME = "/home/arcadedb"
 DB_MOUNT = f"{ARCADE_HOME}/databases"  # ArcadeDB's default databases dir
-DB_NAME = "ragwright_cuad_full"
-BACKUP_ZIP = f"{DB_MOUNT}/{DB_NAME}-backup.zip"  # the uploaded consistent backup (single-file, robust upload)
+# One ArcadeDB server serves EVERY database dir in the mount. Each entry restores once from its uploaded
+# `<db>-backup.zip` (single-file put, robust upload) if its dir is not already present -- so a redeploy never
+# clobbers an already-unpacked DB. `ragwright_compliance` (the FTC 16 CFR 255 Requirement KG) is served
+# alongside the contract KG from the same Volume (no second app), MODAL-COMPLIANCE.
+DB_NAMES = ["ragwright_cuad_full", "ragwright_compliance"]
 _TARBALL = "https://github.com/ArcadeData/arcadedb/releases/download/26.7.1/arcadedb-26.7.1.tar.gz"
 
 app = modal.App("rw-arcadedb")
@@ -60,11 +65,16 @@ def serve() -> None:
             dst = os.path.join(ARCADE_HOME, name)
             if not os.path.exists(dst):  # never clobber the Volume-mounted databases/ dir
                 shutil.move(os.path.join(inner, name), dst)
-    # 2. restore the db from the backup zip (once) into the Volume
-    db_dir = f"{DB_MOUNT}/{DB_NAME}"
-    if not os.path.exists(db_dir) and os.path.exists(BACKUP_ZIP):
-        os.makedirs(db_dir, exist_ok=True)
-        with zipfile.ZipFile(BACKUP_ZIP) as z:
-            z.extractall(db_dir)  # the backup zip is the raw db files (file-level snapshot)
+    # 2. restore each db from its backup zip (once) into the Volume; ArcadeDB auto-serves every dir present
+    restored_any = False
+    for db_name in DB_NAMES:
+        db_dir = f"{DB_MOUNT}/{db_name}"
+        backup_zip = f"{DB_MOUNT}/{db_name}-backup.zip"
+        if not os.path.exists(db_dir) and os.path.exists(backup_zip):  # never clobber an already-unpacked DB
+            os.makedirs(db_dir, exist_ok=True)
+            with zipfile.ZipFile(backup_zip) as z:
+                z.extractall(db_dir)  # the backup zip is the raw db files (file-level snapshot)
+            restored_any = True
+    if restored_any:
         data_vol.commit()
     subprocess.Popen(["./bin/server.sh"], cwd=ARCADE_HOME)

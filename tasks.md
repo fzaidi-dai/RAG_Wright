@@ -20,6 +20,19 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > negative class into a benchmark). The residual precision limit (~0.73) is the external-substantiation reality +
 > small/weak gold labels, NOT tuning or code. Contract-side **EC-5** (enterprise packaging) deferred, fully in-code.
 >
+> **MODAL-COMPLIANCE DONE (2026-08-05): the compliance module now runs fully on Modal, like the contract side.**
+> The compliance Requirement KG (`ragwright_compliance`, 96 reqs) was `BACKUP DATABASE`'d → GCS
+> (`gs://dreamai-pocs-ragwright-ingest/kg-backups/`, ADR-0038 convention) → `modal volume put` onto the
+> `rw-arcadedb-data` Volume; `scripts/modal_arcadedb.py serve()` generalized to restore BOTH DBs (per-DB guard,
+> one server serves every DB in the mount) → Modal KG verified 81/14/1=96 = local. Local Docker STOPPED after
+> the backup+restore+basic-test (nothing downstream needs it). Reused BOTH existing Modal apps (no new GPU/DB
+> server): judge + claim/requirement extraction route to A100 vLLM-Granite via `RAG_SERVING=vllm`; CC-8 BGE
+> narrowing routes to the A100 `/embed` via `remote_encoders.query_embedder()` + `STACK_URL` (the one code swap
+> in `eval_compliance_gold.py`; `compliance_engine_smoke.py` gained an i/N counter). **Component test:** smoke
+> 4/4 on Modal KG + A100 Granite. **Full E2E:** rung-2 gold eval on Modal (A100 Granite extraction + A100 BGE +
+> A100 Granite judge + Modal KG) = clearance-safety 1.00 / hard-viol-precision 0.91 / hard-FP-rate 0.12 =
+> MATCHES the local/OpenRouter baseline (substrate parity proven). Modal apps STOPPED post-run (no idle credits).
+>
 > ---
 >
 > **RESUME / NEXT UP (2026-08-04):** ENTERPRISE-CONTAINER deployable system done; **RECOVER-4-DOCS DONE**

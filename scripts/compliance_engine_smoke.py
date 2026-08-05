@@ -6,7 +6,13 @@ real end-to-end gate (the Track-1 proxy is ContractNLI, eval/contractnli_judge.p
 
 Capped to a few §255.5 disclosure requirements to sidestep the CC-6 cross-product (the semantic-narrowing item).
 
+  # local (dev):
   RAG_SERVING=openrouter uv run --no-sync python -m scripts.compliance_engine_smoke
+  # on Modal (A100 Granite judge + extraction, Modal compliance KG) -- MODAL-COMPLIANCE:
+  ARCADEDB_HOST=farhan-zaidi--rw-arcadedb-serve.modal.run ARCADEDB_PORT=443 ARCADEDB_PROTOCOL=https \
+    ARCADEDB_USER=root ARCADEDB_PASSWORD=rag_wright_dev_2026 \
+    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=rw-vllm-dev-key \
+    uv run --no-sync python -m scripts.compliance_engine_smoke
 """
 
 from __future__ import annotations
@@ -38,18 +44,19 @@ def main() -> None:
         judge_fn=build_compliance_judge_fn(model_for(ModelRole.STRUCTURED_REASONING)))
 
     samples = json.loads(Path("data/compliance/subject_samples/manifest.json").read_text())["samples"]
-    print(f"[engine] compliance_check vs manifest ({len(reqs)} §255.5 rules)\n", flush=True)
+    n = len(samples)
+    print(f"[engine] compliance_check vs manifest: {n} samples x {len(reqs)} §255.5 rules\n", flush=True)
     correct = 0
-    for s in samples:
+    for i, s in enumerate(samples, 1):
         name = s["file"].replace(".txt", "")
         text = Path(f"data/compliance/subject_samples/{name}.txt").read_text()
         report = graph.invoke({"subject_text": text, "source_doc": name})["report"]
         predicted = "violation" if report.summary.get("violation", 0) > 0 else "compliant"
         ok = predicted == s["expected_signal"]
         correct += ok
-        print(f"[engine] {'OK ' if ok else 'XX '} {name[:34]:34} "
+        print(f"[engine] {i}/{n} {'OK ' if ok else 'XX '} {name[:34]:34} "
               f"expected={s['expected_signal']:9} predicted={predicted:9} {report.summary}", flush=True)
-    print(f"\n[engine] ad-level: {correct}/{len(samples)} correct", flush=True)
+    print(f"\n[engine] ad-level: {correct}/{n} correct", flush=True)
     store.close()
 
 
