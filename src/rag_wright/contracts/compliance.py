@@ -183,3 +183,13 @@ class ComplianceFinding(BaseModel):
         """Every violation requires human confirmation before it leaves the tool; needs_review always does.
         A `compliant` finding does not gate (§13.2)."""
         return self.verdict in (Verdict.VIOLATION, Verdict.NEEDS_REVIEW)
+
+
+class ComplianceReport(BaseModel):
+    """The `compliance_check` output (CC-6, §13.3): a subject document's cited findings + a per-requirement gap
+    matrix + a verdict summary. Both-sided cited; every violation/needs_review is human-gated per finding."""
+
+    source_doc: str
+    findings: list[ComplianceFinding] = []
+    summary: dict[str, int] = {}  # verdict -> count (compliant/violation/needs_review)
+    gap_matrix: list[dict] = []  # per-requirement rollup: {requirement_id, citation, verdict, claims_checked}

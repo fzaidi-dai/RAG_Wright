@@ -895,6 +895,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("compliance", "ingestion", "regulatory", "subgraph", "langgraph"),
     ),
+    CapabilityManifest(
+        slug="compliance_check",
+        kind="subgraph",
+        display_name="Compliance check (subject doc x requirements -> cited findings + gap matrix)",
+        description=(
+            "Check a subject advertisement against a regulatory Requirement KG as a hardened LangGraph subgraph "
+            "(CC-6, compliance §13.3, the headline composite): extract the ad's claims (claim_extraction) -> "
+            "retrieve the applicable requirements (claim scope <-> requirement applicability, with a "
+            "section->claim_type map backfilling empty scopes) -> judge each (claim, requirement) pair "
+            "(compliance_judgment, concurrent, with ad-level disclosure context) -> assemble cited findings + a "
+            "per-requirement gap matrix + a verdict summary. Query-side: degrades to empty on failure; every "
+            "violation/needs_review is human-gated. Both-sided cited -- the trust product."
+        ),
+        representative_queries=(
+            "check whether an ad campaign complies with the FTC endorsement guides",
+            "produce a cited compliance gap matrix for a marketing document",
+            "audit a subject document against a regulatory requirements KG",
+        ),
+        tags=("compliance", "check", "verdict", "gap-matrix", "subgraph", "langgraph"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

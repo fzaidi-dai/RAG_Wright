@@ -111,6 +111,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "claim_extraction",  # function: subject ad text -> checkable Claim[] (CC-3)
         "compliance_judgment",  # function: (claim, requirement) -> cited verdict {compliant/violation/needs_review} (CC-4)
         "compliance_ingestion",  # subgraph: regulatory corpus -> Requirement KG (CC-5)
+        "compliance_check",  # subgraph: subject doc x requirements -> cited findings + gap matrix (CC-6)
     }
 )
 
