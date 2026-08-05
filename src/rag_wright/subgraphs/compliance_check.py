@@ -24,12 +24,14 @@ from typing import Any, Callable, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from rag_wright.capabilities.compliance_judgment import JudgeFn, judge_pairs
+from rag_wright.capabilities.retrieval_core import _cosine
 from rag_wright.contracts.compliance import (
     Claim,
     ClaimType,
     ComplianceFinding,
     ComplianceReport,
     Requirement,
+    RuleScope,
     Verdict,
 )
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
@@ -76,6 +78,61 @@ def applies_to(requirement: Requirement, claim: Claim) -> bool:
     return claim.claim_type.value in applicable_claim_types(requirement)
 
 
+# CC-8a: the ontology content/context tag (the narrowing routing lever). A CONTEXT section applies regardless of
+# claim content (disclosure -> always included); everything else is CONTENT (narrowed by semantic similarity).
+SECTION_RULE_SCOPE: dict[str, RuleScope] = {
+    "255.5": RuleScope.CONTEXT,  # Disclosure of material connections -- applies to any claim in an endorsement
+    "255.4": RuleScope.CONTEXT,  # Endorsements by organizations -- the disclosure/relationship angle
+}
+
+
+def rule_scope_of(requirement: Requirement) -> RuleScope:
+    """CONTENT (narrow by similarity) unless the section is a CONTEXT section (disclosure; always-include)."""
+    return SECTION_RULE_SCOPE.get(_section_of(requirement.citation), RuleScope.CONTENT)
+
+
+SelectFn = Callable[[Claim, list], list]  # (claim, requirements) -> the narrowed requirements to judge
+
+
+def _dedup(requirements: list, vectors: dict, threshold: float) -> list:
+    """Greedy near-duplicate collapse: keep a requirement unless it is >= `threshold` cosine-similar to one
+    already kept (the 3 near-identical §255.5 disclosure rules -> one). Order-preserving."""
+    kept: list = []
+    for req in requirements:
+        vec = vectors.get(req.requirement_id)
+        if vec is not None and any(_cosine(vec, vectors[k.requirement_id]) >= threshold for k in kept
+                                   if vectors.get(k.requirement_id) is not None):
+            continue
+        kept.append(req)
+    return kept
+
+
+def build_select_fn(
+    embedder, requirements: list, *, k: int = 5, context_k: int = 3, dedup_threshold: float = 0.92
+) -> SelectFn:
+    """CC-8b: build the semantic-narrowing selector. Precomputes each requirement's BGE vector ONCE. Per claim it
+    returns the top-`context_k` CONTEXT rules (disclosure -- kept regardless of content so similarity can't miss
+    them, Example B) + the top-`k` CONTENT rules (substantiation etc., ranked by cosine to the claim), deduped.
+    Both classes are CAPPED so an over-extracted section (§255.5 -> 32 near-identical disclosure rules) collapses
+    to a few representatives rather than re-exploding the cross-product. A precision/cost win that keeps the
+    context rules (the recall guarantee) while cutting the redundant-rule noise."""
+    vectors = {r.requirement_id: embedder.encode_dense(r.requirement_text) for r in requirements}
+
+    def _ranked(reqs: list, claim_vec: list) -> list:
+        return sorted(reqs, key=lambda r: _cosine(claim_vec, vectors.get(r.requirement_id, [])), reverse=True)
+
+    def select(claim: Claim, reqs: list) -> list:
+        applicable = [r for r in reqs if applies_to(r, claim)]
+        claim_vec = embedder.encode_dense(claim.assertion_text)
+        context = _dedup(_ranked([r for r in applicable if rule_scope_of(r) is RuleScope.CONTEXT], claim_vec),
+                         vectors, dedup_threshold)[:context_k]
+        content = _dedup(_ranked([r for r in applicable if rule_scope_of(r) is RuleScope.CONTENT], claim_vec),
+                         vectors, dedup_threshold)[:k]
+        return _dedup(context + content, vectors, dedup_threshold)
+
+    return select
+
+
 ClaimsFn = Callable[[str, str], list]  # (subject_text, source_doc) -> list[Claim]
 RequirementsFn = Callable[[], list]  # () -> list[Requirement]
 
@@ -100,10 +157,12 @@ def _enrich(claim: Claim, ad_disclosures: set[str]) -> Claim:
 
 
 def build_compliance_check(
-    *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: JudgeFn, retry_policy: Any = DEFAULT_RETRY
+    *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: JudgeFn,
+    select_fn: SelectFn | None = None, retry_policy: Any = DEFAULT_RETRY
 ):
-    """Compile the compliance-check subgraph. All three seams are injected for hermetic testing. Query-side:
-    each node degrades to empty on failure (never crashes) -- an empty report is a safe answer."""
+    """Compile the compliance-check subgraph. All seams are injected for hermetic testing. `select_fn` (CC-8b) is
+    the per-claim requirement narrower; when None, every APPLICABLE requirement is judged (the broad default).
+    Query-side: each node degrades to empty on failure (never crashes) -- an empty report is a safe answer."""
 
     def extract_claims(state: CheckState) -> CheckState:
         with business_span("compliance_check.extract_claims"):
@@ -122,8 +181,11 @@ def build_compliance_check(
                 requirements = requirements_fn()
             except Exception:  # noqa: BLE001 - degrade-to-empty
                 return {"pairs": []}
-        pairs = [(_enrich(claim, ad), req)
-                 for claim in claims for req in requirements if applies_to(req, claim)]
+        if select_fn is not None:  # CC-8b: semantic narrowing (top-k content + always-include context + dedup)
+            pairs = [(_enrich(claim, ad), req) for claim in claims for req in select_fn(claim, requirements)]
+        else:  # broad default: every applicable requirement
+            pairs = [(_enrich(claim, ad), req)
+                     for claim in claims for req in requirements if applies_to(req, claim)]
         return {"pairs": pairs}
 
     def judge(state: CheckState) -> CheckState:
@@ -185,24 +247,32 @@ def _requirement_from_row(row: dict) -> Requirement:
         confidence=ConfidenceTag(row.get("confidence") or "EXTRACTED"))
 
 
-def production_compliance_check(store: Any, *, extract_model: Any, judge_model_id: str):
+def production_compliance_check(
+    store: Any, *, extract_model: Any, judge_model_id: str, embedder: Any = None, k: int = 5
+):
     """Wire the real capabilities: claims = claim_extraction (CC-3), requirements = the store's Requirement KG
-    (CC-5), judge = the Granite compliance judge (CC-4). Requirements are loaded once per check."""
+    (CC-5), judge = the Granite compliance judge (CC-4). Requirements are loaded ONCE here; when an `embedder` is
+    given, CC-8b semantic narrowing is enabled (top-k content + always-include context + dedup), else broad."""
     from rag_wright.capabilities.claim_extraction import claim_extraction
     from rag_wright.capabilities.compliance_judgment import build_compliance_judge_fn
 
+    requirements = [_requirement_from_row(r) for r in store.all_requirements()]
+    select_fn = build_select_fn(embedder, requirements, k=k) if embedder is not None else None
     return build_compliance_check(
         claims_fn=lambda text, source: claim_extraction(text, model=extract_model, source_doc=source),
-        requirements_fn=lambda: [_requirement_from_row(r) for r in store.all_requirements()],
+        requirements_fn=lambda: requirements,
         judge_fn=build_compliance_judge_fn(judge_model_id),
+        select_fn=select_fn,
     )
 
 
 def run_compliance_check(
-    subject_text: str, source_doc: str, *, store: Any, extract_model: Any, judge_model_id: str
+    subject_text: str, source_doc: str, *, store: Any, extract_model: Any, judge_model_id: str,
+    embedder: Any = None, k: int = 5,
 ) -> ComplianceReport:
     """Run a compliance check for one subject document against the Requirement KG -> a cited `ComplianceReport`."""
-    graph = production_compliance_check(store, extract_model=extract_model, judge_model_id=judge_model_id)
+    graph = production_compliance_check(
+        store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k)
     return graph.invoke({"subject_text": subject_text, "source_doc": source_doc})["report"]
 
 

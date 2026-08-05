@@ -148,6 +148,16 @@ class Claim(BaseModel):
         return _content_id(source_doc, str(claim_index), assertion_text)
 
 
+class RuleScope(str, Enum):
+    """How a requirement is narrowed at check time (CC-8a, the ontology routing tag; `compliance_bridge.ttl`
+    cmp:RuleScope). CONTENT rules (substantiation / claim-specific) narrow by semantic similarity to the claim;
+    CONTEXT rules (disclosure / material connection -- apply to ANY claim in an endorsement regardless of its
+    content) are ALWAYS included, never left to similarity. See [[ontology-lever-vs-extraction-lever]]."""
+
+    CONTENT = "content"
+    CONTEXT = "context"
+
+
 class Verdict(str, Enum):
     """The compliance judgment output (CC-4, §13.2). Closed vocab; matches `compliance_bridge.ttl` cmp:Verdict.
     `needs_review` is the conservative default under uncertainty (never a silent compliant/violation)."""

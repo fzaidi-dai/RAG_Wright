@@ -69,6 +69,15 @@ cmp:hasSpan a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:Claim
     rdfs:comment "The subject-document span the claim was read from (provenance, cited)." .
 
 # =============================================================================
+# RuleScope — how a requirement is narrowed at check time (CC-8a, the ontology routing tag). content = narrow by
+# semantic similarity to the claim; context = apply to any claim in an endorsement (always included, e.g. §255.5).
+# =============================================================================
+cmp:RuleScope a owl:Class ; skos:prefLabel "Rule scope" ; owl:oneOf ( cmp:content cmp:context ) .
+cmp:content a cmp:RuleScope ; skos:prefLabel "content rule (substantiation / claim-specific)" .
+cmp:context a cmp:RuleScope ; skos:prefLabel "context rule (disclosure; applies regardless of claim content)" .
+cmp:ruleScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:Requirement ; rdfs:range cmp:RuleScope .
+
+# =============================================================================
 # Verdict — the judgment output (CC-4). Closed vocab; every 'violation' is human-gated before it leaves.
 # =============================================================================
 cmp:Verdict a owl:Class ; skos:prefLabel "Compliance verdict" ;

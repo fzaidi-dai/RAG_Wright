@@ -122,3 +122,73 @@ def test_registers_as_a_subgraph():
     register_compliance_check(reg)
     entry = reg.get("compliance_check")
     assert entry.kind == "subgraph" and entry.contract is ComplianceReport
+
+
+# --- CC-8: semantic narrowing (content top-k + always-include context + dedup) -------------------
+
+from rag_wright.contracts.compliance import RuleScope  # noqa: E402
+from rag_wright.subgraphs.compliance_check import build_select_fn, rule_scope_of  # noqa: E402
+
+
+def test_rule_scope_context_for_disclosure_else_content():
+    # §255.5 (material connections / disclosure) applies regardless of claim content -> CONTEXT (always-include);
+    # §255.1 (objective claims need substantiation) is content-specific -> CONTENT (narrow by similarity)
+    assert rule_scope_of(_req(section="255.5")) is RuleScope.CONTEXT
+    assert rule_scope_of(_req(section="255.1")) is RuleScope.CONTENT
+
+
+class _FakeEmbedder:
+    """Maps a text to a fixed vector by the first keyword it contains -> controllable cosine ranking."""
+
+    def __init__(self, table):
+        self._table = table
+
+    def encode_dense(self, text):
+        for key, vec in self._table.items():
+            if key.lower() in text.lower():
+                return vec
+        return [0.0, 0.0, 0.0]
+
+
+def test_select_keeps_context_and_top_k_content_dropping_irrelevant():
+    claim = _claim(text="reduce your risk of a heart attack", ctype=ClaimType.HEALTH)
+    health = _req(section="255.1", scope=(), text="Health claims need competent and reliable scientific evidence.")
+    kids = _req(section="255.1", scope=(), text="Endorsements to children warrant special care.")
+    disclosure = _req(section="255.5", scope=(), text="A material connection must be disclosed.")
+    emb = _FakeEmbedder({"heart attack": [1, 0, 0], "scientific evidence": [1, 0, 0],
+                         "children": [0, 1, 0], "material connection": [0, 0, 1]})
+    select = build_select_fn(emb, [health, kids, disclosure], k=1)
+
+    picked = {r.requirement_id for r in select(claim, [health, kids, disclosure])}
+    assert health.requirement_id in picked      # top-1 content (cosine 1.0 with the claim)
+    assert disclosure.requirement_id in picked   # CONTEXT rule always included (not by similarity)
+    assert kids.requirement_id not in picked     # irrelevant content dropped by top-k (the noise cut)
+
+
+def test_select_dedupes_near_identical_rules():
+    claim = _claim(text="lose weight fast", ctype=ClaimType.EFFICACY)
+    a = _req(section="255.1", scope=(), text="Weight-loss claims must be substantiated (variant A).")
+    b = _req(section="255.1", scope=(), text="Weight-loss claims must be substantiated (variant B).")
+    emb = _FakeEmbedder({"lose weight": [1, 0, 0], "weight-loss": [1, 0, 0]})  # a and b get the SAME vector
+    select = build_select_fn(emb, [a, b], k=5, dedup_threshold=0.99)
+    picked = select(claim, [a, b])
+    assert len(picked) == 1  # near-identical rules collapse to one
+
+
+def test_compliance_check_uses_select_fn_when_provided():
+    # the subgraph routes through select_fn (narrowing) instead of judging all applicable pairs
+    claim = _claim(ctype=ClaimType.ENDORSEMENT)
+    r1, r2 = _req(text="rule one"), _req(text="rule two")
+    seen = []
+
+    def select(c, reqs):
+        return [r1]  # narrow to just r1
+
+    def judge(c, r):
+        seen.append(r.requirement_text)
+        return JudgeVerdict(verdict="compliant", rationale="", confidence=1.0)
+
+    graph = build_compliance_check(claims_fn=lambda t, s: [claim], requirements_fn=lambda: [r1, r2],
+                                   judge_fn=judge, select_fn=select)
+    graph.invoke({"subject_text": "x", "source_doc": "ad"})
+    assert seen == ["rule one"]  # only the narrowed requirement was judged
