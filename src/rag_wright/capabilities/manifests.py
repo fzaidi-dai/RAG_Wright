@@ -821,22 +821,39 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     # --- Compliance module rung 1 (roadmap §13): the ad-compliance engine ---
     CapabilityManifest(
         slug="requirement_extraction",
-        kind="function",
-        display_name="Requirement extraction (regulatory text -> deontic rules)",
+        kind="subgraph",  # extract(docling-graph, multi-call auto/dense) -> adapt; a workflow, not a single act
+        display_name="Requirement extraction (regulatory section -> deontic rules; subgraph)",
         description=(
-            "Extract the deontic rules a regulatory section states into typed Requirement nodes (CC-2, "
-            "compliance §13.1): reuses the docling-graph extraction seam with a Requirement template + the "
-            "model seam (Granite, ADR-0039), then adapts each rule to the closed CC-1 vocab -- deontic force "
-            "(obligation/prohibition/permission), bound actor, applicability_scope (claim_type constraints), "
-            "and the requirement text, each cited to its section. An off-vocab deontic downgrades to AMBIGUOUS; "
-            "an off-vocab claim_type is dropped, never fabricated. The regulatory side of the compliance check."
+            "Extract the deontic rules a regulatory section states into typed Requirement nodes as a hardened "
+            "LangGraph subgraph (CC-2, compliance §13.1, SKILL-SPLIT): extract (the docling-graph extraction act "
+            "using the skills/requirement_extraction/ template, extraction_contract='auto' -> dense/multi-call "
+            "on long sections) -> adapt (requirement_adaptation). A subgraph because the extraction is "
+            "multi-LLM-call and the extract->adapt chaining is deterministic. A transient extraction failure "
+            "retries then dead-letters the section. The regulatory side of the compliance module's ingestion."
         ),
         representative_queries=(
             "extract the rules a regulation section states as typed requirements",
             "turn FTC endorsement-guide text into cited deontic requirement nodes",
             "parse a regulatory corpus into obligation/prohibition/permission rules",
         ),
-        tags=("compliance", "extraction", "deontic", "regulatory", "citation"),
+        tags=("compliance", "extraction", "deontic", "regulatory", "subgraph"),
+    ),
+    CapabilityManifest(
+        slug="requirement_adaptation",
+        kind="function",
+        display_name="Requirement adaptation (extracted section -> validated Requirements)",
+        description=(
+            "DETERMINISTIC adaptation (CC-2, SKILL-SPLIT): map the requirement_extraction subgraph's raw "
+            "ExtractedRegulationSection to validated CC-1 Requirement nodes -- deontic force coerced to the "
+            "closed vocab (off-vocab -> AMBIGUOUS, kept not dropped), applicability_scope from the claim_types "
+            "(off-vocab dropped), citation = the section, content-hash requirement_id. No model."
+        ),
+        representative_queries=(
+            "adapt an extracted regulation section into validated requirements",
+            "coerce extracted deontic force to the closed vocab with a conservative fallback",
+            "attach citations and ids to extracted regulatory rules",
+        ),
+        tags=("compliance", "adaptation", "deontic", "deterministic"),
     ),
     CapabilityManifest(
         slug="claim_extraction",

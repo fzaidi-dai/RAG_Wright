@@ -1,0 +1,99 @@
+"""CC-2 (compliance §13), SKILL-SPLIT: the `requirement_extraction` SUBGRAPH.
+
+A hardened LangGraph on scaffold.py: START -> extract[retry] -> adapt -> END. `requirement_extraction` is a
+subgraph (not a single-shot skill) because its docling-graph `auto/dense` extraction is multi-LLM-call and the
+extract -> adapt chaining is a deterministic workflow. Hermetic: extract/adapt DI'd, no LLM.
+
+Covers: the wired extract->adapt happy path, dead-letter on extraction exhaustion, the None-extraction ->
+empty-list path, `run_requirement_extraction` invoke convenience, and registration as a subgraph.
+"""
+
+from __future__ import annotations
+
+from rag_wright.capabilities.requirement_extraction import (
+    ExtractedRegulationSection,
+    ExtractedRequirement,
+)
+from rag_wright.capabilities.registry import CapabilityRegistry
+from rag_wright.contracts.compliance import DeonticType, Requirement
+from rag_wright.subgraphs.requirement_extraction import (
+    build_requirement_extraction,
+    register_requirement_extraction,
+    run_requirement_extraction,
+)
+
+
+def _adapt(extracted, source, section):
+    # a trivial deterministic adapter stand-in: turn each raw string into a Requirement
+    return [
+        Requirement(
+            requirement_id=Requirement.make_id(source, section, text),
+            source=source, citation=f"§ {section}", deontic_type=DeonticType.OBLIGATION,
+            actor="advertiser", applicability_scope=[], requirement_text=text,
+        )
+        for text in extracted
+    ]
+
+
+# --- the subgraph: extract -> adapt, hardened ----------------------------------------------------
+
+
+def test_extract_then_adapt_happy_path():
+    captured = {}
+
+    def extract_fn(text):
+        captured["text"] = text
+        return ["Disclose connections."]  # raw extraction stand-in
+
+    graph = build_requirement_extraction(extract_fn, _adapt)
+    out = graph.invoke({"text": "…material connection…", "source": "FTC 16 CFR 255", "section": "255.5"})
+    assert captured["text"] == "…material connection…"
+    assert out.get("dead_letter") is None
+    reqs = out["requirements"]
+    assert [r.requirement_text for r in reqs] == ["Disclose connections."]
+    assert reqs[0].citation == "§ 255.5"
+
+
+def test_extract_failure_dead_letters_and_yields_empty():
+    def boom(text):
+        raise RuntimeError("granite down")
+
+    graph = build_requirement_extraction(boom, _adapt)
+    out = graph.invoke({"text": "x", "source": "reg", "section": "255.1"})
+    assert out.get("dead_letter") and out["dead_letter"]["stage"] == "extract"
+    assert out["requirements"] == []  # adapt handles the dead-letter case -> []
+
+
+def test_none_extraction_yields_empty_without_dead_letter():
+    graph = build_requirement_extraction(lambda text: None, _adapt)
+    out = graph.invoke({"text": "x", "source": "reg", "section": "255.0"})
+    assert out.get("dead_letter") is None
+    assert out["requirements"] == []  # None extraction -> [] (not an error)
+
+
+# --- run_requirement_extraction: single-section invoke convenience (used by CC-5) ----------------
+
+
+def test_run_invokes_the_subgraph_for_one_section():
+    # extract_override is a stub returning the raw ExtractedRegulationSection; adapt = the real
+    # to_requirements FUNCTION, so this exercises the real deterministic adaptation end to end.
+    stub = ExtractedRegulationSection(
+        section="255.5",
+        requirements=[ExtractedRequirement(requirement_text="Disclose connections.", deontic_type="obligation")],
+    )
+    reqs = run_requirement_extraction(
+        "…material connection…", model=None, source="FTC 16 CFR 255", section="255.5",
+        extract_override=lambda text: stub)
+    assert [r.requirement_text for r in reqs] == ["Disclose connections."]
+    assert reqs[0].deontic_type is DeonticType.OBLIGATION
+    assert reqs[0].citation == "§ 255.5"
+
+
+# --- registration: requirement_extraction is a SUBGRAPH ------------------------------------------
+
+
+def test_registers_as_a_subgraph():
+    reg = CapabilityRegistry()
+    register_requirement_extraction(reg)
+    entry = reg.get("requirement_extraction")
+    assert entry.kind == "subgraph" and entry.contract is Requirement

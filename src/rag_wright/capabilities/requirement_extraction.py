@@ -1,59 +1,37 @@
-"""CC-2 (compliance §13 C-1/C-2): the `requirement_extraction` capability.
+"""CC-2 (compliance §13), SKILL-SPLIT: the extraction ACT + the adaptation FUNCTION for `requirement_extraction`.
 
-Regulatory section text -> `Requirement[]` (the CC-1 contract). Reuses the docling-graph extraction seam
-(`dg_extraction.extract_parties`, generic over `template`) with a new Requirement template, then adapts each
-extracted rule to a validated `Requirement`. Same reliability fixes as GP-1B (structured_output=False +
-max_tokens cap + a temp-file source), same model seam (Granite via `RAG_SERVING`; ADR-0039). One section in ->
-its rules out; the CC-5 ingestion subgraph drives it per FTC section (citation = the section).
+Per the capability-architecture rubric, `requirement_extraction` is a SUBGRAPH (its `auto/dense` extraction is
+MULTI-LLM-call; the extract -> adapt chaining is the deterministic workflow). This module holds the subgraph's
+two pieces:
 
-The docling-graph TEMPLATE is what the LLM fills (loose strings, robust to model output); the ADAPTER maps it
-to the closed CC-1 vocab -- an off-vocab deontic downgrades the rule to AMBIGUOUS, an off-vocab claim_type is
-dropped (never fabricated). Provenance (citation) + confidence on every requirement (FR-S.4 / FR-Q.6).
+- **the extraction ACT** (`extract_regulation_section`) -- the docling-graph schema-driven extraction using the
+  co-located skill asset `skills/requirement_extraction/template.py` (ExtractedRegulationSection). Runs `"auto"`
+  (dense on long sections, skeleton-then-fill). The subgraph's extract node.
+- **`requirement_adaptation` (function)** -- `to_requirements`: DETERMINISTIC, no model. Maps the raw extraction
+  to validated `Requirement`s (deontic vocab coercion -> AMBIGUOUS; off-vocab claim_type dropped; blank skipped;
+  citation = the section; content-hash id). The subgraph's adapt node.
+
+The subgraph itself (extract -> adapt, hardened) is `subgraphs/requirement_extraction.py`. The template lives
+with the skill (an Agent-Skill asset), re-exported here for consumers/tests.
 """
 
 from __future__ import annotations
 
 from typing import Any, Callable
 
-from pydantic import BaseModel, ConfigDict, Field
-
-from rag_wright.capabilities.dg_extraction import edge, extract_parties
+from rag_wright.capabilities.dg_extraction import extract_parties
 from rag_wright.contracts.compliance import ClaimType, Constraint, DeonticType, Requirement
 from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.skills.requirement_extraction.template import (  # the skill's schema asset
+    ExtractedRegulationSection,
+    ExtractedRequirement,
+)
+
+__all__ = ["ExtractedRegulationSection", "ExtractedRequirement", "extract_regulation_section",
+           "to_requirements", "register_requirement_adaptation"]
 
 _CLAIM_TYPES = {c.value for c in ClaimType}
 _DEONTIC = {d.value for d in DeonticType}
-
-
-class ExtractedRequirement(BaseModel):
-    """One rule the LLM reads out of a regulatory section (a docling-graph child entity). Loose strings by
-    design (robust to model output); the adapter maps them to the closed CC-1 vocab."""
-
-    model_config = ConfigDict(graph_id_fields=["requirement_text"], extra="ignore", populate_by_name=True)
-
-    requirement_text: str = Field(
-        description="One rule the section states, paraphrased in a single sentence: what must, must not, or may be done")
-    deontic_type: str = Field(
-        default="obligation",
-        description="obligation (must / required), prohibition (must not / may not), or permission (may / allowed)")
-    actor: str = Field(default="", description="Who the rule binds, e.g. advertiser, endorser, expert")
-    claim_types: list[str] = Field(
-        default_factory=list,
-        description=("Which advertising claim types this rule applies to, chosen from: efficacy, comparative, "
-                     "pricing, health, environmental, endorsement, performance, guarantee"))
-    evidence_standard: str = Field(
-        default="", description="The substantiation the rule requires, if any (e.g. competent and reliable scientific evidence)")
-
-
-class ExtractedRegulationSection(BaseModel):
-    """A regulatory section and the distinct rules it states (the docling-graph root entity)."""
-
-    model_config = ConfigDict(graph_id_fields=["section"], extra="ignore", populate_by_name=True)
-
-    section: str = Field(description="The section number, e.g. 255.5")
-    requirements: list[ExtractedRequirement] = edge(
-        "STATES_REQUIREMENT", default_factory=list,
-        description="The distinct rules stated in this section (one entry per rule)")
 
 
 def _coerce_deontic(raw: str) -> tuple[DeonticType, bool]:
@@ -65,9 +43,25 @@ def _coerce_deontic(raw: str) -> tuple[DeonticType, bool]:
     return DeonticType.OBLIGATION, True
 
 
+ExtractFn = Callable[..., Any]  # (text, model, *, template, **kw) -> ExtractedRegulationSection | None
+
+
+def extract_regulation_section(
+    text: str, *, model: Any, extract_fn: ExtractFn = extract_parties,
+    max_tokens: int = 2000, preamble_chars: int = 24_000, extraction_contract: str = "auto",
+) -> ExtractedRegulationSection | None:
+    """The extraction ACT (the requirement_extraction skill, docling-graph runtime): fill the skill's
+    `template.py` schema from a § section's text. `extraction_contract="auto"` -> dense (multi-call) on long
+    sections so rules are not silently self-rationed. `extract_fn` is injected for hermetic tests."""
+    return extract_fn(text, model, template=ExtractedRegulationSection,
+                      max_tokens=max_tokens, preamble_chars=preamble_chars,
+                      extraction_contract=extraction_contract)
+
+
 def to_requirements(extracted: ExtractedRegulationSection, *, source: str, section: str) -> list[Requirement]:
-    """Adapt an extracted section to validated `Requirement`s. Off-vocab deontic -> AMBIGUOUS; off-vocab
-    claim_type dropped; blank rule text skipped. Citation = the section; id = the content-hash scheme."""
+    """`requirement_adaptation` (FUNCTION -- deterministic, no model): adapt an extracted section to validated
+    `Requirement`s. Off-vocab deontic -> AMBIGUOUS; off-vocab claim_type dropped; blank rule text skipped.
+    Citation = the section; id = the content-hash scheme."""
     out: list[Requirement] = []
     for item in extracted.requirements:
         text = (item.requirement_text or "").strip()
@@ -90,35 +84,12 @@ def to_requirements(extracted: ExtractedRegulationSection, *, source: str, secti
     return out
 
 
-ExtractFn = Callable[..., Any]  # (text, model, *, template, **kw) -> ExtractedRegulationSection | None
-
-
-def requirement_extraction(
-    text: str, *, model: Any, source: str, section: str,
-    extract_fn: ExtractFn = extract_parties, max_tokens: int = 2000, preamble_chars: int = 24_000,
-    extraction_contract: str = "auto",
-) -> list[Requirement]:
-    """Extract the `Requirement`s a regulatory section states. `extract_fn` is the docling-graph seam
-    (default `extract_parties`, generic over template); injected in tests. Returns [] if extraction yields
-    nothing. `preamble_chars` is wide (a full section, not just a contract preamble).
-
-    `extraction_contract` defaults to "auto" (NOT the seam's contract-tuned "direct"): a regulatory section
-    spreads its rules across the whole text, so a single "direct" call silently self-rations and loses most of
-    them (measured: §255.5 -> 6 direct vs 31 dense). "auto" picks dense on long sections, direct on short ones.
-    See [[docling-graph-extraction-contract]]."""
-    extracted = extract_fn(text, model, template=ExtractedRegulationSection,
-                           max_tokens=max_tokens, preamble_chars=preamble_chars,
-                           extraction_contract=extraction_contract)
-    if extracted is None:
-        return []
-    return to_requirements(extracted, source=source, section=section)
-
-
-def register_requirement_extraction(registry) -> None:
-    """Register `requirement_extraction` (function; CC-2, compliance §13). Contract = `Requirement`."""
+def register_requirement_adaptation(registry) -> None:
+    """Register `requirement_adaptation` (FUNCTION -- deterministic): the raw ExtractedRegulationSection ->
+    validated `Requirement[]` (deontic coercion, off-vocab handling, citation, content-hash id). No model."""
     registry.register(
-        "requirement_extraction",
+        "requirement_adaptation",
         contract=Requirement,
         kind="function",
-        display_name="Requirement extraction (regulatory text -> deontic rules)",
+        display_name="Requirement adaptation (extracted section -> validated Requirements)",
     )

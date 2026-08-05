@@ -115,12 +115,12 @@ def build_compliance_ingest(
 
 
 def production_compliance_ingestion(store: Any, *, model: Any, extract_override: Optional[ExtractReqFn] = None):
-    """Wire the real capabilities: extract = requirement_extraction (CC-2, through the model seam -- Granite),
-    write = `store.write_requirements`. `extract_override` injects a stub for hermetic driver tests."""
-    from rag_wright.capabilities.requirement_extraction import requirement_extraction
+    """Wire the real capabilities: extract = the requirement_extraction SUBGRAPH (CC-2, extract->adapt through
+    the model seam -- Granite), write = `store.write_requirements`. `extract_override` injects a stub for tests."""
+    from rag_wright.subgraphs.requirement_extraction import run_requirement_extraction
 
     def _extract(doc: SourceDocument) -> list:
-        return requirement_extraction(
+        return run_requirement_extraction(
             doc.text, model=model, source=doc.metadata["source"], section=doc.metadata["section"])
 
     return build_compliance_ingest(extract_override or _extract, lambda doc, reqs: store.write_requirements(reqs))

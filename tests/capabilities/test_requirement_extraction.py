@@ -1,9 +1,14 @@
-"""CC-2 (compliance §13 C-1/C-2): the `requirement_extraction` capability.
+"""CC-2 (compliance §13 C-1/C-2), SKILL-SPLIT: the extraction ACT + the `requirement_adaptation` FUNCTION.
 
-Regulatory section text -> `Requirement[]` via the docling-graph seam (reused `extract_parties` with a new
-Requirement template) + an adapter to the CC-1 contract. Hermetic: the docling-graph run is stubbed
-(`extract_fn`), so no LLM. Deontic force + applicability (claim_type constraints) are mapped to the closed
-vocab; an off-vocab deontic downgrades to AMBIGUOUS; an off-vocab claim_type is dropped.
+`requirement_extraction` is a SUBGRAPH (its `auto/dense` extraction is multi-LLM-call; extract -> adapt is a
+deterministic workflow) -- the subgraph itself is tested in `tests/subgraphs/test_requirement_extraction.py`.
+This file covers the subgraph's two co-located pieces that live in `capabilities/requirement_extraction.py`:
+
+- the extraction ACT (`extract_regulation_section`) -- the docling-graph seam is stubbed (`extract_fn`), so no LLM;
+- the `requirement_adaptation` FUNCTION (`to_requirements`) -- deterministic vocab coercion / off-vocab handling.
+
+Deontic force + applicability (claim_type constraints) are mapped to the closed vocab; an off-vocab deontic
+downgrades to AMBIGUOUS; an off-vocab claim_type is dropped.
 """
 
 from __future__ import annotations
@@ -12,8 +17,8 @@ from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.requirement_extraction import (
     ExtractedRegulationSection,
     ExtractedRequirement,
-    register_requirement_extraction,
-    requirement_extraction,
+    extract_regulation_section,
+    register_requirement_adaptation,
     to_requirements,
 )
 from rag_wright.contracts.compliance import DeonticType, Requirement
@@ -24,7 +29,7 @@ def _section(*reqs: ExtractedRequirement, section: str = "255.5") -> ExtractedRe
     return ExtractedRegulationSection(section=section, requirements=list(reqs))
 
 
-# --- adapter: extracted template -> Requirement contract -----------------------------------------
+# --- requirement_adaptation FUNCTION: extracted template -> Requirement contract ------------------
 
 
 def test_adapter_maps_fields_id_citation_and_applicability():
@@ -77,10 +82,10 @@ def test_missing_actor_defaults_unspecified():
     assert reqs[0].actor == "unspecified"
 
 
-# --- the capability: text -> Requirement[] (docling-graph stubbed) -------------------------------
+# --- the extraction ACT: fills the skill template via the docling-graph seam (stubbed) ------------
 
 
-def test_extraction_uses_the_seam_and_returns_requirements():
+def test_extraction_act_uses_the_seam_with_the_template_and_auto_contract():
     captured = {}
 
     def fake_extract(text, model, *, template, **kw):
@@ -89,26 +94,22 @@ def test_extraction_uses_the_seam_and_returns_requirements():
         captured["extraction_contract"] = kw.get("extraction_contract")
         return _section(ExtractedRequirement(requirement_text="Disclose connections.", deontic_type="obligation"))
 
-    reqs = requirement_extraction(
-        "…material connection…", model=None, source="FTC 16 CFR 255", section="255.5", extract_fn=fake_extract)
+    extracted = extract_regulation_section("…material connection…", model=None, extract_fn=fake_extract)
     assert captured["template"] is ExtractedRegulationSection
     # long regulatory sections must NOT use the seam's contract-tuned "direct" (it silently under-extracts)
     assert captured["extraction_contract"] == "auto"
-    assert [r.requirement_text for r in reqs] == ["Disclose connections."]
-    assert reqs[0].citation == "§ 255.5"
+    assert [r.requirement_text for r in extracted.requirements] == ["Disclose connections."]
 
 
-def test_extraction_none_yields_empty_list():
-    reqs = requirement_extraction("x", model=None, source="r", section="255.0",
-                                  extract_fn=lambda *a, **k: None)
-    assert reqs == []
+def test_extraction_act_passes_none_through():
+    assert extract_regulation_section("x", model=None, extract_fn=lambda *a, **k: None) is None
 
 
-# --- registration (twofold: slug + this fn; manifest in manifests.py) ----------------------------
+# --- registration: requirement_adaptation is a FUNCTION (deterministic) ---------------------------
 
 
-def test_registers_as_a_function():
+def test_registers_requirement_adaptation_as_a_function():
     reg = CapabilityRegistry()
-    register_requirement_extraction(reg)
-    entry = reg.get("requirement_extraction")
+    register_requirement_adaptation(reg)
+    entry = reg.get("requirement_adaptation")
     assert entry.kind == "function" and entry.contract is Requirement
