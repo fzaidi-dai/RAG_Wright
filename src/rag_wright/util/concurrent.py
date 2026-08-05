@@ -13,6 +13,7 @@ calls are in flight at once, bounded by `max_concurrency`. Results come back in 
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -70,14 +71,55 @@ async def map_concurrent_async(
     *,
     max_concurrency: int = DEFAULT_MAX_CONCURRENCY,
     progress: Optional[Progress] = None,
+    timeout_s: Optional[float] = None,
+    timeout_retries: int = 1,
 ) -> list[R]:
     """Run sync `fn` over each item concurrently in a worker thread, bounded by a semaphore; results in
-    input order. Increments `progress` as each call completes (for the flushed progress file)."""
+    input order. Increments `progress` as each call completes (for the flushed progress file).
+
+    `timeout_s` (LLM-CALL-TIMEOUT) bounds each call with a HARD wall-clock deadline enforced from the event
+    loop (`asyncio.wait_for`), so a task blocked in a stalled network read (a hung LLM response -- the CC-8b
+    finding) never hangs the whole batch. On the deadline the call is retried up to `timeout_retries` times (a
+    fresh call/connection often clears a stall); if it still exceeds the deadline the item's result is `None`
+    (the caller treats it as a failure -- e.g. a conservative needs_review). The stuck worker thread is
+    abandoned, not killed (Python cannot kill a thread), but the batch proceeds. Default off (`None`)."""
     semaphore = asyncio.Semaphore(max_concurrency)
+    loop = asyncio.get_running_loop()
+
+    def _post(future: asyncio.Future, setter: Callable, value: object) -> None:
+        try:
+            loop.call_soon_threadsafe(setter, future, value)
+        except RuntimeError:
+            pass  # the loop already closed (we timed out and moved on) -> discard the late result
+
+    async def _run(item: T) -> R:
+        if timeout_s is None:
+            return await asyncio.to_thread(fn, item)  # unchanged default path (no wall-clock bound)
+        # timeout path: run in a DAEMON thread so a stalled call (a hung LLM read) never blocks the batch's
+        # return OR interpreter exit (asyncio.run's shutdown joins the DEFAULT executor's threads, so a leaked
+        # to_thread would re-block us -- a daemon thread is not joined). asyncio.wait_for bounds the wait.
+        for attempt in range(timeout_retries + 1):
+            future: asyncio.Future = loop.create_future()
+
+            def _work(fut: asyncio.Future = future) -> None:
+                try:
+                    result = fn(item)
+                except BaseException as exc:  # noqa: BLE001 - surface any error like the default path
+                    _post(fut, lambda f, e: f.done() or f.set_exception(e), exc)
+                else:
+                    _post(fut, lambda f, r: f.done() or f.set_result(r), result)
+
+            threading.Thread(target=_work, daemon=True).start()
+            try:
+                return await asyncio.wait_for(future, timeout_s)
+            except (asyncio.TimeoutError, TimeoutError):
+                if attempt >= timeout_retries:
+                    return None  # give up -> conservative failure; the daemon thread is abandoned, never joined
+        return None
 
     async def _one(item: T) -> R:
         async with semaphore:  # backpressure
-            result = await asyncio.to_thread(fn, item)
+            result = await _run(item)
         if progress is not None:
             progress.tick()  # serialized on the event loop -> no lock
         return result
@@ -94,13 +136,18 @@ def map_concurrent(
     label: str = "",
     every: int = 1,
     echo: bool = False,
+    timeout_s: Optional[float] = None,
+    timeout_retries: int = 1,
 ) -> list[R]:
     """Synchronous convenience for callers not already in an event loop: bounded-concurrent map with a
-    flushed progress file and/or a stdout echo (`done/total`, rate, ETA), so progress is visible live."""
+    flushed progress file and/or a stdout echo (`done/total`, rate, ETA), so progress is visible live.
+    `timeout_s` bounds each call with a hard wall-clock deadline (a stalled call -> `None`, never a hang)."""
     items = list(items)
     progress = (
         Progress(len(items), path=progress_path, label=label, every=every, echo=echo)
         if (progress_path or echo)
         else None
     )
-    return asyncio.run(map_concurrent_async(items, fn, max_concurrency=max_concurrency, progress=progress))
+    return asyncio.run(map_concurrent_async(
+        items, fn, max_concurrency=max_concurrency, progress=progress,
+        timeout_s=timeout_s, timeout_retries=timeout_retries))

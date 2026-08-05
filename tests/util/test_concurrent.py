@@ -44,3 +44,24 @@ def test_progress_echoes_x_over_n_to_stdout(capsys):
     map_concurrent(range(4), lambda x: x, max_concurrency=2, label="[job]", echo=True, every=1)
     out = capsys.readouterr().out
     assert "[job] 4/4 (100%)" in out and "[job] 1/4" in out
+
+
+def test_timeout_bounds_a_stalled_call_and_does_not_hang():
+    import time as _t
+    from rag_wright.util.concurrent import map_concurrent
+
+    def maybe_slow(x):
+        if x == 1:
+            _t.sleep(1.5)  # stalls past the 0.2s deadline (simulates a hung LLM read)
+        return x * 10
+
+    start = _t.perf_counter()
+    out = map_concurrent([0, 1, 2], maybe_slow, max_concurrency=3, timeout_s=0.2, timeout_retries=0)
+    elapsed = _t.perf_counter() - start
+    assert elapsed < 1.2  # bounded: did NOT wait for the 1.5s task
+    assert out == [0, None, 20]  # the stalled task -> None, order preserved, others unaffected
+
+
+def test_no_timeout_preserves_default_behavior():
+    from rag_wright.util.concurrent import map_concurrent
+    assert map_concurrent([1, 2, 3], lambda x: x + 1) == [2, 3, 4]

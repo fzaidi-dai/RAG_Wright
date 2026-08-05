@@ -126,3 +126,18 @@ def test_registers_as_a_function():
     register_compliance_judgment(reg)
     entry = reg.get("compliance_judgment")
     assert entry.kind == "function" and entry.contract is ComplianceFinding
+
+
+def test_judge_pairs_timeout_becomes_conservative_needs_review(monkeypatch):
+    # a judge that hangs past the deadline -> map_concurrent times out -> a needs_review finding (never a hang)
+    import time
+    from rag_wright.contracts.compliance import Verdict
+
+    def slow_judge(claim, req):
+        time.sleep(1.5)
+        return JudgeVerdict(verdict="compliant", rationale="", confidence=1.0)
+
+    findings = judge_pairs([(_claim(), _req())], judge_fn=slow_judge, timeout_s=0.2)
+    assert len(findings) == 1
+    assert findings[0].verdict is Verdict.NEEDS_REVIEW and findings[0].needs_human_review is True
+    assert findings[0].claim_id and findings[0].requirement_id  # citations preserved from the inputs

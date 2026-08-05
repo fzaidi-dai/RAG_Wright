@@ -19,6 +19,7 @@ on this seam; the core here is the single Granite judge + the conservative mappi
 
 from __future__ import annotations
 
+import os
 from typing import Callable, Optional
 
 from pydantic import BaseModel
@@ -104,15 +105,28 @@ def compliance_judgment(claim: Claim, requirement: Requirement, *, judge_fn: Jud
     )
 
 
+_JUDGE_TIMEOUT_S = float(os.environ.get("RAG_JUDGE_TIMEOUT_S", "90"))  # per-pair wall-clock bound (LLM-CALL-TIMEOUT)
+
+
 def judge_pairs(
-    pairs: list[tuple[Claim, Requirement]], *, judge_fn: JudgeFn, max_concurrency: int = 8
+    pairs: list[tuple[Claim, Requirement]], *, judge_fn: JudgeFn, max_concurrency: int = 8,
+    timeout_s: float | None = _JUDGE_TIMEOUT_S,
 ) -> list[ComplianceFinding]:
     """Judge many `(claim, requirement)` pairs concurrently (async + semaphore, per the parallel-LLM rule).
-    Order is preserved. CC-6 drives this over a subject doc's claims x their applicable requirements."""
-    return map_concurrent(
+    Order is preserved. CC-6 drives this over a subject doc's claims x their applicable requirements.
+
+    `timeout_s` (LLM-CALL-TIMEOUT) bounds each judgment with a hard wall-clock deadline so a stalled provider
+    response never hangs the batch; a timed-out pair (map_concurrent -> None) becomes a conservative
+    needs_review finding (the same conservative default as a judge that could not rule)."""
+    results = map_concurrent(
         pairs, lambda pair: compliance_judgment(pair[0], pair[1], judge_fn=judge_fn),
-        max_concurrency=max_concurrency,
+        max_concurrency=max_concurrency, timeout_s=timeout_s,
     )
+    return [
+        result if result is not None
+        else compliance_judgment(claim, requirement, judge_fn=lambda _c, _r: None)  # timed out -> needs_review
+        for (claim, requirement), result in zip(pairs, results)
+    ]
 
 
 def register_compliance_judgment(registry) -> None:
