@@ -108,7 +108,8 @@ def test_vision_to_text_calls_the_vision_model():
     assert vision.seen == {"len": len(b"\x89PNGfake"), "media_type": "image/png"}
 
 
-def test_vision_to_text_registers_under_its_own_slug():
+def test_vision_to_text_registers_as_an_agent_skill():
+    # SKILL-SPLIT: a single grounded vision-language act (like generation), not a function
     from rag_wright.capabilities.vision_to_text import VisionTranscription, register_vision_to_text
 
     registry = CapabilityRegistry()
@@ -116,7 +117,15 @@ def test_vision_to_text_registers_under_its_own_slug():
     reg = registry.get("vision_to_text")
     assert reg.name == "vision_to_text"  # split from generation (ADR-0014)
     assert reg.contract is VisionTranscription
-    assert reg.kind == "function"
+    assert reg.kind == "agent_skill"
+
+
+def test_transcription_method_loads_the_skill_body_without_frontmatter():
+    from rag_wright.capabilities.vision_to_text import transcription_method
+
+    method = transcription_method()
+    assert method and not method.startswith("---")  # YAML frontmatter stripped
+    assert "reading order" in method.lower()  # the method is authored in the skill
 
 
 # --- live Gemma (opt-in): real generation + real image transcription -----------------------------

@@ -21,8 +21,8 @@ from dotenv import load_dotenv
 
 def main() -> None:
     load_dotenv()
+    from rag_wright.corpus.cuad_ingestion import run_cuad_ingestion
     from rag_wright.store.arcadedb import CONTRACT_TYPE, PARTY_TO_EDGE_TYPE, SPAN_TYPE, ArcadeDBStore
-    from rag_wright.subgraphs.contract_ingestion_pipeline import run_cuad_ingestion
 
     db = os.environ.get("FULL_DB", "ragwright_cuad_full")
     cache_dir = Path("data/cache/cuad_full")  # persistent: a re-run reuses everything already extracted

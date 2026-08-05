@@ -253,32 +253,6 @@ def run_corpus_ingestion(
         party_links=party_links, per_document=per_document)
 
 
-class CuadAdapter:
-    """The REFERENCE `CorpusAdapter` (ADR-locked design): CUAD -> `SourceDocument`s. It is the ONLY CUAD-specific
-    code in the ingest path -- it parses the corpus (CUAD ships text in JSON, so no docling parse), assigns the
-    ONE canonical `source_doc_id` (HYG-1), and passes the raw title as metadata. Adding another corpus means
-    writing a sibling adapter (e.g. `AcordAdapter` carrying pre-segmented spans in `metadata`); the pipeline and
-    driver do not change. `run_corpus_ingestion(CuadAdapter(path), ingest_graph, link_fn=...)` ingests it."""
-
-    def __init__(self, cuad_path: Any, *, limit: int = 0) -> None:
-        self._path = cuad_path
-        self._limit = limit
-
-    def documents(self) -> Iterable[SourceDocument]:
-        from rag_wright.contracts.identifiers import canonical_source_doc_id
-        from rag_wright.spans.cuad_labels import parse_cuad
-
-        contracts = list(parse_cuad(self._path))
-        if self._limit:
-            contracts = contracts[: self._limit]
-        for contract in contracts:
-            yield SourceDocument(
-                source_doc_id=canonical_source_doc_id(contract.contract_id),
-                text=contract.context,
-                metadata={"raw_title": contract.contract_id},
-            )
-
-
 def _parsed_from_text(source_doc_id: str, text: str, parse_dir: Any):
     """text -> a `ParsedDocument` (one TextItem per non-blank line), cached -- so the standard `chunk()` path
     (which loads a real DoclingDocument) works from a text corpus. INGEST-REFACTOR: the shared version of the
@@ -529,41 +503,13 @@ def production_document_ingest(
         chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn)
 
 
-def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:
-    """INGEST-REFACTOR proof: ingest CUAD through the GENERIC pipeline + `CuadAdapter` -- one call, no
-    `ingest_cuad()`. Builds the EDGAR registry, ensures the schema, ingests `limit` documents, and runs
-    party_clause_linking (KG-7) once. Point `store` at a SCRATCH database for a non-destructive smoke.
-
-    INGEST-REFACTOR (a) cache reuse (the ONLY CUAD-specific wiring): the pipeline reuses GP-1B's party
-    extractions (`dg_extracted_parties.json`, ~482) via `party_seed_path`, and prior `chunk()` manifests
-    (`data/cache/cuad/chunks`, content-hash keyed so only true matches are reused) copied into the run's cache.
-    The unavoidable cost that remains is clause property extraction (the template changed since those were cached)."""
-    import json
-    from pathlib import Path
-
-    from rag_wright.capabilities.dg_extraction import build_verified_registry
-
-    store.ensure_schema()
-    seed_chunk_cache(Path(cache_dir) / "chunks", Path("data/cache/cuad/chunks"))
-    vset = json.loads(Path("data/edgar/verification_set.json").read_text(encoding="utf-8"))
-    ingest_graph = production_document_ingest(
-        store, cache_dir=cache_dir, registry=build_verified_registry(vset),
-        party_seed_path="data/cache/dg_extracted_parties.json")
-    return run_corpus_ingestion(
-        CuadAdapter(cuad_path, limit=limit), ingest_graph,
-        # PARTY-TO-MANY-TO-MANY (ADR-0036): default to the mention-cache many-to-many derivation, so a re-ingest
-        # keeps every party linked to every contract it signed instead of silently reverting to the 1-to-1 join.
-        link_fn=_corpus_party_link_fn(store, "data/cache/dg_extracted_parties.json"),
-        # RESUME-skip: a present Contract node means the whole document already landed (Contract is written last).
-        is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)
-
-
-def _corpus_party_link_fn(store: Any, mentions_path: Any) -> LinkFn:
-    """The corpus-level PARTY_TO link step (KG-7, run ONCE after ingestion). Defaults to the TRUE many-to-many
-    derivation (PARTY-TO-MANY-TO-MANY, ADR-0036): loads the GP-1B per-contract mention cache so a party links to
-    EVERY contract it signed -- the same path as `scripts/link_party_clause.py MANY=1`. Falls back to the
-    single-provenance KG-7 join only when the cache is absent. Loaded lazily (at link time) so it reflects the
-    cache on disk when the corpus finishes."""
+def corpus_party_link_fn(store: Any, mentions_path: Any) -> LinkFn:
+    """Build the corpus-level PARTY_TO link step (KG-7, run ONCE after ingestion) -- CORPUS-GENERIC. Defaults to
+    the TRUE many-to-many derivation (PARTY-TO-MANY-TO-MANY, ADR-0036): loads a per-contract party-mention cache
+    (`{source_doc_id: [party names]}`) so a party links to EVERY contract it signed -- the same path as
+    `scripts/link_party_clause.py MANY=1`. Falls back to the single-provenance KG-7 join only when the cache is
+    absent. Loaded lazily (at link time) so it reflects the cache on disk when the corpus finishes. A corpus
+    driver passes its own `mentions_path`; the flow is corpus-agnostic."""
     import json
     from pathlib import Path
 

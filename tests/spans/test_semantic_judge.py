@@ -1,7 +1,10 @@
-"""JUDGE-SEMANTIC (ADR-0040): the narrowed LLM semantic judge. Hermetic -- fake judge, no model, no network."""
+"""JUDGE-SEMANTIC (ADR-0040), SKILL-SPLIT: the narrowed semantic judge, split into the
+`extraction_semantic_judge` SKILL (the verify-or-refute reading) and the `extraction_semantic_gate` FUNCTION
+(the deterministic AMBIGUOUS downgrade). Hermetic -- fake judge, no model, no network."""
 
 from __future__ import annotations
 
+from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import (
     CLOSED_VOCAB,
@@ -15,6 +18,9 @@ from rag_wright.spans.semantic_judge import (
     SEMANTIC_DIMENSIONS,
     SemanticVerdict,
     build_semantic_judge_fn,
+    judgment_method,
+    register_extraction_semantic_gate,
+    register_extraction_semantic_judge,
     semantic_judge,
 )
 
@@ -111,3 +117,25 @@ def test_build_semantic_judge_fn_invokes_the_injected_structured_factory():
     assert captured["model_id"] == "ibm-granite/granite-4.1-8b"
     assert captured["schema"] is SemanticVerdict
     assert "mutual" in captured["prompt"] and "only Licensee shall indemnify" in captured["prompt"]
+    # the prompt is the authored SKILL method + the per-call tail (not a hardcoded string)
+    assert captured["prompt"].startswith(judgment_method())
+
+
+# --- SKILL-SPLIT: the SKILL loads, and the two capabilities register with the right kinds ---------
+
+
+def test_judgment_method_loads_the_skill_body_without_frontmatter():
+    method = judgment_method()
+    assert method and not method.startswith("---")  # YAML frontmatter stripped
+    assert "supported=true" in method  # the strictness rule is authored in the skill
+
+
+def test_registers_the_skill_and_the_gate_split():
+    # SKILL-SPLIT: the LLM verify-or-refute reading is an agent_skill; the AMBIGUOUS-downgrade gate is a function
+    reg = CapabilityRegistry()
+    register_extraction_semantic_judge(reg)
+    register_extraction_semantic_gate(reg)
+    skill = reg.get("extraction_semantic_judge")
+    assert skill.kind == "agent_skill" and skill.contract is SemanticVerdict
+    gate = reg.get("extraction_semantic_gate")
+    assert gate.kind == "function" and gate.contract is ClausePropertyRecord

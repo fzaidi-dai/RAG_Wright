@@ -72,7 +72,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "entity_resolution",  # FR-C.7 (closed-world linking to EDGAR CIK)
         "ontology_registry_derivation",  # FR-C.8 (foundation derivation: slug, but no ARD manifest)
         "generation",  # FR-C.9 (grounded/cited/abstaining answer generation)
-        "vision_to_text",  # FR-C.9 (scanned-image transcription; split from generation, ADR-0014)
+        "vision_to_text",  # agent_skill: FR-C.9 single vision-language act (SKILL.md); split from generation (ADR-0014), SKILL-SPLIT
         "fusion",  # FR-Q.4
         "chunk_read",  # FR-Q (text rehydration between fusion and synthesis; T38)
         "rlm_chunking",  # FR-I.1 (applies the RLM skill; dynamic RLM discoverer -> agent_skill)
@@ -84,7 +84,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         # --- CAP-REG-2: the built contract-KG capabilities ---
         "typed_value_normalization",  # function: canonicalization + subsumption (KG-5a)
         "extraction_grounding_judge",  # function: ADR-0028 lexical grounding gate
-        "extraction_semantic_judge",  # function: ADR-0040 Layer 3 LLM semantic gate
+        "extraction_semantic_judge",  # agent_skill: ADR-0040 Layer 3 verify-or-refute reading (SKILL.md); SKILL-SPLIT
+        "extraction_semantic_gate",  # function: applies the semantic-judge skill + AMBIGUOUS downgrade (deterministic)
         "operative_span_segmentation",  # function: chunk -> operative spans
         "intra_document_scoped_query",  # function: intra-contract scoped KG serving (Leg A)
         "clause_disambiguation",  # function: disambiguation by property (Leg A)

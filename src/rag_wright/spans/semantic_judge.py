@@ -1,26 +1,28 @@
-"""JUDGE-SEMANTIC (ADR-0040): the narrowed LLM semantic judge -- Layer 3 of the neuro-symbolic
-extraction-fidelity cascade, and the ONLY place an LLM is spent on judging.
+"""JUDGE-SEMANTIC (ADR-0040), SKILL-SPLIT: Layer 3 of the neuro-symbolic extraction-fidelity cascade, the ONLY
+place an LLM is spent on judging -- split into a SKILL + a deterministic FUNCTION.
 
-Layers 1-2 (lexical grounding + symbolic SHACL) clear the type / cardinality / deontic / textual-anchor
-errors deterministically. What remains is the irreducible core: the closed SEMANTIC dimensions
-(`SEMANTIC_DIMENSIONS`) whose value is a READING of the clause with no surface form to check --
-`mutuality=mutual` vs `unilateral`, `favorability`, `party_asymmetry`, `cap_basis`, the consent regimes,
-etc. A wrong reading (mutual asserted on a one-sided clause) is invisible to Layers 1-2 and needs a model.
+Per the capability-architecture principle (a `function` is deterministic and takes no model; a single LLM act is
+an authored `agent_skill`; a workflow is a `subgraph`), the semantic judge is two capabilities:
 
-For each surviving (non-AMBIGUOUS) assertion on a semantic dimension, a targeted verify-or-refute call asks:
-does a faithful reading of THIS clause support this property? A refuted assertion is downgraded to AMBIGUOUS,
-exactly like `reground` / `symbolic_validate` -- kept but flagged. Because Layers 1-2 already cleared the
-deterministic errors, this call class is small and focused.
+- **`extraction_semantic_judge` (agent_skill)** -- the verify-or-refute reading METHOD, authored as
+  `skills/extraction_semantic_judge/SKILL.md` and applied through the model seam (product = Granite, ADR-0039).
+  Given one property (`dimension = value`, with its meaning) and the clause text, it returns a raw
+  `SemanticVerdict` (supported / reason). `build_semantic_judge_fn` is its runtime; `structured_factory` is
+  injected for hermetic tests.
+- **`extraction_semantic_gate` (function)** -- `semantic_judge`: DETERMINISTIC, no model. Selects the surviving
+  (non-AMBIGUOUS) assertions on a SEMANTIC dimension (`SEMANTIC_DIMENSIONS`), runs the skill over each
+  concurrently, and downgrades a refuted one to AMBIGUOUS (kept but flagged), exactly like `reground` /
+  `symbolic_validate`. A judge that fails/returns None leaves the assertion untouched (never downgrade on a
+  judge error). Ingestion-side only; NOT on queries (KG-5d: judging the query text false-flags real constraints).
 
-Model-neutral: the structured call goes through the injected `structured_factory` (the model-profile seam by
-default), so the PRODUCT runs it on self-hosted Granite (vLLM/A100, ADR-0039), never a hardcoded provider.
-The factory is injectable so the gate is hermetically testable with a fake judge -- no LLM, no network. A
-judge that fails/returns None leaves the assertion untouched (conservative: never downgrade on a judge error).
-Ingestion-side only; NOT on queries (KG-5d: judging the query text false-flags real constraints).
+Layers 1-2 (lexical grounding + symbolic SHACL) already cleared the type / cardinality / deontic / textual-anchor
+errors deterministically, so this LLM call class is small and focused: the closed SEMANTIC dimensions whose value
+is a READING with no surface form (`mutuality=mutual` vs `unilateral`, `favorability`, `cap_basis`, ...).
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Callable, Optional
 
 from pydantic import BaseModel
@@ -30,6 +32,8 @@ from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.models.seam import build_structured
 from rag_wright.spans.property_grounding import GROUNDING_CUES
 from rag_wright.util.concurrent import map_concurrent
+
+_SKILL_PATH = Path(__file__).parents[1] / "skills" / "extraction_semantic_judge" / "SKILL.md"
 
 # The closed SEMANTIC dimensions: a closed vocabulary (so not open-valued) with NO lexical cue (so not
 # checkable by the grounding judge) -- their value is a reading, not a surface token. This is exactly the
@@ -54,14 +58,9 @@ _DIMENSION_GLOSS: dict[PropertyDimension, str] = {
     PropertyDimension.TERMINATION_RIGHT: "who may terminate for convenience (either_party / one_party)",
 }
 
-_PROMPT = (
-    "You audit a legal-clause property extraction for faithfulness to the TEXT. A property was extracted "
-    "from the clause below. Decide whether a careful reading of THIS clause SUPPORTS that property. Answer "
-    "supported=true only if the clause genuinely supports it; supported=false if the clause does not support "
-    "it or contradicts it. Be strict: mere plausibility is not support -- absence of support in this clause "
-    "means supported=false.\n\n"
-    "Property: {dimension} = {value}\nMeaning: {gloss}\n\nClause:\n{clause}"
-)
+# The per-call appendix bound onto the SKILL method (the static method teaches the reading; the specific
+# property + clause are appended at call time, the compliance_judgment `_PROMPT_TAIL` pattern).
+_PROMPT_TAIL = "\n\nProperty: {dimension} = {value}\nMeaning: {gloss}\n\nClause:\n{clause}"
 
 
 class SemanticVerdict(BaseModel):
@@ -75,12 +74,25 @@ class SemanticVerdict(BaseModel):
 JudgeFn = Callable[[PropertyDimension, str, str], Optional[SemanticVerdict]]
 
 
+def judgment_method() -> str:
+    """The semantic-judge method (the `extraction_semantic_judge` SKILL body, YAML frontmatter stripped) used as
+    the judge's system/method prompt. Authored knowledge (skills/extraction_semantic_judge/SKILL.md)."""
+    text = _SKILL_PATH.read_text(encoding="utf-8")
+    if text.startswith("---"):
+        marker = text.find("\n---", 3)
+        if marker != -1:
+            text = text[marker + 4 :]
+    return text.strip()
+
+
 def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
-    """Wire a Granite-backed verify-or-refute `JudgeFn` through the model seam (model-neutral; the product
-    points the seam at self-hosted vLLM-Granite). `structured_factory` is injected for hermetic testing."""
+    """The `extraction_semantic_judge` SKILL's runtime: a Granite-backed verify-or-refute `JudgeFn` through the
+    model seam (model-neutral; the product points the seam at self-hosted vLLM-Granite). The SKILL.md method is
+    the system prompt; the specific property + clause are appended. `structured_factory` is injected for tests."""
+    method = judgment_method()
 
     def judge(dimension: PropertyDimension, value: str, text: str) -> Optional[SemanticVerdict]:
-        prompt = _PROMPT.format(
+        prompt = method + _PROMPT_TAIL.format(
             dimension=dimension.value,
             value=value,
             gloss=_DIMENSION_GLOSS.get(dimension, dimension.value),
@@ -94,10 +106,11 @@ def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structure
 def semantic_judge(
     record: ClausePropertyRecord, text: str, judge_fn: JudgeFn, *, max_concurrency: int = 8
 ) -> ClausePropertyRecord:
-    """Quality gate (ADR-0040 Layer 3): LLM-judge every surviving (non-AMBIGUOUS) assertion on a SEMANTIC
-    dimension; downgrade a refuted one to AMBIGUOUS. A no-op when there is nothing semantic to judge. The
-    judge calls run concurrently (async + semaphore, per the parallel-LLM rule). A None verdict is a judge
-    failure -> the assertion is left untouched (never downgrade on a judge error)."""
+    """`extraction_semantic_gate` (FUNCTION -- deterministic, no model): the ADR-0040 Layer-3 quality gate. Apply
+    the `extraction_semantic_judge` SKILL (`judge_fn`) to every surviving (non-AMBIGUOUS) assertion on a SEMANTIC
+    dimension; downgrade a refuted one to AMBIGUOUS. A no-op when there is nothing semantic to judge. The judge
+    calls run concurrently (async + semaphore, per the parallel-LLM rule). A None verdict is a judge failure ->
+    the assertion is left untouched (never downgrade on a judge error). The model lives in the SKILL, not here."""
     targets = [
         a for a in record.assertions
         if a.dimension in SEMANTIC_DIMENSIONS and a.confidence != ConfidenceTag.AMBIGUOUS
@@ -118,10 +131,23 @@ def semantic_judge(
 
 
 def register_extraction_semantic_judge(registry) -> None:
-    """Register `extraction_semantic_judge` (function; ADR-0040 Layer 3 LLM semantic gate)."""
+    """Register `extraction_semantic_judge` as an AGENT_SKILL (ADR-0040 Layer 3): a single grounded LLM
+    verify-or-refute reading, authored as `skills/extraction_semantic_judge/SKILL.md` and applied via the seam.
+    Typed output = `SemanticVerdict`."""
     registry.register(
         "extraction_semantic_judge",
+        contract=SemanticVerdict,
+        kind="agent_skill",
+        display_name="Extraction semantic judge (clause property -> supported?; authored skill)",
+    )
+
+
+def register_extraction_semantic_gate(registry) -> None:
+    """Register `extraction_semantic_gate` (FUNCTION -- deterministic): apply the `extraction_semantic_judge`
+    SKILL over each surviving semantic assertion and downgrade a refuted one to AMBIGUOUS. No model."""
+    registry.register(
+        "extraction_semantic_gate",
         contract=ClausePropertyRecord,
         kind="function",
-        display_name="Extraction semantic judge",
+        display_name="Extraction semantic gate (semantic-dimension AMBIGUOUS downgrade)",
     )

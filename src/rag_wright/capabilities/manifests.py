@@ -444,12 +444,15 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="vision_to_text",
-        kind="function",
-        display_name="Vision-to-text (scanned-image transcription)",
+        kind="agent_skill",  # a single grounded vision-language act; SKILL.md, applied via the seam (SKILL-SPLIT)
+        display_name="Vision-to-text (scanned-image transcription; authored skill)",
         description=(
-            "Transcribe a scanned filing's images to text at ingestion on the Gemma 4 class model "
-            "(FR-C.9). Split from answer generation (ADR-0014): different inputs (an image, not evidence), "
-            "different failure modes, and a different caller (ingestion, not the query path)."
+            "Transcribe a scanned filing's images to text at ingestion on the Gemma 4 class model (FR-C.9), "
+            "authored as skills/vision_to_text/SKILL.md: transcribe all visible text exactly, preserving "
+            "reading order, output only the text. A single grounded vision-language act -- the ingestion-side "
+            "twin of answer generation (also an agent_skill). Split from generation (ADR-0014): different "
+            "inputs (an image, not evidence), different failure modes, a different caller (ingestion). "
+            "Model-neutral through the seam (product = self-hosted Gemma-class, ADR-0039)."
         ),
         representative_queries=(
             "transcribe a scanned filing image to text",
@@ -587,21 +590,42 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="extraction_semantic_judge",
-        kind="function",
-        display_name="Extraction semantic judge",
+        kind="agent_skill",  # a single grounded LLM verify-or-refute reading; SKILL.md, applied via the seam
+        display_name="Extraction semantic judge (clause property -> supported?; authored skill)",
         description=(
-            "Layer 3 of the neuro-symbolic extraction-fidelity cascade (ADR-0040): an LLM verify-or-refute "
-            "judge for the closed SEMANTIC dimensions (mutuality, favorability, party_asymmetry, cap_basis, "
-            "the consent regimes) that carry no surface form -- what the lexical and symbolic gates cannot "
-            "reach. Downgrades a refuted reading to AMBIGUOUS. Model-neutral through the seam (self-hosted "
-            "Granite); ingestion-side only."
+            "Layer 3 of the neuro-symbolic extraction-fidelity cascade (ADR-0040), authored as "
+            "skills/extraction_semantic_judge/SKILL.md: the verify-or-refute reading METHOD for the closed "
+            "SEMANTIC dimensions (mutuality, favorability, party_asymmetry, cap_basis, the consent regimes) that "
+            "carry no surface form -- what the lexical and symbolic gates cannot reach. Given one property "
+            "(dimension = value, with its meaning) and the clause text, returns whether a faithful reading of "
+            "THIS clause supports it (strict: mere plausibility is not support). Model-neutral through the seam "
+            "(product = self-hosted Granite, ADR-0039); ingestion-side only. The AMBIGUOUS downgrade and "
+            "dimension selection are the applying extraction_semantic_gate function's job, not the skill's."
         ),
         representative_queries=(
             "verify whether a clause supports an extracted mutuality reading",
             "refute a semantic property that a faithful reading of the clause does not support",
             "LLM-audit the closed semantic dimensions the deterministic gates cannot check",
         ),
-        tags=("grounding", "quality-gate", "semantic", "llm"),
+        tags=("grounding", "quality-gate", "semantic", "skill"),
+    ),
+    CapabilityManifest(
+        slug="extraction_semantic_gate",
+        kind="function",
+        display_name="Extraction semantic gate (semantic-dimension AMBIGUOUS downgrade)",
+        description=(
+            "DETERMINISTIC gate (ADR-0040 Layer 3, SKILL-SPLIT): select the surviving (non-AMBIGUOUS) assertions "
+            "on a closed SEMANTIC dimension, apply the extraction_semantic_judge SKILL to each concurrently "
+            "(async + semaphore), and downgrade a refuted one to AMBIGUOUS (kept but flagged), exactly like "
+            "reground / symbolic_validate. A judge that fails or returns no ruling leaves the assertion "
+            "untouched (never downgrade on a judge error). No model of its own -- it composes the skill."
+        ),
+        representative_queries=(
+            "downgrade refuted semantic-property readings on a clause to AMBIGUOUS",
+            "apply the semantic faithfulness judge across a clause's surviving assertions",
+            "run the ADR-0040 Layer-3 semantic quality gate over an extraction record",
+        ),
+        tags=("grounding", "quality-gate", "semantic", "deterministic"),
     ),
     CapabilityManifest(
         slug="operative_span_segmentation",

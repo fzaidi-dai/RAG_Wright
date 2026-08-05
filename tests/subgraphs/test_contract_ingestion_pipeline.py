@@ -254,17 +254,17 @@ class _LinkStore:
 
 def test_corpus_party_link_fn_defaults_to_many_to_many(tmp_path):
     # the fix: the corpus link step reads the GP-1B mention cache so a party links to EVERY contract it signed
-    # (a re-ingest must not silently revert 1278 many-to-many edges to the 1-to-1 join).
+    # (a re-ingest must not silently revert 1278 many-to-many edges to the 1-to-1 join). CORPUS-GENERIC helper.
     import json
 
-    from rag_wright.subgraphs.contract_ingestion_pipeline import _corpus_party_link_fn
+    from rag_wright.subgraphs.contract_ingestion_pipeline import corpus_party_link_fn
 
     path = tmp_path / "dg_extracted_parties.json"
     path.write_text(json.dumps({"C1": ["Acme Corporation"], "C2": ["Acme Corporation"]}), encoding="utf-8")
     store = _LinkStore([{"contract_id": "C1"}, {"contract_id": "C2"}],
                        [{"entity_id": "CIK1", "name": "Acme Corporation", "chunk_id": ""}])
 
-    n = _corpus_party_link_fn(store, path)()
+    n = corpus_party_link_fn(store, path)()
 
     assert n == 2  # Acme -> BOTH contracts (many-to-many), not one last-write-wins edge
     assert {(link.entity_id, link.contract_id) for link in store.written} == {("CIK1", "C1"), ("CIK1", "C2")}
@@ -272,12 +272,12 @@ def test_corpus_party_link_fn_defaults_to_many_to_many(tmp_path):
 
 def test_corpus_party_link_fn_falls_back_to_provenance_join_without_cache(tmp_path):
     # graceful: no mention cache -> the single-provenance KG-7 join (still links via chunk_id provenance)
-    from rag_wright.subgraphs.contract_ingestion_pipeline import _corpus_party_link_fn
+    from rag_wright.subgraphs.contract_ingestion_pipeline import corpus_party_link_fn
 
     store = _LinkStore([{"contract_id": "C1"}],
                        [{"entity_id": "CIK1", "name": "Acme", "chunk_id": "C1:0:" + "a" * 16}])
 
-    n = _corpus_party_link_fn(store, tmp_path / "absent.json")()
+    n = corpus_party_link_fn(store, tmp_path / "absent.json")()
 
     assert n == 1
     assert {(link.entity_id, link.contract_id) for link in store.written} == {("CIK1", "C1")}
