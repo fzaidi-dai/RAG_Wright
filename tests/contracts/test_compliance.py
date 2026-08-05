@@ -150,3 +150,15 @@ def test_compliance_bridge_ttl_parses_and_declares_the_schema():
     for term in ("Requirement", "Claim", "obligation", "prohibition", "permission"):
         assert term in text, f"compliance_bridge.ttl missing {term}"
     assert len(g) > 0  # non-empty graph
+
+
+def test_compliance_report_ad_level_verdict_threshold():
+    from rag_wright.contracts.compliance import ComplianceReport, Verdict
+    # >=2 violation findings -> hard VIOLATION
+    assert ComplianceReport(source_doc="a", summary={"violation": 2, "needs_review": 5}).verdict is Verdict.VIOLATION
+    # a LONE violation finding among many -> escalate, not hard-flag
+    assert ComplianceReport(source_doc="a", summary={"violation": 1, "needs_review": 7}).verdict is Verdict.NEEDS_REVIEW
+    # any needs_review with no violation -> escalate
+    assert ComplianceReport(source_doc="a", summary={"needs_review": 3, "compliant": 10}).verdict is Verdict.NEEDS_REVIEW
+    # nothing fired -> compliant
+    assert ComplianceReport(source_doc="a", summary={"compliant": 16}).verdict is Verdict.COMPLIANT

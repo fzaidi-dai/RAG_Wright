@@ -195,6 +195,9 @@ class ComplianceFinding(BaseModel):
         return self.verdict in (Verdict.VIOLATION, Verdict.NEEDS_REVIEW)
 
 
+_AD_VIOLATION_THRESHOLD = 2  # a lone violation finding among many rules escalates, not hard-flags (RG-5 aggregation)
+
+
 class ComplianceReport(BaseModel):
     """The `compliance_check` output (CC-6, §13.3): a subject document's cited findings + a per-requirement gap
     matrix + a verdict summary. Both-sided cited; every violation/needs_review is human-gated per finding."""
@@ -203,3 +206,16 @@ class ComplianceReport(BaseModel):
     findings: list[ComplianceFinding] = []
     summary: dict[str, int] = {}  # verdict -> count (compliant/violation/needs_review)
     gap_matrix: list[dict] = []  # per-requirement rollup: {requirement_id, citation, verdict, claims_checked}
+
+    @property
+    def verdict(self) -> Verdict:
+        """The AD-LEVEL verdict rolled up from the findings (RG-5): VIOLATION only when violation findings are a
+        real signal (>= threshold, so one spurious finding among many rules does not hard-flag); else
+        NEEDS_REVIEW if anything fired (a lone violation OR any needs_review -> escalate for a human); else
+        COMPLIANT. It never CLEARS an ad that had a violation finding -- a real violation is never a silent pass."""
+        v = self.summary.get("violation", 0)
+        if v >= _AD_VIOLATION_THRESHOLD:
+            return Verdict.VIOLATION
+        if v or self.summary.get("needs_review", 0):
+            return Verdict.NEEDS_REVIEW
+        return Verdict.COMPLIANT

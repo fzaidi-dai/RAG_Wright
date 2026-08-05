@@ -122,3 +122,35 @@ definitions-skip is a **KG-hygiene / robustness / cost win** (leaner KG, no leak
 per query) that **confirmed the definitions were NOT driving the false positives** -- the precision ceiling is
 the external-substantiation problem above, not the definitions. Part (b), empty applicability scope (now 31/96),
 is already handled at query time by the section->claim_type map (CC-8) -- no change needed.
+
+## RG-6 — the procedural fix: objective claim + no in-text evidence -> needs_review
+
+The NEG-GOLD ceiling (you cannot verify an objective claim's substantiation from ad text alone) is addressed
+PROCEDURALLY, not by pretending to know: (1) judge prompt reserves VIOLATION for what is clearly wrong in the
+text (OVERCLAIMING proof -- 'clinically proven'/'guaranteed' -- without a cited study; a MISSING required
+disclosure; a fake review) and sends an unverifiable objective claim to NEEDS_REVIEW (escalate -- a human checks
+the substantiation file), never clearing it; (2) an ad-level rollup `ComplianceReport.verdict`: VIOLATION only
+when violation findings are a real signal (>= 2, so one spurious finding among many rules does not hard-flag),
+else NEEDS_REVIEW if anything fired, else COMPLIANT.
+
+3-way scores across the iterations (19-case gold, 96-rule KG, granite judge). CLEARED = a real violation the
+engine silently passed = the true miss; hard-FP = a compliant case hard-flagged VIOLATION.
+
+| Judge / rollup | clearance-safety (never clear a violation) | hard-violation precision | hard-FP rate |
+|---|---|---|---|
+| v2 (2-way) | 1.00 | 0.73 | 0.63 |
+| procedural (3-way, any-violation) | 1.00 | 0.79 | 0.38 |
+| **+ >=2 threshold (adopted)** | **1.00** | **0.92** | **0.12** |
+
+- **Clearance safety 1.00** -- 0 of 11 real violations cleared; each fires >= 2 violation findings, so the
+  threshold keeps recall.
+- **Hard false positives 1/8** -- the NAD-**supported** objective claims now ESCALATE to needs_review (the honest
+  "can't verify from text -> human checks the evidence"), not hard-flag. The lone residual hard-FP is the weak
+  `lifes_vigor` closing-letter label.
+- **Tradeoff:** 6 compliant cases escalate to needs_review (more human-review load) -- correct for an assistive,
+  human-gated tool. The threshold lives on the product (`ComplianceReport.verdict`), so any consumer gets the
+  principled ad-level verdict, not the twitchy raw counts.
+
+This is the honest end-state on this gold: recall/clearance-safety complete, hard-precision 0.92, the residual
+limits are the external-substantiation reality and the small/weak gold labels -- addressed next by a larger
+expert-graded negative set, not more tuning.

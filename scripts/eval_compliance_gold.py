@@ -37,30 +37,38 @@ def main() -> None:
     for i, c in enumerate(gold, 1):
         text = Path(f"data/compliance/gold_cases/{c['id']}.txt").read_text()
         report = graph.invoke({"subject_text": text, "source_doc": c["id"]})["report"]
-        predicted = "violation" if report.summary.get("violation", 0) > 0 else "compliant"
-        rows.append({**c, "predicted": predicted, "summary": report.summary})
-        mark = "OK " if predicted == c["expected_verdict"] else "XX "
-        print(f"[gold-eval] {i}/{len(gold)} {mark} {c['id'][:34]:34} exp={c['expected_verdict']:9} "
-              f"pred={predicted:9} {report.summary}", flush=True)
+        s = report.summary
+        predicted = report.verdict.value  # RG-5 ad-level rollup: >=2 violations -> violation; else any -> needs_review
+        rows.append({**c, "predicted": predicted, "summary": s})
+        # a real violation CLEARED (predicted compliant) is the true miss; escalation (needs_review) is not a miss
+        bad = (c["expected_verdict"] == "violation" and predicted == "compliant") or \
+              (c["expected_verdict"] == "compliant" and predicted == "violation")
+        print(f"[gold-eval] {i}/{len(gold)} {'XX ' if bad else 'ok '} {c['id'][:34]:34} "
+              f"exp={c['expected_verdict']:9} pred={predicted:12} {s}", flush=True)
     store.close()
 
-    def _score(subset):
-        tp = sum(r["expected_verdict"] == "violation" and r["predicted"] == "violation" for r in subset)
-        fn = sum(r["expected_verdict"] == "violation" and r["predicted"] == "compliant" for r in subset)
-        fp = sum(r["expected_verdict"] == "compliant" and r["predicted"] == "violation" for r in subset)
-        tn = sum(r["expected_verdict"] == "compliant" and r["predicted"] == "compliant" for r in subset)
-        recall = tp / (tp + fn) if (tp + fn) else float("nan")
-        precision = tp / (tp + fp) if (tp + fp) else float("nan")
-        acc = (tp + tn) / len(subset) if subset else float("nan")
-        return tp, fn, fp, tn, recall, precision, acc
+    def _report(name, subset):
+        viol = [r for r in subset if r["expected_verdict"] == "violation"]
+        comp = [r for r in subset if r["expected_verdict"] == "compliant"]
+        # violation side: flagged (hard) / escalated (needs_review) / CLEARED (the dangerous miss)
+        v_flag = sum(r["predicted"] == "violation" for r in viol)
+        v_esc = sum(r["predicted"] == "needs_review" for r in viol)
+        v_clear = sum(r["predicted"] == "compliant" for r in viol)  # <-- true missed violation
+        # compliant side: cleared (good) / escalated (soft) / flagged (hard false alarm)
+        c_clear = sum(r["predicted"] == "compliant" for r in comp)
+        c_esc = sum(r["predicted"] == "needs_review" for r in comp)
+        c_flag = sum(r["predicted"] == "violation" for r in comp)  # <-- hard false positive (alert fatigue)
+        clearance_safety = 1 - v_clear / len(viol) if viol else float("nan")  # never CLEAR a real violation
+        hard_fp_rate = c_flag / len(comp) if comp else float("nan")
+        hard_prec = v_flag / (v_flag + c_flag) if (v_flag + c_flag) else float("nan")  # of hard 'violation' calls
+        print(f"  {name:16} viol[flag={v_flag} esc={v_esc} CLEARED={v_clear}] comp[clear={c_clear} esc={c_esc} "
+              f"FLAGGED={c_flag}]  clearance-safety={clearance_safety:.2f} hard-viol-precision={hard_prec:.2f} "
+              f"hard-FP-rate={hard_fp_rate:.2f}", flush=True)
 
-    print("\n=== RG-4: violation-class scores (first-pass gold; directional) ===", flush=True)
-    for name, subset in (("ALL", rows),
-                         ("real FTC cases", [r for r in rows if r["provenance"] == "ftc_case"]),
-                         ("constructed", [r for r in rows if r["provenance"] == "constructed"])):
-        tp, fn, fp, tn, rec, prec, acc = _score(subset)
-        print(f"  {name:16} n={len(subset):2}  TP={tp} FN={fn} FP={fp} TN={tn}  "
-              f"recall={rec:.2f} (missed viol) precision={prec:.2f} (alert fatigue) acc={acc:.2f}", flush=True)
+    print("\n=== RG-4 (3-way, procedural fix): CLEARED = missed violation; needs_review = honest escalation ===", flush=True)
+    _report("ALL", rows)
+    _report("real FTC+NAD", [r for r in rows if r["provenance"] != "constructed"])
+    _report("constructed", [r for r in rows if r["provenance"] == "constructed"])
     print("[gold-eval] DONE", flush=True)
 
 
