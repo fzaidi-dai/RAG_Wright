@@ -51,3 +51,27 @@ can't hang the eval (it didn't).
   refinement, and/or a claim-type gate (only run the substantiation check on objective claim types), and/or
   escalation on borderline. Measure the lift against a larger negative gold.
 - Expert grading of the gold remains a human (legal-SME) step before any of this is a shippable benchmark.
+
+## RG-5 — judge precision tuning (the substantiation over-flag fix)
+
+Tuned the `compliance_judgment` prompt (all runs = granite-4.1-8b via the seam) to attack the precision gap.
+Iterated eval-driven, twice:
+
+| Judge prompt | Real-FTC recall | Real-FTC precision | Overall acc (12) | Constructed compliant |
+|---|---|---|---|---|
+| baseline | 1.00 | 0.89 | 0.75 | 0/3 (2 FP) |
+| v1: exempt subjective/puffery/disclosed/substantiated | **0.88** ✗ | 0.88 | 0.83 | 3/3 ✓ |
+| **v2 (adopted)** | **1.00** ✓ | **0.89** | **0.92** | **3/3** ✓ |
+
+- **v1 over-corrected**: it fixed the synthetic puffery/disclosed false positives but LOST recall on a real
+  violation -- Amare's *"science backed / clinically proven"* flipped to compliant, because the judge read the
+  proof-language as if substantiation were provided. For a recall-critical product that is a bad trade.
+- **v2 (adopted)** adds the distinction that fixes it: subjective opinion / puffery / a properly-disclosed
+  endorsement is NOT a violation, BUT proof-adjectives ('clinically proven', 'science backed') WITHOUT a cited
+  study ARE the unsubstantiated claim -> violation. Result: **recall 1.00 preserved, all 3 constructed
+  false-positives fixed, overall accuracy 0.75 -> 0.92**, with a single remaining FP that is a weak gold label
+  (the no-action closing letter, not an affirmative clearance).
+
+These are general principles, not overfit to specific cases -- but the gold is still small (12, partly
+constructed), so a robust precision number needs a larger real negative set. Recall (8 real violations, 0
+missed) is the trustworthy signal.
