@@ -105,6 +105,7 @@ DEFAULT_CANDIDATE_POOL = 100
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
 CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
 PARTY_TO_EDGE_TYPE = "PartyTo"  # KG-7 (ADR-0036): Entity(party) -> Contract, the unifying link
+IS_EXCEPTION_TO_EDGE_TYPE = "IsExceptionTo"  # ADR-0044: exception clause (Uncapped) -> the Cap clause it excepts
 REQUIREMENT_TYPE = "Requirement"  # CC-5 (compliance §13): a deontic regulatory rule (its own DB, ragwright_compliance)
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
@@ -296,6 +297,8 @@ class ArcadeDBStore:
 
         if PARTY_TO_EDGE_TYPE not in types:  # KG-7 (ADR-0036): Entity(party) -> Contract unifying link
             self._command(f"CREATE EDGE TYPE {PARTY_TO_EDGE_TYPE}")
+        if IS_EXCEPTION_TO_EDGE_TYPE not in types:  # ADR-0044: exception clause -> the Cap clause it excepts
+            self._command(f"CREATE EDGE TYPE {IS_EXCEPTION_TO_EDGE_TYPE}")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -656,6 +659,59 @@ class ArcadeDBStore:
             )
         if statements:
             self._db.execute_transaction(statements)
+
+    # --- ADR-0044: the IS_EXCEPTION_TO derived carve-out relationship (exception clause -> Cap clause) ------
+
+    def clause_positions(self, functions: list[str]) -> list[dict]:
+        """Clauses of the given functions with their operative-span DOCUMENT offsets (via the clause-level
+        span_id, ADR-0042), for proximity-based exception linking. Rows: {clause_id, function, contract_id,
+        doc_start, doc_end}. A clause with no resolvable span (legacy/unbackfilled) is skipped."""
+        if not functions:
+            return []
+        fn_list = "[" + ",".join(_sql_str(f) for f in functions) + "]"
+        clauses = self._query(
+            f"SELECT clause_id, function, span_id FROM {CLAUSE_TYPE} WHERE function IN {fn_list}")
+        span_ids = [c["span_id"] for c in clauses if c.get("span_id")]
+        if not span_ids:
+            return []
+        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
+        spans = self._query(
+            f"SELECT span_id, doc_start, doc_end, contract_id FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
+        by_span = {s["span_id"]: s for s in spans}
+        out: list[dict] = []
+        for c in clauses:
+            s = by_span.get(c.get("span_id"))
+            if s is None:
+                continue
+            out.append({"clause_id": c["clause_id"], "function": c["function"],
+                        "contract_id": s.get("contract_id"), "doc_start": s.get("doc_start"),
+                        "doc_end": s.get("doc_end")})
+        return out
+
+    def write_clause_exception_links(self, links: list) -> None:
+        """ADR-0044: write the `IsExceptionTo` edges (exception/Uncapped clause -> the Cap clause it excepts).
+        Idempotent: clears the existing IsExceptionTo layer first, so re-linking is safe and re-derivable. The
+        edge carries the INFERRED confidence (a derived, reasoned link, FR-S.4). One transaction."""
+        statements = (
+            [f"DELETE FROM {IS_EXCEPTION_TO_EDGE_TYPE} UNSAFE"]
+            if IS_EXCEPTION_TO_EDGE_TYPE in self.type_names() else [])
+        for link in links:
+            statements.append(
+                f"CREATE EDGE {IS_EXCEPTION_TO_EDGE_TYPE}"
+                f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {_sql_str(link.exception_clause_id)})"
+                f" TO (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {_sql_str(link.cap_clause_id)})"
+                f" SET confidence = {_sql_str(link.confidence.value)}"
+            )
+        if statements:
+            self._db.execute_transaction(statements)
+
+    def exceptions_of_clause(self, cap_clause_id: str) -> list[dict]:
+        """The exception/carve-out clauses linked to a Cap clause (`IsExceptionTo` in-edges, ADR-0044). For the
+        query side: serving a cap clause pulls its INFERRED carve-outs. Rows: {clause_id, function, span_id}."""
+        return self._query(
+            f"SELECT clause_id, function, span_id FROM ("
+            f"SELECT expand(in('{IS_EXCEPTION_TO_EDGE_TYPE}')) FROM {CLAUSE_TYPE} "
+            f"WHERE clause_id = {_sql_str(cap_clause_id)})")
 
     def graph_counts(self) -> dict[str, int]:
         entities = self._query(f"SELECT count(*) AS n FROM {ENTITY_TYPE}")

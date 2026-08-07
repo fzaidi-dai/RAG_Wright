@@ -555,6 +555,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("graph", "linking", "parties", "unification", "deterministic"),
     ),
+    CapabilityManifest(
+        slug="clause_exception_linking",
+        kind="function",
+        display_name="Clause exception linking (IsExceptionTo carve-out edges over the contract KG)",
+        description=(
+            "Add the missing cap<->carve-out relationship over the contract KG WITHOUT re-ingest (ADR-0044): a "
+            "pure pass over the already-populated clauses that writes IsExceptionTo edges (an Uncapped clause -> "
+            "the Cap clause it excepts). The signal is symbolic co-occurrence + POSITIONAL PROXIMITY (an Uncapped "
+            "clause whose operative span is within ~one section of a Cap clause is that cap's carve-out); distant "
+            "co-occurrence is NOT linked. The link is INFERRED (a reasoned inference, not extracted; surfaced at "
+            "query time and human-validatable, FR-S.4). Lets a query answer 'capped at X, except uncapped for "
+            "[carve-outs]' from structured evidence instead of two contradictory fragments."
+        ),
+        representative_queries=(
+            "link an uncapped-liability carve-out to the cap clause it excepts",
+            "connect a contract's cap and its exceptions so a query sees the conditions",
+            "derive the cap-to-carve-out relationship over the clause KG",
+        ),
+        tags=("graph", "linking", "carve-out", "neuro-symbolic", "inferred"),
+    ),
     # --- CAP-REG-2: the built contract-KG capabilities (capability_interface added when GraphWright-governed) ---
     CapabilityManifest(
         slug="typed_value_normalization",

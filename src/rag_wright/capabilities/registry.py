@@ -98,6 +98,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "property_boosted_retrieval",  # function: BGE pool + span-clause join + typed rerank (SPAN-CLAUSE-RERANK)
         # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
         "party_clause_linking",  # function: PARTY_TO edges (Entity -> Contract) by normalized-name join
+        "clause_exception_linking",  # function: IsExceptionTo edges (Uncapped -> Cap carve-out) by proximity (ADR-0044)
         # --- LG-1/LG-2: hardened LangGraph subgraphs ---
         "typed_clause_extraction",  # subgraph: extract -> adapt -> reground -> escalate -> [HITL] -> dead-letter
         "query_constraint_extraction",  # subgraph: query-side typed constraint extraction (graceful-empty)
