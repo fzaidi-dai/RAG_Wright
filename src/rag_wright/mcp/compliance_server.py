@@ -134,6 +134,20 @@ def demo_check_fn() -> CheckFn:
     return _check
 
 
+def register_compliance_check_mcp(registry) -> None:
+    """Register `compliance_check_mcp` (MCP-PROTO): the ARD `mcp_tool` surface of the `compliance_check`
+    subgraph -- the same capability exposed as a discoverable, cross-agent MCP tool (`check_ad_compliance`,
+    served by `rag_wright.mcp.compliance_server`) so an agent can call it as ONE tool via ARD search instead of
+    embedding the subgraph. Distinct ARD identity from the in-process `compliance_check` subgraph; same output
+    contract `ComplianceReport`."""
+    registry.register(
+        "compliance_check_mcp",
+        contract=ComplianceReport,
+        kind="mcp_tool",
+        display_name="Ad compliance check (MCP tool)",
+    )
+
+
 def main() -> None:
     """Serve the compliance MCP tool over stdio. `RAG_MCP_DEMO=1` uses the no-infra demo checker."""
     check_fn = demo_check_fn() if os.environ.get("RAG_MCP_DEMO") == "1" else production_check_fn()

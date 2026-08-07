@@ -993,6 +993,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("compliance", "check", "verdict", "gap-matrix", "subgraph", "langgraph"),
     ),
+    CapabilityManifest(
+        slug="compliance_check_mcp",
+        kind="mcp_tool",  # the discoverable MCP-tool surface of the compliance_check subgraph (MCP-PROTO)
+        display_name="Ad compliance check (MCP tool)",
+        description=(
+            "The compliance_check capability exposed as a single MCP tool (`check_ad_compliance`, served by "
+            "rag_wright.mcp.compliance_server via FastMCP): screen one advertisement against the FTC 16 CFR 255 "
+            "endorsement rules and return a cited ComplianceReport (ad-level verdict, per-claim findings with "
+            "both-sided citations, verdict summary, per-requirement gap matrix). An external agent discovers "
+            "this via ARD search and calls it as ONE tool -- saving context tokens and inter-agent coordination "
+            "vs. embedding the compliance_check subgraph. Same output contract as the subgraph; distinct ARD "
+            "identity because the callable surface is a deployed MCP server, not an in-process graph node."
+        ),
+        representative_queries=(
+            "check whether an advertisement complies with the FTC endorsement rules",
+            "screen ad copy for unsubstantiated claims and missing disclosures",
+            "get a cited compliance report for a marketing claim as a tool call",
+        ),
+        tags=("compliance", "mcp-tool", "ad-screening", "cited", "discoverable"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

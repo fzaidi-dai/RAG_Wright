@@ -8,8 +8,13 @@ import asyncio
 
 from fastmcp import Client
 
+from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.compliance import ComplianceReport
-from rag_wright.mcp.compliance_server import build_compliance_mcp, demo_check_fn
+from rag_wright.mcp.compliance_server import (
+    build_compliance_mcp,
+    demo_check_fn,
+    register_compliance_check_mcp,
+)
 
 
 def _call(mcp, args: dict):
@@ -38,6 +43,14 @@ def test_demo_checker_returns_a_real_shaped_violation_report():
     assert len(data["findings"]) == 2
     # both-sided citation is present on every finding (no claim without a citation)
     assert all(f["citation_claim"] and f["citation_requirement"] for f in data["findings"])
+
+
+def test_registers_as_an_ard_mcp_tool():
+    # MCP-PROTO: the MCP-tool surface is a distinct ARD entry (mcp_tool), same contract as the subgraph
+    reg = CapabilityRegistry()
+    register_compliance_check_mcp(reg)
+    entry = reg.get("compliance_check_mcp")
+    assert entry.kind == "mcp_tool" and entry.contract is ComplianceReport
 
 
 def test_check_fn_is_injectable_no_store_or_llm_needed():
