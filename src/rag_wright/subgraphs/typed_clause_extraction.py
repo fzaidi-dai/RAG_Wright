@@ -140,12 +140,14 @@ def production_record_fn() -> RecordFn:
     NOTE: the caller must set `chunk_id`/`function`/`span_id` for `clause_to_record`; production wiring passes a
     partial. Grounding (`reground`) is applied by the subgraph node, not here.
     """
-    from rag_wright.capabilities.dg_extraction import extract_clause, openrouter_model
+    from rag_wright.capabilities.dg_extraction import default_extraction_model, extract_clause
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.spans.clause_kg_extractor import clause_to_record
 
     def extract(text: str, model_id: str) -> Optional[ClausePropertyRecord]:
-        model = openrouter_model("clause-extract", model_id)
+        # seam-aware (A3): honor RAG_SERVING like every other extraction path -> A100 vLLM under `vllm`,
+        # OpenRouter otherwise. Was pinned to openrouter_model, which broke "fully on Modal".
+        model = default_extraction_model("clause-extract", model_id)
         try:
             clause = extract_clause(text, model)
         except Exception as exc:  # noqa: BLE001 - provider/pipeline errors are transient -> retried

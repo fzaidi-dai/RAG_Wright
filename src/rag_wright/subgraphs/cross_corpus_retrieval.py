@@ -207,6 +207,51 @@ def production_cross_corpus_retrieval(
     return build_cross_corpus_retrieval(constraints_fn, functions_fn, pool_fn, hydrate_fn)
 
 
+# --- the contract-KG corpus binding (A3): the integration layer -- which store query -> pool, how a span id ->
+#     props / dense vector / text. Capability-general composite above; corpus-specific binding here (two-halves).
+
+
+def contract_pool_fn(store: Any, *, pool_limit: int = 200) -> PoolFn:
+    """`pool_fn` for the ArcadeDB contract KG: the CORPUS-WIDE span ids of the routed functions (the function
+    gate), bounded by `pool_limit`. Constraint-match + dense tiebreak narrow it downstream."""
+
+    def pool(functions: list) -> list:
+        return [row["span_id"] for row in store.spans_by_functions(list(functions), limit=pool_limit)]
+
+    return pool
+
+
+def contract_hydrate_fn(store: Any, embedder: Any) -> HydrateFn:
+    """`hydrate_fn` for the contract KG: query -> dense vector (BGE via the embedder); each candidate span -> its
+    clause's typed props (`span_properties`, the edge.span_id join), dense vector (`span_vectors_by_id`), and
+    operative-span text (`span_texts`). All batched."""
+
+    def hydrate(query: str, candidate_ids: list) -> tuple:
+        query_vector = embedder.encode_dense(query)
+        props = store.span_properties(candidate_ids)
+        vectors = store.span_vectors_by_id(candidate_ids)
+        texts = store.span_texts(candidate_ids)
+        candidates = {
+            sid: {"props": props.get(sid, set()), "vector": vectors.get(sid, []), "text": texts.get(sid, "")}
+            for sid in candidate_ids
+        }
+        return query_vector, candidates
+
+    return hydrate
+
+
+def production_contract_cross_corpus_retrieval(
+    *, store: Any, embedder: Any, extract_model_id: str, function_model_id: str, pool_limit: int = 200
+):
+    """Wire `cross_corpus_retrieval` over the ArcadeDB contract KG: the corpus-wide function pool +
+    span props/vector/text hydration, plus the seam-aware constraint extraction (A100 under RAG_SERVING=vllm)
+    and function routing. The reference corpus binding for the contract KG (A3, MCP-PROTO Phase A)."""
+    return production_cross_corpus_retrieval(
+        pool_fn=contract_pool_fn(store, pool_limit=pool_limit),
+        hydrate_fn=contract_hydrate_fn(store, embedder),
+        extract_model_id=extract_model_id, function_model_id=function_model_id)
+
+
 def register_cross_corpus_retrieval(registry) -> None:
     """LG-3c: register `cross_corpus_retrieval` (composite subgraph; constraints+functions -> routed, graded,
     tie-broken, cited clauses)."""
