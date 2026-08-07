@@ -8,6 +8,7 @@ generation and a real image transcription (a synthetic PNG).
 from __future__ import annotations
 
 import io
+import threading
 
 import pytest
 
@@ -16,6 +17,8 @@ from rag_wright.capabilities.answer_generator import (
     GeneratedAnswer,
     _evidence_block,
     generate_answer,
+    generate_answer_best_of_n,
+    generate_answer_reasoned,
     register_generation,
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
@@ -96,6 +99,107 @@ def test_generation_method_loads_the_skill_body_without_frontmatter():
     method = generation_method()
     assert method and not method.startswith("---")  # YAML frontmatter stripped
     assert "abstain" in method.lower() and "citation" in method.lower()  # the method's load-bearing rules
+
+
+# --- strategy B: reason -> emit split (generation robustness) ------------------------------------
+
+
+class _StubReason:
+    def __init__(self, text: str = "analysis") -> None:
+        self.text = text
+        self.prompt: str | None = None
+
+    def reason(self, prompt: str) -> str:
+        self.prompt = prompt
+        return self.text
+
+
+class _RaisingReason:
+    def reason(self, prompt: str) -> str:
+        raise AssertionError("the reason model must not be called when there is no evidence")
+
+
+def test_reasoned_split_reasons_then_emits_threading_the_analysis():
+    reason = _StubReason("The evidence supports X via [c1].")
+    emit = _StubModel(GeneratedAnswer(answer="X.", citations=["c1"], abstained=False))
+    result = generate_answer_reasoned("q", _EV, reason_model=reason, emit_model=emit)
+    assert result.answer == "X." and result.citations == ["c1"] and not result.abstained
+    assert reason.prompt is not None  # step 1 (free-text reasoning) ran
+    assert "STEP 2" in emit.prompt and "The evidence supports X via [c1]." in emit.prompt  # threaded in
+
+
+def test_reasoned_split_empty_evidence_abstains_without_any_model_call():
+    result = generate_answer_reasoned("q", [], reason_model=_RaisingReason(), emit_model=_RaisingModel())
+    assert result.abstained and result.citations == []
+
+
+def test_reasoned_split_applies_the_finalize_guarantees():
+    reason = _StubReason()
+    emit = _StubModel(GeneratedAnswer(answer="X.", citations=["c1", "c99"], abstained=False))
+    result = generate_answer_reasoned("q", _EV, reason_model=reason, emit_model=emit)
+    assert result.citations == ["c1"]  # fabricated c99 dropped by _finalize, same as the baseline
+
+
+# --- strategy C: best-of-N self-consistency (generation robustness) -------------------------------
+
+_EV2 = [
+    EvidenceItem(chunk_id="c1", text="Acme and Beta are the parties."),
+    EvidenceItem(chunk_id="c2", text="Governed by Delaware law."),
+]
+
+
+class _SequenceModel:
+    """Hands out the given answers across calls, thread-safe (best-of-N runs the samples concurrently).
+    Order of assignment is irrelevant: aggregation is over the MULTISET of samples."""
+
+    def __init__(self, answers: list[GeneratedAnswer]) -> None:
+        self._answers = list(answers)
+        self._i = 0
+        self._lock = threading.Lock()
+        self.calls = 0
+
+    def generate(self, prompt: str) -> GeneratedAnswer:
+        with self._lock:
+            answer = self._answers[self._i]
+            self._i += 1
+            self.calls += 1
+        return answer
+
+
+def test_best_of_n_picks_the_best_cited_non_abstaining_sample():
+    answers = [
+        GeneratedAnswer(answer="A", citations=[], abstained=True),
+        GeneratedAnswer(answer="short", citations=["c1"], abstained=False),
+        GeneratedAnswer(answer="rich", citations=["c1", "c2"], abstained=False),
+        GeneratedAnswer(answer="A", citations=[], abstained=True),
+        GeneratedAnswer(answer="A", citations=[], abstained=True),
+    ]
+    model = _SequenceModel(answers)
+    result = generate_answer_best_of_n("q", _EV2, model=model, n=5)
+    assert not result.abstained and result.answer == "rich" and set(result.citations) == {"c1", "c2"}
+    assert model.calls == 5  # all n samples were drawn
+
+
+def test_best_of_n_abstains_only_when_every_sample_abstains():
+    answers = [GeneratedAnswer(answer="", citations=[], abstained=True)] * 4
+    result = generate_answer_best_of_n("q", _EV2, model=_SequenceModel(answers), n=4)
+    assert result.abstained  # unanimous abstain -> abstain
+
+
+def test_best_of_n_min_answers_demands_agreement():
+    answers = [
+        GeneratedAnswer(answer="only", citations=["c1"], abstained=False),
+        GeneratedAnswer(answer="", citations=[], abstained=True),
+        GeneratedAnswer(answer="", citations=[], abstained=True),
+    ]
+    # a single non-abstaining sample is not enough when min_answers=2 (self-consistency threshold)
+    result = generate_answer_best_of_n("q", _EV2, model=_SequenceModel(answers), n=3, min_answers=2)
+    assert result.abstained
+
+
+def test_best_of_n_empty_evidence_abstains_without_model_call():
+    result = generate_answer_best_of_n("q", [], model=_RaisingModel(), n=3)
+    assert result.abstained and result.citations == []
 
 
 # --- vision-to-text ------------------------------------------------------------------------------

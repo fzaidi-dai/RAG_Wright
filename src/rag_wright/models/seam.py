@@ -89,19 +89,22 @@ def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) ->
 
 
 def build_structured(
-    model_id: str, schema: Any, *, include_raw: bool = False
+    model_id: str, schema: Any, *, include_raw: bool = False, temperature: float = 0.0
 ) -> Runnable:
     """A structured-output runnable for `model_id`, driven by its profile.
 
     The profile supplies the method and the optional structured-only `extra_body`; the `extra_body`
     is bound to this forced structured call only. This is the sole path to `with_structured_output`. The
     runnable is wrapped with `.with_retry` so the OpenRouter-504-as-ValueError transient is retried (bounded).
+
+    `temperature` defaults to 0 (deterministic-intent); a caller doing best-of-N self-consistency raises it
+    to sample GENUINELY diverse structured completions (the base client's temperature, not a provider flag).
     """
     profile = profile_for(model_id)
     kwargs: dict[str, Any] = {"method": profile.structured_method, "include_raw": include_raw}
     if profile.structured_extra_body is not None:
         kwargs["extra_body"] = profile.structured_extra_body
-    runnable = build_model(model_id).with_structured_output(schema, **kwargs)
+    runnable = build_model(model_id, temperature=temperature).with_structured_output(schema, **kwargs)
     return runnable.with_retry(
         retry_if_exception_type=_STRUCTURED_RETRY_ON,
         wait_exponential_jitter=True,

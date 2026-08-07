@@ -21,7 +21,8 @@ from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_structured
+from rag_wright.models.seam import build_model, build_structured
+from rag_wright.util.concurrent import map_concurrent
 
 _ABSTENTION = "The retrieved context does not support an answer."
 _SKILL_PATH = Path(__file__).parents[1] / "skills" / "generation" / "SKILL.md"
@@ -64,13 +65,33 @@ class AnswerModel(Protocol):
 
 
 class SeamAnswerModel:
-    """The real generator: structured output through the model-profile seam (Gemma 4 GENERAL role)."""
+    """The real generator: structured output through the model-profile seam (GENERAL role). `temperature`
+    defaults to 0; the best-of-N strategy constructs one at temperature>0 to sample diverse completions."""
+
+    def __init__(self, model_id: str | None = None, *, temperature: float = 0.0) -> None:
+        self._model_id = model_id or model_for(ModelRole.GENERAL)
+        self._temperature = temperature
+
+    def generate(self, prompt: str) -> GeneratedAnswer:
+        return build_structured(self._model_id, GeneratedAnswer, temperature=self._temperature).invoke(prompt)
+
+
+@runtime_checkable
+class ReasonModel(Protocol):
+    """The free-text reasoning seam (B): analyze the evidence in prose, no forced schema."""
+
+    def reason(self, prompt: str) -> str: ...
+
+
+class SeamReasonModel:
+    """The real reasoner: a plain free-text call through the seam (GENERAL role). Free-text avoids the
+    forced-structured/thinking-mode conflict that makes the one-shot structured generate flaky."""
 
     def __init__(self, model_id: str | None = None) -> None:
         self._model_id = model_id or model_for(ModelRole.GENERAL)
 
-    def generate(self, prompt: str) -> GeneratedAnswer:
-        return build_structured(self._model_id, GeneratedAnswer).invoke(prompt)
+    def reason(self, prompt: str) -> str:
+        return str(build_model(self._model_id).invoke(prompt).content)
 
 
 def _evidence_block(evidence: list[EvidenceItem]) -> str:
@@ -85,6 +106,23 @@ def _abstain(text: str = _ABSTENTION) -> GeneratedAnswer:
     return GeneratedAnswer(answer=text, citations=[], abstained=True)
 
 
+def _finalize(raw: GeneratedAnswer, evidence: list[EvidenceItem]) -> GeneratedAnswer:
+    """The code-level guarantees applied to a raw model answer (shared by every generation strategy):
+    an abstention stays an abstention; a citation not present in the evidence is dropped (no fabrication);
+    an answer left with no valid citation is coerced to an abstention (no claim without a citation, FR-Q.6)."""
+    if raw.abstained:
+        return _abstain(raw.answer or _ABSTENTION)
+    valid_ids = {item.chunk_id for item in evidence}
+    citations = [chunk_id for chunk_id in raw.citations if chunk_id in valid_ids]  # drop fabricated
+    if not citations:
+        return _abstain()
+    return GeneratedAnswer(answer=raw.answer, citations=citations, abstained=False)
+
+
+def _answer_prompt(query: str, evidence: list[EvidenceItem]) -> str:
+    return f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
+
+
 def generate_answer(
     query: str, evidence: list[EvidenceItem], *, model: AnswerModel
 ) -> GeneratedAnswer:
@@ -92,21 +130,59 @@ def generate_answer(
 
     Empty evidence abstains without a model call. Otherwise the model answers over the evidence block
     (with confidence tags surfaced); any citation not present in the evidence is dropped, and an answer
-    left with no valid citation is coerced to an abstention.
+    left with no valid citation is coerced to an abstention. This is the single-call baseline strategy.
     """
     if not evidence:
         return _abstain()
+    return _finalize(model.generate(_answer_prompt(query, evidence)), evidence)
 
-    prompt = f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
-    raw = model.generate(prompt)
-    if raw.abstained:
-        return _abstain(raw.answer or _ABSTENTION)
 
-    valid_ids = {item.chunk_id for item in evidence}
-    citations = [chunk_id for chunk_id in raw.citations if chunk_id in valid_ids]  # drop fabricated
-    if not citations:  # no claim without a citation (FR-Q.6): coerce to abstention
+_REASON_HEADER = (
+    "STEP 1 — ANALYSIS (not the final answer). Work through ONLY the evidence below: does it support an "
+    "answer to the question? Name the specific [chunk_id] items that support each part of a would-be answer; "
+    "if an item is framed as an inferred exception/carve-out, note the rule together with its exception. If "
+    "the evidence genuinely does not support an answer, say so and why. Do NOT write the final answer yet."
+)
+
+
+def generate_answer_reasoned(
+    query: str, evidence: list[EvidenceItem], *, reason_model: ReasonModel, emit_model: AnswerModel
+) -> GeneratedAnswer:
+    """Strategy B: split generation into a FREE-TEXT reasoning node then a STRUCTURED emit node. The reason
+    node analyzes the evidence in prose (where the model is strongest and the forced-structured/thinking-mode
+    conflict does not apply); the emit node only FORMATS that conclusion into the `GeneratedAnswer` contract,
+    a more constrained call than reason-and-emit in one shot. Same code-level guarantees via `_finalize`;
+    empty evidence still abstains without any model call."""
+    if not evidence:
         return _abstain()
-    return GeneratedAnswer(answer=raw.answer, citations=citations, abstained=False)
+    block = _evidence_block(evidence)
+    analysis = reason_model.reason(
+        f"{generation_method()}\n\n{_REASON_HEADER}\n\nQuestion: {query}\n\nEvidence:\n{block}")
+    emit_prompt = (
+        f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{block}\n\n"
+        f"STEP 2 — using your STEP 1 analysis below, emit the final grounded, cited answer now, or abstain "
+        f"if the analysis concluded the evidence does not support one.\n\nSTEP 1 analysis:\n{analysis}"
+    )
+    return _finalize(emit_model.generate(emit_prompt), evidence)
+
+
+def generate_answer_best_of_n(
+    query: str, evidence: list[EvidenceItem], *, model: AnswerModel, n: int = 5, min_answers: int = 1,
+    max_concurrency: int = 5,
+) -> GeneratedAnswer:
+    """Strategy C: sample the single-call generation `n` times (supply a temperature>0 `model` for genuine
+    diversity), run CONCURRENTLY, and take the best-cited NON-abstaining sample — abstaining only if fewer
+    than `min_answers` samples produced a valid cited answer. Self-consistency against the near-boundary
+    abstain flip: one good grounded sample is enough to answer; `min_answers`>1 demands agreement. Empty
+    evidence abstains without any model call."""
+    if not evidence:
+        return _abstain()
+    prompt = _answer_prompt(query, evidence)
+    raws = map_concurrent([prompt] * n, model.generate, max_concurrency=max_concurrency)
+    answered = [f for f in (_finalize(r, evidence) for r in raws if r is not None) if not f.abstained]
+    if len(answered) < min_answers:
+        return _abstain()
+    return max(answered, key=lambda f: len(f.citations))
 
 
 def register_generation(registry: CapabilityRegistry) -> None:
