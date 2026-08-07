@@ -27,15 +27,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 from dotenv import load_dotenv
 
-# (function, natural question) — each answerable from a contract that HAS clauses of that function.
+# (function, natural question) — each answerable from a contract that HAS clauses of that function. A
+# spread of evidence sizes; the biggest-evidence functions (Audit Rights 59, Non-Compete 38) are left out to
+# keep prompts and per-call latency sane -- the abstain flip shows on small evidence too (Governing Law).
 _TARGETS = [
     ("Cap On Liability", "How is liability capped in this contract, and under what conditions?"),
-    ("Uncapped Liability", "For what matters is liability uncapped or unlimited in this contract?"),
     ("Governing Law", "What law governs this contract?"),
     ("Termination For Convenience", "Can this contract be terminated for convenience, and how?"),
-    ("Non-Compete", "What non-compete restrictions does this contract impose?"),
-    ("Audit Rights", "What audit rights does this contract grant?"),
 ]
+
+_MAX_WORKERS = 3  # LOW on purpose: a single A100 inflates every request's latency under high concurrency,
+# pushing calls past the 120s seam timeout into a 6x retry cascade. At ~3 concurrent, calls stay ~10-80s.
 
 
 def _log(s: str = "") -> None:
@@ -113,22 +115,31 @@ def main() -> None:
     combos = [(name, qi, r) for name in strategies for qi in range(len(queries)) for r in range(repeats)]
     total = len(combos)
     _log(f"\n[run] {len(queries)} queries x {repeats} repeats x {len(strategies)} strategies = {total} runs "
-         f"(C fans out {n_samples} samples each)\n")
+         f"(C fans out {n_samples} samples each), max_workers={_MAX_WORKERS}\n")
+
+    import time
 
     results: dict = {}
     lock_done = [0]
 
     def run_one(combo):
         name, qi, r = combo
-        ans = strategies[name](queries[qi])
-        return (name, qi, ans.abstained, len(ans.citations))
+        t0 = time.time()
+        try:
+            ans = strategies[name](queries[qi])
+            return (name, qi, r, ans.abstained, len(ans.citations), time.time() - t0)
+        except Exception as exc:  # noqa: BLE001 - a stuck/failed call counts as an abstain, never kills the run
+            _log(f"[error] {name} {queries[qi]['function']} r{r}: {type(exc).__name__}: {str(exc)[:80]}")
+            return (name, qi, r, True, 0, time.time() - t0)
 
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        for name, qi, abstained, ncit in pool.map(run_one, combos):
+    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
+        for name, qi, r, abstained, ncit, dt in pool.map(run_one, combos):
             results.setdefault((name, qi), []).append((abstained, ncit))
             lock_done[0] += 1
-            if lock_done[0] % 10 == 0 or lock_done[0] == total:
-                _log(f"[progress] {lock_done[0]}/{total}")
+            # per-combo HEARTBEAT: a visible line as each finishes (abstain/cites/latency), not sparse ticks
+            verdict = "ABSTAIN" if abstained else f"answer({ncit}c)"
+            _log(f"[{lock_done[0]:>2}/{total}] {name:<14} {queries[qi]['function']:<28} "
+                 f"r{r} -> {verdict:<11} {dt:>5.0f}s")
 
     # 3. report
     _log("\n" + "=" * 90)
