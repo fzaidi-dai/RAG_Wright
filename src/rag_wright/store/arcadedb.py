@@ -933,9 +933,12 @@ class ArcadeDBStore:
         function, the edge type + dimension + value + predicate IRI, and the provenance (confidence, span_id).
         The shape Leg-A aggregation / disambiguation / citation build on."""
         lo, hi = self._contract_bounds(contract_id)
+        # Only typed-PROPERTY edges (clause -> value), which carry a `dimension`. A clause can also have
+        # clause->clause edges with no dimension (IsExceptionTo, ADR-0044); the `dimension IS NOT NULL` guard
+        # excludes those so they never surface as null-dimension "property" rows.
         q = (
             "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id >= " + lo
-            + " AND clause_id < " + hi + ")}.outE(){as: e}.inV(){as: v}"
+            + " AND clause_id < " + hi + ")}.outE(){as: e, where: (dimension IS NOT NULL)}.inV(){as: v}"
             " RETURN c.clause_id AS clause_id, c.function AS function, e.@type AS edge_type,"
             " e.dimension AS dimension, v.value AS value, v.folio_iri AS folio_iri,"
             " e.predicate_iri AS predicate_iri, e.confidence AS confidence, e.span_id AS span_id"

@@ -9,7 +9,6 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.capabilities.contract_kg_serve import (
-    CitedClause,
     aggregate_by_property,
     clauses_of_function,
     contract_clause_index,
@@ -66,6 +65,26 @@ def test_contract_clause_index_assembles_every_clause_with_properties() -> None:
     # a property-less clause still appears (queryable by type), with no properties
     gl = next(c for c in idx if c.function == "Governing Law")
     assert gl.properties == []
+
+
+def test_contract_clause_index_skips_non_property_edges_no_crash() -> None:
+    """ADR-0044 regression: an IsExceptionTo (clause->clause) edge carries NO dimension/value. The
+    clause_kg outE traversal can surface such a row; serving must skip it (not a typed property), never
+    crash on a null dimension nor attach a bogus empty property (the clean-fixtures-hide-real-data lesson)."""
+
+    class _StoreWithExceptionEdge(_FakeStore):
+        def contract_clause_kg(self, contract_id):
+            return super().contract_clause_kg(contract_id) + [
+                {"clause_id": _A, "function": "Cap On Liability", "edge_type": "IsExceptionTo",
+                 "dimension": None, "value": None, "predicate_iri": None,
+                 "confidence": "INFERRED", "span_id": None},
+            ]
+
+    idx = contract_clause_index(_StoreWithExceptionEdge(), _CID)
+    a = next(c for c in idx if c.clause_id == _A)
+    # the two REAL properties survive; the non-property IsExceptionTo row is dropped (no empty property)
+    assert {(p.dimension, p.value) for p in a.properties} == {("mutuality", "mutual"), ("carve_out", "fraud")}
+    assert all(p.dimension for p in a.properties)
 
 
 def test_disambiguate_same_type_clauses_by_property() -> None:

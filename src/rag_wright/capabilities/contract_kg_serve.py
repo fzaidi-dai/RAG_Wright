@@ -72,6 +72,8 @@ def contract_clause_index(store: _KGStore, contract_id: str) -> list[CitedClause
     """The full per-contract KG: every clause (incl. property-less ones) with its typed properties, cited."""
     by_clause: dict[str, list[CitedProperty]] = {}
     for row in store.contract_clause_kg(contract_id):
+        if not row.get("dimension"):  # a non-property clause edge (e.g. IsExceptionTo, ADR-0044) -> not a fact
+            continue
         by_clause.setdefault(row["clause_id"], []).append(_prop(row))
     index = []
     for c in store.clauses_in_contract(contract_id):
