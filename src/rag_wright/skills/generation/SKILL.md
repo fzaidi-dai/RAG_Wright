@@ -23,6 +23,11 @@ without a citation. It is a single grounded reading, not a workflow.
   fabricate one. A supported partial answer is fine; an unsupported confident answer is not.
 - **Respect the confidence tag on a graph-derived fact.** When an evidence item carries a `[confidence: ...]`
   tag (EXTRACTED / INFERRED / AMBIGUOUS), weight it accordingly -- do not assert an AMBIGUOUS fact as settled.
+- **State a rule together with its inferred exceptions.** When an evidence item is framed as an exception or
+  carve-out to another provision (e.g. "[Exception to the liability cap (inferred)] ..."), do not omit it or
+  read it as a separate contradictory fact: answer with the rule AND its exceptions in one breath ("capped at
+  X, EXCEPT ... for [the carve-outs]"), citing each, and present the exception as inferred (per its
+  `[confidence: INFERRED]` tag) -- so the reader sees both the limit and the conditions under which it lifts.
 
 ## What this skill does NOT own (the applying capability's job, enforced in CODE)
 
