@@ -1,0 +1,1408 @@
+{
+  "records": [
+    {
+      "id": "answerable-0",
+      "kind": "answerable",
+      "function_served": "Cap On Liability",
+      "question": "How is liability capped in this contract, and under what conditions?",
+      "contract_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT",
+      "evidence": [
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:105:12bf002c378dfcd8c67453dc7c90e7f45d998dc81384debc9e2a220ad544d440",
+          "text": "Cap On Liability: Termination of this          Agreement by Corio for non conformance of the Software to the          Documentation under this Section 3.1 shall, upon a refund of all          fees paid to Changepoint, be Corio's sole and exclusive remedy          against Changepoint for any nonconformance of the Software with the          Documentation.  [temporal_bound=nonconformance; termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:212:5d9378fb5653d5b448030c07d9f2d19e2baf68d8e145e51fa804ceecf952e530",
+          "text": "Cap On Liability: In the event any such breach of warranty can not be reasonably          corrected at Changepoint's sole expense, Corio has the right to\n\n [law_multiplicity=single; jurisdiction=California; notice_period=30_days; cap_quantum=$500,000; cap_basis=fixed_fee; procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:214:2eaf8bc8cb382cb5b07c424370e438a5671edd59d09055f7b82914e03efd8956",
+          "text": "Cap On Liability: 11\n\nrefund of all prepaid fees, if any.  [commitment_quantum=all prepaid fees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:215:edc77dab6052742bdde31468a6e10f9e59bdcc10d935f169e1eba2d90cb5c9de",
+          "text": "Cap On Liability: The foregoing are Corio's sole          and exclusive remedies for breach of the foregoing product warranty.           [law_multiplicity=single; jurisdiction=California; temporal_bound=12_months; cap_quantum=1x_fees; cap_basis=fixed_fee; damage_type=special; damage_type=indirect; damage_type=consequential; warranty_scope=express]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:222:35beaf80599a48dbc8363ef61060beb01469ca0ba45c92a684450d06987c0e89",
+          "text": "Cap On Liability: Changepoint's sole          liability under this Section 7.4 is limited to use of reasonable          efforts to correct or replace the defective Software with conforming          Software, and if neither of the foregoing are commercially practicable,          as determined by Changepoint in its reasonable discretion, Changepoint          may, at its option, terminate this Agreement and refund all prepaid          fees, if any. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:223:dfac095cf5dfa0e844079f1df5b65bb802b7e22d3a6e2ccf4b75262eee1dc3f1",
+          "text": "Cap On Liability: The foregoing are Corio's sole and exclusive remedies for          breach of this Year 2000 warranty and Changepoint's sole obligation.\n\n [exclusivity_type=exclusive]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:232:1d7784daa50837bc723bdae07de20e6a432ee659ee77489c3f4c7929bf117b56",
+          "text": "Cap On Liability: Nothing in this provision shall limit Changepoint's          immediate duty to defend Corio and its Customers against any such          claims.  [procedural=duty_to_defend]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:235:3ee1c9f1e77bfd6cad58a74eade7729ddd745bd9e362a7e82fcab407664cd88e",
+          "text": "Cap On Liability: 8.2      LIMITATIONS. Changepoint shall have no liability for any infringement          based on (i) the use of the Software other than as set forth in the          Documentation;  [temporal_bound=the term of the Software License; cap_quantum=zero; damage_type=special; damage_type=punitive; damage_type=incidental; damage_type=consequential; damage_type=indirect]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:236:d2abc567a86c5d5605e118afcf998a4747633f1c9e3683edfe6d0509ab831bd2",
+          "text": "Cap On Liability: (ii) the modification of the Software by a party other          than Changepoint, when such infringement would not have occurred but          for such modification, (iii) the combination of the Software with any          other hardware or software product or service when such infringement\n\n [law_multiplicity=single; jurisdiction=California; notice_period=30_days; cap_quantum=$500,000; cap_basis=fixed_fee; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:241:86b4161cba405047fa57ccc547a579b796991acaa141a03b39649fc005c7eaff",
+          "text": "Cap On Liability: (iii) Corio's copying, distribution or use          of the Software after receiving Changepoint's written notice to Corio          of a third party claim of infringement applicable to the Software, or          (iv) a combination of the Software with other hardware or software          product or service, if such infringement would not have occurred using          the Software alone. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:243:4249e56d70bcc4450090d5988de81ce6e27adb0a473dfd7bfb90134bac123903",
+          "text": "Cap On Liability: Nothing in this provision shall limit          Corio's immediate duty to defend Changepoint against any such claims.           [procedural=duty_to_defend]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:416:27aa099c8309abeb212fdd2dcee742c25b7aa37951b3155c090491a4a8577156",
+          "text": "Cap On Liability: IN NO EVENT WILL CHANGEPOINT BE LIABLE UNDER SUCH       AGREEMENT FOR ANY LOSS OF PROFITS, LOSS OF USE, BUSINESS INTERRUPTION,       LOSS OF DATA, COST OF COVER OR INDIRECT, SPECIAL, INCIDENTAL OR       CONSEQUENTIAL DAMAGES OF ANY KIND IN CONNECTION WITH OR ARISING OUT OF THE       FURNISHING, PERFORMANCE OR USE OF THE SOFTWARE OR SERVICES PERFORMED       HEREUNDER, WHETHER ALLEGED AS A BREACH OF CONTRACT OR TORTIOUS CONDUCT,       INCLUDING NEGLIGENCE, EVEN IF CHANGEPOINT HAS BEEN ADVISED OF THE       POSSIBILITY OF SUCH DAMAGES.  [temporal_bound=null; damage_type=special; damage_type=punitive; damage_type=incidental; damage_type=consequential; damage_type=indirect]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:417:237c607b83522af794ff2380e6515d0c619868eec54af8e8a67566a485f38ac6",
+          "text": "Cap On Liability: IN ADDITION, CHANGEPOINT WILL NOT BE LIABLE       FOR ANY DAMAGES CAUSED BY DELAY IN DELIVERY OR FURNISHING THE SOFTWARE OR       SAID SERVICES.  [temporal_bound=unbounded; damage_type=special; damage_type=punitive; damage_type=incidental; damage_type=consequential; damage_type=indirect]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:418:740aee9d4c153a53af898097a0ad74b6d8aae645907d823f21cc139b060b6f07",
+          "text": "Cap On Liability: CHANGEPOINT'S, LIABILITY UNDER SUCH AGREEMENT FOR DIRECT,       INDIRECT, SPECIAL, INCIDENTAL AND/OR CONSEQUENTIAL DAMAGES OF ANY KIND,       INCLUDING, WITHOUT LIMITATION, RESTITUTION, WILL NOT, IN ANY EVENT, EXCEED       THE FEE PAID BY END USER TO CHANGEPOINT UNDER SUCH AGREEMENT.\n\n [temporal_bound=unbounded; cap_quantum=fee_paid_by_end_user; damage_type=consequential; damage_type=incidental; damage_type=special; damage_type=indirect]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:549:6e4fa0203efe6dd4146d57e33282ae3c24876b72945ebebf2c83c28a744e0c94",
+          "text": "Cap On Liability: (c)      Customer's exclusive remedy and Changepoint's sole obligation with respect to the breach of any of the foregoing warranties is for Changepoint to (i) make commercially reasonable efforts to correct or provide Customer with a workaround for the failure of the Licensed Software to conform substantially to the description thereof in the Documentation or to comply with the Y2K Warranty, as the case may be, or, at Changepoint's sole option, provide Customer with a refund for the License Fees paid with respect to such Licensed Software, and (ii) provide Customer with replacement media in the event there are defects in materials or workmanship in the media upon which the Licensed Software and Documentation are provided if the media is returned to Changepoint within the Warranty Period.\n\n [temporal_bound=Warranty Period; cap_quantum=refund_for_License_Fees; cap_basis=fixed_fee; covered_subject=ip_infringement; termination_right=one_party; procedural=duty_to_defend; warranty_scope=express]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:556:428f0243bf74cabec1cc7f41518c327fe4b5e194310d6ede3c30ee1611ed392a",
+          "text": "Cap On Liability: (a)      FOR ANY BREACH OR DEFAULT BY CHANGEPOINT OF ANY OF THE PROVISIONS OF THIS AGREEMENT, OR WITH RESPECT TO ANY CLAIM ARISING HEREFROM OR RELATED HERETO, EXCEPT FOR ANY CLAIM FOR BREACH OF SECTION  [temporal_bound=any; claim_scope=first_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:557:00a457517ca0dab3087b0e0c4b2bda9b07c1ae3efeca5e6561e09aaba03bf443",
+          "text": "Cap On Liability: 5.2 (UNAUTHORIZED DISCLOSURE OF CONFIDENTIAL INFORMATION), OR FOR BREACH OF SECTION 6.4(A) (INTELLECTUAL PROPERTY INDEMNITY), CHANGEPOINT'S ENTIRE LIABILITY, REGARDLESS OF THE FORM OF ACTION, WHETHER BASED ON CONTRACT OR TORT, INCLUDING\n\n [law_multiplicity=single; jurisdiction=New York; temporal_bound=5_years; cap_quantum=5_years_of_fees; ld_trigger=UNAUTHORIZED DISCLOSURE OF CONFIDENTIAL INFORMATION, OR FOR BREACH OF SECTION 6.4(A) (INTELLECTUAL PROPERTY INDEMNITY)]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:558:8472fe659a7ace76df74c6e9b96f5b61418fd2f582ca90fadc04e38c1e7f08d3",
+          "text": "Cap On Liability: 32\n\nNEGLIGENCE, SHALL IN NO EVENT EXCEED  [cap_quantum=NEGLIGENCE, SHALL IN NO EVENT EXCEED]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:559:57b893efbf301de0eab0f5efd33ba7c3a32ec43366d45b2ef2291a541660b1a9",
+          "text": "Cap On Liability: (I) THE AMOUNT PAID BY CUSTOMER HEREUNDER FOR THE LICENSED MATERIALS, (II) THE AMOUNT PAID BY CUSTOMER FOR THE MAINTENANCE SERVICE THAT IS THE SUBJECT OF THE CLAIM IF THE CLAIM RELATES TO A BREACH OR DEFAULT BY CHANGEPOINT OF THE PROVISIONS OF ARTICLE 7, (III) THE AMOUNT PAID BY CUSTOMER FOR THE INSTALLATION SERVICE THAT IS THE SUBJECT OF THE CLAIM IF THE CLAIM RELATES TO A BREACH OR DEFAULT BY CHANGEPOINT OF THE PROVISIONS OF THIS AGREEMENT PERTAINING TO INSTALLATION SERVICE, OR (IV) IN THE AGGREGATE WITH RESPECT TO ALL CLAIMS UNDER OR RELATED TO THIS AGREEMENT, THE AMOUNT PAID BY CUSTOMER UNDER THIS AGREEMENT.\n\n [law_multiplicity=single; jurisdiction=New York; temporal_bound=12_months; cap_quantum=$1,000,000; cap_basis=fixed_fee; damage_type=special; damage_type=consequential; warranty_scope=express]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:560:8de0d7d228dd084e9fdc14f8747935340079a0b633e8c0509593634eba6fa964",
+          "text": "Cap On Liability: (b)      IN NO EVENT WILL CHANGEPOINT BE LIABLE FOR SPECIAL, INCIDENTAL, INDIRECT, OR CONSEQUENTIAL LOSS OR DAMAGE, LOST BUSINESS REVENUE, LOSS OF PROFITS, LOSS OF DATA, FAILURE TO REALIZE EXPECTED PROFITS OR SAVINGS OR ANY CLAIM AGAINST CUSTOMER BY ANY OTHER PERSON (EVEN IF CHANGEPOINT HAS BEEN ADVISED OF THE POSSIBILITY OF ANY SUCH LOSS OR DAMAGE).\n\n [damage_type=incidental; damage_type=consequential; damage_type=indirect; damage_type=special]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Liability capped to the fees paid / amounts paid under the agreement",
+        "Consequential / indirect / special / incidental damages are excluded",
+        "Higher cap (5 years of fees) for breaches of confidentiality (5.2) and IP indemnity (6.4(a))"
+      ],
+      "expected_citations": [
+        "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:418:740aee9d4c153a53af898097a0ad74b6d8aae645907d823f21cc139b060b6f07",
+        "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:559:57b893efbf301de0eab0f5efd33ba7c3a32ec43366d45b2ef2291a541660b1a9",
+        "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:557:00a457517ca0dab3087b0e0c4b2bda9b07c1ae3efeca5e6561e09aaba03bf443",
+        "CHANGEPOINTCORP_03_08_2000-EX-10.6-LICENSE_AND_HOSTING_AGREEMENT:560:8de0d7d228dd084e9fdc14f8747935340079a0b633e8c0509593634eba6fa964"
+      ],
+      "notes": "Multiple caps: general damages exclusion + fee-paid aggregate cap + a raised cap for confidentiality/IP-indemnity breaches. A good answer names the fee-based cap AND the exclusion of indirect damages."
+    },
+    {
+      "id": "answerable-1",
+      "kind": "answerable",
+      "function_served": "Uncapped Liability",
+      "question": "For what matters is liability uncapped or unlimited in this contract?",
+      "contract_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT",
+      "evidence": [
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:1000:5ab47e88ca156c86f8f41a93a9d5b4ed11835b2c668e9d3ef0997b3cebcbcc6e",
+          "text": "Uncapped Liability: Use of Data), but excluding Section  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:1002:41140a82eb55e538a3ba77df0f3c3cd523d9db20a51241d8de9296b0f45ab722",
+          "text": "Uncapped Liability: 8.5.1 (Disclosure), and Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:1011:4d5dff2a99b70673ce503ac9059669b67e15db9e94ccbcddc82db01335ba368e",
+          "text": "Uncapped Liability: 13.3 (Effects of Termination) (solely for termination of this Agreement), Section  [termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:1014:2a8efe24f0ba43eb13658ef81d913b6c89248c609ad75e66bedf5c5b44ba1f2c",
+          "text": "Uncapped Liability: Equitable Remedies), Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:1046:c53e2a22caa9e1171b1e96d5a5adcf31523c125ec2951d0c4f5f0c5b0321855d",
+          "text": "Uncapped Liability: 14.5.3 (Equitable Remedies) or for which a Party or Person is expressly given final decision-making authority as set forth in Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:276:3e4bad42cfd2879627a9ea11c574a575303ce98e81506734e82562e3e0b3e784",
+          "text": "Uncapped Liability: Notwithstanding anything in Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:394:a2d509313439347c91886c90f01df1863ef810d68a2dd00d3c05b006525dd9ec",
+          "text": "Uncapped Liability: 4.1.4 each Party's indemnification obligations and matters relating to the extent of its liability (e.g. consequential damages waiver) shall solely be determined under the terms of this Agreement (including Section  [temporal_bound=unbounded; cap_quantum=consequential_damages_waiver; damage_type=consequential; covered_subject=ip_infringement; termination_right=either_party; claim_scope=first_party]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:525:4747bfd40c936cbcd256b12501e8afdfc6100e844ebcaaa9a9d2145f51688bc2",
+          "text": "Uncapped Liability: For further clarity, nothing in this Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:550:7307a9fa95ffb2c30ff1b04ba3b9ecd2fa1da4d906983370e9bd0443ce59cdd4",
+          "text": "Uncapped Liability: For clarity, the foregoing sentence shall not [***].  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:683:451a0f886530f899ea3af23ce9c71c6448873da5d8befc814bfa9dc1539cab41",
+          "text": "Uncapped Liability: For clarity, with respect to clause (d) of this Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:684:c5b059bb1ee69a5a25b9ac97282c718f0fbb6f87e1f2e6e46e62b01418d4faca",
+          "text": "Uncapped Liability: 8.5.2 (Use of Collaboration Data), [***].\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:727:d06d0a63f584d4c4b394c329399403f2c289a3fa7be7daad400dd9c077cc5dfe",
+          "text": "Uncapped Liability: (d) in each case of clauses (a) through (c) of this Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:735:d72b2561d35eeddee12126ae83684b8a39b84a9e7b1f919e0172906743536683",
+          "text": "Uncapped Liability: 9.1.1 (Scope of Grants) and Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:739:d72b2561d35eeddee12126ae83684b8a39b84a9e7b1f919e0172906743536683",
+          "text": "Uncapped Liability: 9.1.1 (Scope of Grants) and Section ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:825:cca392c0bdede4c95a432ba2f82207e276f6cd86b8fca60df490812ce9a5dff8",
+          "text": "Uncapped Liability: 9.1 (Grants to Ginkgo) (but for both (a) and (b) no representation, warranty or covenant is given by BLI for Ginkgo Materials, Ginkgo Workflows or for Collaboration Workflows) [***]; and\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:838:0c114c9ffa66ce5abdfd6394134e245a22e7a5021762149b4f57a147f6371e12",
+          "text": "Uncapped Liability: EXCEPT TO THE EXTENT ARISING ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:839:2a453c1fbb521ae1e93aa7c37d519414ff67282dba4f4b78e68b8bfef13b61aa",
+          "text": "Uncapped Liability: (A) FROM A PARTY'S BREACH OF ARTICLE 10 (CONFIDENTIALITY), (B) [***]  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:840:bb1b4ddfdb12bb891f1782966085e38fbd201331422f9bd699bfa27c8e24f57e",
+          "text": "Uncapped Liability: (E) FROM A PARTY'S FRAUD, GROSS NEGLIGENCE OR WILLFUL MISCONDUCT OR ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:841:1f82d4a7f5d49cc2343f548222af2bf1b86195f21f3b9d5920e55da01432c954",
+          "text": "Uncapped Liability: (F) IN CONNECTION WITH A PARTY'S INDEMNIFICATION OBLIGATIONS UNDER ARTICLE 12 (INDEMNIFICATION;  [covered_subject=ip_infringement; termination_right=either_party; claim_scope=third_party]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:843:472c2d07587c572a0e3c884a7c43b2828f61f28bd17e29143ffc5935263f8745",
+          "text": "Uncapped Liability: ANY THEORY OF LIABILITY (WHETHER IN CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE).  [damage_type=special; damage_type=punitive; damage_type=incidental; damage_type=consequential; damage_type=indirect]",
+          "confidence": "AMBIGUOUS"
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Breach of confidentiality (Article 10) is uncapped",
+        "Fraud, gross negligence or willful misconduct is uncapped",
+        "Indemnification obligations (Article 12) are uncapped"
+      ],
+      "expected_citations": [
+        "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:839:2a453c1fbb521ae1e93aa7c37d519414ff67282dba4f4b78e68b8bfef13b61aa",
+        "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:840:bb1b4ddfdb12bb891f1782966085e38fbd201331422f9bd699bfa27c8e24f57e",
+        "BERKELEYLIGHTS_INC_06_26_2020-EX-10.12-COLLABORATION_AGREEMENT:841:1f82d4a7f5d49cc2343f548222af2bf1b86195f21f3b9d5920e55da01432c954"
+      ],
+      "notes": "Evidence is fragmentary (many bare section cross-refs) but the three carve-outs from the liability limit are legible at :839/:840/:841."
+    },
+    {
+      "id": "answerable-2",
+      "kind": "answerable",
+      "function_served": "Governing Law",
+      "question": "What law governs this contract?",
+      "contract_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement",
+      "evidence": [
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1000:652338ddeffbc8fc7c288246fb38137fd625e52a19599695e52e68b3a5abde14",
+          "text": "Governing Law: Among other things, that means that this Guarantee will be interpreted and construed exclusively under the laws of the State of Texas, and that in the event of any conflict of law, Texas law will prevail (without applying Texas conflict of law rules).\n\n [jurisdiction=Texas]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1180:b2e999a8f09037f3397cb21953a4fdcccdc696c4a76aa9bd28d670e41a68f7bf",
+          "text": "Governing Law: The Franchise Agreement requires application of the laws of the State of Texas.  [jurisdiction=Texas]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1211:96b2e4e8bead91c5013e083128314131e256509647bbd84d3cced601ca940a2f",
+          "text": "Governing Law: Choice of law Section 25.1 Except to the extent governed by the Lanham Act, Illinois law (including the Illinois Franchise Disclosure Act) will apply to Illinois franchisees.\n\n [law_multiplicity=single; jurisdiction=Illinois]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1221:8d39d7d4836aab3a0626f1f81c5a2794b441dfa3386713cdcf5d10e29d8d8661",
+          "text": "Governing Law: This Agreement will be interpreted and construed exclusively under the laws of the State of Illinois, which laws will prevail in the event of any conflict of law (without regard to, and without giving effect to, the application of Illinois choice-of-law rules); provided, however, that if the covenants in Section 19 of this Agreement would not be enforced as written under Illinois law, then the parties agree that those covenants will instead be interpreted and construed under the laws of the state in which the Franchised Business is located.  [law_multiplicity=single; jurisdiction=State of Illinois; temporal_bound=conflict_of_law; termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1337:cec1f1e17ec4f2c24cf8b25e32051cda0cdcf82a8b63465f60eddb8b096b8752",
+          "text": "Governing Law: Pursuant to Minnesota Stat.  [jurisdiction=Minnesota]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1432:325232e66069ff6f88bcd9e9f93c051954990fe015f2c9ab925573a39a071901",
+          "text": "Governing Law: E. Applicable Laws: Franchise agreements which specify that any claims arising under the North Dakota franchise law will be governed by the laws of a state other than North Dakota.\n\n [jurisdiction=North Dakota]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1452:ffe0b9884981de00556fca5ac0c3f7177a4b34ebf9d53ce35d8800607285d43e",
+          "text": "Governing Law: E. Applicable Laws: Any provision which specifies that any claims arising under the North Dakota franchise law will be governed by the laws of a state other than North Dakota.\n\n [law_multiplicity=single; jurisdiction=North Dakota]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1498:83f9430f9d38e8c6fb0488a0c4e8888d0835f1bb4486f8b0e6d28a3bce0a3731",
+          "text": "Governing Law: In the event of a conflict of laws, the provisions of the Washington Franchise Investment Protection Act, Chapter  [jurisdiction=Washington]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1512:ebed101e604439b7a7bef1964e019601a53a4ba573d90fab3de7b5b14fd6147b",
+          "text": "Governing Law: 3. In the event of a conflict of laws, the provisions of the Washington Franchise Investment Protection Act, Chapter  [jurisdiction=Washington]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:919:511cba33b171c3d0da761a10b0a3a37efc3184b5822fcf0a84437aefa5b31f7b",
+          "text": "Governing Law: This Agreement will be interpreted and construed exclusively under the laws of the State of Texas, which laws will prevail in the event of any conflict of law (without regard to, and without giving effect to, the application of Texas choice-of-law rules); provided, however, that if the covenants in Section 19 of this Agreement would not be enforced as written under\n\n [law_multiplicity=single; jurisdiction=State of Texas; temporal_bound=conflict_of_law]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:920:16d8c2c0fe5f9ff4d2ec8ab7e7344278520214a694e214543aac36950096aa58",
+          "text": "Governing Law: Page 55 of 80\n\nTexas law, then the parties agree that those covenants will instead be interpreted and construed under the laws of the state in which the Franchised Business is located.  [jurisdiction=state in which the Franchised Business is located]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Governed primarily by the laws of the State of Texas",
+        "State-specific franchise laws override for franchisees in those states (e.g. Illinois)"
+      ],
+      "expected_citations": [
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:919:511cba33b171c3d0da761a10b0a3a37efc3184b5822fcf0a84437aefa5b31f7b",
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1180:b2e999a8f09037f3397cb21953a4fdcccdc696c4a76aa9bd28d670e41a68f7bf",
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1221:8d39d7d4836aab3a0626f1f81c5a2794b441dfa3386713cdcf5d10e29d8d8661"
+      ],
+      "notes": "Nuanced: many state addenda (Illinois, Minnesota, North Dakota, Washington) create apparent conflicts; the primary governing law is Texas, with state-specific carve-outs. A correct answer says Texas + the state-specific exceptions."
+    },
+    {
+      "id": "answerable-3",
+      "kind": "answerable",
+      "function_served": "Termination For Convenience",
+      "question": "Can this contract be terminated for convenience, and how?",
+      "contract_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement",
+      "evidence": [
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1046:247116da0b8ee989b3ef95e95eadc642f6fb27f5bd6849d53c37deb673e4bfbf",
+          "text": "Termination For Convenience: \"(v) with thirty (30) days' written notice to AU if Defra has not assigned to AU, or granted to AU a license reasonably satisfactory to  CERES on, the Intellectual Property vested in Defra or the Crown or the Secretary of State pursuant to the DEFRA agreement NF 0426  within three (3) years from the Effective Date (the \"Assignment/License\"); provided however that Ceres will not unreasonably refuse to  extend such three (3) year term by six (6) months if so requested by AU by December 31, 2009.\"\n\n [temporal_bound=3_years; assignment_consent=notice_only]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1242:f78deed2ef1c6920521563883be0015b0df5b5700174e1bd3a2b18bc1b28a12f",
+          "text": "Termination For Convenience: (e) CERES will have the right to terminate this SCHEDULE unilaterally:  [termination_right=one_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1245:347761e693fb3a536a77dd2ee64ee95e2d4ab938b3acff54ba6b62c67dc3287d",
+          "text": "Termination For Convenience: (iii) with one (1) years' written notice to IGER, if CERES has a documented compelling  business reason to cease the collaboration, (for example, without limitation, lack of sufficient processing capacity for COLLABORATION  CROPS within the expected timeframe in the United States;  [notice_period=1_years; nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1247:acf3097e5859b692df31cfdc075e8ab81232eeda012ee246950b43e04179ad32",
+          "text": "Termination For Convenience: (iv) with three (3) months' prior written notice to IGER, such notice to be given no earlier than eighteen (18) months after the Effective Date  of the CA, if no rights to commercialize (including determination of the compensation due upon commercialization) COLLABORATION  CROPS germplasm provided by IGER which is included in the RESEARCH PROJECT covered by this SCHEDULE have been\n\n [notice_period=3_months; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:2124:247116da0b8ee989b3ef95e95eadc642f6fb27f5bd6849d53c37deb673e4bfbf",
+          "text": "Termination For Convenience: \"(v) with thirty (30) days' written notice to AU if Defra has not assigned to AU, or granted to AU a license reasonably satisfactory to  CERES on, the Intellectual Property vested in Defra or the Crown or the Secretary of State pursuant to the DEFRA agreement NF 0426  within three (3) years from the Effective Date (the \"Assignment/License\"); provided however that Ceres will not unreasonably refuse to  extend such three (3) year term by six (6) months if so requested by AU by December 31, 2009.\"\n\n [temporal_bound=3_years; termination_right=either_party; assignment_consent=notice_only; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:319:c4a2a78a0178f9fac117e675d340139520438c5d3440101dbd784797e0e11909",
+          "text": "Termination For Convenience: (e) CERES will have the right to terminate this Agreement unilaterally:  [termination_right=one_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:322:347761e693fb3a536a77dd2ee64ee95e2d4ab938b3acff54ba6b62c67dc3287d",
+          "text": "Termination For Convenience: (iii) with one (1) years' written notice to IGER, if CERES has a documented compelling  business reason to cease the collaboration, (for example, without limitation, lack of sufficient processing capacity for COLLABORATION  CROPS within the expected timeframe in the United States;  [notice_period=1_years; nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:324:81af8d8d1db5ecd47f8e52892f347854f68a664f7d8cc45c4f811bc6295964f8",
+          "text": "Termination For Convenience: (iv)  with three (3) months' prior written notice to IGER, such notice to be given no earlier than eighteen (18)\n\n [notice_period=3_months; nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:501:7dc9c006fe7eb485804a7825a5611f64d0a5406963522126e297cca52d51ca63",
+          "text": "Termination For Convenience: 9.2   Notwithstanding Article 9.3., [CERES/IGER] will have the right to terminate this Agreement including the Program at any time with  [three (3)] months' prior written notice.  [notice_period=three_months; termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:588:570e62d6501536f72400ea2ce4f6a078d0c452b29d713dff25ca4d10681b3a9f",
+          "text": "Termination For Convenience: 9.2   Notwithstanding Article 9.3., [CERES/IGER] will have the right to terminate this Agreement including the Program at any time with  [three (3)] months' prior written notice.\n\n [notice_period=three (3) months; termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:948:c97f02390e04b2d49eb6c2653aea90bfc517dfad7be1ac1a7a554164a7b37d6a",
+          "text": "Termination For Convenience: 16.5 The Parties may terminate this Agreement at any time by mutual, written agreement.\n\n [termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Either party may terminate at any time on three (3) months' prior written notice",
+        "The parties may also terminate by mutual written agreement"
+      ],
+      "expected_citations": [
+        "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:501:7dc9c006fe7eb485804a7825a5611f64d0a5406963522126e297cca52d51ca63",
+        "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:588:570e62d6501536f72400ea2ce4f6a078d0c452b29d713dff25ca4d10681b3a9f",
+        "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:948:c97f02390e04b2d49eb6c2653aea90bfc517dfad7be1ac1a7a554164a7b37d6a"
+      ],
+      "notes": "Clear termination-for-convenience: 3 months' notice by either party, or mutual agreement."
+    },
+    {
+      "id": "answerable-4",
+      "kind": "answerable",
+      "function_served": "Non-Compete",
+      "question": "What non-compete restrictions does this contract impose?",
+      "contract_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement",
+      "evidence": [
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1048:67d9fcb020ad43c799325f524d344f4df7a1a3872d9da533ab27ad1434e897df",
+          "text": "Non-Compete: D. The Member, by virtue of his or her position with Franchisee, will gain access to certain of Franchisor's Confidential Information, as defined herein, and must therefore be bound by the same non-competition provisions that Franchisee is bound by.\n\n [restriction_scope=activity; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1050:89b13a7d6ac06d5d86a7b9d363c06f1f11ae51a2965bd6dbebf713f4b146aee8",
+          "text": "Non-Compete: 1. Covenants Not to Compete.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1052:14bc17d2bdf8b4702d5ce87b922fedcc01c750329af6df730ea51dc9b533bc0d",
+          "text": "Non-Compete: (b) Member covenants and agrees that during the term of the Franchise Agreement, except as otherwise approved in writing by Franchisor, Member will not, either directly or indirectly, for itself, or through, on behalf of, or in conjunction with any person, persons, partnership, corporation, or entity:\n\n [restriction_scope=activity; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1053:c602b6ebf8290b87ecfff3c8312b6bcf897044555a3cac52ade122ec2cc1f276",
+          "text": "Non-Compete: Page 68 of 80\n\n(i) Solicit, divert or attempt to solicit or divert any business or customer of the Franchised Business or of any Franchised Business using the System to a Competitive Business, by direct or indirect inducement or otherwise, or do or perform, directly or indirectly, any other act injurious or prejudicial to the goodwill associated with Franchisor's Proprietary Marks and the System.\n\n [covered_subject=trademark; restriction_scope=activity; nonsolicit_target=customers]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1055:12554339dda24a450f4df25df95ec5f4b1941bcb8cda30b4fd2fdb865cfa9259",
+          "text": "Non-Compete: (iii) Either directly or indirectly for him/herself or on behalf of, or in conjunction with any person, persons, partnership, corporation, or entity, own, maintain, operate, engage in, be employed by or accept any compensation or remuneration from, or have any interest in any Competitive Business.\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1056:2d67c365ce1403e274d93e2249068cb5b3a0b81bc7f54acf48450120454c6ac7",
+          "text": "Non-Compete: (c) As used in this Agreement, the term \"Competitive Business\" is agreed to mean any property and/or casualty insurance distribution business.\n\n [covered_subject=ip_infringement]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1072:67d9fcb020ad43c799325f524d344f4df7a1a3872d9da533ab27ad1434e897df",
+          "text": "Non-Compete: D. The Member, by virtue of his or her position with Franchisee, will gain access to certain of Franchisor's Confidential Information, as defined herein, and must therefore be bound by the same non-competition provisions that Franchisee is bound by.\n\n [procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1074:ebf9d613bb6c7fda16598c9c0923a07c82bff53f0461aeaec8214a25508c51ef",
+          "text": "Non-Compete: 1. Covenants Not to Compete. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1076:26dae0752b5b16e4c2b2f6a8722c33a62dc7216506951b88e27f8dc9384e1dd5",
+          "text": "Non-Compete: (a) Member covenants and agrees that during the Post-Term Period (defined below), except as otherwise approved in writing by Franchisor, Member will not, either directly or indirectly, for itself, or through, on behalf of, or in conjunction with any person, persons, partnership, corporation, or entity, Member will not own, maintain, operate, engage in, be associated with or accept any compensation or remuneration from, or have any interest in or render services or give\n\n [temporal_bound=Post-Term Period; nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1077:4447b681737e2b45f39e4ea3a0bd6a89548a21a69e45e20f670040e8947c2b0a",
+          "text": "Non-Compete: Page 71 of 80\n\nadvice to any Competitive Business and which business is, or is intended to be, located within the city or county in which the Approved Location is situated.\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1079:2d67c365ce1403e274d93e2249068cb5b3a0b81bc7f54acf48450120454c6ac7",
+          "text": "Non-Compete: (c) As used in this Agreement, the term \"Competitive Business\" is agreed to mean any property and/or casualty insurance distribution business.\n\n [covered_subject=ip_infringement]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1176:354079a2f8b3c01bb7590aa8ccaf807767510d1cd73211c949edba2e23dc2deb",
+          "text": "Non-Compete: Sec. 101 et seq.).\n\nThe Franchise Agreement contains a covenant not to compete which extends beyond the termination of the franchise. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1288:f20a2b4f77ab9e05569d87ee96110e013a8ab10bd972dd4a5239d4f4735b92c9",
+          "text": "Non-Compete: 525 THE FACT THAT THE PROPOSED TRANSFEREE IS A COMPETITOR OF THE FRANCHISOR OR SUBFRANCHISOR.  [covered_subject=ip_infringement]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1382:a8291c42299fa213189df8c5cf7f6a2101c18f66ead0fb15c5ebf373ebd14b57",
+          "text": "Non-Compete: Neither the franchisor, its affiliate, its predecessor, officers, or general partner during the 10-year period immediately before the date of the offering circular:  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1426:be797069efe9d6c849f7eed761b738e7cdad816f0a7f88ebbb6e47e4d73448cf",
+          "text": "Non-Compete: Franchise disclosure documents which disclose the existence of covenants restricting competition contrary to Section 9-08-06, N.D.C.C., without further disclosing that such covenants will be subject to this statute.\n\n [law_multiplicity=single; jurisdiction=North Dakota; temporal_bound=12_months; termination_right=either_party; nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1446:323971502d2aa97c0e7d58afe230dfabd2ebe5a0d8f7e6c1b39949a3a72bf150",
+          "text": "Non-Compete: Any provision which discloses the existence of covenants restricting competition contrary to Section 9-08-06, N.D.C.C., without further disclosing that such covenants will be subject to this statute.\n\n [law_multiplicity=single; jurisdiction=North Dakota; temporal_bound=Section 9-08-06, N.D.C.C.; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:207:f900cb6bf3489706293551b58b5b322dd8e438780e81069b5d65bb8ca859df37",
+          "text": "Non-Compete: 6.3.3 Your Operating Principal, and all of your trainees, Managers, and Producers must sign and deliver to us a personal covenant of confidentiality, an in-term non-competition agreement, and a post-term non-competition agreement in substantially the form of Exhibit F to this Agreement.\n\n [temporal_bound=in-term; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:22:5d781695d8ecdd90a5dbc6b63cf1baadba7b84424c3ab88fb1ea689909a756ce",
+          "text": "Non-Compete: We will not operate your Goosehead Business for you, although we have (and will continue) to set standards for Goosehead Businesses that you will have chosen to adopt as yours by signing this Agreement and by your day-to-day management of your Goosehead Business to our brand standards.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:247:9163a8aadb82a03fad07ab6635c00c5834df83802328f5901d00a412abaa2dc5",
+          "text": "Non-Compete: 7.2 Prohibited Products. You acknowledge and agree that your Franchised Business will not use and/or offer for sale such products or services which we have prohibited you from using and/or selling (\"Prohibited Products and Services\").  [covered_subject=ip_infringement]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:248:5b06e6779fa555e1fddc9e6d047baf7e14bfc4923af98c99682af59900fdc1b3",
+          "text": "Non-Compete: Prohibited Products and Services will include selling any services or products other than personal lines property and casualty, small commercial property and casualty, and life insurance with insurance carriers that we have made available to you through our appointment process. ",
+          "confidence": null
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "In-term covenant not to compete, and a post-term (Post-Term Period) covenant",
+        "May not own, operate, be employed by, or hold an interest in a Competitive Business",
+        "Competitive Business = property and/or casualty insurance distribution business",
+        "Non-solicitation of the Franchised Business's customers"
+      ],
+      "expected_citations": [
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1052:14bc17d2bdf8b4702d5ce87b922fedcc01c750329af6df730ea51dc9b533bc0d",
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1076:26dae0752b5b16e4c2b2f6a8722c33a62dc7216506951b88e27f8dc9384e1dd5",
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1055:12554339dda24a450f4df25df95ec5f4b1941bcb8cda30b4fd2fdb865cfa9259",
+        "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1053:c602b6ebf8290b87ecfff3c8312b6bcf897044555a3cac52ade122ec2cc1f276"
+      ],
+      "notes": "In-term + post-term non-compete, no interest in a competing P&C insurance business, non-solicit customers, geographically scoped to the Approved Location's city/county (:1077)."
+    },
+    {
+      "id": "answerable-5",
+      "kind": "answerable",
+      "function_served": "Audit Rights",
+      "question": "What audit rights does this contract grant?",
+      "contract_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1",
+      "evidence": [
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:230:fd33fec276d0dfc40905c3677e981678e7d1ce59dd5b81809782c19efcfd1335",
+          "text": "Audit Rights: 7.5 Supplier shall provide Bank of America sufficient access to the development site and Supplier personnel so that Bank of America may have a reasonable opportunity to evaluate the status of any Customizations.  [procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:252:af6fe8464adb4aeb275777a0a2b1cab74db1640b5f5282bd1ef293f9601058be",
+          "text": "Audit Rights: Supplier may elect to observe the verification process at its own expense.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:290:18dcffe9b4d43759c1eb4fbdcfdd5d1aec9355b6299b3c4e47bc950448a8e0ba",
+          "text": "Audit Rights: Bank of America may duplicate these materials for Bank of America's use exclusively and use them to conduct other classes at Bank of America's convenience.     [procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:324:db9d175ed765373565ced0fe5c11acbf8b7ead014d80a383371307aec788517b",
+          "text": "Audit Rights: In the event that a taxing authority performs a sample and projection audit on Bank of America, then Supplier shall be responsible for the payment of all projected tax amounts including all interest and penalties on any projected taxes assessed resulting from taxing errors identified by such taxing authority on Supplier's Invoices, provided however, that Supplier shall receive timely notice that such invoice is included In a tax authority's audit and Supplier has the right to produce documentation to support that the tax was satisfied.  [temporal_bound=audit; audit_frequency=sample and projection]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:332:43af1c78523777561bd3c0e876a60fac6f72786bcafbf17fd02b52e95bb26fcf",
+          "text": "Audit Rights: 16.10 Supplier shall keep and maintain complete and accurate accounting Records in accordance with generally accepted accounting principles consistently applied to support and document all amounts becoming payable to Supplier hereunder. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:333:cab5daa7aa01a8ce6b58e59e73f2fca0a8475f26df2c617e9dff915cc84327db",
+          "text": "Audit Rights: Upon request from Bank of America, Supplier shall provide to Bank of America (or a Representative designated by Bank of America) access to such Records for the purpose of auditing such Records during normal business hours.  [audit_frequency=upon request]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:334:df3a53d77d962df8633064e061cdde1c414d065ae6482637e77b5485f85e0a93",
+          "text": "Audit Rights: Supplier shall retain all Records required under this Section in accordance with the Section entitled \"Audit\" of this Agreement, after the amounts documented In such Records become due.  [jurisdiction=United States; temporal_bound=unbounded; procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:337:ec7ba51f71a9f1a2d230894bd813116cd09259512c16880a10de08ab782eff74",
+          "text": "Audit Rights: cooperate fully with Bank of America and any taxing authority involving any audit of sales, use or excise taxes.  [law_multiplicity=single; jurisdiction=New York; notice_period=30_days; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:383:ddd589e0683d0908aa77c15674e590fd3566282743295900657af2f6675ccec0",
+          "text": "Audit Rights: 22.1 Upon Bank of America's request, Supplier shall promptly furnish its financial statements as prepared by or for Supplier in the ordinary course of its business. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:387:cc7427036e0a6f879c3d478b7a5ec1d1a89a9998d4952add5764390c04834c9e",
+          "text": "Audit Rights: If Bank of America's review of financial statements causes Bank of America to question Supplier's ability to perform its duties hereunder, Bank of America may request, and Supplier shall provide to Bank of America, reasonable assurances of Supplier's ability to perform its duties hereunder.  [procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:399:70241150d27b63604c4d1b21a3ad3af749c9accfde098ddd4f62658018efbeee",
+          "text": "Audit Rights: 25.0 SUPPLIER PERSONNEL\n\n25.1 Bank of America shall provide Supplier, if necessary and at a mutually agreed upon time, reasonable access to Bank of America to provide its services, subject to the existing security regulations at Bank of America.\n\n [notice_period=mutually agreed upon]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:412:fc9e3ee45c621a3c0b1111cff8a1161f8235ce8fb1e4039b751a6a91acaa41e6",
+          "text": "Audit Rights: 25.6 Supplier shall not knowingly permit a Representative or Subcontractor to have access to the Confidential Information, premises, records or data of Bank of America when such Representative or Subcontractor:  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:417:bf1b89e4bdedaf86fe289f827eda9d2489ea9ae4d2ce99464009c525ee028d56",
+          "text": "Audit Rights: Supplier shall conduct at its expense background checks on its employees and those of its Subcontractors who will have access (whether physical, remote, or otherwise and whether on or off Bank of America premises) to Bank of America facilities, equipment, systems or data and such background checks shall comply with Bank of America procedures and requirements as set forth in SCHEDULE F to this Agreement and updated in writing delivered to Supplier from time to time. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:423:2a92f2618715086bcb786f6bc9d8846d5f8fe81f971e0e7708250baa127dc245",
+          "text": "Audit Rights: Following such notice, at the request of Bank of America and to the extent permitted by law, Supplier shall cooperate with investigations conducted by or on behalf of Bank of America. [procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:453:71b3a42ba516d2377f40105c3fd48361af05e4839eda6777575c022765de770d",
+          "text": "Audit Rights: (b) Recipient's employees or officers;  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:454:4b3a4a2a3a49706f908eda3e41bbabc20a2dcc35be403c62502bf0033c5d39b8",
+          "text": "Audit Rights: (c) Affiliates of Recipient, its independent contractors at any level, agents and consultants, provided that all such persons are subject to a written confidentiality agreement that shall be no less restrictive than the provisions of this Section;  [covered_parties=affiliates]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:493:54821a1a3e2cc1f3e5df2d26f692c17ab8ad465715cc208b8d9565c0752a6413",
+          "text": "Audit Rights: B. Periodic discussions between Bank of America personnel and Supplier Information Technology security personnel to reviewSupplier Security Controls; and\n\n [procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:549:3623059286adb33c7af4066dce8935b53f8e015692c2338e83e5002ce143e821",
+          "text": "Audit Rights: 33.0 AUDIT\n\n33.1 Supplier shall maintain at no additional cost to Bank of America, in a reasonably accessible location, all Records pertaining to its Products and services provided to Bank of America under this Agreement for a period of seven (7) years or as required by law, if longer.  [temporal_bound=7_years; audit_frequency=not specified]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:550:870462ded5593e18fe74c240ee7b5b03ba194fc42d39bec9daa5417e6d21746e",
+          "text": "Audit Rights: Such Supplier Records referenced above may be inspected, audited and copied by Bank of America, its Representatives or by federal or state agencies having jurisdiction over Bank of America, during normal business hours and at such reasonable times as Bank of America and Supplier may determine.  [jurisdiction=United States; notice_period=reasonable; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:551:018068ce9d2fc306f74b2ab84f463a70c924c1a5815e7146980071f45753867c",
+          "text": "Audit Rights: Records available for review shall exclude any records pertaining to Supplier's other customers deemed proprietary and confidential and Supplier confidential and proprietary records not associated with the Products and services provided under this Agreement.  [nonsolicit_target=customers]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Bank of America may audit/inspect the Supplier's records upon request during normal business hours",
+        "Supplier must keep accurate records and retain them (seven years)"
+      ],
+      "expected_citations": [
+        "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:333:cab5daa7aa01a8ce6b58e59e73f2fca0a8475f26df2c617e9dff915cc84327db",
+        "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:550:870462ded5593e18fe74c240ee7b5b03ba194fc42d39bec9daa5417e6d21746e",
+        "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:549:3623059286adb33c7af4066dce8935b53f8e015692c2338e83e5002ce143e821"
+      ],
+      "notes": "Records kept + retained 7 years; BoA (and its reps / regulators) may inspect/audit/copy during business hours, excluding other customers' proprietary records."
+    },
+    {
+      "id": "answerable-6",
+      "kind": "answerable",
+      "function_served": "Anti-Assignment",
+      "question": "Are there restrictions on assigning this contract?",
+      "contract_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT",
+      "evidence": [
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:628:bd142889c6b23173420bccf2b09e39b14ede1578c1c5740e1dae158b19c74523",
+          "text": "Anti-Assignment: This Agreement is fully transferable by us and will inure to the benefit of any person or entity to whom it is transferred, or to any other legal successor to our interests in this Agreement.    [assignment_consent=free]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:632:b95e53eef1ccd6ba7272754ff7fc78b7afdb1a243cdc0033acd635d1978df7c4",
+          "text": "Anti-Assignment: Any Transfer that is made without our approval will constitute a breach of this Agreement and convey no rights to or interests in this Agreement, you, the Franchise, or any other The Joint Corp. franchise.    [temporal_bound=unbounded; assignment_consent=consent_required; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:647:7ad8621f4f72d4c23db17ae4830bb0f3b003d007dd9174f5480d25efe1cd030e",
+          "text": "Anti-Assignment: (a) the Proposed New Owner must have sufficient business experience, aptitude, and financial resources to operate the Franchise;   ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:649:ba529f4356881e8924b488cd122a9229be8e8967534b668eff802c5eabbaae8a",
+          "text": "Anti-Assignment: (c) the Proposed New Owner's directors and such other personnel as we may designate must have successfully completed our Initial Training program, and shall be legally authorized and have all licenses necessary to perform the services offered by the Franchise. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:650:471d46bf5203770718a1cf48f36fb5ff59c45d9610c6e39523bcda3f7f5d3949",
+          "text": "Anti-Assignment: The Proposed New Owner shall be responsible for any wages and compensation owed to, and the travel and living expenses (including all transportation costs, room, board and meals) incurred by, the attendees who attend the Initial Training program;    [procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:651:973a90cf24203d5b16f68e0cea9156b398221df6d0748a7c48c0613501687963",
+          "text": "Anti-Assignment: (d) if your lease for the Premises requires it, the lessor must have consented to the assignment of the lease of the Premises to the Proposed New Owner;    [assignment_consent=consent_required]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:653:400aab7932fb3b61aa4e6a7d6db74a7cc369f3007920f8a9dde15b15410eec0f",
+          "text": "Anti-Assignment: (f) you and your Principal Owners and your and their spouses must execute a general release (in a form satisfactory to us) of any and all claims you and/or they may have against us, our affiliates, and our and our affiliates' respective officers, directors, employees, and agents;    [nonsolicit_target=employees; claim_scope=first_party; mutuality=mutual]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:655:0eee6f96bff9b460747968af89a0f058a0626b6b4f2f553c7aad5183b4e9e1dd",
+          "text": "Anti-Assignment: 36\n\n(g) we must approve the material terms and conditions of the proposed Transfer, including without limitation that the price and terms of payment are not so burdensome as to adversely affect the operation of the Franchise;   ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:660:0e256e162eeef132ec3ca0258f956868bc7fe1e5ee2220bba52ac211d089b638",
+          "text": "Anti-Assignment: The Proposed New Owner shall have agreed, in writing, to make such reasonable capital expenditures to remodel, equip, modernize and redecorate the interior and exterior of the premises in accordance with our then existing plans and specifications for a The Joint Corp. Location franchise, and shall have agreed to pay our expenses for plan preparation or review, and site inspection;    [jurisdiction=New York; temporal_bound=unbounded; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:661:0c160961a8691edf8f170a688554d67263f9e4fd5298154f23bb948c849f48b8",
+          "text": "Anti-Assignment: (l)  upon receiving our consent for the Transfer or sale of the Franchise, the Proposed New Owner shall agree to assume all of your obligations under this Agreement in a form acceptable to us, or, at our option, shall agree to execute a new Franchise Agreement with us in the form then being used by us.  [assignment_consent=consent_required; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:662:214d41b3462c9042b58ffdc022a12f4acf61482e79f6a467c32f71db0fa11c82",
+          "text": "Anti-Assignment: We may, at our option, require that you guarantee the performance, and obligations of the Proposed New Owner; and   (m) you must have properly offered us the opportunity to exercise our right of first refusal as described below, and we must have then declined to exercise it.    [right_of_first_type=rofr; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:683:d9ca9642817842688080266f0035d1da7326b978d9703e9f98b927114744552b",
+          "text": "Anti-Assignment: Such Transfers, including without limitation transfers by a will or inheritance, will be subject to all the terms and conditions for assignments and Transfers contained in this Agreement.  [assignment_consent=consent_required]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:686:52be74204058a044986d7e69889469ad7cd44419208c48ab71289ef04e083ab0",
+          "text": "Anti-Assignment: Our consent to a proposed Transfer pursuant to this Section 14 will not constitute a waiver of any claims we may have against you or any Principal Owner, nor will it be deemed a waiver of our right to demand exact compliance with any of the terms or conditions of this Agreement by the Proposed New Owner.    [assignment_consent=notice_only; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:692:df84f3d967db3a93c37c4a0788f4c9d5eb1abdf265f73f094e376221e903b414",
+          "text": "Anti-Assignment: (3) you or your Principal Owners assign or Transfer this Agreement, any Interest, the Franchise, or assets of the Franchise without complying with the provisions of Section 14;  [assignment_consent=consent_required]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:877:6f8a85a81003d1c7862971097c63b5c499a5539c1bb9482cf8ceae664314d1ca",
+          "text": "Anti-Assignment: Lessee shall have the right to assign all of its right, title and interest in and to the Lease Agreement to Franchisor or its parent, subsidiary, or affiliate, (including another franchisee) at any time during the term of the Lease, including any extensions or renewals thereof, without first obtaining Lessor's consent, pursuant to the terms of the Collateral Assignment of Lease attached hereto as Exhibit A.  [temporal_bound=term_of_lease; assignment_consent=free; nonsolicit_target=employees; covered_parties=licensee_affiliates]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:878:ee5f2918efaf2494544fadac0387a05238200aa4649a6b4e4e368caa73e0bc2f",
+          "text": "Anti-Assignment: However, no assignment shall be effective until such time as Franchisor or its designated affiliate gives Lessor written notice of its acceptance of the assignment, and nothing contained herein or in any other document shall constitute Franchisor or its designated subsidiary or affiliate a party to the Lease Agreement, or guarantor thereof, and shall not create any liability or obligation of Franchisor or its parent unless and until the Lease Agreement is assigned to, and accepted in writing by, Franchisor or its parent, subsidiary or affiliate.  [assignment_consent=notice_only]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:879:da409309719c8bc4b3f8eec51eea0bf03ce0f83b01a50cba10378f827d9cb4cd",
+          "text": "Anti-Assignment: In the event of any assignment, Lessee shall remain liable under the terms of the Lease.  [assignment_consent=notice_only; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:880:901842f3f7abb077a806e5f83b80120d44488ed892ba60ece5e84221dd22330c",
+          "text": "Anti-Assignment: Franchisor shall have the right to reassign the Lease to another franchisee without the Landlord's consent in accordance with Section 4(a).    [assignment_consent=free]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:895:010a347a017d7155735de9b88441e5f5f2c4c427b3f5676819c5a09fe9c28fef",
+          "text": "Anti-Assignment: (a)  Upon Lessee's default and failure to cure the default within the applicable cure period, if any, under either the Lease Agreement or the Franchise Agreement, Franchisor will, at its option, have the right, but not the obligation, to take an automatic assignment of Lessee's interest in the Lease Agreement and at any time thereafter to re-assign the Lease Agreement to a new franchisee without Lessor's consent and to be fully released from any and all liability to Lessor upon the reassignment, provided the franchisee agrees to assume Lessee's obligations and the Lease Agreement.  [law_multiplicity=single; jurisdiction=New York; temporal_bound=1_year; cap_quantum=0; cap_basis=fixed_fee; termination_right=either_party; assignment_consent=notice_only; procedural=duty_to_defend; nonsolicit_target=customers]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:914:d6143050d874c8bd365f8fb1a853cc27c5c8d1f7cb902c2f597aa122c04cf6f0",
+          "text": "Anti-Assignment: Assignor represents and warrants to Assignee that it has full power and authority to so assign the Lease Agreement and its interest therein and that Assignor has not previously, and is not obligated to, assign or transfer any of its interest in the Lease Agreement nor the Premises demised thereby.    [assignment_consent=free]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "The franchisee may not assign/transfer without the franchisor's approval (an unapproved transfer is a breach)",
+        "The franchisor's interest is freely transferable",
+        "Approved transfers are conditioned (new-owner qualification, general release, franchisor right of first refusal)"
+      ],
+      "expected_citations": [
+        "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:632:b95e53eef1ccd6ba7272754ff7fc78b7afdb1a243cdc0033acd635d1978df7c4",
+        "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:628:bd142889c6b23173420bccf2b09e39b14ede1578c1c5740e1dae158b19c74523",
+        "JOINTCORP_09_19_2014-EX-10.15-FRANCHISE_AGREEMENT:662:214d41b3462c9042b58ffdc022a12f4acf61482e79f6a467c32f71db0fa11c82"
+      ],
+      "notes": "Asymmetric: franchisor freely transfers; franchisee needs consent and must satisfy numerous conditions incl. a ROFR."
+    },
+    {
+      "id": "answerable-7",
+      "kind": "answerable",
+      "function_served": "Insurance",
+      "question": "What insurance is each party required to carry?",
+      "contract_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT",
+      "evidence": [
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1007:f438650208bb8c1a8a0cb0b688fb97a794692ba21e6aef32df6071db4190936c",
+          "text": "Insurance: · Any client applying for a line of credit must be subject to a preapproval from the Business Unit providing the service or the  division of ECOPETROL in charge of conducting the credit analysis.    · The risk rating does not guarantee the approval of credit of confidence;  [law_multiplicity=single; jurisdiction=Colombia; temporal_bound=12_months; cap_quantum=$1,000,000; cap_basis=fixed_fee; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1055:d29e973d419b159a3cea3cbffd735d97a0212de38b120c3784132a2704668011",
+          "text": "Insurance: Low risk.  D&P: DP1-  BRC: ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1058:b9db2a2198be34bdb710b6ce846248179179f2dd49083e99ab09113dce8ab0ea",
+          "text": "Insurance: 9\n\nClients whose internal rating is level 1 (superior) according to the table above, in order to have a line of credit shall not offer acceptable guarantees  issued by third parties in favor of ECOPETROL as indicated in Table 1. Instead, they shall subscribe a promissory note with a letter of instructions  as support for their payment obligations.  [law_multiplicity=single; jurisdiction=Colombia; temporal_bound=12_months; cap_quantum=$1,000,000; cap_basis=fixed_fee; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1063:163b208769184d6dd55f2091311ad3f10223188df854184b04c476c7112e6ce6",
+          "text": "Insurance: Medium risk.  D&P: DP2  BRC: ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1069:6c8b79884b459db3da2cb69ef6d235976dc030c59d31cde0725e4c0275f38a50",
+          "text": "Insurance: High risk.  D&P: DP4 or below  BRC:  [cap_quantum=DP4 or below]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1073:ad9523caad139c3459dfdb19243a389007a50acf349fc417304f00059d256ee5",
+          "text": "Insurance: 10\n\nThose clients offering acceptable guarantees to support their purchases, shall not require a risk rating from any risk rating agency acknowledged  and accept it by ECOPETROL because the risk is assumed by the guarantor.  [temporal_bound=acceptable_guarantees; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1084:ee28a40e7352d15677ff8b592af3a2c38799139c98c3a6642be8cdba8d18ac1a",
+          "text": "Insurance: 11\n\nThe lines of credit recommended by the risk rating company and/or approved are strictly of internal character and an indication of the maximum  debt of a specific client.      [cap_quantum=maximum debt of a specific client]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1091:26aa17a72755d9b023f3940eab7a30f532c04cd2e28c7f62cf8e38fd6a437337",
+          "text": "Insurance: · The coverage of the guarantees or the amount of financial instruments for payment must be sufficient to cover eventual increases in the  price of services.\n\n [temporal_bound=eventual; cap_quantum=sufficient]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1095:6cec7a7243c7a7ec7822a7d5d1b71c41546ff7a338dbdf2aa01d7940f11ccd6d",
+          "text": "Insurance: · Only guarantees established in the guide for administration of acceptable guarantees ECP-UTE-G-006 shall be acceptable.\n\n [jurisdiction=ECP-UTE-G-006]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1109:93dc564de452ddb25f9abd4a2f63919e27ce13fdf7a41c5b1a914224f7e5b2d9",
+          "text": "Insurance: · Acceptance of any other type of guarantee established in the Contracting Manual shall require approval from the respective manager  and/or director with previous approval from the legal vice presidency.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1155:9cf4f6387b03f95e28069f9e7644f5c46d135cdc257f57a377ac385d53ae48a7",
+          "text": "Insurance: For such purposes, the loss shall be reported to the insurance company (in case there is a policy covering the default), the documentation required  shall be presented before the banking entities (bank guarantees, bank acceptances or letters of credit), the client shall be contacted in the case of a  promissory note and in the case of guarantees, they shall be made effective before the corresponding entity in order to collect any overdue  amounts together with late interests.\n\n [law_multiplicity=single; jurisdiction=New York; temporal_bound=12_months; cap_quantum=$1,000,000; cap_basis=fixed_fee; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1209:910d5ecab1640e126697d95412597c79f6734fc052e9b45fe011101ca06c829a",
+          "text": "Insurance: ANNEX 3     INSURANCE ONLY POLICY OF PERFORMANCE FOR STATE CONTRACTS IN FAVOR OF ECOPETROL S A\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1210:004372ff4a88750458090c6d84e43b397f06c0551415e1909648625a23d67946",
+          "text": "Insurance: INSURANCE ONLY POLICY OF PERFORMANCE FOR STATE CONTRACTS IN FAVOR OF ECOPETROL S A     Front Page\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1216:a3a5fc3ee34f60ea6087a712c053a9201faa9ea659459fc2e20ca37e3c63d5cc",
+          "text": "Insurance: c) address\n\n6. ENTITY INSURED (ECOPETROL S A)\n\n [covered_subject=ip_infringement; procedural=duty_to_defend; nonsolicit_target=employees; covered_parties=affiliates]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1219:3d6f098d64403950e1402531821b91656f294a838143aa51dfc0d484b9a102a0",
+          "text": "Insurance: 8. COVERAGE GRANTED\n\n9. INSURED LIMITS GRANTED FOR EACH COVERAGE\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1220:5b12d1a13ec5d8e0a559a8cb2b77870f17635e956c10a9faaa3589f6cc093fe3",
+          "text": "Insurance: 10. VALIDITY FOR EACH OF THE COVERAGE GRANTED\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1222:010cdab660ccf2b48981f190b368cfe9c968a0dcd892c8a0a211278fc1952bcd",
+          "text": "Insurance: c) Days\n\n11. IDENTIFICATION AND PURPOSE OF THE CONTRACT GUARANTEED BY THE INSURANCE\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1223:8c92aa16a6fe97b92666bd39c48419b57243555bcfef7f3301a5f09db37eaf96",
+          "text": "Insurance: 12. PARTICULAR CONDITIONS OF THE INSURANCE\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1224:83cd6491ebf4be740224194e0a2b59908cfea27ad001e6176f0bf0f53cfebfb6",
+          "text": "Insurance: 13. PREMIUM FOR EACH OF THE COVERAGE GRANTED\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GRANTIERRAENERGYINC_05_07_2012-EX-10.6-TRANSPORTATION_CONTRACT:1225:6f925e29daecbc208c249869701e66b813c11484c05bd6f47603a59774e4c0c4",
+          "text": "Insurance: 14. TOTAL PREMIUM FOR ALL COVERAGE CONTRACTED\n\n",
+          "confidence": null
+        }
+      ],
+      "answerable": false,
+      "must_include": [],
+      "expected_citations": [],
+      "notes": "UNANSWERABLE from the served evidence: it is about CREDIT-risk ratings, acceptable payment guarantees, and a BLANK 'insurance only policy of performance' form (fields with no values). It does not state what insurance each party must carry. Correct behaviour = abstain (or answer only 'a performance policy in favour of Ecopetrol is referenced, details not in the evidence')."
+    },
+    {
+      "id": "answerable-9",
+      "kind": "answerable",
+      "function_served": "Exclusivity",
+      "question": "What exclusivity obligations does this contract create?",
+      "contract_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1",
+      "evidence": [
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:108:a462e2f48f25ead76f9168a58ffa072b20897254e65892afa6d58f7bedde26cf",
+          "text": "Exclusivity: Fox has also entered into a separate agreement with T-Mobile to permit T-Mobile to distribute certain Wireless Products to end users outside of the United States the \"T-Mobile Agreement\").  [jurisdiction=United States]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:112:11d9f560eefdaa53af42218c804effae5e8dd0b5897b2dcf8ebe6edc2b1444bc",
+          "text": "Exclusivity: Licensee shall not enter into an exclusive distribution agreement with\n\n [exclusivity_type=exclusive; nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:116:91036be1b348b27e99b209a73ca74d2e7a399a2f822d22844998cf0e69e7a0f9",
+          "text": "Exclusivity: a CSP in any of the VGSL Territories listed in Paragraph 2(c)(ii)(A) below, and Fox has not granted and will not grant any exclusive distribution rights to VGSL or T-Mobile.  [covered_subject=ip_infringement; termination_right=one_party; exclusivity_type=non_exclusive; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:119:2afde36668eb9f817951b41153c7a961e4fcc28eceb8e21da2329e0c64e24d4d",
+          "text": "Exclusivity: (A) Non-Exclusive CSP Distribution in VGSL Territories:  [exclusivity_type=non_exclusive]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:11:19a272731c189a01f11babbb15eb54a7e0ed619c30e27ce130a4ba27e789c30d",
+          "text": "Exclusivity: Fox grants to Licensee a limited, exclusive (except as otherwise may be provided in this Agreement), non-transferable (except as permitted in Paragraph 17(d)) right and license to use, make, have made (as set forth in Paragraph 1(a)(i) below), reproduce, modify, and create derivative works of\n\n [exclusivity_type=exclusive]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:120:5ec67f49b52072892ca0646efea61ff8c29d311792f25fbb4b3a50094c01d94e",
+          "text": "Exclusivity: Under no circumstances shall Licensee enter into an exclusive distribution agreement with a CSP other than VGSL in the following territories (\"VGSL Territories\") covered under the VGSL Agreement:  [covered_subject=ip_infringement; exclusivity_type=exclusive; nonsolicit_target=employees; covered_parties=licensee_affiliates]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:121:6828fcd44795a3863bf80c311c01d49e1baf7c863606996e2b7835749120b8da",
+          "text": "Exclusivity: (1) United Kingdom; (2) Ireland; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:122:e2d7f0f26dbac93ef3ce51c014b1532919f371df5a189e1405de1c945755ce61",
+          "text": "Exclusivity: (3) Germany; (4) Spain; (5) France; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:123:2a3141877c93d43ef195229adeb8212e430711f1f1e8d45d0664ba996c9bbdf1",
+          "text": "Exclusivity: (6) Sweden; (7) Switzerland; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:124:6e84a05f88ce3cb2152f76586531a9a0bb7d2c088a124e88d979cfc24a65e205",
+          "text": "Exclusivity: (8) Portugal; (9) Netherlands; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:125:97bd53ab3ca48d01ca601a8c6a31b6ccb336aaa45fc3927cecbc2102e355bd1a",
+          "text": "Exclusivity: (10) Greece; (11) Italy; (12) Australia;  [covered_subject=copyright; covered_subject=trademark; covered_subject=ip_infringement]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:126:39dac73d3f28415eda01222afbaba024d2a7486cc45cd5995266d0fafc8e425c",
+          "text": "Exclusivity: (13) New Zealand; (14) Egypt; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:127:1a04e7af91051130ce80162641ccbb489ac39f62d6d40746a7d0c43d72786d8b",
+          "text": "Exclusivity: (15) Slovenia; (16) Belgium; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:128:d3388c6f564e2f2e0e99a29f82698845d9fa1b66b2319012c153336c3c703671",
+          "text": "Exclusivity: (17) Austria; (18) Hungary; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:129:567cae47d1fc8cd74bb6200def01a9c793d4746f2444c8b4fc9aa55fb00ba4ad",
+          "text": "Exclusivity: (19) Malta; (20) Croatia; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:130:3154d04ab7c2eca6ccf0fb0283ce7c05abd348e07febc654d282b86ace7aa0a9",
+          "text": "Exclusivity: (21) South Africa; and (22) Japan.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:139:4d5b5dde8eee2fb61a597a32faa8faa65770bec30ac4c838fe55d84d078dde24",
+          "text": "Exclusivity: 3. TERRITORY: Licensee shall use commercially reasonable efforts to exploit the rights granted hereunder throughout the world (the \"Territory\"), including without limitation all of the following VGSL Territories set forth in Paragraph 2(c)(i)(B) above:  [jurisdiction=VGSL; temporal_bound=unbounded]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:140:6828fcd44795a3863bf80c311c01d49e1baf7c863606996e2b7835749120b8da",
+          "text": "Exclusivity: (1) United Kingdom; (2) Ireland;  [jurisdiction=Ireland]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:141:e2d7f0f26dbac93ef3ce51c014b1532919f371df5a189e1405de1c945755ce61",
+          "text": "Exclusivity: (3) Germany; (4) Spain; (5) France; ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:142:2a3141877c93d43ef195229adeb8212e430711f1f1e8d45d0664ba996c9bbdf1",
+          "text": "Exclusivity: (6) Sweden; (7) Switzerland; ",
+          "confidence": null
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Fox grants the Licensee a limited exclusive license",
+        "The Licensee may not enter an exclusive distribution agreement with a CSP other than VGSL in the listed VGSL Territories"
+      ],
+      "expected_citations": [
+        "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:11:19a272731c189a01f11babbb15eb54a7e0ed619c30e27ce130a4ba27e789c30d",
+        "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:120:5ec67f49b52072892ca0646efea61ff8c29d311792f25fbb4b3a50094c01d94e",
+        "GluMobileInc_20070319_S-1A_EX-10.09_436630_EX-10.09_Content_License_Agreement1:112:11d9f560eefdaa53af42218c804effae5e8dd0b5897b2dcf8ebe6edc2b1444bc"
+      ],
+      "notes": "Exclusive license to Licensee + a restriction against granting exclusivity to CSPs other than VGSL in the enumerated territories."
+    },
+    {
+      "id": "answerable-10",
+      "kind": "answerable",
+      "function_served": "Minimum Commitment",
+      "question": "What minimum commitments does this contract impose?",
+      "contract_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement",
+      "evidence": [
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1002:a493b3eff8a577eddd9b7e56758747da70046aba613b8cf10778f14311c0738a",
+          "text": "Minimum Commitment: Estimated production, including grade of COMMERCIAL PROPAGULES, land area to be sown, estimated production and harvest date.        [jurisdiction=United States; temporal_bound=harvest date]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1021:0ffc6964e208134551a6e7fc84990bb6f0d62f232e56571dcde3fa9f49768de2",
+          "text": "Minimum Commitment: \"TRAIT\" shall mean a valuable characteristic of a plant selected by CERES (e.g. drought tolerance, specific flowering time) where at least  seventy percent (70%) of such characteristic is associated with no more than two (2) identified markers.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1096:2bc2b649f6b61b8ea87992e648303e08aedf9969030e459da588894d32afcc87",
+          "text": "Minimum Commitment: It was agreed that while the approach is more likely to work in [***], it should also include x [***] and at least initially [***].\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1140:57d2095453fd5f131a7bf4d0a559055020e15fd1fdb19190203277d7db0706bf",
+          "text": "Minimum Commitment: Goal: A complete and documented Miscanthus [***].\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1165:133e4b9273b59b899219370ea1d18e5a08c6897118fcaa24762849114247ba72",
+          "text": "Minimum Commitment: Send seed of [***] candidates and [***] to CERES locations for trialing.\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1175:96d40b5f5ba774cb93e49022ac486dec21b9a5a4a4e403c954edb3df58a44a63",
+          "text": "Minimum Commitment: After [***] (or [***]) years, the best genotypes will be provided to  CERES to test at diverse locations for commercially relevant evaluation.\n\n [law_multiplicity=single; jurisdiction=United States; temporal_bound=years]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1209:5b05eff3222cc9f197ff441d6729f1890f9f11dd0d5a4c79e2766faefed184ca",
+          "text": "Minimum Commitment: Due at annual meeting in January.\n\n [temporal_bound=annual; commitment_quantum=annual meeting in January]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1276:eb7158394a13a123a0a2abc40a2eccc9a9e45ea5bc1634a52e0586628f7c1af2",
+          "text": "Minimum Commitment: The earliest  this could be  done in  Oct/Nov 20 [***].  [temporal_bound=Oct/Nov 20]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1278:87b2d1e7fcb4fd7d2d54b4cfa3b7c3edb1265dac818ec10f4dcc9b5b842c51ec",
+          "text": "Minimum Commitment: Target  countries are  [***] (incl  [***], [***]  and [***].   [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1283:b36e2c8214db9131e728dd761783e20ddb41c00d6f30adbef8e58823fdc912a9",
+          "text": "Minimum Commitment: I  have  contacted  DEFRA  about [***]  import and  await a  reply. [***]  could be  [***] in  [***] to 1)  fulfil [***]  requirements  2) make a  modest level  of  multiplication  so that [***]  can be  compared on  different  sides of the  [***].                                                                                                                                                                                                         8\n\n [law_multiplicity=single; jurisdiction=England and Wales; temporal_bound=8_years; cap_quantum=12_months; cap_basis=multiple_of_fees; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1302:20ced8e69d18a8810c100acd0bcc2bf6cdc499a5ab3b56ec911a69d6f0fe9a08",
+          "text": "Minimum Commitment: well in  advance of  the [***]\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1303:9b49100511cdf20ba345a85f09712ca837478277eb16fb1ef0f745c4115f2402",
+          "text": "Minimum Commitment: multiplication  stage                                                                                                                                                                                                         14  C  IGER          [***]                                                                                                                                                                                                                         15         IGER           Dig samples of  [***] key   Test [***] to  [***]\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1315:cf50f2562e3c13b62b38db7c5e3671280635925b39fda07d1cd24d702e8b2f79",
+          "text": "Minimum Commitment: This is the  [***] year  following  [***] so  the mature phenotype  is ready  for the 20 [***]  season.  [commitment_quantum=20 [***] season]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1321:f4b94a40c845c619bfd52173eb9331f2b09e9b3878afa12c19215c6706837cda",
+          "text": "Minimum Commitment: [***]                                                                  [***]                                                                            [***]\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1323:42edd5d5946f959744845d6c10b61a2a3fb31037c872d4c4e82df273be60407d",
+          "text": "Minimum Commitment: 22    B   IGER         New  phenotype  trial to be  [***] 20 [***] based  on [***].NB  [***]  material will  consist of  [***] plants  per [***]  derived  from [***].\n\n [covered_subject=ip_infringement; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1326:b4403357cece8fbea14d9b039e81516d6b27a23167c4e950301b8deed7d24c70",
+          "text": "Minimum Commitment: If [***] through  [***] works (we have  started this), we may get  this trial started in June  [***].  [temporal_bound=June]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1332:7e9f3d794d3754506d6f474bcd8f64c16afa9275a30d3ace26385668d8855330",
+          "text": "Minimum Commitment: 25          IGER         Sample  whole plant  material  harvested at  [***],  analyze  using [***],  send [***] to  Ceres\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1334:48d6ccae77c24491ab49cdca0d9cb9811cec98b60392b5af8aa875b1be701464",
+          "text": "Minimum Commitment: Samples to be taken for 20 [***] spring harvest from  [***] and [***] (this is  earlier than ideal - and  should be repeated in 20 [***])\n\n [temporal_bound=20; commitment_quantum=20 spring harvest]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1349:f4b94a40c845c619bfd52173eb9331f2b09e9b3878afa12c19215c6706837cda",
+          "text": "Minimum Commitment: [***]                                                                  [***]                                                                            [***]\n\n [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CERES_INC_01_25_2012-EX-10.20-Collaboration_Agreement:1370:dca8ef64c24d0b112e497b5cc4967d17f24657fe011b71076684ee8d70cc3ef2",
+          "text": "Minimum Commitment: 38       IGER       Carry out the  [***] - a)\n\n",
+          "confidence": null
+        }
+      ],
+      "answerable": false,
+      "must_include": [],
+      "expected_citations": [],
+      "notes": "UNANSWERABLE from the served evidence: a heavily-redacted ([***]) research-project WORK PLAN / task schedule, not stated contractual minimum commitments (no volumes, dollars, or minimum quantities are legible). Correct behaviour = abstain."
+    },
+    {
+      "id": "answerable-11",
+      "kind": "answerable",
+      "function_served": "Revenue/Profit Sharing",
+      "question": "How is revenue or profit shared under this contract?",
+      "contract_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT",
+      "evidence": [
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1011:53c905422cba035902d670d6bb3bf048379cab89294a0e92d260df95966728f1",
+          "text": "Revenue/Profit Sharing: (i) Share of shelf\n\n(ii) Share of off-shelf\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1036:d22d03e9365fe3ea7cf016a65642c1120015601a426541287e5aec186231850f",
+          "text": "Revenue/Profit Sharing: b) Net Sales and margins by key drive group/item, and including product mix analysis\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:103:40726c2378cfc5a775bb9a986bc02e3ee9186fc99bff2bdc0c4f935fb65b5336",
+          "text": "Revenue/Profit Sharing: \"365 Gross Profits\" shall mean the aggregate amount of all invoice sales of Roundup 365 less reasonable amounts for product returns and credits, trade allowances, Cost of Goods Sold applicable to Roundup 365 and 365 Distribution Costs of Roundup 365.\n\n [commitment_quantum=365 Gross Profits]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1052:64bef913a987104eb86d790fbde832445635f5717a828f192b0ecffd222dc593",
+          "text": "Revenue/Profit Sharing: Gross sales Gross revenues for all sales of Roundup L&G products in defined markets Direct; minor allocations as necessary; default based on % of gross sales X\n\n [temporal_bound=defined markets; cap_quantum=X]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1055:e3da2078d357974ce9ccb062626d0f8ffdd3cfe7883475513c554266aaec79ec",
+          "text": "Revenue/Profit Sharing: same as gross sales X\n\nTrade Deductions from gross sales\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1056:fe8174b86e16dd6acee20e6701ee0e620f4904305e9d24c3d9d587ebe275be42",
+          "text": "Revenue/Profit Sharing: Cash discounts Any early payment discounts offered to customers Direct; minor allocations as necessary; default based on % of gross sales X\n\n [commitment_quantum=default based on % of gross sales]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1058:8518ba2073bfaff677d3ce0193281d57461985dc38fa8cf904f0c295a96552c7",
+          "text": "Revenue/Profit Sharing: Actual; default based on % of gross sales to specific customer X\n\n [cap_quantum=Actual; commitment_quantum=default based on % of gross sales to specific customer X]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1064:6f8e0bfac46d99e41586e0c86da77c8098d30992fa10e4d1e4ca76e26b7027df",
+          "text": "Revenue/Profit Sharing: Net Sales Gross sales less trade, as defined\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1093:7f5a55484dc1bc33ad9ab4219ff041837f6c7ea2c7c1d9f8c8962bcb2ed04562",
+          "text": "Revenue/Profit Sharing: Actual; default based on % of sales X X\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1096:73b72b7e83b97a01c9e3a4b3ae24e4f2265abd7483d42a19fec59588d302a9d3",
+          "text": "Revenue/Profit Sharing: Based on cases produced, including production activity at toll manufacturers\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1103:88b7529c0ddfa190a7d944435c769cb43d3ec400881f35cf08f315f9d17827b3",
+          "text": "Revenue/Profit Sharing: X X\n\nToller variances Differences between actual and standard costs of products produced at toll manufacturers Direct; default based on % of Roundup cases produced at specific toll manufacturer\n\n [jurisdiction=Other; temporal_bound=Roundup cases produced at specific toll manufacturer; cap_quantum=default; damage_type=special; damage_type=punitive; damage_type=incidental; damage_type=consequential; damage_type=indirect; covered_subject=ip_infringement; claim_scope=first_party]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1105:8bacf6cff0608dc3c50e4d425aca2dbe4b028c51ca5de00c4cff8901c98abefa",
+          "text": "Revenue/Profit Sharing: Direct; default based on % of Roundup purchases related to price variance drivers\n\n [commitment_quantum=percentage of Roundup purchases related to price variance drivers]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1110:f39dfea891d2c462601b7d9b0f093048ea4af820b6b55b529d90776cb17e61b3",
+          "text": "Revenue/Profit Sharing: Gross Profit Net sales less product and non-standard cost of good sold\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1115:5931a6e1758c8f4b8e5f9190b372619ee147de5a4f1f9f71619c5e416b36b92a",
+          "text": "Revenue/Profit Sharing: Actual; default based on % of direct media spending X\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1131:9ab2b1f948a2c3170ffdf7c2e87f3d70f6cf8dc0e148bf11eb7797bcc1b4bef7",
+          "text": "Revenue/Profit Sharing: Innovation projects Consulting, materials and other non-personnel related costs associated with innovation projects Direct; default based on overall % of innovation group activities directed toward Roundup\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1133:15d3502a5ad3daa5f7eb27bc9f01ca0f8abe98173c9c1db11f0e4e3ae5662b59",
+          "text": "Revenue/Profit Sharing: Direct; default based on overall % of creative service group activities directed toward Roundup\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1135:29e90dbf7650eedf7d37e97552abd5cafc65ed67d1195b43aad85c92081fbfd6",
+          "text": "Revenue/Profit Sharing: Direct; default based on overall % of market research group activities directed toward Roundup\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1137:1bc240df3907ef959ed362de1e5b8378daf5f536d62d05f11423a0c21664aa20",
+          "text": "Revenue/Profit Sharing: Direct; default based on overall % of total sales & promotional space employed for Roundup\n\n [commitment_quantum=overall % of total sales & promotional space employed for Roundup]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1141:eab7efc64dc3b68a85e06eda4c9ec18e8cba50e6ed77fcbcf033087b8973ec50",
+          "text": "Revenue/Profit Sharing: Direct; default based on overall % of consumer service activities directed toward Roundup\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1214:6df0db27d7b2b9fb89bfea517e0fdb871ccacd771e041eaa3472371c8312e9ef",
+          "text": "Revenue/Profit Sharing: X X\n\nOther (income) and expense Other (income) and expense items generally accepted as being included in determining operating income\n\n",
+          "confidence": null
+        }
+      ],
+      "answerable": true,
+      "must_include": [
+        "Economics are shared off a defined profit pool: '365 Gross Profits' = invoice sales less returns/credits, trade allowances, COGS and distribution costs",
+        "Costs are allocated by defined methods (e.g. default as a % of gross sales)"
+      ],
+      "expected_citations": [
+        "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:103:40726c2378cfc5a775bb9a986bc02e3ee9186fc99bff2bdc0c4f935fb65b5336",
+        "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1052:64bef913a987104eb86d790fbde832445635f5717a828f192b0ecffd222dc593",
+        "Monsanto_Company_-_SECOND_A_R_EXCLUSIVE_AGENCY_AND_MARKETING_AGREEMENT:1064:6f8e0bfac46d99e41586e0c86da77c8098d30992fa10e4d1e4ca76e26b7027df"
+      ],
+      "notes": "WEAK-answerable: the evidence defines the shared profit pool and the cost-allocation methodology, but the actual split RATIO is not in the served evidence. A correct answer describes the pool/allocation basis and should NOT invent a percentage split."
+    },
+    {
+      "id": "negative-0",
+      "kind": "negative",
+      "function_served": "Governing Law",
+      "question": "What product warranty and warranty duration does this contract provide?",
+      "contract_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement",
+      "evidence": [
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1000:652338ddeffbc8fc7c288246fb38137fd625e52a19599695e52e68b3a5abde14",
+          "text": "Governing Law: Among other things, that means that this Guarantee will be interpreted and construed exclusively under the laws of the State of Texas, and that in the event of any conflict of law, Texas law will prevail (without applying Texas conflict of law rules).\n\n [jurisdiction=Texas]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1180:b2e999a8f09037f3397cb21953a4fdcccdc696c4a76aa9bd28d670e41a68f7bf",
+          "text": "Governing Law: The Franchise Agreement requires application of the laws of the State of Texas.  [jurisdiction=Texas]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1211:96b2e4e8bead91c5013e083128314131e256509647bbd84d3cced601ca940a2f",
+          "text": "Governing Law: Choice of law Section 25.1 Except to the extent governed by the Lanham Act, Illinois law (including the Illinois Franchise Disclosure Act) will apply to Illinois franchisees.\n\n [law_multiplicity=single; jurisdiction=Illinois]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1221:8d39d7d4836aab3a0626f1f81c5a2794b441dfa3386713cdcf5d10e29d8d8661",
+          "text": "Governing Law: This Agreement will be interpreted and construed exclusively under the laws of the State of Illinois, which laws will prevail in the event of any conflict of law (without regard to, and without giving effect to, the application of Illinois choice-of-law rules); provided, however, that if the covenants in Section 19 of this Agreement would not be enforced as written under Illinois law, then the parties agree that those covenants will instead be interpreted and construed under the laws of the state in which the Franchised Business is located.  [law_multiplicity=single; jurisdiction=State of Illinois; temporal_bound=conflict_of_law; termination_right=either_party]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1337:cec1f1e17ec4f2c24cf8b25e32051cda0cdcf82a8b63465f60eddb8b096b8752",
+          "text": "Governing Law: Pursuant to Minnesota Stat.  [jurisdiction=Minnesota]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1432:325232e66069ff6f88bcd9e9f93c051954990fe015f2c9ab925573a39a071901",
+          "text": "Governing Law: E. Applicable Laws: Franchise agreements which specify that any claims arising under the North Dakota franchise law will be governed by the laws of a state other than North Dakota.\n\n [jurisdiction=North Dakota]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1452:ffe0b9884981de00556fca5ac0c3f7177a4b34ebf9d53ce35d8800607285d43e",
+          "text": "Governing Law: E. Applicable Laws: Any provision which specifies that any claims arising under the North Dakota franchise law will be governed by the laws of a state other than North Dakota.\n\n [law_multiplicity=single; jurisdiction=North Dakota]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1498:83f9430f9d38e8c6fb0488a0c4e8888d0835f1bb4486f8b0e6d28a3bce0a3731",
+          "text": "Governing Law: In the event of a conflict of laws, the provisions of the Washington Franchise Investment Protection Act, Chapter  [jurisdiction=Washington]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:1512:ebed101e604439b7a7bef1964e019601a53a4ba573d90fab3de7b5b14fd6147b",
+          "text": "Governing Law: 3. In the event of a conflict of laws, the provisions of the Washington Franchise Investment Protection Act, Chapter  [jurisdiction=Washington]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:919:511cba33b171c3d0da761a10b0a3a37efc3184b5822fcf0a84437aefa5b31f7b",
+          "text": "Governing Law: This Agreement will be interpreted and construed exclusively under the laws of the State of Texas, which laws will prevail in the event of any conflict of law (without regard to, and without giving effect to, the application of Texas choice-of-law rules); provided, however, that if the covenants in Section 19 of this Agreement would not be enforced as written under\n\n [law_multiplicity=single; jurisdiction=State of Texas; temporal_bound=conflict_of_law]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "GOOSEHEADINSURANCE_INC_04_02_2018-EX-10.6-Franchise_Agreement:920:16d8c2c0fe5f9ff4d2ec8ab7e7344278520214a694e214543aac36950096aa58",
+          "text": "Governing Law: Page 55 of 80\n\nTexas law, then the parties agree that those covenants will instead be interpreted and construed under the laws of the state in which the Franchised Business is located.  [jurisdiction=state in which the Franchised Business is located]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": false,
+      "must_include": [],
+      "expected_citations": [],
+      "notes": "NEGATIVE: evidence is entirely governing-law clauses; there is no product-warranty or warranty-duration content. Correct behaviour = abstain."
+    },
+    {
+      "id": "negative-1",
+      "kind": "negative",
+      "function_served": "Audit Rights",
+      "question": "What is the total contract price and payment schedule?",
+      "contract_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1",
+      "evidence": [
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:230:fd33fec276d0dfc40905c3677e981678e7d1ce59dd5b81809782c19efcfd1335",
+          "text": "Audit Rights: 7.5 Supplier shall provide Bank of America sufficient access to the development site and Supplier personnel so that Bank of America may have a reasonable opportunity to evaluate the status of any Customizations.  [procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:252:af6fe8464adb4aeb275777a0a2b1cab74db1640b5f5282bd1ef293f9601058be",
+          "text": "Audit Rights: Supplier may elect to observe the verification process at its own expense.\n\n",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:290:18dcffe9b4d43759c1eb4fbdcfdd5d1aec9355b6299b3c4e47bc950448a8e0ba",
+          "text": "Audit Rights: Bank of America may duplicate these materials for Bank of America's use exclusively and use them to conduct other classes at Bank of America's convenience.     [procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:324:db9d175ed765373565ced0fe5c11acbf8b7ead014d80a383371307aec788517b",
+          "text": "Audit Rights: In the event that a taxing authority performs a sample and projection audit on Bank of America, then Supplier shall be responsible for the payment of all projected tax amounts including all interest and penalties on any projected taxes assessed resulting from taxing errors identified by such taxing authority on Supplier's Invoices, provided however, that Supplier shall receive timely notice that such invoice is included In a tax authority's audit and Supplier has the right to produce documentation to support that the tax was satisfied.  [temporal_bound=audit; audit_frequency=sample and projection]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:332:43af1c78523777561bd3c0e876a60fac6f72786bcafbf17fd02b52e95bb26fcf",
+          "text": "Audit Rights: 16.10 Supplier shall keep and maintain complete and accurate accounting Records in accordance with generally accepted accounting principles consistently applied to support and document all amounts becoming payable to Supplier hereunder. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:333:cab5daa7aa01a8ce6b58e59e73f2fca0a8475f26df2c617e9dff915cc84327db",
+          "text": "Audit Rights: Upon request from Bank of America, Supplier shall provide to Bank of America (or a Representative designated by Bank of America) access to such Records for the purpose of auditing such Records during normal business hours.  [audit_frequency=upon request]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:334:df3a53d77d962df8633064e061cdde1c414d065ae6482637e77b5485f85e0a93",
+          "text": "Audit Rights: Supplier shall retain all Records required under this Section in accordance with the Section entitled \"Audit\" of this Agreement, after the amounts documented In such Records become due.  [jurisdiction=United States; temporal_bound=unbounded; procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:337:ec7ba51f71a9f1a2d230894bd813116cd09259512c16880a10de08ab782eff74",
+          "text": "Audit Rights: cooperate fully with Bank of America and any taxing authority involving any audit of sales, use or excise taxes.  [law_multiplicity=single; jurisdiction=New York; notice_period=30_days; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:383:ddd589e0683d0908aa77c15674e590fd3566282743295900657af2f6675ccec0",
+          "text": "Audit Rights: 22.1 Upon Bank of America's request, Supplier shall promptly furnish its financial statements as prepared by or for Supplier in the ordinary course of its business. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:387:cc7427036e0a6f879c3d478b7a5ec1d1a89a9998d4952add5764390c04834c9e",
+          "text": "Audit Rights: If Bank of America's review of financial statements causes Bank of America to question Supplier's ability to perform its duties hereunder, Bank of America may request, and Supplier shall provide to Bank of America, reasonable assurances of Supplier's ability to perform its duties hereunder.  [procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:399:70241150d27b63604c4d1b21a3ad3af749c9accfde098ddd4f62658018efbeee",
+          "text": "Audit Rights: 25.0 SUPPLIER PERSONNEL\n\n25.1 Bank of America shall provide Supplier, if necessary and at a mutually agreed upon time, reasonable access to Bank of America to provide its services, subject to the existing security regulations at Bank of America.\n\n [notice_period=mutually agreed upon]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:412:fc9e3ee45c621a3c0b1111cff8a1161f8235ce8fb1e4039b751a6a91acaa41e6",
+          "text": "Audit Rights: 25.6 Supplier shall not knowingly permit a Representative or Subcontractor to have access to the Confidential Information, premises, records or data of Bank of America when such Representative or Subcontractor:  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:417:bf1b89e4bdedaf86fe289f827eda9d2489ea9ae4d2ce99464009c525ee028d56",
+          "text": "Audit Rights: Supplier shall conduct at its expense background checks on its employees and those of its Subcontractors who will have access (whether physical, remote, or otherwise and whether on or off Bank of America premises) to Bank of America facilities, equipment, systems or data and such background checks shall comply with Bank of America procedures and requirements as set forth in SCHEDULE F to this Agreement and updated in writing delivered to Supplier from time to time. ",
+          "confidence": null
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:423:2a92f2618715086bcb786f6bc9d8846d5f8fe81f971e0e7708250baa127dc245",
+          "text": "Audit Rights: Following such notice, at the request of Bank of America and to the extent permitted by law, Supplier shall cooperate with investigations conducted by or on behalf of Bank of America. [procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:453:71b3a42ba516d2377f40105c3fd48361af05e4839eda6777575c022765de770d",
+          "text": "Audit Rights: (b) Recipient's employees or officers;  [nonsolicit_target=employees]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:454:4b3a4a2a3a49706f908eda3e41bbabc20a2dcc35be403c62502bf0033c5d39b8",
+          "text": "Audit Rights: (c) Affiliates of Recipient, its independent contractors at any level, agents and consultants, provided that all such persons are subject to a written confidentiality agreement that shall be no less restrictive than the provisions of this Section;  [covered_parties=affiliates]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:493:54821a1a3e2cc1f3e5df2d26f692c17ab8ad465715cc208b8d9565c0752a6413",
+          "text": "Audit Rights: B. Periodic discussions between Bank of America personnel and Supplier Information Technology security personnel to reviewSupplier Security Controls; and\n\n [procedural=duty_to_defend]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:549:3623059286adb33c7af4066dce8935b53f8e015692c2338e83e5002ce143e821",
+          "text": "Audit Rights: 33.0 AUDIT\n\n33.1 Supplier shall maintain at no additional cost to Bank of America, in a reasonably accessible location, all Records pertaining to its Products and services provided to Bank of America under this Agreement for a period of seven (7) years or as required by law, if longer.  [temporal_bound=7_years; audit_frequency=not specified]",
+          "confidence": "EXTRACTED"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:550:870462ded5593e18fe74c240ee7b5b03ba194fc42d39bec9daa5417e6d21746e",
+          "text": "Audit Rights: Such Supplier Records referenced above may be inspected, audited and copied by Bank of America, its Representatives or by federal or state agencies having jurisdiction over Bank of America, during normal business hours and at such reasonable times as Bank of America and Supplier may determine.  [jurisdiction=United States; notice_period=reasonable; procedural=duty_to_defend; nonsolicit_target=employees]",
+          "confidence": "AMBIGUOUS"
+        },
+        {
+          "chunk_id": "CardlyticsInc_20180112_S-1_EX-10.16_11002987_EX-10.16_Maintenance_Agreement1:551:018068ce9d2fc306f74b2ab84f463a70c924c1a5815e7146980071f45753867c",
+          "text": "Audit Rights: Records available for review shall exclude any records pertaining to Supplier's other customers deemed proprietary and confidential and Supplier confidential and proprietary records not associated with the Products and services provided under this Agreement.  [nonsolicit_target=customers]",
+          "confidence": "EXTRACTED"
+        }
+      ],
+      "answerable": false,
+      "must_include": [],
+      "expected_citations": [],
+      "notes": "NEGATIVE: evidence is entirely audit/records clauses; there is no contract price or payment schedule. Correct behaviour = abstain."
+    }
+  ]
+}
