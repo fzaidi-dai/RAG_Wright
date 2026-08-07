@@ -17,10 +17,20 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > corpus-wide function+property retrieval leg is `typed_property_retrieval`.** Along the way fixed a latent
 > query-constraint bug (function="" → empty constraints; now the `NO_FUNCTION` sentinel, used by Leg B too).
 > **MCP Tier-1 candidate list (for when Phase B resumes) = `compliance_check`, `intra_document_qa`,
-> `relational_qa`, `typed_property_retrieval` (NOT cross_corpus_retrieval).** REMAINING quality nuance: A1's
-> over-classification abstain (Leg A abstains when the query-function classifier over-returns + a fragmentary
-> carve-out span confuses the generator) — under discussion (generator robustness vs classifier precision vs
-> evidence granularity). Both KGs backfilled; local Docker DOWN; A100 DOWN; `rw-arcadedb` UP (cheap).
+> `relational_qa`, `typed_property_retrieval` (NOT cross_corpus_retrieval).**
+> **A1 quality — RESOLVED + re-scoped (ADR-0044, 2026-08-07).** Built the cap↔carve-out `IsExceptionTo`
+> relationship (`clause_exception_linking` capability + `intra_document_qa` consumption + generation SKILL
+> voices "capped, EXCEPT ..."); linking pass run co-located on the Modal KG (409 edges / 390 contracts, 214
+> distant/cap-less left unlinked; `scripts/modal_exception_linking.py`). Re-validating A1 revealed the abstain
+> was mostly a **crash I introduced**: the new clause→clause edges (no `dimension`) polluted
+> `contract_clause_kg`'s outE traversal → null-dimension ValidationError → serve degraded to empty → abstain;
+> FIXED (`898571b`, `dimension IS NOT NULL` guard + skip non-property rows). A1 now answers with citations.
+> **NEW open Leg-A item (supersedes "over-classification abstain"): vLLM-Granite-8B generation is
+> NON-DETERMINISTIC near its abstain boundary** — the same answerable query abstained ~2/3 of runs at temp 0
+> (greedy vLLM isn't bitwise-reproducible; borderline query flips). Generation-robustness / model-strength
+> issue (Pro-on-hard-queries lever), its own task. Both KGs backfilled; local Docker DOWN; A100 DOWN (spun down
+> after the re-validation); `rw-arcadedb` UP (cheap). NOTE: the local KG has NOT had the ADR-0044 linking pass
+> yet (only the Modal KG) — run `scripts/run_clause_exception_linking.py` against local when it's next up.
 >
 > ---
 >

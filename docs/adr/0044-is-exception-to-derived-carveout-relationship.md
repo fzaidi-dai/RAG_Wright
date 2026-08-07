@@ -87,3 +87,36 @@ structurally the cap's exception.
    run as a post-ingest pass; the query side (`intra_document_qa`) consumes the edge.
 6. **Does it fully fix the abstain,** or is a generator-prompt tweak still needed to synthesize "capped except X"?
    (We can measure after building the relationship, on the same query.)
+
+## Outcome (2026-08-07, built + measured)
+
+Built per the recommended answers (proximity-only, INFERRED-or-skip, `IS_EXCEPTION_TO` uncapped→cap, general
+edge type scoped to cap↔uncapped, build-then-measure). Commits: `64077f0` (capability + ADR),
+`8c22b3f` (query consumption in `intra_document_qa`), `e65593f` (co-located linking runner + Modal job),
+`898571b` (regression fix, below), `04e701f` (generation SKILL tweak).
+
+**Linking pass (Modal KG, co-located):** contracts_processed=390, links_written=409, unlinked_exceptions=214
+(distant/cap-less, correctly not linked). Verified live: `exceptions_of_clause` on a real Cap clause returns its
+Uncapped carve-outs.
+
+**Does it work? (mechanism — yes.)** For a cap-only query (classifier returns only `Cap On Liability`), the
+linking injects the cap's Uncapped exceptions into evidence as INFERRED carve-outs the classifier-only path
+misses — on WHITESMOKE, 9 genuine carve-outs (fraud, death/personal-injury from negligence, breach of implied
+title/quiet-enjoyment, indirect/consequential losses, the 9.1/9.2 "nothing shall exclude or limit liability
+for…" clauses). With the SKILL tweak, when the generator answers it now voices them ("capped at X, EXCEPT
+uncapped for fraud/death/negligence", 8 citations).
+
+**Q6 answered — the abstain was NOT primarily the carve-out contradiction.** Two findings changed the picture:
+1. **The A1 abstain on a linked contract was a CRASH, not reasoning.** The new `IsExceptionTo` edges (clause→
+   clause, no `dimension`) polluted `contract_clause_kg`'s `outE()` traversal → null-dimension `CitedProperty`
+   → `ValidationError` in `serve` → degrade-to-empty → abstain. Fixed in `898571b` (restrict the outE match to
+   `dimension IS NOT NULL`; skip non-property rows in `contract_clause_index`). A clean-fixtures-hide-real-data
+   miss (the fake store never returned a non-property edge row).
+2. **Generation is non-deterministic near Granite-8B's abstain boundary.** The same answerable query abstained
+   ~2/3 of runs at temperature 0 (greedy vLLM is not bitwise-reproducible across requests; this borderline
+   query flips). This is a generation-robustness / model-strength issue (cf. the Pro-on-hard-queries lever),
+   independent of the carve-out work, and is the dominant remaining risk on Leg A — flagged as its own task.
+
+**Net:** ADR-0044 is correct and adds real, cited carve-out evidence (its designed purpose); the crash fix is
+the concrete A1 win; the generation-nondeterminism finding supersedes "over-classification abstain" as the open
+Leg-A quality item.
