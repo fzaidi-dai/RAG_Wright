@@ -3,6 +3,27 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **RESUME / NEXT UP (2026-08-07):** **MCP-PROTO + Phase-A quality arc in flight.** Prototyped the "capability
+> as an MCP tool" pattern: `compliance_check` wrapped via FastMCP (`src/rag_wright/mcp/compliance_server.py`),
+> a Deep Agent called it end-to-end, and it's registered as the first ARD `mcp_tool` (`compliance_check_mcp`).
+> FastMCP grounded durably (clone-staged into the framework graph; recipe in CLAUDE.md/playbook/ADR-0008).
+> **Phase B (wrapping the query legs as MCP tools) is SUSPENDED** to fix quality nuances first.
+> **Phase A (validate the 3 unproven query legs on Modal, no MCP):** A1 `intra_document_qa` — clause-level
+> span_id persisted + backfilled on BOTH KGs (ADR-0042, 100% match, in-place); A2 `relational_qa` — rebuilt to
+> GRAPH-STRUCTURAL evidence (no text_store), validated clean on Modal; A3 — see the retirement below.
+> **>>> RETIRED `cross_corpus_retrieval` (ADR-0043). DO NOT recreate it, re-register it, or wrap it as an MCP
+> tool. It was redundant with `typed_property_retrieval` (Leg B), which uses the correct BGE+property pool
+> (`property_boosted_retrieval`) and is re-validated on Modal (fee-multiple-cap query → top-4 [MATCH]). The
+> corpus-wide function+property retrieval leg is `typed_property_retrieval`.** Along the way fixed a latent
+> query-constraint bug (function="" → empty constraints; now the `NO_FUNCTION` sentinel, used by Leg B too).
+> **MCP Tier-1 candidate list (for when Phase B resumes) = `compliance_check`, `intra_document_qa`,
+> `relational_qa`, `typed_property_retrieval` (NOT cross_corpus_retrieval).** REMAINING quality nuance: A1's
+> over-classification abstain (Leg A abstains when the query-function classifier over-returns + a fragmentary
+> carve-out span confuses the generator) — under discussion (generator robustness vs classifier precision vs
+> evidence granularity). Both KGs backfilled; local Docker DOWN; A100 DOWN; `rw-arcadedb` UP (cheap).
+>
+> ---
+>
 > **RESUME / NEXT UP (2026-08-05):** **SKILL-SPLIT arc CLOSED (ADR-0041), pushed to origin/main.** Every
 > LLM-bearing capability is now correctly kinded per the rubric (function=deterministic/no-model ·
 > agent_skill=a single LLM act authored as a SKILL.md folder · subgraph=a multi-step workflow · model=inference):
