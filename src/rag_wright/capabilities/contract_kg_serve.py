@@ -45,6 +45,7 @@ class CitedClause(BaseModel):
     function: str
     folio_iri: str = ""
     span_id: str = ""  # the clause's operative span (1:1); rehydrate a property-less clause from THIS, reliably
+    exception_of: str = ""  # ADR-0044: if set, this clause is an INFERRED carve-out/exception to that cap clause_id
     properties: list[CitedProperty] = []
 
 

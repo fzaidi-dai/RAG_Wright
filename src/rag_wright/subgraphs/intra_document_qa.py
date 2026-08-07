@@ -38,7 +38,9 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
 from rag_wright.capabilities.answer_generator import EvidenceItem, GeneratedAnswer
+from rag_wright.capabilities.clause_exception_linking import CAP_FUNCTION
 from rag_wright.capabilities.contract_kg_serve import CitedClause, CitedProperty
+from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
@@ -80,7 +82,42 @@ def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> EvidenceIte
         text = f"{clause.function} — {facts}"  # no span text (property-less path): the typed facts stand in
     else:
         text = clause.function
+    if clause.exception_of:
+        # ADR-0044: an INFERRED carve-out/exception to a cap clause -> frame it as such and surface INFERRED
+        # confidence, so the generator answers "capped, EXCEPT ..." and treats it as inferred, never a hard claim.
+        return EvidenceItem(
+            chunk_id=clause.clause_id,
+            text=f"[Exception to the liability cap (inferred)] {text}",
+            confidence=ConfidenceTag.INFERRED.value)
     return EvidenceItem(chunk_id=clause.clause_id, text=text, confidence=_clause_confidence(clause.properties))
+
+
+def attach_exception_links(
+    clauses: list[CitedClause], exceptions_fn: Callable[[str], list[dict]], *, contract_id: str
+) -> list[CitedClause]:
+    """ADR-0044 query consumption: for each served Cap clause, pull its `IsExceptionTo` carve-outs
+    (`exceptions_fn(cap_clause_id) -> [{clause_id, function, span_id}]`) and include them as INFERRED exceptions
+    (`exception_of` set), deduped. Pulls the cap's conditions into the evidence EVEN IF the classifier did not
+    return the Uncapped function -- that is the point. A clause already served (via classification) is marked
+    as this cap's exception; a not-yet-served one is added (property-less, rehydrated from its own span_id)."""
+    by_id = {c.clause_id: c for c in clauses}
+    for cap in list(clauses):
+        if cap.function != CAP_FUNCTION or cap.exception_of:
+            continue
+        for exc in exceptions_fn(cap.clause_id):
+            eid = exc.get("clause_id")
+            if not eid or eid == cap.clause_id:
+                continue
+            if eid in by_id:
+                if not by_id[eid].exception_of:
+                    by_id[eid].exception_of = cap.clause_id
+            else:
+                added = CitedClause(
+                    contract_id=contract_id, clause_id=eid, function=exc.get("function") or "",
+                    span_id=exc.get("span_id") or "", exception_of=cap.clause_id, properties=[])
+                by_id[eid] = added
+                clauses.append(added)
+    return clauses
 
 
 def rehydrate_clause_texts(store: Any, contract_id: str, clauses: list[CitedClause]) -> dict[str, str]:
@@ -182,15 +219,18 @@ def production_intra_document_qa(*, store: Any, answer_model: Any, function_mode
     def serve(contract_id: str, question: str) -> list[CitedClause]:
         functions = classify_query_functions(question, function_model_id)
         if not functions:  # no routable function -> serve the whole per-contract KG (the generator scopes)
-            return contract_clause_index(store, contract_id)
-        out: list[CitedClause] = []
-        seen: set[str] = set()
-        for function in functions:
-            for clause in clauses_of_function(store, contract_id, function):
-                if clause.clause_id not in seen:
-                    seen.add(clause.clause_id)
-                    out.append(clause)
-        return out
+            base = contract_clause_index(store, contract_id)
+        else:
+            base = []
+            seen: set[str] = set()
+            for function in functions:
+                for clause in clauses_of_function(store, contract_id, function):
+                    if clause.clause_id not in seen:
+                        seen.add(clause.clause_id)
+                        base.append(clause)
+        # ADR-0044: pull each served cap clause's INFERRED carve-outs (IsExceptionTo) into the evidence, so a
+        # "how is liability capped, and under what conditions?" query sees "capped, except uncapped for ...".
+        return attach_exception_links(base, store.exceptions_of_clause, contract_id=contract_id)
 
     def clause_text(contract_id: str, clauses: list[CitedClause]) -> dict[str, str]:
         return rehydrate_clause_texts(store, contract_id, clauses)

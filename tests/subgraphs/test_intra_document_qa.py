@@ -191,3 +191,44 @@ def test_legacy_clause_with_no_span_link_is_omitted_and_falls_back_to_the_label(
     clause = CitedClause(contract_id="C", clause_id="C:2:h", function="Governing Law", span_id="", properties=[])
     texts = rehydrate_clause_texts(_FakeSpanStore([]), "C", [clause])
     assert "C:2:h" not in texts  # no span link (pre-backfill) -> evidence builder cites the function label
+
+
+# --- ADR-0044: query consumption of the IsExceptionTo carve-out relationship --------------------------------
+
+
+def test_attach_exception_links_pulls_a_caps_carveouts_as_inferred_exceptions():
+    from rag_wright.subgraphs.intra_document_qa import attach_exception_links
+
+    cap = CitedClause(contract_id="C", clause_id="C:5:h", function="Cap On Liability", span_id="s5")
+    seen = {}
+
+    def exceptions_fn(cap_id):
+        seen["cap_id"] = cap_id
+        return [{"clause_id": "C:6:h", "function": "Uncapped Liability", "span_id": "s6"}]
+
+    out = attach_exception_links([cap], exceptions_fn, contract_id="C")
+    assert seen["cap_id"] == "C:5:h"
+    exc = next(c for c in out if c.clause_id == "C:6:h")  # the exception was pulled in even though not classified
+    assert exc.exception_of == "C:5:h" and exc.span_id == "s6"  # marked + rehydratable from its own span
+
+
+def test_attach_marks_an_already_served_uncapped_clause_and_does_not_duplicate():
+    from rag_wright.subgraphs.intra_document_qa import attach_exception_links
+
+    cap = CitedClause(contract_id="C", clause_id="C:5:h", function="Cap On Liability", span_id="s5")
+    unc = CitedClause(contract_id="C", clause_id="C:6:h", function="Uncapped Liability", span_id="s6")
+    out = attach_exception_links(
+        [cap, unc], lambda cid: [{"clause_id": "C:6:h", "function": "Uncapped Liability", "span_id": "s6"}],
+        contract_id="C")
+    assert len(out) == 2  # deduped, not double-added
+    assert next(c for c in out if c.clause_id == "C:6:h").exception_of == "C:5:h"
+
+
+def test_exception_clause_evidence_is_framed_and_tagged_inferred():
+    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+
+    exc = CitedClause(contract_id="C", clause_id="C:6:h", function="Uncapped Liability",
+                      span_id="s6", exception_of="C:5:h")
+    ev = _clause_to_evidence(exc, "any negligence or fault")
+    assert "Exception to the liability cap (inferred)" in ev.text and "negligence" in ev.text
+    assert ev.confidence == "INFERRED"  # FR-S.4: a derived link is surfaced as inferred, human-validatable
