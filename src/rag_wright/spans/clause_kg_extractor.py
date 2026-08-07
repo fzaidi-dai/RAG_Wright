@@ -142,6 +142,7 @@ def clause_to_record(
         clause_id=str(chunk_id),
         function=canonical_function(function) or function,
         folio_iri=FOLIO_CLAUSE_IRI.get(function, ""),
+        span_id=span_id,  # the operative span (1:1) -- carried even when the clause has no properties
         assertions=assertions,
     )
 

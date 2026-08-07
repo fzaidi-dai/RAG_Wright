@@ -172,7 +172,8 @@ def _clause_kg_statements(record: ClausePropertyRecord) -> list[str]:
     cid = _sql_str(record.clause_id)
     statements: list[str] = [
         f"UPDATE {CLAUSE_TYPE} SET clause_id = {cid}, function = {_sql_str(record.function)},"
-        f" folio_iri = {_sql_str(record.folio_iri)} UPSERT WHERE clause_id = {cid}",
+        f" folio_iri = {_sql_str(record.folio_iri)}, span_id = {_sql_str(record.span_id)}"
+        f" UPSERT WHERE clause_id = {cid}",
     ]
     for a in record.assertions:
         edge_type = _TYPED_DIMENSION_EDGE[a.dimension]
@@ -268,6 +269,7 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.clause_id STRING")  # parent chunk / OKF pointer
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.function STRING")
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.folio_iri STRING")
+            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.span_id STRING")  # the operative span (1:1; ADR-0025)
         if PROPVALUE_TYPE not in types:  # shared, deduped (dimension,value) node
             self._command(f"CREATE VERTEX TYPE {PROPVALUE_TYPE}")
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value_key STRING")
@@ -866,7 +868,7 @@ class ArcadeDBStore:
         with no typed properties (still queryable by type)."""
         lo, hi = self._contract_bounds(contract_id)
         return self._query(
-            f"SELECT clause_id, function, folio_iri FROM {CLAUSE_TYPE} "
+            f"SELECT clause_id, function, folio_iri, span_id FROM {CLAUSE_TYPE} "
             f"WHERE clause_id >= {lo} AND clause_id < {hi} ORDER BY clause_id"
         )
 

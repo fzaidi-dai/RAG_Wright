@@ -70,7 +70,8 @@ def test_statements_use_typed_edges_with_predicate_and_provenance() -> None:
         (_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED),
         (_D.DAMAGE_TYPE, "consequential", ConfidenceTag.EXTRACTED),
     ])
-    sql = "\n".join(_clause_kg_statements(rec))
+    statements = _clause_kg_statements(rec)
+    sql = "\n".join(statements)
     # typed edges, not the legacy flat one
     assert "CREATE EDGE HAS_MUTUALITY" in sql
     assert "CREATE EDGE EXCEPTS" in sql
@@ -79,7 +80,10 @@ def test_statements_use_typed_edges_with_predicate_and_provenance() -> None:
     # predicate IRI grounding (ODRL on the deontic edge) + provenance on every edge
     assert "http://www.w3.org/ns/odrl/2/prohibition" in sql
     assert sql.count("predicate_iri = ") == 3
-    assert sql.count("confidence = ") == 3 and sql.count("span_id = ") == 3
+    assert sql.count("confidence = ") == 3
+    # span_id on all 3 property edges AND the Clause vertex itself (clause-level span_id; persist-clause-span-id)
+    assert sql.count("span_id = ") == 4
+    assert statements[0].startswith("UPDATE Clause SET") and "span_id = " in statements[0]
 
 
 def test_value_nodes_get_folio_grounding() -> None:

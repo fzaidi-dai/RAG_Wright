@@ -149,3 +149,45 @@ def test_registers_as_a_subgraph():
     register_intra_document_qa(reg)
     assert reg.get("intra_document_qa").kind == "subgraph"
     assert reg.get("intra_document_qa").contract is GeneratedAnswer
+
+
+# --- rehydrate_clause_texts: the A1 fix (persist-clause-span-id) -- property-less clauses get REAL text --------
+
+
+class _FakeSpanStore:
+    """A minimal store for rehydrate_clause_texts: spans_by_contract filters by function (like ArcadeDBStore)."""
+
+    def __init__(self, spans: list[dict]) -> None:
+        self._spans = spans  # [{span_id, text, function}]
+
+    def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
+        return [s for s in self._spans if s["function"] in functions]
+
+
+def test_property_less_clause_rehydrates_from_its_own_span_id_not_a_bare_label():
+    from rag_wright.subgraphs.intra_document_qa import rehydrate_clause_texts
+
+    spans = [{"span_id": "S#3", "text": "Liability is uncapped for IP indemnity.", "function": "Uncapped Liability"}]
+    clause = CitedClause(contract_id="C", clause_id="C:3:h", function="Uncapped Liability",
+                         span_id="S#3", properties=[])  # property-less, but carries its own span_id
+    texts = rehydrate_clause_texts(_FakeSpanStore(spans), "C", [clause])
+    assert texts["C:3:h"] == "Liability is uncapped for IP indemnity."  # REAL text, not the bare function label
+
+
+def test_property_bearing_clause_uses_its_property_span_ids_over_the_clause_span_id():
+    from rag_wright.subgraphs.intra_document_qa import rehydrate_clause_texts
+
+    spans = [{"span_id": "S#1", "text": "Cap at the fees paid.", "function": "Cap On Liability"}]
+    clause = CitedClause(
+        contract_id="C", clause_id="C:1:h", function="Cap On Liability", span_id="S#9",  # clause span_id NOT used
+        properties=[CitedProperty(dimension="cap_basis", value="multiple_of_fees", edge_type="HAS", span_id="S#1")])
+    texts = rehydrate_clause_texts(_FakeSpanStore(spans), "C", [clause])
+    assert texts["C:1:h"] == "Cap at the fees paid."  # the property span_id path (grounded provenance)
+
+
+def test_legacy_clause_with_no_span_link_is_omitted_and_falls_back_to_the_label():
+    from rag_wright.subgraphs.intra_document_qa import rehydrate_clause_texts
+
+    clause = CitedClause(contract_id="C", clause_id="C:2:h", function="Governing Law", span_id="", properties=[])
+    texts = rehydrate_clause_texts(_FakeSpanStore([]), "C", [clause])
+    assert "C:2:h" not in texts  # no span link (pre-backfill) -> evidence builder cites the function label

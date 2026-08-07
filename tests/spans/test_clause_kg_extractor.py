@@ -38,6 +38,9 @@ def test_empty_clause_yields_no_assertions() -> None:
     assert rec.assertions == []
     assert rec.clause_id == str(_CID)
     assert rec.function == "Cap On Liability"
+    # persist-clause-span-id: even a PROPERTY-LESS clause carries its operative span_id (1:1), so it is never
+    # left with only a bare function label at query time (the A1 fix).
+    assert rec.span_id == "span-1"
 
 
 def test_scalar_enums_map_to_their_dimensions() -> None:

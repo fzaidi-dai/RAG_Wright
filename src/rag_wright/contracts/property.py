@@ -196,6 +196,10 @@ class ClausePropertyRecord(BaseModel):
     clause_id: str
     function: str
     folio_iri: str = ""
+    # The operative span this clause was extracted from (1:1; ADR-0025). Known at extraction (op.span_id) and
+    # persisted here so a PROPERTY-LESS clause still has a reliable, one-to-one span link for citation/rehydration
+    # -- not lost, and never guessed by function label (which is one-to-many). "" only for legacy pre-backfill rows.
+    span_id: str = ""
     assertions: list[PropertyAssertion] = []
 
     @field_validator("function")

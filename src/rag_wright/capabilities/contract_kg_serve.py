@@ -44,6 +44,7 @@ class CitedClause(BaseModel):
     clause_id: str
     function: str
     folio_iri: str = ""
+    span_id: str = ""  # the clause's operative span (1:1); rehydrate a property-less clause from THIS, reliably
     properties: list[CitedProperty] = []
 
 
@@ -76,7 +77,8 @@ def contract_clause_index(store: _KGStore, contract_id: str) -> list[CitedClause
         cid = c["clause_id"]
         index.append(CitedClause(
             contract_id=_contract_of(cid), clause_id=cid, function=c.get("function", ""),
-            folio_iri=c.get("folio_iri") or "", properties=by_clause.get(cid, []),
+            folio_iri=c.get("folio_iri") or "", span_id=c.get("span_id") or "",
+            properties=by_clause.get(cid, []),
         ))
     return index
 

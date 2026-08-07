@@ -83,6 +83,30 @@ def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> EvidenceIte
     return EvidenceItem(chunk_id=clause.clause_id, text=text, confidence=_clause_confidence(clause.properties))
 
 
+def rehydrate_clause_texts(store: Any, contract_id: str, clauses: list[CitedClause]) -> dict[str, str]:
+    """Map each clause to its operative-span TEXT for citation. A clause WITH typed properties uses its property
+    span_ids (grounding invariant: they MUST resolve, else KeyError). A PROPERTY-LESS clause uses its OWN
+    `span_id` (1:1, ADR-0025) -- real span text, not a bare function label, and never a function-label guess
+    (which is one-to-many). A clause with no span link at all (legacy pre-backfill) is omitted, and the evidence
+    builder falls back to the function label. This is why the clause-level span_id is persisted."""
+    functions = sorted({c.function for c in clauses if c.function})
+    text_by_span = {row["span_id"]: row["text"] for row in store.spans_by_contract(contract_id, functions)}
+    out: dict[str, str] = {}
+    for clause in clauses:
+        span_ids = list(dict.fromkeys(p.span_id for p in clause.properties if p.span_id))
+        if span_ids:
+            bodies = []
+            for span_id in span_ids:
+                if span_id not in text_by_span:  # property provenance MUST resolve (grounding invariant)
+                    raise KeyError(
+                        f"clause {clause.clause_id}: span {span_id!r} has no text in contract {contract_id}")
+                bodies.append(text_by_span[span_id])
+            out[clause.clause_id] = " ".join(bodies)
+        elif clause.span_id and clause.span_id in text_by_span:
+            out[clause.clause_id] = text_by_span[clause.span_id]  # property-less: its OWN span (1:1), real text
+    return out
+
+
 def build_intra_document_qa(
     serve_fn: ServeFn,
     clause_text_fn: ClauseTextFn,
@@ -169,21 +193,7 @@ def production_intra_document_qa(*, store: Any, answer_model: Any, function_mode
         return out
 
     def clause_text(contract_id: str, clauses: list[CitedClause]) -> dict[str, str]:
-        functions = sorted({c.function for c in clauses if c.function})
-        text_by_span = {row["span_id"]: row["text"] for row in store.spans_by_contract(contract_id, functions)}
-        out: dict[str, str] = {}
-        for clause in clauses:
-            span_ids = list(dict.fromkeys(p.span_id for p in clause.properties if p.span_id))
-            if not span_ids:
-                continue  # property-less clause: no operative span to quote; cite the function label
-            bodies = []
-            for span_id in span_ids:
-                if span_id not in text_by_span:  # orphan: surfaced (KeyError), never a silent evidence drop
-                    raise KeyError(
-                        f"clause {clause.clause_id}: span {span_id!r} has no text in contract {contract_id}")
-                bodies.append(text_by_span[span_id])
-            out[clause.clause_id] = " ".join(bodies)
-        return out
+        return rehydrate_clause_texts(store, contract_id, clauses)
 
     def generate(question: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
         return generate_answer(question, evidence, model=answer_model)
