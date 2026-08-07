@@ -8,8 +8,10 @@ Flow: from START, `extract_constraints` (LLM: query -> typed (dim,value) constra
 `property_boosted_retrieval` (BGE pool -> edge.span_id join -> typed_constraint_match_rank -> cited spans);
 `assemble` packages the result. START -> {extract_constraints, classify_functions} -> retrieve -> assemble -> END.
 
-Each IO node degrades to EMPTY on exhausted retries (a query survives, never crashes -- same discipline as
-`cross_corpus_retrieval`). The three seams are injected for hermetic testing; `production_typed_property_retrieval`
+Each IO node degrades to EMPTY on exhausted retries (a query survives, never crashes). This is THE corpus-wide
+function+property retrieval leg (the redundant `cross_corpus_retrieval`, which used an inferior function-only
+pool, was retired in favor of this). The three seams are injected for hermetic testing;
+`production_typed_property_retrieval`
 wires the real granite/LegalBERT front-door + `property_boosted_retrieval` over the store + A100/local encoders.
 `property_boosted_retrieval` stays the registered FUNCTION capability; this subgraph composes it.
 """
@@ -113,6 +115,7 @@ def production_typed_property_retrieval(
     from rag_wright.capabilities.dg_extraction import extract_clause
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
     from rag_wright.capabilities.query_function_classifier import classify_query_functions
+    from rag_wright.contracts.function import NO_FUNCTION
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.spans.clause_kg_extractor import clause_to_record
 
@@ -120,7 +123,9 @@ def production_typed_property_retrieval(
         clause = extract_clause(query, extract_model)
         if clause is None:
             return set()
-        rec = clause_to_record(clause, chunk_id=ChunkId.of("q", 0, query), function="Cap On Liability")
+        # a QUERY has no clause function -> the NO_FUNCTION sentinel (only the extracted properties are used).
+        # Was a hardcoded "Cap On Liability" hack to pass ClausePropertyRecord validation -- mislabeled every query.
+        rec = clause_to_record(clause, chunk_id=ChunkId.of("q", 0, query), function=NO_FUNCTION)
         return {(a.dimension.value, a.value) for a in rec.assertions}
 
     def functions_fn(query: str) -> list:

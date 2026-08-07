@@ -3,7 +3,9 @@
 The eval script ranked ACORD candidates through inline closures (`pool_of`, `_match`, `_tiebreak`) wrapped in
 MODE/VARIANT/MATCH ablation scaffolding. This module lifts the ADOPTED operating point out of that scaffolding
 as three pure, deterministic `function` capabilities, each registered under its FR-C slug so the query graph
-(and the `cross_corpus_retrieval` subgraph, LG-3c) can bind them:
+can bind them (`typed_constraint_match_rank` / `dense_rank_tiebreak` back the adopted Leg B via
+`property_boosted_retrieval`; `candidate_routing` is a general union-combiner utility, unused since the redundant
+`cross_corpus_retrieval` subgraph was retired):
 
   - **candidate_routing** -- the union combiner: several routing signals (LLM / LegalBERT classifier /
     dimension-prior) each propose ranked functions; union them (first-wins, recall-safe) and fetch the

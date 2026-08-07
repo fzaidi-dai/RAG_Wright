@@ -781,26 +781,8 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("qa", "intra-document", "contract", "subgraph", "langgraph", "composite"),
     ),
-    CapabilityManifest(
-        slug="cross_corpus_retrieval",
-        kind="subgraph",
-        display_name="Cross-corpus retrieval (ranked, cited clauses)",
-        description=(
-            "Retrieve ranked, cited clauses for a query across the whole clause corpus, as a composite "
-            "LangGraph subgraph: extract the query's typed constraints (query_constraint_extraction, LG-2a) and "
-            "classify its clause function(s) in parallel, route to a candidate pool (candidate_routing), grade "
-            "by subsumption-aware constraint match (typed_constraint_match_rank, recall-safe) with an embedding "
-            "cosine tiebreak within equal-match groups (dense_rank_tiebreak), and emit each clause cited by its "
-            "clause_id (FR-Q.6). Query-side hardening: a transient failure degrades to empty (empty constraints "
-            "-> dense-only order; empty functions -> empty results), never a crash."
-        ),
-        representative_queries=(
-            "retrieve the most relevant clauses across the corpus for a query, with citations",
-            "rank clauses by typed constraint match with an embedding tiebreak",
-            "find clauses matching a query's functions and typed constraints, cited",
-        ),
-        tags=("retrieval", "cross-corpus", "ranking", "subgraph", "langgraph", "composite"),
-    ),
+    # cross_corpus_retrieval RETIRED (standardized on typed_property_retrieval / Leg B, which uses the correct
+    # BGE+property pool via property_boosted_retrieval; cross_corpus's function-only pool was the inferior copy).
     CapabilityManifest(
         slug="typed_property_retrieval",
         kind="subgraph",

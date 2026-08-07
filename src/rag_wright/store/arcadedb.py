@@ -558,24 +558,6 @@ class ArcadeDBStore:
         rows = self._query(f"SELECT span_id, text FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
         return {r["span_id"]: r.get("text", "") for r in rows}
 
-    def spans_by_functions(self, functions: list[str], *, limit: int = 200) -> list[dict]:
-        """A3 (cross_corpus_retrieval `pool_fn`): the CORPUS-WIDE span pool for a set of routed function tags --
-        the function gate over the whole corpus (not one contract). Bounded by `limit`. Rows: {span_id, function}."""
-        if not functions:
-            return []
-        fn_list = "[" + ",".join(_sql_str(f) for f in functions) + "]"
-        return self._query(
-            f"SELECT span_id, function FROM {SPAN_TYPE} WHERE function IN {fn_list} LIMIT {int(limit)}")
-
-    def span_vectors_by_id(self, span_ids: list[str]) -> dict[str, list[float]]:
-        """A3 (cross_corpus_retrieval `hydrate_fn`): the dense BGE vector for each span_id (batched), for the
-        dense-similarity tiebreak within equal constraint-match groups. {span_id: dense}."""
-        if not span_ids:
-            return {}
-        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
-        rows = self._query(f"SELECT span_id, dense FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
-        return {r["span_id"]: (r.get("dense") or []) for r in rows}
-
     def chunk_count(self) -> int:
         rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")
         return int(rows[0]["n"]) if rows else 0

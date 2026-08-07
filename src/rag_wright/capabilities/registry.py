@@ -104,8 +104,8 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         # --- LG-3: composite pipeline subgraphs (compose the component subgraphs + registered capabilities) ---
         "relational_qa",  # subgraph: graph_query -> chunk_read -> generate_answer (entity question -> cited answer)
         "intra_document_qa",  # subgraph: scoped KG query -> generate_answer (contract + question -> cited answer)
-        "cross_corpus_retrieval",  # subgraph: constraints+functions -> route -> match_rank -> tiebreak -> cited clauses
-        "typed_property_retrieval",  # subgraph: front-door + property_boosted_retrieval (Leg B, LEGB-SUBGRAPH)
+        "typed_property_retrieval",  # subgraph: front-door + property_boosted_retrieval (Leg B, LEGB-SUBGRAPH). THE
+        #   corpus-wide function+property retrieval leg; retired the redundant cross_corpus_retrieval (inferior pool)
         "contract_ingestion_pipeline",  # subgraph: generic corpus ingest (chunk->extract->resolve->write->link)
         # --- Compliance module rung 1 (roadmap §13): the ad-compliance engine ---
         "requirement_extraction",  # subgraph: extract(docling-graph, multi-call) -> adapt; regulatory section -> Requirement[] (CC-2, SKILL-SPLIT)
