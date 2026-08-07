@@ -28,9 +28,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > **NEW open Leg-A item (supersedes "over-classification abstain"): vLLM-Granite-8B generation is
 > NON-DETERMINISTIC near its abstain boundary** — the same answerable query abstained ~2/3 of runs at temp 0
 > (greedy vLLM isn't bitwise-reproducible; borderline query flips). Generation-robustness / model-strength
-> issue (Pro-on-hard-queries lever), its own task. Both KGs backfilled; local Docker DOWN; A100 DOWN (spun down
-> after the re-validation); `rw-arcadedb` UP (cheap). NOTE: the local KG has NOT had the ADR-0044 linking pass
-> yet (only the Modal KG) — run `scripts/run_clause_exception_linking.py` against local when it's next up.
+> issue (Pro-on-hard-queries lever), its own task. **ADR-0044 linking pass now run on BOTH KGs** — Modal
+> (409 edges / 390 contracts) and local canonical 510 (409 edges / 391 contracts, `exceptions_of_clause` +
+> outE-fix verified; the deterministic proximity derivation matches). Both KGs backfilled; local Docker DOWN;
+> A100 DOWN; `rw-arcadedb` UP (cheap).
 >
 > ---
 >
