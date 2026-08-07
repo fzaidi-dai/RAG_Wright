@@ -13,10 +13,12 @@ swappable with **zero change here**, which is the whole point). Our only jobs:
   4. Propagate the OTel context across any boundary WE introduce (separate process / worker / queue / custom
      async loop). Std-lib threads are carried by GraphWright's threading instrumentation.
 
-This module is **dependency-free**: if opentelemetry is not importable (RAG_Wright standalone / hermetic
-tests), every helper is a safe NO-OP; under GraphWright's runtime it attaches to the installed provider and
-nests correctly. Never import Langfuse; never construct a provider. Ground OTel via the framework index /
-docs when it is installed under GraphWright.
+This module is a safe NO-OP unless a REAL tracer provider is installed (GraphWright's runtime): standalone /
+hermetic tests, every helper no-ops; under GraphWright it attaches to the installed provider and nests
+correctly. Activation hinges on a real provider being set, NOT on `opentelemetry` merely being importable --
+the API can arrive as a transitive dependency (e.g. via FastMCP) with no SDK/provider configured, and that must
+NOT flip instrumentation on. Never import Langfuse; never construct a provider. Ground OTel via the framework
+index / docs when it is installed under GraphWright.
 """
 
 from __future__ import annotations
@@ -24,15 +26,27 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Any, Iterator, Optional
 
-try:  # present under GraphWright's runtime; absent standalone -> everything below no-ops
+try:  # the API may be importable standalone (transitive dep) -> gate ACTIVATION on a real provider, not this
     from opentelemetry import context as _context
     from opentelemetry import trace as _trace
     from opentelemetry.propagate import extract as _extract
     from opentelemetry.propagate import inject as _inject
 
-    _OTEL = True
+    _OTEL_IMPORTABLE = True
 except Exception:  # noqa: BLE001 - opentelemetry not installed -> graceful no-op seam
-    _OTEL = False
+    _OTEL_IMPORTABLE = False
+
+# The default (unconfigured) providers the OTel API returns before GraphWright sets a real SDK provider. When
+# the current provider is one of these, spans are non-recording, so every helper must no-op.
+_NOOP_PROVIDER_TYPES = frozenset({"ProxyTracerProvider", "NoOpTracerProvider", "DefaultTracerProvider"})
+
+
+def _provider_installed() -> bool:
+    """True only when a REAL tracer provider is installed (GraphWright's instrumented runtime), not the default
+    proxy/no-op the API ships with. This, not mere importability, is what activates the seam."""
+    if not _OTEL_IMPORTABLE:
+        return False
+    return type(_trace.get_tracer_provider()).__name__ not in _NOOP_PROVIDER_TYPES
 
 # OpenTelemetry GenAI semantic-convention attribute names (what OTLP backends read for token/cost views).
 _GENAI_MODEL = "gen_ai.request.model"
@@ -43,12 +57,12 @@ _GENAI_TOTAL = "gen_ai.usage.total_tokens"
 
 
 def otel_active() -> bool:
-    """True when OpenTelemetry is importable (i.e. running under GraphWright's instrumented runtime)."""
-    return _OTEL
+    """True when a real tracer provider is installed (i.e. running under GraphWright's instrumented runtime)."""
+    return _provider_installed()
 
 
 def _tracer():
-    return _trace.get_tracer("rag_wright.subgraphs") if _OTEL else None
+    return _trace.get_tracer("rag_wright.subgraphs") if _provider_installed() else None
 
 
 @contextmanager
@@ -107,7 +121,7 @@ def inject_context(carrier: dict) -> dict:
     """Producer side: serialize the current OTel context into `carrier` before crossing a boundary you
     introduce (separate process / external worker / queue / custom async). Returns the carrier. No-op without
     OTel. Std-lib threads do NOT need this (GraphWright instruments them)."""
-    if _OTEL:
+    if _provider_installed():
         _inject(carrier)
     return carrier
 
@@ -115,8 +129,8 @@ def inject_context(carrier: dict) -> dict:
 @contextmanager
 def attach_context(carrier: dict) -> Iterator[None]:
     """Consumer side: re-attach a context carried across a boundary so the work nests under the original run.
-    No-op without OTel."""
-    if not _OTEL:
+    No-op without a real provider."""
+    if not _provider_installed():
         yield
         return
     token = _context.attach(_extract(carrier))

@@ -1,8 +1,10 @@
-"""LG-0 observability seam: dependency-free and NO-OP-safe when OpenTelemetry is absent.
+"""LG-0 observability seam: NO-OP-safe unless a real tracer provider is installed.
 
-RAG_Wright standalone (and hermetic tests) has no OTel installed -> every helper must be a safe no-op and
-never construct a provider/exporter/Langfuse client. Under GraphWright's runtime (OTel present) the same
-calls emit nested spans; that path is verified there, not here.
+RAG_Wright standalone (and hermetic tests) has no real OTel provider configured -> every helper must be a safe
+no-op and never construct a provider/exporter/Langfuse client. This holds even though the OTel API is now an
+importable transitive dependency (via FastMCP): activation hinges on a real provider, not mere importability,
+so the default ProxyTracerProvider keeps the seam inactive. Under GraphWright's runtime (a real provider set)
+the same calls emit nested spans; that path is verified there, not here.
 """
 
 from __future__ import annotations

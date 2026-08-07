@@ -19,7 +19,7 @@ cd "$(git rev-parse --show-toplevel)"
 # schema-driven KG extractor GP-1B adopted and KG-0..KG-6 lean on heavily — `template from-ontology`,
 # the extraction runners, the model seam; ground its API first-class alongside the `kg-extraction-recipe`
 # Skill + live CLI, so nothing is guessed). modal_proto (low-level gRPC stubs) is excluded as noise.
-PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl"
+PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters"
 SP="$(uv run python -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
 STAGE="$HOME/.graphify/rag-wright-framework/src"
 OUT="graphify-out/framework/graph.json"
@@ -56,6 +56,20 @@ if [ -d "$VLLM_SRC" ]; then
   done
 else
   echo "[framework] NOTE: vllm clone not at $VLLM_SRC -> skipped (git clone --depth 1 https://github.com/vllm-project/vllm.git ~/.graphify-src/vllm)"
+fi
+
+# fastmcp (MCP-PROTO: the MCP-tool server framework, ADR pending) -- staged from the CLONE, not site-packages,
+# because FastMCP versions change rapidly (the whole reason for repo-level grounding) and the 3.x monorepo keeps
+# the core package under fastmcp_slim/fastmcp. `graphify clone https://github.com/jlowin/fastmcp` puts it at
+# ~/.graphify/repos/jlowin/fastmcp; refresh with `git -C ~/.graphify/repos/jlowin/fastmcp pull`. Keep the clone
+# checked out at the tag matching the installed version for grounding accuracy.
+FASTMCP_SRC="$HOME/.graphify/repos/jlowin/fastmcp/fastmcp_slim/fastmcp"
+if [ -d "$FASTMCP_SRC" ]; then
+  echo "[framework] staging fastmcp (core server/tools/client) from clone..."
+  rsync -a --exclude='__pycache__' --exclude='*.pyc' --exclude='*.pyi' --exclude='tests' --exclude='test' \
+    "$FASTMCP_SRC" "$STAGE/"
+else
+  echo "[framework] NOTE: fastmcp clone not at $FASTMCP_SRC -> skipped (graphify clone https://github.com/jlowin/fastmcp)"
 fi
 
 echo "[framework] extracting (AST only, no LLM)..."
