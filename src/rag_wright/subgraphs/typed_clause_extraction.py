@@ -141,6 +141,7 @@ def production_record_fn() -> RecordFn:
     partial. Grounding (`reground`) is applied by the subgraph node, not here.
     """
     from rag_wright.capabilities.dg_extraction import default_extraction_model, extract_clause
+    from rag_wright.contracts.function import NO_FUNCTION
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.spans.clause_kg_extractor import clause_to_record
 
@@ -154,7 +155,9 @@ def production_record_fn() -> RecordFn:
             raise TransientExtraction(str(exc)) from exc
         if clause is None:
             return None
-        return clause_to_record(clause, chunk_id=ChunkId.of("clause", 0, text), function="", span_id="")
+        # a QUERY has no clause function -> the NO_FUNCTION sentinel (only the extracted properties are used;
+        # function="" used to fail ClausePropertyRecord validation and degrade the whole leg to empty constraints).
+        return clause_to_record(clause, chunk_id=ChunkId.of("clause", 0, text), function=NO_FUNCTION, span_id="")
 
     return extract
 

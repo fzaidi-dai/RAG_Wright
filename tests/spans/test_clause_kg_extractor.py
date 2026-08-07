@@ -73,6 +73,20 @@ def test_list_dimensions_expand_to_multiple_assertions() -> None:
     assert sorted(by[_D.CARVE_OUT]) == ["fraud", "willful_misconduct"]
 
 
+def test_query_constraint_record_uses_the_no_function_sentinel() -> None:
+    # A3 bug fix: a QUERY has no clause function, so the query-constraint path builds a ClausePropertyRecord with
+    # the NO_FUNCTION sentinel. function="" used to fail ClausePropertyRecord validation -> the query-constraint
+    # extraction ERRORED -> the whole cross_corpus leg degraded to empty constraints (every span match=0.0).
+    from rag_wright.contracts.function import NO_FUNCTION
+    from rag_wright.spans.clause_kg_extractor import clause_to_record
+
+    clause = ct.Clause(
+        document_reference="q", caps=ct.CapConstraint(cap_basis=ct.CapBasis.MULTIPLE_OF_FEES, cap_operator="eq"))
+    rec = clause_to_record(clause, chunk_id=_CID, function=NO_FUNCTION, span_id="")
+    assert rec.function == NO_FUNCTION  # valid: the no-function sentinel (was a ValidationError for "")
+    assert (_D.CAP_BASIS, "multiple_of_fees") in {(a.dimension, a.value) for a in rec.assertions}  # props survive
+
+
 def test_cap_constraint_maps_basis_and_open_quantum() -> None:
     """caps -> CAP_BASIS (cap_other -> canonical 'other') + CAP_QUANTUM (open literal)."""
     clause = ct.Clause(

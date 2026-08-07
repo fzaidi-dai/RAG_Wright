@@ -50,6 +50,12 @@ FUNCTION_LABELS: tuple[str, ...] = tuple(
 )
 FUNCTION_LABEL_SET: frozenset[str] = frozenset(FUNCTION_LABELS)
 
+# The no-clause-function sentinel (the classifier's off-taxonomy NONE). NOT a function type, so NOT in
+# FUNCTION_LABELS. A `ClausePropertyRecord` carries it ONLY for a QUERY-constraint record (a query has no clause
+# function -- only its extracted properties matter); a real ingested clause never uses it (the ingest extracts
+# clauses only for canonical functions).
+NO_FUNCTION: str = "NONE"
+
 # The classifier was trained on CUAD's label strings, which differ in CASE from the canonical taxonomy for
 # a few labels (e.g. CUAD "Ip Ownership Assignment" vs the canonical "IP Ownership Assignment"). Normalize
 # the classifier output to the canonical label at the boundary (memory: normalize at the boundary), keyed

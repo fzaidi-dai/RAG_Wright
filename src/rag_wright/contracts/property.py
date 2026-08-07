@@ -29,7 +29,7 @@ from enum import Enum
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from rag_wright.contracts.function import FUNCTION_LABEL_SET
+from rag_wright.contracts.function import FUNCTION_LABEL_SET, NO_FUNCTION
 from rag_wright.contracts.ontology import ClauseCategory
 from rag_wright.contracts.provenance import ConfidenceTag, GraphFact
 
@@ -205,9 +205,12 @@ class ClausePropertyRecord(BaseModel):
     @field_validator("function")
     @classmethod
     def _function_in_taxonomy(cls, v: str) -> str:
-        if v not in FUNCTION_LABEL_SET:
+        # a real clause's function is a taxonomy member; the `NO_FUNCTION` sentinel is allowed ONLY for a
+        # query-constraint record (a query has no clause function -- only its extracted properties are used).
+        if v != NO_FUNCTION and v not in FUNCTION_LABEL_SET:
             raise ValueError(
-                f"function {v!r} is not in the retrieval function taxonomy (FUNCTION_LABELS)"
+                f"function {v!r} is not in the retrieval function taxonomy (FUNCTION_LABELS) "
+                f"or the {NO_FUNCTION!r} no-function sentinel"
             )
         return v
 
