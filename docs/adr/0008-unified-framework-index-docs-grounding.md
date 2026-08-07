@@ -73,3 +73,39 @@ plus Graphify's OpenAI extra (`uv tool install "graphifyy[openai]"`). The key is
   same way: tight committed corpus → cost-once OpenRouter/DeepSeek extraction → additive merge.
 - The ArcadeDB SQL grounding replaces the interim doc-fetch-and-ADR record in ADR-0007; ADR-0007's SQL
   facts remain correct and are now also queryable in the framework graph.
+
+## Addendum (2026-08-07): the full new-library onboarding decision tree
+
+This ADR started as the "no source, no MCP → extract the vendor docs" case. Two more experiences (vLLM at
+ADR-0039, FastMCP at MCP-PROTO) rounded it into a complete recipe for onboarding **any** new library into the
+one framework grounding index. The decision tree, keyed by the library's shape:
+
+1. **Pip-installed and stable** — add the package to the `PKGS` list in `refresh_framework_graph.sh`. It is
+   staged from site-packages and version-matched to the installed dependency by construction. This is the
+   default (docling, langchain_openai, mcp, langgraph, deepagents, langchain_mcp_adapters, ...).
+2. **Not pip-installable on this host, OR fast-moving, OR a monorepo where the layout matters** — clone-stage
+   it. `graphify clone <github-url>`, then a staging block in `refresh_framework_graph.sh` that rsyncs the core
+   package (excluding tests/bytecode) into the extraction stage. Refresh with `git -C <clone> pull`; hold the
+   clone at the tag matching the installed version so the graph matches what the code calls. Applied to:
+   - **vllm** — not pip-installable on the Mac (CUDA/Linux); staged from `~/.graphify-src/vllm`, scoped to the
+     serving/sampling/structured-output surfaces our code drives, not the kernel internals.
+   - **fastmcp** — releases fast (the reason repo-level grounding matters) and ships a 3.x monorepo whose core
+     package is under `fastmcp_slim/fastmcp`; staged from `~/.graphify/repos/jlowin/fastmcp`.
+3. **No source tree AND no docs MCP** — LLM-extract the vendor docs into the same index (the original body of
+   this ADR: tight committed corpus under `docs/vendor/` → cost-once OpenRouter/DeepSeek extraction → free
+   additive merge on every rebuild). Applied to the ArcadeDB SQL vector functions.
+
+Two rules hold across all three routes:
+
+- **Ground against BOTH the code graph AND the installed `inspect.signature`.** On a fast-moving library a
+  clone at latest can drift from the pinned install; confirming the signature in the running interpreter closes
+  the gap. (FastMCP was confirmed against both the cloned-repo AST graph and the installed 3.4.6 signatures
+  before a line was written.)
+- **Watch transitive dependencies.** A new library can pull in a package that flips the behavior of code that
+  gates on whether something is merely importable. Adding `fastmcp` pulled in `opentelemetry-api` transitively,
+  which activated the observability seam (it had gated on `import opentelemetry` succeeding). The fix, and the
+  general rule: gate such activation on **real configuration** (here, a real tracer provider being installed),
+  not on mere importability, so a transitive dependency never changes runtime behavior.
+
+The invariant is unchanged from the original decision: **one index, one authority.** The three routes are just
+how a surface gets *into* that one index; grounding still resolves against `graphify-out/framework/graph.json`.
