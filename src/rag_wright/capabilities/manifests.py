@@ -1015,6 +1015,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("compliance", "mcp-tool", "ad-screening", "cited", "discoverable"),
     ),
+    CapabilityManifest(
+        slug="intra_document_qa_mcp",
+        kind="mcp_tool",  # the discoverable MCP-tool surface of the intra_document_qa subgraph (MCP-PROTO B1)
+        display_name="Intra-document contract QA (MCP tool)",
+        description=(
+            "The intra_document_qa capability exposed as a single MCP tool (`answer_contract_question`, served "
+            "by rag_wright.mcp.intra_document_qa_server via FastMCP): answer a natural-language question about "
+            "ONE known contract from its clause knowledge graph and return a cited GeneratedAnswer (grounded "
+            "answer, chunk_id citations, abstained flag). An external agent discovers this via ARD search and "
+            "calls it as ONE tool -- saving context tokens and inter-agent coordination vs. embedding the "
+            "intra_document_qa subgraph. Same output contract as the subgraph; distinct ARD identity because the "
+            "callable surface is a deployed MCP server, not an in-process graph node."
+        ),
+        representative_queries=(
+            "answer a question about a known contract with cited clauses as a tool call",
+            "what does this contract say about the liability cap, with citations",
+            "get a cited answer for one contract's terms over MCP",
+        ),
+        tags=("qa", "intra-document", "contract", "mcp-tool", "cited", "discoverable"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

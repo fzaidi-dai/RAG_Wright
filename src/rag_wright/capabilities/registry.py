@@ -118,6 +118,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "compliance_ingestion",  # subgraph: regulatory corpus -> Requirement KG (CC-5)
         "compliance_check",  # subgraph: subject doc x requirements -> cited findings + gap matrix (CC-6)
         "compliance_check_mcp",  # mcp_tool: the discoverable MCP-tool surface of compliance_check (MCP-PROTO)
+        "intra_document_qa_mcp",  # mcp_tool: the discoverable MCP-tool surface of intra_document_qa (MCP-PROTO B1)
     }
 )
 
