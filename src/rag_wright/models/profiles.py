@@ -133,6 +133,21 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="moonshotai/kimi-k3",
         structured_method="json_schema",
     ),
+    # Self-hosted Gemma 4 QAT on vLLM: forced `function_calling` returns HTTP 400 ("tool_choice=function ...
+    # requires --tool-call-parser to be set") -- vLLM won't honor a forced named tool without a tool-call
+    # parser. `json_schema` routes through vLLM's NATIVE guided decoding (xgrammar), which needs no parser.
+    # Note this is a DIFFERENT id from the OpenRouter `google/gemma-4-31b-it` profile above (which uses the
+    # OpenRouter-only `{"reasoning": {"enabled": False}}` extra_body -- inapplicable to vLLM). Empirical, dated
+    # 2026-08-08: GATE-2 400 on function_calling, clean on json_schema. Candidate self-hosted GENERAL model.
+    "google/gemma-4-31B-it-qat-w4a16-ct": ModelProfile(
+        model_id="google/gemma-4-31B-it-qat-w4a16-ct",
+        structured_method="json_schema",
+    ),
+    # The 26B-A4B MoE (INT8 fallback if the dense 31B is a problem) -- same vLLM json_schema story.
+    "google/gemma-4-26B-A4B-it": ModelProfile(
+        model_id="google/gemma-4-26B-A4B-it",
+        structured_method="json_schema",
+    ),
 }
 
 

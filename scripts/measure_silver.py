@@ -18,6 +18,7 @@ Fact coverage (does the answer state must_include) is left to a manual spot-chec
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -31,7 +32,9 @@ _DUMP = Path("/private/tmp/claude-501/-Users-farhan-work-RAG-Wright/"
 
 _GRANITE = "ibm-granite/granite-4.1-8b"
 _GEMMA4 = "google/gemma-4-31b-it"
-_MAX_WORKERS = 8  # OpenRouter batches fine (not a single-GPU bottleneck like the A100)
+# OpenRouter batches fine at 8; a SINGLE self-hosted A100 doing json_schema guided decoding wants LOW
+# concurrency (xgrammar workspace per in-flight request -> OOM risk), so make it env-tunable (SILVER_WORKERS).
+_MAX_WORKERS = int(os.environ["SILVER_WORKERS"]) if os.environ.get("SILVER_WORKERS") else 8
 
 
 def _log(s: str = "") -> None:
@@ -40,9 +43,12 @@ def _log(s: str = "") -> None:
 
 def main() -> None:
     load_dotenv()
-    import os
-    os.environ["RAG_SERVING"] = "openrouter"  # both models on the SAME backend -> a clean strength comparison
     repeats = int(sys.argv[1]) if len(sys.argv) > 1 else 3
+    # Backend + models are ENV-DRIVEN so this scores OpenRouter OR a self-hosted vLLM endpoint unchanged:
+    #   RAG_SERVING (default openrouter) selects the backend (set vllm + VLLM_BASE_URL for self-hosted);
+    #   SILVER_MODELS="label:model_id,label2:model_id2" picks the strategies (default = OpenRouter granite vs gemma).
+    os.environ.setdefault("RAG_SERVING", "openrouter")
+    spec = os.environ.get("SILVER_MODELS", f"granite-base:{_GRANITE},gemma4-base:{_GEMMA4}")
 
     from rag_wright.capabilities.answer_generator import (
         EvidenceItem,
@@ -57,10 +63,11 @@ def main() -> None:
     _log(f"[silver] {len(records)} records "
          f"({sum(r['answerable'] for r in records)} answerable + {sum(not r['answerable'] for r in records)} not)")
 
-    strategies = {
-        "granite-base": SeamAnswerModel(_GRANITE),
-        "gemma4-base": SeamAnswerModel(_GEMMA4),
-    }
+    strategies = {}
+    for part in spec.split(","):
+        label, mid = part.split(":", 1)
+        strategies[label.strip()] = SeamAnswerModel(mid.strip())
+    _log(f"[backend] RAG_SERVING={os.environ['RAG_SERVING']}  strategies={list(strategies)}")
     combos = [(name, ri, rep) for name in strategies for ri in range(len(records)) for rep in range(repeats)]
     total = len(combos)
     _log(f"[run] {len(strategies)} strategies x {len(records)} records x {repeats} repeats = {total} runs\n")
