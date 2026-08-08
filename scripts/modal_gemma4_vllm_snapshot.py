@@ -39,6 +39,9 @@ GPU_UTIL = os.environ.get("VLLM_GPU_UTIL", "0.80")
 MAX_LEN = os.environ.get("VLLM_MAX_LEN", "16384")
 CHAT_TEMPLATE = os.environ.get("CHAT_TEMPLATE", "/root/gemma4_chat_template.jinja")
 ENFORCE_EAGER = os.environ.get("ENFORCE_EAGER", "1") == "1"  # Lever 2: skip compile/graphs (latency moot)
+# ENABLE_SNAPSHOT lets us verify Lever 2 ALONE first (snapshot off = plain cold start with enforce-eager +
+# optional text-only), then layer Lever 1 (snapshots) on. Default on.
+SNAPSHOT = os.environ.get("ENABLE_SNAPSHOT", "1") == "1"
 # VISION TOGGLE. Unset => vision ON (default; ingestion needs it). "image=0,audio=0" => text-only (query-gen).
 MM_LIMIT = os.environ.get("MM_LIMIT", "")
 MAX_INPUTS = int(os.environ.get("MAX_INPUTS", "8"))  # container concurrency (vLLM batches); keep modest for 31B
@@ -93,41 +96,48 @@ def _wait_ready(timeout_s: int = 900) -> None:
     raise RuntimeError("vLLM did not become ready")
 
 
+_CLS_KWARGS = (
+    {"enable_memory_snapshot": True, "experimental_options": {"enable_gpu_snapshot": True}}  # Lever 1
+    if SNAPSHOT else {}
+)
+
+
 @app.cls(
     image=image, gpu=GPU, volumes={HF_CACHE: hf_vol},
     timeout=3600, scaledown_window=300, max_containers=1,
-    enable_memory_snapshot=True,                          # Lever 1
-    experimental_options={"enable_gpu_snapshot": True},   # Lever 1 (GPU vRAM snapshot, alpha)
+    **_CLS_KWARGS,
 )
 @modal.concurrent(max_inputs=MAX_INPUTS)  # let the container batch concurrent proxy requests (vLLM batches)
 class Gemma:
-    @modal.enter(snap=True)
+    @modal.enter(snap=SNAPSHOT)  # snap=True when snapshotting (runs pre-snapshot); else a regular enter
     def start(self):
-        """Warm the server, then /sleep (offload weights -> CPU, empty KV). THIS state is snapshotted, so later
-        cold starts skip all of load+compile+warmup and just restore + /wake_up."""
+        """Start + warm the server. When SNAPSHOT: then /sleep (offload weights -> CPU, empty KV) so THIS state
+        is snapshotted and later cold starts just restore + /wake_up. When NOT SNAPSHOT (Lever-2-only): this is
+        a normal cold start (enforce-eager + optional text-only) and the server is left ready here."""
         import httpx
 
         hf_vol.reload()
         self._vllm = subprocess.Popen(_vllm_args())
         _wait_ready()
-        # tiny warmup so any first-call init is captured in the snapshot
-        try:
+        try:  # tiny warmup so any first-call init is captured (in the snapshot, or just done up front)
             httpx.post(f"{_VLLM}/v1/completions", timeout=120,
                        headers={"Authorization": f"Bearer {API_KEY}"},
                        json={"model": MODEL, "prompt": "ok", "max_tokens": 1})
         except Exception:  # noqa: BLE001
             pass
-        # offload weights to CPU + empty KV so the snapshot is restorable (level 1 keeps weights in CPU RAM)
-        httpx.post(f"{_VLLM}/sleep", params={"level": 1}, timeout=300,
-                   headers={"Authorization": f"Bearer {API_KEY}"})
+        if SNAPSHOT:  # offload weights to CPU + empty KV (level 1) so the snapshot is restorable
+            httpx.post(f"{_VLLM}/sleep", params={"level": 1}, timeout=300,
+                       headers={"Authorization": f"Bearer {API_KEY}"})
 
     @modal.enter(snap=False)
     def wake(self):
-        """On every (restored) start: /wake_up moves weights back to GPU + re-allocates KV, then wait ready."""
+        """On every (restored) start: /wake_up moves weights back to GPU. No-op in Lever-2-only mode (start()
+        already left the server ready)."""
         import httpx
 
-        httpx.post(f"{_VLLM}/wake_up", timeout=300, headers={"Authorization": f"Bearer {API_KEY}"})
-        _wait_ready()
+        if SNAPSHOT:
+            httpx.post(f"{_VLLM}/wake_up", timeout=300, headers={"Authorization": f"Bearer {API_KEY}"})
+            _wait_ready()
 
     def _mem(self):
         import torch
@@ -150,7 +160,7 @@ class Gemma:
             except Exception:  # noqa: BLE001
                 up = False
             return {"vllm_up": up, "model": MODEL, "vision": "off" if MM_LIMIT else "on",
-                    "enforce_eager": ENFORCE_EAGER, "memory": self._mem()}
+                    "enforce_eager": ENFORCE_EAGER, "snapshot": SNAPSHOT, "memory": self._mem()}
 
         @api.api_route("/v1/{path:path}", methods=["GET", "POST"])
         async def proxy(path: str, request: Request):
