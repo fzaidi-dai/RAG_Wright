@@ -202,6 +202,85 @@ def test_best_of_n_empty_evidence_abstains_without_model_call():
     assert result.abstained and result.citations == []
 
 
+# --- client-side free-text + tag parse (self-hosted Gemma, no server guided decoding) -------------
+
+_C1 = "CHANGEPOINT_2000-EX-10.6:418:428f0243bf74cabec"  # evidence-shaped chunk_ids
+_C2 = "CHANGEPOINT_2000-EX-10.6:557:00a457517ca0dab3"
+
+
+def test_parse_tagged_answer_wellformed():
+    from rag_wright.capabilities.answer_generator import parse_tagged_answer
+
+    text = (f"<answer>\nLiability is capped at fees paid [{_C1}], except uncapped for confidentiality "
+            f"[{_C2}].\n</answer>\n<citations>\n{_C1}\n{_C2}\n</citations>")
+    ans = parse_tagged_answer(text)
+    assert not ans.abstained
+    assert "Liability is capped" in ans.answer and ans.answer.endswith(".")
+    assert ans.citations == [_C1, _C2]  # from the block
+
+
+def test_parse_tagged_answer_missing_block_falls_back_to_inline():
+    from rag_wright.capabilities.answer_generator import parse_tagged_answer
+
+    ans = parse_tagged_answer(f"<answer>Governed by Texas law [{_C1}].</answer>")  # no <citations> block
+    assert not ans.abstained and ans.citations == [_C1]  # recovered the inline [chunk_id]
+
+
+def test_parse_tagged_answer_no_tags_uses_whole_text_and_inline_cites():
+    from rag_wright.capabilities.answer_generator import parse_tagged_answer
+
+    ans = parse_tagged_answer(f"The cap is 1x fees [{_C1}] and it excludes indirect damages.")  # bare prose
+    assert not ans.abstained and _C1 in ans.citations and ans.answer.startswith("The cap")
+
+
+def test_parse_tagged_answer_abstain_marker():
+    from rag_wright.capabilities.answer_generator import parse_tagged_answer
+
+    assert parse_tagged_answer("<abstain/>").abstained
+    assert parse_tagged_answer("  ").abstained  # empty -> abstain
+
+
+def test_parse_tagged_answer_dedupes_block_and_inline():
+    from rag_wright.capabilities.answer_generator import parse_tagged_answer
+
+    ans = parse_tagged_answer(f"<answer>x [{_C1}]</answer><citations>{_C1}</citations>")
+    assert ans.citations == [_C1]  # not duplicated across block + inline
+
+
+def test_tagged_freetext_model_generates_and_parses(monkeypatch):
+    from rag_wright.capabilities import answer_generator as ag
+
+    seen = {}
+
+    class _Msg:
+        content = f"<answer>Capped at fees [{_C1}].</answer>\n<citations>{_C1}</citations>"
+
+    class _Runnable:
+        def invoke(self, prompt):
+            seen["prompt"] = prompt
+            return _Msg()
+
+    # build_model returns a PLAIN client (no with_structured_output -> no server guided decoding)
+    monkeypatch.setattr(ag, "build_model", lambda mid, **kw: _Runnable())
+    model = ag.TaggedFreeTextAnswerModel("google/gemma-4-31B-it-qat-w4a16-ct")
+    ans = model.generate("PROMPT")
+    assert not ans.abstained and ans.citations == [_C1]
+    assert "EXACTLY these tags" in seen["prompt"]  # the tag-format instructions were appended
+
+
+def test_answer_model_for_routes_by_profile():
+    from rag_wright.capabilities.answer_generator import (
+        SeamAnswerModel,
+        TaggedFreeTextAnswerModel,
+        answer_model_for,
+    )
+
+    # a client_side_structured profile -> the free-text tag path
+    assert isinstance(answer_model_for("google/gemma-4-31B-it-qat-w4a16-ct"), TaggedFreeTextAnswerModel)
+    # everything else -> the structured-output seam
+    assert isinstance(answer_model_for("ibm-granite/granite-4.1-8b"), SeamAnswerModel)
+
+
 # --- vision-to-text ------------------------------------------------------------------------------
 
 

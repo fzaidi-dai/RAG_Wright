@@ -34,6 +34,11 @@ class ModelProfile(BaseModel):
 
     model_id: str
     structured_method: StructuredMethod = "function_calling"
+    # Some serving stacks cannot do SERVER-SIDE grammar-constrained structured output at all (self-hosted
+    # Gemma 4 on vLLM 0.26: json_schema/json_mode run away to max_model_len; function_calling needs a buggy
+    # tool-parser -- while FREE-TEXT is perfect). Flag those models so generation uses the CLIENT-SIDE
+    # free-text + tag-parse path (answer_generator.answer_model_for) instead of the guided-decoding seam.
+    client_side_structured: bool = False
     # Applied by the seam only to the forced structured call, never to the base client.
     structured_extra_body: Optional[dict[str, Any]] = Field(default=None)
     # Applied by the seam to the BASE client (every call to this model). Carries request-level provider
@@ -149,11 +154,13 @@ PROFILES: dict[str, ModelProfile] = {
     # kept here to match the Granite precedent; it does NOT yet work for this model on vLLM.
     "google/gemma-4-31B-it-qat-w4a16-ct": ModelProfile(
         model_id="google/gemma-4-31B-it-qat-w4a16-ct",
-        structured_method="json_schema",
+        structured_method="json_schema",  # unused: server-side guided decoding runs away on this stack
+        client_side_structured=True,      # -> free-text + client-side tag parse instead
     ),
     "google/gemma-4-26B-A4B-it": ModelProfile(
         model_id="google/gemma-4-26B-A4B-it",
         structured_method="json_schema",
+        client_side_structured=True,
     ),
 }
 

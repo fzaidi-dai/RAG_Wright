@@ -14,13 +14,14 @@ coerced to an abstention. The model choice is the `GENERAL` role (no flag here).
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.models.profiles import ModelRole, model_for
+from rag_wright.models.profiles import ModelRole, model_for, profile_for
 from rag_wright.models.seam import build_model, build_structured
 from rag_wright.util.concurrent import map_concurrent
 
@@ -97,6 +98,89 @@ class SeamReasonModel:
 
     def reason(self, prompt: str) -> str:
         return str(build_model(self._model_id).invoke(prompt).content)
+
+
+# --- client-side structured output: free-text + light XML tags, parsed here (no server guided decoding) ------
+#
+# Why: on some serving stacks (self-hosted Gemma 4 on vLLM) SERVER-SIDE grammar-constrained structured output
+# runs away to max_model_len, while plain FREE-TEXT terminates cleanly. So we ask the model to answer in light
+# XML tags and parse them CLIENT-SIDE into GeneratedAnswer. Tags (not JSON) because the `answer` body is long
+# legal prose full of quotes/brackets/newlines -- which is exactly what breaks JSON string escaping; a tagged
+# body needs no escaping. Robust by design: a missing <citations> block falls back to the inline [chunk_id]s the
+# model already emits, and missing tags fall back to treating the whole text as the answer -- so retries are rare
+# and _finalize (drop non-evidence citations, coerce uncited -> abstain) still enforces the contract downstream.
+
+_TAG_INSTRUCTIONS = (
+    "\n\nReturn your response using EXACTLY these tags:\n"
+    "<answer>\nYour grounded answer, citing each supporting evidence item inline as [chunk_id] (the bracketed "
+    "id shown for that item).\n</answer>\n"
+    "<citations>\nThe chunk_id of every evidence item you used, one per line; use only ids present in the "
+    "evidence above.\n</citations>\n"
+    "If the evidence does not support an answer, output exactly <abstain/> and nothing else."
+)
+_ANSWER_RE = re.compile(r"<answer>(.*?)</answer>", re.DOTALL | re.IGNORECASE)
+_CITE_BLOCK_RE = re.compile(r"<citations>(.*?)</citations>", re.DOTALL | re.IGNORECASE)
+_ABSTAIN_RE = re.compile(r"<abstain\s*/?>", re.IGNORECASE)
+# an inline citation: [<contract_id>:<index>:<hex hash>]; contract_id is delimiter-safe (no brackets).
+_INLINE_CITE_RE = re.compile(r"\[([^\[\]]+:\d+:[0-9a-fA-F]{8,})\]")
+
+
+def parse_tagged_answer(text: str) -> GeneratedAnswer:
+    """Parse a free-text tagged response into a GeneratedAnswer (Pydantic then validates the contract; the
+    capability's _finalize drops any citation not in the evidence). Tolerant: <answer> tag -> its body; else an
+    <abstain/> marker -> abstain; else the whole text is the answer. Citations come from the <citations> block
+    AND the inline [chunk_id]s in the answer body (deduped), so a missing block still yields citations."""
+    t = text.strip()
+    if not t:
+        return _abstain()
+    match = _ANSWER_RE.search(t)
+    if match:
+        answer = match.group(1).strip()
+    elif _ABSTAIN_RE.search(t):
+        return _abstain()
+    else:
+        answer = t  # no tags at all -> the model just wrote prose (with inline [chunk_id]s); use it
+    if not answer:
+        return _abstain()
+    citations: list[str] = []
+    block = _CITE_BLOCK_RE.search(t)
+    if block:
+        citations = [c for c in re.split(r"[\s,]+", block.group(1).strip()) if c]
+    for cid in _INLINE_CITE_RE.findall(answer):  # supplement with inline ids (dedup, order-preserving)
+        if cid not in citations:
+            citations.append(cid)
+    return GeneratedAnswer(answer=answer, citations=citations, abstained=False)
+
+
+class TaggedFreeTextAnswerModel:
+    """Generation with NO server-side guided decoding: a plain free-text call (`build_model`, no
+    `response_format`) that the model answers in light XML tags, parsed client-side (`parse_tagged_answer`).
+    `max_tokens` is a generous safety cap only -- free-text terminates on its own."""
+
+    def __init__(
+        self, model_id: str | None = None, *, temperature: float = 0.0, max_tokens: int = 2048
+    ) -> None:
+        self._model_id = model_id or model_for(ModelRole.GENERAL)
+        self._temperature = temperature
+        self._max_tokens = max_tokens
+
+    def generate(self, prompt: str) -> GeneratedAnswer:
+        text = build_model(
+            self._model_id, temperature=self._temperature, max_tokens=self._max_tokens
+        ).invoke(prompt + _TAG_INSTRUCTIONS).content
+        return parse_tagged_answer(str(text))
+
+
+def answer_model_for(
+    model_id: str | None = None, *, temperature: float = 0.0, max_tokens: int | None = None
+) -> AnswerModel:
+    """The generation strategy for a model, chosen from its profile: a model flagged `client_side_structured`
+    (server-side guided decoding broken -- self-hosted Gemma 4) gets the free-text + tag-parse path; every other
+    model uses the structured-output seam. One selection point, so production and evals stay in step."""
+    mid = model_id or model_for(ModelRole.GENERAL)
+    if profile_for(mid).client_side_structured:
+        return TaggedFreeTextAnswerModel(mid, temperature=temperature, max_tokens=max_tokens or 2048)
+    return SeamAnswerModel(mid, temperature=temperature, max_tokens=max_tokens)
 
 
 def _evidence_block(evidence: list[EvidenceItem]) -> str:

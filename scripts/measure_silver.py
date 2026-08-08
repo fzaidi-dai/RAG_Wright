@@ -52,7 +52,7 @@ def main() -> None:
 
     from rag_wright.capabilities.answer_generator import (
         EvidenceItem,
-        SeamAnswerModel,
+        answer_model_for,
         generate_answer,
     )
 
@@ -67,7 +67,8 @@ def main() -> None:
     strategies = {}
     for part in spec.split(","):
         label, mid = part.split(":", 1)
-        strategies[label.strip()] = SeamAnswerModel(mid.strip(), max_tokens=max_tokens)
+        # answer_model_for picks per-profile: client-side tag-parse for self-hosted Gemma, the seam otherwise
+        strategies[label.strip()] = answer_model_for(mid.strip(), max_tokens=max_tokens)
     _log(f"[backend] RAG_SERVING={os.environ['RAG_SERVING']}  strategies={list(strategies)}  max_tokens={max_tokens}")
     combos = [(name, ri, rep) for name in strategies for ri in range(len(records)) for rep in range(repeats)]
     total = len(combos)
