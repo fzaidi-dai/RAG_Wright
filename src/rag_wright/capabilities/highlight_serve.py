@@ -22,7 +22,7 @@ from pydantic import BaseModel
 from rag_wright.contracts.highlight import HighlightResult, HighlightSpan
 from rag_wright.contracts.query_intent import QueryIntent
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_structured
+from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 
 DEFAULT_FALLBACK_K = 5
 _EXTRACT_CONCURRENCY = 8
@@ -62,10 +62,14 @@ def _field_extract(spans: list[HighlightSpan], value_to_extract: str, factory, m
     """One structured call per matched span (concurrent) to pinpoint `value_to_extract` within it."""
 
     def _one(sp: HighlightSpan) -> HighlightSpan:
-        out = factory(model_id, _Extracted).invoke(
-            _EXTRACT_PROMPT.format(value=value_to_extract, text=sp.text)
-        )
-        return sp.model_copy(update={"extracted_value": out.value})
+        try:
+            out = factory(model_id, _Extracted).invoke(
+                _EXTRACT_PROMPT.format(value=value_to_extract, text=sp.text)
+            )
+            value = None if out is None else out.value
+        except Exception:  # noqa: BLE001 - a persistent client-side parse failure -> no value (best-effort extract)
+            value = None
+        return sp.model_copy(update={"extracted_value": value})
 
     async def _run() -> list[HighlightSpan]:
         sem = asyncio.Semaphore(_EXTRACT_CONCURRENCY)
@@ -86,7 +90,7 @@ def serve_highlight(
     *,
     store,
     embedder=None,
-    structured_factory=build_structured,
+    structured_factory=build_tag_structured,
     model_id: str | None = None,
     fallback_k: int = DEFAULT_FALLBACK_K,
 ) -> HighlightResult:
