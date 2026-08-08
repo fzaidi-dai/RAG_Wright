@@ -11,7 +11,15 @@ OpenRouter), using the client-side free-text + XML-tag-parse path that bypasses 
 |---|---|---|---|---|
 | Granite-8B (self-hosted, today's prod) | 8/27 (**30%**) | 9/12 (75%*) | 2/13 | ~2-30s |
 | Gemma-4-31B (OpenRouter) | 27/27 (100%) | 6/12 (50%) | 0 | ~120s |
-| **Gemma-4-26B-INT8 (self-hosted, tag path)** | **24/27 (89%)** | 6/12 (50%) | **0/13** | ~46s |
+| **Gemma-4-26B-INT8 (self-hosted A100-40GB, tag path)** | **24/27 (89%)** | 6/12 (50%) | **0/13** | ~46s |
+| **Gemma-4-31B-W4A16 (self-hosted A100-40GB, tag path)** | **9/9 (100%)** | 2/4 (50%) | 0 (1 repeat) | ~47s |
+
+**The 31B closes the gap: 100% recall on the SAME 40GB card, matching OpenRouter, self-hosted.** It answered
+every answerable record INCLUDING Termination (the 26B's only miss). Precision same shape (clean off-topic
+negatives 2/2 abstain; the 2 soft-evidence negatives answered, defensibly). The 31B run was 1 repeat for speed
+(no flip stat), but the 26B showed 0 flips over 3 repeats and the 31B is the stronger model. Serialize the run
+(SILVER_WORKERS=1): the dense 31B is ~47s/call and 3-way concurrency overloads one A100 -> the 120s seam timeout
+-> retry cascade.
 
 Per-answerable-record (answered-count / 3): Cap 3, Uncapped 3, Governing 3, **Termination 0**, Non-Compete 3,
 Audit 3, Anti-Assignment 3, Exclusivity 3, Revenue 3. Only Termination abstained (the 26B MoE is weaker than the
