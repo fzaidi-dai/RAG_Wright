@@ -1055,6 +1055,28 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("qa", "relational", "entity-graph", "mcp-tool", "cited", "discoverable"),
     ),
+    CapabilityManifest(
+        slug="typed_property_retrieval_mcp",
+        kind="mcp_tool",  # the discoverable MCP-tool surface of the typed_property_retrieval subgraph (MCP-PROTO B3)
+        display_name="Typed property-boosted retrieval (MCP tool)",
+        description=(
+            "The typed_property_retrieval capability (Leg B) exposed as a single MCP tool "
+            "(`retrieve_typed_property_spans`, served by rag_wright.mcp.typed_property_retrieval_server via "
+            "FastMCP): retrieve the most relevant contract clauses for a query from across the corpus, "
+            "property-boosted and cited, returning a TypedPropertyRetrieval (the query + ranked spans each with "
+            "its span_id citation, text, function, match score, and satisfied constraints). Corpus-wide "
+            "RETRIEVAL (ranked evidence), NOT a written answer -- distinct from the intra_document_qa / "
+            "relational_qa answer tools. An external agent discovers this via ARD search and calls it as ONE "
+            "tool vs. embedding the subgraph. Same output contract as the subgraph; distinct ARD identity "
+            "because the callable surface is a deployed MCP server, not an in-process graph node."
+        ),
+        representative_queries=(
+            "find clauses across the corpus that cap liability at a multiple of the fees paid",
+            "retrieve ranked cited clauses matching a typed condition as a tool call",
+            "corpus-wide property-boosted clause search over MCP",
+        ),
+        tags=("retrieval", "typed-property", "leg-b", "mcp-tool", "cited", "ranked", "discoverable"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}

@@ -120,6 +120,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "compliance_check_mcp",  # mcp_tool: the discoverable MCP-tool surface of compliance_check (MCP-PROTO)
         "intra_document_qa_mcp",  # mcp_tool: the discoverable MCP-tool surface of intra_document_qa (MCP-PROTO B1)
         "relational_qa_mcp",  # mcp_tool: the discoverable MCP-tool surface of relational_qa (MCP-PROTO B2)
+        "typed_property_retrieval_mcp",  # mcp_tool: the MCP-tool surface of typed_property_retrieval (MCP-PROTO B3)
     }
 )
 

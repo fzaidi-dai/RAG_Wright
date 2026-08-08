@@ -24,13 +24,19 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > and Cerebras — it was a Granite-8B property). Residual, NON-blocking: abstention precision 50% (near-miss
 > over-answer on `Insurance`/`Minimum Commitment`) — a model-strength lever, its own task.
 >
-> **MCP-PROTO Phase B RESUMED (blocker cleared).** Tier-1 legs wrapped as FastMCP tools, mirroring the
-> `compliance_server.py` reference (injectable fn + production/demo + ARD `mcp_tool` + hermetic in-memory-Client
-> tests): **MCP-B1 DONE (commit `78c32a4`)** `intra_document_qa` → `answer_contract_question` → cited
-> `GeneratedAnswer` (`intra_document_qa_mcp`); **MCP-B2 DONE** `relational_qa` → `answer_relational_question`
-> (query, start_entity_id, max_hops) → cited `GeneratedAnswer`, graph-structural (`relational_qa_mcp`).
-> **NEXT = MCP-B3 `typed_property_retrieval`** — the last Tier-1 leg; NOTE its contract differs (a ranked span
-> list, not `GeneratedAnswer`), so the tool shape + manifest differ.
+> **MCP-PROTO Phase B COMPLETE — all 4 Tier-1 capabilities are FastMCP tools, Deep-Agent-validated.** Each leg
+> mirrors the `compliance_server.py` reference (injectable fn + production/demo + ARD `mcp_tool` + hermetic
+> in-memory-Client tests) AND is exercised end-to-end by a Deep Agent over stdio (parity with the compliance
+> demo): **MCP-B1 (`78c32a4`)** `intra_document_qa` → `answer_contract_question` → cited `GeneratedAnswer`
+> (`intra_document_qa_mcp`); **MCP-B2 (`ca37364`)** `relational_qa` → `answer_relational_question`
+> (query, start_entity_id, max_hops) → cited `GeneratedAnswer`, graph-structural (`relational_qa_mcp`); **MCP-B3**
+> `typed_property_retrieval` → `retrieve_typed_property_spans` → `TypedPropertyRetrieval` (ranked cited spans, NOT
+> `GeneratedAnswer` — corpus-wide RETRIEVAL) (`typed_property_retrieval_mcp`). **Deep-Agent parity demo:**
+> `scripts/mcp_query_legs_agent_demo.py` spawns all 3 servers over stdio, the agent discovered + called all 3
+> tools and cited their returned ids (run with `RAG_SERVING=openrouter`, NO provider pin — the driver is DeepSeek
+> STRUCTURED_REASONING, not Cerebras). MCP Tier-1 = `compliance_check` + the 3 query legs, all wrapped.
+> **NEXT (pick one):** a real-infra smoke of one production server against the Modal KG; wire the ARD-discovery
+> tool so the agent finds these via search (not hardcoded); or the non-blocking abstention-precision lever (50%).
 >
 > **RESUME / NEXT UP (2026-08-07):** **MCP-PROTO + Phase-A quality arc in flight.** Prototyped the "capability
 > as an MCP tool" pattern: `compliance_check` wrapped via FastMCP (`src/rag_wright/mcp/compliance_server.py`),
