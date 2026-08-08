@@ -1035,6 +1035,26 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("qa", "intra-document", "contract", "mcp-tool", "cited", "discoverable"),
     ),
+    CapabilityManifest(
+        slug="relational_qa_mcp",
+        kind="mcp_tool",  # the discoverable MCP-tool surface of the relational_qa subgraph (MCP-PROTO B2)
+        display_name="Relational contract QA (MCP tool)",
+        description=(
+            "The relational_qa capability exposed as a single MCP tool (`answer_relational_question`, served by "
+            "rag_wright.mcp.relational_qa_server via FastMCP): answer a relational question about a known entity "
+            "by traversing the contract entity graph and return a cited GeneratedAnswer whose facts are cited by "
+            "their SOURCE CONTRACT (graph-structural evidence, no chunk text). An external agent discovers this "
+            "via ARD search and calls it as ONE tool -- saving context tokens and inter-agent coordination vs. "
+            "embedding the relational_qa subgraph. Same output contract as the subgraph; distinct ARD identity "
+            "because the callable surface is a deployed MCP server, not an in-process graph node."
+        ),
+        representative_queries=(
+            "which parties does this company contract with, as a tool call",
+            "traverse the entity graph for a company's contracting relationships with citations",
+            "get a cited relational answer over MCP from a start entity",
+        ),
+        tags=("qa", "relational", "entity-graph", "mcp-tool", "cited", "discoverable"),
+    ),
 )
 
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
