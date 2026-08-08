@@ -13,8 +13,21 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > OpenRouter/Cerebras (0.5–3s/call, correct). Commits 91fd240..37a3e46. **NOT YET ROUTED (deliberate):**
 > `compliance_judgment.py` (Granite compliance arc, own gold-eval parity — confirm before touching) and
 > ingestion (`rlm_chunking.py` etc. — a later task: Gemma 4 + tag-parse vs DeepSeek A/B, needs the
-> `list[BaseModel]` nested extension). **NEXT = return to OpenRouter providers: try beyond Cerebras, finalize
-> load distribution + fallbacks.**
+> `list[BaseModel]` nested extension).
+>
+> **PROVIDERS FINALIZED (2026-08-08, `docs/eval/silver_provider_routing.md`, commit `e198f0c`).** Silver eval on
+> Gemma-4-31b + tag-parse across three OpenRouter routings: **Cerebras pinned + no fallback + low concurrency
+> wins** (100% recall, **0 flips**, 1.74s median) vs cross-provider fallback (lands on slow deepinfra AND
+> reintroduces flips → 93% recall / 2 flips). `_provider_pin` (commit `5c91daf`) now supports an ordered list +
+> `OPENROUTER_ALLOW_FALLBACKS`; `measure_silver.py` defaults the OpenRouter backend to Cerebras-pinned. The
+> **generation non-determinism blocker is RESOLVED** (0 flips on Gemma-4+tag-parse, both self-hosted 31B-W4A16
+> and Cerebras — it was a Granite-8B property). Residual, NON-blocking: abstention precision 50% (near-miss
+> over-answer on `Insurance`/`Minimum Commitment`) — a model-strength lever, its own task.
+>
+> **MCP-PROTO Phase B RESUMED (blocker cleared). MCP-B1 DONE (commit `78c32a4`):** `intra_document_qa` wrapped as
+> a FastMCP tool (`answer_contract_question` → cited `GeneratedAnswer`; `mcp/intra_document_qa_server.py`; ARD
+> `mcp_tool` `intra_document_qa_mcp`; 4 hermetic tests), mirroring the `compliance_server.py` reference.
+> **NEXT = MCP-B2 `relational_qa`, then MCP-B3 `typed_property_retrieval`** (the remaining Tier-1 legs).
 >
 > **RESUME / NEXT UP (2026-08-07):** **MCP-PROTO + Phase-A quality arc in flight.** Prototyped the "capability
 > as an MCP tool" pattern: `compliance_check` wrapped via FastMCP (`src/rag_wright/mcp/compliance_server.py`),
