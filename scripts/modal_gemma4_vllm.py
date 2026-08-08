@@ -22,24 +22,31 @@ import subprocess
 import modal
 
 MODEL = os.environ.get("MODEL", "google/gemma-4-31B-it-qat-w4a16-ct")
-QUANT = os.environ.get("QUANT", "")  # empty for the W4A16 compressed-tensors dense model (auto-detected)
+QUANT = os.environ.get("QUANT", "")  # empty for the W4A16 compressed-tensors dense model (auto-detected);
+# for the 26B-A4B MoE (no 4-bit checkpoint) set QUANT=int8_per_channel_weight_only (Google's vLLM rec).
 API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
 GPU = os.environ.get("GPU", "A100-40GB")
 GPU_UTIL = os.environ.get("VLLM_GPU_UTIL", "0.80")  # LEAVE HEADROOM: json_schema guided decoding (xgrammar)
-# needs GPU workspace beyond weights+KV; at 0.90 (KV cache ~15GB + weights ~20GB) a guided request OOM-killed the
-# engine. 0.80 keeps ~8GB free for xgrammar. (function_calling would instead need --tool-call-parser gemma4,
-# which has a documented <pad>-under-concurrency bug, vllm#39392 -- so we use json_schema, per the model profile.)
+# needs GPU workspace beyond weights+KV; at 0.90 a guided request OOM-killed the engine. 0.80 keeps room.
 MAX_LEN = os.environ.get("VLLM_MAX_LEN", "16384")   # silver prompts are ~<=8k tokens; keep KV cache small
+# Gemma 4's DEFAULT chat template mishandles end-of-turn -> json_schema generations RUN AWAY to max_model_len.
+# vLLM ships the correct one; we curl it into the image and pass --chat-template. We DELIBERATELY do NOT set the
+# gemma4 reasoning/tool parsers: --reasoning-parser gemma4 BYPASSES xgrammar structured output (vllm#39130), and
+# we drive structured output via json_schema (guided decoding), not tool calls.
+CHAT_TEMPLATE = os.environ.get("CHAT_TEMPLATE", "/root/gemma4_chat_template.jinja")
+_TEMPLATE_URL = "https://raw.githubusercontent.com/vllm-project/vllm/main/examples/tool_chat_template_gemma4.jinja"
 HF_CACHE = "/root/.cache/huggingface"
 
 app = modal.App("rw-gemma4")
 hf_vol = modal.Volume.from_name("rw-hf-cache", create_if_missing=True)
 image = (
     modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
+    .apt_install("curl")
     .pip_install("vllm", "transformers", "fastapi", "httpx", "huggingface_hub[hf_transfer]")
+    .run_commands(f"curl -sL {_TEMPLATE_URL} -o /root/gemma4_chat_template.jinja")
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE,
           "MODEL": MODEL, "QUANT": QUANT, "VLLM_API_KEY": API_KEY,
-          "VLLM_GPU_UTIL": GPU_UTIL, "VLLM_MAX_LEN": MAX_LEN})
+          "VLLM_GPU_UTIL": GPU_UTIL, "VLLM_MAX_LEN": MAX_LEN, "CHAT_TEMPLATE": CHAT_TEMPLATE})
 )
 
 
@@ -58,6 +65,8 @@ class Gemma:
         ]
         if QUANT:
             args += ["--quantization", QUANT]
+        if CHAT_TEMPLATE and os.path.exists(CHAT_TEMPLATE):
+            args += ["--chat-template", CHAT_TEMPLATE]  # correct EOS handling (default template runs away)
         self._vllm = subprocess.Popen(args)
         self._torch = torch
 

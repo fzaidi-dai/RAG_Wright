@@ -63,11 +63,12 @@ def main() -> None:
     _log(f"[silver] {len(records)} records "
          f"({sum(r['answerable'] for r in records)} answerable + {sum(not r['answerable'] for r in records)} not)")
 
+    max_tokens = int(os.environ["SILVER_MAX_TOKENS"]) if os.environ.get("SILVER_MAX_TOKENS") else None
     strategies = {}
     for part in spec.split(","):
         label, mid = part.split(":", 1)
-        strategies[label.strip()] = SeamAnswerModel(mid.strip())
-    _log(f"[backend] RAG_SERVING={os.environ['RAG_SERVING']}  strategies={list(strategies)}")
+        strategies[label.strip()] = SeamAnswerModel(mid.strip(), max_tokens=max_tokens)
+    _log(f"[backend] RAG_SERVING={os.environ['RAG_SERVING']}  strategies={list(strategies)}  max_tokens={max_tokens}")
     combos = [(name, ri, rep) for name in strategies for ri in range(len(records)) for rep in range(repeats)]
     total = len(combos)
     _log(f"[run] {len(strategies)} strategies x {len(records)} records x {repeats} repeats = {total} runs\n")

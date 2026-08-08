@@ -139,11 +139,18 @@ PROFILES: dict[str, ModelProfile] = {
     # Note this is a DIFFERENT id from the OpenRouter `google/gemma-4-31b-it` profile above (which uses the
     # OpenRouter-only `{"reasoning": {"enabled": False}}` extra_body -- inapplicable to vLLM). Empirical, dated
     # 2026-08-08: GATE-2 400 on function_calling, clean on json_schema. Candidate self-hosted GENERAL model.
+    # NOTE (2026-08-08, dated finding): self-hosted Gemma 4 on vLLM 0.26 could NOT do reliable GRAMMAR-
+    # CONSTRAINED structured output -- BOTH `json_schema` and `json_mode` (xgrammar guided decoding) RUN AWAY
+    # to max_model_len instead of emitting EOS, while FREE-TEXT generation terminates perfectly (1s, coherent,
+    # correct, finish=stop) and even emits inline [chunk_id] citations. function_calling needs
+    # --tool-call-parser gemma4 (concurrency <pad> bug, vllm#39392). So structured output on this stack is the
+    # open problem, NOT model quality/VRAM. Path forward: generate the answer as FREE-TEXT and extract the
+    # GeneratedAnswer (citations, abstained) DETERMINISTICALLY from it, bypassing guided decoding. `json_schema`
+    # kept here to match the Granite precedent; it does NOT yet work for this model on vLLM.
     "google/gemma-4-31B-it-qat-w4a16-ct": ModelProfile(
         model_id="google/gemma-4-31B-it-qat-w4a16-ct",
         structured_method="json_schema",
     ),
-    # The 26B-A4B MoE (INT8 fallback if the dense 31B is a problem) -- same vLLM json_schema story.
     "google/gemma-4-26B-A4B-it": ModelProfile(
         model_id="google/gemma-4-26B-A4B-it",
         structured_method="json_schema",

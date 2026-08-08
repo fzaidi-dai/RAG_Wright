@@ -68,12 +68,17 @@ class SeamAnswerModel:
     """The real generator: structured output through the model-profile seam (GENERAL role). `temperature`
     defaults to 0; the best-of-N strategy constructs one at temperature>0 to sample diverse completions."""
 
-    def __init__(self, model_id: str | None = None, *, temperature: float = 0.0) -> None:
+    def __init__(
+        self, model_id: str | None = None, *, temperature: float = 0.0, max_tokens: int | None = None
+    ) -> None:
         self._model_id = model_id or model_for(ModelRole.GENERAL)
         self._temperature = temperature
+        self._max_tokens = max_tokens
 
     def generate(self, prompt: str) -> GeneratedAnswer:
-        return build_structured(self._model_id, GeneratedAnswer, temperature=self._temperature).invoke(prompt)
+        return build_structured(
+            self._model_id, GeneratedAnswer, temperature=self._temperature, max_tokens=self._max_tokens
+        ).invoke(prompt)
 
 
 @runtime_checkable
