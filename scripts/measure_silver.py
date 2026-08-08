@@ -32,9 +32,10 @@ _DUMP = Path("/private/tmp/claude-501/-Users-farhan-work-RAG-Wright/"
 
 _GRANITE = "ibm-granite/granite-4.1-8b"
 _GEMMA4 = "google/gemma-4-31b-it"
-# OpenRouter batches fine at 8; a SINGLE self-hosted A100 doing json_schema guided decoding wants LOW
-# concurrency (xgrammar workspace per in-flight request -> OOM risk), so make it env-tunable (SILVER_WORKERS).
-_MAX_WORKERS = int(os.environ["SILVER_WORKERS"]) if os.environ.get("SILVER_WORKERS") else 8
+# Low concurrency by default: a single self-hosted A100 wants it (OOM risk), and OpenRouter/Cerebras (the pinned
+# eval default below) 429-throttles under load -- 2 workers keeps determinism + a ~1.7s median with only
+# occasional 60s 429 backoffs (docs/eval/silver_provider_routing.md). Env-tunable via SILVER_WORKERS.
+_MAX_WORKERS = int(os.environ["SILVER_WORKERS"]) if os.environ.get("SILVER_WORKERS") else 2
 
 
 def _log(s: str = "") -> None:
@@ -48,6 +49,12 @@ def main() -> None:
     #   RAG_SERVING (default openrouter) selects the backend (set vllm + VLLM_BASE_URL for self-hosted);
     #   SILVER_MODELS="label:model_id,label2:model_id2" picks the strategies (default = OpenRouter granite vs gemma).
     os.environ.setdefault("RAG_SERVING", "openrouter")
+    if os.environ["RAG_SERVING"] == "openrouter":
+        # Finalized eval routing (docs/eval/silver_provider_routing.md): Cerebras pinned, no cross-provider
+        # fallback. A single fast provider keeps determinism (0 flips) + ~1.7s median; cross-provider fallback
+        # lands on slow deepinfra AND reintroduces flips. Override via OPENROUTER_PROVIDER/ALLOW_FALLBACKS.
+        os.environ.setdefault("OPENROUTER_PROVIDER", "Cerebras")
+        os.environ.setdefault("OPENROUTER_ALLOW_FALLBACKS", "false")
     spec = os.environ.get("SILVER_MODELS", f"granite-base:{_GRANITE},gemma4-base:{_GEMMA4}")
 
     from rag_wright.capabilities.answer_generator import (
