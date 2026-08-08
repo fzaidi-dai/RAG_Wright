@@ -35,8 +35,21 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > `scripts/mcp_query_legs_agent_demo.py` spawns all 3 servers over stdio, the agent discovered + called all 3
 > tools and cited their returned ids (run with `RAG_SERVING=openrouter`, NO provider pin — the driver is DeepSeek
 > STRUCTURED_REASONING, not Cerebras). MCP Tier-1 = `compliance_check` + the 3 query legs, all wrapped.
-> **NEXT (pick one):** a real-infra smoke of one production server against the Modal KG; wire the ARD-discovery
-> tool so the agent finds these via search (not hardcoded); or the non-blocking abstention-precision lever (50%).
+> **REAL-INFRA SMOKE DONE (`scripts/mcp_intra_document_qa_smoke.py`):** spawned the PRODUCTION
+> `intra_document_qa` MCP server over stdio (no demo fn) against the LOCAL Docker ArcadeDB KG
+> (`ragwright_cuad_full`, 42,314 clauses) + Gemma-4-31b/Cerebras; `answer_contract_question` on a real contract
+> returned a real cited answer (`abstained=False`, real chunk_id). Proves the wrapped capability works as a tool
+> on live infra. CAVEAT (feeds PREC-1): on `LIMEENERGYCO…DISTRIBUTOR_AGREEMENT` the served/answered clause was a
+> force-majeure limitation, NOT a monetary cap — the classify→serve step surfaced the wrong clause. Local Docker
+> ArcadeDB is UP.
+>
+> **NEXT = PREC-1 (retrieval/abstention precision lever) — IN PROGRESS.** Its own task. Two precision signals to
+> localize and fix: (1) SILVER frozen-evidence over-answer — generation answers non-answerable questions instead
+> of abstaining (silver precision 50%: `Insurance`, `Minimum Commitment`); (2) REAL-INFRA off-target serve — the
+> classify→`clauses_of_function`→serve step pulled a force-majeure clause for a "how is liability capped" query.
+> These are DIFFERENT stages (generation abstention-discipline vs classification/serve precision). **Step 1 =
+> DIAGNOSIS first** (localize where precision is lost before any fix); do NOT jump to a fix. Non-blocking to the
+> MCP arc; taken up now at the user's direction.
 >
 > **RESUME / NEXT UP (2026-08-07):** **MCP-PROTO + Phase-A quality arc in flight.** Prototyped the "capability
 > as an MCP tool" pattern: `compliance_check` wrapped via FastMCP (`src/rag_wright/mcp/compliance_server.py`),
