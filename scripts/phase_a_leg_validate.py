@@ -27,15 +27,15 @@ def _line(s: str = "") -> None:
 
 def validate_leg_a() -> None:
     """A1: intra_document_qa -- (contract_id, question) -> cited GeneratedAnswer, all on the Modal stack."""
-    from rag_wright.capabilities.answer_generator import SeamAnswerModel
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.intra_document_qa import production_intra_document_qa
 
     store = ArcadeDBStore.from_env(database="ragwright_cuad_full")
-    llm_id = model_for(ModelRole.GENERAL)  # granite via the seam (RAG_SERVING=vllm -> A100)
-    answer_model = SeamAnswerModel(llm_id)
-    leg_a = production_intra_document_qa(store=store, answer_model=answer_model, function_model_id=llm_id)
+    llm_id = model_for(ModelRole.GENERAL)  # the configured GENERAL model (self-hosted Gemma, OpenRouter, ...)
+    # answer model is defaulted via answer_model_for -> the RIGHT path per profile (free-text tag-parse for a
+    # self-hosted Gemma, the structured-output seam otherwise). No hardcoded SeamAnswerModel.
+    leg_a = production_intra_document_qa(store=store, function_model_id=llm_id, answer_model_id=llm_id)
 
     # pick a real contract that has a well-known clause function (the Modal KG is 506, so never the 4 recovered)
     row = store._query("SELECT clause_id FROM Clause WHERE function = 'Cap On Liability' LIMIT 1")

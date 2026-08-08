@@ -232,3 +232,24 @@ def test_exception_clause_evidence_is_framed_and_tagged_inferred():
     ev = _clause_to_evidence(exc, "any negligence or fault")
     assert "Exception to the liability cap (inferred)" in ev.text and "negligence" in ev.text
     assert ev.confidence == "INFERRED"  # FR-S.4: a derived link is surfaced as inferred, human-validatable
+
+
+# --- production wiring: defaults the answer model via answer_model_for (right path per profile) ---------------
+
+
+def test_production_defaults_answer_model_via_answer_model_for(monkeypatch):
+    """production_intra_document_qa with no injected answer_model builds it through answer_model_for, so a
+    client_side_structured model (self-hosted Gemma) automatically gets the free-text tag-parse path."""
+    from rag_wright.subgraphs import intra_document_qa as idq
+
+    seen = {}
+
+    def _fake_answer_model_for(model_id=None, **kw):
+        seen["model_id"] = model_id
+        return object()  # a sentinel answer_model; generation isn't exercised here
+
+    monkeypatch.setattr(idq, "_answer_model_for_impl", _fake_answer_model_for, raising=False)
+    # build with no answer_model -> must call answer_model_for (via the module hook) with the given id
+    idq.production_intra_document_qa(
+        store=object(), function_model_id="m", answer_model_id="google/gemma-4-31B-it-qat-w4a16-ct")
+    assert seen["model_id"] == "google/gemma-4-31B-it-qat-w4a16-ct"

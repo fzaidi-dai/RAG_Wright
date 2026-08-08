@@ -204,15 +204,31 @@ def build_intra_document_qa(
     return g.compile()
 
 
-def production_intra_document_qa(*, store: Any, answer_model: Any, function_model_id: str):
+def _answer_model_for_impl(model_id: str | None = None, **kwargs: Any) -> Any:
+    """Indirection over `answer_model_for` so `production_intra_document_qa` can default the answer model (and
+    tests can monkeypatch this hook). Lazy import keeps the subgraph module import-light."""
+    from rag_wright.capabilities.answer_generator import answer_model_for
+    return answer_model_for(model_id, **kwargs)
+
+
+def production_intra_document_qa(
+    *, store: Any, function_model_id: str, answer_model: Any = None, answer_model_id: str | None = None
+):
     """Wire the real scoped query + span-text rehydration + `generate_answer` into the composite. The scoped
     query classifies the question to its clause function(s) (`query_function_classification`) and serves those
     clauses (`clauses_of_function`), falling back to the whole per-contract index when no function is inferred.
     Rehydration maps each clause's `span_id` provenance to its operative-span text (`spans_by_contract`,
     contract-scoped and light -- no dense vectors).
 
-    Imports are lazy so the subgraph module stays import-light and hermetic (tests inject stubs)."""
+    The answer model defaults to `answer_model_for(answer_model_id)` (GENERAL role when None), so the configured
+    generation model automatically takes the RIGHT path -- the client-side free-text tag-parse for a
+    `client_side_structured` model (self-hosted Gemma), the structured-output seam otherwise. A caller may still
+    inject a specific `answer_model` (tests, or to force a strategy). Imports are lazy so the subgraph module
+    stays import-light and hermetic (tests inject stubs)."""
     from rag_wright.capabilities.answer_generator import generate_answer
+
+    if answer_model is None:
+        answer_model = _answer_model_for_impl(answer_model_id)
     from rag_wright.capabilities.contract_kg_serve import clauses_of_function, contract_clause_index
     from rag_wright.capabilities.query_function_classifier import classify_query_functions
 
