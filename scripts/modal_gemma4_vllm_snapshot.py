@@ -60,6 +60,14 @@ image = (
         "HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE,
         "VLLM_SERVER_DEV_MODE": "1",        # exposes /sleep + /wake_up (required for the snapshot pattern)
         "TORCHINDUCTOR_COMPILE_THREADS": "1",  # snapshot-friendly compile (per Modal's vLLM snapshot example)
+        # BAKE the config read at deploy time INTO the image, so the CONTAINER reads the SAME values (the module
+        # is imported both client-side at deploy and in the container; without this, container-side reads fall
+        # back to defaults -> MM_LIMIT/ENABLE_SNAPSHOT silently ignored).
+        "MODEL": MODEL, "QUANT": QUANT, "VLLM_API_KEY": API_KEY, "VLLM_GPU_UTIL": GPU_UTIL,
+        "VLLM_MAX_LEN": MAX_LEN, "CHAT_TEMPLATE": CHAT_TEMPLATE, "MM_LIMIT": MM_LIMIT,
+        "ENFORCE_EAGER": os.environ.get("ENFORCE_EAGER", "1"),
+        "ENABLE_SNAPSHOT": os.environ.get("ENABLE_SNAPSHOT", "1"),
+        "MAX_INPUTS": str(MAX_INPUTS),
     })
 )
 
