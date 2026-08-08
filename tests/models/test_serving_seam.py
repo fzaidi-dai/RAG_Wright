@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.models.seam import _serving_config, build_model
+from rag_wright.models.seam import _provider_pin, _serving_config, build_model
 
 
 @pytest.fixture(autouse=True)
@@ -27,6 +27,25 @@ def test_default_serving_is_openrouter():
 def test_explicit_openrouter_matches_default(monkeypatch):
     monkeypatch.setenv("RAG_SERVING", "openrouter")
     assert _serving_config()["base_url"] == "https://openrouter.ai/api/v1"
+
+
+def test_provider_pin_empty_when_unset(monkeypatch):
+    monkeypatch.delenv("OPENROUTER_PROVIDER", raising=False)
+    assert _provider_pin() == {}
+
+
+def test_provider_pin_single_is_a_hard_pin(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_PROVIDER", "Cerebras")
+    monkeypatch.delenv("OPENROUTER_ALLOW_FALLBACKS", raising=False)
+    assert _provider_pin() == {"provider": {"only": ["Cerebras"], "allow_fallbacks": False}}
+
+
+def test_provider_pin_ordered_list_with_fallbacks(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_PROVIDER", "deepinfra/turbo, Cerebras, friendli")
+    monkeypatch.setenv("OPENROUTER_ALLOW_FALLBACKS", "true")
+    assert _provider_pin() == {
+        "provider": {"order": ["deepinfra/turbo", "Cerebras", "friendli"], "allow_fallbacks": True}
+    }
 
 
 def test_vllm_serving_reads_base_url_and_key(monkeypatch):

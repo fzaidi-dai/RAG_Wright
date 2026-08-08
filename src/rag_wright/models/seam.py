@@ -70,13 +70,26 @@ def _serving_config() -> dict[str, Any]:
 
 
 def _provider_pin() -> dict[str, Any]:
-    """OpenRouter provider pinning from env (measurement/benchmark only): `OPENROUTER_PROVIDER=Cerebras` ->
-    `{"provider": {"only": ["Cerebras"], "allow_fallbacks": False}}`, so a run can force a single provider and
-    measure it specifically. Empty when unset, so normal routing is unaffected."""
-    provider = os.getenv("OPENROUTER_PROVIDER")
-    if not provider:
+    """OpenRouter provider routing from env (measurement/benchmark only). `OPENROUTER_PROVIDER` is a
+    comma-separated provider list; `OPENROUTER_ALLOW_FALLBACKS` (true/false) toggles routing beyond that list.
+
+    - single provider, no fallbacks (default): `OPENROUTER_PROVIDER=Cerebras` ->
+      `{"provider": {"only": ["Cerebras"], "allow_fallbacks": False}}` (a hard pin, to measure one provider).
+    - ordered preference + fallbacks: `OPENROUTER_PROVIDER=deepinfra/turbo,Cerebras,friendli` with
+      `OPENROUTER_ALLOW_FALLBACKS=true` -> `{"provider": {"order": [...], "allow_fallbacks": True}}` (try those
+      in order, then route around rate-limit/errors to any other provider).
+
+    Empty when unset, so normal routing is unaffected."""
+    raw = os.getenv("OPENROUTER_PROVIDER")
+    if not raw:
         return {}
-    return {"provider": {"only": [provider], "allow_fallbacks": False}}
+    providers = [p.strip() for p in raw.split(",") if p.strip()]
+    if not providers:
+        return {}
+    allow = os.getenv("OPENROUTER_ALLOW_FALLBACKS", "").strip().lower() in ("1", "true", "yes")
+    if len(providers) == 1 and not allow:
+        return {"provider": {"only": providers, "allow_fallbacks": False}}  # hard single-provider pin
+    return {"provider": {"order": providers, "allow_fallbacks": allow}}  # ordered preference, fallbacks per env
 
 
 def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
