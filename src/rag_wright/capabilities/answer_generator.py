@@ -14,6 +14,7 @@ coerced to an abstention. The model choice is the `GENERAL` role (no flag here).
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
@@ -178,7 +179,12 @@ def answer_model_for(
     (server-side guided decoding broken -- self-hosted Gemma 4) gets the free-text + tag-parse path; every other
     model uses the structured-output seam. One selection point, so production and evals stay in step."""
     mid = model_id or model_for(ModelRole.GENERAL)
-    if profile_for(mid).client_side_structured:
+    # RAG_CLIENT_SIDE_STRUCTURED (env) forces the free-text tag-parse path for the listed ids (or "all") even
+    # when the profile isn't flagged -- e.g. to run the SAME path on an OpenRouter model whose provider (Cerebras)
+    # is slow at server-side json_schema. Empty => profile decides, so normal behaviour is unchanged.
+    forced = os.getenv("RAG_CLIENT_SIDE_STRUCTURED", "")
+    force_tag = forced == "all" or mid in {x.strip() for x in forced.split(",") if x.strip()}
+    if force_tag or profile_for(mid).client_side_structured:
         return TaggedFreeTextAnswerModel(mid, temperature=temperature, max_tokens=max_tokens or 2048)
     return SeamAnswerModel(mid, temperature=temperature, max_tokens=max_tokens)
 
