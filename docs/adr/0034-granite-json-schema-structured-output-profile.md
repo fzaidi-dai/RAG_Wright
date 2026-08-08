@@ -1,7 +1,9 @@
 # ADR-0034: Granite 4.1-8b uses `json_schema` structured output (model-profile seam)
 
 Date: 2026-07-29
-Status: Accepted
+Status: Accepted; superseded for the query side by ADR-0045 (query-side structured output is now client-side
+XML-tag parsing, not server-side guided decoding). Still applies to any caller that uses `build_structured`
+directly (ingestion, explicit opt-in).
 
 ## Context
 

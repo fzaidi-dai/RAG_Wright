@@ -3,6 +3,19 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **RESUME / NEXT UP (2026-08-08):** **ADR-0045 (client-side XML-tag structured output) — QUERY SIDE DONE.**
+> All query-side structured-output callers now use `models/tag_structured.py::build_tag_structured` (free-text +
+> client-side tag-parse, a drop-in for `build_structured`), so structured output is LLM-agnostic and no longer
+> depends on server-side guided decoding (which runs away on self-hosted Gemma 4 / vLLM and costs ~60s/call on
+> Cerebras). Routed: query function classifier, query understanding (step-2 emit), highlight field-extract, OKF
+> reader judge, and generation (`answer_model_for` is now UNIVERSALLY the tag path; the `client_side_structured`
+> profile flag + `RAG_CLIENT_SIDE_STRUCTURED` env force are no longer consulted). Each re-tested via
+> OpenRouter/Cerebras (0.5–3s/call, correct). Commits 91fd240..37a3e46. **NOT YET ROUTED (deliberate):**
+> `compliance_judgment.py` (Granite compliance arc, own gold-eval parity — confirm before touching) and
+> ingestion (`rlm_chunking.py` etc. — a later task: Gemma 4 + tag-parse vs DeepSeek A/B, needs the
+> `list[BaseModel]` nested extension). **NEXT = return to OpenRouter providers: try beyond Cerebras, finalize
+> load distribution + fallbacks.**
+>
 > **RESUME / NEXT UP (2026-08-07):** **MCP-PROTO + Phase-A quality arc in flight.** Prototyped the "capability
 > as an MCP tool" pattern: `compliance_check` wrapped via FastMCP (`src/rag_wright/mcp/compliance_server.py`),
 > a Deep Agent called it end-to-end, and it's registered as the first ARD `mcp_tool` (`compliance_check_mcp`).
