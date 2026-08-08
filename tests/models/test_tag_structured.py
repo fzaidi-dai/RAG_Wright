@@ -100,6 +100,28 @@ def test_build_tag_structured_invokes_free_text_and_parses(monkeypatch):
     assert isinstance(out, _Flat) and out.name == "parsed" and out.count == 7
 
 
+def test_build_tag_structured_accepts_a_message_list(monkeypatch):
+    # build_structured runnables accept a [SystemMessage, HumanMessage] list; the drop-in must too.
+    from langchain_core.messages import HumanMessage, SystemMessage
+
+    captured = {}
+
+    class _Msg:
+        def __init__(self, c): self.content = c
+
+    class _Client:
+        def invoke(self, prompt):
+            captured["prompt"] = prompt
+            return _Msg("<name>from-messages</name>")
+
+    monkeypatch.setattr(ts, "build_model", lambda *a, **k: _Client())
+    out = build_tag_structured("m", _Flat).invoke([SystemMessage(content="sys"), HumanMessage(content="q")])
+    assert out.name == "from-messages"
+    # the tag instructions were appended as a trailing human turn, system/human kept intact
+    assert captured["prompt"][0].content == "sys" and captured["prompt"][-1][0] == "human"
+    assert "<name>" in captured["prompt"][-1][1]
+
+
 def test_build_tag_structured_retries_on_validation_error(monkeypatch):
     # first response is missing the required <name> -> ValidationError -> retry -> second is valid
     _stub_build_model(monkeypatch, ["<count>1</count>", "<name>ok</name>"])

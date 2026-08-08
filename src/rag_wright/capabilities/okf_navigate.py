@@ -39,7 +39,8 @@ from deepagents import create_deep_agent
 from deepagents.middleware.subagents import SubAgent
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_model, build_structured
+from rag_wright.models.seam import build_model
+from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 from rag_wright.okf.document import parse_okf
 from rag_wright.skills.rlm.agent import _resolve_model, rlm_interpreter_session
 
@@ -258,9 +259,9 @@ _READER_JUDGE_PROMPT = (
 
 
 class _Relevance(BaseModel):
-    """The reader judgment schema, forced through the profile seam (build_structured) -- the profile applies
-    DeepSeek's structured method and disables thinking on this forced call, so it never hits the reasoning-mode
-    tool_choice rejection that `task(responseSchema)` did."""
+    """The reader judgment schema, emitted via client-side tag-parse (ADR-0045, build_tag_structured) -- one
+    `<relevant>true|false</relevant>` tag parsed on our side, so it works on any model/provider and never hits
+    the reasoning-mode tool_choice rejection that a forced schema (`task(responseSchema)`) did."""
 
     relevant: bool
 
@@ -326,8 +327,8 @@ def _navigation_ptc(reader: OkfBundleReader, bounds: Bounds, query: str, reader_
         booleans (one per input path, order preserved). This is where reader parallelism lives: the fan-out is
         Python asyncio (Semaphore + gather + to_thread, the embed_chunks pattern), so it is NOT bottlenecked by
         the single-JS-engine limit that serializes sub-agent dispatches. Each judgment goes through the profile
-        seam (build_structured), never a hardcoded provider flag."""
-        judge = build_structured(reader_model_id, _Relevance)
+        seam, never a hardcoded provider flag (ADR-0045: client-side tag-parse, LLM-agnostic)."""
+        judge = build_tag_structured(reader_model_id, _Relevance)
         system = _with_question(_READER_JUDGE_PROMPT, query)
         semaphore = asyncio.Semaphore(_READER_CONCURRENCY)
 
@@ -399,9 +400,9 @@ class SeamNavigator:
 
         orchestrator = resolve(self._model)
         selector = resolve(self._selector_model if self._selector_model is not None else self._model)
-        # The reader is a PTC tool (build_structured), which needs a model-id string, not a built model. Prefer
-        # an explicit id; fall back to the STRUCTURED_REASONING default. (A BaseChatModel injected as the reader
-        # cannot drive the seam's structured path, so only the live id/None path is supported for judging.)
+        # The reader is a PTC tool (build_tag_structured), which needs a model-id string, not a built model.
+        # Prefer an explicit id; fall back to the STRUCTURED_REASONING default. (A BaseChatModel injected as the
+        # reader cannot drive the tag-parse path, so only the live id/None path is supported for judging.)
         reader_model_id = next(
             (m for m in (self._reader_model, self._model) if isinstance(m, str)),
             model_for(ModelRole.STRUCTURED_REASONING),

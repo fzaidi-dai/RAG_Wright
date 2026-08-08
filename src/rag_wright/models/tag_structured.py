@@ -108,8 +108,11 @@ class _TagStructuredRunnable:
         self._max_tokens = max_tokens
         self._retries = retries
 
-    def invoke(self, prompt: str, config: Any = None) -> BaseModel:  # config accepted for runnable-compat, unused
-        full = f"{prompt}\n\n{tag_instructions(self._schema)}"
+    def invoke(self, prompt: Any, config: Any = None) -> BaseModel:  # config accepted for runnable-compat, unused
+        # Drop-in for build_structured: `prompt` is either a plain string or a LangChain message sequence
+        # (e.g. [SystemMessage, HumanMessage]). Append the tag instructions as a trailing human turn either way.
+        instr = tag_instructions(self._schema)
+        full = f"{prompt}\n\n{instr}" if isinstance(prompt, str) else [*prompt, ("human", instr)]
         last: Exception | None = None
         for _ in range(self._retries + 1):
             text = str(build_model(
