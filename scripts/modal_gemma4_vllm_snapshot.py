@@ -42,6 +42,10 @@ ENFORCE_EAGER = os.environ.get("ENFORCE_EAGER", "1") == "1"  # Lever 2: skip com
 # ENABLE_SNAPSHOT lets us verify Lever 2 ALONE first (snapshot off = plain cold start with enforce-eager +
 # optional text-only), then layer Lever 1 (snapshots) on. Default on.
 SNAPSHOT = os.environ.get("ENABLE_SNAPSHOT", "1") == "1"
+# GPU_SNAPSHOT toggles the ALPHA gpu-state snapshot. With it OFF we still take a standard (non-alpha) CPU
+# MEMORY snapshot: since /sleep offloads weights to CPU RAM first, the CPU snapshot may capture them and /wake_up
+# restores to GPU -- potentially most of the win without the alpha gate. (The alpha create step failed for us.)
+GPU_SNAPSHOT = os.environ.get("GPU_SNAPSHOT", "1") == "1"
 # VISION TOGGLE. Unset => vision ON (default; ingestion needs it). "image=0,audio=0" => text-only (query-gen).
 MM_LIMIT = os.environ.get("MM_LIMIT", "")
 MAX_INPUTS = int(os.environ.get("MAX_INPUTS", "8"))  # container concurrency (vLLM batches); keep modest for 31B
@@ -67,6 +71,7 @@ image = (
         "VLLM_MAX_LEN": MAX_LEN, "CHAT_TEMPLATE": CHAT_TEMPLATE, "MM_LIMIT": MM_LIMIT,
         "ENFORCE_EAGER": os.environ.get("ENFORCE_EAGER", "1"),
         "ENABLE_SNAPSHOT": os.environ.get("ENABLE_SNAPSHOT", "1"),
+        "GPU_SNAPSHOT": os.environ.get("GPU_SNAPSHOT", "1"),
         "MAX_INPUTS": str(MAX_INPUTS),
     })
 )
@@ -104,10 +109,11 @@ def _wait_ready(timeout_s: int = 900) -> None:
     raise RuntimeError("vLLM did not become ready")
 
 
-_CLS_KWARGS = (
-    {"enable_memory_snapshot": True, "experimental_options": {"enable_gpu_snapshot": True}}  # Lever 1
-    if SNAPSHOT else {}
-)
+_CLS_KWARGS: dict = {}
+if SNAPSHOT:
+    _CLS_KWARGS["enable_memory_snapshot"] = True                  # Lever 1 (CPU memory snapshot)
+    if GPU_SNAPSHOT:
+        _CLS_KWARGS["experimental_options"] = {"enable_gpu_snapshot": True}  # + alpha GPU-state snapshot
 
 
 @app.cls(
