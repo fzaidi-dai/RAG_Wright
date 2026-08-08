@@ -23,7 +23,8 @@ from pydantic import BaseModel
 from rag_wright.contracts.function import FUNCTION_LABELS, canonical_function
 from rag_wright.contracts.query_intent import QueryIntent
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_model, build_structured
+from rag_wright.models.seam import build_model
+from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 
 _INTENTS = ("highlight", "extract", "discriminate")
 
@@ -70,7 +71,7 @@ def understand_query(
     query: str,
     *,
     reason_factory=build_model,
-    structured_factory=build_structured,
+    structured_factory=build_tag_structured,
     model_id: str | None = None,
 ) -> QueryIntent:
     """Parse a natural-language question into a `QueryIntent` via the two-step reason->emit (see the prompts
@@ -84,8 +85,11 @@ def understand_query(
     reasoning = reason_factory(model_id).invoke(
         _REASON_PROMPT.format(taxonomy=_taxonomy_block(), query=query)
     ).content
-    raw = structured_factory(model_id, _RawIntent).invoke(_EMIT_PROMPT.format(reasoning=reasoning))
-    if raw is None:  # the forced structured emit failed -> out-of-taxonomy, low confidence (never a hard error)
+    try:
+        raw = structured_factory(model_id, _RawIntent).invoke(_EMIT_PROMPT.format(reasoning=reasoning))
+    except Exception:  # noqa: BLE001 - a persistent client-side parse failure degrades like a None emit
+        raw = None
+    if raw is None:  # the emit failed -> out-of-taxonomy, low confidence (never a hard error)
         return QueryIntent(clause_types=[], intent="highlight", in_taxonomy=False, confidence=0.0)
     canon: list[str] = []
     for label in raw.clause_types:
