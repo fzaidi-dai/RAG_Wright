@@ -76,6 +76,7 @@ def main() -> None:
 
     results: dict = {}
     answers: dict = {}  # (name, ri) -> a sample answer for spot-checking
+    latencies: list = []  # (name, dt_seconds, err) per call -> per-call latency stats
     done = [0]
 
     def run_one(combo):
@@ -91,13 +92,14 @@ def main() -> None:
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
         for name, ri, abst, ncit, ans_text, dt, err in pool.map(run_one, combos):
             results.setdefault((name, ri), []).append(abst)
+            latencies.append((name, dt, err))
             if (name, ri) not in answers and not abst:
                 answers[(name, ri)] = ans_text
             done[0] += 1
             rec = records[ri]
             verdict = "ERR" if err else ("ABSTAIN" if abst else f"answer({ncit}c)")
             tag = "ANS" if rec["answerable"] else "NO "
-            _log(f"[{done[0]:>3}/{total}] {name:<13} {rec['id']:<13}[{tag}] -> {verdict:<11} {dt:>4.0f}s"
+            _log(f"[{done[0]:>3}/{total}] {name:<13} {rec['id']:<13}[{tag}] -> {verdict:<11} {dt:>7.2f}s"
                  + (f"  {err}" if err else ""))
 
     # --- score ---
@@ -115,6 +117,22 @@ def main() -> None:
         _log(f"{name:<14} {answered}/{len(ans_runs)} ({answered/len(ans_runs):>4.0%})        "
              f"{abstained_neg}/{len(neg_runs)} ({abstained_neg/len(neg_runs):>4.0%})       "
              f"{flips}/{len(records)}")
+    _log("=" * 78)
+
+    # --- per-call latency (seconds), successful calls only ---
+    import statistics
+    _log("\n=== per-call latency (seconds), SUCCESSFUL calls only ===")
+    _log(f"{'strategy':<16} {'n':>4} {'min':>8} {'max':>8} {'avg':>8} {'median':>8}  errors")
+    for name in strategies:
+        lat = sorted(dt for (n, dt, err) in latencies if n == name and err is None)
+        errs = [err for (n, dt, err) in latencies if n == name and err is not None]
+        if lat:
+            _log(f"{name:<16} {len(lat):>4} {min(lat):>8.2f} {max(lat):>8.2f} "
+                 f"{sum(lat)/len(lat):>8.2f} {statistics.median(lat):>8.2f}  {len(errs)}")
+        else:
+            _log(f"{name:<16} {0:>4} {'-':>8} {'-':>8} {'-':>8} {'-':>8}  {len(errs)} (all failed)")
+        for e in errs[:3]:
+            _log(f"   err: {e}")
     _log("=" * 78)
 
     # per-record recall (answered-count / repeats), answerable rows only

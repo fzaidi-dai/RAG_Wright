@@ -69,6 +69,16 @@ def _serving_config() -> dict[str, Any]:
     raise ValueError(f"RAG_SERVING must be 'openrouter' or 'vllm', got {serving!r}")
 
 
+def _provider_pin() -> dict[str, Any]:
+    """OpenRouter provider pinning from env (measurement/benchmark only): `OPENROUTER_PROVIDER=Cerebras` ->
+    `{"provider": {"only": ["Cerebras"], "allow_fallbacks": False}}`, so a run can force a single provider and
+    measure it specifically. Empty when unset, so normal routing is unaffected."""
+    provider = os.getenv("OPENROUTER_PROVIDER")
+    if not provider:
+        return {}
+    return {"provider": {"only": [provider], "allow_fallbacks": False}}
+
+
 def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
     """Construct the base client for `model_id`, carrying the profile's base `extra_body` (request-level
     provider routing, e.g. OpenRouter throughput sort -- a config-driven provider flag, ADR-0027).
@@ -77,8 +87,9 @@ def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) ->
     """
     params: dict[str, Any] = {"max_retries": _MAX_RETRIES, "timeout": _TIMEOUT_S}
     profile = profile_for(model_id)
-    if profile.extra_body is not None:
-        params["extra_body"] = profile.extra_body
+    extra_body = {**(profile.extra_body or {}), **_provider_pin()}  # env pin merges over/into profile routing
+    if extra_body:
+        params["extra_body"] = extra_body
     params.update(overrides)  # caller overrides win
     return ChatOpenAI(
         model=model_id,
@@ -105,8 +116,11 @@ def build_structured(
     """
     profile = profile_for(model_id)
     kwargs: dict[str, Any] = {"method": profile.structured_method, "include_raw": include_raw}
-    if profile.structured_extra_body is not None:
-        kwargs["extra_body"] = profile.structured_extra_body
+    # also put the env provider pin on the forced structured call (belt-and-suspenders: the base client carries
+    # it too, but with_structured_output's extra_body should not drop it).
+    structured_extra = {**(profile.structured_extra_body or {}), **_provider_pin()}
+    if structured_extra:
+        kwargs["extra_body"] = structured_extra
     overrides: dict[str, Any] = {"max_tokens": max_tokens} if max_tokens is not None else {}
     runnable = build_model(model_id, temperature=temperature, **overrides).with_structured_output(schema, **kwargs)
     return runnable.with_retry(
