@@ -268,17 +268,12 @@ def test_tagged_freetext_model_generates_and_parses(monkeypatch):
     assert "EXACTLY these tags" in seen["prompt"]  # the tag-format instructions were appended
 
 
-def test_answer_model_for_routes_by_profile():
-    from rag_wright.capabilities.answer_generator import (
-        SeamAnswerModel,
-        TaggedFreeTextAnswerModel,
-        answer_model_for,
-    )
+def test_answer_model_for_is_universally_tag_parse():
+    # ADR-0045: generation is ALWAYS the client-side tag-parse path, for every model (LLM-agnostic).
+    from rag_wright.capabilities.answer_generator import TaggedFreeTextAnswerModel, answer_model_for
 
-    # a client_side_structured profile -> the free-text tag path
-    assert isinstance(answer_model_for("google/gemma-4-31B-it-qat-w4a16-ct"), TaggedFreeTextAnswerModel)
-    # everything else -> the structured-output seam
-    assert isinstance(answer_model_for("ibm-granite/granite-4.1-8b"), SeamAnswerModel)
+    for mid in ("google/gemma-4-31B-it-qat-w4a16-ct", "ibm-granite/granite-4.1-8b", "google/gemma-4-31b-it"):
+        assert isinstance(answer_model_for(mid), TaggedFreeTextAnswerModel)
 
 
 # --- vision-to-text ------------------------------------------------------------------------------

@@ -14,7 +14,6 @@ coerced to an abstention. The model choice is the `GENERAL` role (no flag here).
 
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
@@ -22,7 +21,7 @@ from typing import Optional, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.models.profiles import ModelRole, model_for, profile_for
+from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_model, build_structured
 from rag_wright.util.concurrent import map_concurrent
 
@@ -175,18 +174,12 @@ class TaggedFreeTextAnswerModel:
 def answer_model_for(
     model_id: str | None = None, *, temperature: float = 0.0, max_tokens: int | None = None
 ) -> AnswerModel:
-    """The generation strategy for a model, chosen from its profile: a model flagged `client_side_structured`
-    (server-side guided decoding broken -- self-hosted Gemma 4) gets the free-text + tag-parse path; every other
-    model uses the structured-output seam. One selection point, so production and evals stay in step."""
+    """The generation strategy for a model: ALWAYS the free-text + client-side tag-parse path (ADR-0045).
+    Server-side guided decoding is not portable (runs away on self-hosted Gemma 4, ~60s/call on Cerebras), so
+    generation no longer depends on it for any model -- one LLM-agnostic path, so production and evals stay in
+    step. `SeamAnswerModel` remains for an explicit opt-in (constructed directly), but is never the default."""
     mid = model_id or model_for(ModelRole.GENERAL)
-    # RAG_CLIENT_SIDE_STRUCTURED (env) forces the free-text tag-parse path for the listed ids (or "all") even
-    # when the profile isn't flagged -- e.g. to run the SAME path on an OpenRouter model whose provider (Cerebras)
-    # is slow at server-side json_schema. Empty => profile decides, so normal behaviour is unchanged.
-    forced = os.getenv("RAG_CLIENT_SIDE_STRUCTURED", "")
-    force_tag = forced == "all" or mid in {x.strip() for x in forced.split(",") if x.strip()}
-    if force_tag or profile_for(mid).client_side_structured:
-        return TaggedFreeTextAnswerModel(mid, temperature=temperature, max_tokens=max_tokens or 2048)
-    return SeamAnswerModel(mid, temperature=temperature, max_tokens=max_tokens)
+    return TaggedFreeTextAnswerModel(mid, temperature=temperature, max_tokens=max_tokens or 2048)
 
 
 def _evidence_block(evidence: list[EvidenceItem]) -> str:
