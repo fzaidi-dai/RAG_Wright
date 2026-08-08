@@ -18,7 +18,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from rag_wright.contracts.function import FUNCTION_LABELS, canonical_function
-from rag_wright.models.seam import build_structured
+from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 
 _PROMPT = (
     "You match a legal question about a contract to clause types from a FIXED taxonomy. Return the EXACT "
@@ -39,14 +39,17 @@ def _taxonomy_block() -> str:
 
 
 def classify_query_functions(
-    query: str, model_id: str, *, k: int = 3, structured_factory=build_structured
+    query: str, model_id: str, *, k: int = 3, structured_factory=build_tag_structured
 ) -> list[str]:
     """The top-`k` canonical FUNCTION_LABELS a query is about, ranked, via one structured call. Off-taxonomy or
-    unmappable labels are dropped; a failed structured emit (None) -> ``[]`` (degrades to no routing, never a
-    hard error). Order preserved, deduped, truncated to `k`."""
-    raw = structured_factory(model_id, _FunctionChoice).invoke(
-        _PROMPT.format(taxonomy=_taxonomy_block(), query=query)
-    )
+    unmappable labels are dropped; a failed structured emit (None or a persistent parse failure) -> ``[]``
+    (degrades to no routing, never a hard error). Order preserved, deduped, truncated to `k`."""
+    try:
+        raw = structured_factory(model_id, _FunctionChoice).invoke(
+            _PROMPT.format(taxonomy=_taxonomy_block(), query=query)
+        )
+    except Exception:  # noqa: BLE001 - client-side tag parse gave up -> no routing (degrade, never a hard error)
+        return []
     if raw is None:
         return []
     out: list[str] = []
