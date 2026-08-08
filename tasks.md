@@ -43,13 +43,87 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > force-majeure limitation, NOT a monetary cap — the classify→serve step surfaced the wrong clause. Local Docker
 > ArcadeDB is UP.
 >
-> **NEXT = PREC-1 (retrieval/abstention precision lever) — IN PROGRESS.** Its own task. Two precision signals to
-> localize and fix: (1) SILVER frozen-evidence over-answer — generation answers non-answerable questions instead
-> of abstaining (silver precision 50%: `Insurance`, `Minimum Commitment`); (2) REAL-INFRA off-target serve — the
-> classify→`clauses_of_function`→serve step pulled a force-majeure clause for a "how is liability capped" query.
-> These are DIFFERENT stages (generation abstention-discipline vs classification/serve precision). **Step 1 =
-> DIAGNOSIS first** (localize where precision is lost before any fix); do NOT jump to a fix. Non-blocking to the
-> MCP arc; taken up now at the user's direction.
+> **NEXT = PREC-1 (retrieval/abstention precision lever) — IN PROGRESS.** Its own task. DIAGNOSIS DONE: the two
+> precision signals localize to DIFFERENT pipeline stages, neither a query classifier/serve bug.
+> **Leak A (ingestion function-mislabel):** CONFIRMED — `LIMEENERGYCO…` idx 75 is a FORCE-MAJEURE clause labeled
+> `Cap On Liability` in the KG; classifier + serve were correct, the KG label is wrong. Corpus: 374 contracts /
+> 2,099 cap-labeled clauses; mislabel RATE not yet measured (regex too crude — "other" bucket was mostly regex
+> misses on real limitation clauses). → needs an LLM-judge quantification over enough contracts to justify
+> replacing regex with an LLM function-classifier in ingestion, then the fix.
+> **Leak B (generation abstention discipline):** silver frozen-evidence over-answer. RE-EXAMINED: the 50% is not
+> flat — of 4 negatives, 2 clean abstains + 1 HONEST HEDGE (`Insurance`: answer explicitly says "the evidence
+> does not specify… although it mentions…", cited — asserts no unsupported answer) + 1 REAL over-answer
+> (`Minimum Commitment`: confident list, no caveat). On "did it assert an unsupported answer?" that's ~75%, 1 true
+> failure. The binary `abstained` flag is too strict for the honest hedge.
+>
+> **PREC-1a (Leak-B subtask) — DONE (awaiting approval/commit).** Made the hedge first-class + re-scored silver
+> honestly, THEN added a generation-layer mitigation for mislabeled evidence:
+> - **Structured sufficiency signal:** `GeneratedAnswer.answer_kind ∈ {answered, partial, abstained}` (`abstained`
+>   kept + derived, backward-compat — no `abstained=`-only caller changed) + a `<partial/>` tag in the
+>   tag-protocol + `parse_tagged_answer`/`_finalize` propagation + SKILL three-outcome guidance. Silver 3-way:
+>   `Insurance`→partial (honest hedge, credited); binary precision 50% was too strict → honest 75%.
+> - **(a) label de-assertion:** `_clause_to_evidence` now frames the KG function as `[auto-tag: X]` (a guess to
+>   verify), not an asserted prefix `"X: ..."`. **(b) SKILL self-check:** treat `[auto-tag: X]` as possibly-wrong,
+>   verify the text instantiates the concept, hedge/abstain on mismatch. Frozen fixture reformatted to match
+>   (`scripts/migrate_silver_evidence_autotag.py`, 233 items, same content + key).
+> - **Result:** `Minimum Commitment` answered→**partial** (honest: "does not explicitly state the formal minimum
+>   commitments"); silver honest precision **75%→100%** (no confident over-answer left), recall **100%**, 0 flips.
+>   Also validated on REAL infra: the LIMEENERGYCO force-majeure→Cap mislabel now returns **partial** ("the
+>   evidence does not establish a general liability cap") instead of confidently mislabeling force-majeure as the
+>   cap. (a)+(b) = an HONESTY fix on both mislabeled cases, NOT a correctness fix (right answer needs the label
+>   fixed at ingestion). Minor nit: occasional tag-leak in parse fallback (non-deterministic model formatting).
+> **NEXT = PREC-1b (Leak-A: ingestion function-mislabel) — NOT STARTED. Discuss options after compaction.**
+> Goal: (1) QUANTIFY the mislabel rate honestly, then (2) FIX it. Generation-side (a)+(b) already makes the
+> system HEDGE honestly on mislabels; PREC-1b is about CORRECTNESS (serve the RIGHT clause).
+>
+> **OPEN QUESTION 0 (establish FIRST — the fix depends on it):** what actually assigned each clause's `function`
+> in `ragwright_cuad_full`? The label is PASSED INTO the extractor (`spans/clause_kg_extractor.py` `__call__(...,
+> function=...)`), computed UPSTREAM by the ingestion driver — NOT by an LLM at extraction time. Candidates:
+> (i) CUAD gold-overlap labels (`spans/cuad_labels.py`: segment each contract, label each operative span by the
+> CUAD clause-type whose answer span it overlaps MOST, type regex-parsed from the CUAD question, else NONE);
+> (ii) the trained LegalBERT function classifier (`spans/legalbert_classifier.py`, kind=model); (iii) other. Find
+> the actual KG-build driver and confirm. The user framed it as "replace regex by LLM" — but the force-majeure→
+> `Cap On Liability` mislabel is most likely a CUAD-gold **overlap-heuristic** artifact (a span overlapping a
+> broad CUAD answer region inherits the wrong type), which is a different fix than "regex."
+>
+> **PART 1 — QUANTIFY (do first; user: "run on enough contracts/clauses to conclude we need to replace the
+> labeler"):** an LLM-judge over a stratified sample of served clauses per function — "does this clause TEXT
+> actually instantiate function X, per its definition?" → correct / mislabel / ambiguous, with cited examples +
+> a per-function mislabel-rate table. Design to DISCUSS: sample size + stratification (corpus = 374 contracts /
+> 2,099 `Cap On Liability` clauses; sample across all 41 functions vs. focus on confirmed-bad `Cap On Liability`
+> + `Minimum Commitment` + a random control); judge model = Gemma-4-31b/Cerebras via tag-parse, CONCURRENT
+> (async+semaphore, standing rule); judge needs per-function DEFINITIONS (CUAD category defs exist). NB regex
+> was proven too crude for this (the earlier 40-contract scan: "other" bucket was mostly regex misses on real
+> limitation clauses) — MUST be an LLM judge.
+>
+> **PART 2 — FIX OPTIONS (discuss after Part 1):**
+> - **A. LLM function-classifier at ingestion (user's leaning).** Replace the labeler with a tag-parse LLM
+>   classifier over clause TEXT (the query-side `classify_query_functions` already works in-distribution on
+>   clause-like text). Pros: reads content, not overlap geometry. Cons: cost at scale (one-time, batchable,
+>   concurrent) + needs a RELABEL pass (cheaper: run the new labeler over EXISTING clause texts, update
+>   `function` + re-run `symbolic_validate`, NO full re-extraction) or a full re-ingest (GCP bulk box, ADR-0038).
+>   Tension: do we trust an LLM over CUAD GOLD where gold is clean? (Only override where the label is wrong.)
+> - **B. Neuro-symbolic function-label gate (extend ADR-0040 cascade).** We already have `symbolic_validate`
+>   (function→dimension applicability, SHACL) + `reground` (ADR-0028 lexical property gate). ADD a check that the
+>   FUNCTION label's defining cue is present in the text (force-majeure clause labeled `Cap On Liability` has no
+>   cap/limit cue → downgrade/relabel/flag). Ties to [[ontology-lever-vs-extraction-lever]]: is a given mislabel
+>   a "schema-checkable rule" (cue present?) or a "better reading" (needs the model)? Cap-vs-force-majeure looks
+>   cue-checkable.
+> - **C. Fix the label SOURCE, not re-classify.** If mislabels come from the CUAD overlap heuristic, tighten it
+>   (higher overlap threshold, better single-label disambiguation, low-overlap → NONE). Cheapest if the root
+>   cause is the heuristic; no LLM at ingestion.
+> - **D. Combine (neuro-symbolic, ADR-0040 spirit):** LLM classifier as labeler + symbolic/lexical gate as the
+>   check + CUAD gold as validation. Likely the durable answer.
+> - Note: property tags were ALSO garbage on the mislabeled clause (`nonsolicit_target=employees` on plant
+>   trials) — but ADR-0040 already targets property fidelity; the FUNCTION label is the new, separate gap.
+> **VALIDATION after the fix:** re-run the real-infra Cap smoke (should serve a REAL cap clause or correctly
+> abstain), re-quantify the mislabel rate (Part 1 judge) to show improvement, and re-check silver.
+>
+> **INFRA/CONFIG STATE (for resume):** local Docker ArcadeDB `arcadedb-ragwright` is UP (`ragwright_cuad_full`,
+> 42,314 clauses / 510 contracts, `.env` → localhost:2480). Modal apps + A100 STOPPED. Silver default =
+> Cerebras-pinned Gemma-4 (`measure_silver.py` defaults, commit `e198f0c`); the Deep-Agent driver = DeepSeek
+> (STRUCTURED_REASONING) with NO provider pin (Cerebras doesn't serve DeepSeek — a pin 404s). Silver answers dump
+> = scratchpad `silver_answers.txt`. Real-infra smoke = `scripts/mcp_intra_document_qa_smoke.py` (needs local KG up).
 >
 > **RESUME / NEXT UP (2026-08-07):** **MCP-PROTO + Phase-A quality arc in flight.** Prototyped the "capability
 > as an MCP tool" pattern: `compliance_check` wrapped via FastMCP (`src/rag_wright/mcp/compliance_server.py`),

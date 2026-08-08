@@ -347,3 +347,56 @@ def test_live_vision_to_text_transcribes_a_synthetic_image():
 
     text = vision_to_text(buffer.getvalue(), model=SeamVisionModel(), media_type="image/png")
     assert "HELLO" in text.upper() or "WORLD" in text.upper()  # the model read the rendered text
+
+
+# --- PREC-1a: structured sufficiency signal (answer_kind: answered | partial | abstained) -------------------
+
+
+def test_answer_kind_backward_compat_derives_from_abstained():
+    from rag_wright.capabilities.answer_generator import AnswerKind, GeneratedAnswer
+    # existing construction (abstained only, no answer_kind) still works and derives the kind
+    assert GeneratedAnswer(answer="a", citations=["c"], abstained=False).answer_kind is AnswerKind.ANSWERED
+    assert GeneratedAnswer(answer="a", citations=[], abstained=True).answer_kind is AnswerKind.ABSTAINED
+
+
+def test_answer_kind_partial_forces_abstained_false():
+    from rag_wright.capabilities.answer_generator import AnswerKind, GeneratedAnswer
+    g = GeneratedAnswer(answer="found related but not the exact term", citations=["c"],
+                        abstained=False, answer_kind=AnswerKind.PARTIAL)
+    assert g.answer_kind is AnswerKind.PARTIAL and g.abstained is False
+
+
+def test_answer_kind_abstained_forces_abstained_true():
+    from rag_wright.capabilities.answer_generator import AnswerKind, GeneratedAnswer
+    # answer_kind wins when explicitly set: ABSTAINED -> abstained True even if passed False
+    assert GeneratedAnswer(answer="x", citations=[], abstained=False,
+                           answer_kind=AnswerKind.ABSTAINED).abstained is True
+
+
+def test_parse_tagged_answer_marks_partial():
+    from rag_wright.capabilities.answer_generator import AnswerKind, parse_tagged_answer
+    g = parse_tagged_answer(
+        "<answer>Mentions a related policy [X:1:aa11bbbb2222] but does not state the requirement.</answer>\n"
+        "<partial/>\n<citations>X:1:aa11bbbb2222</citations>")
+    assert g.answer_kind is AnswerKind.PARTIAL and not g.abstained and g.citations == ["X:1:aa11bbbb2222"]
+    assert "<partial" not in g.answer  # the marker never leaks into the answer body
+
+
+def test_parse_tagged_answer_default_kinds():
+    from rag_wright.capabilities.answer_generator import AnswerKind, parse_tagged_answer
+    assert parse_tagged_answer("<abstain/>").answer_kind is AnswerKind.ABSTAINED
+    g = parse_tagged_answer("<answer>Capped at 2x [X:1:aa11bbbb2222].</answer><citations>X:1:aa11bbbb2222</citations>")
+    assert g.answer_kind is AnswerKind.ANSWERED
+
+
+def test_finalize_propagates_partial_and_coerces_uncited_partial_to_abstain():
+    from rag_wright.capabilities.answer_generator import AnswerKind, EvidenceItem, GeneratedAnswer, _finalize
+    ev = [EvidenceItem(chunk_id="X:1:aa11bbbb2222", text="a related mention")]
+    raw = GeneratedAnswer(answer="related [X:1:aa11bbbb2222]", citations=["X:1:aa11bbbb2222"],
+                          abstained=False, answer_kind=AnswerKind.PARTIAL)
+    out = _finalize(raw, ev)
+    assert out.answer_kind is AnswerKind.PARTIAL and not out.abstained
+    # a PARTIAL that cites only ids NOT in the evidence has no valid citation -> coerced to abstain
+    raw2 = GeneratedAnswer(answer="related [Y:9:ffff0000a]", citations=["Y:9:ffff0000a"],
+                           abstained=False, answer_kind=AnswerKind.PARTIAL)
+    assert _finalize(raw2, ev).answer_kind is AnswerKind.ABSTAINED

@@ -54,7 +54,7 @@ async def _main() -> None:
             "answer_contract_question", {"contract_id": contract_id, "question": _QUESTION})
 
     data = result.data
-    print(f"\n[smoke] abstained: {data['abstained']}", flush=True)
+    print(f"\n[smoke] answer_kind: {data.get('answer_kind')} | abstained: {data['abstained']}", flush=True)
     print(f"[smoke] citations ({len(data['citations'])}): {[c[-20:] for c in data['citations'][:6]]}", flush=True)
     print(f"[smoke] answer:\n{data['answer'][:700]}", flush=True)
     ok = (not data["abstained"]) and bool(data["citations"])

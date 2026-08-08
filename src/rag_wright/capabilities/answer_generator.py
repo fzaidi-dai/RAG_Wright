@@ -15,10 +15,11 @@ coerced to an abstention. The model choice is the `GENERAL` role (no flag here).
 from __future__ import annotations
 
 import re
+from enum import Enum
 from pathlib import Path
 from typing import Optional, Protocol, runtime_checkable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
@@ -50,12 +51,33 @@ class EvidenceItem(BaseModel):
     confidence: Optional[str] = None  # graph-fact confidence tag; None for plain retrieved text
 
 
+class AnswerKind(str, Enum):
+    """The sufficiency of a generated answer (PREC-1a): a first-class signal so an honest hedge is distinct
+    from a confident over-answer, both in the contract the caller receives and in evaluation."""
+
+    ANSWERED = "answered"      # the evidence supports the answer
+    PARTIAL = "partial"        # answered, but the evidence does NOT fully support it -> caveated, low-confidence
+    ABSTAINED = "abstained"    # the evidence supports no answer -> abstention (no fabrication)
+
+
 class GeneratedAnswer(BaseModel):
-    """The generated answer (FR-C.9): grounded text, the cited chunk_ids, and whether it abstained."""
+    """The generated answer (FR-C.9): grounded text, the cited chunk_ids, whether it abstained, and its
+    sufficiency `answer_kind` (PREC-1a). `abstained` is kept (backward-compat) and `answer_kind` is kept in
+    sync: constructing with `abstained` alone derives the kind (ABSTAINED/ANSWERED); passing `answer_kind`
+    (e.g. PARTIAL) wins and sets `abstained` accordingly. So no existing `abstained=`-only caller changes."""
 
     answer: str
     citations: list[str]  # chunk_ids actually in the evidence (no claim without a citation, FR-Q.6)
-    abstained: bool
+    abstained: bool = False  # kept for backward-compat; reconciled with answer_kind by the validator below
+    answer_kind: Optional[AnswerKind] = None  # None at input -> derived from `abstained`; else it wins
+
+    @model_validator(mode="after")
+    def _sync_kind(self) -> "GeneratedAnswer":
+        if self.answer_kind is None:
+            self.answer_kind = AnswerKind.ABSTAINED if self.abstained else AnswerKind.ANSWERED
+        else:
+            self.abstained = self.answer_kind is AnswerKind.ABSTAINED
+        return self
 
 
 @runtime_checkable
@@ -116,11 +138,16 @@ _TAG_INSTRUCTIONS = (
     "id shown for that item).\n</answer>\n"
     "<citations>\nThe chunk_id of every evidence item you used, one per line; use only ids present in the "
     "evidence above.\n</citations>\n"
-    "If the evidence does not support an answer, output exactly <abstain/> and nothing else."
+    "If the evidence does not support an answer at all, output exactly <abstain/> and nothing else. If the "
+    "evidence only PARTIALLY or TANGENTIALLY addresses the question -- it mentions related material but does "
+    "not actually state the answer -- give what the evidence does support with citations, add the marker "
+    "<partial/>, and say plainly what the evidence does not establish (do NOT present a tangential mention as a "
+    "confident answer)."
 )
 _ANSWER_RE = re.compile(r"<answer>(.*?)</answer>", re.DOTALL | re.IGNORECASE)
 _CITE_BLOCK_RE = re.compile(r"<citations>(.*?)</citations>", re.DOTALL | re.IGNORECASE)
 _ABSTAIN_RE = re.compile(r"<abstain\s*/?>", re.IGNORECASE)
+_PARTIAL_RE = re.compile(r"<partial\s*/?>", re.IGNORECASE)
 # an inline citation: [<contract_id>:<index>:<hex hash>]; contract_id is delimiter-safe (no brackets).
 _INLINE_CITE_RE = re.compile(r"\[([^\[\]]+:\d+:[0-9a-fA-F]{8,})\]")
 
@@ -139,7 +166,7 @@ def parse_tagged_answer(text: str) -> GeneratedAnswer:
     elif _ABSTAIN_RE.search(t):
         return _abstain()
     else:
-        answer = t  # no tags at all -> the model just wrote prose (with inline [chunk_id]s); use it
+        answer = _PARTIAL_RE.sub("", t).strip()  # no tags -> prose (with inline [chunk_id]s); drop any marker
     if not answer:
         return _abstain()
     citations: list[str] = []
@@ -149,7 +176,8 @@ def parse_tagged_answer(text: str) -> GeneratedAnswer:
     for cid in _INLINE_CITE_RE.findall(answer):  # supplement with inline ids (dedup, order-preserving)
         if cid not in citations:
             citations.append(cid)
-    return GeneratedAnswer(answer=answer, citations=citations, abstained=False)
+    kind = AnswerKind.PARTIAL if _PARTIAL_RE.search(t) else AnswerKind.ANSWERED  # a flagged partial/hedge
+    return GeneratedAnswer(answer=answer, citations=citations, answer_kind=kind)
 
 
 class TaggedFreeTextAnswerModel:
@@ -203,8 +231,8 @@ def _finalize(raw: GeneratedAnswer, evidence: list[EvidenceItem]) -> GeneratedAn
     valid_ids = {item.chunk_id for item in evidence}
     citations = [chunk_id for chunk_id in raw.citations if chunk_id in valid_ids]  # drop fabricated
     if not citations:
-        return _abstain()
-    return GeneratedAnswer(answer=raw.answer, citations=citations, abstained=False)
+        return _abstain()  # no valid citation -> abstain (even a PARTIAL needs a citation, FR-Q.6)
+    return GeneratedAnswer(answer=raw.answer, citations=citations, answer_kind=raw.answer_kind)
 
 
 def _answer_prompt(query: str, evidence: list[EvidenceItem]) -> str:

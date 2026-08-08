@@ -76,12 +76,17 @@ def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> EvidenceIte
     """One cited evidence item: the clause's REAL span text (when rehydrated) with its typed facts appended,
     cited by `clause_id`, confidence surfaced. A property-less clause with no span text cites its function."""
     facts = "; ".join(f"{p.dimension}={p.value}" for p in clause.properties)
+    # PREC-1a (a): present the KG-assigned function as an AUTO-TAG to verify, NOT an asserted fact prefix
+    # ("Cap On Liability: <force-majeure text>"). A mislabeled clause no longer tells the generator it IS that
+    # type; the generation SKILL teaches the model to judge each item by its actual text (and hedge/abstain when
+    # the text does not instantiate the concept asked). One-place framing; the silver fixture mirrors it.
+    tag = f"[auto-tag: {clause.function}]"
     if body:
-        text = f"{clause.function}: {body}" + (f" [{facts}]" if facts else "")
+        text = f"{tag} {body}" + (f" [{facts}]" if facts else "")
     elif facts:
-        text = f"{clause.function} — {facts}"  # no span text (property-less path): the typed facts stand in
+        text = f"{tag} {facts}"  # no span text (property-less path): the typed facts stand in
     else:
-        text = clause.function
+        text = tag
     if clause.exception_of:
         # ADR-0044: an INFERRED carve-out/exception to a cap clause -> frame it as such and surface INFERRED
         # confidence, so the generator answers "capped, EXCEPT ..." and treats it as inferred, never a hard claim.

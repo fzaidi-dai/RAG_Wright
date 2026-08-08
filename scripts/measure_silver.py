@@ -82,6 +82,7 @@ def main() -> None:
     _log(f"[run] {len(strategies)} strategies x {len(records)} records x {repeats} repeats = {total} runs\n")
 
     results: dict = {}
+    kinds: dict = {}  # (name, ri) -> [answer_kind, ...] per repeat (answered | partial | abstained), PREC-1a
     answers: dict = {}  # (name, ri) -> a sample answer for spot-checking
     latencies: list = []  # (name, dt_seconds, err) per call -> per-call latency stats
     done = [0]
@@ -92,19 +93,21 @@ def main() -> None:
         t0 = time.time()
         try:
             ans = generate_answer(rec["question"], rec["_ev"], model=strategies[name])
-            return (name, ri, ans.abstained, len(ans.citations), ans.answer, time.time() - t0, None)
+            return (name, ri, ans.abstained, ans.answer_kind.value, len(ans.citations), ans.answer,
+                    time.time() - t0, None)
         except Exception as exc:  # noqa: BLE001
-            return (name, ri, True, 0, "", time.time() - t0, f"{type(exc).__name__}: {str(exc)[:80]}")
+            return (name, ri, True, "abstained", 0, "", time.time() - t0, f"{type(exc).__name__}: {str(exc)[:80]}")
 
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
-        for name, ri, abst, ncit, ans_text, dt, err in pool.map(run_one, combos):
+        for name, ri, abst, kind, ncit, ans_text, dt, err in pool.map(run_one, combos):
             results.setdefault((name, ri), []).append(abst)
+            kinds.setdefault((name, ri), []).append(kind)
             latencies.append((name, dt, err))
             if (name, ri) not in answers and not abst:
                 answers[(name, ri)] = ans_text
             done[0] += 1
             rec = records[ri]
-            verdict = "ERR" if err else ("ABSTAIN" if abst else f"answer({ncit}c)")
+            verdict = "ERR" if err else ("ABSTAIN" if abst else f"{kind[:4]}({ncit}c)")
             tag = "ANS" if rec["answerable"] else "NO "
             _log(f"[{done[0]:>3}/{total}] {name:<13} {rec['id']:<13}[{tag}] -> {verdict:<11} {dt:>7.2f}s"
                  + (f"  {err}" if err else ""))
@@ -124,6 +127,24 @@ def main() -> None:
         _log(f"{name:<14} {answered}/{len(ans_runs)} ({answered/len(ans_runs):>4.0%})        "
              f"{abstained_neg}/{len(neg_runs)} ({abstained_neg/len(neg_runs):>4.0%})       "
              f"{flips}/{len(records)}")
+    _log("=" * 78)
+
+    # PREC-1a: the HONEST precision -- "did NOT assert an unsupported answer" credits abstained OR partial (an
+    # honest hedge that flags insufficiency), not just a hard abstain. Reported ALONGSIDE the strict binary
+    # above (transparent, not a silent softening); the per-negative kind breakdown shows which is which.
+    _log("\n=== PREC-1a: 3-way answer_kind + honest precision (abstained|partial credited on negatives) ===")
+    _log(f"{'strategy':<14} {'strict(abstain/neg)':>20} {'honest(abst|part/neg)':>22}")
+    for name in strategies:
+        neg_kinds = [k for ri in neg_ids for k in kinds[(name, ri)]]
+        strict = sum(k == "abstained" for k in neg_kinds)
+        honest = sum(k in ("abstained", "partial") for k in neg_kinds)
+        n = len(neg_kinds)
+        _log(f"{name:<14} {strict}/{n} ({strict/n:>4.0%})        {honest}/{n} ({honest/n:>4.0%})")
+    _log("\nPer-negative-record answer_kind (across %d repeats):" % repeats)
+    _log(f"{'record':<26} " + "  ".join(f"{n:>16}" for n in strategies))
+    for ri in neg_ids:
+        cells = ["/".join(sorted(set(kinds[(name, ri)]))) for name in strategies]
+        _log(f"{records[ri]['function_served']:<26} " + "  ".join(f"{c:>16}" for c in cells))
     _log("=" * 78)
 
     # --- per-call latency (seconds), successful calls only ---

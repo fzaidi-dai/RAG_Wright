@@ -102,7 +102,7 @@ def test_property_less_clause_cites_its_function_label():
 
     out = graph.invoke({"contract_id": "k", "question": "q"})
 
-    assert seen["evidence"][0].text == "Governing Law"  # falls back to the function label, no crash
+    assert seen["evidence"][0].text == "[auto-tag: Governing Law]"  # falls back to the auto-tag, no crash
     assert out["answer"].citations == ["k:0:h"]
 
 
@@ -222,6 +222,17 @@ def test_attach_marks_an_already_served_uncapped_clause_and_does_not_duplicate()
         contract_id="C")
     assert len(out) == 2  # deduped, not double-added
     assert next(c for c in out if c.clause_id == "C:6:h").exception_of == "C:5:h"
+
+
+def test_clause_evidence_frames_function_as_an_auto_tag_not_an_asserted_fact():
+    # PREC-1a (a): the KG function is a to-verify auto-tag, never a bare asserted prefix ("Cap On Liability: ...")
+    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+
+    c = CitedClause(contract_id="C", clause_id="C:7:h", function="Cap On Liability", span_id="s7")
+    ev = _clause_to_evidence(c, "the Company shall not be liable for acts of God")
+    assert ev.text.startswith("[auto-tag: Cap On Liability]")  # framed as a guess to verify
+    assert "the Company shall not be liable for acts of God" in ev.text  # the real text stands on its own
+    assert not ev.text.startswith("Cap On Liability:")  # NOT asserted as fact
 
 
 def test_exception_clause_evidence_is_framed_and_tagged_inferred():
