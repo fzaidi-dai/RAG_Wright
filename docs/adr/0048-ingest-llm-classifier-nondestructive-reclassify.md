@@ -135,3 +135,50 @@ Terms`). The approved delta is a **disciplined 8-ADD** (not the LLM's raw 32), p
   (`FunctionScore` still rejects any non-canonical label).
 - The curation is reproducible from a committed script; the proposal/report artifacts stay gitignored under
   `data/eval/taxonomy_gaps/`.
+
+## Addendum (Phase A executed): the reclassify WRITE over the live KG — classifier fix, never-null policy, audit+revert
+
+Phase A (read clause text from the KG → batched-LLM classify into the 52-label space + folds → UPSERT
+function/functions → mark primary-flips stale → delta report) was executed over `ragwright_cuad_full` (45,404
+clauses / 6,320 chunks). Three findings reshaped it from the original design:
+
+1. **The classifier had to change.** A dry-run showed the batched **granite-4.1-8b** classifier INVENTED free-form
+   function names (44% of spans: "Exclusive Source of Supply", "Forecasting Obligation", …) that fell to NONE,
+   plus omitted spans and was non-deterministic. Fixes: (a) the structured `function` field now advertises the
+   closed 52+OTHER **enum** (`json_schema_extra`) so guided decoding hard-constrains the model (kept a `str` so a
+   stray never crashes a sub-batch and the `other_label` gap channel survives); (b) switched the reclassify model
+   to **Gemma-4-31b via OpenRouter, provider-pinned `coreweave/bf16` with fallbacks** (`OPENROUTER_PROVIDER` +
+   `OPENROUTER_ALLOW_FALLBACKS`, the existing seam). Enum + Gemma eliminated invention (44%→0). A 2-pass agreement
+   probe showed the LABEL is ~99.5% stable run-to-run; the instability is confined to the "has a function at all"
+   (→NONE) decision.
+
+2. **Never-null-on-NONE (user-approved).** ~40% of clauses "flip to NONE", but that signal is noisy AND often a
+   granularity artifact (the original ingestion propagated a section's function onto every header/fragment span).
+   So a flip-to-NONE is a **no-op** — it never overwrites the existing label. Only a REAL new label is upserted
+   (with the flipped clause's property edges marked AMBIGUOUS via `store.mark_span_properties_ambiguous`); an
+   unchanged primary still gets the additive multi-label `functions`. The write is thus strictly non-destructive:
+   a clause can only move to another real label, never be nulled. Verified at scale: `function='NONE'` count = 0,
+   45,404 clauses intact.
+
+3. **Independent audit + selective revert (user-approved path).** 99.5% *stability* ≠ *correctness*: at aggregate
+   scale Gemma over-attracts to a few new labels (esp. Payment Terms). `scripts/audit_reclass_flips.py` had an
+   INDEPENDENT judge (**DeepSeek V4 Pro**, not the Gemma classifier) rule OLD-vs-NEW on the actual clause text for
+   every transition with count≥30 (12 samples each). Result: 38/41 transitions KEEP (~6,190 clauses validated),
+   3 REVERT. `scripts/revert_reclass_flips.py` restored the 277 clauses in the 3 failing transitions
+   (`Liquidated Damages→Payment Terms` [50/50 tie], `Competitive Restriction Exception→Exclusivity` [17/83],
+   `Covenant Not To Sue→IP Ownership Assignment` [17/75]) to their OLD labels (property edges left AMBIGUOUS).
+
+### Outcome
+- **28,413 clauses** relabeled/enriched; **~10,278 audited real→real label corrections** stand; **16,197**
+  flip-to-NONE kept untouched; **15,322** property edges staled (the Phase B queue); 8 new taxonomy-gap labels
+  populated. Full GCS backup taken pre-write; the write checkpoint holds old→new per clause (any transition is
+  precisely reversible). Residuals: ~4,088 flips in small transitions (count<30) unaudited/left-as-is; 7 marginal
+  KEEPs (NEW=58% on n=12) left as written.
+
+### Consequences / next
+- **Phase B (LLM).** Re-extract typed properties for the ~10,278 reclassified clauses whose edges are now
+  AMBIGUOUS — conditioned on the CORRECTED function (which dimensions to pull), gated to the flipped delta (not
+  the corpus). This is the granite property-extraction work; it turns corrected labels into corrected property
+  graphs. Reverted clauses' AMBIGUOUS edges are resolved here too.
+- Query legs read `function` (the primary), so the corrected labels are already live for retrieval; the multi-label
+  `functions` field is additive (QUERY-EXPLOIT-MULTILABEL, still optional).

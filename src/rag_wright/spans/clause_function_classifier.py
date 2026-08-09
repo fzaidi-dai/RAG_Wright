@@ -14,12 +14,25 @@ from __future__ import annotations
 
 from typing import Any, Protocol, runtime_checkable
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from rag_wright.contracts.function import FunctionConfidence, FunctionScore, canonical_function
+from rag_wright.contracts.function import (
+    FUNCTION_LABELS,
+    FunctionConfidence,
+    FunctionScore,
+    canonical_function,
+)
 
 _FLOOR: frozenset[FunctionConfidence] = frozenset({FunctionConfidence.HIGH, FunctionConfidence.MEDIUM})
 _MAX_FUNCTIONS = 3
+
+# ADR-0048 Phase A: the structured `function` field advertises the closed label set (the 52 taxonomy labels +
+# "OTHER" for a real clause type we lack a label for). Emitted into the JSON schema so guided decoding HARD-
+# constrains the model to a valid label (killing the granite-8B failure mode: inventing free-form names like
+# "Exclusive Source of Supply" that then fall to NONE), and strongly guides it under function-calling. Kept as a
+# `str` field (json_schema_extra is schema-only, not pydantic-enforced), so a stray value never crashes a whole
+# sub-batch and the taxonomy-gap channel (`other_label`) still works. "OTHER" is not a FUNCTION_LABELS entry.
+_FUNCTION_ENUM: list[str] = [*FUNCTION_LABELS, "OTHER"]
 
 
 @runtime_checkable
@@ -31,11 +44,12 @@ class ClauseFunctionClassifier(Protocol):
 
 
 class RawScore(BaseModel):
-    """The LLM's raw (pre-validation) score: a function label (one of the 44 taxonomy labels or "OTHER") + coarse
+    """The LLM's raw (pre-validation) score: a function label (one of the 52 taxonomy labels or "OTHER") + coarse
     confidence. When `function` is "OTHER" (a real clause type not in our taxonomy), `other_label` names it -- the
-    taxonomy-gap signal (ADR-0048 option 2). Filtered/categorized downstream."""
+    taxonomy-gap signal (ADR-0048 option 2). Filtered/categorized downstream. `function` advertises the closed
+    label enum in the JSON schema (guided decoding), but stays a `str` so a stray never crashes the sub-batch."""
 
-    function: str
+    function: str = Field(json_schema_extra={"enum": _FUNCTION_ENUM})
     confidence: str
     other_label: str = ""
 

@@ -187,7 +187,37 @@ def main() -> None:
 
     n = len(chunk_ids)
     timeout_s = float(os.environ.get("TIMEOUT_S", "90"))  # a big multi-span chunk's structured call can stall
-    log(f"[reclassify] classifying {n} chunks (batched, conc={conc}, timeout={timeout_s:.0f}s) | WRITE={write} ...")
+
+    from pathlib import Path
+
+    from rag_wright.contracts.function import NO_FUNCTION, FunctionConfidence, FunctionScore
+    from rag_wright.spans.reclassify import ClauseReclass
+
+    ckpt_dir = Path("data/eval/taxonomy_gaps")
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
+    ckpt_file = ckpt_dir / (f"reclass_{'write' if write else 'dry'}_checkpoint.jsonl")
+    skip_file = ckpt_dir / (f"reclass_{'write' if write else 'dry'}_skipped.txt")  # timed-out chunks (follow-up)
+
+    def _rc_from_json(d: dict) -> ClauseReclass:
+        scores = [FunctionScore(function=s["function"], confidence=FunctionConfidence(s["confidence"]))
+                  for s in d["scores"]]
+        return ClauseReclass(clause_id=d["clause_id"], span_id=d["span_id"], old_function=d["old"],
+                             new_scores=scores, new_primary=d["new"])
+
+    delta = ReclassDelta()
+    done: set[str] = set()
+    if ckpt_file.exists():  # RESUME: re-aggregate checkpointed chunks (their writes are already applied -> skip)
+        for line in ckpt_file.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                d = json.loads(line)
+                done.add(d["chunk"])
+                for r in d["reclass"]:
+                    delta.add(_rc_from_json(r))
+        log(f"[reclassify] RESUME: {len(done)} chunks from checkpoint ({delta.total} clauses re-aggregated)")
+
+    todo = [c for c in chunk_ids if c not in done]
+    log(f"[reclassify] {len(todo)} chunks to classify ({len(done)} resumed) of {n} | WRITE={write} conc={conc} "
+        f"timeout={timeout_s:.0f}s | checkpoint={ckpt_file.name}")
 
     def _one(chunk_id: str):
         spans = spans_by_chunk.get(chunk_id, [])
@@ -200,41 +230,85 @@ def main() -> None:
             return []
         return reclassify_chunk(chunk_text, ordered, by_span, classifier)
 
-    results = map_concurrent(chunk_ids, _one, max_concurrency=conc, label="[reclassify]", echo=True,
-                             timeout_s=timeout_s, timeout_retries=1)
-    skipped = sum(1 for r in results if r is None)  # None = timed out (a stalled/too-big chunk); [] = no clauses
+    wrote = 0
+    staled = 0
+    skipped = 0
+    kept_on_none = 0  # never-null-on-NONE (user-approved): a flip-to-NONE is a NO-OP, never overwrites the label
+    batch_n = 120
+    with ckpt_file.open("a", encoding="utf-8") as ck, skip_file.open("a", encoding="utf-8") as sk:
+        for bs in range(0, len(todo), batch_n):
+            batch = todo[bs:bs + batch_n]
+            res = map_concurrent(batch, _one, max_concurrency=conc, label="[reclassify]", echo=True,
+                                 timeout_s=timeout_s, timeout_retries=1)
+            flipped_spans: list[str] = []
+            ckpt_lines: list[str] = []
+            for cid, rcs in zip(batch, res):
+                if rcs is None:  # timed out even after retry -> checkpoint as empty (bounded), log id for follow-up
+                    skipped += 1
+                    sk.write(cid + "\n")
+                    ckpt_lines.append(json.dumps({"chunk": cid, "reclass": []}, ensure_ascii=False))
+                    continue
+                for rc in rcs:
+                    # NEVER-NULL-ON-NONE (user-approved): only a REAL new label overwrites. Gemma's per-label
+                    # agreement is ~99.5%, but its "no function" (NONE) decision is noisy AND often a granularity
+                    # artifact (the original ingestion propagated a section's function onto every header/fragment
+                    # span), so a flip-to-NONE NEVER destroys the existing label -- it is a no-op.
+                    if write and rc.new_primary != NO_FUNCTION:  # real -> real (or unchanged): safe to upsert
+                        fjson = json.dumps(
+                            [{"function": f.function, "confidence": f.confidence.value} for f in rc.new_scores])
+                        try:
+                            store._command(
+                                f"UPDATE Clause SET function = {_q(rc.new_primary)}, functions = {_q(fjson)} "
+                                f"WHERE clause_id = {_q(rc.clause_id)}")
+                            wrote += 1
+                        except Exception as e:  # noqa: BLE001
+                            log(f"  write err {rc.clause_id[:40]}: {str(e)[:60]}")
+                        if rc.primary_flipped:  # a real->real flip: properties were extracted for the OLD function
+                            flipped_spans.append(rc.span_id)
+                    elif write and rc.primary_flipped:  # flip-to-NONE: keep the old label, DO NOT mark stale
+                        kept_on_none += 1
+                    delta.add(rc)
+                ckpt_lines.append(json.dumps({"chunk": cid, "reclass": [
+                    {"clause_id": rc.clause_id, "span_id": rc.span_id, "old": rc.old_function,
+                     "new": rc.new_primary,
+                     "scores": [{"function": f.function, "confidence": f.confidence.value} for f in rc.new_scores]}
+                    for rc in rcs]}, ensure_ascii=False))
+            if write and flipped_spans:  # one batched mark-stale call (23 UPDATEs, not per-span)
+                staled += store.mark_span_properties_ambiguous(flipped_spans)
+            for line in ckpt_lines:  # checkpoint the batch ONLY after its writes + mark-stale applied
+                ck.write(line + "\n")
+            ck.flush()
+            sk.flush()
+            log(f"[reclassify] CHECKPOINT {len(done) + bs + len(batch)}/{n} chunks | "
+                f"reclassified={delta.total} flipped={delta.flipped} wrote={wrote} staled_edges={staled} "
+                f"skipped={skipped}")
 
-    delta = ReclassDelta()
-    for rcs in results:
-        for rc in (rcs or []):
-            delta.add(rc)
-
-    log("\n=== RECLASSIFY DELTA (Phase A) ===")
-    log(f"chunks skipped (timeout {timeout_s:.0f}s): {skipped}/{n}  (big multi-span chunks stall the structured call)")
+    real_flips = delta.flipped - delta.to_none  # real -> real: the ONLY writes under never-null-on-NONE
+    log("\n=== RECLASSIFY DELTA (Phase A, never-null-on-NONE) ===")
+    log(f"chunks skipped (timeout {timeout_s:.0f}s): {skipped}/{n}  (logged to {skip_file.name} for follow-up)")
     log(f"clauses reclassified : {delta.total}")
     log(f"unchanged primary    : {delta.unchanged} ({100*delta.unchanged/max(1,delta.total):.1f}%)")
-    log(f"PRIMARY FLIPPED      : {delta.flipped} ({100*delta.flipped/max(1,delta.total):.1f}%)  <- Phase B candidates")
-    log(f"  ...flipped to NONE : {delta.to_none}  (clause should be retired)")
-    log("top transitions (old -> new):")
-    for (old, new), c in delta.top_transitions(15):
+    log(f"REAL->REAL flip (WRITTEN): {real_flips} ({100*real_flips/max(1,delta.total):.1f}%)  <- the actual label fixes")
+    log(f"flip-to-NONE (KEPT, no-op): {delta.to_none} ({100*delta.to_none/max(1,delta.total):.1f}%)  "
+        f"<- label preserved, never nulled")
+    log("top REAL->REAL transitions (old -> new; NONE flips excluded as no-ops):")
+    real_trans = [((o, nw), c) for (o, nw), c in delta.top_transitions(80) if nw != NO_FUNCTION]
+    for (old, new), c in real_trans[:20]:
         log(f"  {c:5d}  {old!r} -> {new!r}")
-
+    report = {"write": write, "policy": "never-null-on-NONE", "chunks": n, "skipped": skipped,
+              "clauses": delta.total, "unchanged": delta.unchanged, "real_flips_written": real_flips,
+              "flip_to_none_kept": delta.to_none, "wrote": wrote, "staled_edges": staled,
+              "kept_on_none": kept_on_none,
+              "top_real_transitions": [{"old": o, "new": nw, "count": c} for (o, nw), c in real_trans]}
+    (ckpt_dir / f"reclass_{'write' if write else 'dry'}_delta_report.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     if write:
-        log(f"\n[reclassify] WRITE: upserting function + functions on {delta.total} clauses ...")
-        wrote = 0
-        for rcs in results:
-            for rc in (rcs or []):
-                fjson = json.dumps([{"function": f.function, "confidence": f.confidence.value} for f in rc.new_scores])
-                try:
-                    store._command(
-                        f"UPDATE Clause SET function = {_q(rc.new_primary)}, functions = {_q(fjson)} "
-                        f"WHERE clause_id = {_q(rc.clause_id)}")
-                    wrote += 1
-                except Exception as e:  # noqa: BLE001
-                    log(f"  write err {rc.clause_id[:40]}: {str(e)[:60]}")
-        log(f"[reclassify] wrote {wrote} clause labels. (mark-stale + Phase B re-extraction = next step.)")
+        log(f"\n[reclassify] WROTE {wrote} real labels + staled {staled} property edges on real->real flips; "
+            f"KEPT {kept_on_none} flip-to-NONE labels untouched (non-destructive). "
+            f"(Phase B re-extraction of the {real_flips} real flips = next step.)")
     else:
-        log("\n[reclassify] DRY-RUN (no writes). Re-run with WRITE=1 to upsert the labels.")
+        log(f"\n[reclassify] DRY-RUN (no writes). {real_flips} real->real fixes would be written, "
+            f"{delta.to_none} flip-to-NONE kept as no-ops. Re-run with WRITE=1.")
     store.close()
 
 

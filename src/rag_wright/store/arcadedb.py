@@ -30,6 +30,7 @@ from rag_wright.contracts.property import (
     ClausePropertyRecord,
     PropertyDimension,
 )
+from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
 
@@ -162,6 +163,20 @@ def _sql_literal(value: MetadataValue) -> str:
     if isinstance(value, (int, float)):
         return repr(value)
     return _sql_str(str(value))
+
+
+def _stale_property_statements(span_ids: list[str]) -> list[str]:
+    """ADR-0048 Phase A mark-stale (pure): one `UPDATE ... SET confidence=AMBIGUOUS WHERE span_id IN (...) AND
+    confidence <> AMBIGUOUS` per typed property edge type, for the given spans. Separated from the DB call so the
+    SQL is unit-tested with no store. Empty span list -> no statements (the caller no-ops)."""
+    if not span_ids:
+        return []
+    id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
+    amb = _sql_str(ConfidenceTag.AMBIGUOUS.value)
+    return [
+        f"UPDATE {edge_type} SET confidence = {amb} WHERE span_id IN {id_list} AND confidence <> {amb}"
+        for edge_type in TYPED_PROPERTY_EDGE_TYPES
+    ]
 
 
 def _clause_kg_statements(record: ClausePropertyRecord) -> list[str]:
@@ -567,6 +582,23 @@ class ArcadeDBStore:
         id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
         rows = self._query(f"SELECT span_id, text FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
         return {r["span_id"]: r.get("text", "") for r in rows}
+
+    def mark_span_properties_ambiguous(self, span_ids: list[str]) -> int:
+        """ADR-0048 Phase A mark-stale: set `confidence = AMBIGUOUS` on every typed property edge of these spans.
+        A clause whose PRIMARY function flipped had its properties extracted for the OLD function, so they are
+        stale until Phase B re-extraction -- downgraded (kept but flagged) exactly as the ADR-0040 judges do, so
+        the soft-boost down-weights them meanwhile. Keyed by the ADR-0025 `edge.span_id`. Idempotent (skips
+        already-AMBIGUOUS). Returns the number of edges downgraded (best-effort from the driver's row count)."""
+        if not span_ids:
+            return 0
+        total = 0
+        for stmt in _stale_property_statements(span_ids):
+            res = self._command(stmt)
+            if isinstance(res, list):
+                for row in res:
+                    if isinstance(row, dict) and "count" in row:
+                        total += int(row["count"])
+        return total
 
     def chunk_count(self) -> int:
         rows = self._query(f"SELECT count(*) AS n FROM {CHUNK_TYPE}")

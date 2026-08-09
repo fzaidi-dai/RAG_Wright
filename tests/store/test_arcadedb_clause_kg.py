@@ -18,6 +18,7 @@ from rag_wright.store.arcadedb import (
     ArcadeDBStore,
     _clause_kg_statements,
     _edge_predicate_iri,
+    _stale_property_statements,
     _TYPED_DIMENSION_EDGE,
 )
 
@@ -221,3 +222,23 @@ def test_clause_upsert_emits_functions_json():
 def test_clause_upsert_empty_functions_is_empty_json_array():
     rec, _ = _record("s2", "Governing Law", [])
     assert '[]' in _clause_kg_statements(rec)[0]
+
+
+# --- ADR-0048 Phase A mark-stale: the pure UPDATE builder (no store) --------------------------------------
+
+
+def test_stale_property_statements_one_update_per_edge_type_scoped_to_spans():
+    stmts = _stale_property_statements(["s1", "s2"])
+    # one UPDATE per typed property edge type, no more (bounded by edge-type count, not pool size)
+    assert len(stmts) == len(TYPED_PROPERTY_EDGE_TYPES)
+    joined = "\n".join(stmts)
+    for edge_type in TYPED_PROPERTY_EDGE_TYPES:
+        assert f"UPDATE {edge_type} SET confidence = 'AMBIGUOUS'" in joined
+    # scoped to the given spans by the ADR-0025 span_id key, and idempotent (skips already-AMBIGUOUS)
+    for s in stmts:
+        assert "WHERE span_id IN ['s1','s2']" in s
+        assert "confidence <> 'AMBIGUOUS'" in s
+
+
+def test_stale_property_statements_empty_is_noop():
+    assert _stale_property_statements([]) == []

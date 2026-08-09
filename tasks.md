@@ -51,14 +51,18 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (additive) + `Clause.functions` JSON string in `_clause_kg_statements` + `CREATE PROPERTY Clause.functions`;
 > `function` stays PRIMARY so query readers untouched. New tests (helper batching, NONE sentinel, contract
 > round-trip, store JSON emit); 430 subgraphs/store/contracts/spans green; ruff clean.
-> **PROGRESS: step 2 DONE (taxonomy extension, ADR-0048 addendum).** Full-corpus taxonomy-gap analysis + curation
-> → 44 → 52 labels + curated FOLD alias map (see the top banner). Contract/canonicalization only — no KG writes,
-> no re-extraction yet. `scripts/curate_taxonomy_gaps.py` committed; `scripts/reclassify_kg.py` (Phase-A DEBUG
-> gap-analysis mode) produced the gap report the curation consumed.
-> **NEXT increment 3: the UPSERT/reclassify WRITE pass over the existing KG — Phase A (read clause text from KG →
-> batched LLM classify [now over the 52-label space + folds] → UPSERT function+functions → mark primary-flips
-> AMBIGUOUS → delta report), THEN Phase B (re-extract the stale delta; on real assertions, move the 8 new
-> functions out of `PERMISSIVE_FUNCTIONS` into the applicability map).**
+> **PROGRESS: step 2 DONE (taxonomy extension) + Phase A WRITE DONE + audited (ADR-0048 addenda).** Taxonomy 44→52
+> + FOLD map (step 2). Phase A executed over `ragwright_cuad_full` (45,404 clauses): classifier FIX (enum-advertise
+> `function` field → killed granite's 44% invention; switched reclassify to Gemma-4-31b via coreweave/bf16+fallbacks),
+> NEVER-NULL-ON-NONE write policy (a flip-to-NONE never overwrites — verified 0 nulled, KG intact), independent
+> DeepSeek audit (38/41 transitions KEEP) + selective revert of 277 clauses in 3 bad transitions. Outcome: 28,413
+> clauses relabeled/enriched, ~10,278 audited real→real fixes stand, 16,197 flip-to-NONE kept, 15,322 property edges
+> staled (Phase B queue), 8 new labels populated. GCS backup pre-write; write checkpoint = per-clause old→new
+> (reversible). New scripts: `audit_reclass_flips.py`, `revert_reclass_flips.py`; `reclassify_kg.py` WRITE path
+> (checkpoint/resume + mark-stale). Residuals: ~4,088 small-transition flips (count<30) unaudited; 7 marginal KEEPs.
+> **NEXT = Phase B (LLM): re-extract typed properties for the ~10,278 reclassified clauses (edges now AMBIGUOUS),
+> conditioned on the CORRECTED function, gated to the flipped delta (granite property extraction). On real
+> assertions, move the 8 new functions out of `PERMISSIVE_FUNCTIONS` into `FUNCTION_APPLICABLE_DIMS`.**
 >
 > **QUERY-EXPLOIT-MULTILABEL (future enhancement, todo — after INGEST-LLM-CLASSIFIER).** Once clauses carry
 > multi-label functions + confidence (ADR-0048), the query legs can OPTIONALLY exploit them (none required —

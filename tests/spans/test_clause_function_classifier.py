@@ -4,6 +4,8 @@ adapter, graceful degrade, and the batched `classify_spans` (option B) with INDE
 
 from __future__ import annotations
 
+from json import dumps as json_dumps
+
 from rag_wright.contracts.function import FunctionConfidence
 from rag_wright.spans.clause_function_classifier import (
     BatchSpanClassification,
@@ -159,3 +161,25 @@ def test_categorize_raw_splits_in_taxonomy_from_out_of_taxonomy():
     in_tax, others = categorize_raw(raws)
     assert [s.function for s in in_tax] == ["Cap On Liability"]
     assert others == ["Late Delivery Remedies", "Product Returns", "Repurchase of Products"]
+
+
+# --- ADR-0048 Phase A: the `function` field advertises the closed label enum (guided decoding) ------------------
+
+
+def test_rawscore_function_advertises_the_closed_label_enum_in_the_schema():
+    from rag_wright.contracts.function import FUNCTION_LABELS
+    from rag_wright.spans.clause_function_classifier import BatchSpanClassification, RawScore
+
+    enum = RawScore.model_json_schema()["properties"]["function"]["enum"]
+    assert set(enum) == set(FUNCTION_LABELS) | {"OTHER"}  # 52 labels + OTHER, so the model cannot invent a name
+    # the enum reaches the NESTED batched schema too (what build_structured actually sends)
+    nested = BatchSpanClassification.model_json_schema()
+    assert "OTHER" in json_dumps(nested)
+
+
+def test_rawscore_still_accepts_a_stray_value_without_crashing():
+    # json_schema_extra is schema-only, NOT pydantic-enforced -> a stray (a model that ignores the enum under
+    # function-calling) parses instead of failing the whole sub-batch; categorize_raw handles it downstream.
+    from rag_wright.spans.clause_function_classifier import RawScore
+
+    assert RawScore(function="Exclusive Source of Supply", confidence="high").function == "Exclusive Source of Supply"
