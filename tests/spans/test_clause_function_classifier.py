@@ -72,3 +72,51 @@ def test_legalbert_adapter_off_taxonomy_none_is_empty():
             return ["NONE"]
 
     assert LegalBertClauseAdapter(_LB()).classify("clause") == []
+
+
+# --- batched classify_spans (option B): one LLM call per chunk, per-span aligned output, chunk as context ------
+
+from rag_wright.spans.clause_function_classifier import BatchSpanClassification, LlmBatchClauseClassifier  # noqa: E402
+
+
+def _batch(per_span):
+    return BatchSpanClassification(
+        spans=[ClauseFunctionClassification(functions=[RawScore(function=f, confidence=c) for f, c in s])
+               for s in per_span])
+
+
+def test_batch_classifier_aligns_scores_to_each_span_in_order():
+    out = _batch([
+        [("cap on liability", "high")],
+        [("Indemnification", "medium"), ("Governing Law", "low")],  # low dropped
+    ])
+    got = LlmBatchClauseClassifier(_FakeRunnable(out)).classify_spans("chunk context", ["span A", "span B"])
+    assert [[s.function for s in span] for span in got] == [["Cap On Liability"], ["Indemnification"]]
+
+
+def test_batch_classifier_pads_missing_and_truncates_extra_span_results():
+    # LLM returned only 1 classification for 3 spans -> spans 2,3 get [] (aligned to input length)
+    out = _batch([[("Cap On Liability", "high")]])
+    got = LlmBatchClauseClassifier(_FakeRunnable(out)).classify_spans("ctx", ["a", "b", "c"])
+    assert [len(span) for span in got] == [1, 0, 0]
+
+
+def test_batch_classifier_empty_spans_is_empty():
+    assert LlmBatchClauseClassifier(_FakeRunnable(_batch([]))).classify_spans("ctx", []) == []
+
+
+def test_batch_classifier_degrades_to_per_span_empty_on_failure():
+    class _Boom:
+        def invoke(self, _p):
+            raise RuntimeError("down")
+
+    assert LlmBatchClauseClassifier(_Boom()).classify_spans("ctx", ["a", "b"]) == [[], []]
+
+
+def test_legalbert_adapter_classify_spans_is_span_level_single_label():
+    class _LB:
+        def classify(self, texts, **_):
+            return ["cap on liability", "NONE", "Indemnification"]
+
+    got = LegalBertClauseAdapter(_LB()).classify_spans("ignored chunk ctx", ["a", "b", "c"])
+    assert [[s.function for s in span] for span in got] == [["Cap On Liability"], [], ["Indemnification"]]
