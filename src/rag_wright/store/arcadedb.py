@@ -171,9 +171,14 @@ def _clause_kg_statements(record: ClausePropertyRecord) -> list[str]:
     (confidence + span_id + chunk_id + source_doc_id; FR-S.4 / FR-Q.6). Value-node identity (`value_key`) is
     unchanged from the flat graph. Separated from the DB call so the mapping is unit-tested with no store."""
     cid = _sql_str(record.clause_id)
+    # ADR-0048: persist the multi-label classification as a JSON string (ranked primary-first); `function` above
+    # stays the PRIMARY for query readers. Empty list -> "[]".
+    functions_json = _sql_str(json.dumps(
+        [{"function": f.function, "confidence": f.confidence.value} for f in record.functions]))
     statements: list[str] = [
         f"UPDATE {CLAUSE_TYPE} SET clause_id = {cid}, function = {_sql_str(record.function)},"
-        f" folio_iri = {_sql_str(record.folio_iri)}, span_id = {_sql_str(record.span_id)}"
+        f" folio_iri = {_sql_str(record.folio_iri)}, span_id = {_sql_str(record.span_id)},"
+        f" functions = {functions_json}"
         f" UPSERT WHERE clause_id = {cid}",
     ]
     for a in record.assertions:
@@ -271,6 +276,8 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.function STRING")
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.folio_iri STRING")
             self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.span_id STRING")  # the operative span (1:1; ADR-0025)
+            # ADR-0048: multi-label classification, JSON-encoded [{function, confidence}] ranked primary-first.
+            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.functions STRING")
         if PROPVALUE_TYPE not in types:  # shared, deduped (dimension,value) node
             self._command(f"CREATE VERTEX TYPE {PROPVALUE_TYPE}")
             self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value_key STRING")

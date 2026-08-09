@@ -29,7 +29,7 @@ from enum import Enum
 
 from pydantic import BaseModel, field_validator, model_validator
 
-from rag_wright.contracts.function import FUNCTION_LABEL_SET, NO_FUNCTION
+from rag_wright.contracts.function import FUNCTION_LABEL_SET, NO_FUNCTION, FunctionScore
 from rag_wright.contracts.ontology import ClauseCategory
 from rag_wright.contracts.provenance import ConfidenceTag, GraphFact
 
@@ -201,6 +201,10 @@ class ClausePropertyRecord(BaseModel):
     # -- not lost, and never guessed by function label (which is one-to-many). "" only for legacy pre-backfill rows.
     span_id: str = ""
     assertions: list[PropertyAssertion] = []
+    # INGEST-LLM-CLASSIFIER (ADR-0048): the multi-label classification, ranked primary-first. `function` above is
+    # the PRIMARY (functions[0].function) -- the label query readers use; this additive list carries the
+    # secondaries + confidence for the deferred multi-label consumers. Empty on legacy / LegalBERT-single records.
+    functions: list[FunctionScore] = []
 
     @field_validator("function")
     @classmethod

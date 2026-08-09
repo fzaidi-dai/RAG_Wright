@@ -90,3 +90,18 @@ def test_folio_maps_cover_extensions_and_align_only_where_a_home_exists():
     assert "Revenue/Profit Sharing" not in FOLIO_CLAUSE_IRI
     # subject IRIs are all carve-out vocabulary members
     assert set(FOLIO_SUBJECT_IRI) <= CLOSED_VOCAB[PropertyDimension.CARVE_OUT]
+
+
+def test_clause_property_record_carries_multi_label_functions_additively():
+    # ADR-0048: `functions` (multi-label + confidence) is additive; defaults empty; `function` stays the primary.
+    from rag_wright.contracts.function import FunctionConfidence, FunctionScore
+    from rag_wright.contracts.property import ClausePropertyRecord
+
+    rec = ClausePropertyRecord(clause_id="c:0:h", function="Cap On Liability")
+    assert rec.functions == []  # legacy / single-label default
+    rec2 = ClausePropertyRecord(
+        clause_id="c:0:h", function="Cap On Liability",
+        functions=[FunctionScore(function="Cap On Liability", confidence=FunctionConfidence.HIGH),
+                   FunctionScore(function="Indemnification", confidence=FunctionConfidence.MEDIUM)])
+    round_trip = ClausePropertyRecord.model_validate_json(rec2.model_dump_json())
+    assert [f.function for f in round_trip.functions] == ["Cap On Liability", "Indemnification"]

@@ -199,3 +199,25 @@ def test_span_properties_joins_typed_edges_by_span_id():
     assert out["s2"] == set()  # its only row had value=None -> nothing recorded
     assert "sX" not in out  # rows for spans outside the requested batch are ignored
     assert store.span_properties([]) == {}  # empty in -> empty out, no query
+
+
+def test_clause_upsert_emits_functions_json(): 
+    # ADR-0048: the Clause UPSERT persists the multi-label classification as a JSON string (primary-first).
+    import json
+
+    from rag_wright.contracts.function import FunctionConfidence, FunctionScore
+
+    rec, _ = _record("s1", "Cap On Liability", [])
+    rec = rec.model_copy(update={"functions": [
+        FunctionScore(function="Cap On Liability", confidence=FunctionConfidence.HIGH),
+        FunctionScore(function="Indemnification", confidence=FunctionConfidence.MEDIUM)]})
+    clause_update = _clause_kg_statements(rec)[0]
+    assert "functions = " in clause_update
+    payload = json.dumps([{"function": "Cap On Liability", "confidence": "high"},
+                          {"function": "Indemnification", "confidence": "medium"}])
+    assert payload in clause_update  # exact JSON payload present in the SET clause
+
+
+def test_clause_upsert_empty_functions_is_empty_json_array():
+    rec, _ = _record("s2", "Governing Law", [])
+    assert '[]' in _clause_kg_statements(rec)[0]

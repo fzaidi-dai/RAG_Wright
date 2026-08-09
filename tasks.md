@@ -31,9 +31,19 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > the `ClauseFunctionClassifier` Protocol + `LlmClauseClassifier` (graph-building LLM via `build_structured`,
 > injected runnable; canonicalize + floor≥medium + cap≤3 post-processing, degrade-to-empty on failure) +
 > `LegalBertClauseAdapter` (back-compat, single-label→primary/high) + `production_llm_clause_classifier`. 13 new
-> tests; 306 contracts/spans green; ruff clean. **NEXT increment: inject `classify_fn` into
-> `production_document_ingest` (classify the CLAUSE, not spans) + the multi-function clause write; THEN the
-> upsert/reclassify pass (Phase A + delta report), THEN Phase B.**
+> tests; 306 contracts/spans green; ruff clean. **PROGRESS: increment 2 DONE (ingestion injection + multi-function
+> clause write).** Empirical finding: a CHUNK is a large multi-provision block (LIMEENERGYCO: 8 chunks, ~29
+> spans each, up to 9 functions/chunk), so function lives at the SPAN level → chose option B (batched per-chunk
+> classify_spans with chunk context). `_segment_and_classify` helper (batched, primary-per-span + carries
+> scores); `production_document_ingest` gained `classify_fn` (default = `production_batch_clause_classifier`,
+> graph-building LLM), segment_fn→batched, clauses_fn/index_fn→4-tuple, clause record gets the LIVE `functions`
+> (model_copy, not stale cache). Persistence (user-approved): `ClausePropertyRecord.functions:[FunctionScore]`
+> (additive) + `Clause.functions` JSON string in `_clause_kg_statements` + `CREATE PROPERTY Clause.functions`;
+> `function` stays PRIMARY so query readers untouched. New tests (helper batching, NONE sentinel, contract
+> round-trip, store JSON emit); 430 subgraphs/store/contracts/spans green; ruff clean.
+> **NEXT increment 3: the UPSERT/reclassify pass over the existing KG — Phase A (read clause text from KG →
+> batched LLM classify → UPSERT function+functions → mark primary-flips AMBIGUOUS → delta report), THEN Phase B
+> (re-extract the stale delta).**
 >
 > **QUERY-EXPLOIT-MULTILABEL (future enhancement, todo — after INGEST-LLM-CLASSIFIER).** Once clauses carry
 > multi-label functions + confidence (ADR-0048), the query legs can OPTIONALLY exploit them (none required —
