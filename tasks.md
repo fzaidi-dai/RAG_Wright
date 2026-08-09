@@ -3,7 +3,30 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-08):** **ADR-0045 (client-side XML-tag structured output) — QUERY SIDE DONE.**
+> **RESUME / NEXT UP (2026-08-09): ACORD UNIFIED INTO THE ONE PRODUCTION KG (ADR-0046) — done; NEXT = the
+> function-gate ON/OFF GRADED RECALL on the unified KG.** Context: PREC-1b (Leak-A ingestion function-mislabel)
+> led to a design question — do the query legs even need the precomputed LegalBERT clause `function`? Static
+> audit: only `typed_property_retrieval` (Leg B) HARD-depends on it (a `span_hybrid_search(function=f)` pool
+> pre-filter); relational/intra-doc/compliance don't. Empirical top-8 probe (7 typed queries, local KG +
+> Cerebras/Gemma-4 @conc≤2, `scripts/…legb_gate_ab` in scratchpad): function-gate OFF (whole-index BGE + property
+> rerank) reproduces ON at 7-8/8 — the gate only trims one tail semantic-neighbor, and DROPPING it shrinks a
+> mislabel's blast radius. To BANK this with graded recall we needed ACORD on the CURRENT KG — which exposed that
+> ACORD lived in a stale separate `ragwright_acord_pivot` (14/23 property edges), violating ADR-0033 (one KG).
+> **UNIFICATION DONE (ADR-0046, `scripts/acord_unify.py {map|ingest|qrels}`):** (1) MAP — 3,221/3,931 (82%) ACORD
+> clauses already verbatim in `ragwright_cuad_full` → existing clause; (2) INGEST — the 710 remainder through the
+> ENHANCED clause layer (segment→LegalBERT→granite 23-dim+ADR-0040 judge→typed edges+BGE spans), granite@conc8,
+> monitored; verified in-KG: Clause 42,314→45,404 (+3,090), Span 136,460→139,955 (+3,495), 710 distinct clauses;
+> (3) QRELS — ACORD qrels on the unified KG's canonical `parent_chunk_id`s, **relevant coverage 620/620 = 100%**
+> (`data/eval/acord_unify/acord_prod_qrels.json`). OKF is dropped: the ingest uses canonical ids only
+> (`source_doc_id=acord-{aid}`), `parent_okf_path` cleared on all 3,495 ACORD spans (matches CUAD). Pre-ingest
+> backup taken; ACORD nodes are `acord-`-prefixed (reversible). `ragwright_acord_pivot` backed up +
+> superseded/unreferenced — physical `drop database` pending (classifier-blocked; user runs it). **NEXT:** adapt
+> the graded-recall recipe (`eval/function_property_rerank.py` style: oracle-function pool vs whole-index pool →
+> property-boost + BGE-rerank → recall@50 vs ACORD bar 0.667) into a unified-KG ON/OFF harness (query LLM on
+> Cerebras/Gemma-4 @conc≤2), run it, and decide Option A (keep+fix the label) vs Option B (retire precomputed
+> function, derive at query time). Local Docker ArcadeDB UP.
+>
+> **(prior) RESUME / NEXT UP (2026-08-08):** **ADR-0045 (client-side XML-tag structured output) — QUERY SIDE DONE.**
 > All query-side structured-output callers now use `models/tag_structured.py::build_tag_structured` (free-text +
 > client-side tag-parse, a drop-in for `build_structured`), so structured output is LLM-agnostic and no longer
 > depends on server-side guided decoding (which runs away on self-hosted Gemma 4 / vLLM and costs ~60s/call on
