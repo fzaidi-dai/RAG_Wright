@@ -21,9 +21,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > uses the query function classifier (SOFT: `classify_query_functions → clauses_of_function` narrowing within one
 > contract, has a `contract_clause_index` fallback). **`relational_qa` and `compliance_check` do NOT use the query
 > function classifier at all** (grep-verified: zero refs) → NO task needed for those two.
->   - **OPTB-INTRA (todo):** remove the soft function-classifier narrowing from `intra_document_qa` production
->     wiring — serve ALL clauses in the contract (`contract_clause_index`) and let rerank/generation sort them
->     (a contract has ~10-80 clauses, so the narrowing is a convenience, not recall-critical). TDD-first.
+>   - **OPTB-INTRA (DONE):** removed the soft function-classifier narrowing from `intra_document_qa` — `serve`
+>     now always uses `contract_clause_index` (whole contract, ~10-80 clauses) + `attach_exception_links`; dropped
+>     `classify_query_functions` + the `function_model_id` param. Same mislabel-robustness as Leg B (generation
+>     sees every clause, so a mislabel can't filter the real clause out). MCP `production_qa_fn` keeps
+>     `function_model_id` as a back-compat alias for the generation-model default; phase_a caller updated. New spy
+>     test asserts whole-contract serve + no narrowing path; 109 subgraph/mcp tests green, ruff clean.
+>     **Classifier is now OFF the critical path of BOTH legs that used it (Leg B + intra-doc).**
 > PREC-1b (fix the labeler) is de-prioritized (its main harm was via the gate); PREC-1a generation honesty fixes
 > remain. Pivot DB `ragwright_acord_pivot` DROPPED. Benchmark scripts committed. Local Docker ArcadeDB UP (only
 > `ragwright_cuad_full` + `ragwright_compliance` remain).

@@ -262,5 +262,41 @@ def test_production_defaults_answer_model_via_answer_model_for(monkeypatch):
     monkeypatch.setattr(idq, "_answer_model_for_impl", _fake_answer_model_for, raising=False)
     # build with no answer_model -> must call answer_model_for (via the module hook) with the given id
     idq.production_intra_document_qa(
-        store=object(), function_model_id="m", answer_model_id="google/gemma-4-31B-it-qat-w4a16-ct")
+        store=object(), answer_model_id="google/gemma-4-31B-it-qat-w4a16-ct")
     assert seen["model_id"] == "google/gemma-4-31B-it-qat-w4a16-ct"
+
+
+def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
+    """ADR-0047: production `serve` uses `contract_clause_index` (the WHOLE contract) and never the
+    `clauses_of_function` narrowing / the query function classifier -- a mislabel can't hide the real clause."""
+    from rag_wright.capabilities import answer_generator as ag
+    from rag_wright.capabilities import contract_kg_serve as cks
+    from rag_wright.capabilities.answer_generator import GeneratedAnswer
+    from rag_wright.subgraphs import intra_document_qa as idq
+
+    calls = {"whole": 0, "by_function": 0}
+
+    def _whole(store, contract_id):
+        calls["whole"] += 1
+        return []  # no clauses -> empty evidence -> the stub generator abstains
+
+    def _by_function(*a, **k):
+        calls["by_function"] += 1
+        return []
+
+    monkeypatch.setattr(cks, "contract_clause_index", _whole)
+    monkeypatch.setattr(cks, "clauses_of_function", _by_function, raising=False)
+    monkeypatch.setattr(ag, "generate_answer",
+                        lambda q, ev, model=None: GeneratedAnswer(answer="", citations=[], abstained=True))
+
+    class _Store:
+        def exceptions_of_clause(self, cid):
+            return []
+
+        def spans_by_contract(self, cid, fns):
+            return []
+
+    leg = idq.production_intra_document_qa(store=_Store(), answer_model=object())
+    leg.invoke({"contract_id": "c1", "question": "how is liability capped?"})
+    assert calls["whole"] == 1        # the whole-contract index WAS used
+    assert calls["by_function"] == 0  # the function-narrowing path was NOT

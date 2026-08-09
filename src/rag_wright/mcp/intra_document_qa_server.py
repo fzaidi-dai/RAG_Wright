@@ -80,8 +80,9 @@ def build_intra_document_qa_mcp(qa_fn: QAFn, *, name: str = "rag-wright-intra-do
 
 def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: str | None = None) -> QAFn:
     """Wire the real `intra_document_qa` over the env-selected store + models: ArcadeDB contract KG (`ARCADEDB_*`,
-    `QA_DB`), the GENERAL model for both the function classifier and generation (via the seam; `RAG_SERVING`).
-    Heavy imports are lazy so `RAG_MCP_DEMO` never pays for them."""
+    `QA_DB`), the GENERAL model for generation (via the seam; `RAG_SERVING`). ADR-0047: there is no function
+    classifier anymore -- the leg serves the whole contract; `function_model_id` is kept as a back-compat alias
+    for the generation-model default. Heavy imports are lazy so `RAG_MCP_DEMO` never pays for them."""
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -90,9 +91,8 @@ def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: s
     from rag_wright.subgraphs.intra_document_qa import production_intra_document_qa
 
     store = ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
-    fmid = function_model_id or model_for(ModelRole.GENERAL)
-    leg = production_intra_document_qa(
-        store=store, function_model_id=fmid, answer_model_id=answer_model_id or fmid)
+    default_model = answer_model_id or function_model_id or model_for(ModelRole.GENERAL)
+    leg = production_intra_document_qa(store=store, answer_model_id=default_model)
 
     def _qa(contract_id: str, question: str) -> GeneratedAnswer:
         out = leg.invoke({"contract_id": contract_id, "question": question})

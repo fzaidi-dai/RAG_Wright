@@ -35,7 +35,7 @@ def validate_leg_a() -> None:
     llm_id = model_for(ModelRole.GENERAL)  # the configured GENERAL model (self-hosted Gemma, OpenRouter, ...)
     # answer model is defaulted via answer_model_for -> the RIGHT path per profile (free-text tag-parse for a
     # self-hosted Gemma, the structured-output seam otherwise). No hardcoded SeamAnswerModel.
-    leg_a = production_intra_document_qa(store=store, function_model_id=llm_id, answer_model_id=llm_id)
+    leg_a = production_intra_document_qa(store=store, answer_model_id=llm_id)  # ADR-0047: no classifier
 
     # pick a real contract that has a well-known clause function (the Modal KG is 506, so never the 4 recovered)
     row = store._query("SELECT clause_id FROM Clause WHERE function = 'Cap On Liability' LIMIT 1")

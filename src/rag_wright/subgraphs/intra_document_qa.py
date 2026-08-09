@@ -217,13 +217,17 @@ def _answer_model_for_impl(model_id: str | None = None, **kwargs: Any) -> Any:
 
 
 def production_intra_document_qa(
-    *, store: Any, function_model_id: str, answer_model: Any = None, answer_model_id: str | None = None
+    *, store: Any, answer_model: Any = None, answer_model_id: str | None = None
 ):
     """Wire the real scoped query + span-text rehydration + `generate_answer` into the composite. The scoped
-    query classifies the question to its clause function(s) (`query_function_classification`) and serves those
-    clauses (`clauses_of_function`), falling back to the whole per-contract index when no function is inferred.
+    query serves the WHOLE per-contract clause KG (`contract_clause_index`) and lets generation select + cite.
     Rehydration maps each clause's `span_id` provenance to its operative-span text (`spans_by_contract`,
     contract-scoped and light -- no dense vectors).
+
+    ADR-0047: the function-classifier narrowing (`clauses_of_function`) was REMOVED here too -- a contract holds
+    only ~10-80 clauses, so narrowing was a convenience, and (like Leg B) a clause mislabel could hide the real
+    clause from the generator by filtering it out of the served set. Serving the whole contract makes generation
+    robust to a mislabel: it sees every clause and picks the right one.
 
     The answer model defaults to `answer_model_for(answer_model_id)` (GENERAL role when None), so the configured
     generation model automatically takes the RIGHT path -- the client-side free-text tag-parse for a
@@ -234,21 +238,10 @@ def production_intra_document_qa(
 
     if answer_model is None:
         answer_model = _answer_model_for_impl(answer_model_id)
-    from rag_wright.capabilities.contract_kg_serve import clauses_of_function, contract_clause_index
-    from rag_wright.capabilities.query_function_classifier import classify_query_functions
+    from rag_wright.capabilities.contract_kg_serve import contract_clause_index
 
-    def serve(contract_id: str, question: str) -> list[CitedClause]:
-        functions = classify_query_functions(question, function_model_id)
-        if not functions:  # no routable function -> serve the whole per-contract KG (the generator scopes)
-            base = contract_clause_index(store, contract_id)
-        else:
-            base = []
-            seen: set[str] = set()
-            for function in functions:
-                for clause in clauses_of_function(store, contract_id, function):
-                    if clause.clause_id not in seen:
-                        seen.add(clause.clause_id)
-                        base.append(clause)
+    def serve(contract_id: str, question: str) -> list[CitedClause]:  # noqa: ARG001 - ADR-0047: no query narrowing
+        base = contract_clause_index(store, contract_id)  # the WHOLE per-contract clause KG (generation scopes)
         # ADR-0044: pull each served cap clause's INFERRED carve-outs (IsExceptionTo) into the evidence, so a
         # "how is liability capped, and under what conditions?" query sees "capped, except uncapped for ...".
         return attach_exception_links(base, store.exceptions_of_clause, contract_id=contract_id)
