@@ -3,8 +3,23 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-09): ACORD UNIFIED INTO THE ONE PRODUCTION KG (ADR-0046) — done; NEXT = the
-> function-gate ON/OFF GRADED RECALL on the unified KG.** Context: PREC-1b (Leak-A ingestion function-mislabel)
+> **RESUME / NEXT UP (2026-08-09 latest): OPTION B DECIDED (ADR-0047) — retire the precomputed clause-function
+> pre-filter; NEXT = implement the Leg B whole-index change.** The function-gate ON/OFF graded-recall benchmark
+> on the unified KG is DONE (`scripts/legb_function_gate_recall.py {raw|rerank}`, `docs/eval/function_gate_recall.md`):
+> 57 ACORD attorney-graded queries, ON (oracle-function) vs OFF (whole-index). **Result: ON ≈ OFF within ±0.02 at
+> every K in both raw and reranked modes (OFF marginally AHEAD), single-function CEILING 0.969.** The gate does not
+> buy recall, caps recall at 0.969, and is the mechanism by which a clause mislabel corrupts retrieval — so
+> dropping it shrinks the mislabel blast radius (the PREC-1b robustness fix WITHOUT a corpus relabel). **DECISION
+> (user): go Option B (ADR-0047).** IMPLEMENTATION (next task, needs scoping/approval): default
+> `property_boosted_retrieval` / `typed_property_retrieval` (Leg B) to a WHOLE-INDEX pool (functions→empty), keep
+> the property boost + rerank; the query function classifier leaves Leg B's critical path. The clause `function`
+> LABEL stays in the KG (cheap; intra-doc scoped serve + returned tag) but is no longer a corpus retrieval gate;
+> whether to stop computing it at ingestion is a separate later call. PREC-1b (fix the labeler) is de-prioritized
+> (its main harm was via the gate); PREC-1a generation honesty fixes remain. Pivot DB `ragwright_acord_pivot`
+> DROPPED (retired). Benchmark scripts promoted + committed. Local Docker ArcadeDB UP (only `ragwright_cuad_full`
+> + `ragwright_compliance` remain).
+>
+> **(prior 2026-08-09): ACORD UNIFIED INTO THE ONE PRODUCTION KG (ADR-0046) — done.** Context: PREC-1b (Leak-A ingestion function-mislabel)
 > led to a design question — do the query legs even need the precomputed LegalBERT clause `function`? Static
 > audit: only `typed_property_retrieval` (Leg B) HARD-depends on it (a `span_hybrid_search(function=f)` pool
 > pre-filter); relational/intra-doc/compliance don't. Empirical top-8 probe (7 typed queries, local KG +
