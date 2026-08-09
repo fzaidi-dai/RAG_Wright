@@ -21,13 +21,25 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > uses the query function classifier (SOFT: `classify_query_functions → clauses_of_function` narrowing within one
 > contract, has a `contract_clause_index` fallback). **`relational_qa` and `compliance_check` do NOT use the query
 > function classifier at all** (grep-verified: zero refs) → NO task needed for those two.
->   - **OPTB-INTRA (DONE):** removed the soft function-classifier narrowing from `intra_document_qa` — `serve`
->     now always uses `contract_clause_index` (whole contract, ~10-80 clauses) + `attach_exception_links`; dropped
->     `classify_query_functions` + the `function_model_id` param. Same mislabel-robustness as Leg B (generation
->     sees every clause, so a mislabel can't filter the real clause out). MCP `production_qa_fn` keeps
->     `function_model_id` as a back-compat alias for the generation-model default; phase_a caller updated. New spy
->     test asserts whole-contract serve + no narrowing path; 109 subgraph/mcp tests green, ruff clean.
->     **Classifier is now OFF the critical path of BOTH legs that used it (Leg B + intra-doc).**
+>   - **OPTB-INTRA (DONE + REWORKED + real-infra-validated):** replaced the function-classifier narrowing in
+>     `intra_document_qa` with a **BGE semantic top-K within the contract**. v1 "serve the whole contract" was
+>     caught by the required re-test as a REGRESSION (LIMEENERGYCO = 101 clauses / 235 spans / ~13k tokens →
+>     generation hung 6+ min). Rework: `serve` = `contract_clause_index` + `attach_exception_links` → BGE
+>     cross-encoder rank vs the question → **top_k=12** (+ keep a kept cap clause's ADR-0044 carve-outs). Bounded
+>     AND mislabel-robust (ranks by MEANING, not the LegalBERT label). `production_intra_document_qa` gained
+>     `reranker` (defaults BGEReranker) + `top_k`; dropped `classify_query_functions` + `function_model_id`. MCP
+>     `production_qa_fn` keeps `function_model_id` as a back-compat gen-model alias; phase_a caller updated. Tests:
+>     whole-contract-not-narrowed spy + top-K rerank test; 110 subgraph/mcp green, ruff clean. **Real-infra
+>     validated:** direct run 10.2s (was 6+ min) + MCP smoke both return `answer_kind=partial` + 3 citations on the
+>     mislabeled LIMEENERGYCO cap (correctly hedges — BGE surfaced the real liability clauses, generation honest).
+>     **Classifier now OFF the critical path of BOTH legs that used it (Leg B + intra-doc).**
+> **INFRA NOTE:** the ArcadeDB container OOM-crashed (Exit 137) during the recall benchmark's whole-index k=400
+> vector searches over 139,955 vectors ([[arcadedb-container-heap]]); restarted, both DBs intact. Watch heap on
+> heavy whole-index vector sweeps.
+> **QUERY-PIPELINE RE-TEST (user-required before dropping the LegalBERT ingestion pass):** ✅ Deep-agent MCP demo
+> (all 3 query legs called + cited); ✅ intra_document_qa production MCP smoke (partial + cited). REMAINING:
+> Leg B (`phase_a_leg_validate B`) + relational (`phase_a_leg_validate Crel`) real-infra runs — THEN the ingestion
+> LegalBERT-drop decision.
 > PREC-1b (fix the labeler) is de-prioritized (its main harm was via the gate); PREC-1a generation honesty fixes
 > remain. Pivot DB `ragwright_acord_pivot` DROPPED. Benchmark scripts committed. Local Docker ArcadeDB UP (only
 > `ragwright_cuad_full` + `ragwright_compliance` remain).

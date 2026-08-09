@@ -300,3 +300,44 @@ def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
     leg.invoke({"contract_id": "c1", "question": "how is liability capped?"})
     assert calls["whole"] == 1        # the whole-contract index WAS used
     assert calls["by_function"] == 0  # the function-narrowing path was NOT
+
+
+def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
+    """ADR-0047 rework: with more than top_k clauses, `serve` BGE-reranks the contract's clauses to the question
+    and serves only the top-K (bounded evidence) -- mislabel-robust (ranks by meaning) AND avoids dumping the
+    whole 100-clause contract into generation."""
+    from rag_wright.capabilities import answer_generator as ag
+    from rag_wright.capabilities import contract_kg_serve as cks
+    from rag_wright.capabilities.answer_generator import GeneratedAnswer
+    from rag_wright.subgraphs import intra_document_qa as idq
+
+    n, k = 20, 5
+    clauses = [CitedClause(contract_id="c1", clause_id=f"c1:{i}:h", function="F",
+                           span_id=f"c1:{i}:h#0", properties=[]) for i in range(n)]
+    monkeypatch.setattr(cks, "contract_clause_index", lambda store, cid: list(clauses))
+    monkeypatch.setattr(idq, "rehydrate_clause_texts",
+                        lambda store, cid, cl: {c.clause_id: f"text-{c.clause_id}" for c in cl})
+
+    class _RR:  # score ascending with index -> clause 19 highest; top-5 = indices 19,18,17,16,15
+        def score(self, q, passages):
+            return list(range(len(passages)))
+
+    captured = {}
+
+    def _gen(q, ev, model=None):
+        captured["ids"] = [e.chunk_id for e in ev]  # EvidenceItem.chunk_id == the clause_id
+        return GeneratedAnswer(answer="", citations=[], abstained=True)
+
+    monkeypatch.setattr(ag, "generate_answer", _gen)
+
+    class _Store:
+        def exceptions_of_clause(self, cid):
+            return []
+
+        def spans_by_contract(self, cid, fns):
+            return []
+
+    leg = idq.production_intra_document_qa(store=_Store(), reranker=_RR(), answer_model=object(), top_k=k)
+    leg.invoke({"contract_id": "c1", "question": "how is liability capped?"})
+    assert len(captured["ids"]) == k  # generation saw only the top-K, not all 20
+    assert set(captured["ids"]) == {f"c1:{i}:h" for i in range(15, 20)}  # the 5 highest-scored

@@ -217,17 +217,18 @@ def _answer_model_for_impl(model_id: str | None = None, **kwargs: Any) -> Any:
 
 
 def production_intra_document_qa(
-    *, store: Any, answer_model: Any = None, answer_model_id: str | None = None
+    *, store: Any, reranker: Any = None, answer_model: Any = None, answer_model_id: str | None = None,
+    top_k: int = 12,
 ):
-    """Wire the real scoped query + span-text rehydration + `generate_answer` into the composite. The scoped
-    query serves the WHOLE per-contract clause KG (`contract_clause_index`) and lets generation select + cite.
-    Rehydration maps each clause's `span_id` provenance to its operative-span text (`spans_by_contract`,
-    contract-scoped and light -- no dense vectors).
+    """Wire the real scoped query + span-text rehydration + `generate_answer` into the composite. `serve` takes
+    the WHOLE per-contract clause KG (`contract_clause_index`) and ranks it by BGE cross-encoder relevance to the
+    question, serving only the top-`k` (bounded evidence). Rehydration maps each clause's `span_id` provenance to
+    its operative-span text (`spans_by_contract`, contract-scoped and light -- no dense vectors).
 
-    ADR-0047: the function-classifier narrowing (`clauses_of_function`) was REMOVED here too -- a contract holds
-    only ~10-80 clauses, so narrowing was a convenience, and (like Leg B) a clause mislabel could hide the real
-    clause from the generator by filtering it out of the served set. Serving the whole contract makes generation
-    robust to a mislabel: it sees every clause and picks the right one.
+    ADR-0047: the function-classifier narrowing (`clauses_of_function`) was REPLACED by this SEMANTIC narrowing --
+    a clause mislabel can no longer hide the real clause (BGE ranks by MEANING, not the LegalBERT label), while
+    the top-`k` cap keeps generation bounded (a contract can hold 100+ clauses ~= 13k tokens, too much to dump
+    whole). The `reranker` defaults to `BGEReranker` (injectable for tests / the A100 path).
 
     The answer model defaults to `answer_model_for(answer_model_id)` (GENERAL role when None), so the configured
     generation model automatically takes the RIGHT path -- the client-side free-text tag-parse for a
@@ -238,13 +239,29 @@ def production_intra_document_qa(
 
     if answer_model is None:
         answer_model = _answer_model_for_impl(answer_model_id)
+    if reranker is None:
+        from rag_wright.capabilities.reranking import BGEReranker
+        reranker = BGEReranker()
     from rag_wright.capabilities.contract_kg_serve import contract_clause_index
 
-    def serve(contract_id: str, question: str) -> list[CitedClause]:  # noqa: ARG001 - ADR-0047: no query narrowing
-        base = contract_clause_index(store, contract_id)  # the WHOLE per-contract clause KG (generation scopes)
-        # ADR-0044: pull each served cap clause's INFERRED carve-outs (IsExceptionTo) into the evidence, so a
-        # "how is liability capped, and under what conditions?" query sees "capped, except uncapped for ...".
-        return attach_exception_links(base, store.exceptions_of_clause, contract_id=contract_id)
+    def serve(contract_id: str, question: str) -> list[CitedClause]:
+        # ADR-0044: pull each cap clause's INFERRED carve-outs (IsExceptionTo) so "how is liability capped, and
+        # under what conditions?" sees "capped, except uncapped for ...".
+        base = attach_exception_links(contract_clause_index(store, contract_id), store.exceptions_of_clause,
+                                      contract_id=contract_id)
+        if len(base) <= top_k:
+            return base  # small contract -> no narrowing needed
+        # SEMANTIC top-K (ADR-0047): BGE-rerank the contract's clauses by relevance to the question.
+        texts = rehydrate_clause_texts(store, contract_id, base)
+        scores = reranker.score(question, [texts.get(c.clause_id, "") for c in base])
+        ranked = [c for c, _ in sorted(zip(base, scores), key=lambda cs: -cs[1])]
+        top = ranked[:top_k]
+        kept = {c.clause_id for c in top}
+        for c in base:  # ADR-0044: keep a kept cap clause's carve-outs even if they scored outside top-K
+            if c.exception_of and c.exception_of in kept and c.clause_id not in kept:
+                top.append(c)
+                kept.add(c.clause_id)
+        return top
 
     def clause_text(contract_id: str, clauses: list[CitedClause]) -> dict[str, str]:
         return rehydrate_clause_texts(store, contract_id, clauses)
