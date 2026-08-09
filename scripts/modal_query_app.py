@@ -52,8 +52,7 @@ def query():
     from fastapi.concurrency import run_in_threadpool
 
     from rag_wright.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.capabilities.remote_encoders import query_classifier, query_embedder
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
@@ -80,16 +79,14 @@ def query():
                     "detail": "the A100 was cold; this request triggered it (~4 min). Retry shortly.",
                     "retry_after_s": 60}
         store = _store()
-        leg_b = production_typed_property_retrieval(
-            store=store, embedder=query_embedder(), classifier=query_classifier(),
-            extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"),
-            function_model_id=model_for(ModelRole.GENERAL), k=k)
+        leg_b = production_typed_property_retrieval(  # ADR-0047: no classifier -- whole-index pool
+            store=store, embedder=query_embedder(),
+            extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"), k=k)
         state = leg_b.invoke({"query": question})
         r = state["retrieval"]
         return {
             "question": question,
             "constraints": sorted(state.get("constraints", set())),
-            "functions": state.get("functions", []),
             "results": [
                 {"rank": s.rank, "span_id": s.span_id, "function": s.function,
                  "matched": s.matched, "text": s.text[:400]}

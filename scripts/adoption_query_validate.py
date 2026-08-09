@@ -22,7 +22,7 @@ def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.contract_kg_serve import clauses_of_function
     from rag_wright.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.capabilities.remote_encoders import query_classifier, query_embedder
+    from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.models.seam import build_model
     from rag_wright.store.arcadedb import ArcadeDBStore
@@ -30,16 +30,14 @@ def main() -> None:
 
     store = ArcadeDBStore.from_env()  # -> ragwright_cuad_full (the adopted default)
     embedder = query_embedder()       # -> A100 /embed  (STACK_URL set)
-    classifier = query_classifier()   # -> A100 /classify
     llm_model = model_for(ModelRole.GENERAL)  # -> granite via the seam (RAG_SERVING=vllm)
 
     _line("=" * 90)
     _line("LEG B -- PROPERTY-BOOSTED typed retrieval via the REGISTERED `typed_property_retrieval` SUBGRAPH "
-          "(granite constraints + granite/LegalBERT routing -> property_boosted_retrieval; local KG, A100 models)")
+          "(granite constraints -> property_boosted_retrieval over the WHOLE-INDEX pool, ADR-0047; local KG, A100)")
     extract_model = default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b")  # A100 vLLM
-    leg_b = production_typed_property_retrieval(  # the hardened LangGraph subgraph, wired for production
-        store=store, embedder=embedder, classifier=classifier,
-        extract_model=extract_model, function_model_id=llm_model, k=5)
+    leg_b = production_typed_property_retrieval(  # ADR-0047: no classifier -- whole-index pool
+        store=store, embedder=embedder, extract_model=extract_model, k=5)
     for q in ["anti-assignment clauses that allow a party to freely assign without consent",
               "cap on liability set at a multiple of the fees paid"]:
         state = leg_b.invoke({"query": q})  # constraints + functions (parallel) -> retrieve -> assemble

@@ -85,16 +85,14 @@ def validate_leg_b() -> None:
     """Leg B: typed_property_retrieval -- THE corpus-wide function+property retrieval leg (BGE+property pool via
     property_boosted_retrieval). Standardized on this after retiring the redundant cross_corpus_retrieval."""
     from rag_wright.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.capabilities.remote_encoders import query_classifier, query_embedder
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
     store = ArcadeDBStore.from_env(database="ragwright_cuad_full")
-    leg = production_typed_property_retrieval(
-        store=store, embedder=query_embedder(), classifier=query_classifier(),
-        extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"),
-        function_model_id=model_for(ModelRole.GENERAL), k=8)
+    leg = production_typed_property_retrieval(  # ADR-0047: no classifier -- whole-index pool
+        store=store, embedder=query_embedder(),
+        extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"), k=8)
     q = "cap on liability set at a multiple of the fees paid"
     _line("=" * 90)
     _line(f"LEG B -- typed_property_retrieval SUBGRAPH | Q={q!r}")

@@ -10,14 +10,23 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > every K in both raw and reranked modes (OFF marginally AHEAD), single-function CEILING 0.969.** The gate does not
 > buy recall, caps recall at 0.969, and is the mechanism by which a clause mislabel corrupts retrieval — so
 > dropping it shrinks the mislabel blast radius (the PREC-1b robustness fix WITHOUT a corpus relabel). **DECISION
-> (user): go Option B (ADR-0047).** IMPLEMENTATION (next task, needs scoping/approval): default
-> `property_boosted_retrieval` / `typed_property_retrieval` (Leg B) to a WHOLE-INDEX pool (functions→empty), keep
-> the property boost + rerank; the query function classifier leaves Leg B's critical path. The clause `function`
-> LABEL stays in the KG (cheap; intra-doc scoped serve + returned tag) but is no longer a corpus retrieval gate;
-> whether to stop computing it at ingestion is a separate later call. PREC-1b (fix the labeler) is de-prioritized
-> (its main harm was via the gate); PREC-1a generation honesty fixes remain. Pivot DB `ragwright_acord_pivot`
-> DROPPED (retired). Benchmark scripts promoted + committed. Local Docker ArcadeDB UP (only `ragwright_cuad_full`
-> + `ragwright_compliance` remain).
+> (user): go Option B (ADR-0047).** **LEG B CHANGE DONE:** `typed_property_retrieval` subgraph now
+> `START→extract_constraints→retrieve→assemble` — the `classify_functions` node is REMOVED; `retrieve_fn` is
+> `(query, constraints)` and `production_typed_property_retrieval` passes `functions=()` so
+> `property_boosted_retrieval` runs the WHOLE-INDEX pool + property boost. `build_/production_` signatures dropped
+> `functions_fn`/`classifier`/`function_model_id`; MCP server + phase_a/adoption/modal_query callers updated; test
+> rewritten (no functions node); 535 subgraph/mcp/capabilities tests green, ruff clean. The clause `function`
+> LABEL stays in the KG (cheap; intra-doc scoped serve + returned tag).
+> **FOLLOW-UP TASKS (classifier removal from the OTHER legs) — audited precisely:** ONLY `intra_document_qa` also
+> uses the query function classifier (SOFT: `classify_query_functions → clauses_of_function` narrowing within one
+> contract, has a `contract_clause_index` fallback). **`relational_qa` and `compliance_check` do NOT use the query
+> function classifier at all** (grep-verified: zero refs) → NO task needed for those two.
+>   - **OPTB-INTRA (todo):** remove the soft function-classifier narrowing from `intra_document_qa` production
+>     wiring — serve ALL clauses in the contract (`contract_clause_index`) and let rerank/generation sort them
+>     (a contract has ~10-80 clauses, so the narrowing is a convenience, not recall-critical). TDD-first.
+> PREC-1b (fix the labeler) is de-prioritized (its main harm was via the gate); PREC-1a generation honesty fixes
+> remain. Pivot DB `ragwright_acord_pivot` DROPPED. Benchmark scripts committed. Local Docker ArcadeDB UP (only
+> `ragwright_cuad_full` + `ragwright_compliance` remain).
 >
 > **(prior 2026-08-09): ACORD UNIFIED INTO THE ONE PRODUCTION KG (ADR-0046) — done.** Context: PREC-1b (Leak-A ingestion function-mislabel)
 > led to a design question — do the query legs even need the precomputed LegalBERT clause `function`? Static
