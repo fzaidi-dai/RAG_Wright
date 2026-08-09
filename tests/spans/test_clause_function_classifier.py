@@ -1,15 +1,18 @@
 """INGEST-LLM-CLASSIFIER (ADR-0048): the clause-level function classifier seam. Hermetic -- the LLM structured
-runnable is injected, no real model. Covers: canonicalize + confidence-floor + cap post-processing, the LegalBERT
-back-compat adapter, and graceful degrade-to-empty on a runnable failure."""
+runnable is injected, no real model. Covers post-processing (canonicalize/floor/cap), the LegalBERT back-compat
+adapter, graceful degrade, and the batched `classify_spans` (option B) with INDEX-based alignment + sub-batching."""
 
 from __future__ import annotations
 
 from rag_wright.contracts.function import FunctionConfidence
 from rag_wright.spans.clause_function_classifier import (
+    BatchSpanClassification,
     ClauseFunctionClassification,
     LegalBertClauseAdapter,
+    LlmBatchClauseClassifier,
     LlmClauseClassifier,
     RawScore,
+    SpanFunctions,
 )
 
 
@@ -25,11 +28,14 @@ def _cls(scores):
     return ClauseFunctionClassification(functions=[RawScore(function=f, confidence=c) for f, c in scores])
 
 
+# --- single-clause classify -----------------------------------------------------------------------------------
+
+
 def test_llm_classifier_keeps_ranked_canonicalized_scores_above_floor():
     out = _cls([("cap on liability", "high"), ("Indemnification", "medium")])
     scores = LlmClauseClassifier(_FakeRunnable(out)).classify("some clause")
     assert [(s.function, s.confidence) for s in scores] == [
-        ("Cap On Liability", FunctionConfidence.HIGH),   # canonicalized casing, order preserved (primary first)
+        ("Cap On Liability", FunctionConfidence.HIGH),
         ("Indemnification", FunctionConfidence.MEDIUM),
     ]
 
@@ -58,7 +64,7 @@ def test_llm_classifier_degrades_to_empty_on_runnable_failure():
 def test_legalbert_adapter_wraps_single_label_as_primary_high():
     class _LB:
         def classify(self, texts, **_):
-            return ["cap on liability"]  # span-level single label, CUAD casing
+            return ["cap on liability"]
 
     scores = LegalBertClauseAdapter(_LB()).classify("clause text")
     assert len(scores) == 1
@@ -74,35 +80,53 @@ def test_legalbert_adapter_off_taxonomy_none_is_empty():
     assert LegalBertClauseAdapter(_LB()).classify("clause") == []
 
 
-# --- batched classify_spans (option B): one LLM call per chunk, per-span aligned output, chunk as context ------
-
-from rag_wright.spans.clause_function_classifier import BatchSpanClassification, LlmBatchClauseClassifier  # noqa: E402
+# --- batched classify_spans (option B): sub-batched, INDEX-aligned (not positional), chunk as context ----------
 
 
-def _batch(per_span):
-    return BatchSpanClassification(
-        spans=[ClauseFunctionClassification(functions=[RawScore(function=f, confidence=c) for f, c in s])
-               for s in per_span])
+def _sf(idx, scores):
+    return SpanFunctions(span_index=idx, functions=[RawScore(function=f, confidence=c) for f, c in scores])
 
 
-def test_batch_classifier_aligns_scores_to_each_span_in_order():
-    out = _batch([
-        [("cap on liability", "high")],
-        [("Indemnification", "medium"), ("Governing Law", "low")],  # low dropped
+def test_batch_classifier_aligns_by_returned_index_even_out_of_order():
+    # LLM returns span 1 BEFORE span 0 -> must align by span_index, not by position
+    out = BatchSpanClassification(spans=[
+        _sf(1, [("Indemnification", "medium"), ("Governing Law", "low")]),  # low dropped
+        _sf(0, [("cap on liability", "high")]),
     ])
-    got = LlmBatchClauseClassifier(_FakeRunnable(out)).classify_spans("chunk context", ["span A", "span B"])
+    got = LlmBatchClauseClassifier(_FakeRunnable(out)).classify_spans("ctx", ["span A", "span B"])
     assert [[s.function for s in span] for span in got] == [["Cap On Liability"], ["Indemnification"]]
 
 
-def test_batch_classifier_pads_missing_and_truncates_extra_span_results():
-    # LLM returned only 1 classification for 3 spans -> spans 2,3 get [] (aligned to input length)
-    out = _batch([[("Cap On Liability", "high")]])
+def test_batch_classifier_omitted_span_is_empty():
+    out = BatchSpanClassification(spans=[_sf(0, [("Cap On Liability", "high")])])  # spans 1,2 omitted -> []
     got = LlmBatchClauseClassifier(_FakeRunnable(out)).classify_spans("ctx", ["a", "b", "c"])
     assert [len(span) for span in got] == [1, 0, 0]
 
 
-def test_batch_classifier_empty_spans_is_empty():
-    assert LlmBatchClauseClassifier(_FakeRunnable(_batch([]))).classify_spans("ctx", []) == []
+def test_batch_classifier_out_of_range_index_dropped():
+    out = BatchSpanClassification(spans=[_sf(0, [("Cap On Liability", "high")]), _sf(9, [("Insurance", "high")])])
+    got = LlmBatchClauseClassifier(_FakeRunnable(out)).classify_spans("ctx", ["a", "b"])  # 9 is out of range
+    assert [len(span) for span in got] == [1, 0]
+
+
+def test_batch_classifier_splits_big_chunk_into_sub_batches_with_offset_alignment():
+    from rag_wright.spans import clause_function_classifier as m
+
+    assert m._BATCH_CAP == 10
+    calls = []
+
+    class _Multi:
+        def invoke(self, prompt):  # noqa: ARG002
+            calls.append(1)
+            if len(calls) == 1:  # first sub-batch [0..9]: local index 3 -> global 3
+                return BatchSpanClassification(spans=[_sf(3, [("Cap On Liability", "high")])])
+            return BatchSpanClassification(spans=[_sf(1, [("Insurance", "high")])])  # second [10..11]: local 1 -> global 11
+
+    got = LlmBatchClauseClassifier(_Multi()).classify_spans("ctx", [f"s{i}" for i in range(12)])
+    assert len(calls) == 2                                       # 12 spans, cap 10 -> 2 sub-batch calls
+    assert [i for i, span in enumerate(got) if span] == [3, 11]  # offset alignment is correct
+    assert got[3][0].function == "Cap On Liability"
+    assert got[11][0].function == "Insurance"
 
 
 def test_batch_classifier_degrades_to_per_span_empty_on_failure():
@@ -120,3 +144,17 @@ def test_legalbert_adapter_classify_spans_is_span_level_single_label():
 
     got = LegalBertClauseAdapter(_LB()).classify_spans("ignored chunk ctx", ["a", "b", "c"])
     assert [[s.function for s in span] for span in got] == [["Cap On Liability"], [], ["Indemnification"]]
+
+
+def test_categorize_raw_splits_in_taxonomy_from_out_of_taxonomy():
+    from rag_wright.spans.clause_function_classifier import categorize_raw
+
+    raws = [
+        RawScore(function="Cap On Liability", confidence="high"),
+        RawScore(function="OTHER", confidence="high", other_label="Late Delivery Remedies"),
+        RawScore(function="Product Returns", confidence="high"),  # invented off-taxonomy (no other_label)
+        RawScore(function="Indemnification", confidence="low"),   # in-taxonomy but below floor -> not kept
+    ]
+    in_tax, others = categorize_raw(raws)
+    assert [s.function for s in in_tax] == ["Cap On Liability"]
+    assert others == ["Late Delivery Remedies", "Product Returns"]

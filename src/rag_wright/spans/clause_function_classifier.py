@@ -31,10 +31,13 @@ class ClauseFunctionClassifier(Protocol):
 
 
 class RawScore(BaseModel):
-    """The LLM's raw (pre-validation) score: a free-text function label + coarse confidence, filtered downstream."""
+    """The LLM's raw (pre-validation) score: a function label (one of the 44 taxonomy labels or "OTHER") + coarse
+    confidence. When `function` is "OTHER" (a real clause type not in our taxonomy), `other_label` names it -- the
+    taxonomy-gap signal (ADR-0048 option 2). Filtered/categorized downstream."""
 
     function: str
     confidence: str
+    other_label: str = ""
 
 
 class ClauseFunctionClassification(BaseModel):
@@ -45,17 +48,27 @@ class ClauseFunctionClassification(BaseModel):
     functions: list[RawScore]
 
 
+class SpanFunctions(BaseModel):
+    """One span's classification, keyed by its EXPLICIT `span_index` (the `[n]` in the prompt) -- alignment is by
+    index, NOT list position, so a dropped/reordered span can't silently shift every later span's label. The
+    classifier may OMIT spans it assigns no function."""
+
+    span_index: int
+    functions: list[RawScore]
+
+
 class BatchSpanClassification(BaseModel):
-    """The batched (option B) output: one `ClauseFunctionClassification` per input span, aligned to input order."""
+    """The batched (option B) output: per-span classifications keyed by `span_index` (sparse -- no-function spans
+    may be omitted)."""
 
-    spans: list[ClauseFunctionClassification]
+    spans: list[SpanFunctions]
 
 
-def _to_scores(raw: ClauseFunctionClassification) -> list[FunctionScore]:
+def _to_scores(raw_scores: list[RawScore]) -> list[FunctionScore]:
     """Canonicalize + confidence-floor (>= medium) + cap (<=3), preserving rank. Drops off-taxonomy / NONE /
     below-floor / unparseable-confidence entries (robust to LLM slop)."""
     out: list[FunctionScore] = []
-    for r in raw.functions:
+    for r in raw_scores:
         canon = canonical_function(r.function)
         if canon is None:  # off-taxonomy or NONE
             continue
@@ -68,6 +81,21 @@ def _to_scores(raw: ClauseFunctionClassification) -> list[FunctionScore]:
             if len(out) >= _MAX_FUNCTIONS:
                 break
     return out
+
+
+def categorize_raw(raw_scores: list[RawScore]) -> tuple[list[FunctionScore], list[str]]:
+    """ADR-0048 option 2: split a span's raw scores into (in-taxonomy FunctionScores [canonical+floored],
+    out-of-taxonomy labels). An entry whose `function` is off-taxonomy / "OTHER" is captured by its real clause
+    type (`other_label`, else the raw `function`) -- distinguishing "no function" from "a function we lack a
+    label for" (the taxonomy-gap signal), instead of silently collapsing both to NONE."""
+    in_tax = _to_scores(raw_scores)
+    others: list[str] = []
+    for r in raw_scores:
+        if canonical_function(r.function) is None:  # OTHER / off-taxonomy
+            label = (r.other_label or r.function).strip()
+            if label and label.upper() not in ("NONE", "OTHER"):
+                others.append(label)
+    return in_tax, others
 
 
 _PROMPT = (
@@ -95,43 +123,62 @@ class LlmClauseClassifier:
             return []
         if not isinstance(raw, ClauseFunctionClassification):
             return []
-        return _to_scores(raw)
+        return _to_scores(raw.functions)
 
+
+_BATCH_CAP = 10  # max spans per LLM call -- a big multi-provision chunk is split into sub-batches (bounded prompt)
 
 _BATCH_PROMPT = (
     "You are classifying the operative provisions of ONE contract section by their legal function. Read the WHOLE "
-    "section for context, then classify EACH numbered span below by the function(s) it serves -- ranked "
-    "most-relevant first, each with a coarse confidence (high, medium, or low). A span usually serves one "
-    "function; some serve more. Use ONLY these function types; if a span serves none, return an empty list for "
-    "it. Return exactly one result per span, in the same order.\n\nFunction types:\n{labels}\n\n"
-    "SECTION (context):\n{context}\n\nSPANS:\n{spans}"
+    "section for context, then classify each numbered span below by the function(s) it serves -- ranked "
+    "most-relevant first, each with a coarse confidence (high, medium, or low). For `function`, use EXACTLY one of "
+    "the function types listed below. If a span's real function is NOT in the list, set `function` to \"OTHER\" and "
+    "put the actual clause type in `other_label` -- do NOT invent a name in `function`. For EACH span you classify, "
+    "return its `span_index` (the [n] number) and its functions; OMIT any span that serves no function. Classify "
+    "only indices 0..{max_index}.\n\nFunction types:\n{labels}\n\nSECTION (context):\n{context}\n\nSPANS:\n{spans}"
 )
 
 
 class LlmBatchClauseClassifier:
-    """Option B: classify all of a chunk's spans in ONE LLM call, the chunk as shared context. `runnable` is the
-    injected structured seam (`.invoke(prompt) -> BatchSpanClassification`); production wires the graph-building
-    model. Robust: a failure or a mis-aligned response degrades to per-span empty (spans become NONE, never a
-    crash), and the output is force-aligned to the input span count."""
+    """Option B: classify a chunk's spans with the chunk as shared context. A big chunk is split into sub-batches
+    of `_BATCH_CAP` spans (bounded prompt), each ONE LLM call. Output is aligned by the returned `span_index` (not
+    list position), so a dropped/reordered span can't shift later labels. `runnable` is the injected structured
+    seam (`.invoke(prompt) -> BatchSpanClassification`). Robust: a failed sub-batch leaves its spans empty."""
 
     def __init__(self, runnable: Any) -> None:
         self._runnable = runnable
 
-    def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:
+    def _classify_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
+        """Sub-batched LLM calls; index-aligned RAW per-span scores (the LLM's function+confidence strings, NO
+        canonicalize/floor/cap). A failed sub-batch leaves its spans empty."""
         if not span_texts:
             return []
         from rag_wright.contracts.function import FUNCTION_LABELS
 
-        numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(span_texts))
-        prompt = _BATCH_PROMPT.format(labels="\n".join(FUNCTION_LABELS), context=chunk_text, spans=numbered)
-        try:
-            raw = self._runnable.invoke(prompt)
-        except Exception:  # noqa: BLE001 - a classify failure degrades to NO function per span (never crash)
-            return [[] for _ in span_texts]
-        if not isinstance(raw, BatchSpanClassification):
-            return [[] for _ in span_texts]
-        per_span = raw.spans
-        return [_to_scores(per_span[i]) if i < len(per_span) else [] for i in range(len(span_texts))]
+        labels = "\n".join(FUNCTION_LABELS)
+        out: list[list[RawScore]] = [[] for _ in span_texts]
+        for start in range(0, len(span_texts), _BATCH_CAP):
+            sub = span_texts[start:start + _BATCH_CAP]
+            numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(sub))
+            prompt = _BATCH_PROMPT.format(labels=labels, context=chunk_text, spans=numbered, max_index=len(sub) - 1)
+            try:
+                raw = self._runnable.invoke(prompt)
+            except Exception:  # noqa: BLE001 - a failed sub-batch leaves its spans empty (never crash)
+                continue
+            if not isinstance(raw, BatchSpanClassification):
+                continue
+            for sf in raw.spans:  # align by returned span_index (relative to this sub-batch), offset by start
+                idx = start + sf.span_index
+                if start <= idx < start + len(sub):
+                    out[idx] = list(sf.functions)
+        return out
+
+    def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:
+        return [_to_scores(raws) for raws in self._classify_raw(chunk_text, span_texts)]
+
+    def classify_spans_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
+        """Debug: the RAW per-span scores (pre-floor), to see what the confidence floor drops."""
+        return self._classify_raw(chunk_text, span_texts)
 
 
 class LegalBertClauseAdapter:
