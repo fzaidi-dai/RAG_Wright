@@ -3,8 +3,29 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-09 latest): OPTION B DECIDED (ADR-0047) — retire the precomputed clause-function
-> pre-filter; NEXT = implement the Leg B whole-index change.** The function-gate ON/OFF graded-recall benchmark
+> **RESUME / NEXT UP (2026-08-09 newest): ADR-0047 ARC COMPLETE + query pipelines re-validated; NEXT =
+> INGEST-LLM-CLASSIFIER (ADR-0048), scoped, to build.** ADR-0047 done end-to-end: Leg B whole-index (aea1dba) +
+> OPTB-INTRA BGE-top-K rework (6ad8b4c) — classifier off the critical path of both legs that used it. Query re-test
+> ALL GREEN (Deep-agent MCP demo; intra-doc MCP smoke = partial+cited 10s; Leg B real-infra = cap clauses all
+> [MATCH]; relational real-infra = cited). ArcadeDB OOM'd during the recall benchmark (k=400 whole-index sweeps),
+> restarted, intact.
+> **INGEST-LLM-CLASSIFIER (ADR-0048) — SCOPED, to build.** The clause `function` is still load-bearing at
+> INGESTION (gates clause creation + conditions granite property extraction), so it can't just be dropped. Replace
+> LegalBERT with the **graph-building LLM**, classify the **FULL CLAUSE** (not spans), **multi-label + confidence**.
+> Hard constraint (user): **NON-DESTRUCTIVE / upsert** — keep the existing KG (139,955 spans / 45,404 clauses /
+> 72,746 property edges, a >1h granite build), change only the classification, re-pay granite ONLY for the changed
+> delta. Design (ADR-0048): (1) new seam `classify_clause(text)->[FunctionScore{function,confidence}]` + inject
+> `classify_fn` into `production_document_ingest` (today it's HARDCODED — the seam query-time already had); (2)
+> multi-function clause KG (additive: `functions:[FunctionScore]`, property edges tagged by their function); (3)
+> two modes — `scratch` (RESET, full rebuild) and `upsert` (RECLASSIFY, default over existing KG): read clause
+> text from the KG (no re-parse/chunk/segment/embed) → LLM-classify (concurrent, X/N) → UPSERT function labels →
+> delta property re-extraction ONLY where the function set changed (unchanged clause = ZERO granite). Grounded
+> feasible: `write_clause_kg`=`UPDATE SET function`, edges UPSERT by span_id, `spans_by_contract`/`span_texts`
+> reconstruct clause text. Sub-decisions for build: FunctionScore schema + confidence floor; immediate vs deferred
+> delta re-extraction; per-function edge tagging vs one primary function. Also the natural place to MEASURE the
+> reclassify delta (PREC-1b quantify). TDD-first; ask-first store DDL change.
+>
+> **(prior) OPTION B DECIDED (ADR-0047) — retire the precomputed clause-function pre-filter.** The function-gate ON/OFF graded-recall benchmark
 > on the unified KG is DONE (`scripts/legb_function_gate_recall.py {raw|rerank}`, `docs/eval/function_gate_recall.md`):
 > 57 ACORD attorney-graded queries, ON (oracle-function) vs OFF (whole-index). **Result: ON ≈ OFF within ±0.02 at
 > every K in both raw and reranked modes (OFF marginally AHEAD), single-function CEILING 0.969.** The gate does not
