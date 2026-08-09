@@ -21,9 +21,27 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > text from the KG (no re-parse/chunk/segment/embed) → LLM-classify (concurrent, X/N) → UPSERT function labels →
 > delta property re-extraction ONLY where the function set changed (unchanged clause = ZERO granite). Grounded
 > feasible: `write_clause_kg`=`UPDATE SET function`, edges UPSERT by span_id, `spans_by_contract`/`span_texts`
-> reconstruct clause text. Sub-decisions for build: FunctionScore schema + confidence floor; immediate vs deferred
-> delta re-extraction; per-function edge tagging vs one primary function. Also the natural place to MEASURE the
-> reclassify delta (PREC-1b quantify). TDD-first; ask-first store DDL change.
+> reconstruct clause text. Sub-decisions RESOLVED (see ADR-0048):
+> FunctionScore {function, confidence enum high|medium|low}, ranked primary-first, floor ≥ medium, cap ≤3;
+> extraction PRIMARY-ONLY (edges tagged by function) so delta re-extraction fires only on a PRIMARY flip;
+> two gated phases (A classify+upsert+mark-stale+delta-report, B re-extract the stale delta). TDD-first;
+> ask-first store DDL change.
+> **PROGRESS: increment 1 DONE (contract + seam).** `contracts/function.py`: `FunctionConfidence{high,medium,low}`
+> + `FunctionScore{function(canonical-validated), confidence}` + `primary_function()`. `spans/clause_function_classifier.py`:
+> the `ClauseFunctionClassifier` Protocol + `LlmClauseClassifier` (graph-building LLM via `build_structured`,
+> injected runnable; canonicalize + floor≥medium + cap≤3 post-processing, degrade-to-empty on failure) +
+> `LegalBertClauseAdapter` (back-compat, single-label→primary/high) + `production_llm_clause_classifier`. 13 new
+> tests; 306 contracts/spans green; ruff clean. **NEXT increment: inject `classify_fn` into
+> `production_document_ingest` (classify the CLAUSE, not spans) + the multi-function clause write; THEN the
+> upsert/reclassify pass (Phase A + delta report), THEN Phase B.**
+>
+> **QUERY-EXPLOIT-MULTILABEL (future enhancement, todo — after INGEST-LLM-CLASSIFIER).** Once clauses carry
+> multi-label functions + confidence (ADR-0048), the query legs can OPTIONALLY exploit them (none required —
+> additive/insulated by ADR-0047): (1) **confidence-modulated `[auto-tag:]`** in `intra_document_qa` — assert for
+> `high`-confidence functions, keep the PREC-1a hedge for `low` (natural PREC-1a follow-on); (2) **multi-label
+> weighting** — Leg B / intra-doc surface or lightly weight secondary functions; (3) **expose `functions` on the
+> `CitedClause` / `RankedSpan` contracts** (additive) for clients that want the full picture. All deferred until
+> INGEST-LLM-CLASSIFIER lands the multi-label data.
 >
 > **(prior) OPTION B DECIDED (ADR-0047) — retire the precomputed clause-function pre-filter.** The function-gate ON/OFF graded-recall benchmark
 > on the unified KG is DONE (`scripts/legb_function_gate_recall.py {raw|rerank}`, `docs/eval/function_gate_recall.md`):

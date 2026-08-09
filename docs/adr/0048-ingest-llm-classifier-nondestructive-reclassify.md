@@ -73,6 +73,15 @@ build-from-scratch mode retained. Three layers:
 - **Scope discipline:** identifiers unchanged (`clause_id`/`entity_id`/`value_key`); the multi-function field is
   additive; the store DDL change (per-clause functions list + edge function tag) is an ask-first schema change,
   staged so the existing single-function reads keep working during migration.
-- Open sub-decisions for the build task: the exact `FunctionScore` schema + confidence floor; whether delta
-  re-extraction is immediate or deferred (mark-stale then a bounded pass); and the multi-function property-edge
-  tagging vs. keeping one primary function for extraction.
+- Sub-decisions (resolved): `FunctionScore = {function, confidence: enum high|medium|low}`, LLM returns ranked
+  (primary first), floor ≥ medium, cap ≤3. Extraction is **primary-function only** (edges tagged by function, so
+  per-function extraction is a no-migration extension); delta re-extraction fires only on a **primary** change.
+  Delta handling = two gated phases: Phase A classify + upsert labels + mark primary-flip clauses' properties
+  `AMBIGUOUS` (mark-stale) + emit a delta report; Phase B re-extract the stale delta (gated, resumable).
+- **Query-side is unaffected (additive design).** Keeping `Clause.function`/`Span.function` = the PRIMARY label
+  means Leg B (reads `function` for display + properties for boost) and intra-doc (reads `function` for the
+  PREC-1a `[auto-tag:]` frame) need NO code change — they benefit passively from better labels + properties.
+  ADR-0047 de-risked this: neither leg gates on function anymore, so a label change can't reshuffle a retrieval
+  pool. The optional ways the query legs could *exploit* the richer labels (confidence-modulated `[auto-tag:]`,
+  multi-label weighting, exposing `functions` on the contracts) are deferred to task **QUERY-EXPLOIT-MULTILABEL**
+  (tasks.md) — none are required for the pipelines to keep working.

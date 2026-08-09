@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import pytest
+from pydantic import ValidationError
+
 from rag_wright.contracts.function import (
     FUNCTION_LABEL_SET,
     FUNCTION_LABELS,
     ExtendedFunction,
+    FunctionConfidence,
+    FunctionScore,
     canonical_function,
+    primary_function,
 )
 from rag_wright.contracts.ontology import ClauseCategory
 
@@ -39,3 +45,35 @@ def test_labels_are_unique_and_order_is_cuad_then_extensions():
     assert len(FUNCTION_LABELS) == len(set(FUNCTION_LABELS))  # no duplicate label collides CUAD/extension
     assert FUNCTION_LABELS[: len(ClauseCategory)] == tuple(c.value for c in ClauseCategory)
     assert FUNCTION_LABELS[len(ClauseCategory) :] == tuple(f.value for f in ExtendedFunction)
+
+
+# --- INGEST-LLM-CLASSIFIER (ADR-0048): FunctionScore = a classified function + coarse confidence -------------
+
+
+def test_function_confidence_is_ordinal_high_medium_low():
+    assert {c.value for c in FunctionConfidence} == {"high", "medium", "low"}
+
+
+def test_function_score_requires_a_canonical_label():
+    fs = FunctionScore(function="Cap On Liability", confidence=FunctionConfidence.HIGH)
+    assert fs.function == "Cap On Liability"
+    assert fs.confidence is FunctionConfidence.HIGH
+    with pytest.raises(ValidationError):  # a non-canonical label is rejected (strict contract, ADR-0048)
+        FunctionScore(function="Not A Function", confidence=FunctionConfidence.LOW)
+    with pytest.raises(ValidationError):  # NONE is the off-taxonomy sentinel, not a function
+        FunctionScore(function="NONE", confidence=FunctionConfidence.HIGH)
+
+
+def test_function_score_canonicalizes_casing_at_the_boundary():
+    # the classifier may emit CUAD casing; the contract normalizes to the canonical label
+    assert FunctionScore(function="ip ownership assignment", confidence=FunctionConfidence.MEDIUM).function \
+        == "IP Ownership Assignment"
+
+
+def test_primary_function_is_the_first_score():
+    scores = [
+        FunctionScore(function="Cap On Liability", confidence=FunctionConfidence.HIGH),
+        FunctionScore(function="Indemnification", confidence=FunctionConfidence.MEDIUM),
+    ]
+    assert primary_function(scores) == "Cap On Liability"
+    assert primary_function([]) is None

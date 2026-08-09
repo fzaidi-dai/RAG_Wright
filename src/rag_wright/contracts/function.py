@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from rag_wright.contracts.ontology import ClauseCategory
 
@@ -67,3 +67,36 @@ def canonical_function(label: str) -> str | None:
     """Map a (possibly differently-cased) function label to its canonical `FUNCTION_LABELS` entry, or None
     if it matches none. Case-insensitive: fixes the classifier's CUAD-cased labels (e.g. 'Ip' -> 'IP')."""
     return _FUNCTION_BY_CASEFOLD.get(label.strip().casefold())
+
+
+class FunctionConfidence(str, Enum):
+    """INGEST-LLM-CLASSIFIER (ADR-0048): the LLM clause classifier's coarse confidence in a function assignment.
+    Ordinal, not a float -- LLMs are not calibrated on numeric self-confidence; a floor (>= medium) filters weak
+    labels, so a clause with one clear function stays single while a genuinely mixed clause keeps 2-3."""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class FunctionScore(BaseModel):
+    """INGEST-LLM-CLASSIFIER (ADR-0048): one function a clause is classified into, with coarse confidence. In a
+    ranked list the first is the PRIMARY (the label kept on `Clause.function` for the query legs). `function` is
+    normalized to its canonical `FUNCTION_LABELS` entry at the boundary; a non-canonical label (incl. the NONE
+    sentinel) is rejected (strict contract; normalize upstream)."""
+
+    function: str
+    confidence: FunctionConfidence
+
+    @field_validator("function")
+    @classmethod
+    def _canonicalize(cls, v: str) -> str:
+        canon = canonical_function(v)
+        if canon is None:
+            raise ValueError(f"function must be a canonical FUNCTION_LABELS label, got {v!r}")
+        return canon
+
+
+def primary_function(scores: list[FunctionScore]) -> str | None:
+    """The PRIMARY (highest-ranked) function of a ranked `FunctionScore` list (primary first), or None if empty."""
+    return scores[0].function if scores else None
