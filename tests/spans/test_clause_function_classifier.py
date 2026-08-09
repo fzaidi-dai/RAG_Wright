@@ -43,7 +43,7 @@ def test_llm_classifier_keeps_ranked_canonicalized_scores_above_floor():
 def test_llm_classifier_drops_low_confidence_off_taxonomy_and_caps_at_three():
     out = _cls([
         ("Cap On Liability", "high"),
-        ("Force Majeure", "high"),        # off-taxonomy -> dropped
+        ("Signature", "high"),            # off-taxonomy artifact (not a label or alias) -> dropped
         ("Indemnification", "low"),       # below the medium floor -> dropped
         ("Audit Rights", "medium"),
         ("Governing Law", "high"),

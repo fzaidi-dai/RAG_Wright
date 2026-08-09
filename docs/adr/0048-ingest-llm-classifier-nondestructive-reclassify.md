@@ -85,3 +85,53 @@ build-from-scratch mode retained. Three layers:
   pool. The optional ways the query legs could *exploit* the richer labels (confidence-modulated `[auto-tag:]`,
   multi-label weighting, exposing `functions` on the contracts) are deferred to task **QUERY-EXPLOIT-MULTILABEL**
   (tasks.md) — none are required for the pipelines to keep working.
+
+## Addendum (step 2): full-corpus taxonomy-gap curation → 44 → 52 labels + a curated FOLD alias map
+
+The Phase-A reclassify pass (DEBUG 3-way, ~840 chunks / 6,157 clauses on the unified `ragwright_cuad_full`
+CUAD+ACORD KG) surfaced, alongside the in-taxonomy relabels, a large **OTHER (out-of-taxonomy)** bucket: 954
+distinct clause types the LLM named because the 44-label taxonomy had no home for them (32% of categorized
+clauses fell to OTHER, 25% to NONE). This is the taxonomy-gap signal ADR-0048 option 2 designed the
+`other_label` channel to capture. Left unaddressed, these clauses stay unroutable (OTHER/NONE) and their
+properties unextracted.
+
+**Curation (LLM-assisted, human-overseen).** `scripts/curate_taxonomy_gaps.py` takes the 135 recurring gap terms
+(count ≥ 3) and, in **one global DeepSeek call** (via `build_structured`, ADR-0045 server-side; a first 45-per-batch
+run was discarded because independent batches contradicted each other — the same concept got FOLD/DROP/ADD in
+different batches), sorts each into **FOLD** (a synonym of an existing label), **DROP** (a structural artifact), or
+**ADD** (a genuinely new clause function). The output is a *proposal only* (`data/eval/taxonomy_gaps/curation_proposal.json`,
+gitignored) — nothing is applied automatically.
+
+**Human reconciliation (the oversight step).** The LLM proposal was reviewed against the real 44 labels and
+**3 mis-folds were rejected** (`Confidentiality→Non-Disparagement`, `Representations and Warranties→Warranty
+Duration`, `Royalty Grant→License Grant`), the **royalty family was consolidated** into the new `Royalties` label,
+and two wrongly-DROPped reals were **folded** (`Right of First Refusal→Rofr/Rofo/Rofn`, `Milestone Payment→Payment
+Terms`). The approved delta is a **disciplined 8-ADD** (not the LLM's raw 32), plus the reconciled folds.
+
+### Decision (step 2)
+1. **ADD 8 labels** — `TaxonomyGapFunction` enum in `contracts/function.py`: `Confidentiality`, `Royalties`,
+   `Payment Terms`, `Dispute Resolution`, `Record Retention`, `Security Interest`, `Condition Precedent`,
+   `Force Majeure`. Genuinely distinct from CUAD/ACORD's 44 (CUAD has no generic class for any of these). Order
+   stays stable (CUAD → ACORD-ext → gap) so a classifier retrain's label↔id map is reproducible. Taxonomy 44 → 52.
+2. **A curated FOLD alias map** — `_FUNCTION_ALIASES` (55 aliases → canonical label), authored **in code** (no
+   external map to drift, consistent with the `symbolic_validation` maps). `canonical_function` resolves an exact
+   cased match first, then an alias; so recurring synonyms (`Limitation of Liability`→`Cap On Liability`,
+   `Assignment`→`Anti-Assignment`, …) now route instead of falling to OTHER.
+3. **DROP terms need no code** — they stay off-taxonomy (`canonical_function → None`), same as before.
+4. **`symbolic_validation` coverage** — the ADR-0040 function→dimension map must cover the taxonomy exactly. The 8
+   new functions' property-dimension profiles are **not yet characterized** (Phase B property re-extraction, which
+   would populate real assertions to review, is deferred). Per this module's standing rule — *coverage is expanded
+   deliberately, never by guessing a closed set we are unsure of* — they are added to an explicit
+   `PERMISSIVE_FUNCTIONS` set (unvalidated, declared not silently absent) rather than modeled speculatively (which
+   would risk false downgrades). The coverage invariant becomes **modeled XOR explicitly-permissive == taxonomy**.
+
+### Consequences (step 2)
+- Fewer unroutable clauses: the FOLD map + 8 ADDs reclaim a large share of the OTHER bucket at query and ingest.
+- **No re-extraction yet.** This changes only the *label space and canonicalization*. The actual reclassification
+  write (Phase A) and delta property re-extraction (Phase B) over the live KG remain the deferred next steps; when
+  Phase B runs and yields real assertions on the 8 new functions, each moves from `PERMISSIVE_FUNCTIONS` into
+  `FUNCTION_APPLICABLE_DIMS` with its observed dimensions.
+- Identifiers unchanged; the additions are purely additive to `FUNCTION_LABELS`; strict contracts hold
+  (`FunctionScore` still rejects any non-canonical label).
+- The curation is reproducible from a committed script; the proposal/report artifacts stay gitignored under
+  `data/eval/taxonomy_gaps/`.

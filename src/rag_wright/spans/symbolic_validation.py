@@ -48,6 +48,7 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.collection import Collection
 from rdflib.namespace import RDF, SH
 
+from rag_wright.contracts.function import TaxonomyGapFunction
 from rag_wright.contracts.property import (
     CLOSED_VOCAB,
     ClausePropertyRecord,
@@ -141,6 +142,15 @@ FUNCTION_APPLICABLE_DIMS: dict[str, frozenset[PropertyDimension]] = {
     ),
     "Third Party Beneficiary": frozenset({_D.COVERED_PARTIES, _D.PARTY_ASYMMETRY}),
 }
+
+# ADR-0048 step 2: the 8 taxonomy-gap functions are in the label space now, but their property-dimension
+# profiles are NOT yet characterized (Phase B property re-extraction, which would populate real assertions on
+# these clauses to review, is deferred). Per this module's standing rule -- coverage is expanded deliberately,
+# never by guessing a closed set we are unsure of (see the header) -- they are EXPLICITLY PERMISSIVE
+# (unvalidated) until real-data evidence exists, rather than modeled speculatively (which would risk false
+# downgrades). Declared here (not silently absent from the map) so the coverage test still guards against typos
+# and silent gaps; each moves into FUNCTION_APPLICABLE_DIMS once its real dimensions are observed.
+PERMISSIVE_FUNCTIONS: frozenset[str] = frozenset({f.value for f in TaxonomyGapFunction})
 
 
 # The multi-valued dimensions (`clause_kg_extractor._LIST_ENUM_DIMS`): a clause may carry several. Every

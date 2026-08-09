@@ -3,8 +3,18 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-09 newest): ADR-0047 ARC COMPLETE + query pipelines re-validated; NEXT =
-> INGEST-LLM-CLASSIFIER (ADR-0048), scoped, to build.** ADR-0047 done end-to-end: Leg B whole-index (aea1dba) +
+> **RESUME / NEXT UP (2026-08-09 newest): INGEST-LLM-CLASSIFIER step-2 taxonomy extension DONE (44 → 52 labels
+> + curated FOLD alias map); NEXT = the reclassify WRITE pass (Phase A) over the live KG.** Step 2 (ADR-0048
+> addendum): the full-corpus gap analysis (840 chunks / 6,157 clauses, 954 distinct OTHER types) → LLM-assisted,
+> human-reconciled curation (`scripts/curate_taxonomy_gaps.py`, one global DeepSeek call; batched runs discarded
+> for cross-batch contradiction). Approved disciplined delta APPLIED to `contracts/function.py`: `TaxonomyGapFunction`
+> (8 ADDs: Confidentiality, Royalties, Payment Terms, Dispute Resolution, Record Retention, Security Interest,
+> Condition Precedent, Force Majeure) + `_FUNCTION_ALIASES` (55 folds → canonical, in-code; 3 LLM mis-folds
+> rejected, royalty family → Royalties, RoFR + Milestone Payment folded not dropped). `symbolic_validation`: the 8
+> new functions are EXPLICITLY PERMISSIVE (uncharacterized dims; move into the applicability map when Phase B
+> yields real assertions) — coverage invariant = modeled XOR permissive == taxonomy. ruff clean; full suite 1095
+> passed / 43 skipped. Proposal/report gitignored under `data/eval/taxonomy_gaps/`.
+> **(prior, still true) ADR-0047 ARC COMPLETE + query pipelines re-validated.** ADR-0047 done end-to-end: Leg B whole-index (aea1dba) +
 > OPTB-INTRA BGE-top-K rework (6ad8b4c) — classifier off the critical path of both legs that used it. Query re-test
 > ALL GREEN (Deep-agent MCP demo; intra-doc MCP smoke = partial+cited 10s; Leg B real-infra = cap clauses all
 > [MATCH]; relational real-infra = cited). ArcadeDB OOM'd during the recall benchmark (k=400 whole-index sweeps),
@@ -41,9 +51,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (additive) + `Clause.functions` JSON string in `_clause_kg_statements` + `CREATE PROPERTY Clause.functions`;
 > `function` stays PRIMARY so query readers untouched. New tests (helper batching, NONE sentinel, contract
 > round-trip, store JSON emit); 430 subgraphs/store/contracts/spans green; ruff clean.
-> **NEXT increment 3: the UPSERT/reclassify pass over the existing KG — Phase A (read clause text from KG →
-> batched LLM classify → UPSERT function+functions → mark primary-flips AMBIGUOUS → delta report), THEN Phase B
-> (re-extract the stale delta).**
+> **PROGRESS: step 2 DONE (taxonomy extension, ADR-0048 addendum).** Full-corpus taxonomy-gap analysis + curation
+> → 44 → 52 labels + curated FOLD alias map (see the top banner). Contract/canonicalization only — no KG writes,
+> no re-extraction yet. `scripts/curate_taxonomy_gaps.py` committed; `scripts/reclassify_kg.py` (Phase-A DEBUG
+> gap-analysis mode) produced the gap report the curation consumed.
+> **NEXT increment 3: the UPSERT/reclassify WRITE pass over the existing KG — Phase A (read clause text from KG →
+> batched LLM classify [now over the 52-label space + folds] → UPSERT function+functions → mark primary-flips
+> AMBIGUOUS → delta report), THEN Phase B (re-extract the stale delta; on real assertions, move the 8 new
+> functions out of `PERMISSIVE_FUNCTIONS` into the applicability map).**
 >
 > **QUERY-EXPLOIT-MULTILABEL (future enhancement, todo — after INGEST-LLM-CLASSIFIER).** Once clauses carry
 > multi-label functions + confidence (ADR-0048), the query legs can OPTIONALLY exploit them (none required —

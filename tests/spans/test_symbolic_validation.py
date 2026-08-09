@@ -8,6 +8,7 @@ from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertio
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.spans.symbolic_validation import (
     FUNCTION_APPLICABLE_DIMS,
+    PERMISSIVE_FUNCTIONS,
     flagged_dimensions,
     symbolic_validate,
 )
@@ -25,8 +26,12 @@ def _record(function: str, *assertions: tuple) -> ClausePropertyRecord:
 
 
 def test_the_map_covers_exactly_the_function_taxonomy():
-    # every FUNCTION label is modeled (no silent permissive gap), and no key is a typo outside the taxonomy
-    assert set(FUNCTION_APPLICABLE_DIMS) == FUNCTION_LABEL_SET
+    # no key is a typo outside the taxonomy, and no label is a SILENT permissive gap: every FUNCTION label is
+    # either modeled (FUNCTION_APPLICABLE_DIMS) or EXPLICITLY permissive (PERMISSIVE_FUNCTIONS, ADR-0048 step 2).
+    assert set(FUNCTION_APPLICABLE_DIMS) <= FUNCTION_LABEL_SET
+    assert PERMISSIVE_FUNCTIONS <= FUNCTION_LABEL_SET
+    assert set(FUNCTION_APPLICABLE_DIMS) | PERMISSIVE_FUNCTIONS == FUNCTION_LABEL_SET
+    assert not (set(FUNCTION_APPLICABLE_DIMS) & PERMISSIVE_FUNCTIONS)  # modeled XOR permissive, never both
 
 
 def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():
