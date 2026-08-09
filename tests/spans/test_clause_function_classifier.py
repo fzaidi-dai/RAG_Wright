@@ -115,16 +115,16 @@ def test_batch_classifier_splits_big_chunk_into_sub_batches_with_offset_alignmen
     assert m._BATCH_CAP == 10
     calls = []
 
-    class _Multi:
-        def invoke(self, prompt):  # noqa: ARG002
-            calls.append(1)
-            if len(calls) == 1:  # first sub-batch [0..9]: local index 3 -> global 3
-                return BatchSpanClassification(spans=[_sf(3, [("Cap On Liability", "high")])])
-            return BatchSpanClassification(spans=[_sf(1, [("Insurance", "high")])])  # second [10..11]: local 1 -> global 11
+    class _Multi:  # sub-batches run CONCURRENTLY -> identify the sub-batch by PROMPT CONTENT, not call order
+        def invoke(self, prompt):
+            calls.append(1)  # list.append is thread-safe under the GIL
+            if "s10" in prompt:  # second sub-batch [10,11]: local index 1 -> global 11
+                return BatchSpanClassification(spans=[_sf(1, [("Insurance", "high")])])
+            return BatchSpanClassification(spans=[_sf(3, [("Cap On Liability", "high")])])  # first: local 3 -> global 3
 
     got = LlmBatchClauseClassifier(_Multi()).classify_spans("ctx", [f"s{i}" for i in range(12)])
     assert len(calls) == 2                                       # 12 spans, cap 10 -> 2 sub-batch calls
-    assert [i for i, span in enumerate(got) if span] == [3, 11]  # offset alignment is correct
+    assert [i for i, span in enumerate(got) if span] == [3, 11]  # offset alignment correct despite concurrency
     assert got[3][0].function == "Cap On Liability"
     assert got[11][0].function == "Insurance"
 
@@ -151,10 +151,11 @@ def test_categorize_raw_splits_in_taxonomy_from_out_of_taxonomy():
 
     raws = [
         RawScore(function="Cap On Liability", confidence="high"),
-        RawScore(function="OTHER", confidence="high", other_label="Late Delivery Remedies"),
-        RawScore(function="Product Returns", confidence="high"),  # invented off-taxonomy (no other_label)
+        RawScore(function="OTHER", confidence="high", other_label="Late Delivery Remedies"),  # convention: use other_label
+        RawScore(function="Product Returns", confidence="high"),  # real type in function, other_label empty
+        RawScore(function="Repurchase of Products", confidence="high", other_label="None"),  # real type in function, junk other_label
         RawScore(function="Indemnification", confidence="low"),   # in-taxonomy but below floor -> not kept
     ]
     in_tax, others = categorize_raw(raws)
     assert [s.function for s in in_tax] == ["Cap On Liability"]
-    assert others == ["Late Delivery Remedies", "Product Returns"]
+    assert others == ["Late Delivery Remedies", "Product Returns", "Repurchase of Products"]

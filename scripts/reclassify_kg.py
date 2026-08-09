@@ -88,7 +88,13 @@ def main() -> None:
         tmo = float(os.environ.get("TIMEOUT_S", "90"))
         log(f"[reclassify][debug] categorizing verdicts over {len(chunk_ids)} chunks (conc={conc}) ...")
 
-        def _dbg(cid):
+        from pathlib import Path
+
+        ckpt_dir = Path("data/eval/taxonomy_gaps")
+        ckpt_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_file = ckpt_dir / "gap_checkpoint.jsonl"
+
+        def _dbg(cid):  # -> lightweight rows [[old, kind, label, text_snippet, raw_str]] (checkpoint-serializable)
             spans = spans_by_chunk.get(cid, [])
             if not spans:
                 return []
@@ -100,36 +106,68 @@ def main() -> None:
                 if sid not in existing:
                     continue
                 in_tax, others = categorize_raw(raws)
-                rows.append((existing[sid][1], in_tax, others, text, raws))
+                if in_tax:
+                    kind, label = "intax", in_tax[0].function
+                elif others:
+                    kind, label = "other", others[0]
+                else:
+                    kind, label = "none", ""
+                raw_str = ", ".join(
+                    f"{r.function}{'/' + r.other_label if r.other_label else ''}={r.confidence}"
+                    for r in raws) or "(none)"
+                rows.append([existing[sid][1], kind, label, text[:75].strip(), raw_str])
             return rows
 
-        dbg = map_concurrent(chunk_ids, _dbg, max_concurrency=conc, label="[reclassify][debug]", echo=True,
-                             timeout_s=tmo, timeout_retries=1)
         cat: Counter = Counter()
         gaps: Counter = Counter()
-        examples = []
-        for rows in dbg:
-            for old, in_tax, others, text, raws in (rows or []):
-                if in_tax:
-                    new = in_tax[0].function
-                    kind = "in-taxonomy (unchanged)" if new == old else "in-taxonomy (reclassified)"
-                elif others:
-                    new = f"OTHER:{others[0]}"
-                    kind = "OTHER (taxonomy gap)"
-                    gaps[others[0]] += 1
+        examples: list = []
+        skipped = 0
+
+        def _agg(rows):
+            for old, kind, label, text, raw_str in rows:
+                if kind == "intax":
+                    new = label
+                    key = "in-taxonomy (unchanged)" if new == old else "in-taxonomy (reclassified)"
+                elif kind == "other":
+                    new = f"OTHER:{label}"
+                    key = "OTHER (taxonomy gap)"
+                    gaps[label] += 1
                 else:
                     new = "NONE"
-                    kind = "NONE (no function)"
-                cat[kind] += 1
+                    key = "NONE (no function)"
+                cat[key] += 1
                 if new != old and len(examples) < 25:
-                    raw_str = ", ".join(
-                        f"{r.function}{'/' + r.other_label if r.other_label else ''}={r.confidence}"
-                        for r in raws) or "(none)"
                     examples.append((old, new, text, raw_str))
+
+        done: set = set()
+        if ckpt_file.exists():  # RESUME: aggregate already-done chunks + skip them
+            for line in ckpt_file.read_text(encoding="utf-8").splitlines():
+                if line.strip():
+                    d = json.loads(line)
+                    done.add(d["chunk"])
+                    _agg(d["rows"])
+            log(f"[reclassify][debug] RESUME: {len(done)} chunks from checkpoint")
+
+        todo = [c for c in chunk_ids if c not in done]
+        log(f"[reclassify][debug] {len(todo)} chunks to classify ({len(done)} resumed); checkpointing per batch")
+        batch_n = 120
+        with ckpt_file.open("a", encoding="utf-8") as ck:
+            for bs in range(0, len(todo), batch_n):
+                batch = todo[bs:bs + batch_n]
+                res = map_concurrent(batch, _dbg, max_concurrency=conc, label="[reclassify][debug]", echo=True,
+                                     timeout_s=tmo, timeout_retries=1)
+                for cid, rows in zip(batch, res):
+                    if rows is None:
+                        skipped += 1
+                        rows = []
+                    ck.write(json.dumps({"chunk": cid, "rows": rows}, ensure_ascii=False) + "\n")
+                    _agg(rows)
+                ck.flush()
+                log(f"[reclassify][debug] CHECKPOINT {len(done) + bs + len(batch)}/{len(chunk_ids)} chunks done")
 
         total = sum(cat.values())
         log("\n=== DEBUG: reclassification 3-way (option 2: in-taxonomy / OTHER / NONE) ===")
-        log(f"clauses categorized: {total}  (chunks skipped/timeout: {sum(1 for r in dbg if r is None)})")
+        log(f"clauses categorized: {total}  (chunks skipped/timeout: {skipped})")
         for k, c in cat.most_common():
             log(f"  {c:5d} ({100 * c / max(1, total):.0f}%)  {k}")
         log(f"\ntop OUT-OF-TAXONOMY clause types the LLM found ({len(gaps)} distinct; taxonomy gaps):")
@@ -139,14 +177,11 @@ def main() -> None:
         for old, new, text, raw_str in examples:
             log(f"  [{old} -> {new}]  {text[:75].strip()!r}\n      RAW: {raw_str}")
         # save the FULL gap report for the taxonomy-extension step (2)
-        from pathlib import Path
-
-        out = Path("data/eval/taxonomy_gaps")
-        out.mkdir(parents=True, exist_ok=True)
         report = {"clauses_categorized": total, "three_way": dict(cat.most_common()),
                   "out_of_taxonomy": dict(gaps.most_common())}
-        (out / "gap_report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
-        log(f"\n[reclassify][debug] saved full gap report ({len(gaps)} distinct types) -> {out / 'gap_report.json'}")
+        (ckpt_dir / "gap_report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        log(f"\n[reclassify][debug] saved full gap report ({len(gaps)} distinct types) -> {ckpt_dir / 'gap_report.json'}")
         store.close()
         return
 

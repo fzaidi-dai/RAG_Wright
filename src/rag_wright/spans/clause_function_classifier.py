@@ -91,8 +91,14 @@ def categorize_raw(raw_scores: list[RawScore]) -> tuple[list[FunctionScore], lis
     in_tax = _to_scores(raw_scores)
     others: list[str] = []
     for r in raw_scores:
-        if canonical_function(r.function) is None:  # OTHER / off-taxonomy
-            label = (r.other_label or r.function).strip()
+        if canonical_function(r.function) is None:  # off-taxonomy
+            # the LLM may follow the convention (function="OTHER", real type in other_label) OR put the real
+            # type directly in `function` (with other_label empty/"None"). Prefer other_label ONLY when function
+            # is the literal "OTHER"; otherwise the off-taxonomy `function` string IS the real type.
+            if r.function.strip().upper() == "OTHER":
+                label = r.other_label.strip()
+            else:
+                label = r.function.strip()
             if label and label.upper() not in ("NONE", "OTHER"):
                 others.append(label)
     return in_tax, others
@@ -149,27 +155,41 @@ class LlmBatchClauseClassifier:
         self._runnable = runnable
 
     def _classify_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
-        """Sub-batched LLM calls; index-aligned RAW per-span scores (the LLM's function+confidence strings, NO
-        canonicalize/floor/cap). A failed sub-batch leaves its spans empty."""
+        """Sub-batched LLM calls, run CONCURRENTLY within the chunk (a big multi-provision chunk's sub-batches are
+        independent, so a 29-span chunk costs ~1 call's latency, not 3x). Index-aligned RAW per-span scores (the
+        LLM's function+confidence strings, NO canonicalize/floor/cap). A failed sub-batch leaves its spans empty."""
         if not span_texts:
             return []
+        from concurrent.futures import ThreadPoolExecutor
+
         from rag_wright.contracts.function import FUNCTION_LABELS
 
         labels = "\n".join(FUNCTION_LABELS)
-        out: list[list[RawScore]] = [[] for _ in span_texts]
-        for start in range(0, len(span_texts), _BATCH_CAP):
-            sub = span_texts[start:start + _BATCH_CAP]
+        subs = [(start, span_texts[start:start + _BATCH_CAP]) for start in range(0, len(span_texts), _BATCH_CAP)]
+
+        def _call(item):
+            start, sub = item
             numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(sub))
             prompt = _BATCH_PROMPT.format(labels=labels, context=chunk_text, spans=numbered, max_index=len(sub) - 1)
             try:
                 raw = self._runnable.invoke(prompt)
             except Exception:  # noqa: BLE001 - a failed sub-batch leaves its spans empty (never crash)
-                continue
-            if not isinstance(raw, BatchSpanClassification):
+                return (start, len(sub), None)
+            return (start, len(sub), raw if isinstance(raw, BatchSpanClassification) else None)
+
+        if len(subs) <= 1:  # single sub-batch -> no thread pool
+            results = [_call(subs[0])]
+        else:  # concurrent sub-batches (independent calls, merged by span_index)
+            with ThreadPoolExecutor(max_workers=len(subs)) as ex:
+                results = list(ex.map(_call, subs))
+
+        out: list[list[RawScore]] = [[] for _ in span_texts]
+        for start, sublen, raw in results:
+            if raw is None:
                 continue
             for sf in raw.spans:  # align by returned span_index (relative to this sub-batch), offset by start
                 idx = start + sf.span_index
-                if start <= idx < start + len(sub):
+                if start <= idx < start + sublen:
                     out[idx] = list(sf.functions)
         return out
 
