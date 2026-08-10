@@ -296,7 +296,11 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
 
 # --- KG-2: per-clause typed property extraction (the same seam, the KG-1 clause template) ---
 
-_CLAUSE_MAX_TOKENS = 2000  # a Clause has ~30 typed dims; a well-constrained extraction fits well under this.
+# PROD-1 finding: a rich clause (esp. after ONT-2 grew the Clause template to ~36 typed dims) can exceed 2000 and
+# truncate its structured JSON (a real NDA clause hit max_tokens=2000 -> unterminated string -> that clause's
+# properties lost). This is a MAX for INGESTION extraction only (extract_clause), not a per-call cost -- a
+# well-constrained extraction still terminates well under it -- so 4000 is a safe headroom bump, not a spend.
+_CLAUSE_MAX_TOKENS = 4000
 # (INGEST-REFACTOR: truncation was NOT a size problem -- unconstrained free-text fields like `document_reference`
 # were dumping verbatim clause prose and ballooning the JSON; the fix is field constraints, not a higher cap.)
 _CLAUSE_TEXT_CHARS = 12000  # one operative span is short; a generous cap that never truncates a real clause
