@@ -90,6 +90,33 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   full connector layer + orchestration.
 >
 > ---
+> **PROD-3 — async, LangGraph-based ingestion (job submit + status, not a blocking run). status: TODO.
+> Implements ADR-0050; the production-grade uplift over PROD-1's blocking `run_corpus_ingestion`.** WHY: a real
+> onboarding cannot make the user wait hours on a spinner — ingestion must be SUBMITTED (returns a job_id
+> immediately), run ASYNC with document-level parallelism + queuing, and its progress POLLED via an API. Tractable
+> because the pipeline is ALREADY idempotent + resumable (content-hash gating + `is_done` [Contract present = done]
+> + upserts) and documents are independent units of work — exactly what durable execution needs. SUBSTRATE = LangGraph
+> (we already use it throughout; the per-document `production_document_ingest` IS a LangGraph subgraph). Docs-MCP
+> grounded: LangGraph gives checkpointer+`thread_id` (durable resume), parallel fan-out + `max_concurrency`
+> (rate-limit-bounded) + per-node RetryPolicy, and `interrupt()`/`Command(resume=)` (cancel/pause); its idempotency
+> guidance (upserts/read-before-write) is what we already do.
+> - **DESIGN (ADR-0050):** a corpus-level LangGraph graph fans out documents (map) to the existing per-doc ingest
+>   subgraph, bounded by `max_concurrency`, fan-in finalizes (party link + report); `thread_id=job_id` + a persistent
+>   checkpointer = durable resume; an `IngestionJob` record {job_id, corpus_ref, db, status, total, done,
+>   dead_lettered[], ts, error} + the KG (`count(Contract)`) as progress ground truth; MCP tools
+>   `submit_ingestion(corpus_ref, db)->job_id` + `get_ingestion_status(job_id)` (capability infra, NOT orchestration —
+>   the agent calls them). MVP = corpus graph + persistent checkpointer + background async runner + thin status;
+>   FULL = LangGraph Platform/Server (built-in background runs + REST status + queue) OR GCP Pub/Sub + Cloud Run workers.
+> - **ACCEPTANCE (MVP, a HANDFUL of docs):** `submit_ingestion` returns a job_id immediately; documents ingest
+>   in parallel (bounded); `get_ingestion_status` reports done/total + dead_lettered while running and after; a
+>   killed+restarted job RESUMES (re-does only unfinished docs); validated on ~3–5 docs from the GCS prod1 corpus.
+> - **BUILD-TIME GROUNDING REQUIRED (CLAUDE.md rule) before coding:** exact LangGraph fan-out API (`Send` vs
+>   parallel-edges + `defer` fan-in), checkpointer backend (SQLite/Postgres), `max_concurrency`/`RetryPolicy` wiring,
+>   and the MVP-runner-vs-LangGraph-Platform decision. Size the pool from PROD-1's real per-doc throughput + rate limits.
+> - **Files (anticipated):** a corpus-ingest LangGraph graph (`subgraphs/`), an `IngestionJob` store (ArcadeDB type
+>   or light store), an ingestion MCP server (`mcp/`), tests.
+>
+> ---
 > **FCE-1 — function-conditioned extraction (status: TODO / future, measurement-gated). Implements the ADR-0049 (3)
 > "execution lever" experiment; connects to ADR-0049 + ADR-0048 Phase-A addendum (the function-agnostic finding).**
 > - **What:** make clause property extraction FUNCTION-CONDITIONED. Today `capabilities/dg_extraction.extract_clause(text, model)`

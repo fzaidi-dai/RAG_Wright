@@ -32,6 +32,12 @@ def main() -> None:
     reset = os.environ.get("RESET", "1") == "1"
     bucket = os.environ.get("GCS_BUCKET", "dreamai-pocs-ragwright-ingest")
     prefix = os.environ.get("GCS_PREFIX", "prod1-corpus/")
+    # INCLUDE_FILE: a curated subset (one blob basename per line) -> ingest exactly those (budget-bounded MVP set)
+    include = None
+    inc_file = os.environ.get("INCLUDE_FILE")
+    if inc_file and os.path.exists(inc_file):
+        with open(inc_file) as f:
+            include = frozenset(ln.strip() for ln in f if ln.strip())
 
     from rag_wright.capabilities.dg_extraction import build_verified_registry
     from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
@@ -41,13 +47,14 @@ def main() -> None:
         run_corpus_ingestion,
     )
 
-    log(f"[prod1] scratch DB={db} reset={reset} | GCS gs://{bucket}/{prefix} limit={limit or 'ALL'}")
+    log(f"[prod1] scratch DB={db} reset={reset} | GCS gs://{bucket}/{prefix} "
+        f"{'include='+str(len(include))+' curated' if include else 'limit='+str(limit or 'ALL')}")
     store = ArcadeDBStore.from_env(database=db, reset=reset)
     store.ensure_schema()
     registry = build_verified_registry({"entities": []})  # GENERIC: no CUAD/EDGAR verified entity anchors
     ingest_graph = production_document_ingest(
         store, cache_dir="data/cache/prod1", registry=registry, party_seed_path=None)  # no CUAD party seed
-    adapter = production_gcs_adapter(bucket, prefix, limit=limit)
+    adapter = production_gcs_adapter(bucket, prefix, limit=0 if include else limit, include=include)
 
     log("[prod1] ingesting from GCS ...")
     report = run_corpus_ingestion(

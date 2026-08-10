@@ -77,3 +77,9 @@ def test_non_text_blob_uses_the_injected_parse_bytes_seam():
 def test_non_text_blob_without_a_parser_fails_clearly():
     with pytest.raises(NotImplementedError, match="parse_bytes"):
         list(_adapter([_FakeBlob("prod1-corpus/deal.pdf", data=b"x")]).documents())
+
+
+def test_include_filters_to_a_curated_subset_by_basename():
+    blobs = [_FakeBlob(f"prod1-corpus/{n}.txt", text=n) for n in ("a", "b", "c", "d")]
+    got = list(_adapter(blobs, include=frozenset({"b.txt", "d.txt"})).documents())
+    assert sorted(d.text for d in got) == ["b", "d"]

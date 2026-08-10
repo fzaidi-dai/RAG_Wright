@@ -32,12 +32,14 @@ class GcsCorpusAdapter:
         prefix: str,
         *,
         limit: int = 0,
+        include: Optional[frozenset] = None,
         client: Any = None,
         parse_bytes: Optional[Callable[[str, bytes], str]] = None,
     ) -> None:
         self._bucket = bucket
         self._prefix = prefix
         self._limit = limit
+        self._include = include  # if set, only blobs whose BASENAME is in this set (a curated subset ingest)
         self._client = client
         self._parse_bytes = parse_bytes
 
@@ -64,6 +66,8 @@ class GcsCorpusAdapter:
 
         client = self._get_client()
         blobs = [b for b in client.list_blobs(self._bucket, prefix=self._prefix) if not b.name.endswith("/")]
+        if self._include is not None:  # curated subset: keep only the named blobs (by basename)
+            blobs = [b for b in blobs if b.name.rsplit("/", 1)[-1] in self._include]
         if self._limit:
             blobs = blobs[: self._limit]
         for blob in blobs:
@@ -79,6 +83,7 @@ class GcsCorpusAdapter:
 
 
 def production_gcs_adapter(bucket: str, prefix: str, *, limit: int = 0,
+                          include: Optional[frozenset] = None,
                           parse_bytes: Optional[Callable[[str, bytes], str]] = None) -> GcsCorpusAdapter:
     """Build the adapter with a real `google.cloud.storage.Client` (application-default credentials, the same auth
     gsutil uses). Lazy import so importing this module needs no GCS client."""
@@ -92,4 +97,4 @@ def production_gcs_adapter(bucket: str, prefix: str, *, limit: int = 0,
             "GCS python client needs Application Default Credentials. Run once: "
             "`gcloud auth application-default login` (or set GOOGLE_APPLICATION_CREDENTIALS to a service-account "
             "key in production). Note: gsutil/gcloud being authed is NOT sufficient for the python client.") from e
-    return GcsCorpusAdapter(bucket, prefix, limit=limit, client=client, parse_bytes=parse_bytes)
+    return GcsCorpusAdapter(bucket, prefix, limit=limit, include=include, client=client, parse_bytes=parse_bytes)
