@@ -31,11 +31,16 @@ the enum; extraction = granite (product substrate). Deliberately generic: **empt
    on 250k-char merger agreements the LLM JSON truncates ("Unterminated string") → graceful degrade (doc still
    ingests, fewer entities), but few/no party entities from the M&A docs. Fix: chunk / bound the party pass (same
    class as the per-clause `max_tokens` issue, but for the whole-doc call).
-2. **Party-linking generalization UNPROVEN.** Two-part: (a) my `ingest_prod1` driver initially left `link_fn` on
-   the no-op default (fixed — now wires the generic cacheless `party_clause_linking(store)`); (b) but run directly,
-   the generic single-provenance join still derived **0 PARTY_TO links** on this corpus — driven partly by #1
-   (truncated party extraction) and partly by the derive-join's generality on non-CUAD entities. Needs its own
-   investigation; do NOT claim party-linking generalizes yet.
+2. **Party-linking: RESOLVED (PLINK-1) — it works generically; my earlier "0 links" was two of my own errors, not
+   a defect.** (a) The `ingest_prod1` driver initially left `link_fn` on the no-op default so linking never ran
+   *during* ingest (fixed — now wires the generic cacheless `party_clause_linking(store)`). (b) My post-hoc
+   diagnostic queried the **wrong edge-type name** (`PARTY_TO`; the constant is `PartyTo`), which threw "type not
+   found" and made me falsely report 0 links. Run correctly, the generic provenance join
+   (`Entity.chunk_id` source-doc == `Contract.contract_id`) derives **48 links / 0 unmatched** across BOTH the NDA
+   (38) and MAUD (10) entities, and writes **48 `PartyTo` edges** (real party→contract links). The derive-join is
+   already covered by hermetic tests (13 green). PEXT-1 is NOT a confounder — party extraction produced entities
+   for both corpora. So party-linking generalizes; the many-to-many enrichment (mention cache) remains the only
+   cache-dependent part.
 3. **GCS python client needs a service account / ADC** (gsutil/gcloud auth is insufficient) — handled here via the
    `.env` SA key; production would use a service account or the GCP MCP (product-side).
 4. **Blocking sequential run is slow** — 19 docs ≈ 1.5h; the full 100 (50 large MAUD) would be ~3.5–6h. This is the
@@ -46,5 +51,5 @@ the enum; extraction = granite (product substrate). Deliberately generic: **empt
 ## Verdict
 The **core is production-shaped and validated on real non-CUAD contracts**: GCS → generic pipeline → typed KG +
 span index, with a sane classifier and the ONT-2 ontology enrichment demonstrably working on fresh data. The open
-items — large-doc party extraction, party-linking generalization, async execution (PROD-3), and PDF parsing — are
-the capability-hardening backlog, not blockers to the pipeline itself.
+items — large-doc party extraction (PEXT-1), async execution (PROD-3), and PDF parsing — are the capability-
+hardening backlog, not blockers to the pipeline itself. (Party-linking, PLINK-1, is resolved: it works generically.)

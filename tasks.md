@@ -43,10 +43,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > exactly the designed M&A facets. GCS integration works (SA auth, `GcsCorpusAdapter` + `include` filter). Built:
 > `scripts/acquire_prod1_corpus.py`, `corpus/gcs_ingestion.py`, `scripts/ingest_prod1.py`; max_tokens 2000→4000 fix.
 > OPEN FOLLOW-UPS (hardening backlog, NOT blockers): (1) full-document party extraction truncates JSON on large docs
-> (graceful degrade) → chunk/bound the party pass; (2) party-linking generalization UNPROVEN — the generic cacheless
-> `party_clause_linking(store)` runs but derived 0 PARTY_TO links here (partly #1, partly the derive-join on non-CUAD
-> entities) → investigate; (3) PDF/DOCX parse route (`parse_bytes`/docling) not exercised (text corpus) → shared with
-> PROD-2; (4) blocking sequential run is slow (19 docs ~1.5h) → PROD-3 async. ORIGINAL SCOPE below.
+> (graceful degrade) → chunk/bound the party pass [PEXT-1]; (2) party-linking = RESOLVED [PLINK-1] — works generically
+> (48 `PartyTo` edges); the "0 links" was my diagnostic querying the wrong type name (`PARTY_TO` vs `PartyTo`) + the
+> driver omitting `link_fn` (both fixed); (3) PDF/DOCX parse route (`parse_bytes`/docling) not exercised (text corpus)
+> → shared with PROD-2; (4) blocking sequential run is slow (19 docs ~1.5h) → PROD-3 async. ORIGINAL SCOPE below.
 >
 > **PROD-1 (original scope) — end-to-end ingest of a NON-CUAD corpus.
 > Connects to ADR-0049 (generic-customer lens) + ADR-0039 (self-hosted product substrate) + ADR-0048 (the enum
@@ -84,8 +84,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > PEXT-1 are PROD-1 hardening findings (`docs/eval/prod1_readiness.md`) promoted to tracked tasks.
 >
 > ---
-> **PLINK-1 — party-linking not producing links: investigate + fix (status: TODO, DO FIRST). PROD-1 finding #2;
-> connects to ADR-0036 (PARTY-TO-MANY-TO-MANY) + the KG-7 party<->contract join.** SYMPTOM: on the PROD-1 KG
+> **PLINK-1 — party-linking: RESOLVED (2026-08-11) — no capability defect; it works generically. Root cause = two
+> of my own errors: (a) the `ingest_prod1` driver left `link_fn` on the no-op default so linking never ran during
+> ingest (FIXED — now wires generic cacheless `party_clause_linking(store)`); (b) my diagnostic queried the WRONG
+> edge-type name (`PARTY_TO`; the constant is `PartyTo`) → false "type not found / 0 links". Run correctly, the
+> generic provenance join (Entity.chunk_id source-doc == Contract.contract_id) gives 48 links / 0 unmatched across
+> BOTH NDA (38) + MAUD (10) entities → 48 `PartyTo` edges on the prod1 KG; derive already covered by 13 hermetic
+> tests. PEXT-1 is NOT a confounder. No code change beyond the driver `link_fn`; readiness note corrected.**
+> (original investigation scope below.) PROD-1 finding #2; connects ADR-0036 + KG-7.
+> SYMPTOM (as first seen): on the PROD-1 KG
 > (`ragwright_prod1`, 19 contracts / 48 Entity nodes), the GENERIC cacheless `party_clause_linking(store)` (mentions=None
 > → `derive_party_contract_links(all_contracts, all_entities)`) ran but derived **0 PARTY_TO links** (PARTY_TO type
 > never created). Entity fields present: `entity_id, cik, name, entity_type, confidence, chunk_id`. So the capability
