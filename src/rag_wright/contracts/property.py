@@ -74,6 +74,10 @@ class PropertyDimension(str, Enum):
     # one carries that had no existing dimension). Vocab domain-designed + corpus-checked (ADR-0049 step 2).
     DISPUTE_METHOD = "dispute_method"    # how disputes are resolved (Dispute Resolution)
     COLLATERAL_TYPE = "collateral_type"  # collateral a security interest attaches to (Security Interest; list)
+    FORCE_MAJEURE_EVENT = "force_majeure_event"              # excused events (Force Majeure; list)
+    ROYALTY_BASIS = "royalty_basis"                          # how a royalty is calculated (Royalties)
+    CONFIDENTIALITY_EXCEPTION = "confidentiality_exception"  # permitted disclosures (Confidentiality; list)
+    CONDITION_TYPE = "condition_type"                        # kind of condition (Condition Precedent)
 
 
 # Closed controlled vocabularies (approved OQ3). A dimension NOT in this map is open-valued
@@ -129,6 +133,17 @@ CLOSED_VOCAB: dict[PropertyDimension, frozenset[str]] = {
     PropertyDimension.COLLATERAL_TYPE: frozenset(
         {"accounts_receivable", "inventory", "equipment", "fixtures", "ip", "real_property",
          "deposit_accounts", "general_intangibles", "all_assets"}),
+    PropertyDimension.FORCE_MAJEURE_EVENT: frozenset(
+        {"act_of_god", "war", "pandemic", "government_action", "labor_dispute", "supply_failure",
+         "natural_disaster"}),
+    PropertyDimension.ROYALTY_BASIS: frozenset(
+        {"pct_net_sales", "pct_gross_sales", "per_unit", "fixed", "tiered"}),
+    PropertyDimension.CONFIDENTIALITY_EXCEPTION: frozenset(
+        {"required_by_law", "publicly_available", "independently_developed", "prior_possession",
+         "third_party_source"}),
+    PropertyDimension.CONDITION_TYPE: frozenset(
+        {"regulatory_approval", "financing", "third_party_consent", "due_diligence", "board_approval",
+         "no_material_adverse_change", "court_approval", "closing_condition"}),
 }
 
 _FOLIO_BASE = "https://folio.openlegalstandard.org/"

@@ -42,21 +42,27 @@ def test_the_8_taxonomy_gap_types_are_now_modeled_with_existing_dims():
     for f in TaxonomyGapFunction:
         assert f.value in FUNCTION_APPLICABLE_DIMS, f"{f.value} must be modeled, not permissive"
     assert PERMISSIVE_FUNCTIONS == frozenset()  # every one of the 52 labels is now modeled
-    # spot-check the domain choices (Force Majeure / Confidentiality still on existing dims only)
-    assert FUNCTION_APPLICABLE_DIMS["Force Majeure"] == frozenset(
-        {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT})
-    assert FUNCTION_APPLICABLE_DIMS["Confidentiality"] == frozenset(
-        {_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND})
+    # spot-check the ONT-1 existing-dim choices are present (subset -- ONT-2 later adds each type's facet dim)
+    assert {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT} <= \
+        FUNCTION_APPLICABLE_DIMS["Force Majeure"]
+    assert {_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND} <= FUNCTION_APPLICABLE_DIMS["Confidentiality"]
 
 
-def test_ont2_new_dimensions_added_to_dispute_and_security_types():
-    # ADR-0049 (2): dispute_method (scalar) and collateral_type (list) enrich their types' applicability
-    assert _D.DISPUTE_METHOD in FUNCTION_APPLICABLE_DIMS["Dispute Resolution"]
-    assert _D.COLLATERAL_TYPE in FUNCTION_APPLICABLE_DIMS["Security Interest"]
+def test_ont2_new_dimensions_added_to_their_types():
+    # ADR-0049 (2): each taxonomy-gap type's defining facet dimension is in its applicability set
     from rag_wright.spans.symbolic_validation import MULTI_VALUED_DIMENSIONS
 
-    assert _D.COLLATERAL_TYPE in MULTI_VALUED_DIMENSIONS  # a clause may pledge several collateral kinds
-    assert _D.DISPUTE_METHOD not in MULTI_VALUED_DIMENSIONS  # scalar
+    assert _D.DISPUTE_METHOD in FUNCTION_APPLICABLE_DIMS["Dispute Resolution"]
+    assert _D.COLLATERAL_TYPE in FUNCTION_APPLICABLE_DIMS["Security Interest"]
+    assert _D.FORCE_MAJEURE_EVENT in FUNCTION_APPLICABLE_DIMS["Force Majeure"]
+    assert _D.ROYALTY_BASIS in FUNCTION_APPLICABLE_DIMS["Royalties"]
+    assert _D.CONFIDENTIALITY_EXCEPTION in FUNCTION_APPLICABLE_DIMS["Confidentiality"]
+    assert _D.CONDITION_TYPE in FUNCTION_APPLICABLE_DIMS["Condition Precedent"]
+    # lists vs scalars
+    for d in (_D.COLLATERAL_TYPE, _D.FORCE_MAJEURE_EVENT, _D.CONFIDENTIALITY_EXCEPTION):
+        assert d in MULTI_VALUED_DIMENSIONS
+    for d in (_D.DISPUTE_METHOD, _D.ROYALTY_BASIS, _D.CONDITION_TYPE):
+        assert d not in MULTI_VALUED_DIMENSIONS
 
 
 def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():

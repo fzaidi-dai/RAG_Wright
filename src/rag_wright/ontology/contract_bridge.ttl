@@ -218,6 +218,33 @@ cbr:fixtures a cbr:CollateralType . cbr:ip a cbr:CollateralType . cbr:real_prope
 cbr:deposit_accounts a cbr:CollateralType . cbr:general_intangibles a cbr:CollateralType .
 cbr:all_assets a cbr:CollateralType .
 
+cbr:ForceMajeureEvent a owl:Class ;   # a clause may list several (list)
+    owl:oneOf ( cbr:act_of_god cbr:war cbr:pandemic cbr:government_action cbr:labor_dispute cbr:supply_failure
+                cbr:natural_disaster ) .
+cbr:act_of_god a cbr:ForceMajeureEvent . cbr:war a cbr:ForceMajeureEvent . cbr:pandemic a cbr:ForceMajeureEvent .
+cbr:government_action a cbr:ForceMajeureEvent . cbr:labor_dispute a cbr:ForceMajeureEvent .
+cbr:supply_failure a cbr:ForceMajeureEvent . cbr:natural_disaster a cbr:ForceMajeureEvent .
+
+cbr:RoyaltyBasis a owl:Class ;
+    owl:oneOf ( cbr:pct_net_sales cbr:pct_gross_sales cbr:per_unit cbr:fixed cbr:tiered ) .
+cbr:pct_net_sales a cbr:RoyaltyBasis . cbr:pct_gross_sales a cbr:RoyaltyBasis . cbr:per_unit a cbr:RoyaltyBasis .
+cbr:fixed a cbr:RoyaltyBasis . cbr:tiered a cbr:RoyaltyBasis .
+
+cbr:ConfidentialityException a owl:Class ;   # standard NDA carve-outs; a clause may list several (list)
+    owl:oneOf ( cbr:required_by_law cbr:publicly_available cbr:independently_developed cbr:prior_possession
+                cbr:third_party_source ) .
+cbr:required_by_law a cbr:ConfidentialityException . cbr:publicly_available a cbr:ConfidentialityException .
+cbr:independently_developed a cbr:ConfidentialityException . cbr:prior_possession a cbr:ConfidentialityException .
+cbr:third_party_source a cbr:ConfidentialityException .
+
+cbr:ConditionType a owl:Class ;   # broadened via corpus check (no_material_adverse_change / court_approval / closing)
+    owl:oneOf ( cbr:regulatory_approval cbr:financing cbr:third_party_consent cbr:due_diligence cbr:board_approval
+                cbr:no_material_adverse_change cbr:court_approval cbr:closing_condition ) .
+cbr:regulatory_approval a cbr:ConditionType . cbr:financing a cbr:ConditionType .
+cbr:third_party_consent a cbr:ConditionType . cbr:due_diligence a cbr:ConditionType .
+cbr:board_approval a cbr:ConditionType . cbr:no_material_adverse_change a cbr:ConditionType .
+cbr:court_approval a cbr:ConditionType . cbr:closing_condition a cbr:ConditionType .
+
 # edges (Clause -> value class). Functional = at most one per clause.
 cbr:hasExclusivityType a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:permission ;
     rdfs:domain cbr:Clause ; rdfs:range cbr:ExclusivityType ;

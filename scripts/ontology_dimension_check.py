@@ -20,16 +20,25 @@ class Facet(BaseModel):
 
 # (clause function, facet question, proposed canonical vocab) -- the two HIGH dimensions
 CHECKS = [
-    ("Dispute Resolution",
-     "What dispute-resolution METHOD(s) does this clause specify (how disputes are resolved)? Options include "
-     "arbitration, litigation (courts), mediation, expert determination, negotiation/escalation. Return each as a "
-     "short lowercase phrase; [] if the clause specifies no method.",
-     {"arbitration", "litigation", "mediation", "expert_determination", "negotiation"}),
-    ("Security Interest",
-     "What COLLATERAL or assets does this clause grant / describe a security interest in? Return each asset "
-     "category as a short lowercase phrase (e.g. inventory, equipment, accounts receivable, intellectual "
-     "property, real property, all assets, deposit accounts); [] if none.",
-     {"accounts_receivable", "inventory", "equipment", "ip", "real_property", "all_assets", "deposit_accounts"}),
+    ("Force Majeure",
+     "What EVENTS does this force-majeure clause list as excusing performance? Return each event category as a "
+     "short lowercase phrase (e.g. act of god, war, pandemic, government action, labor dispute, supply failure, "
+     "natural disaster); [] if none.",
+     {"act_of_god", "war", "pandemic", "government_action", "labor_dispute", "supply_failure", "natural_disaster"}),
+    ("Royalties",
+     "On what BASIS is the royalty / payment in this clause calculated? Return a short lowercase phrase (e.g. "
+     "percentage of net sales, percentage of gross sales, per unit, fixed, tiered); [] if unclear.",
+     {"pct_net_sales", "pct_gross_sales", "per_unit", "fixed", "tiered"}),
+    ("Confidentiality",
+     "What EXCEPTIONS / permitted disclosures to the confidentiality obligation does this clause list? Return "
+     "each as a short lowercase phrase (e.g. required by law, publicly available, independently developed, prior "
+     "possession, received from third party); [] if none.",
+     {"required_by_law", "publicly_available", "independently_developed", "prior_possession", "third_party_source"}),
+    ("Condition Precedent",
+     "What KIND of condition must be satisfied under this condition-precedent clause? Return a short lowercase "
+     "phrase (e.g. regulatory approval, financing, third party consent, due diligence, board approval); [] if "
+     "unclear.",
+     {"regulatory_approval", "financing", "third_party_consent", "due_diligence", "board_approval"}),
 ]
 
 

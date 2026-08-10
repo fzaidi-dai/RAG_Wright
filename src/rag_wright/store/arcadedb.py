@@ -86,6 +86,12 @@ _TYPED_DIMENSION_EDGE: dict[PropertyDimension, str] = {
     # ADR-0049 (2): taxonomy-gap dimensions. dispute_method -> descriptive HAS_*; collateral -> semantic SECURES.
     PropertyDimension.DISPUTE_METHOD: "HAS_DISPUTE_METHOD",
     PropertyDimension.COLLATERAL_TYPE: "SECURES",
+    # ADR-0049 (2) batch 2: new descriptive edges for FM/royalty; confidentiality exceptions reuse EXCEPTS
+    # (they ARE carve-outs to the duty) and conditions reuse REQUIRES (a condition is an obligation).
+    PropertyDimension.FORCE_MAJEURE_EVENT: "HAS_FORCE_MAJEURE_EVENT",
+    PropertyDimension.ROYALTY_BASIS: "HAS_ROYALTY_BASIS",
+    PropertyDimension.CONFIDENTIALITY_EXCEPTION: "EXCEPTS",
+    PropertyDimension.CONDITION_TYPE: "REQUIRES",
 }
 # distinct edge types, insertion-ordered (for DDL + counts)
 TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(dict.fromkeys(_TYPED_DIMENSION_EDGE.values()))

@@ -15,18 +15,22 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > **ONT-1 DONE (implements ADR-0049 step 1):** the 8 taxonomy-gap clause types moved OUT of `PERMISSIVE_FUNCTIONS`
 > INTO `FUNCTION_APPLICABLE_DIMS`, each with its EXISTING-dimension applicability from legal domain knowledge
 > (partial by design). `PERMISSIVE_FUNCTIONS` now empty (all 52 labels validated). ruff clean; suite 1100 pass/43 skip.
-> **ONT-2 IN PROGRESS (ADR-0049 step 2): 2 HIGH dimensions DONE; 4 remaining.** The 8 types' defining facets had NO
-> existing dimension. Method: domain-designed vocab + CORPUS-CHECK (`scripts/ontology_dimension_check.py`, DeepSeek
-> free-form extraction over sampled clauses = check not source). **DONE (2 HIGH, worked end-to-end across all synced
-> artifacts):** `dispute_method` (scalar; arbitration/litigation/mediation/expert_determination/negotiation → Dispute
-> Resolution) + `collateral_type` (list, UCC-aligned; corpus added fixtures+general_intangibles → Security Interest).
-> Threaded through .ttl + `property.py` PropertyDimension/CLOSED_VOCAB + `clause_template.py::Clause` fields +
-> `clause_kg_extractor.py` field→dim maps + `arcadedb.py` _TYPED_DIMENSION_EDGE (HAS_DISPUTE_METHOD/SECURES) +
-> `symbolic_validation.py` applicability+MULTI_VALUED. All sync-lints green; suite 1101 pass/43 skip.
-> **ONT-2 REMAINING (4, batch next, same pattern):** `force_majeure_event` (list → Force Majeure), `royalty_basis`
-> (→ Royalties), `confidentiality_exception` (list → Confidentiality; reuse-vs-new carve_out TBD), `condition_type`
-> (→ Condition Precedent). Payment Terms + Record Retention = covered by existing dims (no new dim). (3)
-> function-conditioned extraction = FUTURE experiment, gated on measurement.
+> **ONT-2 DONE (ADR-0049 step 2): all 6 new dimensions added; the 8 taxonomy-gap types are now FULLY modeled.**
+> Method: domain-designed vocab + CORPUS-CHECK (`scripts/ontology_dimension_check.py`, DeepSeek free-form extraction
+> over sampled clauses = check NOT source). The 6 defining-facet dimensions, each threaded end-to-end through all
+> synced artifacts (.ttl + `property.py` PropertyDimension/CLOSED_VOCAB + `clause_template.py::Clause` fields +
+> `clause_kg_extractor.py` field→dim maps + `arcadedb.py` _TYPED_DIMENSION_EDGE + `symbolic_validation.py`
+> applicability+MULTI_VALUED): `dispute_method` (scalar→Dispute Resolution, HAS_DISPUTE_METHOD), `collateral_type`
+> (list, UCC-aligned→Security Interest, SECURES), `force_majeure_event` (list→Force Majeure, HAS_FORCE_MAJEURE_EVENT),
+> `royalty_basis` (scalar→Royalties, HAS_ROYALTY_BASIS), `confidentiality_exception` (list→Confidentiality, reuses
+> EXCEPTS), `condition_type` (scalar→Condition Precedent, reuses REQUIRES; broadened via corpus check w/ MAC +
+> court_approval + closing_condition). Corpus refined vocabs: collateral +fixtures/general_intangibles;
+> confidentiality proceeded on domain knowledge (weak corpus support = label-quality artifact, user-approved).
+> Payment Terms + Record Retention = covered by existing dims (no new dim). All sync-lints green; suite 1101 pass/43 skip.
+> **NEXT (open): (3) function-conditioned extraction = FUTURE experiment, gated on measurement.** The ADR-0049
+> ontology-enrichment arc (ONT-1 + ONT-2) for the 8 new types is COMPLETE. Generic-customer lens (ADR-0049) stands
+> for all future ingestion/KG moves. Re-INGEST is what would populate these new dims on real data (not done; the KG
+> only has them as schema until an ingest fills them — CUAD reclassify was label-only).
 >
 > **(prior, 2026-08-09/10) INGEST-LLM-CLASSIFIER step-2 taxonomy extension DONE (44 → 52 labels
 > + curated FOLD alias map) + Phase A WRITE DONE + audited (ADR-0048 addenda).** Step 2 (ADR-0048

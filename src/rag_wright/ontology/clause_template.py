@@ -435,6 +435,55 @@ class CollateralType(str, Enum):
     OTHER = "Other"
 
 
+class ForceMajeureEvent(str, Enum):
+    """Controlled vocabulary for force_majeure_event values (ADR-0049 (2)). Unmapped -> OTHER."""
+
+    ACT_OF_GOD = "act_of_god"
+    WAR = "war"
+    PANDEMIC = "pandemic"
+    GOVERNMENT_ACTION = "government_action"
+    LABOR_DISPUTE = "labor_dispute"
+    SUPPLY_FAILURE = "supply_failure"
+    NATURAL_DISASTER = "natural_disaster"
+    OTHER = "Other"
+
+
+class RoyaltyBasis(str, Enum):
+    """Controlled vocabulary for royalty_basis values (ADR-0049 (2)). Unmapped -> OTHER."""
+
+    PCT_NET_SALES = "pct_net_sales"
+    PCT_GROSS_SALES = "pct_gross_sales"
+    PER_UNIT = "per_unit"
+    FIXED = "fixed"
+    TIERED = "tiered"
+    OTHER = "Other"
+
+
+class ConfidentialityException(str, Enum):
+    """Controlled vocabulary for confidentiality_exception values (ADR-0049 (2), standard NDA carve-outs)."""
+
+    REQUIRED_BY_LAW = "required_by_law"
+    PUBLICLY_AVAILABLE = "publicly_available"
+    INDEPENDENTLY_DEVELOPED = "independently_developed"
+    PRIOR_POSSESSION = "prior_possession"
+    THIRD_PARTY_SOURCE = "third_party_source"
+    OTHER = "Other"
+
+
+class ConditionType(str, Enum):
+    """Controlled vocabulary for condition_type values (ADR-0049 (2), broadened via corpus check). Unmapped -> OTHER."""
+
+    REGULATORY_APPROVAL = "regulatory_approval"
+    FINANCING = "financing"
+    THIRD_PARTY_CONSENT = "third_party_consent"
+    DUE_DILIGENCE = "due_diligence"
+    BOARD_APPROVAL = "board_approval"
+    NO_MATERIAL_ADVERSE_CHANGE = "no_material_adverse_change"
+    COURT_APPROVAL = "court_approval"
+    CLOSING_CONDITION = "closing_condition"
+    OTHER = "Other"
+
+
 # -----------------------------------------------------------------------------
 # Root document
 # -----------------------------------------------------------------------------
@@ -498,6 +547,39 @@ class Clause(BaseModel):
         description=(
             "The minimum-commitment / volume amount ONLY (a short value), e.g. '$1,000,000', "
             "'100 units/year'."
+        ),
+    )
+
+    condition_type: ConditionType = Field(
+        ConditionType.OTHER,
+        description=(
+            "The kind of condition a CONDITION-PRECEDENT clause requires: regulatory approval / financing / "
+            "third-party consent / due diligence / board approval / no material adverse change / court "
+            "approval / closing condition."
+        ),
+    )
+
+    confidentiality_exception: List[ConfidentialityException] = Field(
+        default_factory=list,
+        description=(
+            "Permitted disclosures / exceptions to a CONFIDENTIALITY obligation (may be several): required by "
+            "law, publicly available, independently developed, prior possession, received from a third party."
+        ),
+    )
+
+    force_majeure_event: List[ForceMajeureEvent] = Field(
+        default_factory=list,
+        description=(
+            "Events a FORCE-MAJEURE clause lists as excusing performance (may be several): act of god, war, "
+            "pandemic, government action, labor dispute, supply failure, natural disaster."
+        ),
+    )
+
+    royalty_basis: RoyaltyBasis = Field(
+        RoyaltyBasis.OTHER,
+        description=(
+            "How a ROYALTY is calculated: percentage of net sales / percentage of gross sales / per unit / "
+            "fixed / tiered."
         ),
     )
 

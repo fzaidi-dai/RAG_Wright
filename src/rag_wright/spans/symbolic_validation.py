@@ -146,16 +146,18 @@ FUNCTION_APPLICABLE_DIMS: dict[str, frozenset[PropertyDimension]] = {
     # majeure events, confidentiality permitted-disclosures) has no existing dimension and is added as a NEW
     # dimension in step (2). Cross-cutting dims (party_asymmetry/temporal_bound/mutuality) included where they
     # genuinely recur, per the "expand conservatively" rule.
-    "Confidentiality": frozenset({_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
+    # ADR-0049 (2): each type-specific facet dimension added to its type's applicability.
+    "Confidentiality": frozenset(
+        {_D.CONFIDENTIALITY_EXCEPTION, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
     "Payment Terms": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Royalties": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND}),
-    # ADR-0049 (2): dispute_method / collateral_type added -- the type-specific facets
+    "Royalties": frozenset({_D.ROYALTY_BASIS, _D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND}),
     "Dispute Resolution": frozenset({_D.DISPUTE_METHOD, _D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
     "Record Retention": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
     "Security Interest": frozenset({_D.COLLATERAL_TYPE, _D.COMMITMENT_QUANTUM, _D.PARTY_ASYMMETRY}),
-    "Condition Precedent": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
+    "Condition Precedent": frozenset({_D.CONDITION_TYPE, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
     "Force Majeure": frozenset(
-        {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT}),
+        {_D.FORCE_MAJEURE_EVENT, _D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY,
+         _D.TERMINATION_RIGHT}),
 }
 
 # ADR-0049 (1): the 8 taxonomy-gap functions are now MODELED above (existing-dimension applicability), so nothing
@@ -169,7 +171,9 @@ PERMISSIVE_FUNCTIONS: frozenset[str] = frozenset()
 # other dimension is SCALAR (at most one value) -> `sh:maxCount 1`. Kept in code, referencing enum members,
 # for the same no-ttl-drift reason as FUNCTION_APPLICABLE_DIMS.
 MULTI_VALUED_DIMENSIONS: frozenset[PropertyDimension] = frozenset(
-    {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE, _D.COLLATERAL_TYPE}  # ADR-0049 (2): collateral is a list
+    # ADR-0049 (2): collateral / force-majeure events / confidentiality exceptions are all lists on a clause.
+    {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE, _D.COLLATERAL_TYPE, _D.FORCE_MAJEURE_EVENT,
+     _D.CONFIDENTIALITY_EXCEPTION}
 )
 
 # Deontic consistency (JUDGE-ONTOLOGY-3, ODRL). The consent-regime VALUES that assert NO restriction
