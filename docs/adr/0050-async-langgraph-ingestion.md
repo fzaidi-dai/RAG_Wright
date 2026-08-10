@@ -59,3 +59,29 @@ clean: the product's agents submit and poll; the async ingestion job lives on ou
   parallel-edges + `defer` fan-in), checkpointer backend, `max_concurrency`/`RetryPolicy` wiring, and the
   MVP-runner-vs-LangGraph-Platform decision. Tracked as **PROD-3** in `tasks.md`.
 - Sizing (worker pool / queue concurrency) should use PROD-1's real per-document throughput + rate-limit ceilings.
+
+## Addendum (PROD-3 hard requirement): lossless ingestion — NO silent partial success
+
+PROD-1/PEXT-1 surfaced an unacceptable production behavior: a stage can fail *inside* a document (e.g. party
+extraction returns truncated JSON on a transient LLM garble), the pipeline **degrades gracefully to empty** (0
+parties), the document is still written as "ingested", and the loss is only discoverable by grepping logs after
+the fact. For a production application this is a silent data-loss defect, not resilience.
+
+**Invariant (non-negotiable):** every document either ingests **fully** — all REQUIRED stages succeed (retried on
+transient failure) — **or is explicitly recorded** as failed, never silently written with missing extractions.
+Concretely the async ingestion job MUST:
+1. **Track per-stage outcome per document** (parse / chunk / segment / classify / clause-extract / party-extract /
+   write), so a partial is detectable, not swallowed. A stage that "degrades to empty" MUST set a failure flag,
+   not pass silently.
+2. **Retry transient failures** — per-node `RetryPolicy` (the LangGraph lever) with backoff, since the observed
+   failures are concurrency/provider transients that succeed on a clean retry.
+3. **On irrecoverable failure of a required stage → DEAD-LETTER the document** (do not commit a partial/misleading
+   Contract), OR write it explicitly flagged `PARTIAL` with the failed stages + reason recorded on the node — the
+   choice is per-stage, but the outcome is always **visible**, never silent.
+4. **Surface it in the job status:** `get_ingestion_status` reports `dead_lettered[]` and any `partial[]` with
+   reasons, so a failure is known at job-completion time, not discovered later.
+5. **Idempotent re-run heals it:** because `is_done` + content-hash gating already make re-ingest re-do only the
+   unfinished/failed work, a dead-lettered document can be re-submitted and completed without touching the rest.
+
+This invariant is the PRIMARY acceptance criterion for PROD-3 — a stable, lossless-or-explicitly-dead-lettered
+pipeline — above raw throughput. PEXT-1's transient is the first concrete case it must handle correctly.

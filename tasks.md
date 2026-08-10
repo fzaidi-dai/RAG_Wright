@@ -111,8 +111,20 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   entities aren't marked as parties.
 >
 > ---
-> **PEXT-1 — full-document party extraction truncates JSON on large docs: investigate + fix (status: TODO, DO
-> SECOND). PROD-1 finding #1; connects to `capabilities/dg_extraction.py` (GP-1B party extraction, ADR-0035).**
+> **PEXT-1 — RESOLVED via diagnosis (2026-08-11): NOT a systematic bug; the real issue is SILENT PARTIAL SUCCESS,
+> which folds into PROD-3's lossless invariant.** DIAGNOSIS (evidence): (1) input is capped at 8000 chars (preamble),
+> so it's NOT a long-input problem; (2) all 4 ingested MAUD docs extract parties fine with `direct` (2/3/2/6 parties)
+> and `maud_11` is 5/5 OK standalone; (3) `auto`/`dense` gives NO benefit (same or fewer/cleaner) at higher cost —
+> DISPROVEN; (4) RLM (long-input) + XML/tag-parse (not escaping; nested-list unsupported; wrong seam) are inapplicable.
+> So the ingest-time "Unterminated string" was a RARE CONCURRENCY-INDUCED TRANSIENT (many granite calls fanning out
+> → one garbled response), not doc-size-driven. BUT the graceful-degrade-to-0-parties (discovered only by grepping
+> logs) is itself a PRODUCTION DEFECT (silent data loss) → the fix is NOT doc-specific; it is the LOSSLESS-OR-DEAD-
+> LETTERED invariant now made PROD-3's PRIMARY acceptance criterion (ADR-0050 addendum): retry the transient, and on
+> irrecoverable failure of a required stage DEAD-LETTER/flag-PARTIAL with the reason — never silently write partial.
+> (`_DEFAULT_MAX_RETRIES` is currently 1; PROD-3's per-node RetryPolicy + stage-outcome tracking supersede it.) No
+> code change taken here. ORIGINAL SCOPE below.
+>
+> **PEXT-1 (original scope) — full-document party extraction truncation.**
 > SYMPTOM: `extract_parties` (GP-1B, runs on the WHOLE document) on 250k-char MAUD merger agreements returns
 > truncated JSON ("Unterminated string starting at ...", "Invalid JSON response") → graceful degrade but few/no party
 > entities from the large docs. This is the whole-document analogue of the per-clause `max_tokens` issue (which was
@@ -170,9 +182,16 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   `submit_ingestion(corpus_ref, db)->job_id` + `get_ingestion_status(job_id)` (capability infra, NOT orchestration —
 >   the agent calls them). MVP = corpus graph + persistent checkpointer + background async runner + thin status;
 >   FULL = LangGraph Platform/Server (built-in background runs + REST status + queue) OR GCP Pub/Sub + Cloud Run workers.
+> - **PRIMARY ACCEPTANCE — LOSSLESS OR EXPLICITLY DEAD-LETTERED (user requirement, ADR-0050 addendum), ABOVE
+>   throughput:** NO silent partial success. Track per-stage outcome per document (a stage that degrades to empty
+>   MUST flag failure, not pass silently); RETRY transient failures (per-node RetryPolicy); on irrecoverable failure
+>   of a REQUIRED stage → DEAD-LETTER the doc (or write it flagged PARTIAL with the failed stages + reason), surfaced
+>   in `get_ingestion_status` `dead_lettered[]`/`partial[]`. PEXT-1's transient (party-extract → 0 parties) is the
+>   first case it must catch — a failure must be KNOWN at job completion, never discovered later by grepping logs.
 > - **ACCEPTANCE (MVP, a HANDFUL of docs):** `submit_ingestion` returns a job_id immediately; documents ingest
 >   in parallel (bounded); `get_ingestion_status` reports done/total + dead_lettered while running and after; a
->   killed+restarted job RESUMES (re-does only unfinished docs); validated on ~3–5 docs from the GCS prod1 corpus.
+>   killed+restarted job RESUMES (re-does only unfinished docs); validated on ~3–5 docs from the GCS prod1 corpus,
+>   INCLUDING a forced-failure doc that must dead-letter/flag (not silently write partial).
 > - **BUILD-TIME GROUNDING REQUIRED (CLAUDE.md rule) before coding:** exact LangGraph fan-out API (`Send` vs
 >   parallel-edges + `defer` fan-in), checkpointer backend (SQLite/Postgres), `max_concurrency`/`RetryPolicy` wiring,
 >   and the MVP-runner-vs-LangGraph-Platform decision. Size the pool from PROD-1's real per-doc throughput + rate limits.
