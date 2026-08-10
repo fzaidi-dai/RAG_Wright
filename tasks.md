@@ -3,8 +3,27 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-09 newest): INGEST-LLM-CLASSIFIER step-2 taxonomy extension DONE (44 → 52 labels
-> + curated FOLD alias map); NEXT = the reclassify WRITE pass (Phase A) over the live KG.** Step 2 (ADR-0048
+> **RESUME / NEXT UP (2026-08-10 NEWEST): ONTOLOGY-ENRICH arc under the GENERIC-CUSTOMER LENS (ADR-0049). ONT-1
+> DONE; NEXT = ONT-2 (dimension/property gap analysis).** STANDING LENS (ADR-0049, memory `generic-customer-lens`):
+> judge every ingestion/KG move by "does a brand-new SME customer's ingest→KG→query benefit?" — NOT by CUAD/ACORD
+> label quality (dev corpora). Master lever = enrich the ontology/`.ttl` (the 4 synced artifacts: `contract_bridge.ttl`
+> + `ontology/clause_template.py::Clause` + `contracts/property.py::PropertyDimension`/`CLOSED_VOCAB` +
+> `spans/symbolic_validation.py::FUNCTION_APPLICABLE_DIMS`, kept equal by a lint + `tests/ontology/test_clause_template.py`).
+> Consequence: the ADR-0048 reclassify is reframed as VALIDATION; the CUAD label tail (~4,088) is DROPPED as product
+> work; Phase B (dev-corpus property re-extraction) de-prioritized. Also grounded: extraction is FUNCTION-AGNOSTIC
+> (extract_clause fills the template from text; the label only gates applicability), so the ontology is the substance.
+> **ONT-1 DONE (implements ADR-0049 step 1):** the 8 taxonomy-gap clause types moved OUT of `PERMISSIVE_FUNCTIONS`
+> INTO `FUNCTION_APPLICABLE_DIMS`, each with its EXISTING-dimension applicability from legal domain knowledge
+> (partial by design). `PERMISSIVE_FUNCTIONS` now empty (all 52 labels validated). ruff clean; suite 1100 pass/43 skip.
+> **ONT-2 NEXT (ADR-0049 step 2):** dimension/property GAP ANALYSIS — the 8 types' defining facets have NO existing
+> dimension (dispute_method, royalty basis, force-majeure events, confidentiality permitted-disclosures, payment
+> method, collateral type, …). Design new closed-vocab `PropertyDimension`s + `Clause` template fields + value vocab
+> + FOLIO/ODRL grounding across ALL 4 synced artifacts (ask-first schema change), then extend the ONT-1 applicability
+> sets. Property analog of the taxonomy-gap analysis; LLM-assisted proposal + human oversight. (3) function-conditioned
+> extraction = FUTURE experiment, gated on measurement.
+>
+> **(prior, 2026-08-09/10) INGEST-LLM-CLASSIFIER step-2 taxonomy extension DONE (44 → 52 labels
+> + curated FOLD alias map) + Phase A WRITE DONE + audited (ADR-0048 addenda).** Step 2 (ADR-0048
 > addendum): the full-corpus gap analysis (840 chunks / 6,157 clauses, 954 distinct OTHER types) → LLM-assisted,
 > human-reconciled curation (`scripts/curate_taxonomy_gaps.py`, one global DeepSeek call; batched runs discarded
 > for cross-batch contradiction). Approved disciplined delta APPLIED to `contracts/function.py`: `TaxonomyGapFunction`

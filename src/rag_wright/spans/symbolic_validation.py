@@ -48,7 +48,6 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.collection import Collection
 from rdflib.namespace import RDF, SH
 
-from rag_wright.contracts.function import TaxonomyGapFunction
 from rag_wright.contracts.property import (
     CLOSED_VOCAB,
     ClausePropertyRecord,
@@ -141,16 +140,28 @@ FUNCTION_APPLICABLE_DIMS: dict[str, frozenset[PropertyDimension]] = {
         {_D.DAMAGE_TYPE, _D.CAP_BASIS, _D.MUTUALITY, _D.PARTY_ASYMMETRY}
     ),
     "Third Party Beneficiary": frozenset({_D.COVERED_PARTIES, _D.PARTY_ASYMMETRY}),
+    # ADR-0049 (1): the 8 taxonomy-gap functions, modeled with their EXISTING-dimension applicability from legal
+    # domain knowledge (what each clause type carries for ANY customer, not fitted to CUAD). These sets are
+    # PARTIAL by design -- the type-specific facet each one needs (e.g. dispute_method, royalty basis, force-
+    # majeure events, confidentiality permitted-disclosures) has no existing dimension and is added as a NEW
+    # dimension in step (2). Cross-cutting dims (party_asymmetry/temporal_bound/mutuality) included where they
+    # genuinely recur, per the "expand conservatively" rule.
+    "Confidentiality": frozenset({_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
+    "Payment Terms": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
+    "Royalties": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND}),
+    "Dispute Resolution": frozenset({_D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
+    "Record Retention": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
+    "Security Interest": frozenset({_D.COMMITMENT_QUANTUM, _D.PARTY_ASYMMETRY}),
+    "Condition Precedent": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
+    "Force Majeure": frozenset(
+        {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT}),
 }
 
-# ADR-0048 step 2: the 8 taxonomy-gap functions are in the label space now, but their property-dimension
-# profiles are NOT yet characterized (Phase B property re-extraction, which would populate real assertions on
-# these clauses to review, is deferred). Per this module's standing rule -- coverage is expanded deliberately,
-# never by guessing a closed set we are unsure of (see the header) -- they are EXPLICITLY PERMISSIVE
-# (unvalidated) until real-data evidence exists, rather than modeled speculatively (which would risk false
-# downgrades). Declared here (not silently absent from the map) so the coverage test still guards against typos
-# and silent gaps; each moves into FUNCTION_APPLICABLE_DIMS once its real dimensions are observed.
-PERMISSIVE_FUNCTIONS: frozenset[str] = frozenset({f.value for f in TaxonomyGapFunction})
+# ADR-0049 (1): the 8 taxonomy-gap functions are now MODELED above (existing-dimension applicability), so nothing
+# is permissive -- every one of the 52 labels is validated. The mechanism is kept (empty) so a future new clause
+# type can be declared explicitly permissive rather than silently missing, per the coverage test. Their
+# type-specific dimensions are added in ADR-0049 step (2).
+PERMISSIVE_FUNCTIONS: frozenset[str] = frozenset()
 
 
 # The multi-valued dimensions (`clause_kg_extractor._LIST_ENUM_DIMS`): a clause may carry several. Every

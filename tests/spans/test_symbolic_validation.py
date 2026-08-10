@@ -34,6 +34,23 @@ def test_the_map_covers_exactly_the_function_taxonomy():
     assert not (set(FUNCTION_APPLICABLE_DIMS) & PERMISSIVE_FUNCTIONS)  # modeled XOR permissive, never both
 
 
+def test_the_8_taxonomy_gap_types_are_now_modeled_with_existing_dims():
+    # ADR-0049 (1): the 8 new clause types graduate from PERMISSIVE_FUNCTIONS into the applicability map, each
+    # with its existing-dimension applicability (domain-knowledge; (2) adds the type-specific dims later).
+    from rag_wright.contracts.function import TaxonomyGapFunction
+
+    for f in TaxonomyGapFunction:
+        assert f.value in FUNCTION_APPLICABLE_DIMS, f"{f.value} must be modeled, not permissive"
+    assert PERMISSIVE_FUNCTIONS == frozenset()  # every one of the 52 labels is now modeled
+    # spot-check the domain choices (existing dims only)
+    assert FUNCTION_APPLICABLE_DIMS["Dispute Resolution"] == frozenset(
+        {_D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND})
+    assert FUNCTION_APPLICABLE_DIMS["Force Majeure"] == frozenset(
+        {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT})
+    assert FUNCTION_APPLICABLE_DIMS["Confidentiality"] == frozenset(
+        {_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND})
+
+
 def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():
     # the observed error class: nonsolicit_target (valid value, in-vocab) asserted on Anti-Assignment, where
     # only assignment_consent / party_asymmetry apply. The lexical judge cannot see this; the SHACL gate can.
