@@ -48,6 +48,9 @@ _ENUM_TO_DIMENSION = {
     t.EscrowReleaseTrigger: PropertyDimension.ESCROW_RELEASE_TRIGGER,
     t.MfnScope: PropertyDimension.MFN_SCOPE,
     t.TerminationRight: PropertyDimension.TERMINATION_RIGHT,
+    # ADR-0049 (2)
+    t.DisputeMethod: PropertyDimension.DISPUTE_METHOD,
+    t.CollateralType: PropertyDimension.COLLATERAL_TYPE,
 }
 
 
@@ -92,7 +95,7 @@ def test_every_enum_has_the_other_escape() -> None:
 
 def test_multivalued_dimensions_are_lists() -> None:
     """Carve-outs, covered subjects, and waived damage types are sets on a clause -> list fields."""
-    for field in ("covers", "excepts", "prohibits_damage"):
+    for field in ("covers", "excepts", "prohibits_damage", "collateral_type"):
         assert "list" in str(t.Clause.model_fields[field].annotation).lower()
 
 

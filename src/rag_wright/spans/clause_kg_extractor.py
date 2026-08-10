@@ -61,6 +61,7 @@ _SCALAR_ENUM_DIMS: dict[str, PropertyDimension] = {
     "has_escrow_release_trigger": _D.ESCROW_RELEASE_TRIGGER,
     "has_mfn_scope": _D.MFN_SCOPE,
     "has_termination_right": _D.TERMINATION_RIGHT,
+    "dispute_method": _D.DISPUTE_METHOD,  # ADR-0049 (2): Dispute Resolution method
 }
 # open-valued CUAD dims: direct string fields on Clause -> dimension
 _OPEN_STR_DIMS: dict[str, PropertyDimension] = {
@@ -73,6 +74,7 @@ _LIST_ENUM_DIMS: dict[str, PropertyDimension] = {
     "covers": _D.COVERED_SUBJECT,
     "excepts": _D.CARVE_OUT,
     "prohibits_damage": _D.DAMAGE_TYPE,
+    "collateral_type": _D.COLLATERAL_TYPE,  # ADR-0049 (2): Security Interest collateral (multi-valued)
 }
 
 

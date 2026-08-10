@@ -54,6 +54,8 @@ def test_sanctioned_edge_set() -> None:
         # CUAD-family extensions (KG-4): deontic -> GRANTS/PROHIBITS; the rest -> HAS_*
         "GRANTS", "HAS_COC_CONSENT", "HAS_ASSIGNMENT_CONSENT", "HAS_ESCROW_TRIGGER", "HAS_MFN_SCOPE",
         "HAS_TERMINATION_RIGHT", "HAS_AUDIT_FREQUENCY", "HAS_COMMITMENT_QUANTUM", "HAS_LD_TRIGGER",
+        # ADR-0049 (2): dispute_method -> HAS_DISPUTE_METHOD; collateral_type -> SECURES
+        "HAS_DISPUTE_METHOD", "SECURES",
     }
 
 

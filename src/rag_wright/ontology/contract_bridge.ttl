@@ -204,6 +204,20 @@ cbr:price a cbr:MfnScope . cbr:terms a cbr:MfnScope . cbr:price_and_terms a cbr:
 cbr:TerminationRight a owl:Class ; owl:oneOf ( cbr:either_party cbr:one_party ) .
 cbr:either_party a cbr:TerminationRight . cbr:one_party a cbr:TerminationRight .
 
+# ADR-0049 (2): the taxonomy-gap clause types' defining facets (domain-designed, corpus-checked).
+cbr:DisputeMethod a owl:Class ;
+    owl:oneOf ( cbr:arbitration cbr:litigation cbr:mediation cbr:expert_determination cbr:negotiation ) .
+cbr:arbitration a cbr:DisputeMethod . cbr:litigation a cbr:DisputeMethod . cbr:mediation a cbr:DisputeMethod .
+cbr:expert_determination a cbr:DisputeMethod . cbr:negotiation a cbr:DisputeMethod .
+
+cbr:CollateralType a owl:Class ;   # UCC Article 9 aligned; a security interest may attach to several (list)
+    owl:oneOf ( cbr:accounts_receivable cbr:inventory cbr:equipment cbr:fixtures cbr:ip cbr:real_property
+                cbr:deposit_accounts cbr:general_intangibles cbr:all_assets ) .
+cbr:accounts_receivable a cbr:CollateralType . cbr:inventory a cbr:CollateralType . cbr:equipment a cbr:CollateralType .
+cbr:fixtures a cbr:CollateralType . cbr:ip a cbr:CollateralType . cbr:real_property a cbr:CollateralType .
+cbr:deposit_accounts a cbr:CollateralType . cbr:general_intangibles a cbr:CollateralType .
+cbr:all_assets a cbr:CollateralType .
+
 # edges (Clause -> value class). Functional = at most one per clause.
 cbr:hasExclusivityType a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:subPropertyOf odrl:permission ;
     rdfs:domain cbr:Clause ; rdfs:range cbr:ExclusivityType ;

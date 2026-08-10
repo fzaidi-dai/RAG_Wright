@@ -149,9 +149,10 @@ FUNCTION_APPLICABLE_DIMS: dict[str, frozenset[PropertyDimension]] = {
     "Confidentiality": frozenset({_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
     "Payment Terms": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
     "Royalties": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND}),
-    "Dispute Resolution": frozenset({_D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
+    # ADR-0049 (2): dispute_method / collateral_type added -- the type-specific facets
+    "Dispute Resolution": frozenset({_D.DISPUTE_METHOD, _D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
     "Record Retention": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Security Interest": frozenset({_D.COMMITMENT_QUANTUM, _D.PARTY_ASYMMETRY}),
+    "Security Interest": frozenset({_D.COLLATERAL_TYPE, _D.COMMITMENT_QUANTUM, _D.PARTY_ASYMMETRY}),
     "Condition Precedent": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
     "Force Majeure": frozenset(
         {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT}),
@@ -168,7 +169,7 @@ PERMISSIVE_FUNCTIONS: frozenset[str] = frozenset()
 # other dimension is SCALAR (at most one value) -> `sh:maxCount 1`. Kept in code, referencing enum members,
 # for the same no-ttl-drift reason as FUNCTION_APPLICABLE_DIMS.
 MULTI_VALUED_DIMENSIONS: frozenset[PropertyDimension] = frozenset(
-    {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE}
+    {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE, _D.COLLATERAL_TYPE}  # ADR-0049 (2): collateral is a list
 )
 
 # Deontic consistency (JUDGE-ONTOLOGY-3, ODRL). The consent-regime VALUES that assert NO restriction

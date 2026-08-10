@@ -42,13 +42,21 @@ def test_the_8_taxonomy_gap_types_are_now_modeled_with_existing_dims():
     for f in TaxonomyGapFunction:
         assert f.value in FUNCTION_APPLICABLE_DIMS, f"{f.value} must be modeled, not permissive"
     assert PERMISSIVE_FUNCTIONS == frozenset()  # every one of the 52 labels is now modeled
-    # spot-check the domain choices (existing dims only)
-    assert FUNCTION_APPLICABLE_DIMS["Dispute Resolution"] == frozenset(
-        {_D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND})
+    # spot-check the domain choices (Force Majeure / Confidentiality still on existing dims only)
     assert FUNCTION_APPLICABLE_DIMS["Force Majeure"] == frozenset(
         {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT})
     assert FUNCTION_APPLICABLE_DIMS["Confidentiality"] == frozenset(
         {_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND})
+
+
+def test_ont2_new_dimensions_added_to_dispute_and_security_types():
+    # ADR-0049 (2): dispute_method (scalar) and collateral_type (list) enrich their types' applicability
+    assert _D.DISPUTE_METHOD in FUNCTION_APPLICABLE_DIMS["Dispute Resolution"]
+    assert _D.COLLATERAL_TYPE in FUNCTION_APPLICABLE_DIMS["Security Interest"]
+    from rag_wright.spans.symbolic_validation import MULTI_VALUED_DIMENSIONS
+
+    assert _D.COLLATERAL_TYPE in MULTI_VALUED_DIMENSIONS  # a clause may pledge several collateral kinds
+    assert _D.DISPUTE_METHOD not in MULTI_VALUED_DIMENSIONS  # scalar
 
 
 def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():

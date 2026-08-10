@@ -70,6 +70,10 @@ class PropertyDimension(str, Enum):
     AUDIT_FREQUENCY = "audit_frequency"  # open-valued (e.g. "annual", "quarterly")
     COMMITMENT_QUANTUM = "commitment_quantum"  # open-valued (minimum commitment / volume restriction)
     LD_TRIGGER = "ld_trigger"  # open-valued (liquidated-damages trigger)
+    # ADR-0049 (2): new closed-vocab dimensions for the taxonomy-gap clause types (the type-specific facet each
+    # one carries that had no existing dimension). Vocab domain-designed + corpus-checked (ADR-0049 step 2).
+    DISPUTE_METHOD = "dispute_method"    # how disputes are resolved (Dispute Resolution)
+    COLLATERAL_TYPE = "collateral_type"  # collateral a security interest attaches to (Security Interest; list)
 
 
 # Closed controlled vocabularies (approved OQ3). A dimension NOT in this map is open-valued
@@ -119,6 +123,12 @@ CLOSED_VOCAB: dict[PropertyDimension, frozenset[str]] = {
     PropertyDimension.ESCROW_RELEASE_TRIGGER: frozenset({"bankruptcy", "breach", "discontinuance"}),
     PropertyDimension.MFN_SCOPE: frozenset({"price", "terms", "price_and_terms"}),
     PropertyDimension.TERMINATION_RIGHT: frozenset({"either_party", "one_party"}),
+    # ADR-0049 (2): the taxonomy-gap types' defining facets (domain-designed, corpus-checked).
+    PropertyDimension.DISPUTE_METHOD: frozenset(
+        {"arbitration", "litigation", "mediation", "expert_determination", "negotiation"}),
+    PropertyDimension.COLLATERAL_TYPE: frozenset(
+        {"accounts_receivable", "inventory", "equipment", "fixtures", "ip", "real_property",
+         "deposit_accounts", "general_intangibles", "all_assets"}),
 }
 
 _FOLIO_BASE = "https://folio.openlegalstandard.org/"

@@ -409,6 +409,32 @@ class Jurisdiction(BaseModel):
         return " ".join(str(p) for p in parts if p) or "Unknown"
 
 
+class DisputeMethod(str, Enum):
+    """Controlled vocabulary for dispute_method values (ADR-0049 (2)). Unmapped values normalize to OTHER."""
+
+    ARBITRATION = "arbitration"
+    LITIGATION = "litigation"
+    MEDIATION = "mediation"
+    EXPERT_DETERMINATION = "expert_determination"
+    NEGOTIATION = "negotiation"
+    OTHER = "Other"
+
+
+class CollateralType(str, Enum):
+    """Controlled vocabulary for collateral_type values (ADR-0049 (2), UCC Article 9 aligned). Unmapped -> OTHER."""
+
+    ACCOUNTS_RECEIVABLE = "accounts_receivable"
+    INVENTORY = "inventory"
+    EQUIPMENT = "equipment"
+    FIXTURES = "fixtures"
+    IP = "ip"
+    REAL_PROPERTY = "real_property"
+    DEPOSIT_ACCOUNTS = "deposit_accounts"
+    GENERAL_INTANGIBLES = "general_intangibles"
+    ALL_ASSETS = "all_assets"
+    OTHER = "Other"
+
+
 # -----------------------------------------------------------------------------
 # Root document
 # -----------------------------------------------------------------------------
@@ -458,6 +484,14 @@ class Clause(BaseModel):
         ),
     )
 
+    collateral_type: List[CollateralType] = Field(
+        default_factory=list,
+        description=(
+            "The collateral / assets a SECURITY-INTEREST clause attaches to (may be several), e.g. "
+            "inventory, equipment, accounts receivable, all assets."
+        ),
+    )
+
     commitment_quantum: Optional[str] = Field(
         None,
         max_length=80,
@@ -475,6 +509,14 @@ class Clause(BaseModel):
     covers_party_scope: PartyScope = Field(
         PartyScope.OTHER,
         description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+    )
+
+    dispute_method: DisputeMethod = Field(
+        DisputeMethod.OTHER,
+        description=(
+            "How a DISPUTE-RESOLUTION clause resolves disputes: arbitration / litigation (courts) / "
+            "mediation / expert determination / negotiation."
+        ),
     )
 
     excepts: List[ExceptionModel] = Field(

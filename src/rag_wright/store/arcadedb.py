@@ -83,6 +83,9 @@ _TYPED_DIMENSION_EDGE: dict[PropertyDimension, str] = {
     PropertyDimension.AUDIT_FREQUENCY: "HAS_AUDIT_FREQUENCY",
     PropertyDimension.COMMITMENT_QUANTUM: "HAS_COMMITMENT_QUANTUM",
     PropertyDimension.LD_TRIGGER: "HAS_LD_TRIGGER",
+    # ADR-0049 (2): taxonomy-gap dimensions. dispute_method -> descriptive HAS_*; collateral -> semantic SECURES.
+    PropertyDimension.DISPUTE_METHOD: "HAS_DISPUTE_METHOD",
+    PropertyDimension.COLLATERAL_TYPE: "SECURES",
 }
 # distinct edge types, insertion-ordered (for DDL + counts)
 TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(dict.fromkeys(_TYPED_DIMENSION_EDGE.values()))
