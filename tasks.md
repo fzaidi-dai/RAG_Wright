@@ -34,7 +34,21 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > reclassify was label-only).
 >
 > ---
-> **PROD-1 — production-readiness evidence: end-to-end ingest of a NON-CUAD corpus (status: TODO / recommended next).
+> **PROD-1 — production-readiness evidence: end-to-end ingest of a NON-CUAD corpus (status: MVP VALIDATED, budget-
+> capped; see `docs/eval/prod1_readiness.md`).** RESULT (2026-08-11): ingested 19 real non-CUAD contracts FROM GCS
+> (15 ContractNLI NDAs + 4 MAUD merger agreements; capped from 25 for budget) → Contract=19/Clause=1,134/Span=4,010,
+> 0 dead-lettered, `function=NONE=0`. The ADR-0049 ONT-2 ontology enrichment is VALIDATED on real data:
+> `condition_type` 122 (all 8 values incl. the corpus-check-added no_material_adverse_change/court_approval/closing),
+> `confidentiality_exception` 182, `dispute_method` 9, collateral 2, force_majeure 2 — the merger agreements exercised
+> exactly the designed M&A facets. GCS integration works (SA auth, `GcsCorpusAdapter` + `include` filter). Built:
+> `scripts/acquire_prod1_corpus.py`, `corpus/gcs_ingestion.py`, `scripts/ingest_prod1.py`; max_tokens 2000→4000 fix.
+> OPEN FOLLOW-UPS (hardening backlog, NOT blockers): (1) full-document party extraction truncates JSON on large docs
+> (graceful degrade) → chunk/bound the party pass; (2) party-linking generalization UNPROVEN — the generic cacheless
+> `party_clause_linking(store)` runs but derived 0 PARTY_TO links here (partly #1, partly the derive-join on non-CUAD
+> entities) → investigate; (3) PDF/DOCX parse route (`parse_bytes`/docling) not exercised (text corpus) → shared with
+> PROD-2; (4) blocking sequential run is slow (19 docs ~1.5h) → PROD-3 async. ORIGINAL SCOPE below.
+>
+> **PROD-1 (original scope) — end-to-end ingest of a NON-CUAD corpus.
 > Connects to ADR-0049 (generic-customer lens) + ADR-0039 (self-hosted product substrate) + ADR-0048 (the enum
 > classifier).** GOAL: convert ARCHITECTURE-confidence into EVIDENCE. The core pipeline (`run_corpus_ingestion` +
 > the per-document graph) is generic in shape but has NEVER run on non-CUAD/ACORD data; the 6 ONT-2 dims are

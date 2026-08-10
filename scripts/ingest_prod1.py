@@ -40,6 +40,7 @@ def main() -> None:
             include = frozenset(ln.strip() for ln in f if ln.strip())
 
     from rag_wright.capabilities.dg_extraction import build_verified_registry
+    from rag_wright.capabilities.party_clause_linking import party_clause_linking
     from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.contract_ingestion_pipeline import (
@@ -59,6 +60,10 @@ def main() -> None:
     log("[prod1] ingesting from GCS ...")
     report = run_corpus_ingestion(
         adapter, ingest_graph, progress=log,
+        # GENERIC party->clause linking (KG-7), no cache: the single-provenance join straight from the KG's own
+        # extracted parties. (The CUAD many-to-many enrichment needs a mention cache; this cacheless path is the
+        # generic default.) Runs ONCE after all documents are written.
+        link_fn=lambda: len(party_clause_linking(store).links),
         is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)
 
     log("\n=== PROD-1 INGEST REPORT ===")
