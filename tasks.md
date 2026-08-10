@@ -57,7 +57,37 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   chunking A/B). Do NOT claim "production-ready for any customer" until this evidence exists.
 > - **Explicitly OUT of scope (separate tasks):** full source connectors (GCS/S3/Drive/zip); the orchestration/agent
 >   layer (GraphWright); the per-onboarding taxonomy-gap analysis (method exists: taxonomy-gap + `ontology_dimension_check`).
+> - **Corpus (research done):** non-CUAD, in-domain, CC BY 4.0 — **MAUD** (152 real merger agreements, Atticus; exercises
+>   condition_type/MAC + dispute_method) + **ContractNLI** (~607 mostly-NDAs, Stanford; exercises Confidentiality +
+>   confidentiality_exception). Also **fresh SEC EDGAR EX-10** material contracts (most customer-like; EDGAR fetch
+>   plumbing exists in `data/edgar/cache`). ACORD EXCLUDED (CUAD-derivative, already in KG). Upload a small diverse mix
+>   to a subfolder of the existing GCS bucket (`gs://dreamai-pocs-ragwright-ingest/`). Sources: atticusprojectai.org/maud,
+>   stanfordnlp.github.io/contract-nli.
 > - **Files:** a new `FolderCorpusAdapter` (`corpus/`), a driver script (`scripts/`), a findings note (`docs/eval/` or ADR).
+>
+> ---
+> **PROD-2 — compliance-KG ingestion readiness (status: TODO). The COMPLIANCE side is a DIFFERENT KG
+> (`ragwright_compliance`) + ontology (`compliance_bridge.ttl`, deontic Requirement = obligation/prohibition/permission)
+> + pipeline; analyze + prove its readiness for ANY customer regulation, analogous to PROD-1. Connects to ADR-0049 +
+> the compliance rung (CC-*).** GROUNDED FINDINGS: architecturally GOOD — `run_compliance_ingestion` reuses the SAME
+> generic `run_corpus_ingestion` (dead-letter/resume/X-N) with a `RegulationAdapter` + compliance-specific extract/write,
+> and the deontic ontology is domain-generic by construction. GAPS (same classes as PROD-1): (1) **no generic
+> raw-doc→sections parser** — `RegulationAdapter` expects a PRE-SECTIONED `sections.json`; the only producer is
+> `scripts/acquire_ftc_255.py`, which is **eCFR-API + XML specific**, so a customer's own policy PDF/docx can't be
+> ingested; (2) requirement_extraction + the judge + the `skip_definitions` heuristic were tuned/validated ONLY on **FTC
+> 16 CFR 255** (advertising) — unproven on any other regulation domain; (3) never run on non-FTC data.
+> - **Steps:** Phase 1 (cheap, isolates EXTRACTION generalization from the parsing gap): ingest ANOTHER eCFR part via the
+>   existing `acquire_ftc_255.py` pattern (e.g. 16 CFR 233 deceptive pricing, or a different domain like 21 CFR 101 food
+>   labeling) → run requirement_extraction + inspect the Requirement KG (obligation/prohibition/permission sanity,
+>   over-/under-generation, the definitions-skip). Phase 2 (the real gap): a GENERIC raw-doc→sections adapter
+>   (docling parse → section split, replacing the eCFR-XML-specific producer) so a customer POLICY PDF ingests; test on
+>   GDPR (EUR-Lex) or a sample internal policy. Vision on, monitored, validated model config.
+> - **Acceptance / verify:** a non-FTC regulation ingests end-to-end; the Requirement KG is sane on the new domain; a
+>   DATED readiness note enumerating what generalizes vs what's FTC-tuned. Do NOT claim compliance-ingestion
+>   production-ready until then.
+> - **Corpus (research done):** easiest = OTHER eCFR parts (trivial via the existing acquire script); richer = **GDPR**
+>   (EUR-Lex, public), **OPP-115 / PrivacyQA** (privacy policies), **CODE-ACCORD** (building regs). Out of scope: the
+>   full connector layer + orchestration.
 >
 > ---
 > **FCE-1 — function-conditioned extraction (status: TODO / future, measurement-gated). Implements the ADR-0049 (3)
