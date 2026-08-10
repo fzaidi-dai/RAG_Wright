@@ -15,8 +15,10 @@ GraphConverter reads (`edge_label`, `graph_reference`, `reference_closed_catalog
 
 from __future__ import annotations
 
+import logging
 import os
 import tempfile
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -29,6 +31,43 @@ from rag_wright.capabilities.graph_extraction import parties_to_extraction
 from rag_wright.contracts.identifiers import ChunkId, canonical_source_doc_id
 from rag_wright.corpus.edgar import normalize_cik, normalize_name
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
+
+_DOCLING_LOGGER = "docling_graph"  # the package-root logger; children propagate their ERROR records up to it
+
+
+class ExtractionFailed(Exception):
+    """PROD-3 lossless invariant (ADR-0050): a docling-graph extraction call ERRORED (e.g. a truncated / invalid
+    LLM JSON response) rather than returning a clean result. docling-graph LOGS such a failure and then SWALLOWS it,
+    returning an empty result -- indistinguishable from a genuine no-content extraction unless we watch the log. We
+    RAISE this so the ingest graph can retry and, on exhaustion, dead-letter / flag the document, instead of
+    silently writing empty extractions. `stage` = 'party' | 'clause'; `reason` = the captured error message."""
+
+    def __init__(self, stage: str, reason: str) -> None:
+        super().__init__(f"{stage} extraction failed: {reason}")
+        self.stage = stage
+        self.reason = reason
+
+
+@contextmanager
+def capture_docling_errors():
+    """Capture ERROR-level log records emitted by docling-graph (the package logger `docling_graph`; children
+    propagate up) during an extraction call. The captured messages are appended to the yielded list -- a non-empty
+    list after the call means the extraction FAILED (vs a genuine clean-empty result)."""
+    captured: list[str] = []
+
+    class _Capture(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            if record.levelno >= logging.ERROR:
+                captured.append(record.getMessage())
+
+    logger = logging.getLogger(_DOCLING_LOGGER)
+    handler = _Capture()
+    handler.setLevel(logging.ERROR)
+    logger.addHandler(handler)
+    try:
+        yield captured
+    finally:
+        logger.removeHandler(handler)
 
 _PRIVATE_RESOLUTIONS = {"PRIVATE", "SKIP"}
 
@@ -277,20 +316,28 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
                     timeout_s: int = _DEFAULT_TIMEOUT_S,
                     temperature: float | None = None,
                     structured_output: bool = False,
-                    extraction_contract: str = "direct") -> Any | None:
+                    extraction_contract: str = "direct", stage: str = "party") -> Any | None:
     """Extract from `text` with `model` via docling-graph (API mode). Writes the preamble to a temp .md
     (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first extracted model or
     None. `extraction_contract` defaults to "direct" (contracts); pass "auto"/"dense" for long docs
-    (regulations) so a single call does not silently self-ration -- see build_pipeline_config."""
+    (regulations) so a single call does not silently self-ration -- see build_pipeline_config.
+
+    PROD-3 lossless invariant (ADR-0050): docling-graph LOGS an LLM/parse failure and then SWALLOWS it, returning
+    an empty result. We capture the ERROR log during the call and RAISE `ExtractionFailed(stage, reason)` on a
+    failure, so the ingest graph retries and (on exhaustion) dead-letters / flags the document instead of silently
+    writing empty extractions. A genuine clean-empty result (no error logged) still returns None."""
     from docling_graph import run_pipeline
 
     md = Path(tempfile.mkdtemp(prefix="dg_extract_")) / "contract.md"
     md.write_text(text[:preamble_chars], encoding="utf-8")
-    ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens,
-                                             timeout_s=timeout_s, temperature=temperature,
-                                             structured_output=structured_output,
-                                             extraction_contract=extraction_contract),
-                       mode="api")
+    with capture_docling_errors() as errors:
+        ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens,
+                                                 timeout_s=timeout_s, temperature=temperature,
+                                                 structured_output=structured_output,
+                                                 extraction_contract=extraction_contract),
+                           mode="api")
+    if errors:  # docling logged an error then swallowed it -> a failure, NOT a clean-empty result -> raise
+        raise ExtractionFailed(stage, errors[-1][:300])
     return ctx.extracted_models[0] if ctx.extracted_models else None
 
 
@@ -316,5 +363,5 @@ def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAU
 
     return extract_parties(
         text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS,
-        temperature=temperature, structured_output=structured_output,
+        temperature=temperature, structured_output=structured_output, stage="clause",
     )

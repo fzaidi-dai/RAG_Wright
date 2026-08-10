@@ -182,6 +182,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   `submit_ingestion(corpus_ref, db)->job_id` + `get_ingestion_status(job_id)` (capability infra, NOT orchestration —
 >   the agent calls them). MVP = corpus graph + persistent checkpointer + background async runner + thin status;
 >   FULL = LangGraph Platform/Server (built-in background runs + REST status + queue) OR GCP Pub/Sub + Cloud Run workers.
+> - **INCREMENT 1 DONE (2026-08-11): lossless hardening of the per-document pipeline (no silent partial
+> success), on the CURRENT sync pipeline.** `ExtractionFailed` + `capture_docling_errors` (dg_extraction):
+> `extract_parties`/`extract_clause` now RAISE on a captured docling ERROR (vs silently returning empty);
+> genuine-empty still returns None. Party-extraction failure → `_guard` retry → DEAD-LETTER with reason.
+> Clause-extraction failure → retry (transient), persistent → RECORDED (span_id+reason) → doc flagged PARTIAL
+> (not dead-lettered — user choice) → surfaced in `IngestionReport.partial[]` (never grep-only). +7 tests;
+> full suite 1114 pass. NEXT = Increment 2 (async LangGraph job envelope: fan-out + checkpointer + IngestionJob
+> + submit/status MCP tools).
 > - **PRIMARY ACCEPTANCE — LOSSLESS OR EXPLICITLY DEAD-LETTERED (user requirement, ADR-0050 addendum), ABOVE
 >   throughput:** NO silent partial success. Track per-stage outcome per document (a stage that degrades to empty
 >   MUST flag failure, not pass silently); RETRY transient failures (per-node RetryPolicy); on irrecoverable failure

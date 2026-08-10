@@ -23,7 +23,8 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
 
 
-def _stub_stages(*, fail_chunk_for=(), fail_index_for=(), fail_write_for=()):
+def _stub_stages(*, fail_chunk_for=(), fail_index_for=(), fail_write_for=(), fail_graph_for=(),
+                 clause_partial_for=None):
     calls = {"chunk": [], "segment": [], "clauses": [], "index": [], "graph": [], "resolve": 0, "write": []}
 
     def chunk_fn(doc):
@@ -38,7 +39,10 @@ def _stub_stages(*, fail_chunk_for=(), fail_index_for=(), fail_write_for=()):
 
     def clauses_fn(doc, segments):
         calls["clauses"].append(doc.source_doc_id)
-        return [f"clause::{doc.source_doc_id}"]
+        if clause_partial_for and doc.source_doc_id in clause_partial_for:  # PROD-3: records + per-clause failures
+            return {"clause_records": [f"clause::{doc.source_doc_id}"],
+                    "clause_failures": clause_partial_for[doc.source_doc_id]}
+        return [f"clause::{doc.source_doc_id}"]  # back-compat: a plain list -> no per-clause failures
 
     def index_fn(doc, segments):  # the span retrieval index -> #Span records written
         calls["index"].append(doc.source_doc_id)
@@ -48,6 +52,10 @@ def _stub_stages(*, fail_chunk_for=(), fail_index_for=(), fail_write_for=()):
 
     def graph_fn(doc, chunks):
         calls["graph"].append(doc.source_doc_id)
+        if doc.source_doc_id in fail_graph_for:  # party extraction FAILED (PROD-3: raises, not silent 0 parties)
+            from rag_wright.capabilities.dg_extraction import ExtractionFailed
+
+            raise ExtractionFailed("party", "Invalid JSON response: Unterminated string")
         return [f"extraction::{doc.source_doc_id}"]
 
     def resolve_fn(extraction_results):
@@ -281,3 +289,37 @@ def test_corpus_party_link_fn_falls_back_to_provenance_join_without_cache(tmp_pa
 
     assert n == 1
     assert {(link.entity_id, link.contract_id) for link in store.written} == {("CIK1", "C1")}
+
+
+# --- PROD-3 lossless invariant (ADR-0050): no silent partial success -------------------------------------------
+
+
+def test_party_extraction_failure_dead_letters_the_document():
+    # a failed party extraction (now RAISES ExtractionFailed instead of degrading to 0 parties) must dead-letter
+    # the document with the reason -- never silently write a Contract with no parties.
+    stages, calls = _stub_stages(fail_graph_for={"C1"})
+    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+
+    assert out["dead_letter"]["stage"] == "extract_graph"
+    assert "Unterminated string" in out["dead_letter"]["error"]
+    assert "written" not in out
+    assert calls["graph"] == ["C1", "C1"]  # retried under _FAST_RETRY before dead-lettering
+
+
+def test_clause_partial_failure_flags_the_document_not_dead_letter():
+    # a persistent per-clause failure must FLAG the doc PARTIAL (it is still written) and be SURFACED in the
+    # report -- one bad clause does not dead-letter the whole document, and the loss is never silent.
+    fails = [{"span_id": "s7", "function": "Cap On Liability", "reason": "boom"}]
+    stages, _ = _stub_stages(clause_partial_for={"C1": fails})
+    report = run_corpus_ingestion(_FakeAdapter(["C1"]), _graph(stages))
+
+    assert report.documents_ingested == 1 and report.dead_lettered == []
+    assert len(report.partial) == 1
+    assert report.partial[0]["source_doc_id"] == "C1"
+    assert report.partial[0]["clause_failures"] == fails
+
+
+def test_clean_document_is_not_flagged_partial():
+    stages, _ = _stub_stages()
+    report = run_corpus_ingestion(_FakeAdapter(["C1"]), _graph(stages))
+    assert report.partial == [] and report.documents_ingested == 1

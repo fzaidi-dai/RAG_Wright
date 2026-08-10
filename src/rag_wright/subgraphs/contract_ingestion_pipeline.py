@@ -59,6 +59,9 @@ class IngestionReport(BaseModel):
     dead_lettered: list[dict]
     party_links: int
     per_document: list[dict]
+    # PROD-3 lossless invariant (ADR-0050): documents written but INCOMPLETE (>=1 clause extraction failed after
+    # retries). Surfaced here so a partial is KNOWN at job completion, never discovered later by grepping logs.
+    partial: list[dict] = []
 
 
 @runtime_checkable
@@ -72,7 +75,9 @@ class CorpusAdapter(Protocol):
 # The injected per-document stage seams (each wraps a built subgraph / capability; stubbed in tests).
 ChunkFn = Callable[[SourceDocument], list]  # doc -> chunks
 SegmentFn = Callable[[SourceDocument, list], list]  # (doc, chunks) -> [(op, primary_function, chunk_doc_start, scores)]
-ClausesFn = Callable[[SourceDocument, list], list]  # (doc, segments) -> typed clause records
+ClausesFn = Callable[[SourceDocument, list], Any]  # (doc, segments) -> typed clause records (list) OR
+# {clause_records, clause_failures} when the adapter reports per-clause failures (PROD-3 lossless; extract_clauses
+# accepts either shape for back-compat)
 IndexFn = Callable[[SourceDocument, list], int]  # (doc, segments) -> #Span records written (retrieval index)
 GraphFn = Callable[[SourceDocument, list], list]  # (doc, chunks) -> ExtractionResults
 ResolveFn = Callable[[list], Any]  # extraction results -> resolution
@@ -85,6 +90,7 @@ class IngestionState(TypedDict, total=False):
     chunks: list
     segments: list  # shared: [(OperativeSpan, primary_function, chunk_doc_start, [FunctionScore])] (ADR-0048)
     clause_records: list
+    clause_failures: list  # PROD-3 lossless: per-clause extraction failures (span_id + reason) -> doc flagged PARTIAL
     span_count: int  # Span records written to the retrieval index (best-effort)
     extraction_results: list
     resolution: Any
@@ -130,8 +136,17 @@ def build_document_ingest(
 
     def extract_clauses(state: IngestionState, runtime: Runtime) -> IngestionState:
         doc = state["document"]
-        return _guard("extract_clauses",
-                      lambda: {"clause_records": clauses_fn(doc, state.get("segments", []))}, runtime, doc)
+
+        def _work() -> dict:
+            result = clauses_fn(doc, state.get("segments", []))
+            # PROD-3 lossless: clauses_fn may return {clause_records, clause_failures}; a plain list is back-compat
+            # (no per-clause failures). Per-clause failures do NOT dead-letter -- they flag the doc PARTIAL.
+            if isinstance(result, dict):
+                return {"clause_records": result.get("clause_records", []),
+                        "clause_failures": result.get("clause_failures", [])}
+            return {"clause_records": result}
+
+        return _guard("extract_clauses", _work, runtime, doc)
 
     def index_spans(state: IngestionState) -> IngestionState:
         # The dense/sparse retrieval index (Span records). BEST-EFFORT: a failed index must NOT lose the
@@ -223,6 +238,7 @@ def run_corpus_ingestion(
     ingested = 0
     skipped = 0
     dead_lettered: list[dict] = []
+    partial: list[dict] = []
     per_document: list[dict] = []
     for i, document in enumerate(documents, 1):
         if is_done(document):  # RESUME: already fully written in a prior run -> skip (no re-embed/re-write)
@@ -241,16 +257,23 @@ def run_corpus_ingestion(
         written = out.get("written", {})
         per_document.append({"source_doc_id": document.source_doc_id, "written": written})
         summary = " ".join(f"{k}={v}" for k, v in written.items()) or "ok"  # corpus-generic (clauses/entities OR requirements/…)
-        progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
+        # PROD-3 lossless: a doc written with >=1 failed clause is PARTIAL -- surfaced now, not grep-only.
+        clause_failures = out.get("clause_failures") or []
+        if clause_failures:
+            partial.append({"source_doc_id": document.source_doc_id, "clause_failures": clause_failures})
+            progress(f"[ingest] {i}/{total} {document.source_doc_id} PARTIAL ({len(clause_failures)} clause(s) "
+                     f"failed) {summary}")
+        else:
+            progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
 
     progress(f"[ingest] {ingested}/{total} present ({skipped} resume-skipped), {len(dead_lettered)} "
-             f"dead-lettered; linking parties (KG-7)...")
+             f"dead-lettered, {len(partial)} partial; linking parties (KG-7)...")
     party_links = link_fn()
     progress(f"[ingest] done: {ingested}/{total} ingested ({skipped} resume-skipped), "
-             f"{len(dead_lettered)} dead-lettered, {party_links} PARTY_TO edges")
+             f"{len(dead_lettered)} dead-lettered, {len(partial)} partial, {party_links} PARTY_TO edges")
     return IngestionReport(
         documents_ingested=ingested, dead_lettered=dead_lettered,
-        party_links=party_links, per_document=per_document)
+        party_links=party_links, per_document=per_document, partial=partial)
 
 
 def _parsed_from_text(source_doc_id: str, text: str, parse_dir: Any):
@@ -433,6 +456,7 @@ def production_document_ingest(
     # Clause extraction is network-bound (granite via OpenRouter); concurrency is env-tunable (CLAUDE.md
     # parallelize-LLM rule) -- 8 by default (populate_clause_kg's CONCURRENCY), higher for a large corpus.
     clause_concurrency = int(os.environ.get("CLAUSE_CONCURRENCY", "8"))
+    _CLAUSE_EXTRACT_ATTEMPTS = 3  # PROD-3 lossless: retry a transient per-clause extraction failure before flagging
 
     def _party_names(text: str) -> list:
         parties = extract_parties_fn(text)
@@ -448,7 +472,7 @@ def production_document_ingest(
         # index. Every span is kept (the index needs them all); NONE / off-taxonomy spans stay as NO_FUNCTION.
         return _segment_and_classify(chunks, classify_fn)
 
-    def clauses_fn(doc: SourceDocument, segments: list) -> list:
+    def clauses_fn(doc: SourceDocument, segments: list) -> dict:
         # Extract the typed record only for spans whose PRIMARY is a REAL function (NONE / off-taxonomy spans are
         # not clauses -- but they ARE still indexed by index_fn). Extraction is conditioned on the PRIMARY
         # (ADR-0048: primary-only extraction); the full `scores` list is attached to the record. CONCURRENT
@@ -459,7 +483,13 @@ def production_document_ingest(
             if canonical_function(function) is not None
         ]
         if not jobs:
-            return []
+            return {"clause_records": [], "clause_failures": []}
+
+        # PROD-3 lossless invariant (ADR-0050): a per-clause extraction FAILURE is RETRIED, then -- if persistent --
+        # RECORDED (span_id + reason), never silently dropped. The failures flag the document PARTIAL (one bad
+        # clause must not dead-letter a 100-clause doc; the failure is still surfaced). list.append is GIL-safe
+        # across map_concurrent's threads.
+        failures: list[dict] = []
 
         def _extract(job):
             index, op, function, scores = job
@@ -469,17 +499,24 @@ def production_document_ingest(
             if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no granite re-call
                 record = ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
             else:
-                try:
-                    record = clause_extractor(
-                        chunk_id=clause_cid, function=function, text=op.text, span_id=op.span_id)
-                except Exception:  # noqa: BLE001 - a per-span failure (truncated/invalid JSON) is SKIPPED (matches
-                    return None    # populate_clause_kg) and NOT cached, so a template-fix re-run re-extracts it
+                record = None
+                reason = ""
+                for _attempt in range(_CLAUSE_EXTRACT_ATTEMPTS):  # retry the transient (rare LLM-JSON garble)
+                    try:
+                        record = clause_extractor(
+                            chunk_id=clause_cid, function=function, text=op.text, span_id=op.span_id)
+                        break
+                    except Exception as exc:  # noqa: BLE001 - retry; a PERSISTENT failure is recorded below
+                        reason = str(exc)
+                if record is None:  # persistent failure -> record it (PARTIAL), do NOT cache, do NOT silently drop
+                    failures.append({"span_id": op.span_id, "function": function, "reason": reason[:200]})
+                    return None
                 cache_file.write_text(record.model_dump_json(), encoding="utf-8")  # cache successes only
             # ADR-0048: attach the LIVE multi-label classification (from the current classifier, not the cache).
             return record.model_copy(update={"functions": scores})
 
-        return [record for record in map_concurrent(jobs, _extract, max_concurrency=clause_concurrency)
-                if record is not None]
+        records = [r for r in map_concurrent(jobs, _extract, max_concurrency=clause_concurrency) if r is not None]
+        return {"clause_records": records, "clause_failures": failures}
 
     def index_fn(doc: SourceDocument, segments: list) -> int:
         # The dense/sparse Span retrieval index (FR-R): embed every span (BGE-M3, one batch) and upsert a
