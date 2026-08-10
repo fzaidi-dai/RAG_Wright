@@ -80,6 +80,48 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **Files:** a new `FolderCorpusAdapter` (`corpus/`), a driver script (`scripts/`), a findings note (`docs/eval/` or ADR).
 >
 > ---
+> **NEXT-UP SEQUENCE (user-set, task-by-task per the working loop): PLINK-1 → PEXT-1 → PROD-3.** Both PLINK-1 and
+> PEXT-1 are PROD-1 hardening findings (`docs/eval/prod1_readiness.md`) promoted to tracked tasks.
+>
+> ---
+> **PLINK-1 — party-linking not producing links: investigate + fix (status: TODO, DO FIRST). PROD-1 finding #2;
+> connects to ADR-0036 (PARTY-TO-MANY-TO-MANY) + the KG-7 party<->contract join.** SYMPTOM: on the PROD-1 KG
+> (`ragwright_prod1`, 19 contracts / 48 Entity nodes), the GENERIC cacheless `party_clause_linking(store)` (mentions=None
+> → `derive_party_contract_links(all_contracts, all_entities)`) ran but derived **0 PARTY_TO links** (PARTY_TO type
+> never created). Entity fields present: `entity_id, cik, name, entity_type, confidence, chunk_id`. So the capability
+> is wired (driver fix landed) but the DERIVE-JOIN yielded nothing on non-CUAD entities.
+> - **Investigate:** read `derive_party_contract_links` (`capabilities/party_clause_linking.py`) — what does it join
+>   on (entity_type=='party'? name match to a Contract's party list? chunk_id→contract provenance?), and does it
+>   assume CUAD-specific fields (e.g. CIK-resolved entities) that non-CUAD entities lack. ISOLATE the confounder: run
+>   it on ONLY the 15 NDAs (where full-document party extraction worked) vs the 4 MAUD (where it truncated, PEXT-1) —
+>   if NDAs also give 0, the derive-join is the bug; if NDAs give links, it's the PEXT-1 extraction confounder. Also
+>   check whether Entity nodes are even typed/marked as PARTIES vs generic entities, and whether the contract's party
+>   list is populated for the join.
+> - **Acceptance / verify:** `party_clause_linking(store)` derives correct PARTY_TO links on a clean non-CUAD KG (the
+>   NDA subset at minimum); a hermetic test over synthetic Contract+Entity nodes proving the generic join; a one-line
+>   root-cause note. Contract-first TDD; fix surgically.
+> - **Files:** `capabilities/party_clause_linking.py` (+ its test); possibly the extraction/entity-write path if
+>   entities aren't marked as parties.
+>
+> ---
+> **PEXT-1 — full-document party extraction truncates JSON on large docs: investigate + fix (status: TODO, DO
+> SECOND). PROD-1 finding #1; connects to `capabilities/dg_extraction.py` (GP-1B party extraction, ADR-0035).**
+> SYMPTOM: `extract_parties` (GP-1B, runs on the WHOLE document) on 250k-char MAUD merger agreements returns
+> truncated JSON ("Unterminated string starting at ...", "Invalid JSON response") → graceful degrade but few/no party
+> entities from the large docs. This is the whole-document analogue of the per-clause `max_tokens` issue (which was
+> fixed 2000→4000 for `extract_clause`). It is ALSO a confounder for PLINK-1, so PLINK-1 should isolate against it.
+> - **Investigate:** the `extract_parties` path in `dg_extraction.py` — its `max_tokens` / `preamble_chars` caps and
+>   why a huge document overruns them; whether the truncation is input-side (document too long for the context) or
+>   output-side (party list JSON exceeds max_tokens).
+> - **Fix options (decide during the task):** (a) CHUNK the document for the party pass (extract parties per
+>   chunk/section, then merge+dedup) — most robust for arbitrary-size docs; (b) bump the party-pass `max_tokens` +
+>   window the input; (c) catch the truncation and retry with a larger cap (like the PROD-1 note's original
+>   suggestion). Prefer (a) for generalization (a customer's docs are arbitrary size).
+> - **Acceptance / verify:** a large merger agreement (e.g. a 250k-char MAUD doc) yields party entities with NO
+>   truncation failure; a test on a large synthetic/real doc; re-run confirms entities extracted.
+> - **Files:** `capabilities/dg_extraction.py` (+ test); possibly `graph_extraction.py` / the party-extract wiring.
+>
+> ---
 > **PROD-2 — compliance-KG ingestion readiness (status: TODO). The COMPLIANCE side is a DIFFERENT KG
 > (`ragwright_compliance`) + ontology (`compliance_bridge.ttl`, deontic Requirement = obligation/prohibition/permission)
 > + pipeline; analyze + prove its readiness for ANY customer regulation, analogous to PROD-1. Connects to ADR-0049 +
