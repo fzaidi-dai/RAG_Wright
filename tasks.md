@@ -27,10 +27,37 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > court_approval + closing_condition). Corpus refined vocabs: collateral +fixtures/general_intangibles;
 > confidentiality proceeded on domain knowledge (weak corpus support = label-quality artifact, user-approved).
 > Payment Terms + Record Retention = covered by existing dims (no new dim). All sync-lints green; suite 1101 pass/43 skip.
-> **NEXT (open): FCE-1 — function-conditioned extraction (FUTURE experiment, measurement-gated); see the FCE-1
-> block below.** The ADR-0049 ontology-enrichment arc (ONT-1 + ONT-2) for the 8 new types is COMPLETE. Generic-customer
-> lens (ADR-0049) stands for all future ingestion/KG moves. Re-INGEST is what would populate these new dims on real
-> data (not done; the KG only has them as schema until an ingest fills them — CUAD reclassify was label-only).
+> **NEXT (open): PROD-1 (recommended, concrete — earns the "production-ready for any customer" claim) + FCE-1
+> (future experiment). Both scoped below.** The ADR-0049 ontology-enrichment arc (ONT-1 + ONT-2) for the 8 new types
+> is COMPLETE. Generic-customer lens (ADR-0049) stands for all future ingestion/KG moves. Re-INGEST is what would
+> populate the new dims on real data (not done; the KG only has them as schema until an ingest fills them — CUAD
+> reclassify was label-only).
+>
+> ---
+> **PROD-1 — production-readiness evidence: end-to-end ingest of a NON-CUAD corpus (status: TODO / recommended next).
+> Connects to ADR-0049 (generic-customer lens) + ADR-0039 (self-hosted product substrate) + ADR-0048 (the enum
+> classifier).** GOAL: convert ARCHITECTURE-confidence into EVIDENCE. The core pipeline (`run_corpus_ingestion` +
+> the per-document graph) is generic in shape but has NEVER run on non-CUAD/ACORD data; the 6 ONT-2 dims are
+> schema-only; and the ingestion default classifier (`model_for(GENERAL)` → granite) is NOT the config we validated
+> (Gemma-4-31b+enum). PROD-1 = run a small, diverse, REAL non-CUAD contract set end-to-end and inspect what the KG
+> actually gets.
+> - **Steps:** (a) write a minimal GENERIC `FolderCorpusAdapter` (yields `SourceDocument`s from a folder of
+>   PDFs/docx) — the first real generic input adapter (source CONNECTORS = GCS/S3/Drive/zip remain a SEPARATE task);
+>   (b) assemble ~5–10 real contracts NOT in CUAD/ACORD (diverse types); (c) run `run_corpus_ingestion` with vision
+>   ON, X/N progress + MONITORED (CLAUDE.md long-running rule), classifier pinned to the VALIDATED config
+>   (Gemma-4-31b, `OPENROUTER_PROVIDER=coreweave/bf16` + fallbacks, enum); (d) INSPECT the KG: function-label sanity
+>   (invention/NONE rates, distribution), the 6 new ONT-2 dims ACTUALLY populated on the right clause types
+>   (dispute_method on dispute clauses, collateral on security interests, force_majeure_event, etc.), property
+>   grounding/gating, dead-letter rate, crashes/edge cases; (e) A/B the product-substrate default (granite+enum via
+>   json_schema guided decoding) vs Gemma to RESOLVE whether the enum tames granite at ingest or the ingest default
+>   must move to Gemma.
+> - **Acceptance / verify:** the non-CUAD ingest COMPLETES (acceptable dead-letter rate); the KG shows sane labels +
+>   the new dimensions populated on the correct types; a DATED readiness note (`docs/eval/` or an ADR) enumerating
+>   what works and the residual gaps (connectors, granite-vs-Gemma default, per-onboarding taxonomy gap analysis,
+>   chunking A/B). Do NOT claim "production-ready for any customer" until this evidence exists.
+> - **Explicitly OUT of scope (separate tasks):** full source connectors (GCS/S3/Drive/zip); the orchestration/agent
+>   layer (GraphWright); the per-onboarding taxonomy-gap analysis (method exists: taxonomy-gap + `ontology_dimension_check`).
+> - **Files:** a new `FolderCorpusAdapter` (`corpus/`), a driver script (`scripts/`), a findings note (`docs/eval/` or ADR).
 >
 > ---
 > **FCE-1 — function-conditioned extraction (status: TODO / future, measurement-gated). Implements the ADR-0049 (3)
