@@ -57,6 +57,7 @@ corpus-specific tuning. CUAD/ACORD remain the measurement harness (how we *know*
   needed) — a direct `.ttl` enrichment; (2) a **dimension/property gap analysis** (the property analog of the
   taxonomy-gap analysis) to find facets the Clause template cannot express and add them — the deep master-lever
   enrichment. (3) Function-conditioned extraction (letting clause-type knowledge inform extraction) is kept as a
-  future experiment, gated on measurement.
+  future experiment, gated on measurement — tracked as **FCE-1** in `tasks.md` (what/why-deferred/measurement-gate).
+  ONT-1 and ONT-2 (steps 1 and 2) are DONE; FCE-1 (step 3) remains a measurement-gated experiment.
 - Consistent with the two-halves boundary (ADR / CLAUDE.md): we enrich capabilities and the ontology here;
   orchestration and use-case workflows are GraphWright's, sequenced with the product roadmap later.

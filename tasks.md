@@ -27,10 +27,37 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > court_approval + closing_condition). Corpus refined vocabs: collateral +fixtures/general_intangibles;
 > confidentiality proceeded on domain knowledge (weak corpus support = label-quality artifact, user-approved).
 > Payment Terms + Record Retention = covered by existing dims (no new dim). All sync-lints green; suite 1101 pass/43 skip.
-> **NEXT (open): (3) function-conditioned extraction = FUTURE experiment, gated on measurement.** The ADR-0049
-> ontology-enrichment arc (ONT-1 + ONT-2) for the 8 new types is COMPLETE. Generic-customer lens (ADR-0049) stands
-> for all future ingestion/KG moves. Re-INGEST is what would populate these new dims on real data (not done; the KG
-> only has them as schema until an ingest fills them — CUAD reclassify was label-only).
+> **NEXT (open): FCE-1 — function-conditioned extraction (FUTURE experiment, measurement-gated); see the FCE-1
+> block below.** The ADR-0049 ontology-enrichment arc (ONT-1 + ONT-2) for the 8 new types is COMPLETE. Generic-customer
+> lens (ADR-0049) stands for all future ingestion/KG moves. Re-INGEST is what would populate these new dims on real
+> data (not done; the KG only has them as schema until an ingest fills them — CUAD reclassify was label-only).
+>
+> ---
+> **FCE-1 — function-conditioned extraction (status: TODO / future, measurement-gated). Implements the ADR-0049 (3)
+> "execution lever" experiment; connects to ADR-0049 + ADR-0048 Phase-A addendum (the function-agnostic finding).**
+> - **What:** make clause property extraction FUNCTION-CONDITIONED. Today `capabilities/dg_extraction.extract_clause(text, model)`
+>   (used by `spans/clause_kg_extractor.granite_clause_extractor`) fills the `ontology/clause_template.Clause` template
+>   from TEXT ONLY — the function label is used only downstream (metadata + the deterministic `symbolic_validation`
+>   applicability gate), NEVER at extraction time. FCE-1 = pass the clause's known FUNCTION into the extraction prompt
+>   (e.g. "this is an Indemnification clause; extract its properties") so the model extracts WITH knowledge of the type.
+> - **Why this is the only path to BETTER VALUES:** because extraction is currently function-agnostic, re-extracting a
+>   relabeled clause reproduces the SAME values (ADR-0048 Phase-A addendum) — the label only re-gates applicability
+>   (deterministic). So neither re-gate nor plain re-extract improves the extracted VALUES; only conditioning the
+>   extractor on the function can (surface a dimension it would miss, read ambiguous text in light of the type). This
+>   is the "execution lever" complement to the ontology "knowledge lever" (ADR-0049).
+> - **Risk (why deferred, not done):** coupled to LABEL CORRECTNESS — if a clause's function is wrong, function-conditioning
+>   extracts for the WRONG function MORE confidently (amplifies a mislabel instead of being neutral to it). So it is only
+>   safe where labels are trustworthy, and its net value is unproven.
+> - **MEASUREMENT GATE (adopt ONLY if this passes):** on a held-out, human-graded set of clauses, run BOTH extractors
+>   (function-agnostic baseline vs function-conditioned) on the SAME clauses and show a real precision/recall LIFT in the
+>   property assertions (per-dimension), net of any regressions on mislabeled clauses. No lift (or lift only when labels
+>   are oracle-correct) ⇒ do NOT adopt. Also measure cost/latency delta. Generic-lens framing: the graded set must be
+>   diverse (not CUAD-fitted); CUAD/ACORD are the measurement harness, not the target.
+> - **Files it would touch:** `capabilities/dg_extraction.py` (extract_clause gains an optional `function`/prompt-context
+>   param), `spans/clause_kg_extractor.py` (thread the function through — the `__call__` already has it), a new eval
+>   script (baseline-vs-conditioned on the graded set). Ask-first (changes the extraction prompt = a model-behavior change).
+> - **Verify:** the eval script's per-dimension precision/recall table (baseline vs conditioned) + the adopt/no-adopt call
+>   recorded in a dated note or ADR. **Do NOT wire it into the ingestion default until the gate passes.**
 >
 > **(prior, 2026-08-09/10) INGEST-LLM-CLASSIFIER step-2 taxonomy extension DONE (44 → 52 labels
 > + curated FOLD alias map) + Phase A WRITE DONE + audited (ADR-0048 addenda).** Step 2 (ADR-0048
