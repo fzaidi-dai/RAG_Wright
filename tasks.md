@@ -374,11 +374,25 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **STATUS: mechanism DONE for ADVERTISING (the worked example — claim_type dimension + template field + subject
 >   claim_extraction + matching all exist and pass the CC eval); NOT STARTED for any other domain (0 non-advertising
 >   domains enriched). So this is REPLICATE-the-advertising-vertical per target domain, not a from-scratch build.**
+> - **INCREMENT 0 (do FIRST, ONE-TIME — so subsequent domains are DATA not CODE): GENERALIZE THE MATCHER.** Today
+>   `subgraphs/compliance_check.py` HARDCODES advertising: `applies_to` = `claim.claim_type.value in
+>   applicable_claim_types(req)`, and `applicable_claim_types` hardcodes `SECTION_CLAIM_TYPES` + `dimension ==
+>   "claim_type"`. But `Constraint` is ALREADY generic `(dimension, value)` (its docstring: "deliberately identical
+>   to the retrieval router's constraint tuple"). So rewrite the matcher ONCE to be DIMENSION-AGNOSTIC — a requirement
+>   applies to a subject iff their `(dimension, value)` constraints are compatible, driven by whatever dimensions the
+>   ONTOLOGY defines, with the existing "no matching constraint → semantic fallback". After this, advertising is just
+>   "claim_type is one dimension" and a NEW domain needs NO compliance_check code — only ontology + extraction (data).
+>   This is the CheckableFact/generic-judge move applied to routing.
 > - **NOT extraction-only: 4 coordinated pieces per target domain (spans ontology + ingestion + query):**
 >   1. **ONTOLOGY (knowledge):** define the domain's applicability dimensions + closed vocab in
 >      `ontology/compliance_bridge.ttl` (+ the synced mirrors) — e.g. OSHA → {employer_size, industry, hazard_type};
 >      privacy → {data_category, processing_purpose}; financial → {product_type, customer_class}. ONT-2 method
->      (domain-design + corpus-check). The master knowledge lever.
+>      (domain-design + corpus-check). The master knowledge lever. **LEVERAGE EXISTING PUBLIC ONTOLOGIES rather than
+>      hand-authoring where one exists:** we ALREADY use FOLIO (legal clause types) + ODRL (rights/duties) + LKIF
+>      (deontic classes) + PROV-O. For a new domain, seed the applicability dims from a standard vocab — **DPV (W3C
+>      Data Privacy Vocabulary)** for privacy/GDPR (data categories / processing purposes / legal bases), **FIBO**
+>      (Financial Industry Business Ontology) for financial, **FOLIO** (broad, already in use) for general legal.
+>      (NB: the GDPR/OPP-115/CODE-ACCORD items in the PROD-2 corpus research were CORPORA to ingest, NOT ontologies.)
 >   2. **REQUIREMENT-SIDE EXTRACTION (+ RE-POPULATE, non-destructive):** the requirement template
 >      (`skills/requirement_extraction/template.py`) currently extracts advertising `claim_types`; add the domain's
 >      applicability field (+ the adapter mapping in `capabilities/requirement_extraction.py` → `Constraint(dimension
