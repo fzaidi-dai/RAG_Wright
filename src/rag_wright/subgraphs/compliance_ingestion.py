@@ -177,6 +177,19 @@ def run_compliance_ingestion(
     return run_corpus_ingestion(RegulationAdapter(sections_path, source), graph)
 
 
+def run_compliance_document_ingestion(
+    doc_name: str, data: bytes, store: Any, *, model: Any, source: str,
+    sections_fn: Optional[Any] = None, extract_override: Optional[ExtractReqFn] = None,
+) -> IngestionReport:
+    """DOCPARSE-1: ingest a customer's OWN regulation/policy DOCUMENT (PDF/DOCX/HTML bytes) into the Requirement
+    KG -- the same compliance pipeline, fed by a `DocumentRegulationAdapter` (docling parse -> heading-split
+    sections) instead of a pre-sectioned eCFR `sections.json`. `sections_fn` injects the parse for tests."""
+    store.ensure_compliance_schema()
+    graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
+    return run_corpus_ingestion(
+        DocumentRegulationAdapter(doc_name, data, source, sections_fn=sections_fn), graph)
+
+
 def register_compliance_ingestion(registry) -> None:
     """Register `compliance_ingestion` (subgraph; CC-5). Contract = `IngestionReport`."""
     registry.register(

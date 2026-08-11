@@ -30,11 +30,24 @@ change — the deontic ontology + requirement extraction are domain-generic, as 
 Extraction already uses `extraction_contract="auto"` (skeleton-then-fill), so the large-doc truncation that bit
 the contract party path does not apply here.
 
+## Phase 2 — customer-document ingestion (DONE, PASSED live via DOCPARSE-1)
+
+The real customer gap: a customer's OWN policy PDF/DOCX, not a pre-sectioned eCFR `sections.json`. DOCPARSE-1
+built the generic parser (`corpus/document_parser.py`) + a `DocumentRegulationAdapter` (docling parse →
+heading-split sections → `SourceDocument`s, the same shape `RegulationAdapter` yields);
+`run_compliance_document_ingestion` wires it into the same pipeline.
+
+**Live result** (16 CFR 233 reconstructed as a structured policy DOCUMENT, ingested via the document path,
+`scripts/ingest_compliance_document_prod2.py`): 5/5 sections, **0 dead-lettered**, **28 Requirement nodes**,
+deontic 19 obligation / 9 prohibition, clean on-domain text. **Comparable to the Phase-1 `sections.json` path on
+the same content** (24 requirements, 14/10) — within LLM run-to-run variance; same sections, same deontic
+character. So the GENERIC DOCUMENT PARSER produces equivalent output to the structured eCFR-XML producer: a
+customer's own document ingests into the compliance KG through the identical pipeline. Note (DOCPARSE-1):
+heading-sectioning needs a STRUCTURED source (PDF/DOCX/MD with headings); a flat .txt yields one section.
+
 ## Findings / gaps (the compliance hardening backlog)
-1. **No generic raw-doc→sections parser (Phase 2, the real customer gap).** `RegulationAdapter` ingests a
-   PRE-SECTIONED `sections.json`; the only producer is eCFR-XML parsing (`acquire_ecfr.py`). A customer's own
-   policy PDF/DOCX cannot be ingested without a docling parse → section-split step. This is the same generic
-   input/parse gap as the contract side's PDF route (PROD-1 finding #3), and is Phase 2.
+1. **Generic raw-doc→sections parser — RESOLVED (DOCPARSE-1 + Phase 2 above).** A customer policy PDF/DOCX now
+   ingests via `DocumentRegulationAdapter` / `run_compliance_document_ingestion`, validated live.
 2. **No `is_done` resume marker for compliance.** `run_compliance_ingestion` passes no `is_done`, so a re-run
    re-extracts every section (the contract side skips via a present `Contract` node). Add a per-section "already
    written" check for resumable compliance ingests.

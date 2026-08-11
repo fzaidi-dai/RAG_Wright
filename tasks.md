@@ -187,7 +187,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > customer's own policy PDF needs a docling parse→section-split step (same gap as PROD-1 finding #3, shared work);
 > (2) no `is_done` resume for compliance; (3) requirement extraction has the same silent-empty-vs-failure nuance
 > (model-seam path, not docling — a parallel lossless hardening); (4) cross-DOMAIN (non-advertising) test not yet
-> done; (5) not yet async (PROD-3 envelope is corpus-generic, would wrap it). ORIGINAL SCOPE below.
+> done; (5) not yet async (PROD-3 envelope is corpus-generic, would wrap it). **PHASE 2 (customer-document
+> ingestion) DONE + PASSED LIVE (DOCPARSE-1): `run_compliance_document_ingestion` + `DocumentRegulationAdapter`
+> ingest a customer policy DOCUMENT (bytes → docling → heading-split sections → same pipeline); live-validated on a
+> reconstructed 16 CFR 233 policy doc → 5 sections, 0 dead-lettered, 28 Requirement nodes (comparable to the Phase-1
+> sections.json path's 24, within LLM variance). `scripts/ingest_compliance_document_prod2.py`. Gap #1 (no generic
+> parser) RESOLVED. Remaining: compliance is_done resume (#2), requirement-path lossless hardening (#3), cross-domain
+> test (#4), async (#5).** ORIGINAL SCOPE below.
 >
 > **PROD-2 (original scope) — The COMPLIANCE side is a DIFFERENT KG
 > (`ragwright_compliance`) + ontology (`compliance_bridge.ttl`, deontic Requirement = obligation/prohibition/permission)

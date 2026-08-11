@@ -175,3 +175,23 @@ def test_document_regulation_adapter_skips_empty_sections():
         sections_fn=lambda n, d: [{"section": "1", "heading": "H", "text": "  "},
                                   {"section": "2", "heading": "H2", "text": "real body"}])
     assert [d.metadata["section"] for d in adapter.documents()] == ["2"]
+
+
+def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements():
+    # DOCPARSE-1 PROD-2 Phase-2: a customer's OWN policy DOCUMENT -> DocumentRegulationAdapter -> the SAME pipeline
+    from rag_wright.subgraphs.compliance_ingestion import run_compliance_document_ingestion
+
+    store = _FakeStore()
+
+    def _sections_fn(name, data):  # inject the docling parse (hermetic)
+        return [
+            {"section": "1", "heading": "1. Retention", "text": "Records kept seven years."},
+            {"section": "2", "heading": "2. Definitions", "text": "PII means ..."},   # skipped
+            {"section": "3", "heading": "3. Access", "text": "Access is audited."},
+        ]
+
+    report = run_compliance_document_ingestion(
+        "acme_privacy.pdf", b"%PDF...", store, model=None, source="ACME Privacy Policy",
+        sections_fn=_sections_fn, extract_override=lambda doc: [f"req::{doc.metadata['section']}"])
+    assert report.documents_ingested == 2 and report.dead_lettered == []  # section 2 (Definitions) skipped
+    assert store.schema_ensured is True and store.reqs == ["req::1", "req::3"]
