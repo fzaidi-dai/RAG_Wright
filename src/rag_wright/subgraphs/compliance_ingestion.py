@@ -159,8 +159,11 @@ def production_compliance_ingestion(store: Any, *, model: Any, extract_override:
     from rag_wright.subgraphs.requirement_extraction import run_requirement_extraction
 
     def _extract(doc: SourceDocument) -> list:
+        # COMP-ASYNC-1 lossless: raise_on_failure so a FAILED section propagates to the compliance `_guard`
+        # (-> retry -> dead-letter with reason), never silently writing 0 requirements. Genuine-empty still -> [].
         return run_requirement_extraction(
-            doc.text, model=model, source=doc.metadata["source"], section=doc.metadata["section"])
+            doc.text, model=model, source=doc.metadata["source"], section=doc.metadata["section"],
+            raise_on_failure=True)
 
     return build_compliance_ingest(extract_override or _extract, lambda doc, reqs: store.write_requirements(reqs))
 
@@ -188,6 +191,24 @@ def run_compliance_document_ingestion(
     graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
     return run_corpus_ingestion(
         DocumentRegulationAdapter(doc_name, data, source, sections_fn=sections_fn), graph)
+
+
+def submit_compliance_ingestion(
+    adapter: Any, store: Any, jobs: Any, *, job_id: str, model: Any, source: str,
+    extract_override: Optional[ExtractReqFn] = None, max_concurrency: int = 4,
+) -> str:
+    """COMP-ASYNC-1 (ADR-0050): submit an ASYNC compliance ingestion job. Returns `job_id` IMMEDIATELY; sections
+    ingest in the background with bounded parallelism, and a FAILED section is dead-lettered on the job (lossless).
+    Ensures the compliance schema, builds the per-section graph, then hands the (adapter, graph) to the generic
+    async runner. `adapter` = a RegulationAdapter (eCFR sections.json) OR DocumentRegulationAdapter (customer doc).
+    `jobs` = the `JobStore`; poll `jobs.get(job_id)` for status."""
+    from rag_wright.subgraphs.async_ingestion import submit_ingestion
+
+    store.ensure_compliance_schema()
+    graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
+    return submit_ingestion(
+        adapter, graph, jobs, job_id=job_id, db=getattr(store, "database", ""),
+        corpus_ref={"kind": "compliance", "source": source}, max_concurrency=max_concurrency)
 
 
 def register_compliance_ingestion(registry) -> None:

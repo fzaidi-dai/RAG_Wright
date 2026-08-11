@@ -50,12 +50,16 @@ heading-sectioning needs a STRUCTURED source (PDF/DOCX/MD with headings); a flat
    ingests via `DocumentRegulationAdapter` / `run_compliance_document_ingestion`, validated live.
 2. **No `is_done` resume marker for compliance.** `run_compliance_ingestion` passes no `is_done`, so a re-run
    re-extracts every section (the contract side skips via a present `Contract` node). Add a per-section "already
-   written" check for resumable compliance ingests.
-3. **Same lossless nuance as PROD-3 Increment 1, different path.** Requirement extraction degrades a failed
-   section to `None → []` (genuine-empty vs failure ambiguity), via the model seam (not docling), so the
-   `capture_docling_errors` fix does not apply. A parallel lossless hardening (retry + flag, not silent-empty)
-   would bring compliance to the same "no silent partial success" bar. (Not hit here — 0 dead-letters — but the
-   surface exists.)
+   written" check for resumable compliance ingests. (Still open.)
+3. **Lossless requirement path — RESOLVED (COMP-ASYNC-1).** `run_requirement_extraction` swallowed the inner
+   subgraph's dead-letter (a failed section silently wrote 0 requirements — the model-seam analogue of the docling
+   silent-partial-success PROD-3 Increment 1 fixed). Fixed with `raise_on_failure=True` (surfaces the inner
+   dead-letter → the compliance `_guard` dead-letters the section with the reason; a genuine-empty section still →
+   []). A failed section now dead-letters VISIBLY (report + async job), never silent. Hermetic + full-run tested.
+5. **Async — RESOLVED (COMP-ASYNC-1).** `submit_compliance_ingestion` wraps the compliance side in the PROD-3
+   async envelope (`submit_ingestion`/`run_job`, corpus-generic): non-blocking submit → job_id, parallel sections
+   (bounded), pollable `JobStore`, dead-letter surfacing. LIVE-validated (16 CFR 233): queued → running 2/5 → 5/5
+   succeeded, 24 Requirement nodes, 0 dead-lettered — parity with the contract async path.
 4. **Cross-DOMAIN (non-advertising) generalization not yet tested.** Phase 1 stayed in the FTC advertising family
    (same-domain, cheapest). A genuinely different domain (privacy/GDPR, financial, safety) is the stronger test —
    a follow-on when warranted.

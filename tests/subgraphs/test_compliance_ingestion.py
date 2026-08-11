@@ -11,6 +11,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.subgraphs.compliance_ingestion import (
     RegulationAdapter,
@@ -195,3 +197,69 @@ def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements(
         sections_fn=_sections_fn, extract_override=lambda doc: [f"req::{doc.metadata['section']}"])
     assert report.documents_ingested == 2 and report.dead_lettered == []  # section 2 (Definitions) skipped
     assert store.schema_ensured is True and store.reqs == ["req::1", "req::3"]
+
+
+# --- COMP-ASYNC-1: lossless (failed section dead-letters) + async envelope --------------------------------------
+
+
+def test_failed_section_dead_letters_instead_of_writing_zero_requirements(tmp_path):
+    # COMP-ASYNC-1 lossless: an extraction FAILURE (raises) must dead-letter the section, not silently write 0 reqs
+    store = _FakeStore()
+
+    def _boom(doc):
+        raise RuntimeError("granite JSON garble")
+
+    report = run_compliance_ingestion(
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_boom)
+    assert report.documents_ingested == 0            # nothing silently "ingested"
+    assert len(report.dead_lettered) == 2            # both sections dead-lettered (visible)
+    assert store.reqs == []                           # and NO partial/silent writes
+    assert report.dead_lettered[0]["stage"] == "extract"
+
+
+def test_run_requirement_extraction_raise_on_failure_surfaces_the_dead_letter():
+    from rag_wright.subgraphs.requirement_extraction import (
+        RequirementExtractionFailed,
+        run_requirement_extraction,
+    )
+
+    def _boom(_text):
+        raise RuntimeError("extract blew up")
+
+    # default (back-compat): swallows -> []
+    assert run_requirement_extraction("t", model=None, source="s", section="1", extract_override=_boom) == []
+    # raise_on_failure: surfaces the failure
+    with pytest.raises(RequirementExtractionFailed) as ei:
+        run_requirement_extraction("t", model=None, source="s", section="1",
+                                   extract_override=_boom, raise_on_failure=True)
+    assert ei.value.section == "1"
+
+
+def test_submit_compliance_ingestion_is_async_and_dead_letters_a_failed_section(tmp_path):
+    import time
+
+    from rag_wright.subgraphs.async_ingestion import JobStore
+    from rag_wright.subgraphs.compliance_ingestion import RegulationAdapter, submit_compliance_ingestion
+
+    store = _FakeStore()
+    store.database = "ragwright_compliance_test"
+    jobs = JobStore(tmp_path / "jobs")
+    adapter = RegulationAdapter(_sections_file(tmp_path), source="FTC 16 CFR 255")
+
+    def _extract(doc):  # 255.5 fails, 255.1 succeeds
+        if doc.metadata["section"] == "255.5":
+            raise RuntimeError("boom")
+        return [f"req::{doc.metadata['section']}"]
+
+    job_id = submit_compliance_ingestion(
+        adapter, store, jobs, job_id="cjob", model=None, source="FTC 16 CFR 255", extract_override=_extract)
+    assert job_id == "cjob" and jobs.get("cjob") is not None  # returned immediately
+
+    deadline = time.time() + 10
+    while time.time() < deadline and not jobs.get("cjob").done:
+        time.sleep(0.05)
+    job = jobs.get("cjob")
+    assert job.status.value == "succeeded"
+    assert job.ingested == 1                          # 255.1 succeeded
+    assert len(job.dead_lettered) == 1                # 255.5 dead-lettered (visible on the job, not silent)
+    assert store.reqs == ["req::255.1"]

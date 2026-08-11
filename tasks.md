@@ -141,6 +141,34 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **Files:** `capabilities/dg_extraction.py` (+ test); possibly `graph_extraction.py` / the party-extract wiring.
 >
 > ---
+> **COMP-ASYNC-1 — DONE + LIVE-VALIDATED (2026-08-11): compliance side wrapped in the PROD-3 async + lossless
+> envelope; PARITY with contracts. Closed PROD-2 backlog #3 (lossless) + #5 (async). Connects ADR-0050.** (A)
+> LOSSLESS: `run_requirement_extraction(raise_on_failure=True)` surfaces the inner subgraph's dead-letter (a FAILED
+> section now dead-letters via the compliance `_guard`, reason-tagged, instead of silently writing 0 reqs; genuine-
+> empty still → []; default flag preserves back-compat). (B) ASYNC: `submit_compliance_ingestion` (ensure schema →
+> build graph → generic `submit_ingestion`) = non-blocking submit → job_id, parallel sections, pollable `JobStore`,
+> dead-letter surfacing. LIVE (16 CFR 233): queued → running 2/5 → 5/5 SUCCEEDED, 24 Requirement nodes, 0
+> dead-lettered — parity with the contract async path. `RequirementExtractionFailed` exception;
+> `scripts/ingest_compliance_async_prod2.py`. +3 tests; suite 1138 pass. STILL OPEN: compliance `is_done` resume
+> (PROD-2 #2), cross-domain test (#4).
+> **(original scope) wrap the COMPLIANCE side in the PROD-3 async + lossless envelope (parity with contracts).
+> Closes PROD-2 backlog #3 (lossless requirement path) + #5 (async). Connects ADR-0050.**
+> Two parts: (A) LOSSLESS — `run_requirement_extraction` currently SWALLOWS the inner requirement-extraction
+> subgraph's dead-letter (returns `.get("requirements", [])`), so a FAILED section silently writes 0 requirements
+> (the model-seam analogue of the docling silent-partial-success PROD-3 Increment-1 fixed). Fix: surface the inner
+> dead-letter so the compliance `_guard` dead-letters the section with the reason (a genuine-empty section still →
+> []); preserve the existing `[]`-on-empty contract for other callers. (B) ASYNC — `run_job`/`submit_ingestion`
+> (async_ingestion.py) are corpus-generic and already read `out.get("dead_letter")`, so a thin
+> `submit_compliance_ingestion` (ensure_compliance_schema → build the compliance graph → submit_ingestion with the
+> RegulationAdapter/DocumentRegulationAdapter) gives non-blocking submit + parallel sections + pollable JobStore +
+> dead-letter surfacing. (compliance `is_done` resume = separate backlog #2; not this task.)
+> - **ACCEPTANCE:** a failed section DEAD-LETTERS (visible in the report/job) instead of silently writing 0 reqs
+>   (hermetic test); `submit_compliance_ingestion` returns a job_id immediately, ingests sections in parallel,
+>   status pollable, a forced-failure section dead-lettered on the job (hermetic + optional live). TDD.
+> - **Files:** `requirement_extraction.py` (surface failure), `compliance_ingestion.py` (`submit_compliance_ingestion`
+>   + wire the raise), tests.
+>
+> ---
 > **DOCPARSE-1 — generic raw-doc→(text | sections) parser: DONE (2026-08-11) + LIVE-VALIDATED. The SHARED customer
 > PDF/DOCX gap on BOTH sides is closed.** Built `corpus/document_parser.py`: `parse_document_bytes(name, data)` (bytes
 > → temp file → the existing `DoclingParser`), `document_to_text(doc)` (markdown export → wired as the DEFAULT

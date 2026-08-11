@@ -30,6 +30,18 @@ ExtractSectionFn = Callable[[str], Any]
 AdaptFn = Callable[[Any, str, str], list]
 
 
+class RequirementExtractionFailed(Exception):
+    """COMP-ASYNC-1 (PROD-3 lossless, ADR-0050): the per-section requirement extraction FAILED (its subgraph
+    dead-lettered after retries) -- distinct from a genuine section with no requirements. Raised so the compliance
+    corpus driver can dead-letter the SECTION (visible in the report/job) instead of silently writing 0
+    requirements. `section`/`reason` carry the citation + the underlying error."""
+
+    def __init__(self, section: str, reason: str) -> None:
+        super().__init__(f"requirement extraction failed for section {section}: {reason}")
+        self.section = section
+        self.reason = reason
+
+
 class ReqExtractState(TypedDict, total=False):
     text: str
     source: str
@@ -89,11 +101,20 @@ def production_requirement_extraction(
 
 
 def run_requirement_extraction(
-    text: str, *, model: Any, source: str, section: str, extract_override: Optional[ExtractSectionFn] = None
+    text: str, *, model: Any, source: str, section: str, extract_override: Optional[ExtractSectionFn] = None,
+    raise_on_failure: bool = False,
 ) -> list[Requirement]:
-    """Invoke the requirement-extraction subgraph for one § section -> its `Requirement[]` ([] on dead-letter)."""
+    """Invoke the requirement-extraction subgraph for one § section -> its `Requirement[]`.
+
+    Default (`raise_on_failure=False`, back-compat): `[]` whether the section genuinely has no requirements OR the
+    extraction dead-lettered. COMP-ASYNC-1 lossless: with `raise_on_failure=True`, a dead-letter (a real FAILURE,
+    not a genuine-empty section) RAISES `RequirementExtractionFailed` so the compliance corpus driver dead-letters
+    the section instead of silently writing 0 requirements. A genuine-empty section still returns []."""
     graph = production_requirement_extraction(model=model, extract_override=extract_override)
-    return graph.invoke({"text": text, "source": source, "section": section}).get("requirements", [])
+    result = graph.invoke({"text": text, "source": source, "section": section})
+    if raise_on_failure and result.get("dead_letter"):
+        raise RequirementExtractionFailed(section, str(result["dead_letter"].get("error", "extraction failed")))
+    return result.get("requirements", [])
 
 
 def register_requirement_extraction(registry) -> None:
