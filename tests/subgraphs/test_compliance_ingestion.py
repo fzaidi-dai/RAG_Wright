@@ -114,6 +114,9 @@ class _FakeStore:
         self.reqs.extend(reqs)
         return len(reqs)
 
+    def ingested_citations(self, source):
+        return getattr(self, "_done_citations", set())
+
 
 def test_run_over_the_corpus_writes_all_sections(tmp_path):
     store = _FakeStore()
@@ -263,3 +266,26 @@ def test_submit_compliance_ingestion_is_async_and_dead_letters_a_failed_section(
     assert job.ingested == 1                          # 255.1 succeeded
     assert len(job.dead_lettered) == 1                # 255.5 dead-lettered (visible on the job, not silent)
     assert store.reqs == ["req::255.1"]
+
+
+def test_compliance_resume_skips_already_ingested_sections(tmp_path):
+    # PROD-2 #2: a section whose citation already has requirements is SKIPPED (not re-extracted) on a re-run
+    store = _FakeStore()
+    store._done_citations = {"§ 255.1"}  # 255.1 already ingested by a prior run
+    extracted = []
+    report = run_compliance_ingestion(
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
+        extract_override=lambda doc: (extracted.append(doc.metadata["section"]),
+                                      [f"req::{doc.metadata['section']}"])[1])
+    assert report.documents_ingested == 2               # both counted present...
+    assert extracted == ["255.5"]                        # ...but 255.1 was resume-skipped, only 255.5 extracted
+    assert store.reqs == ["req::255.5"]
+
+
+def test_compliance_no_resume_when_nothing_ingested_yet(tmp_path):
+    store = _FakeStore()  # empty done-set -> all sections run
+    extracted = []
+    run_compliance_ingestion(
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
+        extract_override=lambda doc: (extracted.append(doc.metadata["section"]), [])[1])
+    assert sorted(extracted) == ["255.1", "255.5"]

@@ -512,6 +512,17 @@ class ArcadeDBStore:
             f" evidence_standard, severity, applicability_json, confidence FROM {REQUIREMENT_TYPE}"
         )
 
+    def ingested_citations(self, source: str) -> set[str]:
+        """COMP-ASYNC-1 resume (PROD-2 #2): the set of `citation`s that ALREADY have >=1 `Requirement` for `source`
+        -- the compliance analogue of a present `Contract` node. A section in this set was successfully ingested
+        (a FAILED or genuinely-empty section wrote 0 requirements, so it is absent and correctly re-runs). The
+        Requirement type may not exist yet on a fresh DB -> empty set."""
+        if REQUIREMENT_TYPE not in self.type_names():
+            return set()
+        rows = self._query(
+            f"SELECT DISTINCT(citation) AS c FROM {REQUIREMENT_TYPE} WHERE source = {_sql_str(source)}")
+        return {r["c"] for r in rows if r.get("c")}
+
     def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
         """CU-B3: the within-contract typed filter -- every span in `contract_id` whose `function` is in
         `functions`, ordered by document position (the CUAD serve retrieval; empty `functions` -> []).

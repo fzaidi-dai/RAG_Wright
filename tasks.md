@@ -149,8 +149,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > build graph → generic `submit_ingestion`) = non-blocking submit → job_id, parallel sections, pollable `JobStore`,
 > dead-letter surfacing. LIVE (16 CFR 233): queued → running 2/5 → 5/5 SUCCEEDED, 24 Requirement nodes, 0
 > dead-lettered — parity with the contract async path. `RequirementExtractionFailed` exception;
-> `scripts/ingest_compliance_async_prod2.py`. +3 tests; suite 1138 pass. STILL OPEN: compliance `is_done` resume
-> (PROD-2 #2), cross-domain test (#4).
+> `scripts/ingest_compliance_async_prod2.py`. +3 tests; suite 1138 pass. STILL OPEN: cross-domain test (PROD-2 #4).
+> **PROD-2 #2 (compliance is_done resume) DONE + LIVE (2026-08-11):** `store.ingested_citations(source)` (citations
+> with >=1 Requirement = the compliance analogue of a present Contract node) + `_compliance_is_done` wired into all
+> 3 entry points (run_compliance_ingestion / run_compliance_document_ingestion / submit_compliance_ingestion); a
+> FAILED/empty section wrote 0 reqs so it correctly re-runs. Live: re-ingest of 16 CFR 233 (RESET=0) resume-skipped
+> all 5 sections, 0 LLM calls. +2 tests; suite 1140 pass.
 > **(original scope) wrap the COMPLIANCE side in the PROD-3 async + lossless envelope (parity with contracts).
 > Closes PROD-2 backlog #3 (lossless requirement path) + #5 (async). Connects ADR-0050.**
 > Two parts: (A) LOSSLESS — `run_requirement_extraction` currently SWALLOWS the inner requirement-extraction

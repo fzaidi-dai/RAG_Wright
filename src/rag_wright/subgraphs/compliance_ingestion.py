@@ -168,6 +168,15 @@ def production_compliance_ingestion(store: Any, *, model: Any, extract_override:
     return build_compliance_ingest(extract_override or _extract, lambda doc, reqs: store.write_requirements(reqs))
 
 
+def _compliance_is_done(store: Any, source: str) -> Any:
+    """PROD-2 #2 resume: skip a SECTION already ingested for `source` (a present `citation` in the Requirement KG
+    -- the compliance analogue of a present `Contract` node). Computed ONCE (one query); a failed/empty section
+    wrote no requirement, so it is absent and correctly re-runs. The section's citation is `§ {section}` (matches
+    `to_requirements`)."""
+    done = store.ingested_citations(source)
+    return lambda doc: f"§ {doc.metadata.get('section', '')}" in done
+
+
 def run_compliance_ingestion(
     sections_path: Any, store: Any, *, model: Any, source: str = "FTC 16 CFR 255",
     extract_override: Optional[ExtractReqFn] = None,
@@ -177,7 +186,8 @@ def run_compliance_ingestion(
     dead-letter, is_done resume). Point `store` at the compliance database (`ragwright_compliance`)."""
     store.ensure_compliance_schema()
     graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
-    return run_corpus_ingestion(RegulationAdapter(sections_path, source), graph)
+    return run_corpus_ingestion(
+        RegulationAdapter(sections_path, source), graph, is_done=_compliance_is_done(store, source))
 
 
 def run_compliance_document_ingestion(
@@ -190,7 +200,8 @@ def run_compliance_document_ingestion(
     store.ensure_compliance_schema()
     graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
     return run_corpus_ingestion(
-        DocumentRegulationAdapter(doc_name, data, source, sections_fn=sections_fn), graph)
+        DocumentRegulationAdapter(doc_name, data, source, sections_fn=sections_fn), graph,
+        is_done=_compliance_is_done(store, source))
 
 
 def submit_compliance_ingestion(
@@ -208,7 +219,8 @@ def submit_compliance_ingestion(
     graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
     return submit_ingestion(
         adapter, graph, jobs, job_id=job_id, db=getattr(store, "database", ""),
-        corpus_ref={"kind": "compliance", "source": source}, max_concurrency=max_concurrency)
+        corpus_ref={"kind": "compliance", "source": source}, max_concurrency=max_concurrency,
+        is_done=_compliance_is_done(store, source))  # PROD-2 #2: skip already-ingested sections on resume
 
 
 def register_compliance_ingestion(registry) -> None:
