@@ -3,7 +3,25 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-10 NEWEST): ONTOLOGY-ENRICH arc under the GENERIC-CUSTOMER LENS (ADR-0049). ONT-1
+> **RESUME / NEXT UP (2026-08-11 NEWEST): the ingestion + compliance CAPABILITY hardening arc is COMPLETE and pushed;
+> NEXT = the PRODUCT SPEC (`docs/product/contracts_product_roadmap.md`).** We finished a long capability-hardening arc
+> (all committed + pushed to origin/main): ADR-0047 (retire function gate) → ADR-0048 (INGEST-LLM-CLASSIFIER: taxonomy
+> 44→52 + reclassify write + audit) → ADR-0049 generic-customer lens + ONT-1/ONT-2 (ontology enrichment, live) →
+> PROD-1 (GCS + non-CUAD ingest) + PLINK-1 + PEXT-1 → ADR-0050/PROD-3 (async + lossless ingestion) → DOCPARSE-1
+> (generic PDF/DOCX/MD parser, both sides) → PROD-2 complete (compliance readiness Ph1/Ph2 + resume + cross-domain
+> OSHA) + COMP-ASYNC-1 → COMP-VERDICT-GENERIC (CheckableFact base + domain-agnostic verdict + generic judge SKILL) →
+> COMP-APPLIC-1 Increment 0 (dimension-agnostic matcher). Suite 1150 pass. The ingestion substrate (GCS → generic
+> doc parse → KG build → lossless/async/resumable) + the compliance verdict work for ANY domain out of the box; a
+> 3-leg compliance DEMO (FTC ads / OSHA safety / a customer's own policy) is preserved + live-validated
+> (`docs/eval/compliance_demo.md`, `scripts/compliance_policy_demo.py`, `eval/compliance_demo/`).
+> **NEXT = PRODUCT SPEC.** The remaining tracked items are all forward-looking + product-gated: COMP-APPLIC-1 (per-domain
+> precision, Increment 0 done — the rest gated on a chosen domain), COMP-VERDICT-GENERIC follow-ons, FCE-1 (measurement-
+> gated), and the product-side items (ingestion EXPOSURE interface MCP/REST/CLI, distributed async scale-up). All of
+> these need the PRODUCT SPEC to prioritize — read `docs/product/contracts_product_roadmap.md` (the rough vision/spec)
+> and pick up the product definition (user stories, use-cases, UI surfaces, background/cron agents) as the next arc.
+> The capability half is production-shaped + demoable; the product SPEC is where we go next.
+>
+> **(prior, 2026-08-10) ONTOLOGY-ENRICH arc under the GENERIC-CUSTOMER LENS (ADR-0049). ONT-1
 > DONE; NEXT = ONT-2 (dimension/property gap analysis).** STANDING LENS (ADR-0049, memory `generic-customer-lens`):
 > judge every ingestion/KG move by "does a brand-new SME customer's ingest→KG→query benefit?" — NOT by CUAD/ACORD
 > label quality (dev corpora). Master lever = enrich the ontology/`.ttl` (the 4 synced artifacts: `contract_bridge.ttl`
