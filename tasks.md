@@ -314,6 +314,28 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   or light store), an ingestion MCP server (`mcp/`), tests.
 >
 > ---
+> **COMP-APPLIC-1 — compliance applicability-dimension enrichment per domain (status: TODO / future, product-gated).
+> The compliance analogue of ONT-1/ONT-2; from the PROD-2 #4 cross-domain finding; generic-customer lens (ADR-0049).**
+> FINDING (PROD-2 #4, `docs/eval/prod2_readiness.md`): the deontic CORE (obligation/prohibition/permission
+> extraction) is domain-generic and generalized cleanly to OSHA safety recordkeeping (73/6/8, clean text), BUT the
+> APPLICABILITY-SCOPE layer is ADVERTISING-SPECIFIC — applicability 0/87 on OSHA vs 24/24 on FTC ads, because the ONLY
+> applicability dimension is `claim_type` (which advertising CLAIMS a rule applies to). So requirements EXTRACT
+> correctly in any domain, but can't be MATCHED to a claim/fact in a NON-advertising domain (compliance_check's
+> claim-scope↔requirement-applicability match has nothing to match on). The applicability layer is domain-specific at
+> 3 grounded points: (1) `skills/requirement_extraction/template.py` field `claim_types: list[str]`; (2)
+> `ontology/compliance_bridge.ttl` `cmp:ClaimType` closed vocab; (3) `subgraphs/compliance_check.py` the authored
+> section→claim_type map (`_SECTION_CLAIM_TYPES`-style) that backfills empty scopes + the `claim_type` match filter.
+> - **WHAT (per target domain):** add that domain's applicability dimension(s) at the 3 points — e.g. OSHA safety →
+>   {employer_size, industry, hazard_type}; privacy → {data_category, processing_purpose}; financial → {product_type,
+>   customer_class}. Extraction field + closed vocab (ttl) + the check-time match. Mirrors the ONT-2 method
+>   (domain-design the vocab, corpus-check it, thread all synced points). Ask-first (schema/contract change).
+> - **PRODUCT-GATED (do NOT build speculatively):** which domain(s) to enrich is a PRODUCT decision (which customers
+>   / verticals we onboard). Build applicability dimensions for a domain only when a real customer/use-case needs
+>   requirement↔claim MATCHING in it — until then, requirements still ingest + are readable, just not claim-matched.
+> - **Verify:** in the target domain, requirements populate applicability scope, and compliance_check matches a claim
+>   to the applicable requirements. Connects PROD-2, ADR-0049, the CC-* compliance rung.
+>
+> ---
 > **FCE-1 — function-conditioned extraction (status: TODO / future, measurement-gated). Implements the ADR-0049 (3)
 > "execution lever" experiment; connects to ADR-0049 + ADR-0048 Phase-A addendum (the function-agnostic finding).**
 > - **What:** make clause property extraction FUNCTION-CONDITIONED. Today `capabilities/dg_extraction.extract_clause(text, model)`
