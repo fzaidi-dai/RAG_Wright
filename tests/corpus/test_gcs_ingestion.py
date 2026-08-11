@@ -83,3 +83,19 @@ def test_include_filters_to_a_curated_subset_by_basename():
     blobs = [_FakeBlob(f"prod1-corpus/{n}.txt", text=n) for n in ("a", "b", "c", "d")]
     got = list(_adapter(blobs, include=frozenset({"b.txt", "d.txt"})).documents())
     assert sorted(d.text for d in got) == ["b", "d"]
+
+
+def test_parse_bytes_seam_routes_pdf_through_document_to_text():
+    # DOCPARSE-1: a PDF blob is parsed to text via the injected parse_bytes (docling in production)
+    from rag_wright.corpus.document_parser import document_to_text
+
+    class _Doc:
+        def export_to_markdown(self, **_):
+            return "# Master Services Agreement\n\nThe parties agree ..."
+
+    docs = list(_adapter(
+        [_FakeBlob("prod1-corpus/msa.pdf", data=b"%PDF-1.7 real bytes")],
+        parse_bytes=lambda name, data: document_to_text(_Doc()),
+    ).documents())
+    assert docs[0].text.startswith("# Master Services Agreement")
+    assert docs[0].metadata["blob"].endswith("msa.pdf")

@@ -64,6 +64,45 @@ class RegulationAdapter:
             )
 
 
+class DocumentRegulationAdapter:
+    """DOCPARSE-1 (ADR-0049): the per-corpus seam for a customer's OWN regulation/policy DOCUMENT (PDF/DOCX/HTML),
+    not a pre-sectioned eCFR `sections.json`. Parses the document once (docling) and splits it at its headings via
+    `document_to_sections`, yielding one `SourceDocument` per section -- the SAME shape `RegulationAdapter` yields,
+    so a customer policy PDF flows through the identical compliance pipeline. `sections_fn` is injected (the docling
+    parse) so this is hermetically testable; production passes the real `document_to_sections(parse_document_bytes(...))`."""
+
+    def __init__(self, doc_name: str, data: bytes, source: str, *, sections_fn: Any = None,
+                 limit: int = 0, skip_definitions: bool = True) -> None:
+        self._name = doc_name
+        self._data = data
+        self._source = source
+        self._sections_fn = sections_fn
+        self._limit = limit
+        self._skip_definitions = skip_definitions
+
+    def documents(self) -> Iterable[SourceDocument]:
+        if self._sections_fn is not None:
+            sections = self._sections_fn(self._name, self._data)
+        else:  # production: docling parse -> heading-split sections (DOCPARSE-1)
+            from rag_wright.corpus.document_parser import document_to_sections, parse_document_bytes
+
+            sections = document_to_sections(parse_document_bytes(self._name, self._data))
+        if self._limit:
+            sections = sections[: self._limit]
+        for i, sec in enumerate(sections, 1):
+            if not (sec.get("text") or "").strip():
+                continue
+            if self._skip_definitions and "definition" in (sec.get("heading") or "").lower():
+                continue
+            # a headingless preamble section still ingests -- its citation is its position (never dropped)
+            citation = sec.get("section") or str(i)
+            yield SourceDocument(
+                source_doc_id=canonical_source_doc_id(f"{self._source}_{citation}"),
+                text=sec["text"],
+                metadata={"section": citation, "source": self._source},
+            )
+
+
 class ComplianceIngestState(TypedDict, total=False):
     document: SourceDocument
     requirements: list

@@ -97,4 +97,8 @@ def production_gcs_adapter(bucket: str, prefix: str, *, limit: int = 0,
             "GCS python client needs Application Default Credentials. Run once: "
             "`gcloud auth application-default login` (or set GOOGLE_APPLICATION_CREDENTIALS to a service-account "
             "key in production). Note: gsutil/gcloud being authed is NOT sufficient for the python client.") from e
+    if parse_bytes is None:  # DOCPARSE-1: default to the generic docling parser so PDF/DOCX customer contracts ingest
+        from rag_wright.corpus.document_parser import document_to_text, parse_document_bytes
+
+        parse_bytes = lambda name, data: document_to_text(parse_document_bytes(name, data))  # noqa: E731
     return GcsCorpusAdapter(bucket, prefix, limit=limit, include=include, client=client, parse_bytes=parse_bytes)

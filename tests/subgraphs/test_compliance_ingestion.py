@@ -143,3 +143,35 @@ def test_adapter_skips_definitions_sections(tmp_path):
     # opt out preserves it
     secs2 = [d.metadata["section"] for d in RegulationAdapter(p, source="x", skip_definitions=False).documents()]
     assert secs2 == ["255.0", "255.5"]
+
+
+# --- DOCPARSE-1: DocumentRegulationAdapter -- a customer's OWN document (PDF/DOCX) -> sections -> SourceDocuments
+
+
+def test_document_regulation_adapter_splits_a_parsed_doc_into_section_documents():
+    from rag_wright.subgraphs.compliance_ingestion import DocumentRegulationAdapter
+
+    # inject the docling parse result (hermetic): a policy doc split into sections at its headings
+    def _sections_fn(name, data):
+        return [
+            {"section": "1", "heading": "1. Data Retention", "text": "Records must be kept for seven years."},
+            {"section": "2", "heading": "2. Definitions", "text": "Personal Data means ..."},  # skipped
+            {"section": "3", "heading": "3. Access", "text": "Access is logged and audited."},
+        ]
+
+    adapter = DocumentRegulationAdapter("policy.pdf", b"%PDF...", "ACME Privacy Policy", sections_fn=_sections_fn)
+    docs = list(adapter.documents())
+    assert [d.metadata["section"] for d in docs] == ["1", "3"]  # the Definitions section is skipped
+    assert docs[0].text == "Records must be kept for seven years."
+    assert docs[0].metadata["source"] == "ACME Privacy Policy"
+    assert docs[0].source_doc_id != docs[1].source_doc_id  # distinct canonical ids per section
+
+
+def test_document_regulation_adapter_skips_empty_sections():
+    from rag_wright.subgraphs.compliance_ingestion import DocumentRegulationAdapter
+
+    adapter = DocumentRegulationAdapter(
+        "p.pdf", b"x", "src",
+        sections_fn=lambda n, d: [{"section": "1", "heading": "H", "text": "  "},
+                                  {"section": "2", "heading": "H2", "text": "real body"}])
+    assert [d.metadata["section"] for d in adapter.documents()] == ["2"]

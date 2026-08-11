@@ -141,6 +141,39 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **Files:** `capabilities/dg_extraction.py` (+ test); possibly `graph_extraction.py` / the party-extract wiring.
 >
 > ---
+> **DOCPARSE-1 — generic raw-doc→(text | sections) parser: DONE (2026-08-11) + LIVE-VALIDATED. The SHARED customer
+> PDF/DOCX gap on BOTH sides is closed.** Built `corpus/document_parser.py`: `parse_document_bytes(name, data)` (bytes
+> → temp file → the existing `DoclingParser`), `document_to_text(doc)` (markdown export → wired as the DEFAULT
+> `GcsCorpusAdapter.parse_bytes` so PDF/DOCX CONTRACTS ingest), `document_to_sections(doc)` (DoclingDocument items
+> grouped at heading labels SECTION_HEADER/TITLE/FIELD_HEADING; PAGE_HEADER skipped; headingless preamble kept) →
+> new `DocumentRegulationAdapter` (compliance: a customer POLICY doc → sections → `SourceDocument`s, same shape as
+> `RegulationAdapter`). Grounded DoclingDocument API (framework graph + inspect). LIVE-PROVEN: real NDA → text 6384
+> chars; structured markdown → 3 correct heading-split sections (Confidentiality/Governing Law/Term). Honest note: a
+> plain .txt yields 1 section (no heading structure — correct); real heading-sectioning needs a structured source
+> (PDF/DOCX/MD), proven live on MD. 15 tests (5 parser + 2 compliance-adapter + 1 contract-seam + hermetic wiring);
+> suite 1134 pass. Files: `corpus/document_parser.py`, `corpus/gcs_ingestion.py` (parse_bytes default),
+> `subgraphs/compliance_ingestion.py` (`DocumentRegulationAdapter`). This resolves PROD-1 finding #3 + PROD-2 Phase 2.
+> (superseded scope below.)
+> **(original scope) generic raw-doc→(text | sections) parser (PROD-1 finding #3 + PROD-2 Phase 2; ADR-0049).** WHY: today the contract side ingests text/GCS text only (`GcsCorpusAdapter.parse_bytes` seam is
+> unimplemented) and the compliance side needs a PRE-SECTIONED `sections.json` (only eCFR-XML produces it). A real
+> customer's own PDF/DOCX policy/contract can't be ingested on either side. GROUNDED: the docling parse capability
+> ALREADY EXISTS (`capabilities/parsing.py`: `DoclingParser`/`DocumentConverter` → `DoclingDocument`, content-hash
+> cached) but takes a file `Path`; customer docs from GCS are BYTES, and we need TWO projections (text for contracts,
+> sections for compliance).
+> - **DESIGN:** one new module `corpus/document_parser.py`: (a) `parse_document_bytes(name, data) → DoclingDocument`
+>   (bytes → temp file → docling convert, reusing the existing capability); (b) `document_to_text(doc) → str`
+>   (markdown/text export) → wire into `GcsCorpusAdapter.parse_bytes` so PDF/DOCX contracts ingest; (c)
+>   `document_to_sections(doc) → [{section, heading, text}]` (group DoclingDocument items by heading) → a
+>   `DocumentRegulationAdapter` (or a section-producer) so a customer POLICY PDF flows into `RegulationAdapter`'s
+>   shape. Ground the exact DoclingDocument API (export_to_markdown / iterate items / heading labels) against the
+>   framework graph FIRST (CLAUDE.md rule).
+> - **ACCEPTANCE / verify:** hermetic tests (a fake DoclingDocument → text + sections) + a LIVE parse of one real
+>   PDF (convert a MAUD/NDA txt or a real policy PDF) proving text extraction AND heading-based sectioning; the
+>   contract `parse_bytes` seam ingests a PDF end-to-end; the compliance side ingests a doc→sections end-to-end. TDD.
+> - **Files:** `corpus/document_parser.py` (+ test); wire `corpus/gcs_ingestion.py` `parse_bytes` default; a
+>   `DocumentRegulationAdapter` for compliance (+ test). Ask-first only if it changes a contract/schema.
+>
+> ---
 > **PROD-2 — compliance-KG ingestion readiness (status: PHASE 1 DONE + PASSED; see `docs/eval/prod2_readiness.md`).**
 > PHASE 1 (extraction generalization) PASSED (2026-08-11): acquired **16 CFR 233 (deceptive pricing)** via a new
 > GENERIC `scripts/acquire_ecfr.py` (the eCFR DIV8/HEAD/P parser generalized, parameterized TITLE/PART/CHAPTER/
