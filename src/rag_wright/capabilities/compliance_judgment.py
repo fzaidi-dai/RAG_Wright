@@ -29,7 +29,9 @@ from rag_wright.models.seam import build_structured
 from rag_wright.util.concurrent import map_concurrent
 
 _VERDICTS = {v.value for v in Verdict}
-_SKILL_PATH = Path(__file__).parents[1] / "skills" / "compliance_judgment" / "SKILL.md"
+_SKILL_PATH = Path(__file__).parents[1] / "skills" / "compliance_judgment" / "SKILL.md"  # advertising method
+# COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC judgment method -- the base the advertising SKILL specializes.
+_GENERIC_SKILL_PATH = Path(__file__).parents[1] / "skills" / "generic_compliance_judgment" / "SKILL.md"
 
 
 class JudgeVerdict(BaseModel):
@@ -58,15 +60,25 @@ _BASE_PROMPT_TAIL = (
 _AD_ENRICHMENT = "\n\nCLAIM SIGNALS: type={claim_type}; disclosures_present={disclosures}; evidence_referenced={evidence}"
 
 
-def judgment_method() -> str:
-    """The compliance-judgment method (the `compliance_judgment` SKILL body, YAML frontmatter stripped) used as
-    the judge's system/method prompt. Authored knowledge (skills/compliance_judgment/SKILL.md), not hardcoded."""
-    text = _SKILL_PATH.read_text(encoding="utf-8")
+def _skill_body(path: Path) -> str:
+    """A SKILL.md body with its YAML frontmatter stripped -- the judge's system/method prompt."""
+    text = path.read_text(encoding="utf-8")
     if text.startswith("---"):
         marker = text.find("\n---", 3)
         if marker != -1:
             text = text[marker + 4 :]
     return text.strip()
+
+
+def judgment_method() -> str:
+    """The ADVERTISING compliance-judgment method (skills/compliance_judgment/SKILL.md, FTC doctrine)."""
+    return _skill_body(_SKILL_PATH)
+
+
+def generic_judgment_method() -> str:
+    """COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC judgment method (skills/generic_compliance_judgment/SKILL.md) --
+    no advertising doctrine, so the generic judge reasons about "the subject" in any domain."""
+    return _skill_body(_GENERIC_SKILL_PATH)
 
 
 def _base_tail(fact: CheckableFact, requirement: Requirement) -> str:
@@ -78,9 +90,10 @@ def _base_tail(fact: CheckableFact, requirement: Requirement) -> str:
 
 def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
     """COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC judge -- rules a `(subject_fact, requirement)` pair on TEXT alone
-    (the base tail; no advertising claim signals), so it gives a verdict in ANY compliance domain. Same SKILL
-    method + conservative default as the advertising judge; only the appendix differs."""
-    method = judgment_method()
+    using the GENERIC judgment method (no advertising doctrine; reasons about "the subject" in any domain), so it
+    gives a verdict in ANY compliance domain. Same conservative default as the advertising judge; the method +
+    the appendix (base tail only, no claim signals) differ."""
+    method = generic_judgment_method()
 
     def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
         return structured_factory(model_id, JudgeVerdict).invoke(method + _base_tail(fact, requirement))

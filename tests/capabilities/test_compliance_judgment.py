@@ -164,3 +164,57 @@ def test_judge_pairs_timeout_becomes_conservative_needs_review(monkeypatch):
     assert len(findings) == 1
     assert findings[0].verdict is Verdict.NEEDS_REVIEW and findings[0].needs_human_review is True
     assert findings[0].claim_id and findings[0].requirement_id  # citations preserved from the inputs
+
+
+# --- COMP-VERDICT-GENERIC: the split judgment methods (generic domain-neutral vs advertising doctrine) ---------
+
+
+def test_generic_judgment_method_is_domain_neutral():
+    from rag_wright.capabilities.compliance_judgment import generic_judgment_method
+
+    body = generic_judgment_method().lower()
+    assert body  # loads
+    # the generic method must NOT carry advertising doctrine / vocabulary
+    for ad_word in (" ad ", "advertis", "endorsement", "#ad", "puffery", "clinically proven", "substantiation"):
+        assert ad_word not in body, f"generic judge SKILL leaked advertising term {ad_word!r}"
+    assert "subject" in body and "requirement" in body  # domain-neutral framing
+
+
+def test_advertising_judgment_method_still_carries_ftc_doctrine():
+    from rag_wright.capabilities.compliance_judgment import judgment_method
+
+    body = judgment_method().lower()
+    assert "ad text" in body and "disclosure" in body  # advertising doctrine preserved (unchanged)
+
+
+def test_generic_judge_uses_the_generic_method_advertising_uses_the_ad_method():
+    from rag_wright.capabilities.compliance_judgment import build_compliance_judge_fn, build_generic_judge_fn
+
+    seen = {}
+
+    class _Factory:
+        def __init__(self, which):
+            self._which = which
+
+        def __call__(self, model_id, schema):
+            outer = self
+
+            class _R:
+                def invoke(self, prompt):
+                    seen[outer._which] = prompt
+                    return JudgeVerdict(verdict="compliant", rationale="ok", confidence=1.0)
+
+            return _R()
+
+    req = _req(actor="employer")  # neutral actor -> the only advertising terms would come from the SKILL/enrichment
+    from rag_wright.contracts.compliance import CheckableFact
+    fact = CheckableFact(fact_id="f0", source_doc="s", assertion_text="the subject did X")
+    build_generic_judge_fn("m", structured_factory=_Factory("generic"))(fact, req)
+    build_compliance_judge_fn("m", structured_factory=_Factory("ad"))(_claim(), req)
+    # the generic judge's prompt must NOT contain advertising DOCTRINE; the ad judge's MUST
+    gen = seen["generic"].lower()
+    for doctrine in ("#ad", "puffery", "clinically proven", "ad text", "substantiation"):
+        assert doctrine not in gen, f"generic prompt leaked ad doctrine {doctrine!r}"
+    assert "ad text" in seen["ad"].lower()
+    assert "CLAIM SIGNALS" in seen["ad"]  # advertising enrichment present only on the ad path
+    assert "CLAIM SIGNALS" not in seen["generic"]
