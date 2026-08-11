@@ -371,16 +371,40 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > 3 grounded points: (1) `skills/requirement_extraction/template.py` field `claim_types: list[str]`; (2)
 > `ontology/compliance_bridge.ttl` `cmp:ClaimType` closed vocab; (3) `subgraphs/compliance_check.py` the authored
 > section→claim_type map (`SECTION_CLAIM_TYPES`) that backfills empty scopes + the `claim_type` match filter.
-> - **WHAT (per target domain):** add that domain's applicability dimension(s) at the 3 points — e.g. OSHA safety →
->   {employer_size, industry, hazard_type}; privacy → {data_category, processing_purpose}; financial → {product_type,
->   customer_class}. Extraction field + closed vocab (ttl) + the check-time match. Mirrors the ONT-2 method
->   (domain-design the vocab, corpus-check it, thread all synced points). Ask-first (schema/contract change).
-> - **PRODUCT-GATED (do NOT build speculatively):** which domain(s) to enrich is a PRODUCT decision (which customers
->   / verticals we onboard). Build applicability dimensions for a domain only when a real customer/use-case needs
->   PRECISE requirement↔claim matching in it — until then, requirements ingest + are readable + get a generic LLM
->   verdict (COMP-VERDICT-GENERIC), just not structured claim-matched.
-> - **Verify:** in the target domain, requirements populate applicability scope, and compliance_check matches a claim
->   to the applicable requirements. Connects PROD-2, ADR-0049, the CC-* compliance rung.
+> - **STATUS: mechanism DONE for ADVERTISING (the worked example — claim_type dimension + template field + subject
+>   claim_extraction + matching all exist and pass the CC eval); NOT STARTED for any other domain (0 non-advertising
+>   domains enriched). So this is REPLICATE-the-advertising-vertical per target domain, not a from-scratch build.**
+> - **NOT extraction-only: 4 coordinated pieces per target domain (spans ontology + ingestion + query):**
+>   1. **ONTOLOGY (knowledge):** define the domain's applicability dimensions + closed vocab in
+>      `ontology/compliance_bridge.ttl` (+ the synced mirrors) — e.g. OSHA → {employer_size, industry, hazard_type};
+>      privacy → {data_category, processing_purpose}; financial → {product_type, customer_class}. ONT-2 method
+>      (domain-design + corpus-check). The master knowledge lever.
+>   2. **REQUIREMENT-SIDE EXTRACTION (+ RE-POPULATE, non-destructive):** the requirement template
+>      (`skills/requirement_extraction/template.py`) currently extracts advertising `claim_types`; add the domain's
+>      applicability field (+ the adapter mapping in `capabilities/requirement_extraction.py` → `Constraint(dimension
+>      =...)`). Then POPULATE it on the domain's ALREADY-INGESTED requirements (empty today, e.g. OSHA 0/87). This is
+>      NON-DESTRUCTIVE: `requirement_id` is content-hashed on (source, section, text), NOT applicability, so a
+>      re-extract yields the SAME id → `write_requirements` UPSERTs applicability_json IN PLACE (a targeted delta via
+>      the is_done resume). NEVER a from-scratch KG rebuild. Alternative: an authored section→dimension backfill map
+>      at query time (like SECTION_CLAIM_TYPES) = ZERO KG writes.
+>   3. **SUBJECT-SIDE EXTRACTION (query):** extract the subject's scope (the domain analogue of a claim's claim_type,
+>      via a `claim_extraction`-like step) so there's something to MATCH the requirement applicability against.
+>      (Lighter option: skip full subject-scope extraction, rely on the section→dimension map + semantic retrieval —
+>      trades some precision for less work.)
+>   4. **MATCHING (query):** `subgraphs/compliance_check.py` `applies_to`/`select` routing by the domain's dimension +
+>      the authored section→dimension backfill map.
+> - **NOT DESTRUCTIVE / NO KG REBUILD:** at most a non-destructive upsert re-extraction over the domain's sections
+>   (same requirement_ids, in-place applicability update), or purely query-time authoring. The existing
+>   `ragwright_compliance` KG is never dropped.
+> - **WHAT IT BUYS:** structured routing to EXACTLY-applicable requirements (fewer false-applicable, no
+>   missed-applicable) vs a semantic top-k guess; structured queries ("all rules for a small construction employer");
+>   fewer LLM judge calls (only truly-applicable pairs). PRECISION, on top of the always-answer generic verdict.
+> - **PRODUCT-GATED (do NOT build speculatively):** which domain(s) to enrich is a PRODUCT decision (which customers/
+>   verticals we onboard). Build a domain's applicability only when a real customer/use-case needs PRECISE
+>   requirement↔subject matching in it — until then, that domain ingests + is readable + gets a generic LLM verdict
+>   (COMP-VERDICT-GENERIC), just not structured-matched.
+> - **Verify:** in the target domain, requirements populate applicability scope, and compliance_check matches a
+>   subject to the applicable requirements (higher precision than semantic-only). Connects PROD-2, ADR-0049, CC-* rung.
 >
 > ---
 > **FCE-1 — function-conditioned extraction (status: TODO / future, measurement-gated). Implements the ADR-0049 (3)
