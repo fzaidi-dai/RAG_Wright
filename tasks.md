@@ -141,7 +141,22 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **Files:** `capabilities/dg_extraction.py` (+ test); possibly `graph_extraction.py` / the party-extract wiring.
 >
 > ---
-> **PROD-2 — compliance-KG ingestion readiness (status: TODO). The COMPLIANCE side is a DIFFERENT KG
+> **PROD-2 — compliance-KG ingestion readiness (status: PHASE 1 DONE + PASSED; see `docs/eval/prod2_readiness.md`).**
+> PHASE 1 (extraction generalization) PASSED (2026-08-11): acquired **16 CFR 233 (deceptive pricing)** via a new
+> GENERIC `scripts/acquire_ecfr.py` (the eCFR DIV8/HEAD/P parser generalized, parameterized TITLE/PART/CHAPTER/
+> SUBCHAPTER — 0 part-specific code; 5 sections parsed cleanly), ingested through the SAME `compliance_ingestion`
+> subgraph into scratch DB `ragwright_compliance_prod2` (`scripts/ingest_compliance_prod2.py`): 5/5 sections, 0
+> dead-lettered, 24 Requirement nodes, sane deontic split (14 obligation / 10 prohibition), no over/under-generation
+> (2–8 per section by length), 100% applicability scope, clean on-domain text. → the FTC-255-tuned pipeline
+> GENERALIZES to a different rulebook with NO code change (deontic ontology + requirement extraction are
+> domain-generic; extraction already uses `extraction_contract="auto"`). OPEN (compliance hardening backlog): (1)
+> **PHASE 2 = no generic raw-doc→sections parser** — `RegulationAdapter` needs a PRE-SECTIONED sections.json; a
+> customer's own policy PDF needs a docling parse→section-split step (same gap as PROD-1 finding #3, shared work);
+> (2) no `is_done` resume for compliance; (3) requirement extraction has the same silent-empty-vs-failure nuance
+> (model-seam path, not docling — a parallel lossless hardening); (4) cross-DOMAIN (non-advertising) test not yet
+> done; (5) not yet async (PROD-3 envelope is corpus-generic, would wrap it). ORIGINAL SCOPE below.
+>
+> **PROD-2 (original scope) — The COMPLIANCE side is a DIFFERENT KG
 > (`ragwright_compliance`) + ontology (`compliance_bridge.ttl`, deontic Requirement = obligation/prohibition/permission)
 > + pipeline; analyze + prove its readiness for ANY customer regulation, analogous to PROD-1. Connects to ADR-0049 +
 > the compliance rung (CC-*).** GROUNDED FINDINGS: architecturally GOOD — `run_compliance_ingestion` reuses the SAME
