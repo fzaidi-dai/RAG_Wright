@@ -197,8 +197,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > failure is dead_lettered (job still SUCCEEDS), only a RUNNER-level error → FAILED. PRAGMATIC async-runner approach
 > (reuses the per-doc LangGraph graph + is_done resume — NOT a LangGraph corpus-graph+checkpointer, which is_done
 > makes redundant; full = LangGraph Platform / Pub-Sub, ADR-0050). 18 async_ingestion tests; suite 1125 pass.
-> **NEXT = 2c (`submit_ingestion`/`get_ingestion_status` MCP tools, mirroring `mcp/compliance_server.py`) + 2d (live
-> validation on a handful from the GCS prod1 corpus incl. a forced-failure doc that must dead-letter/flag).**
+> **INCREMENT 2 COMPLETE (2a+2b+2d); PROD-3 async ingestion validated LIVE.** 2d DONE + PASSED
+> (`scripts/ingest_prod1_async.py`): async submit→parallel→status-poll→completion on 3 real NDAs from GCS into a
+> scratch KG (job SUCCEEDED, ingested=3, party_links=6), and a FORCED-FAILURE doc DEAD-LETTERED (visible on the job,
+> not silent) — the lossless invariant holds through the async runner. run_job hardened: a per-doc CRASH dead-letters
+> THAT doc, never fails the whole job. **2c (MCP tool exposure) DEFERRED (user decision): all current MCP tools are
+> QUERY pipelines; ingestion is an admin/onboarding operation and the async CAPABILITY already exists (2b) — the
+> exposure INTERFACE (MCP tool vs REST vs CLI vs onboarding-flow trigger) is an OPEN PRODUCT-SPEC decision, not a
+> capability-build default. Full distributed version (LangGraph Platform / GCP Pub-Sub + Cloud Run) = ADR-0050 "full".**
 > - **PRIMARY ACCEPTANCE — LOSSLESS OR EXPLICITLY DEAD-LETTERED (user requirement, ADR-0050 addendum), ABOVE
 >   throughput:** NO silent partial success. Track per-stage outcome per document (a stage that degrades to empty
 >   MUST flag failure, not pass silently); RETRY transient failures (per-node RetryPolicy); on irrecoverable failure

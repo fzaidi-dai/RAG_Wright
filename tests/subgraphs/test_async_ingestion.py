@@ -151,3 +151,13 @@ def test_submit_returns_job_id_immediately_then_completes(tmp_path):
     final = store.get("jobX")
     assert final.status is JobStatus.SUCCEEDED and final.documents_done == 3
     assert [p["source_doc_id"] for p in final.partial] == ["C2"]
+
+
+def test_run_job_per_document_crash_dead_letters_that_doc_not_the_whole_job(tmp_path):
+    # a per-doc graph that RAISES (a crash, not a returned dead_letter) must dead-letter THAT doc; the job succeeds
+    store = JobStore(tmp_path)
+    store.create(_job())
+    job = asyncio.run(run_job("job1", _docs("C1", "C2", "C3"), _FakeGraph(raise_for={"C2"}), store))
+    assert job.status is JobStatus.SUCCEEDED and job.ingested == 2
+    assert [d["source_doc_id"] for d in job.dead_lettered] == ["C2"]
+    assert job.dead_lettered[0]["stage"] == "invoke" and "blew up" in job.dead_lettered[0]["error"]

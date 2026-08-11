@@ -118,7 +118,12 @@ async def run_job(
             async with sem:  # bound concurrent LLM/DB work (rate limits)
                 if is_done(doc):  # RESUME: a prior run already wrote this document
                     return ("skip", doc, None)
-                out = await asyncio.to_thread(ingest_graph.invoke, {"document": doc})  # the per-doc LangGraph graph
+                try:
+                    out = await asyncio.to_thread(ingest_graph.invoke, {"document": doc})  # per-doc LangGraph graph
+                except Exception as exc:  # noqa: BLE001 - a per-doc CRASH must dead-letter THAT doc, never fail the
+                    out = {"dead_letter": {                                                # whole job (lossless)
+                        "source_doc_id": doc.source_doc_id, "stage": "invoke",
+                        "reason": "ingest_crashed", "error": str(exc)[:200]}}
                 return ("out", doc, out)
 
         for coro in asyncio.as_completed([_one(doc) for doc in documents]):
