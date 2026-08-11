@@ -1,0 +1,1 @@
+I strongly disagree with the decision to deprecate the legacy module. I think it was a mistake and I've argued this at length. The reasoning given in the release notes felt weak to me, and I'm frustrated that community feedback seemed to be ignored during the process.

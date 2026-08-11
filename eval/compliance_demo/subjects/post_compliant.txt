@@ -1,0 +1,1 @@
+I wanted to share some constructive feedback on the recent release. The new API is a big improvement, and I appreciate the team's hard work. I did run into one issue with the migration guide that was unclear, and I've opened a detailed issue with reproduction steps. Thanks to everyone who contributed — looking forward to the next version.
