@@ -344,8 +344,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   domain-agnostic MCP tool (added when a `generic_check_fn` is provided) with an enrich-suggestion note.
 >   LIVE (OSHA injury-not-logged scenario vs the un-enriched OSHA KG, applicability 0/87): verdict=VIOLATION, 6
 >   findings with both-sided citations, correctly flagged §1904.7/8/9 recording violations + compliant/needs_review
->   on non-applicable rules. FOLLOW-UP (noted): the judge SKILL text still says "the ad text" — a domain-neutral
->   judge SKILL is the natural later refinement (judge CONTENT, per-domain). +11 tests; suite 1145 pass.
+>   on non-applicable rules. **FOLLOW-UP RESOLVED (judge SKILL split):** the judge SKILL was SPLIT
+>   base/specialization (like CheckableFact/Claim) — new `skills/generic_compliance_judgment/SKILL.md` (domain-neutral
+>   method, reasons about "the subject") for `build_generic_judge_fn` via `generic_judgment_method()`; the advertising
+>   `compliance_judgment` SKILL (FTC substantiation/disclosure/puffery doctrine) kept INTACT for
+>   `build_compliance_judge_fn`. NOT a word-swap: the ad SKILL's RULES are FTC doctrine, so neutralizing the shared
+>   file would have broken advertising precision. KG + ontology UNAFFECTED (independent of the judge SKILL: the KG
+>   requirement_text is always fed to the judge; applicability routing runs BEFORE the judge). LIVE re-run (OSHA):
+>   rationales now "the subject text", verdict still VIOLATION, non-applicable rules now correctly COMPLIANT (cleaner
+>   than the ad-lensed run). Commit b08868c. +14 tests total; suite 1148 pass.
 > - **(orig) Verify:** feed a non-advertising subject with NO enrichment → cited LLM verdict + enrich-suggestion.
 >   Files (anticipated): `subgraphs/compliance_check.py` (a text-entry path) or a
 >   sibling verdict subgraph; tests.
