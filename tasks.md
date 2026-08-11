@@ -188,8 +188,17 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > genuine-empty still returns None. Party-extraction failure → `_guard` retry → DEAD-LETTER with reason.
 > Clause-extraction failure → retry (transient), persistent → RECORDED (span_id+reason) → doc flagged PARTIAL
 > (not dead-lettered — user choice) → surfaced in `IngestionReport.partial[]` (never grep-only). +7 tests;
-> full suite 1114 pass. NEXT = Increment 2 (async LangGraph job envelope: fan-out + checkpointer + IngestionJob
-> + submit/status MCP tools).
+> full suite 1114 pass.
+> - **INCREMENT 2 IN PROGRESS: 2a+2b DONE (`subgraphs/async_ingestion.py`).** `IngestionJob` model + file-based
+> `JobStore` (durable, process-independent so a status reader in another process sees live progress) + the async
+> runner: `submit_ingestion` returns a job_id IMMEDIATELY and ingests in a background daemon thread with bounded doc
+> parallelism (`asyncio.Semaphore` + `to_thread` over the existing per-doc LangGraph graph), updating the job per-doc
+> (live progress); resume via `is_done`; the Increment-1 `dead_lettered`/`partial` accumulate on the job; a per-doc
+> failure is dead_lettered (job still SUCCEEDS), only a RUNNER-level error → FAILED. PRAGMATIC async-runner approach
+> (reuses the per-doc LangGraph graph + is_done resume — NOT a LangGraph corpus-graph+checkpointer, which is_done
+> makes redundant; full = LangGraph Platform / Pub-Sub, ADR-0050). 18 async_ingestion tests; suite 1125 pass.
+> **NEXT = 2c (`submit_ingestion`/`get_ingestion_status` MCP tools, mirroring `mcp/compliance_server.py`) + 2d (live
+> validation on a handful from the GCS prod1 corpus incl. a forced-failure doc that must dead-letter/flag).**
 > - **PRIMARY ACCEPTANCE — LOSSLESS OR EXPLICITLY DEAD-LETTERED (user requirement, ADR-0050 addendum), ABOVE
 >   throughput:** NO silent partial success. Track per-stage outcome per document (a stage that degrades to empty
 >   MUST flag failure, not pass silently); RETRY transient failures (per-node RetryPolicy); on irrecoverable failure
