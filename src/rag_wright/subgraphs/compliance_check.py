@@ -74,6 +74,32 @@ def applicable_claim_types(requirement: Requirement) -> set[str]:
     return section | scope
 
 
+def _constraints_by_dimension(constraints: list) -> dict:
+    """`[Constraint(dimension, value), ...]` -> {dimension: {values}}."""
+    out: dict = {}
+    for c in constraints:
+        out.setdefault(c.dimension, set()).add(c.value)
+    return out
+
+
+def constraint_applies(requirement_scope: list, subject_scope: list) -> bool:
+    """COMP-APPLIC-1 Increment 0: the DIMENSION-AGNOSTIC applicability matcher. A requirement applies to a subject
+    iff, for EVERY dimension the requirement constrains, the subject's value(s) on that dimension INTERSECT the
+    requirement's allowed values. A dimension the requirement does NOT constrain, or one the subject does NOT
+    carry, never excludes (recall-first). Both scopes are `(dimension, value)` Constraint lists, so ANY domain
+    routes with NO new compliance_check code -- the ontology's dimensions are DATA, not per-domain matcher logic.
+    (The advertising `applies_to` keeps its own path: its "definitions section applies to nothing" is authored
+    doctrine that pure constraint matching does not express -- a domain with such authored routing adds a thin
+    wrapper; a domain with pure scope matching adds none.)"""
+    req = _constraints_by_dimension(requirement_scope)
+    subj = _constraints_by_dimension(subject_scope)
+    for dim, allowed in req.items():
+        vals = subj.get(dim)
+        if vals is not None and not (vals & allowed):
+            return False  # subject HAS this dimension but with a non-matching value -> excluded
+    return True
+
+
 def applies_to(requirement: Requirement, claim: Claim) -> bool:
     """Does `requirement` apply to `claim`? (the claim's type is in the requirement's applicable claim types)."""
     return claim.claim_type.value in applicable_claim_types(requirement)
@@ -110,7 +136,7 @@ def _dedup(requirements: list, vectors: dict, threshold: float) -> list:
 
 def build_select_fn(
     embedder, requirements: list, *, k: int = 5, context_k: int = 3, dedup_threshold: float = 0.92,
-    filter_applicability: bool = True
+    filter_applicability: bool = True, constraint_scope_fn: Any = None
 ) -> SelectFn:
     """CC-8b: build the semantic-narrowing selector. Precomputes each requirement's BGE vector ONCE. Per claim it
     returns the top-`context_k` CONTEXT rules (disclosure -- kept regardless of content so similarity can't miss
@@ -119,16 +145,23 @@ def build_select_fn(
     to a few representatives rather than re-exploding the cross-product. A precision/cost win that keeps the
     context rules (the recall guarantee) while cutting the redundant-rule noise.
 
-    COMP-VERDICT-GENERIC: `filter_applicability=False` skips the `applies_to` (claim_type) pre-filter -- for a
-    generic `CheckableFact` (any domain, no claim_type), narrowing is PURELY SEMANTIC (BGE cosine), so a verdict
-    works with no domain applicability ontology. The advertising path keeps `True` (structured claim_type routing)."""
+    Three applicability-routing modes (in precedence): `constraint_scope_fn` (COMP-APPLIC-1 Increment 0: generic
+    DIMENSION-AGNOSTIC structured routing -- `subject -> [Constraint]`, matched against each requirement's scope by
+    `constraint_applies`; ANY domain, no per-domain matcher code) > `filter_applicability=True` (advertising
+    claim_type routing via `applies_to`) > `filter_applicability=False` (semantic-only, COMP-VERDICT-GENERIC)."""
     vectors = {r.requirement_id: embedder.encode_dense(r.requirement_text) for r in requirements}
 
     def _ranked(reqs: list, claim_vec: list) -> list:
         return sorted(reqs, key=lambda r: _cosine(claim_vec, vectors.get(r.requirement_id, [])), reverse=True)
 
     def select(claim: Any, reqs: list) -> list:
-        applicable = [r for r in reqs if applies_to(r, claim)] if filter_applicability else list(reqs)
+        if constraint_scope_fn is not None:  # generic structured routing (any domain, ontology-driven, DATA)
+            subject_scope = constraint_scope_fn(claim)
+            applicable = [r for r in reqs if constraint_applies(r.applicability_scope, subject_scope)]
+        elif filter_applicability:  # advertising claim_type routing
+            applicable = [r for r in reqs if applies_to(r, claim)]
+        else:  # semantic-only (generic verdict)
+            applicable = list(reqs)
         claim_vec = embedder.encode_dense(claim.assertion_text)
         context = _dedup(_ranked([r for r in applicable if rule_scope_of(r) is RuleScope.CONTEXT], claim_vec),
                          vectors, dedup_threshold)[:context_k]

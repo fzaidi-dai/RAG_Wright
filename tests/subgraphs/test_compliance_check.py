@@ -256,3 +256,57 @@ def test_run_generic_compliance_verdict_produces_a_cited_report_without_ontology
     assert report.findings and report.findings[0].verdict.value == "violation"
     assert report.findings[0].citation_requirement.startswith("§ 1904.4")  # both-sided citation preserved
     assert report.summary.get("violation") == 1
+
+
+# --- COMP-APPLIC-1 Increment 0: the DIMENSION-AGNOSTIC matcher (any domain, no per-domain code) ----------------
+
+
+def test_constraint_applies_is_dimension_agnostic_and_recall_first():
+    from rag_wright.contracts.compliance import Constraint
+    from rag_wright.subgraphs.compliance_check import constraint_applies
+
+    C = Constraint
+    # requirement constrains a dimension; subject matches on it -> applies
+    assert constraint_applies([C(dimension="hazard_type", value="chemical")],
+                              [C(dimension="hazard_type", value="chemical")])
+    # subject HAS the dimension but a non-matching value -> excluded
+    assert not constraint_applies([C(dimension="hazard_type", value="chemical")],
+                                  [C(dimension="hazard_type", value="fall")])
+    # requirement constrains a dimension the SUBJECT lacks -> recall-first, NOT excluded
+    assert constraint_applies([C(dimension="employer_size", value="small")],
+                              [C(dimension="industry", value="construction")])
+    # requirement with NO constraints -> applies to any subject
+    assert constraint_applies([], [C(dimension="anything", value="x")])
+    # multi-dimension: all constrained dims the subject carries must match
+    req = [C(dimension="industry", value="construction"), C(dimension="employer_size", value="small")]
+    assert constraint_applies(req, [C(dimension="industry", value="construction"),
+                                    C(dimension="employer_size", value="small")])
+    assert not constraint_applies(req, [C(dimension="industry", value="retail"),
+                                        C(dimension="employer_size", value="small")])
+    # works for the ADVERTISING dimension too (claim_type) -- one matcher, all domains
+    assert constraint_applies([C(dimension="claim_type", value="health")],
+                              [C(dimension="claim_type", value="health")])
+
+
+def test_build_select_fn_constraint_scope_mode_routes_by_generic_matching():
+    from rag_wright.contracts.compliance import Constraint
+    from rag_wright.subgraphs.compliance_check import build_select_fn
+
+    class _Emb:
+        def encode_dense(self, text):
+            return [1.0, 0.0]
+
+    # two requirements with DIFFERENT (dimension,value) applicability -- a NON-advertising dimension
+    r_small = _req("A", text="rule for small employers")
+    r_small = r_small.model_copy(update={"applicability_scope": [Constraint(dimension="employer_size", value="small")]})
+    r_large = _req("B", text="rule for large employers")
+    r_large = r_large.model_copy(update={"applicability_scope": [Constraint(dimension="employer_size", value="large")]})
+
+    from rag_wright.contracts.compliance import CheckableFact
+    subject = CheckableFact(fact_id="f0", source_doc="s", assertion_text="a small employer scenario")
+    # the domain's subject-scope producer (data, not compliance_check code): this subject is a "small" employer
+    def scope_fn(_s):
+        return [Constraint(dimension="employer_size", value="small")]
+    select = build_select_fn(_Emb(), [r_small, r_large], k=5, context_k=3, constraint_scope_fn=scope_fn)
+    got = {r.requirement_id for r in select(subject, [r_small, r_large])}
+    assert got == {r_small.requirement_id}  # only the small-employer rule applies -- generic routing, no ad code

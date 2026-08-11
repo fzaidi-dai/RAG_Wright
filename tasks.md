@@ -374,7 +374,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **STATUS: mechanism DONE for ADVERTISING (the worked example — claim_type dimension + template field + subject
 >   claim_extraction + matching all exist and pass the CC eval); NOT STARTED for any other domain (0 non-advertising
 >   domains enriched). So this is REPLICATE-the-advertising-vertical per target domain, not a from-scratch build.**
-> - **INCREMENT 0 (do FIRST, ONE-TIME — so subsequent domains are DATA not CODE): GENERALIZE THE MATCHER.** Today
+> - **INCREMENT 0 DONE (2026-08-11): the matcher is generalized (dimension-agnostic).** Today
 >   `subgraphs/compliance_check.py` HARDCODES advertising: `applies_to` = `claim.claim_type.value in
 >   applicable_claim_types(req)`, and `applicable_claim_types` hardcodes `SECTION_CLAIM_TYPES` + `dimension ==
 >   "claim_type"`. But `Constraint` is ALREADY generic `(dimension, value)` (its docstring: "deliberately identical
