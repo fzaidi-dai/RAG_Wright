@@ -314,24 +314,52 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   or light store), an ingestion MCP server (`mcp/`), tests.
 >
 > ---
+> **COMP-VERDICT-GENERIC — domain-agnostic "always answer" compliance verdict (status: TODO / future,
+> product-side query capability). The ALWAYS-ANSWER guarantee: a customer in ANY domain gets an LLM compliance
+> verdict even WITHOUT domain ontology enrichment; suggest enrichment for precision. Connects PROD-2 / the CC-* rung
+> / ADR-0049.** WHY (grounded): the compliance VERDICT MACHINERY is already domain-agnostic — (1) requirement
+> retrieval is RECALL-FIRST (`applicable_claim_types` defaults an unknown section to ALL claim types, so an
+> un-enriched domain's requirements are NEVER filtered out); (2) narrowing is SEMANTIC (`build_select_fn`, BGE cosine
+> on requirement-text vs subject-text — any text); (3) the judge (`judge_pairs`) is PURELY LLM on text
+> (requirement_text + claim/subject text → verdict/rationale/confidence). The ONLY advertising-specific piece is the
+> SUBJECT/CLAIM ENTRY: `ClaimType` = {efficacy, comparative, pricing, health, environmental, endorsement,
+> performance, guarantee} (all advertising) + CC-3 ad-claim extraction, and `compliance_check.select` calls
+> `applies_to(req, claim)` which REQUIRES a `Claim` with a `claim_type`. So today the ENTRY assumes an ad even though
+> everything downstream is generic.
+> - **WHAT:** a domain-agnostic verdict ENTRY that takes the subject as FREE TEXT (or generic "facts to check"),
+>   bypasses the structured `ClaimType` claim step, → semantic-retrieve requirements (BGE) → LLM-judge → cited
+>   verdict + report. Attach a "for precise claim-type routing, enrich this domain's applicability (COMP-APPLIC-1)"
+>   suggestion. This is a QUERY-side generalization (a new/generalized entry path), NOT ontology work.
+> - **DISTINCT FROM COMP-APPLIC-1:** COMP-VERDICT-GENERIC = ALWAYS-ANSWER (works in any domain, no enrichment);
+>   COMP-APPLIC-1 = PRECISION (structured claim↔requirement routing, per-domain enrichment). Enrichment IMPROVES the
+>   generic verdict; it is NOT a prerequisite for one.
+> - **Verify:** feed a non-advertising subject (e.g. an OSHA scenario) with NO applicability enrichment → get a
+>   cited LLM verdict against the relevant retrieved requirements + the enrich-suggestion. Product-side; build when
+>   the product SPEC calls for it. Files (anticipated): `subgraphs/compliance_check.py` (a text-entry path) or a
+>   sibling verdict subgraph; tests.
+>
+> ---
 > **COMP-APPLIC-1 — compliance applicability-dimension enrichment per domain (status: TODO / future, product-gated).
-> The compliance analogue of ONT-1/ONT-2; from the PROD-2 #4 cross-domain finding; generic-customer lens (ADR-0049).**
+> The compliance analogue of ONT-1/ONT-2; from the PROD-2 #4 cross-domain finding; generic-customer lens (ADR-0049).
+> PRECISION-ONLY: this is NOT a prerequisite for a verdict — COMP-VERDICT-GENERIC gives an LLM answer in any domain
+> without it; COMP-APPLIC-1 adds STRUCTURED claim↔requirement routing (precision) on top.**
 > FINDING (PROD-2 #4, `docs/eval/prod2_readiness.md`): the deontic CORE (obligation/prohibition/permission
 > extraction) is domain-generic and generalized cleanly to OSHA safety recordkeeping (73/6/8, clean text), BUT the
 > APPLICABILITY-SCOPE layer is ADVERTISING-SPECIFIC — applicability 0/87 on OSHA vs 24/24 on FTC ads, because the ONLY
 > applicability dimension is `claim_type` (which advertising CLAIMS a rule applies to). So requirements EXTRACT
-> correctly in any domain, but can't be MATCHED to a claim/fact in a NON-advertising domain (compliance_check's
-> claim-scope↔requirement-applicability match has nothing to match on). The applicability layer is domain-specific at
+> correctly in any domain; STRUCTURED claim↔requirement matching (precision) needs domain applicability dims (a
+> pure-LLM verdict does NOT — see COMP-VERDICT-GENERIC). The applicability layer is domain-specific at
 > 3 grounded points: (1) `skills/requirement_extraction/template.py` field `claim_types: list[str]`; (2)
 > `ontology/compliance_bridge.ttl` `cmp:ClaimType` closed vocab; (3) `subgraphs/compliance_check.py` the authored
-> section→claim_type map (`_SECTION_CLAIM_TYPES`-style) that backfills empty scopes + the `claim_type` match filter.
+> section→claim_type map (`SECTION_CLAIM_TYPES`) that backfills empty scopes + the `claim_type` match filter.
 > - **WHAT (per target domain):** add that domain's applicability dimension(s) at the 3 points — e.g. OSHA safety →
 >   {employer_size, industry, hazard_type}; privacy → {data_category, processing_purpose}; financial → {product_type,
 >   customer_class}. Extraction field + closed vocab (ttl) + the check-time match. Mirrors the ONT-2 method
 >   (domain-design the vocab, corpus-check it, thread all synced points). Ask-first (schema/contract change).
 > - **PRODUCT-GATED (do NOT build speculatively):** which domain(s) to enrich is a PRODUCT decision (which customers
 >   / verticals we onboard). Build applicability dimensions for a domain only when a real customer/use-case needs
->   requirement↔claim MATCHING in it — until then, requirements still ingest + are readable, just not claim-matched.
+>   PRECISE requirement↔claim matching in it — until then, requirements ingest + are readable + get a generic LLM
+>   verdict (COMP-VERDICT-GENERIC), just not structured claim-matched.
 > - **Verify:** in the target domain, requirements populate applicability scope, and compliance_check matches a claim
 >   to the applicable requirements. Connects PROD-2, ADR-0049, the CC-* compliance rung.
 >
