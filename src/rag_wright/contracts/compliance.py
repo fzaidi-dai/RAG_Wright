@@ -111,41 +111,52 @@ class Requirement(BaseModel):
         return _content_id(source, section, requirement_text)
 
 
-class Claim(BaseModel):
-    """A checkable element extracted from the SUBJECT document (roadmap §13.1).
+class CheckableFact(BaseModel):
+    """COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC subject-fact the compliance verdict core consumes -- a checkable
+    assertion (any domain) with its provenance. The verdict machinery (semantic retrieval + LLM judge + finding /
+    report) needs only THIS (an id + text + provenance); advertising `Claim` is a SPECIALIZATION that adds typed
+    claim fields for structured routing. A NEW compliance domain either uses a bare `CheckableFact` (generic
+    verdict) or subclasses this with its own enrichment -- WITHOUT touching the base or other domains.
 
-    `claim_id = <source_doc>:<claim_index>:<hash>`; the `(source_doc, doc_start, doc_end, assertion_text)`
-    is the span provenance (cited, FR-Q.6). `confidence` is the graph-derived tag (FR-S.4).
-    """
+    `fact_id = <source_doc>:<index>:<hash>`; `(source_doc, doc_start, doc_end, assertion_text)` is the span
+    provenance (cited, FR-Q.6); `confidence` is the graph-derived tag (FR-S.4). NB: never persisted -- a
+    query-time object only (the KG stores `Requirement`), so this shape is a pure query-side/contract concern."""
 
-    claim_id: str
+    fact_id: str
     source_doc: str
+    assertion_text: str  # the checkable statement text (domain-neutral: an "assertion" is any checkable claim/fact)
+    doc_start: int | None = None  # span provenance: char offsets in source_doc (optional)
+    doc_end: int | None = None
+    confidence: ConfidenceTag = ConfidenceTag.EXTRACTED
+
+    @field_validator("fact_id", "source_doc", "assertion_text")
+    @classmethod
+    def _required_nonblank(cls, v: str, info) -> str:
+        return _nonblank(v, info.field_name)
+
+    @model_validator(mode="after")
+    def _ordered_offsets(self) -> CheckableFact:
+        if self.doc_start is not None and self.doc_end is not None and self.doc_start >= self.doc_end:
+            raise ValueError(f"doc_start ({self.doc_start}) must be < doc_end ({self.doc_end})")
+        return self
+
+    @staticmethod
+    def make_id(source_doc: str, index: int, text: str) -> str:
+        return _content_id(source_doc, str(index), text)
+
+
+class Claim(CheckableFact):
+    """An ADVERTISING checkable element (roadmap §13.1) -- a `CheckableFact` SPECIALIZED with the typed claim
+    fields the advertising compliance path uses for structured routing (claim_type) + disclosure/substantiation
+    judging. Inherits id/text/provenance + validators + `make_id` from `CheckableFact`."""
+
     claim_type: ClaimType
-    assertion_text: str
     actor: str | None = None
     subject_product: str | None = None
     quantitative_value: str | None = None
     disclosures_present: list[str] = []
     evidence_referenced: bool = False
     medium: str | None = None
-    doc_start: int | None = None  # span provenance: char offsets in source_doc (optional)
-    doc_end: int | None = None
-    confidence: ConfidenceTag = ConfidenceTag.EXTRACTED
-
-    @field_validator("claim_id", "source_doc", "assertion_text")
-    @classmethod
-    def _required_nonblank(cls, v: str, info) -> str:
-        return _nonblank(v, info.field_name)
-
-    @model_validator(mode="after")
-    def _ordered_offsets(self) -> Claim:
-        if self.doc_start is not None and self.doc_end is not None and self.doc_start >= self.doc_end:
-            raise ValueError(f"doc_start ({self.doc_start}) must be < doc_end ({self.doc_end})")
-        return self
-
-    @staticmethod
-    def make_id(source_doc: str, claim_index: int, assertion_text: str) -> str:
-        return _content_id(source_doc, str(claim_index), assertion_text)
 
 
 class RuleScope(str, Enum):

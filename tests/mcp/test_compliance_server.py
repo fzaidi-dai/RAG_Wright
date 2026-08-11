@@ -64,3 +64,43 @@ def test_check_fn_is_injectable_no_store_or_llm_needed():
     _, result = _call(build_compliance_mcp(stub), {"ad_text": "smooth relaxing flavor", "source_doc": "x"})
     assert seen["ad"] == "smooth relaxing flavor"
     assert result.data["verdict"] == "compliant"  # no violation/needs_review findings -> compliant rollup
+
+
+def test_generic_check_compliance_tool_is_exposed_and_returns_a_noted_report():
+    # COMP-VERDICT-GENERIC: the domain-agnostic tool is added when a generic_check_fn is provided
+    from rag_wright.contracts.compliance import ComplianceFinding, ComplianceReport, Verdict
+
+    def _generic(subject_text, source_doc):
+        return ComplianceReport(
+            source_doc=source_doc,
+            findings=[ComplianceFinding(
+                claim_id="f0", requirement_id="osha:1904.4", verdict=Verdict.VIOLATION,
+                rationale="not recorded", citation_claim=f"{source_doc}: subject",
+                citation_requirement="§ 1904.4", confidence=0.9)],
+            summary={"violation": 1}, gap_matrix=[])
+
+    mcp = build_compliance_mcp(demo_check_fn(), generic_check_fn=_generic)
+
+    async def _run():
+        async with Client(mcp) as client:
+            tools = [t.name for t in await client.list_tools()]
+            result = await client.call_tool(
+                "check_compliance", {"subject_text": "employer did not log an injury", "source_doc": "osha_case"})
+            return tools, result.data
+
+    tools, data = asyncio.run(_run())
+    assert "check_compliance" in tools and "check_ad_compliance" in tools  # both exposed
+    assert data["source_doc"] == "osha_case" and data["summary"]["violation"] == 1
+    assert data["verdict"] == "needs_review"  # ad-level rollup: 1 violation finding -> needs_review (threshold >=2)
+    assert "note" in data and "enrich" in data["note"].lower()  # suggests domain enrichment
+
+
+def test_generic_tool_absent_when_no_generic_check_fn():
+    mcp = build_compliance_mcp(demo_check_fn())  # no generic_check_fn
+
+    async def _run():
+        async with Client(mcp) as client:
+            return [t.name for t in await client.list_tools()]
+
+    tools = asyncio.run(_run())
+    assert "check_compliance" not in tools and "check_ad_compliance" in tools

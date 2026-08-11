@@ -42,7 +42,7 @@ def test_adapter_maps_fields_id_and_provenance():
     assert isinstance(c, Claim)
     assert c.claim_type is ClaimType.HEALTH and c.medium == "social"
     assert c.assertion_text.startswith("clinically proven")
-    assert c.claim_id == Claim.make_id("influencer_skincare_no_disclosure", 0, c.assertion_text)
+    assert c.fact_id == Claim.make_id("influencer_skincare_no_disclosure", 0, c.assertion_text)
     assert c.evidence_referenced is False and c.confidence is ConfidenceTag.EXTRACTED
 
 
@@ -74,7 +74,7 @@ def test_distinct_ids_for_distinct_assertions():
         _ad(ExtractedClaim(assertion_text="lose 30 pounds", claim_type="efficacy"),
             ExtractedClaim(assertion_text="guaranteed results", claim_type="guarantee")),
         source_doc="ad")
-    assert len({c.claim_id for c in claims}) == 2
+    assert len({c.fact_id for c in claims}) == 2
 
 
 # --- the capability: text -> Claim[] (docling-graph stubbed) -------------------------------------

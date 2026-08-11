@@ -314,8 +314,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   or light store), an ingestion MCP server (`mcp/`), tests.
 >
 > ---
-> **COMP-VERDICT-GENERIC — domain-agnostic "always answer" compliance verdict (status: TODO / future,
-> product-side query capability). The ALWAYS-ANSWER guarantee: a customer in ANY domain gets an LLM compliance
+> **COMP-VERDICT-GENERIC — DONE + LIVE-VALIDATED (2026-08-11): domain-agnostic "always answer" compliance verdict.
+> A customer in ANY domain gets a cited LLM verdict WITHOUT ontology enrichment.** The ALWAYS-ANSWER guarantee: a customer in ANY domain gets an LLM compliance
 > verdict even WITHOUT domain ontology enrichment; suggest enrichment for precision. Connects PROD-2 / the CC-* rung
 > / ADR-0049.** WHY (grounded): the compliance VERDICT MACHINERY is already domain-agnostic — (1) requirement
 > retrieval is RECALL-FIRST (`applicable_claim_types` defaults an unknown section to ALL claim types, so an
@@ -333,9 +333,21 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **DISTINCT FROM COMP-APPLIC-1:** COMP-VERDICT-GENERIC = ALWAYS-ANSWER (works in any domain, no enrichment);
 >   COMP-APPLIC-1 = PRECISION (structured claim↔requirement routing, per-domain enrichment). Enrichment IMPROVES the
 >   generic verdict; it is NOT a prerequisite for one.
-> - **Verify:** feed a non-advertising subject (e.g. an OSHA scenario) with NO applicability enrichment → get a
->   cited LLM verdict against the relevant retrieved requirements + the enrich-suggestion. Product-side; build when
->   the product SPEC calls for it. Files (anticipated): `subgraphs/compliance_check.py` (a text-entry path) or a
+> - **DELIVERED (the CheckableFact-base design, per the design discussion):** (1) `contracts/compliance.py` —
+>   `CheckableFact` base (fact_id/source_doc/assertion_text/provenance) + `Claim(CheckableFact)` advertising
+>   specialization; `claim_id`→`fact_id` on the input side; `ComplianceFinding.claim_id` kept (mapped from fact_id).
+>   NO KG impact (Claim is query-time only, never persisted). (2) `capabilities/compliance_judgment.py` — judge tail
+>   split into base (requirement+subject, any domain) + advertising enrichment; `build_generic_judge_fn` (text-only)
+>   alongside `build_compliance_judge_fn` (behavior unchanged). (3) `subgraphs/compliance_check.py` — `build_select_fn(
+>   filter_applicability=False)` semantic-only, extract_claims getattr-tolerant (serves Claims AND bare facts),
+>   `generic_facts_fn` + `run_generic_compliance_verdict`. (4) `mcp/compliance_server.py` — `check_compliance`
+>   domain-agnostic MCP tool (added when a `generic_check_fn` is provided) with an enrich-suggestion note.
+>   LIVE (OSHA injury-not-logged scenario vs the un-enriched OSHA KG, applicability 0/87): verdict=VIOLATION, 6
+>   findings with both-sided citations, correctly flagged §1904.7/8/9 recording violations + compliant/needs_review
+>   on non-applicable rules. FOLLOW-UP (noted): the judge SKILL text still says "the ad text" — a domain-neutral
+>   judge SKILL is the natural later refinement (judge CONTENT, per-domain). +11 tests; suite 1145 pass.
+> - **(orig) Verify:** feed a non-advertising subject with NO enrichment → cited LLM verdict + enrich-suggestion.
+>   Files (anticipated): `subgraphs/compliance_check.py` (a text-entry path) or a
 >   sibling verdict subgraph; tests.
 >
 > ---

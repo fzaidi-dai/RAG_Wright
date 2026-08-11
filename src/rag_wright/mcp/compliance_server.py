@@ -47,14 +47,28 @@ def _report_to_dict(report: ComplianceReport) -> dict[str, Any]:
     return {"verdict": report.verdict.value, **report.model_dump(mode="json")}
 
 
-def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-compliance") -> FastMCP:
-    """Build the FastMCP server exposing `compliance_check` as one tool. `check_fn` is injected (real subgraph
-    in production; a stub in tests) so the MCP surface is testable with no ArcadeDB / LLM."""
+_GENERIC_TOOL_DESCRIPTION = (
+    "Check ANY subject (a practice, document, or scenario) against the ingested regulation knowledge graph and "
+    "return a cited LLM compliance verdict -- WITHOUT needing a domain-specific applicability ontology. It "
+    "semantically retrieves the most relevant requirements and judges the subject against each from the text, "
+    "returning a cited report (verdict / needs_review / compliant, per-requirement findings with both-sided "
+    "citations, summary, gap matrix) plus a note suggesting domain applicability enrichment for more precise "
+    "routing. Use this for any regulatory domain; use check_ad_compliance for the advertising-tuned path."
+)
+
+
+def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-compliance",
+                         generic_check_fn: CheckFn | None = None) -> FastMCP:
+    """Build the FastMCP server exposing the compliance tools. `check_fn` = the advertising `check_ad_compliance`
+    (injected: real subgraph in production, a stub in tests). `generic_check_fn` (optional) adds the
+    domain-agnostic `check_compliance` tool (COMP-VERDICT-GENERIC). Both testable with no ArcadeDB / LLM."""
     mcp: FastMCP = FastMCP(
         name=name,
         instructions=(
-            "Advertising-compliance tools over the FTC 16 CFR 255 endorsement-rule knowledge graph. "
-            "Use check_ad_compliance to screen an ad's claims for endorsement/testimonial violations."
+            "Compliance tools over a deontic Requirement knowledge graph. `check_ad_compliance` is the "
+            "advertising-tuned path (FTC 16 CFR 255, structured claim-type routing). `check_compliance` is the "
+            "DOMAIN-AGNOSTIC path: it gives a cited LLM verdict for ANY subject against ANY ingested regulation, "
+            "even one whose domain has no applicability ontology yet."
         ),
     )
 
@@ -70,6 +84,25 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
             A cited compliance report: {verdict, source_doc, summary, findings[], gap_matrix[]}.
         """
         return _report_to_dict(check_fn(ad_text, source_doc))
+
+    if generic_check_fn is not None:  # COMP-VERDICT-GENERIC: the domain-agnostic verdict tool (any domain)
+        @mcp.tool(name="check_compliance", description=_GENERIC_TOOL_DESCRIPTION)
+        def check_compliance(subject_text: str, source_doc: str = "subject") -> dict[str, Any]:
+            """Check any subject against the ingested regulation KG -> a cited LLM verdict, WITHOUT needing a
+            domain-specific applicability ontology (semantic-retrieve relevant requirements -> LLM-judge).
+
+            Args:
+                subject_text: The practice / document / scenario to check for compliance.
+                source_doc: A short identifier for the subject (used in citations). Defaults to "subject".
+
+            Returns:
+                A cited compliance report {verdict, source_doc, summary, findings[], gap_matrix[]}, plus a
+                `note` suggesting domain applicability enrichment for more precise claim<->requirement routing.
+            """
+            out = _report_to_dict(generic_check_fn(subject_text, source_doc))
+            out["note"] = ("Generic domain-agnostic verdict (semantic retrieval + LLM judge). For more precise "
+                           "claim<->requirement routing in this domain, enrich its applicability dimensions.")
+            return out
 
     return mcp
 
@@ -99,6 +132,28 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
         return run_compliance_check(
             ad_text, source_doc, store=store, extract_model=extract_model,
             judge_model_id=judge_model_id, embedder=embedder, k=k)
+
+    return _check
+
+
+def production_generic_check_fn(*, k: int = 8) -> CheckFn:
+    """COMP-VERDICT-GENERIC: wire the DOMAIN-AGNOSTIC verdict over the env-selected store + models (no claim
+    extraction; semantic-retrieve + generic judge). Same infra as `production_check_fn`."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    from rag_wright.capabilities.remote_encoders import query_embedder
+    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+
+    store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
+    judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
+    embedder = query_embedder()
+
+    def _check(subject_text: str, source_doc: str) -> ComplianceReport:
+        return run_generic_compliance_verdict(
+            subject_text, source_doc, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k)
 
     return _check
 

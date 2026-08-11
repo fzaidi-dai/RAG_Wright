@@ -24,7 +24,7 @@ from typing import Callable, Optional
 
 from pydantic import BaseModel
 
-from rag_wright.contracts.compliance import Claim, ComplianceFinding, Requirement, Verdict
+from rag_wright.contracts.compliance import CheckableFact, Claim, ComplianceFinding, Requirement, Verdict
 from rag_wright.models.seam import build_structured
 from rag_wright.util.concurrent import map_concurrent
 
@@ -42,15 +42,20 @@ class JudgeVerdict(BaseModel):
     confidence: float = 0.0
 
 
-# judge_fn: (claim, requirement) -> JudgeVerdict, or None if the judge could not rule (-> conservative default).
-JudgeFn = Callable[[Claim, Requirement], Optional[JudgeVerdict]]
+# judge_fn: (subject_fact, requirement) -> JudgeVerdict, or None if the judge could not rule (-> conservative
+# default). Accepts any `CheckableFact` (the advertising `Claim` is one).
+JudgeFn = Callable[[CheckableFact, Requirement], Optional[JudgeVerdict]]
 
 # The per-call appendix bound onto the SKILL method (the static method teaches the reading; the specific
-# requirement + claim are appended at call time, the okf_navigate `_with_question` pattern).
-_PROMPT_TAIL = (
+# requirement + subject are appended at call time, the okf_navigate `_with_question` pattern).
+# COMP-VERDICT-GENERIC: split into a domain-agnostic BASE tail (requirement + subject assertion -- works for ANY
+# CheckableFact / domain) + an ADVERTISING enrichment line (claim_type / disclosures / evidence). The generic
+# judge uses only the base; the advertising judge appends the enrichment (behavior unchanged).
+_BASE_PROMPT_TAIL = (
     "\n\nREQUIREMENT ({deontic}, {citation}; applies to {actor}):\n{requirement_text}\n\n"
-    "CLAIM (type={claim_type}; disclosures_present={disclosures}; evidence_referenced={evidence}):\n{assertion}"
+    "SUBJECT:\n{assertion}"
 )
+_AD_ENRICHMENT = "\n\nCLAIM SIGNALS: type={claim_type}; disclosures_present={disclosures}; evidence_referenced={evidence}"
 
 
 def judgment_method() -> str:
@@ -64,22 +69,37 @@ def judgment_method() -> str:
     return text.strip()
 
 
+def _base_tail(fact: CheckableFact, requirement: Requirement) -> str:
+    """The domain-agnostic judge appendix: the requirement + the subject assertion. Works for ANY CheckableFact."""
+    return _BASE_PROMPT_TAIL.format(
+        deontic=requirement.deontic_type.value, citation=requirement.citation, actor=requirement.actor,
+        requirement_text=requirement.requirement_text, assertion=fact.assertion_text)
+
+
+def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
+    """COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC judge -- rules a `(subject_fact, requirement)` pair on TEXT alone
+    (the base tail; no advertising claim signals), so it gives a verdict in ANY compliance domain. Same SKILL
+    method + conservative default as the advertising judge; only the appendix differs."""
+    method = judgment_method()
+
+    def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
+        return structured_factory(model_id, JudgeVerdict).invoke(method + _base_tail(fact, requirement))
+
+    return judge
+
+
 def build_compliance_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
-    """The `compliance_judgment` SKILL's runtime: a Granite-backed judge `JudgeFn` through the model seam
-    (product = vLLM-Granite; ADR-0039). The SKILL.md method is the system prompt; the specific requirement +
-    claim (with the disclosure/evidence signals) are appended. `structured_factory` is injected for tests."""
+    """The advertising `compliance_judgment` SKILL runtime: a Granite-backed judge `JudgeFn` through the model seam
+    (product = vLLM-Granite; ADR-0039). Base tail (requirement + subject) + the ADVERTISING claim signals
+    (claim_type / disclosures / evidence). Behavior unchanged from before the CheckableFact split.
+    `structured_factory` is injected for tests."""
     method = judgment_method()
 
     def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
-        prompt = method + _PROMPT_TAIL.format(
-            deontic=requirement.deontic_type.value,
-            citation=requirement.citation,
-            actor=requirement.actor,
-            requirement_text=requirement.requirement_text,
+        prompt = method + _base_tail(claim, requirement) + _AD_ENRICHMENT.format(
             claim_type=claim.claim_type.value,
             disclosures=claim.disclosures_present or "none",
             evidence=claim.evidence_referenced,
-            assertion=claim.assertion_text,
         )
         return structured_factory(model_id, JudgeVerdict).invoke(prompt)
 
@@ -105,7 +125,7 @@ def assemble_finding(
         rationale = ruling.rationale
         confidence = min(1.0, max(0.0, ruling.confidence))
     return ComplianceFinding(
-        claim_id=claim.claim_id,
+        claim_id=claim.fact_id,
         requirement_id=requirement.requirement_id,
         verdict=verdict,
         rationale=rationale,

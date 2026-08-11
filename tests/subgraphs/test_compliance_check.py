@@ -27,7 +27,7 @@ from rag_wright.subgraphs.compliance_check import (
 
 
 def _claim(text="clinically proven to work", ctype=ClaimType.HEALTH, disc=None) -> Claim:
-    return Claim(claim_id=Claim.make_id("ad", 0, text), source_doc="ad", claim_type=ctype,
+    return Claim(fact_id=Claim.make_id("ad", 0, text), source_doc="ad", claim_type=ctype,
                  assertion_text=text, disclosures_present=disc or [])
 
 
@@ -192,3 +192,67 @@ def test_compliance_check_uses_select_fn_when_provided():
                                    judge_fn=judge, select_fn=select)
     graph.invoke({"subject_text": "x", "source_doc": "ad"})
     assert seen == ["rule one"]  # only the narrowed requirement was judged
+
+
+# --- COMP-VERDICT-GENERIC: domain-agnostic verdict on a free-text subject (no applicability ontology) ----------
+
+
+def test_generic_facts_fn_makes_one_checkable_fact_from_free_text():
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import generic_facts_fn
+
+    facts = generic_facts_fn("Employer did not record a work-related injury.", "osha_scenario")
+    assert len(facts) == 1 and isinstance(facts[0], CheckableFact)
+    assert facts[0].assertion_text.startswith("Employer did not record")
+    assert facts[0].source_doc == "osha_scenario"
+    assert generic_facts_fn("  ", "s") == []  # empty subject -> no fact
+
+
+def test_semantic_select_without_applicability_filter_keeps_all_then_ranks():
+    # filter_applicability=False -> no claim_type pre-filter (a generic CheckableFact has none), pure BGE ranking
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import build_select_fn
+
+    class _Emb:  # deterministic DISTINCT 2-D vectors so the two reqs are not near-duplicates (dedup)
+        def encode_dense(self, text):
+            return [1.0, 0.0] if "short" in text else [0.0, 1.0]
+
+    reqs = [_req("255.1", text="short"), _req("255.5", text="a much longer requirement text here")]
+    fact = CheckableFact(fact_id="f0", source_doc="s", assertion_text="x")
+    select = build_select_fn(_Emb(), reqs, k=5, context_k=3, filter_applicability=False)
+    got = select(fact, reqs)
+    assert {r.requirement_id for r in got} == {r.requirement_id for r in reqs}  # all kept (no applicability drop)
+
+
+def test_run_generic_compliance_verdict_produces_a_cited_report_without_ontology():
+    # end-to-end hermetic: a non-advertising subject + requirements with EMPTY applicability -> a verdict + findings
+    from rag_wright.capabilities.compliance_judgment import JudgeVerdict
+    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+
+    class _Store:
+        def all_requirements(self):
+            return [{"requirement_id": "osha:1904.4:h", "source": "OSHA", "citation": "§ 1904.4",
+                     "deontic_type": "obligation", "actor": "employer",
+                     "requirement_text": "Employers must record each work-related injury.",
+                     "evidence_standard": None, "severity": None, "applicability_json": "[]",
+                     "confidence": "EXTRACTED"}]
+
+    class _Emb:
+        def encode_dense(self, text):
+            return [1.0, 0.0]
+
+    def _judge(fact, requirement):  # domain-agnostic judge stub -> a verdict on text
+        return JudgeVerdict(verdict="violation", rationale="not recorded", confidence=0.9)
+
+    import rag_wright.capabilities.compliance_judgment as cj
+    orig = cj.build_generic_judge_fn
+    cj.build_generic_judge_fn = lambda model_id: _judge  # inject the stub judge (source of the local import)
+    try:
+        report = run_generic_compliance_verdict(
+            "The employer failed to record a work-related injury on the OSHA log.",
+            "osha_case", store=_Store(), judge_model_id="stub", embedder=_Emb())
+    finally:
+        cj.build_generic_judge_fn = orig
+    assert report.findings and report.findings[0].verdict.value == "violation"
+    assert report.findings[0].citation_requirement.startswith("§ 1904.4")  # both-sided citation preserved
+    assert report.summary.get("violation") == 1

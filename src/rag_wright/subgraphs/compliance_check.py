@@ -26,6 +26,7 @@ from langgraph.graph import END, START, StateGraph
 from rag_wright.capabilities.compliance_judgment import JudgeFn, judge_pairs
 from rag_wright.capabilities.retrieval_core import _cosine
 from rag_wright.contracts.compliance import (
+    CheckableFact,
     Claim,
     ClaimType,
     ComplianceFinding,
@@ -108,21 +109,26 @@ def _dedup(requirements: list, vectors: dict, threshold: float) -> list:
 
 
 def build_select_fn(
-    embedder, requirements: list, *, k: int = 5, context_k: int = 3, dedup_threshold: float = 0.92
+    embedder, requirements: list, *, k: int = 5, context_k: int = 3, dedup_threshold: float = 0.92,
+    filter_applicability: bool = True
 ) -> SelectFn:
     """CC-8b: build the semantic-narrowing selector. Precomputes each requirement's BGE vector ONCE. Per claim it
     returns the top-`context_k` CONTEXT rules (disclosure -- kept regardless of content so similarity can't miss
     them, Example B) + the top-`k` CONTENT rules (substantiation etc., ranked by cosine to the claim), deduped.
     Both classes are CAPPED so an over-extracted section (§255.5 -> 32 near-identical disclosure rules) collapses
     to a few representatives rather than re-exploding the cross-product. A precision/cost win that keeps the
-    context rules (the recall guarantee) while cutting the redundant-rule noise."""
+    context rules (the recall guarantee) while cutting the redundant-rule noise.
+
+    COMP-VERDICT-GENERIC: `filter_applicability=False` skips the `applies_to` (claim_type) pre-filter -- for a
+    generic `CheckableFact` (any domain, no claim_type), narrowing is PURELY SEMANTIC (BGE cosine), so a verdict
+    works with no domain applicability ontology. The advertising path keeps `True` (structured claim_type routing)."""
     vectors = {r.requirement_id: embedder.encode_dense(r.requirement_text) for r in requirements}
 
     def _ranked(reqs: list, claim_vec: list) -> list:
         return sorted(reqs, key=lambda r: _cosine(claim_vec, vectors.get(r.requirement_id, [])), reverse=True)
 
-    def select(claim: Claim, reqs: list) -> list:
-        applicable = [r for r in reqs if applies_to(r, claim)]
+    def select(claim: Any, reqs: list) -> list:
+        applicable = [r for r in reqs if applies_to(r, claim)] if filter_applicability else list(reqs)
         claim_vec = embedder.encode_dense(claim.assertion_text)
         context = _dedup(_ranked([r for r in applicable if rule_scope_of(r) is RuleScope.CONTEXT], claim_vec),
                          vectors, dedup_threshold)[:context_k]
@@ -170,7 +176,9 @@ def build_compliance_check(
                 claims = claims_fn(state["subject_text"], state["source_doc"])
             except Exception:  # noqa: BLE001 - degrade-to-empty (query-side never crashes)
                 return {"claims": [], "ad_disclosures": []}
-        ad = sorted({d for c in claims for d in c.disclosures_present})  # ad-level disclosure union (CC-4 fix)
+        # ad-level disclosure union (CC-4 fix). getattr-tolerant: a generic CheckableFact has no disclosures ->
+        # empty union -> _enrich is a no-op, so the same pipeline serves both advertising Claims and bare facts.
+        ad = sorted({d for c in claims for d in getattr(c, "disclosures_present", [])})
         return {"claims": claims, "ad_disclosures": ad}
 
     def retrieve_applicable(state: CheckState) -> CheckState:
@@ -273,6 +281,45 @@ def run_compliance_check(
     """Run a compliance check for one subject document against the Requirement KG -> a cited `ComplianceReport`."""
     graph = production_compliance_check(
         store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k)
+    return graph.invoke({"subject_text": subject_text, "source_doc": source_doc})["report"]
+
+
+def generic_facts_fn(subject_text: str, source_doc: str) -> list:
+    """COMP-VERDICT-GENERIC: the domain-agnostic subject producer -- the subject as ONE `CheckableFact` (no
+    advertising claim structure). MVP granularity: the whole subject is one fact judged against the semantically
+    relevant requirements. (Sentence/paragraph segmentation for finer citations is a later refinement.)"""
+    text = (subject_text or "").strip()
+    if not text:
+        return []
+    return [CheckableFact(fact_id=CheckableFact.make_id(source_doc, 0, text), source_doc=source_doc,
+                          assertion_text=text)]
+
+
+def production_generic_compliance_check(store: Any, *, judge_model_id: str, embedder: Any, k: int = 8):
+    """COMP-VERDICT-GENERIC: wire the DOMAIN-AGNOSTIC verdict path -- generic subject facts (no claim_type),
+    SEMANTIC-ONLY requirement narrowing (`filter_applicability=False`, no domain applicability ontology needed),
+    and the GENERIC judge (text-only). Gives a cited LLM verdict in ANY compliance domain; enrichment
+    (COMP-APPLIC-1) only ADDS structured precision on top. `embedder` is required (semantic retrieval is the
+    narrowing here)."""
+    from rag_wright.capabilities.compliance_judgment import build_generic_judge_fn
+
+    requirements = [_requirement_from_row(r) for r in store.all_requirements()]
+    select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False)
+    return build_compliance_check(
+        claims_fn=generic_facts_fn,
+        requirements_fn=lambda: requirements,
+        judge_fn=build_generic_judge_fn(judge_model_id),
+        select_fn=select_fn,
+    )
+
+
+def run_generic_compliance_verdict(
+    subject_text: str, source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
+) -> ComplianceReport:
+    """COMP-VERDICT-GENERIC: a domain-agnostic compliance verdict for a free-text subject against the Requirement
+    KG -- semantic-retrieve the relevant requirements -> LLM-judge -> cited `ComplianceReport`. Works with NO
+    domain applicability enrichment (the always-answer guarantee); suggest COMP-APPLIC-1 for structured precision."""
+    graph = production_generic_compliance_check(store, judge_model_id=judge_model_id, embedder=embedder, k=k)
     return graph.invoke({"subject_text": subject_text, "source_doc": source_doc})["report"]
 
 

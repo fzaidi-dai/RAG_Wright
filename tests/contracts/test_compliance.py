@@ -106,7 +106,7 @@ def _claim(**over) -> Claim:
         assertion_text="clinically proven to erase deep wrinkles in just 7 days",
     )
     base.update(over)
-    base.setdefault("claim_id", Claim.make_id(base["source_doc"], 0, base["assertion_text"]))
+    base.setdefault("fact_id", Claim.make_id(base["source_doc"], 0, base["assertion_text"]))
     return Claim(**base)
 
 

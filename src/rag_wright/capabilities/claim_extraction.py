@@ -57,7 +57,7 @@ def to_claims(extracted: ExtractedAd, *, source_doc: str) -> list[Claim]:
             continue
         claim_type, ambiguous = _coerce_claim_type(item.claim_type)
         out.append(Claim(
-            claim_id=Claim.make_id(source_doc, index, text),
+            fact_id=Claim.make_id(source_doc, index, text),
             source_doc=source_doc,
             claim_type=claim_type,
             assertion_text=text,

@@ -34,7 +34,7 @@ def _claim(**over) -> Claim:
     base = dict(source_doc="influencer_ad", claim_type=ClaimType.HEALTH,
                 assertion_text="clinically proven to erase deep wrinkles in 7 days")
     base.update(over)
-    base.setdefault("claim_id", Claim.make_id(base["source_doc"], 0, base["assertion_text"]))
+    base.setdefault("fact_id", Claim.make_id(base["source_doc"], 0, base["assertion_text"]))
     return Claim(**base)
 
 
@@ -84,7 +84,7 @@ def test_citations_are_taken_from_the_inputs():
     claim, req = _claim(), _req()
     finding = compliance_judgment(
         claim, req, judge_fn=lambda c, r: JudgeVerdict(verdict="violation", rationale="x", confidence=0.7))
-    assert finding.claim_id == claim.claim_id and finding.requirement_id == req.requirement_id
+    assert finding.claim_id == claim.fact_id and finding.requirement_id == req.requirement_id
     assert claim.assertion_text in finding.citation_claim
     assert req.citation in finding.citation_requirement  # "§ 255.5"
 
@@ -138,7 +138,7 @@ def test_assemble_finding_is_deterministic_and_conservative():
     # the FUNCTION: no model; None ruling -> conservative needs_review; citations from the inputs
     claim, req = _claim(), _req()
     none_finding = assemble_finding(claim, req, None)
-    assert none_finding.verdict is Verdict.NEEDS_REVIEW and none_finding.claim_id == claim.claim_id
+    assert none_finding.verdict is Verdict.NEEDS_REVIEW and none_finding.claim_id == claim.fact_id
     viol = assemble_finding(claim, req, JudgeVerdict(verdict="violation", rationale="x", confidence=0.9))
     assert viol.verdict is Verdict.VIOLATION and req.citation in viol.citation_requirement
 
