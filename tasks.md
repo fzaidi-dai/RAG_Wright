@@ -16,7 +16,9 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (`docs/eval/compliance_demo.md`, `scripts/compliance_policy_demo.py`, `eval/compliance_demo/`).
 > **NEXT = PRODUCT SPEC.** The remaining tracked items are all forward-looking + product-gated: COMP-APPLIC-1 (per-domain
 > precision, Increment 0 done — the rest gated on a chosen domain), COMP-VERDICT-GENERIC follow-ons, FCE-1 (measurement-
-> gated), and the product-side items (ingestion EXPOSURE interface MCP/REST/CLI, distributed async scale-up). All of
+> gated), ONT-EVOLVE-1 (ADR-0051 the living ontology: schema bootstrap + feedback-driven evolution — the productization
+> of the ADR-0049 lens), and the product-side items (ingestion EXPOSURE interface MCP/REST/CLI, distributed async
+> scale-up). All of
 > these need the PRODUCT SPEC to prioritize — read `docs/product/contracts_product_roadmap.md` (the rough vision/spec)
 > and pick up the product definition (user stories, use-cases, UI surfaces, background/cron agents) as the next arc.
 > The capability half is production-shaped + demoable; the product SPEC is where we go next.
@@ -464,6 +466,44 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   script (baseline-vs-conditioned on the graded set). Ask-first (changes the extraction prompt = a model-behavior change).
 > - **Verify:** the eval script's per-dimension precision/recall table (baseline vs conditioned) + the adopt/no-adopt call
 >   recorded in a dated note or ADR. **Do NOT wire it into the ingestion default until the gate passes.**
+>
+> **ONT-EVOLVE-1 — the living ontology: schema bootstrap + feedback-driven ontology evolution (status: TODO / future,
+> product-gated). Implements ADR-0051; the productization of the ADR-0049 generic-customer lens (the ".ttl is the
+> master knowledge lever" made a living, usage-driven asset). Depends on the PRODUCT SPEC to prioritize its surfaces.**
+> - **Why:** docling-graph extraction is schema-guided — a new customer in an un-modeled domain still needs a schema, and
+>   hand-crafting one per domain does not scale. ADR-0051's answer is bootstrap-then-evolve, keeping schema-guided
+>   extraction as the precision backbone and using automatic NLP/NLI methods ONLY where reliable (as a DRAFT and a
+>   DISCOVERY signal, never as the stored graph — schema-free open-IE would LOWER query precision by removing the
+>   normalization our typed queries depend on).
+> - **Three layers (ADR-0051):** (1) SEED — LLM ontology induction over a sample of a new domain's corpus drafts a
+>   starter ontology (entity/relation types, property dimensions, deontic mapping), human-reviewed → becomes the schema
+>   docling-graph enforces (solves cold-start); open-IE/SVO/LLM triples are the discovery INPUT, not the stored graph.
+>   (2) GROW — curated increments via the EXISTING gap machinery (the `OTHER`/`other_label` channel in
+>   `spans/clause_function_classifier.py` + `scripts/ontology_dimension_check.py` + `scripts/curate_taxonomy_gaps.py`,
+>   the ONT-1/ONT-2 FOLD/DROP/ADD loop). (3) FEEDBACK LOOP (the product surfaces) — an EXPERT path (create/upload/edit
+>   the domain ontology directly) + an SME path (flag an imprecise match at query/verdict time → a feedback-processing
+>   agent proposes a CONSTRAINED, ADD-ONLY `.ttl` delta with near-duplicate FOLDing → the user approves the FIXED
+>   OUTCOME, not the syntax → the delta threads the 4 synced artifacts under the `tests/contracts/test_ontology.py`
+>   gate → a BOUNDED subset of previously-ingested docs is re-ingested to populate the new fields).
+> - **Load-bearing infra it reuses (already built):** selective re-ingest = the `is_done(doc)` resume seam in
+>   `subgraphs/contract_ingestion_pipeline.py` + idempotent upserts + the ADR-0050 async/lossless envelope (mark the
+>   affected docs not-done and re-run; non-destructive, bounded, streamed X/N, dead-letters irrecoverable failures).
+>   Consistency = the 4 synced artifacts guarded by `tests/contracts/test_ontology.py` (a bad delta fails the lint +
+>   suite before it lands).
+> - **Risks (ADR-0051, with mitigations):** auto-editing the 4 synced artifacts is the riskiest piece → constrain
+>   feedback-driven changes to ADD-ONLY from a template, approve the DIFF, CI-gate on the ontology lint + tests. Drift/
+>   bloat → the curation agent FOLDs near-dupes + a periodic consolidation review. Per-tenant vs shared ontology = OPEN
+>   product decision (default direction: per-tenant domain ontologies + an optional curated shared base). Re-ingest cost
+>   = bounded (affected docs only, async).
+> - **Trust (non-expert approval):** the approval unit is the FIXED OUTCOME — re-run the user's flagged case with the
+>   proposed schema and show "your case, before vs after"; the SME approves because it now matches correctly.
+> - **NOT decided here (deferred to the PRODUCT SPEC):** the concrete UI/agent surfaces (upload/edit editor; the
+>   flag-a-match affordance; the approval view); whether SEED ships before or after the first product cut; the
+>   per-tenant-vs-shared policy + any cross-tenant learning.
+> - **Verify (when built, incrementally):** SEED = on a new-domain sample, the induced draft ontology passes human
+>   review + docling-graph extracts typed against it (0 dead-letter regressions). FEEDBACK = a flagged case, its
+>   agent-proposed add-only delta, the green `test_ontology.py` + suite after threading, and the before/after re-run
+>   showing the case now matches. Each layer is its own gated increment; do NOT build unattended.
 >
 > **(prior, 2026-08-09/10) INGEST-LLM-CLASSIFIER step-2 taxonomy extension DONE (44 → 52 labels
 > + curated FOLD alias map) + Phase A WRITE DONE + audited (ADR-0048 addenda).** Step 2 (ADR-0048
