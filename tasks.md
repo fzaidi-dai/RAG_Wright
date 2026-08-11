@@ -149,7 +149,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > build graph → generic `submit_ingestion`) = non-blocking submit → job_id, parallel sections, pollable `JobStore`,
 > dead-letter surfacing. LIVE (16 CFR 233): queued → running 2/5 → 5/5 SUCCEEDED, 24 Requirement nodes, 0
 > dead-lettered — parity with the contract async path. `RequirementExtractionFailed` exception;
-> `scripts/ingest_compliance_async_prod2.py`. +3 tests; suite 1138 pass. STILL OPEN: cross-domain test (PROD-2 #4).
+> `scripts/ingest_compliance_async_prod2.py`. +3 tests; suite 1138 pass. **PROD-2 COMPLETE.** #4 (cross-domain) DONE + PASSED (2026-08-11): 29 CFR 1904 (OSHA safety recordkeeping),
+> 12 sections → 87 Requirement nodes, 0 dead-lettered; deontic mix correctly obligation-heavy (73 obl / 6 proh /
+> 8 perm, 84% obl) vs advertising's prohibition-leaning — the deontic CORE is domain-generic. FINDING: applicability
+> scope 0/87 (OSHA) vs 24/24 (advertising) — the applicability dimension `claim_type` is ADVERTISING-SPECIFIC; a
+> new domain needs its own applicability dimensions to match requirements↔claims (the compliance analogue of the
+> contract-side ONT-2 property-dimension work; ADR-0049; NEW compliance-ontology item, not a blocker). See
+> `docs/eval/prod2_readiness.md`.
 > **PROD-2 #2 (compliance is_done resume) DONE + LIVE (2026-08-11):** `store.ingested_citations(source)` (citations
 > with >=1 Requirement = the compliance analogue of a present Contract node) + `_compliance_is_done` wired into all
 > 3 entry points (run_compliance_ingestion / run_compliance_document_ingestion / submit_compliance_ingestion); a

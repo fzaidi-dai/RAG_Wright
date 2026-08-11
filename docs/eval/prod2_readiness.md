@@ -66,7 +66,34 @@ heading-sectioning needs a STRUCTURED source (PDF/DOCX/MD with headings); a flat
 5. **Not yet made async (PROD-3).** Compliance ingestion is still the blocking `run_corpus_ingestion`; the PROD-3
    async job envelope (`submit_ingestion`/`run_job`) is corpus-generic and would wrap it identically.
 
+## Phase 1b — CROSS-DOMAIN generalization (PROD-2 #4, DONE + PASSED)
+
+Phase 1 stayed in the FTC advertising family. Phase 1b tests a GENUINELY DIFFERENT domain: **29 CFR 1904 (OSHA
+Occupational Injury & Illness Recording & Reporting — workplace safety)**, acquired via `acquire_ecfr.py` (0
+domain-specific code), 12 sections ingested into scratch DB `ragwright_compliance_osha`.
+
+**What generalized (the deontic core, PASS):**
+- 12/12 sections, **0 dead-lettered**, **87 Requirement nodes**.
+- The deontic mix correctly shifted to **obligation-heavy — 73 obligation / 6 prohibition / 8 permission (84%
+  obligation)** — appropriate for recordkeeping DUTIES, vs the deceptive-pricing baseline (14 obl / 10 prohib,
+  prohibition-leaning). Permissions appeared for the partial-exemption rules. The pipeline read the domain's
+  deontic character correctly, with no code/ontology change.
+- Clean on-domain text ("Employers must record and report work-related fatalities, injuries, and illnesses";
+  exemption thresholds). Large-section auto/dense held: §1904.7 (19k chars) → 26 requirements, no truncation.
+
+**The finding — applicability-scope is DOMAIN-TUNED (not a blocker; an ontology-enrichment item):** `with
+applicability scope: 0/87` on OSHA vs **24/24** on FTC advertising. Confirmed cause: the FTC ad KG uses the
+`claim_type` applicability dimension (advertising-specific — which CLAIMS a rule applies to); OSHA recordkeeping
+duties aren't scoped to ad claim-types, so no applicability populates. This is the **compliance analogue of the
+contract-side ontology story** (ADR-0049): the CORE deontic extraction is domain-generic and generalizes cleanly,
+but the APPLICABILITY-SCOPE vocabulary is domain-specific. A genuinely different compliance domain needs its own
+applicability dimensions (so requirements can be MATCHED to claims/facts) — a compliance ontology-enrichment task,
+analogous to ONT-1/ONT-2 on the contract side. Requirements are extracted correctly; only claim-matching in a new
+domain is gated on domain applicability dimensions.
+
 ## Verdict
-Compliance extraction is production-shaped and generalizes across rulebooks (Phase 1 proven). The open items —
+Compliance extraction is production-shaped and generalizes across rulebooks AND domains — the deontic core is
+domain-generic (Phase 1 + 1b proven); the applicability-scope vocabulary is domain-tuned (a per-domain
+ontology-enrichment item, the compliance analogue of ONT-2). The open items —
 the generic raw-doc→sections parser (Phase 2), compliance resume, lossless hardening of the requirement path,
 cross-domain testing, and async — are the hardening backlog, not blockers to the pipeline itself.
