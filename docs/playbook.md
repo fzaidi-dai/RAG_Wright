@@ -1,6 +1,6 @@
 # DreamAI Claude Code Build Playbook: RAG_Wright
 
-The DreamAI recipe for building a spec-driven project with Claude Code, following spec-driven development, test-driven development, contracts-first, and library-grounded coding. Filled for RAG_Wright: the parameters below are set, and the body applies as written. RAG_Wright builds the capability half of the Hybrid RAG system; the graphs are compiled separately by the GraphWright compiler.
+The DreamAI recipe for building a spec-driven project with Claude Code, following spec-driven development, test-driven development, contracts-first, and library-grounded coding. Filled for RAG_Wright: the parameters below are set, and the body applies as written. RAG_Wright is the reusable **engine/platform** (open-core candidate) of the Hybrid RAG system; the user-facing **product** is a separate repo that depends on it, and GraphWright (the orchestration compiler) is PARKED (ADR-0052).
 
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
 
@@ -25,7 +25,7 @@ The DreamAI recipe for building a spec-driven project with Claude Code, followin
 ### Filled values for RAG_Wright
 
 - Project name: RAG_Wright.
-- Spec: `RAG_Capability_Spec.md`, v0.1. This repo builds the capability half only; the Orchestration Spec's graph briefs are dispatched to the GraphWright compiler separately.
+- Spec: `RAG_Capability_Spec.md`, v0.1. This repo is the ENGINE/platform (the FR-C / FR-I / FR-Q capabilities + ingestion/query pipelines + MCP + ARD, as ordinary tested software). The user-facing PRODUCT is a separate repo depending on this engine; GraphWright (the orchestration compiler) is PARKED (ADR-0052).
 - Build stage: MVP.
 - Stack: Python with uv, pytest, Pydantic (the default).
 - Index tool: Graphify.
@@ -36,9 +36,9 @@ The DreamAI recipe for building a spec-driven project with Claude Code, followin
 - Data artifacts: the ArcadeDB data directory, MinIO or object-store artifacts, parsed-document and embedding caches, evaluation outputs, and model caches.
 - Contract use: the Pydantic contracts (ontology, extraction contracts, shared identifiers) are the capability contracts each capability is registered under.
 
-### The two-halves boundary
+### The engine / product boundary (ADR-0052)
 
-RAG_Wright builds capabilities, not graphs. Every task in this repo builds and registers a capability from the capability spec (FR-C, FR-I, FR-Q) as ordinary tested software. The ingestion and query graphs are compiled from the companion Orchestration Spec by the GraphWright compiler in a later step; they are not built here. If a task looks like graph or orchestration wiring, it is out of scope for this repo, stop and flag it.
+This repo is the ENGINE/platform (open-core candidate): it builds and registers the capabilities from the capability spec (FR-C, FR-I, FR-Q) plus the ingestion/query pipelines, MCP servers, and ARD, as ordinary tested software. The user-facing PRODUCT (contract management + compliance app: UI, product-named tools, hand-built orchestration, connectors, guardrails, feedback loops) is a SEPARATE, closed-source repo that depends on this engine and has its own SPEC/plan/tasks; product work is not done here. Dependency direction is strict: Product → Engine, never the reverse. GraphWright (the orchestration compiler) is PARKED (ADR-0052) — no compiler step; the product hand-builds orchestration, which becomes GraphWright's future spec. If a task is UI, a product-named tool, or higher-level orchestration, it belongs in the product repo; flag it.
 
 ---
 

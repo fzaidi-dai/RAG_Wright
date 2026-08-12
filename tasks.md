@@ -3,6 +3,18 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
+> reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
+> ontology machinery). The user-facing **product** (contract mgmt + compliance app: UI, product-named tools,
+> hand-built orchestration, connectors, guardrails, feedback loops) is a **separate closed-source repo** with its
+> OWN CLAUDE.md/SPEC/plan/tasks; product work is NOT done here; dependency is one-way Product→Engine. **GraphWright
+> is PARKED** (larger-scoped; the product hand-builds orchestration, which becomes GraphWright's future spec) — no
+> compiler step, no Orchestration Spec/graph brief, `AC-N` framing dead. **ARD is a first-class STANDING commitment
+> independent of GraphWright** (emerging open standard, Google-originated, local instantiation now; global
+> discoverability later). Domain assets (contract ontology + compliance SKILLs) stay in the open engine as the
+> **reference domain pack** for now. See `docs/adr/0052-engine-product-split-graphwright-parked.md`. NEXT arc = stand
+> up the PRODUCT repo (its own SPEC/plan/tasks) from `docs/product/contracts_product_roadmap.md`.
+>
 > **RESUME / NEXT UP (2026-08-11 NEWEST): the ingestion + compliance CAPABILITY hardening arc is COMPLETE and pushed;
 > NEXT = the PRODUCT SPEC (`docs/product/contracts_product_roadmap.md`).** We finished a long capability-hardening arc
 > (all committed + pushed to origin/main): ADR-0047 (retire function gate) → ADR-0048 (INGEST-LLM-CLASSIFIER: taxonomy
