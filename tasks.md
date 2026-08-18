@@ -16,6 +16,17 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > encoders `urllib`→`httpx.AsyncClient`; docling-graph `run_pipeline` sync/litellm→injected async client (A4);
 > ArcadeDB store→async I/O (B4). Product (RuleWright) FastAPI→async routes = Phase E, done in the product session.
 > Arc tasks: ASYNC-A1..A4 (seam), B1..B4 (ingestion), C1..C3 (query+MCP), D1..D2 (entrypoints), E1 (product).
+> **PROGRESS (2026-08-18): A1-A4 DONE (async seam+deadline+streaming+docling-graph). B1 DONE (async classifier).
+> B2a-c DONE (async chunk/clause/graph leaf capabilities). B2e (async ingestion) IN PROGRESS: step 1 (async
+> pipeline abuild/aproduction/arun_corpus_ingestion + _asegment_and_classify) DONE; step 2 (run_job->ainvoke +
+> cuad/compliance glue async + JobStore atomic-write fix, pulled from B4) DONE; async pipeline has full test
+> parity (7 tests). B4 JobStore hardening DONE (in B2e). REMAINING B2e: step 3 (convert ingest scripts to
+> async) + step 4 (REMOVE the now-test/script-only sync build_document_ingest/production_document_ingest/
+> run_corpus_ingestion/_segment_and_classify + trim their sync tests + port test_ingest_segment_classify to
+> _asegment_and_classify -- production is already fully async, these are scaffolding). FOLLOW-ON: compliance
+> graph NODES async (build_compliance_ingest/requirement_extraction) for the deadline on the compliance path
+> (currently its sync-node graph runs under ainvoke in a threadpool -- non-blocking but no per-call deadline).
+> Then Phase C (query side), D (entrypoints), E (RuleWright product, its session). Suite green throughout.
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +

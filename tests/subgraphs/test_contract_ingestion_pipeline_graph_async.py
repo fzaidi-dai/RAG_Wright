@@ -15,9 +15,11 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 _FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)
 
 
-def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset()):
+def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset(), fail_index_for=frozenset(),
+                  fail_write_for=frozenset(), clause_partial_for=None):
     calls: dict = {k: [] for k in ("chunk", "segment", "clauses", "index", "graph", "write")}
     calls["resolve"] = 0
+    clause_partial_for = clause_partial_for or {}
 
     async def chunk_fn(doc):
         calls["chunk"].append(doc.source_doc_id)
@@ -31,10 +33,15 @@ def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset()):
 
     async def clauses_fn(doc, _segments):
         calls["clauses"].append(doc.source_doc_id)
+        if doc.source_doc_id in clause_partial_for:  # PROD-3: records + per-clause failures -> PARTIAL
+            return {"clause_records": [f"clause::{doc.source_doc_id}"],
+                    "clause_failures": clause_partial_for[doc.source_doc_id]}
         return [f"clause::{doc.source_doc_id}"]
 
     async def index_fn(doc, segments):
         calls["index"].append(doc.source_doc_id)
+        if doc.source_doc_id in fail_index_for:
+            raise RuntimeError("index blip")
         return len(segments)
 
     async def graph_fn(doc, _chunks):
@@ -51,6 +58,8 @@ def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset()):
 
     async def write_fn(doc, clause_records, resolution):
         calls["write"].append(doc.source_doc_id)
+        if doc.source_doc_id in fail_write_for:
+            raise RuntimeError("write blip")
         return {"clauses": len(clause_records), "entities": len(resolution["resolved"])}
 
     return (chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn), calls
@@ -86,6 +95,27 @@ async def test_async_bad_document_dead_letters_without_raising():
     assert out["dead_letter"]["source_doc_id"] == "C1"
 
 
+async def test_async_index_failure_is_best_effort_and_does_not_dead_letter():
+    stages, _ = _astub_stages(fail_index_for={"C1"})
+    out = await _agraph(stages).ainvoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+    assert out["written"]["spans"] == 0  # the retrieval index degrades to 0...
+    assert "dead_letter" not in out  # ...without dead-lettering the document's KG
+
+
+async def test_async_write_failure_dead_letters_instead_of_crashing():
+    stages, _ = _astub_stages(fail_write_for={"C1"})
+    out = await _agraph(stages).ainvoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+    assert out["dead_letter"]["stage"] == "write" and out["dead_letter"]["source_doc_id"] == "C1"
+
+
+async def test_async_clause_partial_failure_flags_the_document_not_dead_letter():
+    stages, _ = _astub_stages(clause_partial_for={"C1": [{"span_id": "s1", "reason": "trunc"}]})
+    report = await arun_corpus_ingestion(
+        _FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
+    assert report.documents_ingested == 1 and report.dead_lettered == []
+    assert report.partial == [{"source_doc_id": "C1", "clause_failures": [{"span_id": "s1", "reason": "trunc"}]}]
+
+
 async def test_arun_corpus_ingestion_maps_all_and_dead_letters_one():
     stages, _ = _astub_stages(fail_graph_for={"BAD"})
     report = await arun_corpus_ingestion(
@@ -93,3 +123,12 @@ async def test_arun_corpus_ingestion_maps_all_and_dead_letters_one():
     assert isinstance(report, IngestionReport)
     assert report.documents_ingested == 2
     assert [d["source_doc_id"] for d in report.dead_lettered] == ["BAD"]
+
+
+async def test_arun_corpus_ingestion_resume_skips_already_done():
+    stages, calls = _astub_stages()
+    report = await arun_corpus_ingestion(
+        _FakeAdapter(["C1", "C2"]), _agraph(stages), progress=lambda _m: None,
+        is_done=lambda doc: doc.source_doc_id == "C1")  # C1 already ingested
+    assert report.documents_ingested == 2  # both counted present...
+    assert calls["chunk"] == ["C2"]  # ...but only C2 was re-processed (C1 resume-skipped)
