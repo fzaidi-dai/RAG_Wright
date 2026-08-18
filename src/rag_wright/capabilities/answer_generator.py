@@ -85,6 +85,7 @@ class AnswerModel(Protocol):
     """The generation seam: produce a `GeneratedAnswer` for a grounded prompt (structured output)."""
 
     def generate(self, prompt: str) -> GeneratedAnswer: ...
+    async def agenerate(self, prompt: str) -> GeneratedAnswer: ...  # ASYNC-C1 (ADR-0057): true-deadline twin
 
 
 class SeamAnswerModel:
@@ -102,6 +103,13 @@ class SeamAnswerModel:
         return build_structured(
             self._model_id, GeneratedAnswer, temperature=self._temperature, max_tokens=self._max_tokens
         ).invoke(prompt)
+
+    async def agenerate(self, prompt: str) -> GeneratedAnswer:
+        # ASYNC-C1 (ADR-0057): the structured seam's async path (build_structured's .ainvoke = true wall-clock
+        # deadline). Kept in step with .generate so a SeamAnswerModel injected into agenerate_answer works.
+        return await build_structured(
+            self._model_id, GeneratedAnswer, temperature=self._temperature, max_tokens=self._max_tokens
+        ).ainvoke(prompt)
 
 
 @runtime_checkable
@@ -328,6 +336,18 @@ def generate_answer(
     if not evidence:
         return _abstain()
     return _finalize(model.generate(_answer_prompt(query, evidence)), evidence)
+
+
+async def agenerate_answer(
+    query: str, evidence: list[EvidenceItem], *, model: AnswerModel
+) -> GeneratedAnswer:
+    """ASYNC-C1 (ADR-0057): the async twin of `generate_answer` -- the single-call baseline strategy on the
+    async generation seam (`model.agenerate`, a true wall-clock deadline on the model call). Identical
+    guarantees: empty evidence abstains WITHOUT a model call; any citation not in the evidence is dropped; an
+    answer left with no valid citation is coerced to an abstention (no claim without a citation, FR-Q.6)."""
+    if not evidence:
+        return _abstain()
+    return _finalize(await model.agenerate(_answer_prompt(query, evidence)), evidence)
 
 
 _REASON_HEADER = (

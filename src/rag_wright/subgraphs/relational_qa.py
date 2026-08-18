@@ -30,7 +30,7 @@ Query-side posture (matches `query_constraint_extraction`, LG-2a): hardening app
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, TypedDict
+from typing import Any, Awaitable, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -43,7 +43,8 @@ from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # 
 
 # traverse_fn: (start_entity_id, relationship_type, max_hops) -> GraphAnswer (must raise on a transient blip).
 TraverseFn = Callable[[str, RelationshipType, int], GraphAnswer]
-GenerateFn = Callable[[str, list[EvidenceItem]], GeneratedAnswer]
+# ASYNC-C1 (ADR-0057): generate_fn is async (the model call gets a true wall-clock deadline via the seam).
+GenerateFn = Callable[[str, list[EvidenceItem]], Awaitable[GeneratedAnswer]]
 
 DEFAULT_RELATIONSHIP = RelationshipType.CONTRACTS_WITH
 
@@ -109,9 +110,9 @@ def build_relational_qa(traverse_fn: TraverseFn, generate_fn: GenerateFn, *, ret
         with business_span("relational_qa.assemble"):
             return {"evidence": graph_structural_evidence(state["graph_answer"])}
 
-    def generate(state: RelationalQAState) -> RelationalQAState:
+    async def generate(state: RelationalQAState) -> RelationalQAState:
         with business_span("relational_qa.generate"):
-            return {"answer": generate_fn(state["query"], state.get("evidence", []))}
+            return {"answer": await generate_fn(state["query"], state.get("evidence", []))}
 
     g = StateGraph(RelationalQAState)
     g.add_node("traverse", traverse, retry_policy=retry_policy)
@@ -127,14 +128,14 @@ def build_relational_qa(traverse_fn: TraverseFn, generate_fn: GenerateFn, *, ret
 def production_relational_qa(*, store: Any, answer_model: Any):
     """Wire the real `graph_query` + `generate_answer` into the composite (no text_store: the evidence is
     graph-structural). Imports are lazy so the module stays import-light and hermetic (tests inject stubs)."""
-    from rag_wright.capabilities.answer_generator import generate_answer
+    from rag_wright.capabilities.answer_generator import agenerate_answer
     from rag_wright.capabilities.graph_query import graph_query
 
     def traverse(start: str, rel: RelationshipType, max_hops: int) -> GraphAnswer:
         return graph_query(start, store=store, relationship_type=rel, max_hops=max_hops)
 
-    def generate(query: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
-        return generate_answer(query, evidence, model=answer_model)
+    async def generate(query: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
+        return await agenerate_answer(query, evidence, model=answer_model)
 
     return build_relational_qa(traverse, generate)
 

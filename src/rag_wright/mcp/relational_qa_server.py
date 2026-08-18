@@ -24,14 +24,15 @@ ArcadeDB/LLM). `main()` picks the production answerer (real subgraph, env-wired)
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from fastmcp import FastMCP
 
 from rag_wright.capabilities.answer_generator import GeneratedAnswer
 
 # qa_fn: (query, start_entity_id, max_hops) -> GeneratedAnswer. Injected so the server is testable without infra.
-RelationalQAFn = Callable[[str, str, int], GeneratedAnswer]
+# ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async relational_qa subgraph.
+RelationalQAFn = Callable[[str, str, int], Awaitable[GeneratedAnswer]]
 
 _TOOL_DESCRIPTION = (
     "Answer a relational question about a known entity by traversing the contract entity graph, returning a "
@@ -60,7 +61,7 @@ def build_relational_qa_mcp(qa_fn: RelationalQAFn, *, name: str = "rag-wright-re
     )
 
     @mcp.tool(name="answer_relational_question", description=_TOOL_DESCRIPTION)
-    def answer_relational_question(query: str, start_entity_id: str, max_hops: int = 1) -> dict[str, Any]:
+    async def answer_relational_question(query: str, start_entity_id: str, max_hops: int = 1) -> dict[str, Any]:
         """Answer one relational question by traversing the entity graph from a start entity.
 
         Args:
@@ -72,7 +73,7 @@ def build_relational_qa_mcp(qa_fn: RelationalQAFn, *, name: str = "rag-wright-re
             A cited answer: {answer, citations[], abstained}. `citations` are the SOURCE CONTRACT ids the facts
             came from; `abstained` is true when the graph does not support an answer.
         """
-        return _answer_to_dict(qa_fn(query, start_entity_id, max_hops))
+        return _answer_to_dict(await qa_fn(query, start_entity_id, max_hops))
 
     return mcp
 
@@ -97,8 +98,8 @@ def production_qa_fn(*, answer_model_id: str | None = None) -> RelationalQAFn:
     answer_model = answer_model_for(answer_model_id or model_for(ModelRole.GENERAL))
     leg = production_relational_qa(store=store, answer_model=answer_model)
 
-    def _qa(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
-        out = leg.invoke({"query": query, "start_entity_id": start_entity_id, "max_hops": max_hops})
+    async def _qa(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
+        out = await leg.ainvoke({"query": query, "start_entity_id": start_entity_id, "max_hops": max_hops})
         ans = out.get("answer")
         if ans is None:  # defensive: no answer produced -> an honest abstention, never a fabrication
             return GeneratedAnswer(
@@ -117,7 +118,7 @@ def demo_qa_fn() -> RelationalQAFn:
     Deep-Agent prototype (and the hermetic test) exercise the full MCP path with no ArcadeDB / LLM."""
     _cid = "AcmeBetaMSA:3:beef0002"
 
-    def _qa(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
+    async def _qa(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
         return GeneratedAnswer(
             answer=f"AcmeCorp contracts with BetaLLC (per AcmeBetaMSA) [{_cid}].",
             citations=[_cid], abstained=False)

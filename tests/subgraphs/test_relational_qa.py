@@ -49,7 +49,7 @@ class _StubTraverse:
 def _capturing_generate():
     seen = {}
 
-    def generate(query, evidence):
+    async def generate(query, evidence):
         seen["evidence"] = evidence
         if not evidence:
             return GeneratedAnswer(answer="abstain", citations=[], abstained=True)
@@ -83,36 +83,36 @@ def test_evidence_falls_back_to_entity_id_without_chunk_provenance():
 # --- the subgraph: traverse -> assemble -> generate ---------------------------------------------------------
 
 
-def test_composes_traverse_assemble_generate_into_a_cited_answer():
+async def test_composes_traverse_assemble_generate_into_a_cited_answer():
     answer = _graph_answer([_evidence("beta", ["limeenergy:0:h0"], ["EXTRACTED"])])
     traverse = _StubTraverse(answer)
     generate, _ = _capturing_generate()
     graph = build_relational_qa(traverse, generate, retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"query": "Who does Acme contract with?", "start_entity_id": "acme"})
+    out = await graph.ainvoke({"query": "Who does Acme contract with?", "start_entity_id": "acme"})
 
     assert out["answer"].abstained is False
     assert out["answer"].citations == ["limeenergy"]  # cited the SOURCE CONTRACT (no chunk text needed)
     assert traverse.calls == 1
 
 
-def test_confidence_tag_is_surfaced_from_the_graph_to_the_generator():
+async def test_confidence_tag_is_surfaced_from_the_graph_to_the_generator():
     generate, seen = _capturing_generate()
     graph = build_relational_qa(
         _StubTraverse(_graph_answer([_evidence("beta", ["doc:0:h0"], ["INFERRED"])])), generate,
         retry_policy=_FAST_RETRY)
 
-    graph.invoke({"query": "q", "start_entity_id": "acme"})
+    await graph.ainvoke({"query": "q", "start_entity_id": "acme"})
 
     assert [e.confidence for e in seen["evidence"]] == ["INFERRED"]  # FR-S.4: confidence travels into evidence
 
 
-def test_transient_traversal_retries_then_degrades_to_empty_and_abstains():
+async def test_transient_traversal_retries_then_degrades_to_empty_and_abstains():
     traverse = _StubTraverse(_graph_answer([_evidence("beta", ["doc:0:h0"], ["EXTRACTED"])]), fail_times=99)
     generate, seen = _capturing_generate()
     graph = build_relational_qa(traverse, generate, retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"query": "q", "start_entity_id": "acme"})
+    out = await graph.ainvoke({"query": "q", "start_entity_id": "acme"})
 
     assert traverse.calls == 3  # retried up to max_attempts
     assert out["answer"].abstained is True  # degraded to empty evidence -> abstain (query survives)
