@@ -90,6 +90,9 @@ class _FakeGraph:
         cf = [{"span_id": "s1", "reason": "trunc"}] if doc.source_doc_id in self.pf else []
         return {"written": {"clauses": 1}, "clause_failures": cf}
 
+    async def ainvoke(self, state):  # run_job now uses ainvoke (ASYNC-B2e); delegate to invoke (patchable in tests)
+        return self.invoke(state)
+
 
 def _docs(*ids):
     return [SourceDocument(source_doc_id=i, text=f"t{i}") for i in ids]

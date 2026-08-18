@@ -119,7 +119,9 @@ async def run_job(
                 if is_done(doc):  # RESUME: a prior run already wrote this document
                     return ("skip", doc, None)
                 try:
-                    out = await asyncio.to_thread(ingest_graph.invoke, {"document": doc})  # per-doc LangGraph graph
+                    # ASYNC-B2e (ADR-0057): ainvoke runs an async-node graph on the loop (true deadline) and a
+                    # sync-node graph in LangGraph's threadpool -- so it is safe on any compiled graph.
+                    out = await ingest_graph.ainvoke({"document": doc})  # per-doc LangGraph graph
                 except Exception as exc:  # noqa: BLE001 - a per-doc CRASH must dead-letter THAT doc, never fail the
                     out = {"dead_letter": {                                                # whole job (lossless)
                         "source_doc_id": doc.source_doc_id, "stage": "invoke",
