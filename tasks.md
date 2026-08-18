@@ -47,8 +47,16 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     run_in_threadpool hop), compliance_policy_demo (await run_generic_compliance_verdict) -> async main +
 >     asyncio.run + await ainvoke. Ingestion scripts were already async (B2e). ruff + py_compile clean; not in the
 >     test suite (infra-gated), verified by grep (zero remaining .invoke-on-async-graph) + compile.
->   - Phase D remaining: engine public async API + ARD (ASYNC-D2). Phase E (RuleWright FastAPI async, its
->     session). Suite green throughout (main green).
+>   - ASYNC-D2 DONE (2026-08-19): engine public async API finalized + documented. All public ingest/query/
+>     compliance entrypoints are async (or return graphs called via .ainvoke) -- no code change needed, they were
+>     finalized by A-D1; fixed the stale __init__.py docstring (GraphWright-compiles-the-graphs -> engine/product
+>     + async, per ADR-0052/0057) and authored `docs/product/engine_async_api.md` = the interface contract the
+>     product depends on (the one async rule, the query/ingest/compliance entrypoint tables, submit_* fire-and-
+>     forget jobs, ARD/MCP Tier-1 surface, the do-NOTs). ARD = 52 registrations intact.
+>   - ENGINE-SIDE ASYNC MIGRATION COMPLETE (A-D done; C2 skipped as speculative + encoder follow-up logged; C3
+>     folded into C1). REMAINING: B4 native async ArcadeDB client (OPTIONAL upgrade -- store I/O is currently
+>     to_thread, non-blocking). Phase E (RuleWright FastAPI async) is PRODUCT work in its own session.
+>     Suite green throughout (main green).
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
