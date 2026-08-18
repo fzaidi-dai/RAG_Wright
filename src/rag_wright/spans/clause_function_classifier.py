@@ -12,6 +12,7 @@ becomes NONE, exactly as an off-taxonomy span does today)."""
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
@@ -158,6 +159,36 @@ _BATCH_PROMPT = (
     "only indices 0..{max_index}.\n\nFunction types:\n{labels}\n\nSECTION (context):\n{context}\n\nSPANS:\n{spans}"
 )
 
+_SUBBATCH_CONCURRENCY = 8  # max concurrent sub-batch LLM calls per chunk (async), bounded against provider limits
+
+
+def _subs(span_texts: list[str]) -> list[tuple[int, list[str]]]:
+    """Split spans into sub-batches of at most `_BATCH_CAP`, each a `(start_index, spans)` pair."""
+    return [(start, span_texts[start:start + _BATCH_CAP]) for start in range(0, len(span_texts), _BATCH_CAP)]
+
+
+def _sub_prompt(chunk_text: str, sub: list[str]) -> str:
+    """The batch-classify prompt for one sub-batch (shared by the sync and async paths)."""
+    from rag_wright.contracts.function import FUNCTION_LABELS
+
+    numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(sub))
+    return _BATCH_PROMPT.format(
+        labels="\n".join(FUNCTION_LABELS), context=chunk_text, spans=numbered, max_index=len(sub) - 1)
+
+
+def _merge_subbatches(results: list[tuple[int, int, Any]], span_texts: list[str]) -> list[list[RawScore]]:
+    """Merge sub-batch results into index-aligned per-span scores, aligning by the returned `span_index` (relative
+    to each sub-batch, offset by its start) so a dropped/reordered span can't shift later labels."""
+    out: list[list[RawScore]] = [[] for _ in span_texts]
+    for start, sublen, raw in results:
+        if raw is None:
+            continue
+        for sf in raw.spans:
+            idx = start + sf.span_index
+            if start <= idx < start + sublen:
+                out[idx] = list(sf.functions)
+    return out
+
 
 class LlmBatchClauseClassifier:
     """Option B: classify a chunk's spans with the chunk as shared context. A big chunk is split into sub-batches
@@ -176,17 +207,12 @@ class LlmBatchClauseClassifier:
             return []
         from concurrent.futures import ThreadPoolExecutor
 
-        from rag_wright.contracts.function import FUNCTION_LABELS
-
-        labels = "\n".join(FUNCTION_LABELS)
-        subs = [(start, span_texts[start:start + _BATCH_CAP]) for start in range(0, len(span_texts), _BATCH_CAP)]
+        subs = _subs(span_texts)
 
         def _call(item):
             start, sub = item
-            numbered = "\n".join(f"[{i}] {t}" for i, t in enumerate(sub))
-            prompt = _BATCH_PROMPT.format(labels=labels, context=chunk_text, spans=numbered, max_index=len(sub) - 1)
             try:
-                raw = self._runnable.invoke(prompt)
+                raw = self._runnable.invoke(_sub_prompt(chunk_text, sub))
             except Exception:  # noqa: BLE001 - a failed sub-batch leaves its spans empty (never crash)
                 return (start, len(sub), None)
             return (start, len(sub), raw if isinstance(raw, BatchSpanClassification) else None)
@@ -196,19 +222,35 @@ class LlmBatchClauseClassifier:
         else:  # concurrent sub-batches (independent calls, merged by span_index)
             with ThreadPoolExecutor(max_workers=len(subs)) as ex:
                 results = list(ex.map(_call, subs))
+        return _merge_subbatches(results, span_texts)
 
-        out: list[list[RawScore]] = [[] for _ in span_texts]
-        for start, sublen, raw in results:
-            if raw is None:
-                continue
-            for sf in raw.spans:  # align by returned span_index (relative to this sub-batch), offset by start
-                idx = start + sf.span_index
-                if start <= idx < start + sublen:
-                    out[idx] = list(sf.functions)
-        return out
+    async def _aclassify_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
+        """ASYNC-B1 (ADR-0057): the async twin of `_classify_raw`. Sub-batches run concurrently via
+        `asyncio.gather` bounded by a `Semaphore` (native form of the sync thread pool); each `.ainvoke` carries
+        the true wall-clock deadline. A failed sub-batch -- including a `ModelCallTimeout` (an Exception, so it is
+        caught here) -- leaves its spans empty: the degrade path stays reachable and the node never raises."""
+        if not span_texts:
+            return []
+        subs = _subs(span_texts)
+        sem = asyncio.Semaphore(_SUBBATCH_CONCURRENCY)
+
+        async def _acall(item):
+            start, sub = item
+            async with sem:
+                try:
+                    raw = await self._runnable.ainvoke(_sub_prompt(chunk_text, sub))
+                except Exception:  # noqa: BLE001 - failed sub-batch -> empty spans (never crash the document)
+                    return (start, len(sub), None)
+            return (start, len(sub), raw if isinstance(raw, BatchSpanClassification) else None)
+
+        results = await asyncio.gather(*(_acall(s) for s in subs))
+        return _merge_subbatches(results, span_texts)
 
     def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:
         return [_to_scores(raws) for raws in self._classify_raw(chunk_text, span_texts)]
+
+    async def aclassify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:
+        return [_to_scores(raws) for raws in await self._aclassify_raw(chunk_text, span_texts)]
 
     def classify_spans_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
         """Debug: the RAW per-span scores (pre-floor), to see what the confidence floor drops."""
