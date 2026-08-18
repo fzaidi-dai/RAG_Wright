@@ -15,11 +15,13 @@ GraphConverter reads (`edge_label`, `graph_reference`, `reference_closed_catalog
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
 from contextlib import contextmanager
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -288,6 +290,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
         GenerationOverrides,
         LlmRuntimeOverrides,
         ReliabilityOverrides,
+        resolve_effective_model_config,
     )
     from pydantic import SecretStr
 
@@ -295,6 +298,17 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
         base_url=model.base_url,
         api_key=SecretStr(model.api_key) if model.api_key else None,
     )
+    overrides = LlmRuntimeOverrides(
+        generation=GenerationOverrides(max_tokens=max_tokens, temperature=temperature),
+        reliability=ReliabilityOverrides(timeout_s=timeout_s, max_retries=max_retries),
+        connection=connection,
+    )
+    # ASYNC-A4 (ADR-0057): inject OUR deadline-bounded client via PipelineConfig.llm_client (a seam docling-graph
+    # honors at pipeline/stages.py:559). Its LLM call runs `litellm.acompletion` under a TRUE asyncio.timeout, so
+    # a slow-drip extraction is cancelled (socket torn down) at the deadline instead of running for minutes --
+    # docling-graph's own request-building and response-parsing are reused unchanged; NO fork.
+    effective = resolve_effective_model_config(model.provider, model.model, overrides=overrides)
+    llm_client = _deadline_bounded_client_class()(model_config=effective)
     return PipelineConfig(
         source=source_path, template=template, backend="llm", inference=model.inference,
         extraction_contract=extraction_contract, processing_mode="many-to-one",
@@ -302,12 +316,56 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
         # decoding (xgrammar) CONSTRAINS the decoder to the schema, so structured_output=True works + is stricter.
         structured_output=structured_output,
         provider_override=model.provider, model_override=model.model,
-        llm_overrides=LlmRuntimeOverrides(
-            generation=GenerationOverrides(max_tokens=max_tokens, temperature=temperature),
-            reliability=ReliabilityOverrides(timeout_s=timeout_s, max_retries=max_retries),
-            connection=connection,
-        ),
+        llm_overrides=overrides,
+        llm_client=llm_client,
     )
+
+
+@lru_cache(maxsize=1)
+def _deadline_bounded_client_class() -> type:
+    """The docling-graph LLM client that runs its call ASYNC under our true wall-clock deadline (ADR-0057,
+    ASYNC-A4). Defined lazily (docling-graph imported only on first real extraction) so the module stays
+    import-light. Subclasses `LiteLLMClient` and overrides ONLY `_call_api` -- the single point that calls
+    litellm -- so all of docling-graph's message building, request building, response parsing, and diagnostics
+    are reused unchanged. `litellm.acompletion` is truly cancellable, and `run_pipeline` is synchronous with no
+    running event loop (it is called directly, or off the loop via `asyncio.to_thread` in `aextract_*`), so
+    `asyncio.run` creates a fresh loop and the socket is torn down at the deadline."""
+    from docling_graph.exceptions import ClientError
+    from docling_graph.llm_clients.litellm import LiteLLMClient
+
+    from rag_wright.models import seam
+
+    class _DeadlineBoundedLiteLLMClient(LiteLLMClient):
+        def _call_api(self, messages: list[dict[str, str]], **params: Any) -> tuple[str, dict[str, Any]]:
+            import litellm
+
+            request = self._build_request(messages, **params)
+
+            async def _go() -> Any:
+                async with asyncio.timeout(seam._MODEL_DEADLINE_S):
+                    return await litellm.acompletion(**request)
+
+            try:
+                response = asyncio.run(_go())
+            except TimeoutError as exc:
+                raise seam.ModelCallTimeout(
+                    f"docling-graph extraction on {self.model} exceeded the "
+                    f"{seam._MODEL_DEADLINE_S}s deadline") from exc
+            except Exception as exc:  # noqa: BLE001 - wrap like the base's _call_api (docling-graph ClientError)
+                raise ClientError(f"LiteLLM async call failed: {type(exc).__name__}",
+                                  details={"model": self.model, "error": str(exc)}, cause=exc) from exc
+
+            choices = response.get("choices", [])
+            if not choices:
+                raise ClientError("LiteLLM returned no choices", details={"model": self.model})
+            content = choices[0].get("message", {}).get("content")
+            if not content:
+                raise ClientError("LiteLLM returned empty content", details={"model": self.model})
+            metadata = {"finish_reason": choices[0].get("finish_reason"),
+                        "model": response.get("model", self.model), "usage": response.get("usage")}
+            return str(content), metadata
+
+    return _DeadlineBoundedLiteLLMClient
 
 
 def extract_parties(text: str, model: ExtractionModel, *, template: type = ContractParties,
@@ -341,6 +399,14 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
     return ctx.extracted_models[0] if ctx.extracted_models else None
 
 
+async def aextract_parties(text: str, model: ExtractionModel, **kwargs: Any) -> Any | None:
+    """ASYNC-A4 (ADR-0057): `extract_parties` off the event loop. `run_pipeline` is synchronous (docling-graph
+    has no async variant), so it runs via `asyncio.to_thread` -- keeping the loop non-blocking -- while the
+    injected deadline-bounded client makes the docling-graph LLM socket truly cancellable at `_MODEL_DEADLINE_S`
+    inside that worker thread. Same contract as `extract_parties`."""
+    return await asyncio.to_thread(lambda: extract_parties(text, model, **kwargs))
+
+
 # --- KG-2: per-clause typed property extraction (the same seam, the KG-1 clause template) ---
 
 # PROD-1 finding: a rich clause (esp. after ONT-2 grew the Clause template to ~36 typed dims) can exceed 2000 and
@@ -365,3 +431,14 @@ def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAU
         text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS,
         temperature=temperature, structured_output=structured_output, stage="clause",
     )
+
+
+async def aextract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAUSE_MAX_TOKENS,
+                          temperature: float | None = None, structured_output: bool = False) -> Any | None:
+    """ASYNC-A4 (ADR-0057): `extract_clause` off the event loop (via `asyncio.to_thread`), the injected
+    deadline-bounded client truly cancelling the docling-graph LLM socket at the deadline. Same contract."""
+    from rag_wright.ontology.clause_template import Clause
+
+    return await aextract_parties(
+        text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS,
+        temperature=temperature, structured_output=structured_output, stage="clause")
