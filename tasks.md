@@ -17,16 +17,19 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > ArcadeDB store→async I/O (B4). Product (RuleWright) FastAPI→async routes = Phase E, done in the product session.
 > Arc tasks: ASYNC-A1..A4 (seam), B1..B4 (ingestion), C1..C3 (query+MCP), D1..D2 (entrypoints), E1 (product).
 > **PROGRESS (2026-08-18): A1-A4 DONE (async seam+deadline+streaming+docling-graph). B1 DONE (async classifier).
-> B2a-c DONE (async chunk/clause/graph leaf capabilities). B2e (async ingestion) IN PROGRESS: step 1 (async
-> pipeline abuild/aproduction/arun_corpus_ingestion + _asegment_and_classify) DONE; step 2 (run_job->ainvoke +
-> cuad/compliance glue async + JobStore atomic-write fix, pulled from B4) DONE; async pipeline has full test
-> parity (7 tests). B4 JobStore hardening DONE (in B2e). REMAINING B2e: step 3 (convert ingest scripts to
-> async) + step 4 (REMOVE the now-test/script-only sync build_document_ingest/production_document_ingest/
-> run_corpus_ingestion/_segment_and_classify + trim their sync tests + port test_ingest_segment_classify to
-> _asegment_and_classify -- production is already fully async, these are scaffolding). FOLLOW-ON: compliance
-> graph NODES async (build_compliance_ingest/requirement_extraction) for the deadline on the compliance path
-> (currently its sync-node graph runs under ainvoke in a threadpool -- non-blocking but no per-call deadline).
-> Then Phase C (query side), D (entrypoints), E (RuleWright product, its session). Suite green throughout.
+> B2a-c DONE (async chunk/clause/graph leaf capabilities). B2e DONE (all 4 steps: async pipeline abuild/
+> aproduction/arun_corpus_ingestion; run_job->ainvoke; cuad/compliance glue async; sync pipeline REMOVED; ingest
+> scripts converted). INGESTION IS FULLY ASYNC END TO END -- no sync shim, zero stragglers (verified), true
+> wall-clock deadline on every ingest model call; issue-0003 root cause (contract classifier) fully fixed. B4
+> JobStore atomic-write DONE (in B2e). REMAINING async arc:
+>   - B4 (rest): ArcadeDB store reads/writes non-blocking (currently to_thread in aproduction closures; a native
+>     async client is the optional upgrade).
+>   - FOLLOW-ON: compliance graph-NODE async (build_compliance_ingest / requirement_extraction) for the deadline
+>     on the compliance path (its glue is async; its 2-node graph currently runs sync-node under ainvoke in a
+>     threadpool -- non-blocking but no per-call deadline yet).
+>   - Phase C (query side: intra_document_qa/relational_qa/typed_property_retrieval/compliance_check + generation
+>     + FastMCP handlers async), Phase D (entrypoints/ARD, no sync shim), Phase E (RuleWright FastAPI async, its
+>     session). Suite green throughout (~19 commits, main green).
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
