@@ -3,6 +3,20 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
+> A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran
+> 591s against a 60s timeout, and a 399s call SUCCEEDED with no exception/retry/log (nothing keys off an
+> exception that is never raised). Fix = full async end to end with a TRUE `asyncio.timeout(180s)` cancel
+> (socket teardown), `astream`+`stream_chunk_timeout` for free-text, docling-graph on our seam via an injected
+> async client (Approach A, NO fork), NO sync shim (scripts use `asyncio.run(main())`), `pytest-asyncio` added.
+> Plan: `docs/plans/async-migration.md`; decision: `docs/adr/0057-async-engine-architecture.md`. Bottom-up,
+> each `ASYNC-*` task TDD + gated so `main` stays green. **NEXT = ASYNC-A1** (test infra), then A2 (async seam +
+> deadline). Issue 0003 stays OPEN until Phase A/B land + RuleWright re-runs `repro_ingest_deadlock.py`.
+> Grounded sync surfaces: docling `.convert` sync→`to_thread`; local embed sync→already `to_thread`; remote
+> encoders `urllib`→`httpx.AsyncClient`; docling-graph `run_pipeline` sync/litellm→injected async client (A4);
+> ArcadeDB store→async I/O (B4). Product (RuleWright) FastAPI→async routes = Phase E, done in the product session.
+> Arc tasks: ASYNC-A1..A4 (seam), B1..B4 (ingestion), C1..C3 (query+MCP), D1..D2 (entrypoints), E1 (product).
+
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
 > ontology machinery). The user-facing **product** (contract mgmt + compliance app: UI, product-named tools,
