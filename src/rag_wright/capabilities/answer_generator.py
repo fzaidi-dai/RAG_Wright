@@ -211,11 +211,29 @@ def answer_model_for(
 
 
 def _evidence_block(evidence: list[EvidenceItem]) -> str:
-    lines = []
-    for item in evidence:
-        tag = f" [confidence: {item.confidence}]" if item.confidence else ""
-        lines.append(f"[{item.chunk_id}]{tag} {item.text}")
-    return "\n".join(lines)
+    # engine issue 0002 (ADR-0055): NO inline [confidence: ...] marker. It used to sit in the evidence text,
+    # where the model narrated it to the reader (~100% conditional on citing an uncertain clause). Confidence is
+    # now delivered out-of-band as a hedging directive (see `_confidence_directive`); the evidence block is just
+    # the cited text.
+    return "\n".join(f"[{item.chunk_id}] {item.text}" for item in evidence)
+
+
+# Confidence, OUT-OF-BAND (engine issue 0002 / ADR-0055). Instead of an inline [confidence: ...] marker the model
+# can quote, the worst-case certainty across the evidence becomes a HEDGING DIRECTIVE the prompt consumes -- a
+# tone instruction, appended after the evidence, never quotable. It does NOT name the internal enum tokens
+# (INFERRED / AMBIGUOUS), so they cannot be echoed. This preserves the FR-S.4 / ADR-0028 hedging while removing
+# the narratable surface -- the same move that closed the auto-tag leak (ADR-0054).
+def _confidence_directive(evidence: list[EvidenceItem]) -> str:
+    confs = {(item.confidence or "").upper() for item in evidence}
+    if "AMBIGUOUS" in confs:
+        return ("\n\nCertainty note (do NOT mention this to the reader): some of the evidence is uncertain. "
+                "Where your answer depends on it, be tentative and do not state those points as settled. Let this "
+                "shape only how tentatively you write; never mention certainty, confidence, or any internal label.")
+    if "INFERRED" in confs:
+        return ("\n\nCertainty note (do NOT mention this to the reader): some of the evidence is inferred rather "
+                "than directly stated. Present any point that depends on it as an inference, not a settled fact. "
+                "Let this shape only how you phrase it; never mention certainty, confidence, or any internal label.")
+    return ""
 
 
 def _abstain(text: str = _ABSTENTION) -> GeneratedAnswer:
@@ -239,6 +257,9 @@ _PROSE_ANNOTATION_RES = [
     re.compile(r"\[confidence:[^\[\]]*\]", re.IGNORECASE),
     re.compile(r"\[Exception[^\[\]]*\]", re.IGNORECASE),  # the inferred carve-out framing
     re.compile(r"\[[^\[\]]*=[^\[\]]*\]"),                 # a typed-property fact group [dim=value; ...]
+    # engine issue 0002: a literal schema FIELD NAME written where a citation would go (not an id) -- engine
+    # vocabulary, never legitimate in a contract answer.
+    re.compile(r"\[(?:chunk_id|clause_id|source_doc_id|span_id|answer_kind)\]", re.IGNORECASE),
 ]
 
 
@@ -280,7 +301,8 @@ def _finalize(raw: GeneratedAnswer, evidence: list[EvidenceItem]) -> GeneratedAn
 
 
 def _answer_prompt(query: str, evidence: list[EvidenceItem]) -> str:
-    return f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
+    return (f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
+            f"{_confidence_directive(evidence)}")
 
 
 def generate_answer(
@@ -316,10 +338,11 @@ def generate_answer_reasoned(
     if not evidence:
         return _abstain()
     block = _evidence_block(evidence)
+    directive = _confidence_directive(evidence)  # out-of-band hedging (ADR-0055), applied to both nodes
     analysis = reason_model.reason(
-        f"{generation_method()}\n\n{_REASON_HEADER}\n\nQuestion: {query}\n\nEvidence:\n{block}")
+        f"{generation_method()}\n\n{_REASON_HEADER}\n\nQuestion: {query}\n\nEvidence:\n{block}{directive}")
     emit_prompt = (
-        f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{block}\n\n"
+        f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{block}{directive}\n\n"
         f"STEP 2 — using your STEP 1 analysis below, emit the final grounded, cited answer now, or abstain "
         f"if the analysis concluded the evidence does not support one.\n\nSTEP 1 analysis:\n{analysis}"
     )

@@ -127,12 +127,35 @@ def test_model_abstention_is_respected():
     assert result.abstained and result.answer == "Not stated."
 
 
-def test_graph_fact_confidence_is_surfaced_to_the_generator():
+def test_confidence_is_surfaced_out_of_band_not_as_an_inline_marker():
+    # engine issue 0002 (ADR-0055): confidence hedging is delivered as an out-of-band directive the prompt
+    # consumes, NOT as a quotable [confidence: ...] marker in the evidence (which the model narrated ~100% of the
+    # time it cited an uncertain clause). The raw enum token is never exposed, so it cannot be echoed; the
+    # evidence block carries no confidence marker; but the hedging directive IS present so the answer still hedges.
     evidence = [EvidenceItem(chunk_id="c1", text="Acme affiliates Beta.", confidence="AMBIGUOUS")]
     model = _StubModel(GeneratedAnswer(answer="Acme affiliates Beta.", citations=["c1"], abstained=False))
     generate_answer("q", evidence, model=model)
-    assert "AMBIGUOUS" in model.prompt  # the confidence tag is put in front of the model
-    assert "[confidence: AMBIGUOUS]" in _evidence_block(evidence)
+    assert "[confidence:" not in _evidence_block(evidence)  # no inline marker in the evidence text
+    assert "[confidence:" not in model.prompt and "AMBIGUOUS" not in model.prompt  # raw token never exposed
+    assert "tentative" in model.prompt.lower()  # ...but the hedging directive is present
+
+
+def test_extracted_confidence_adds_no_hedging_directive():
+    evidence = [EvidenceItem(chunk_id="c1", text="Acme affiliates Beta.", confidence="EXTRACTED")]
+    model = _StubModel(GeneratedAnswer(answer="x", citations=["c1"], abstained=False))
+    generate_answer("q", evidence, model=model)
+    assert "Certainty note" not in model.prompt  # a fully-certain fact needs no hedging directive
+
+
+def test_prose_scrubbed_of_literal_schema_field_names():
+    # engine issue 0002 follow-on: the model sometimes writes a literal schema FIELD NAME ("[chunk_id]") where a
+    # citation would go -- engine vocabulary, not an id. Strip the bracketed field-name tokens from the prose.
+    ev = [EvidenceItem(chunk_id="c1", text="Acme affiliates Beta.")]
+    dirty = GeneratedAnswer(answer="The cap is expressed as [chunk_id] and applies per [clause_id].",
+                            citations=["c1"], abstained=False)
+    result = generate_answer("q", ev, model=_StubModel(dirty))
+    assert "[chunk_id]" not in result.answer and "[clause_id]" not in result.answer
+    assert result.citations == ["c1"]
 
 
 def test_registers_under_fr_c_9():
