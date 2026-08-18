@@ -23,7 +23,7 @@ from rag_wright.contracts.identifiers import canonical_source_doc_id
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
-    run_corpus_ingestion,
+    arun_corpus_ingestion,
 )
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
@@ -177,7 +177,7 @@ def _compliance_is_done(store: Any, source: str) -> Any:
     return lambda doc: f"§ {doc.metadata.get('section', '')}" in done
 
 
-def run_compliance_ingestion(
+async def run_compliance_ingestion(
     sections_path: Any, store: Any, *, model: Any, source: str = "FTC 16 CFR 255",
     extract_override: Optional[ExtractReqFn] = None,
 ) -> IngestionReport:
@@ -186,11 +186,11 @@ def run_compliance_ingestion(
     dead-letter, is_done resume). Point `store` at the compliance database (`ragwright_compliance`)."""
     store.ensure_compliance_schema()
     graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
-    return run_corpus_ingestion(
+    return await arun_corpus_ingestion(
         RegulationAdapter(sections_path, source), graph, is_done=_compliance_is_done(store, source))
 
 
-def run_compliance_document_ingestion(
+async def run_compliance_document_ingestion(
     doc_name: str, data: bytes, store: Any, *, model: Any, source: str,
     sections_fn: Optional[Any] = None, extract_override: Optional[ExtractReqFn] = None,
 ) -> IngestionReport:
@@ -199,7 +199,7 @@ def run_compliance_document_ingestion(
     sections) instead of a pre-sectioned eCFR `sections.json`. `sections_fn` injects the parse for tests."""
     store.ensure_compliance_schema()
     graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
-    return run_corpus_ingestion(
+    return await arun_corpus_ingestion(
         DocumentRegulationAdapter(doc_name, data, source, sections_fn=sections_fn), graph,
         is_done=_compliance_is_done(store, source))
 

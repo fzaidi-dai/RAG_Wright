@@ -118,10 +118,10 @@ class _FakeStore:
         return getattr(self, "_done_citations", set())
 
 
-def test_run_over_the_corpus_writes_all_sections(tmp_path):
+async def test_run_over_the_corpus_writes_all_sections(tmp_path):
     store = _FakeStore()
     # inject a stub extractor so no LLM runs: each section -> one requirement stand-in
-    report = run_compliance_ingestion(
+    report = await run_compliance_ingestion(
         _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
         extract_override=lambda doc: [f"req::{doc.metadata['section']}"])
     assert isinstance(report, IngestionReport)
@@ -182,7 +182,7 @@ def test_document_regulation_adapter_skips_empty_sections():
     assert [d.metadata["section"] for d in adapter.documents()] == ["2"]
 
 
-def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements():
+async def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements():
     # DOCPARSE-1 PROD-2 Phase-2: a customer's OWN policy DOCUMENT -> DocumentRegulationAdapter -> the SAME pipeline
     from rag_wright.subgraphs.compliance_ingestion import run_compliance_document_ingestion
 
@@ -195,7 +195,7 @@ def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements(
             {"section": "3", "heading": "3. Access", "text": "Access is audited."},
         ]
 
-    report = run_compliance_document_ingestion(
+    report = await run_compliance_document_ingestion(
         "acme_privacy.pdf", b"%PDF...", store, model=None, source="ACME Privacy Policy",
         sections_fn=_sections_fn, extract_override=lambda doc: [f"req::{doc.metadata['section']}"])
     assert report.documents_ingested == 2 and report.dead_lettered == []  # section 2 (Definitions) skipped
@@ -205,14 +205,14 @@ def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements(
 # --- COMP-ASYNC-1: lossless (failed section dead-letters) + async envelope --------------------------------------
 
 
-def test_failed_section_dead_letters_instead_of_writing_zero_requirements(tmp_path):
+async def test_failed_section_dead_letters_instead_of_writing_zero_requirements(tmp_path):
     # COMP-ASYNC-1 lossless: an extraction FAILURE (raises) must dead-letter the section, not silently write 0 reqs
     store = _FakeStore()
 
     def _boom(doc):
         raise RuntimeError("granite JSON garble")
 
-    report = run_compliance_ingestion(
+    report = await run_compliance_ingestion(
         _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_boom)
     assert report.documents_ingested == 0            # nothing silently "ingested"
     assert len(report.dead_lettered) == 2            # both sections dead-lettered (visible)
@@ -268,12 +268,12 @@ def test_submit_compliance_ingestion_is_async_and_dead_letters_a_failed_section(
     assert store.reqs == ["req::255.1"]
 
 
-def test_compliance_resume_skips_already_ingested_sections(tmp_path):
+async def test_compliance_resume_skips_already_ingested_sections(tmp_path):
     # PROD-2 #2: a section whose citation already has requirements is SKIPPED (not re-extracted) on a re-run
     store = _FakeStore()
     store._done_citations = {"§ 255.1"}  # 255.1 already ingested by a prior run
     extracted = []
-    report = run_compliance_ingestion(
+    report = await run_compliance_ingestion(
         _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
         extract_override=lambda doc: (extracted.append(doc.metadata["section"]),
                                       [f"req::{doc.metadata['section']}"])[1])
@@ -282,10 +282,10 @@ def test_compliance_resume_skips_already_ingested_sections(tmp_path):
     assert store.reqs == ["req::255.5"]
 
 
-def test_compliance_no_resume_when_nothing_ingested_yet(tmp_path):
+async def test_compliance_no_resume_when_nothing_ingested_yet(tmp_path):
     store = _FakeStore()  # empty done-set -> all sections run
     extracted = []
-    run_compliance_ingestion(
+    await run_compliance_ingestion(
         _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
         extract_override=lambda doc: (extracted.append(doc.metadata["section"]), [])[1])
     assert sorted(extracted) == ["255.1", "255.5"]

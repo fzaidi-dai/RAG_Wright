@@ -14,9 +14,9 @@ from typing import Any, Iterable
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
+    aproduction_document_ingest,
+    arun_corpus_ingestion,
     corpus_party_link_fn,
-    production_document_ingest,
-    run_corpus_ingestion,
     seed_chunk_cache,
 )
 
@@ -47,7 +47,7 @@ class CuadAdapter:
             )
 
 
-def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:
+async def arun_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:
     """INGEST-REFACTOR proof: ingest CUAD through the GENERIC pipeline + `CuadAdapter` -- one call, no
     `ingest_cuad()`. Builds the EDGAR registry, ensures the schema, ingests `limit` documents, and runs
     party_clause_linking (KG-7) once. Point `store` at a SCRATCH database for a non-destructive smoke.
@@ -64,10 +64,10 @@ def run_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int
     store.ensure_schema()
     seed_chunk_cache(Path(cache_dir) / "chunks", Path("data/cache/cuad/chunks"))
     vset = json.loads(Path("data/edgar/verification_set.json").read_text(encoding="utf-8"))
-    ingest_graph = production_document_ingest(
+    ingest_graph = aproduction_document_ingest(
         store, cache_dir=cache_dir, registry=build_verified_registry(vset),
         party_seed_path="data/cache/dg_extracted_parties.json")
-    return run_corpus_ingestion(
+    return await arun_corpus_ingestion(
         CuadAdapter(cuad_path, limit=limit), ingest_graph,
         # PARTY-TO-MANY-TO-MANY (ADR-0036): default to the mention-cache many-to-many derivation, so a re-ingest
         # keeps every party linked to every contract it signed instead of silently reverting to the 1-to-1 join.

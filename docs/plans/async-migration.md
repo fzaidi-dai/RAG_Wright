@@ -42,10 +42,9 @@ guarantees (ADR-0053/54/55); the classifier empty-sub-batch degrade and the pipe
   resume / partial preserved. *Verify:* a document whose classify times out degrades (empty sub-batch), ingests,
   and is not pregel-retried.
 - **ASYNC-B4 — async store I/O.** ArcadeDB reads/writes non-blocking (async client or `asyncio.to_thread`) so a
-  slow DB call does not stall the loop. **MUST also harden `JobStore`** (engine issue surfaced in B2c): `get`
-  reads a job file that may be empty mid-write -> occasional `ValidationError` under parallel load. Fix with an
-  atomic write (write-temp-then-rename) and/or a tolerant read (treat empty/partial as "not ready"). Do NOT drop
-  this -- it is a real robustness gap on the product's async job path.
+  slow DB call does not stall the loop. (**JobStore hardening: DONE in B2e step 2** -- `run_job`->`ainvoke`
+  shifted the timing so the read-mid-write race became a hard failure; fixed with `_atomic_write`
+  [write-temp-then-`os.replace`] + a tolerant `get`.)
 
 ## Phase C — async query side
 - **ASYNC-C1 — async query subgraphs.** `intra_document_qa`, `relational_qa`, `typed_property_retrieval`,

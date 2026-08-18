@@ -13,6 +13,7 @@ needs no KG schema change for the MVP. The full version can move the store to Ar
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 from datetime import datetime, timezone
 from enum import Enum
@@ -56,6 +57,15 @@ class IngestionJob(BaseModel):
         return self.status in (JobStatus.SUCCEEDED, JobStatus.FAILED)
 
 
+def _atomic_write(path: Path, text: str) -> None:
+    """Write `text` to `path` atomically: write a temp file, then `os.replace` (an atomic rename on POSIX and
+    Windows). A concurrent reader therefore sees either the old complete file or the new complete one -- never a
+    truncated/empty file mid-write (the JobStore read-mid-write race, ADR-0057 B2e/B4)."""
+    tmp = path.with_name(f"{path.name}.tmp.{os.getpid()}")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
 class JobStore:
     """File-based job store: one `<job_id>.json` per job under `jobs_dir`. Read-modify-write `update` is safe for
     a SINGLE writer per job (the runner's orchestrator coroutine updates the record; parallel document workers
@@ -69,12 +79,17 @@ class JobStore:
         return self._dir / f"{job_id}.json"
 
     def create(self, job: IngestionJob) -> IngestionJob:
-        self._path(job.job_id).write_text(job.model_dump_json(indent=2), encoding="utf-8")
+        _atomic_write(self._path(job.job_id), job.model_dump_json(indent=2))
         return job
 
     def get(self, job_id: str) -> IngestionJob | None:
         path = self._path(job_id)
-        return IngestionJob.model_validate_json(path.read_text(encoding="utf-8")) if path.exists() else None
+        if not path.exists():
+            return None
+        text = path.read_text(encoding="utf-8")
+        # atomic writes (create) mean a reader never sees a partial file; tolerate an empty read defensively
+        # (e.g. a truncated legacy write) as "not ready yet" rather than raising.
+        return IngestionJob.model_validate_json(text) if text.strip() else None
 
     def update(self, job_id: str, **fields: Any) -> IngestionJob:
         """Read-modify-write the job's fields, stamping `updated_at`. Raises KeyError if the job is unknown."""
