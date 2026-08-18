@@ -22,8 +22,9 @@ is a READING with no surface form (`mutuality=mutual` vs `unilateral`, `favorabi
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -85,6 +86,12 @@ def judgment_method() -> str:
     return text.strip()
 
 
+def _judge_prompt(method: str, dimension: PropertyDimension, value: str, text: str) -> str:
+    return method + _PROMPT_TAIL.format(
+        dimension=dimension.value, value=value,
+        gloss=_DIMENSION_GLOSS.get(dimension, dimension.value), clause=text)
+
+
 def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
     """The `extraction_semantic_judge` SKILL's runtime: a Granite-backed verify-or-refute `JudgeFn` through the
     model seam (model-neutral; the product points the seam at self-hosted vLLM-Granite). The SKILL.md method is
@@ -92,15 +99,21 @@ def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structure
     method = judgment_method()
 
     def judge(dimension: PropertyDimension, value: str, text: str) -> Optional[SemanticVerdict]:
-        prompt = method + _PROMPT_TAIL.format(
-            dimension=dimension.value,
-            value=value,
-            gloss=_DIMENSION_GLOSS.get(dimension, dimension.value),
-            clause=text,
-        )
-        return structured_factory(model_id, SemanticVerdict).invoke(prompt)
+        return structured_factory(model_id, SemanticVerdict).invoke(_judge_prompt(method, dimension, value, text))
 
     return judge
+
+
+def build_asemantic_judge_fn(model_id: str, *, structured_factory=build_structured):
+    """ASYNC-B2b (ADR-0057): the async twin of `build_semantic_judge_fn` -- the judge call on the async seam
+    (`.ainvoke`, true wall-clock deadline)."""
+    method = judgment_method()
+
+    async def ajudge(dimension: PropertyDimension, value: str, text: str) -> Optional[SemanticVerdict]:
+        return await structured_factory(model_id, SemanticVerdict).ainvoke(
+            _judge_prompt(method, dimension, value, text))
+
+    return ajudge
 
 
 def semantic_judge(
@@ -120,6 +133,12 @@ def semantic_judge(
     verdicts = map_concurrent(
         targets, lambda a: judge_fn(a.dimension, a.value, text), max_concurrency=max_concurrency
     )
+    return _apply_verdicts(record, targets, verdicts)
+
+
+def _apply_verdicts(record: ClausePropertyRecord, targets: list, verdicts: list) -> ClausePropertyRecord:
+    """Downgrade to AMBIGUOUS every target assertion whose verdict refuted it; a None verdict (judge failure)
+    leaves the assertion untouched. Shared by the sync and async gates."""
     refuted = {id(a) for a, v in zip(targets, verdicts) if v is not None and not v.supported}
     if not refuted:
         return record
@@ -128,6 +147,30 @@ def semantic_judge(
         for a in record.assertions
     ]
     return record.model_copy(update={"assertions": new})
+
+
+def _semantic_targets(record: ClausePropertyRecord) -> list:
+    return [a for a in record.assertions
+            if a.dimension in SEMANTIC_DIMENSIONS and a.confidence != ConfidenceTag.AMBIGUOUS]
+
+
+async def asemantic_judge(
+    record: ClausePropertyRecord, text: str, ajudge_fn: Any, *, max_concurrency: int = 8
+) -> ClausePropertyRecord:
+    """ASYNC-B2b (ADR-0057): the async twin of `semantic_judge`. Judges each surviving semantic assertion via the
+    async judge, concurrently, bounded by a semaphore (native form of the parallel-LLM rule); each call carries
+    the true wall-clock deadline. A None verdict leaves the assertion untouched (never downgrade on a failure)."""
+    targets = _semantic_targets(record)
+    if not targets:
+        return record
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def _one(a: Any) -> Any:
+        async with sem:
+            return await ajudge_fn(a.dimension, a.value, text)
+
+    verdicts = list(await asyncio.gather(*(_one(a) for a in targets)))
+    return _apply_verdicts(record, targets, verdicts)
 
 
 def register_extraction_semantic_judge(registry) -> None:

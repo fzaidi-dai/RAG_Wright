@@ -34,7 +34,7 @@ from rag_wright.contracts.property import (
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.spans.property_grounding import reground
-from rag_wright.spans.semantic_judge import semantic_judge
+from rag_wright.spans.semantic_judge import asemantic_judge, semantic_judge
 from rag_wright.spans.symbolic_validation import symbolic_validate
 
 _D = PropertyDimension
@@ -163,38 +163,65 @@ class DGClausePropertyExtractor:
     grounding-judge gate (ADR-0028). Matches the `PropertyExtractor` call shape (T57b) so it drops into
     the ingestion driver. A None extraction yields an empty (but valid) record for that clause."""
 
-    def __init__(self, extract_fn: ClauseExtractFn, *, semantic_judge_fn: Any = None) -> None:
+    def __init__(self, extract_fn: ClauseExtractFn, *, semantic_judge_fn: Any = None,
+                 aextract_fn: Any = None, asemantic_judge_fn: Any = None) -> None:
         self._extract = extract_fn
         # ADR-0040 Layer 3: an optional LLM semantic judge. Injected (default None -> deterministic-only) so
         # existing callers + hermetic tests are unaffected; the production pipeline wires the real granite judge.
         self._semantic_judge_fn = semantic_judge_fn
+        # ASYNC-B2b (ADR-0057): the async twins (extraction on the async docling-graph seam + async judge).
+        self._aextract = aextract_fn
+        self._asemantic_judge_fn = asemantic_judge_fn
+
+    def _empty(self, chunk_id: ChunkId, function: str) -> ClausePropertyRecord:
+        return ClausePropertyRecord(
+            clause_id=str(chunk_id), function=canonical_function(function) or function,
+            folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=[])
+
+    def _grounded(self, clause: Any, *, chunk_id: ChunkId, function: str, text: str, span_id: str
+                  ) -> ClausePropertyRecord:
+        # ADR-0028 lexical grounding gate, then ADR-0040 symbolic (function->dimension applicability) gate.
+        record = clause_to_record(clause, chunk_id=chunk_id, function=function, span_id=span_id)
+        return symbolic_validate(reground(record, text))
 
     def __call__(
         self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = ""
     ) -> ClausePropertyRecord:
         clause = self._extract(text)
         if clause is None:
-            return ClausePropertyRecord(
-                clause_id=str(chunk_id),
-                function=canonical_function(function) or function,
-                folio_iri=FOLIO_CLAUSE_IRI.get(function, ""),
-                assertions=[],
-            )
-        record = clause_to_record(clause, chunk_id=chunk_id, function=function, span_id=span_id)
-        # ADR-0028 lexical grounding gate, then ADR-0040 symbolic (function->dimension applicability) gate
-        record = symbolic_validate(reground(record, text))
+            return self._empty(chunk_id, function)
+        record = self._grounded(clause, chunk_id=chunk_id, function=function, text=text, span_id=span_id)
         if self._semantic_judge_fn is not None:  # ADR-0040 Layer 3 LLM semantic gate (production only)
             record = semantic_judge(record, text, self._semantic_judge_fn)
         return record
 
+    async def aextract(
+        self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = ""
+    ) -> ClausePropertyRecord:
+        """ASYNC-B2b (ADR-0057): the async twin of `__call__`. Runs the docling-graph clause extraction on the
+        async seam (true wall-clock deadline), the same deterministic grounding/symbolic gates, then the async
+        Layer-3 semantic judge. Same contract as `__call__`."""
+        clause = await self._aextract(text)
+        if clause is None:
+            return self._empty(chunk_id, function)
+        record = self._grounded(clause, chunk_id=chunk_id, function=function, text=text, span_id=span_id)
+        if self._asemantic_judge_fn is not None:
+            record = await asemantic_judge(record, text, self._asemantic_judge_fn)
+        return record
 
-def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None) -> DGClausePropertyExtractor:
+
+def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None,
+                             asemantic_judge_fn: Any = None) -> DGClausePropertyExtractor:
     """The live default: granite-4.1-8b via the SELECTED serving backend (`default_extraction_model` reads
     `RAG_SERVING` -> vLLM-Granite in product, OpenRouter-Granite in dev; MS1-3). Pass a different
-    `ExtractionModel` to override, or a `semantic_judge_fn` to enable the ADR-0040 Layer-3 gate."""
-    from rag_wright.capabilities.dg_extraction import default_extraction_model, extract_clause
+    `ExtractionModel` to override, or a `semantic_judge_fn`/`asemantic_judge_fn` to enable the ADR-0040 Layer-3
+    gate (sync/async). ASYNC-B2b wires the async extraction seam (`aextract_clause`) so `aextract` gets the true
+    wall-clock deadline."""
+    from rag_wright.capabilities.dg_extraction import aextract_clause, default_extraction_model, extract_clause
 
     chosen = model or default_extraction_model("granite-4.1-8b", "ibm-granite/granite-4.1-8b")
     return DGClausePropertyExtractor(
-        lambda text: extract_clause(text, chosen), semantic_judge_fn=semantic_judge_fn
+        lambda text: extract_clause(text, chosen),
+        aextract_fn=lambda text: aextract_clause(text, chosen),
+        semantic_judge_fn=semantic_judge_fn, asemantic_judge_fn=asemantic_judge_fn,
     )
