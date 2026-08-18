@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from rag_wright.capabilities.dg_extraction import extract_parties
+from rag_wright.capabilities.dg_extraction import aextract_parties, extract_parties
 from rag_wright.contracts.compliance import ClaimType, Constraint, DeonticType, Requirement
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.skills.requirement_extraction.template import (  # the skill's schema asset
@@ -56,6 +56,17 @@ def extract_regulation_section(
     return extract_fn(text, model, template=ExtractedRegulationSection,
                       max_tokens=max_tokens, preamble_chars=preamble_chars,
                       extraction_contract=extraction_contract)
+
+
+async def aextract_regulation_section(
+    text: str, *, model: Any, aextract_fn: Any = aextract_parties,
+    max_tokens: int = 2000, preamble_chars: int = 24_000, extraction_contract: str = "auto",
+) -> ExtractedRegulationSection | None:
+    """ASYNC (ADR-0057): the async twin of `extract_regulation_section` -- docling-graph extraction on the async
+    seam (`aextract_parties`, true wall-clock deadline via the injected client). `aextract_fn` injected for tests."""
+    return await aextract_fn(text, model, template=ExtractedRegulationSection,
+                             max_tokens=max_tokens, preamble_chars=preamble_chars,
+                             extraction_contract=extraction_contract)
 
 
 def to_requirements(extracted: ExtractedRegulationSection, *, source: str, section: str) -> list[Requirement]:

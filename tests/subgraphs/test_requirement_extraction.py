@@ -38,15 +38,15 @@ def _adapt(extracted, source, section):
 # --- the subgraph: extract -> adapt, hardened ----------------------------------------------------
 
 
-def test_extract_then_adapt_happy_path():
+async def test_extract_then_adapt_happy_path():
     captured = {}
 
-    def extract_fn(text):
+    async def extract_fn(text):
         captured["text"] = text
         return ["Disclose connections."]  # raw extraction stand-in
 
     graph = build_requirement_extraction(extract_fn, _adapt)
-    out = graph.invoke({"text": "…material connection…", "source": "FTC 16 CFR 255", "section": "255.5"})
+    out = await graph.ainvoke({"text": "…material connection…", "source": "FTC 16 CFR 255", "section": "255.5"})
     assert captured["text"] == "…material connection…"
     assert out.get("dead_letter") is None
     reqs = out["requirements"]
@@ -54,19 +54,22 @@ def test_extract_then_adapt_happy_path():
     assert reqs[0].citation == "§ 255.5"
 
 
-def test_extract_failure_dead_letters_and_yields_empty():
-    def boom(text):
+async def test_extract_failure_dead_letters_and_yields_empty():
+    async def boom(text):
         raise RuntimeError("granite down")
 
     graph = build_requirement_extraction(boom, _adapt)
-    out = graph.invoke({"text": "x", "source": "reg", "section": "255.1"})
+    out = await graph.ainvoke({"text": "x", "source": "reg", "section": "255.1"})
     assert out.get("dead_letter") and out["dead_letter"]["stage"] == "extract"
     assert out["requirements"] == []  # adapt handles the dead-letter case -> []
 
 
-def test_none_extraction_yields_empty_without_dead_letter():
-    graph = build_requirement_extraction(lambda text: None, _adapt)
-    out = graph.invoke({"text": "x", "source": "reg", "section": "255.0"})
+async def test_none_extraction_yields_empty_without_dead_letter():
+    async def _none(text):
+        return None
+
+    graph = build_requirement_extraction(_none, _adapt)
+    out = await graph.ainvoke({"text": "x", "source": "reg", "section": "255.0"})
     assert out.get("dead_letter") is None
     assert out["requirements"] == []  # None extraction -> [] (not an error)
 
@@ -74,16 +77,19 @@ def test_none_extraction_yields_empty_without_dead_letter():
 # --- run_requirement_extraction: single-section invoke convenience (used by CC-5) ----------------
 
 
-def test_run_invokes_the_subgraph_for_one_section():
+async def test_run_invokes_the_subgraph_for_one_section():
     # extract_override is a stub returning the raw ExtractedRegulationSection; adapt = the real
     # to_requirements FUNCTION, so this exercises the real deterministic adaptation end to end.
     stub = ExtractedRegulationSection(
         section="255.5",
         requirements=[ExtractedRequirement(requirement_text="Disclose connections.", deontic_type="obligation")],
     )
-    reqs = run_requirement_extraction(
+    async def _stub(text):
+        return stub
+
+    reqs = await run_requirement_extraction(
         "…material connection…", model=None, source="FTC 16 CFR 255", section="255.5",
-        extract_override=lambda text: stub)
+        extract_override=_stub)
     assert [r.requirement_text for r in reqs] == ["Disclose connections."]
     assert reqs[0].deontic_type is DeonticType.OBLIGATION
     assert reqs[0].citation == "§ 255.5"

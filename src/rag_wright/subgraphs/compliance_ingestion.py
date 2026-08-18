@@ -12,6 +12,8 @@ adds the `Requirement` vertex type additively (`ensure_compliance_schema`).
 
 from __future__ import annotations
 
+import asyncio
+
 import json
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, TypedDict
@@ -118,30 +120,34 @@ def build_compliance_ingest(
     raised) so one bad section never kills the corpus ingest -- the LG-3 hardening pattern."""
     max_attempts = int(getattr(retry_policy, "max_attempts", 3))
 
-    def _guard(name: str, work: Callable[[], dict], runtime: Runtime, doc: SourceDocument) -> dict:
+    async def _aguard(name: str, work: Any, runtime: Runtime, doc: SourceDocument) -> dict:
         attempt = runtime.execution_info.node_attempt
         with business_span(f"compliance_ingestion.{name}", source_doc_id=doc.source_doc_id):
             try:
-                return work()
+                return await work()
             except Exception as exc:  # noqa: BLE001 - transient -> retry, or dead-letter on exhaustion
                 if attempt >= max_attempts:
                     return {"dead_letter": dead_letter(
                         "ingest_failed", source_doc_id=doc.source_doc_id, stage=name, error=str(exc))}
                 raise TransientExtraction(str(exc)) from exc
 
-    def extract(state: ComplianceIngestState, runtime: Runtime) -> ComplianceIngestState:
+    async def extract(state: ComplianceIngestState, runtime: Runtime) -> ComplianceIngestState:
         doc = state["document"]
-        return _guard("extract", lambda: {"requirements": extract_fn(doc)}, runtime, doc)
 
-    def write(state: ComplianceIngestState, runtime: Runtime) -> ComplianceIngestState:
+        async def _w() -> dict:
+            return {"requirements": await extract_fn(doc)}
+
+        return await _aguard("extract", _w, runtime, doc)
+
+    async def write(state: ComplianceIngestState, runtime: Runtime) -> ComplianceIngestState:
         if state.get("dead_letter"):
             return {}
         doc = state["document"]
-        return _guard(
-            "write",
-            lambda: {"written": {"requirements": write_fn(doc, state.get("requirements", []))}},
-            runtime, doc,
-        )
+
+        async def _w() -> dict:
+            return {"written": {"requirements": await write_fn(doc, state.get("requirements", []))}}
+
+        return await _aguard("write", _w, runtime, doc)
 
     g = StateGraph(ComplianceIngestState)
     g.add_node("extract", extract, retry_policy=retry_policy)
@@ -158,14 +164,17 @@ def production_compliance_ingestion(store: Any, *, model: Any, extract_override:
     the model seam -- Granite), write = `store.write_requirements`. `extract_override` injects a stub for tests."""
     from rag_wright.subgraphs.requirement_extraction import run_requirement_extraction
 
-    def _extract(doc: SourceDocument) -> list:
-        # COMP-ASYNC-1 lossless: raise_on_failure so a FAILED section propagates to the compliance `_guard`
+    async def _extract(doc: SourceDocument) -> list:
+        # COMP-ASYNC-1 lossless: raise_on_failure so a FAILED section propagates to the compliance `_aguard`
         # (-> retry -> dead-letter with reason), never silently writing 0 requirements. Genuine-empty still -> [].
-        return run_requirement_extraction(
+        return await run_requirement_extraction(
             doc.text, model=model, source=doc.metadata["source"], section=doc.metadata["section"],
             raise_on_failure=True)
 
-    return build_compliance_ingest(extract_override or _extract, lambda doc, reqs: store.write_requirements(reqs))
+    async def _awrite(doc: SourceDocument, reqs: list) -> Any:
+        return await asyncio.to_thread(store.write_requirements, reqs)  # store I/O off the loop
+
+    return build_compliance_ingest(extract_override or _extract, _awrite)
 
 
 def _compliance_is_done(store: Any, source: str) -> Any:

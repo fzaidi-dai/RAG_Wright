@@ -20,7 +20,7 @@ from typing import Any, Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from rag_wright.capabilities.requirement_extraction import extract_regulation_section, to_requirements
+from rag_wright.capabilities.requirement_extraction import aextract_regulation_section, to_requirements
 from rag_wright.contracts.compliance import Requirement
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
@@ -58,24 +58,24 @@ def build_requirement_extraction(
     A transient extraction failure retries, then dead-letters the section (never raised) -> an empty result."""
     max_attempts = int(getattr(retry_policy, "max_attempts", 3))
 
-    def extract(state: ReqExtractState, runtime: Runtime) -> ReqExtractState:
+    async def extract(state: ReqExtractState, runtime: Runtime) -> ReqExtractState:
         section = state.get("section", "")
         attempt = runtime.execution_info.node_attempt
         with business_span("requirement_extraction.extract", section=section):
             try:
-                return {"extracted": extract_fn(state["text"])}
+                return {"extracted": await extract_fn(state["text"])}  # ASYNC (ADR-0057): async extract seam
             except Exception as exc:  # noqa: BLE001 - transient -> retry, or dead-letter on exhaustion
                 if attempt >= max_attempts:
                     return {"dead_letter": dead_letter(
                         "extract_failed", section=section, stage="extract", error=str(exc))}
                 raise TransientExtraction(str(exc)) from exc
 
-    def adapt(state: ReqExtractState) -> ReqExtractState:
+    async def adapt(state: ReqExtractState) -> ReqExtractState:
         extracted = state.get("extracted")
         if state.get("dead_letter") or extracted is None:
             return {"requirements": []}
         with business_span("requirement_extraction.adapt"):
-            return {"requirements": adapt_fn(extracted, state["source"], state["section"])}
+            return {"requirements": adapt_fn(extracted, state["source"], state["section"])}  # adapt is sync/CPU
 
     g = StateGraph(ReqExtractState)
     g.add_node("extract", extract, retry_policy=retry_policy)
@@ -91,8 +91,8 @@ def production_requirement_extraction(
 ):
     """Wire the real capabilities: extract = the docling-graph extraction ACT (skills/requirement_extraction/),
     adapt = the `to_requirements` FUNCTION. `extract_override` injects a stub for hermetic driver tests."""
-    def _extract(text: str) -> Any:
-        return extract_regulation_section(text, model=model, extraction_contract=extraction_contract)
+    async def _extract(text: str) -> Any:
+        return await aextract_regulation_section(text, model=model, extraction_contract=extraction_contract)
 
     return build_requirement_extraction(
         extract_override or _extract,
@@ -100,7 +100,7 @@ def production_requirement_extraction(
     )
 
 
-def run_requirement_extraction(
+async def run_requirement_extraction(
     text: str, *, model: Any, source: str, section: str, extract_override: Optional[ExtractSectionFn] = None,
     raise_on_failure: bool = False,
 ) -> list[Requirement]:
@@ -111,7 +111,7 @@ def run_requirement_extraction(
     not a genuine-empty section) RAISES `RequirementExtractionFailed` so the compliance corpus driver dead-letters
     the section instead of silently writing 0 requirements. A genuine-empty section still returns []."""
     graph = production_requirement_extraction(model=model, extract_override=extract_override)
-    result = graph.invoke({"text": text, "source": source, "section": section})
+    result = await graph.ainvoke({"text": text, "source": source, "section": section})
     if raise_on_failure and result.get("dead_letter"):
         raise RequirementExtractionFailed(section, str(result["dead_letter"].get("error", "extraction failed")))
     return result.get("requirements", [])

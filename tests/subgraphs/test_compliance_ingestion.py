@@ -53,48 +53,48 @@ def _doc() -> SourceDocument:
                           metadata={"section": "255.5", "source": "FTC 16 CFR 255"})
 
 
-def test_ingest_extracts_then_writes():
+async def test_ingest_extracts_then_writes():
     written = {}
 
-    def extract_fn(doc):
+    async def extract_fn(doc):
         return ["req-a", "req-b"]  # stand-ins; the graph only counts/passes them through
 
-    def write_fn(doc, reqs):
+    async def write_fn(doc, reqs):
         written["reqs"] = reqs
         return len(reqs)
 
     graph = build_compliance_ingest(extract_fn, write_fn)
-    out = graph.invoke({"document": _doc()})
+    out = await graph.ainvoke({"document": _doc()})
     assert out.get("dead_letter") is None
     assert out["written"] == {"requirements": 2}
     assert written["reqs"] == ["req-a", "req-b"]
 
 
-def test_extract_failure_dead_letters_and_skips_write():
+async def test_extract_failure_dead_letters_and_skips_write():
     calls = {"write": 0}
 
-    def boom(doc):
+    async def boom(doc):
         raise RuntimeError("granite down")
 
-    def write_fn(doc, reqs):
+    async def write_fn(doc, reqs):
         calls["write"] += 1
         return len(reqs)
 
     graph = build_compliance_ingest(boom, write_fn)
-    out = graph.invoke({"document": _doc()})
+    out = await graph.ainvoke({"document": _doc()})
     assert out.get("dead_letter") and out["dead_letter"]["stage"] == "extract"
     assert calls["write"] == 0  # write never runs on a dead-lettered section
 
 
-def test_write_failure_dead_letters():
-    def extract_fn(doc):
+async def test_write_failure_dead_letters():
+    async def extract_fn(doc):
         return ["r"]
 
-    def boom_write(doc, reqs):
+    async def boom_write(doc, reqs):
         raise RuntimeError("db lock")
 
     graph = build_compliance_ingest(extract_fn, boom_write)
-    out = graph.invoke({"document": _doc()})
+    out = await graph.ainvoke({"document": _doc()})
     assert out.get("dead_letter") and out["dead_letter"]["stage"] == "write"
 
 
@@ -120,10 +120,12 @@ class _FakeStore:
 
 async def test_run_over_the_corpus_writes_all_sections(tmp_path):
     store = _FakeStore()
-    # inject a stub extractor so no LLM runs: each section -> one requirement stand-in
+
+    async def _ov(doc):  # inject a stub extractor so no LLM runs: each section -> one requirement stand-in
+        return [f"req::{doc.metadata['section']}"]
+
     report = await run_compliance_ingestion(
-        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
-        extract_override=lambda doc: [f"req::{doc.metadata['section']}"])
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov)
     assert isinstance(report, IngestionReport)
     assert report.documents_ingested == 2 and report.dead_lettered == []
     assert store.schema_ensured is True and store.reqs == ["req::255.1", "req::255.5"]
@@ -195,9 +197,12 @@ async def test_run_compliance_document_ingestion_parses_a_doc_and_writes_require
             {"section": "3", "heading": "3. Access", "text": "Access is audited."},
         ]
 
+    async def _ov(doc):
+        return [f"req::{doc.metadata['section']}"]
+
     report = await run_compliance_document_ingestion(
         "acme_privacy.pdf", b"%PDF...", store, model=None, source="ACME Privacy Policy",
-        sections_fn=_sections_fn, extract_override=lambda doc: [f"req::{doc.metadata['section']}"])
+        sections_fn=_sections_fn, extract_override=_ov)
     assert report.documents_ingested == 2 and report.dead_lettered == []  # section 2 (Definitions) skipped
     assert store.schema_ensured is True and store.reqs == ["req::1", "req::3"]
 
@@ -209,7 +214,7 @@ async def test_failed_section_dead_letters_instead_of_writing_zero_requirements(
     # COMP-ASYNC-1 lossless: an extraction FAILURE (raises) must dead-letter the section, not silently write 0 reqs
     store = _FakeStore()
 
-    def _boom(doc):
+    async def _boom(doc):
         raise RuntimeError("granite JSON garble")
 
     report = await run_compliance_ingestion(
@@ -220,21 +225,21 @@ async def test_failed_section_dead_letters_instead_of_writing_zero_requirements(
     assert report.dead_lettered[0]["stage"] == "extract"
 
 
-def test_run_requirement_extraction_raise_on_failure_surfaces_the_dead_letter():
+async def test_run_requirement_extraction_raise_on_failure_surfaces_the_dead_letter():
     from rag_wright.subgraphs.requirement_extraction import (
         RequirementExtractionFailed,
         run_requirement_extraction,
     )
 
-    def _boom(_text):
+    async def _boom(_text):
         raise RuntimeError("extract blew up")
 
     # default (back-compat): swallows -> []
-    assert run_requirement_extraction("t", model=None, source="s", section="1", extract_override=_boom) == []
+    assert await run_requirement_extraction("t", model=None, source="s", section="1", extract_override=_boom) == []
     # raise_on_failure: surfaces the failure
     with pytest.raises(RequirementExtractionFailed) as ei:
-        run_requirement_extraction("t", model=None, source="s", section="1",
-                                   extract_override=_boom, raise_on_failure=True)
+        await run_requirement_extraction("t", model=None, source="s", section="1",
+                                         extract_override=_boom, raise_on_failure=True)
     assert ei.value.section == "1"
 
 
@@ -249,7 +254,7 @@ def test_submit_compliance_ingestion_is_async_and_dead_letters_a_failed_section(
     jobs = JobStore(tmp_path / "jobs")
     adapter = RegulationAdapter(_sections_file(tmp_path), source="FTC 16 CFR 255")
 
-    def _extract(doc):  # 255.5 fails, 255.1 succeeds
+    async def _extract(doc):  # 255.5 fails, 255.1 succeeds
         if doc.metadata["section"] == "255.5":
             raise RuntimeError("boom")
         return [f"req::{doc.metadata['section']}"]
@@ -273,10 +278,13 @@ async def test_compliance_resume_skips_already_ingested_sections(tmp_path):
     store = _FakeStore()
     store._done_citations = {"§ 255.1"}  # 255.1 already ingested by a prior run
     extracted = []
+
+    async def _ov(doc):
+        extracted.append(doc.metadata["section"])
+        return [f"req::{doc.metadata['section']}"]
+
     report = await run_compliance_ingestion(
-        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
-        extract_override=lambda doc: (extracted.append(doc.metadata["section"]),
-                                      [f"req::{doc.metadata['section']}"])[1])
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov)
     assert report.documents_ingested == 2               # both counted present...
     assert extracted == ["255.5"]                        # ...but 255.1 was resume-skipped, only 255.5 extracted
     assert store.reqs == ["req::255.5"]
@@ -285,7 +293,11 @@ async def test_compliance_resume_skips_already_ingested_sections(tmp_path):
 async def test_compliance_no_resume_when_nothing_ingested_yet(tmp_path):
     store = _FakeStore()  # empty done-set -> all sections run
     extracted = []
+
+    async def _ov(doc):
+        extracted.append(doc.metadata["section"])
+        return []
+
     await run_compliance_ingestion(
-        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255",
-        extract_override=lambda doc: (extracted.append(doc.metadata["section"]), [])[1])
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov)
     assert sorted(extracted) == ["255.1", "255.5"]

@@ -21,12 +21,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > aproduction/arun_corpus_ingestion; run_job->ainvoke; cuad/compliance glue async; sync pipeline REMOVED; ingest
 > scripts converted). INGESTION IS FULLY ASYNC END TO END -- no sync shim, zero stragglers (verified), true
 > wall-clock deadline on every ingest model call; issue-0003 root cause (contract classifier) fully fixed. B4
-> JobStore atomic-write DONE (in B2e). REMAINING async arc:
+> JobStore atomic-write DONE (in B2e). COMPLIANCE GRAPH-NODE ASYNC DONE (2026-08-18): build_compliance_ingest
+> (extract/write nodes async; _aguard; _awrite via to_thread) + build_requirement_extraction (extract node awaits
+> the async extract seam) + aextract_regulation_section + run_requirement_extraction/run_compliance_* async ->
+> the compliance path now gets the SAME true wall-clock deadline on every model call as the contract path. Both
+> ingest paths fully async, zero sync stragglers. Suite 1199 pass. REMAINING async arc:
 >   - B4 (rest): ArcadeDB store reads/writes non-blocking (currently to_thread in aproduction closures; a native
 >     async client is the optional upgrade).
->   - FOLLOW-ON: compliance graph-NODE async (build_compliance_ingest / requirement_extraction) for the deadline
->     on the compliance path (its glue is async; its 2-node graph currently runs sync-node under ainvoke in a
->     threadpool -- non-blocking but no per-call deadline yet).
 >   - Phase C (query side: intra_document_qa/relational_qa/typed_property_retrieval/compliance_check + generation
 >     + FastMCP handlers async), Phase D (entrypoints/ARD, no sync shim), Phase E (RuleWright FastAPI async, its
 >     session). Suite green throughout (~19 commits, main green).
