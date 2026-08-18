@@ -22,14 +22,15 @@ checker (`RAG_MCP_DEMO=1`, no infra) and serves over stdio (so a Deep Agent can 
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from fastmcp import FastMCP
 
 from rag_wright.contracts.compliance import Claim, ComplianceFinding, ComplianceReport, Verdict
 
 # check_fn: (ad_text, source_doc) -> ComplianceReport. Injected so the server is testable without infra.
-CheckFn = Callable[[str, str], ComplianceReport]
+# ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async compliance_check subgraph.
+CheckFn = Callable[[str, str], Awaitable[ComplianceReport]]
 
 _TOOL_DESCRIPTION = (
     "Check an advertisement's claims against the FTC endorsement & testimonial rules (16 CFR Part 255). "
@@ -73,7 +74,7 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
     )
 
     @mcp.tool(name="check_ad_compliance", description=_TOOL_DESCRIPTION)
-    def check_ad_compliance(ad_text: str, source_doc: str = "ad") -> dict[str, Any]:
+    async def check_ad_compliance(ad_text: str, source_doc: str = "ad") -> dict[str, Any]:
         """Screen one advertisement for FTC endorsement-rule compliance.
 
         Args:
@@ -83,11 +84,11 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
         Returns:
             A cited compliance report: {verdict, source_doc, summary, findings[], gap_matrix[]}.
         """
-        return _report_to_dict(check_fn(ad_text, source_doc))
+        return _report_to_dict(await check_fn(ad_text, source_doc))
 
     if generic_check_fn is not None:  # COMP-VERDICT-GENERIC: the domain-agnostic verdict tool (any domain)
         @mcp.tool(name="check_compliance", description=_GENERIC_TOOL_DESCRIPTION)
-        def check_compliance(subject_text: str, source_doc: str = "subject") -> dict[str, Any]:
+        async def check_compliance(subject_text: str, source_doc: str = "subject") -> dict[str, Any]:
             """Check any subject against the ingested regulation KG -> a cited LLM verdict, WITHOUT needing a
             domain-specific applicability ontology (semantic-retrieve relevant requirements -> LLM-judge).
 
@@ -99,7 +100,7 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
                 A cited compliance report {verdict, source_doc, summary, findings[], gap_matrix[]}, plus a
                 `note` suggesting domain applicability enrichment for more precise claim<->requirement routing.
             """
-            out = _report_to_dict(generic_check_fn(subject_text, source_doc))
+            out = _report_to_dict(await generic_check_fn(subject_text, source_doc))
             out["note"] = ("Generic domain-agnostic verdict (semantic retrieval + LLM judge). For more precise "
                            "claim<->requirement routing in this domain, enrich its applicability dimensions.")
             return out
@@ -128,8 +129,8 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     embedder = query_embedder()
 
-    def _check(ad_text: str, source_doc: str) -> ComplianceReport:
-        return run_compliance_check(
+    async def _check(ad_text: str, source_doc: str) -> ComplianceReport:
+        return await run_compliance_check(
             ad_text, source_doc, store=store, extract_model=extract_model,
             judge_model_id=judge_model_id, embedder=embedder, k=k)
 
@@ -151,8 +152,8 @@ def production_generic_check_fn(*, k: int = 8) -> CheckFn:
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     embedder = query_embedder()
 
-    def _check(subject_text: str, source_doc: str) -> ComplianceReport:
-        return run_generic_compliance_verdict(
+    async def _check(subject_text: str, source_doc: str) -> ComplianceReport:
+        return await run_generic_compliance_verdict(
             subject_text, source_doc, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k)
 
     return _check
@@ -170,7 +171,7 @@ def demo_check_fn() -> CheckFn:
         ("guaranteed to reverse aging in 7 days", "'guaranteed' result claim with no substantiation shown"),
     ]
 
-    def _check(ad_text: str, source_doc: str) -> ComplianceReport:
+    async def _check(ad_text: str, source_doc: str) -> ComplianceReport:
         findings = [
             ComplianceFinding(
                 claim_id=Claim.make_id(source_doc, i, assertion),

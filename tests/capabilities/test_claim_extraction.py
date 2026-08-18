@@ -98,6 +98,34 @@ def test_extraction_none_yields_empty_list():
     assert claim_extraction("x", model=None, source_doc="ad", extract_fn=lambda *a, **k: None) == []
 
 
+# --- ASYNC-C1 (ADR-0057): aclaim_extraction -- the async twin (await extract ACT, then to_claims) --------------
+
+
+async def test_aclaim_extraction_awaits_the_async_seam_then_adapts():
+    from rag_wright.capabilities.claim_extraction import aclaim_extraction
+
+    captured = {}
+
+    async def afake_extract(text, model, *, template, **kw):
+        captured["template"] = template
+        captured["extraction_contract"] = kw.get("extraction_contract")
+        return _ad(ExtractedClaim(assertion_text="erase wrinkles in 7 days", claim_type="health"))
+
+    claims = await aclaim_extraction("…ad…", model=None, source_doc="influencer_ad", aextract_fn=afake_extract)
+    assert captured["template"] is ExtractedAd
+    assert captured["extraction_contract"] == "direct"  # ads are short -> direct
+    assert [c.assertion_text for c in claims] == ["erase wrinkles in 7 days"]
+
+
+async def test_aclaim_extraction_none_yields_empty_list():
+    from rag_wright.capabilities.claim_extraction import aclaim_extraction
+
+    async def _none(*a, **k):
+        return None
+
+    assert await aclaim_extraction("x", model=None, source_doc="ad", aextract_fn=_none) == []
+
+
 # --- registration --------------------------------------------------------------------------------
 
 

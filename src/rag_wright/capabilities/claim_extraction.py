@@ -18,13 +18,13 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from rag_wright.capabilities.dg_extraction import extract_parties
+from rag_wright.capabilities.dg_extraction import aextract_parties, extract_parties
 from rag_wright.contracts.compliance import Claim, ClaimType
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.skills.claim_extraction.template import ExtractedAd, ExtractedClaim  # the skill's schema asset
 
-__all__ = ["ExtractedAd", "ExtractedClaim", "extract_ad", "to_claims", "claim_extraction",
-           "register_claim_extraction", "register_claim_adaptation"]
+__all__ = ["ExtractedAd", "ExtractedClaim", "extract_ad", "aextract_ad", "to_claims", "claim_extraction",
+           "aclaim_extraction", "register_claim_extraction", "register_claim_adaptation"]
 
 _CLAIM_TYPES = {c.value for c in ClaimType}
 # off-vocab fallback: keep the claim (never drop a checkable assertion) but mark it AMBIGUOUS. EFFICACY is the
@@ -95,6 +95,30 @@ def claim_extraction(
     Returns [] if extraction yields nothing."""
     extracted = extract_ad(text, model=model, extract_fn=extract_fn, max_tokens=max_tokens,
                            preamble_chars=preamble_chars, extraction_contract=extraction_contract)
+    if extracted is None:
+        return []
+    return to_claims(extracted, source_doc=source_doc)
+
+
+async def aextract_ad(
+    text: str, *, model: Any, aextract_fn: Any = aextract_parties,
+    max_tokens: int = 1500, preamble_chars: int = 8000, extraction_contract: str = "direct",
+) -> ExtractedAd | None:
+    """ASYNC-C1 (ADR-0057): the async twin of `extract_ad` -- the claim-extraction docling-graph act on the async
+    seam (`aextract_parties`, true wall-clock deadline via the injected client). `aextract_fn` injected for tests."""
+    return await aextract_fn(text, model, template=ExtractedAd,
+                             max_tokens=max_tokens, preamble_chars=preamble_chars,
+                             extraction_contract=extraction_contract)
+
+
+async def aclaim_extraction(
+    text: str, *, model: Any, source_doc: str, aextract_fn: Any = aextract_parties,
+    max_tokens: int = 1500, preamble_chars: int = 8000, extraction_contract: str = "direct",
+) -> list[Claim]:
+    """ASYNC-C1 (ADR-0057): the async twin of `claim_extraction` -- await the async extraction ACT, then the
+    deterministic `to_claims` adaptation. Same contract: [] if extraction yields nothing."""
+    extracted = await aextract_ad(text, model=model, aextract_fn=aextract_fn, max_tokens=max_tokens,
+                                  preamble_chars=preamble_chars, extraction_contract=extraction_contract)
     if extracted is None:
         return []
     return to_claims(extracted, source_doc=source_doc)

@@ -57,7 +57,7 @@ def test_check_fn_is_injectable_no_store_or_llm_needed():
     # a custom stub proves the MCP surface is decoupled from ArcadeDB/models -- the whole point of the wrapper
     seen = {}
 
-    def stub(ad_text: str, source_doc: str) -> ComplianceReport:
+    async def stub(ad_text: str, source_doc: str) -> ComplianceReport:
         seen["ad"] = ad_text
         return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 4})
 
@@ -70,7 +70,7 @@ def test_generic_check_compliance_tool_is_exposed_and_returns_a_noted_report():
     # COMP-VERDICT-GENERIC: the domain-agnostic tool is added when a generic_check_fn is provided
     from rag_wright.contracts.compliance import ComplianceFinding, ComplianceReport, Verdict
 
-    def _generic(subject_text, source_doc):
+    async def _generic(subject_text, source_doc):
         return ComplianceReport(
             source_doc=source_doc,
             findings=[ComplianceFinding(

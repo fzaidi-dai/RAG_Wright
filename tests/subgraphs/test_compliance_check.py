@@ -66,55 +66,68 @@ def test_extracted_scope_only_broadens_never_excludes():
 
 
 def _graph(claims, requirements, judge_fn):
+    async def _claims_fn(text, source):
+        return claims
+
     return build_compliance_check(
-        claims_fn=lambda text, source: claims,
+        claims_fn=_claims_fn,
         requirements_fn=lambda: requirements,
         judge_fn=judge_fn,
     )
 
 
-def test_produces_cited_findings_and_a_summary():
+async def test_produces_cited_findings_and_a_summary():
     claims = [_claim(ctype=ClaimType.ENDORSEMENT)]
     reqs = [_req(scope=("endorsement",))]
-    graph = _graph(claims, reqs, lambda c, r: JudgeVerdict(verdict="violation", rationale="no disclosure", confidence=0.9))
-    report = graph.invoke({"subject_text": "…ad…", "source_doc": "ad"})["report"]
+
+    async def _judge(c, r):
+        return JudgeVerdict(verdict="violation", rationale="no disclosure", confidence=0.9)
+
+    graph = _graph(claims, reqs, _judge)
+    out = await graph.ainvoke({"subject_text": "…ad…", "source_doc": "ad"})
+    report = out["report"]
     assert isinstance(report, ComplianceReport)
     assert len(report.findings) == 1 and report.findings[0].verdict is Verdict.VIOLATION
     assert report.summary == {"violation": 1}
     assert report.gap_matrix and report.gap_matrix[0]["citation"] == "§ 255.5"
 
 
-def test_only_applicable_pairs_are_judged():
+async def test_only_applicable_pairs_are_judged():
     # a §255.0 (definitions) requirement applies to no claim -> no applicable pair -> no findings
-    graph = _graph([_claim(ctype=ClaimType.PRICING)], [_req(section="255.0", scope=(), text="Endorsement means…")],
-                   lambda c, r: JudgeVerdict(verdict="violation", rationale="", confidence=1.0))
-    report = graph.invoke({"subject_text": "x", "source_doc": "ad"})["report"]
-    assert report.findings == []
+    async def _judge(c, r):
+        return JudgeVerdict(verdict="violation", rationale="", confidence=1.0)
+
+    graph = _graph([_claim(ctype=ClaimType.PRICING)],
+                   [_req(section="255.0", scope=(), text="Endorsement means…")], _judge)
+    out = await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
+    assert out["report"].findings == []
 
 
-def test_ad_level_disclosures_reach_the_judge():
+async def test_ad_level_disclosures_reach_the_judge():
     # one claim discloses #ad, another has none; both must be judged WITH the ad-level disclosure set
     seen = {}
 
-    def judge(claim, req):
+    async def judge(claim, req):
         seen[claim.assertion_text] = set(claim.disclosures_present)
         return JudgeVerdict(verdict="compliant", rationale="", confidence=0.9)
 
     disclosed = _claim(text="two shades whiter", ctype=ClaimType.ENDORSEMENT, disc=["#ad"])
     bare = _claim(text="available now", ctype=ClaimType.ENDORSEMENT, disc=[])
     graph = _graph([disclosed, bare], [_req(scope=("endorsement",))], judge)
-    graph.invoke({"subject_text": "x", "source_doc": "ad"})
+    await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
     assert "#ad" in seen["available now"]  # the bare fragment sees the ad-level #ad (the CC-4 residual fix)
 
 
-def test_degrades_to_empty_when_extraction_fails():
-    def boom(text, source):
+async def test_degrades_to_empty_when_extraction_fails():
+    async def boom(text, source):
         raise RuntimeError("extractor down")
 
-    graph = build_compliance_check(claims_fn=boom, requirements_fn=lambda: [_req()],
-                                   judge_fn=lambda c, r: JudgeVerdict(verdict="violation", rationale="", confidence=1.0))
-    report = graph.invoke({"subject_text": "x", "source_doc": "ad"})["report"]
-    assert report.findings == [] and report.source_doc == "ad"  # never crashes; empty report
+    async def _judge(c, r):
+        return JudgeVerdict(verdict="violation", rationale="", confidence=1.0)
+
+    graph = build_compliance_check(claims_fn=boom, requirements_fn=lambda: [_req()], judge_fn=_judge)
+    out = await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
+    assert out["report"].findings == [] and out["report"].source_doc == "ad"  # never crashes; empty report
 
 
 def test_registers_as_a_subgraph():
@@ -175,22 +188,25 @@ def test_select_dedupes_near_identical_rules():
     assert len(picked) == 1  # near-identical rules collapse to one
 
 
-def test_compliance_check_uses_select_fn_when_provided():
+async def test_compliance_check_uses_select_fn_when_provided():
     # the subgraph routes through select_fn (narrowing) instead of judging all applicable pairs
     claim = _claim(ctype=ClaimType.ENDORSEMENT)
     r1, r2 = _req(text="rule one"), _req(text="rule two")
     seen = []
 
-    def select(c, reqs):
+    def select(c, reqs):  # select_fn stays sync (embedder narrowing, no model call)
         return [r1]  # narrow to just r1
 
-    def judge(c, r):
+    async def judge(c, r):
         seen.append(r.requirement_text)
         return JudgeVerdict(verdict="compliant", rationale="", confidence=1.0)
 
-    graph = build_compliance_check(claims_fn=lambda t, s: [claim], requirements_fn=lambda: [r1, r2],
+    async def _claims_fn(t, s):
+        return [claim]
+
+    graph = build_compliance_check(claims_fn=_claims_fn, requirements_fn=lambda: [r1, r2],
                                    judge_fn=judge, select_fn=select)
-    graph.invoke({"subject_text": "x", "source_doc": "ad"})
+    await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
     assert seen == ["rule one"]  # only the narrowed requirement was judged
 
 
@@ -224,7 +240,7 @@ def test_semantic_select_without_applicability_filter_keeps_all_then_ranks():
     assert {r.requirement_id for r in got} == {r.requirement_id for r in reqs}  # all kept (no applicability drop)
 
 
-def test_run_generic_compliance_verdict_produces_a_cited_report_without_ontology():
+async def test_run_generic_compliance_verdict_produces_a_cited_report_without_ontology():
     # end-to-end hermetic: a non-advertising subject + requirements with EMPTY applicability -> a verdict + findings
     from rag_wright.capabilities.compliance_judgment import JudgeVerdict
     from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
@@ -241,18 +257,18 @@ def test_run_generic_compliance_verdict_produces_a_cited_report_without_ontology
         def encode_dense(self, text):
             return [1.0, 0.0]
 
-    def _judge(fact, requirement):  # domain-agnostic judge stub -> a verdict on text
+    async def _judge(fact, requirement):  # domain-agnostic ASYNC judge stub -> a verdict on text
         return JudgeVerdict(verdict="violation", rationale="not recorded", confidence=0.9)
 
     import rag_wright.capabilities.compliance_judgment as cj
-    orig = cj.build_generic_judge_fn
-    cj.build_generic_judge_fn = lambda model_id: _judge  # inject the stub judge (source of the local import)
+    orig = cj.build_ageneric_judge_fn
+    cj.build_ageneric_judge_fn = lambda model_id: _judge  # inject the stub async judge (source of the local import)
     try:
-        report = run_generic_compliance_verdict(
+        report = await run_generic_compliance_verdict(
             "The employer failed to record a work-related injury on the OSHA log.",
             "osha_case", store=_Store(), judge_model_id="stub", embedder=_Emb())
     finally:
-        cj.build_generic_judge_fn = orig
+        cj.build_ageneric_judge_fn = orig
     assert report.findings and report.findings[0].verdict.value == "violation"
     assert report.findings[0].citation_requirement.startswith("§ 1904.4")  # both-sided citation preserved
     assert report.summary.get("violation") == 1

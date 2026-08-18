@@ -11,7 +11,9 @@ from __future__ import annotations
 
 from rag_wright.capabilities.compliance_judgment import (
     JudgeVerdict,
+    ajudge_pairs,
     assemble_finding,
+    build_acompliance_judge_fn,
     build_compliance_judge_fn,
     compliance_judgment,
     judge_pairs,
@@ -96,6 +98,63 @@ def test_judge_pairs_returns_one_finding_per_pair():
     pairs = [(_claim(), _req()), (_claim(assertion_text="lose 30 lbs"), _req(citation="§ 255.2"))]
     findings = judge_pairs(pairs, judge_fn=lambda c, r: JudgeVerdict(verdict="needs_review", rationale="", confidence=0.0))
     assert len(findings) == 2 and all(f.verdict is Verdict.NEEDS_REVIEW for f in findings)
+
+
+# --- ASYNC-C1 (ADR-0057): ajudge_pairs -- concurrent async judging, order preserved, conservative default -----
+
+
+async def test_ajudge_pairs_one_finding_per_pair_order_preserved():
+    pairs = [(_claim(assertion_text="a"), _req()), (_claim(assertion_text="b"), _req(citation="§ 255.2"))]
+
+    async def _judge(claim, req):
+        return JudgeVerdict(verdict="violation" if claim.assertion_text == "a" else "compliant",
+                            rationale="", confidence=0.9)
+
+    findings = await ajudge_pairs(pairs, ajudge_fn=_judge)
+    assert [f.verdict for f in findings] == [Verdict.VIOLATION, Verdict.COMPLIANT]  # order preserved by gather
+
+
+async def test_ajudge_pairs_timeout_becomes_conservative_needs_review():
+    # an async judge that hangs past the deadline -> asyncio.timeout -> a needs_review finding (never a hang)
+    import asyncio
+
+    async def slow_judge(claim, req):
+        await asyncio.sleep(1.5)
+        return JudgeVerdict(verdict="compliant", rationale="", confidence=1.0)
+
+    findings = await ajudge_pairs([(_claim(), _req())], ajudge_fn=slow_judge, timeout_s=0.2, timeout_retries=0)
+    assert len(findings) == 1
+    assert findings[0].verdict is Verdict.NEEDS_REVIEW and findings[0].needs_human_review is True
+    assert findings[0].claim_id and findings[0].requirement_id  # citations preserved from the inputs
+
+
+async def test_ajudge_pairs_non_timeout_error_propagates():
+    # a genuine judge bug is NOT masked as needs_review (matches map_concurrent_async) -- it surfaces
+    import pytest
+
+    async def boom(claim, req):
+        raise RuntimeError("judge bug")
+
+    with pytest.raises(RuntimeError, match="judge bug"):
+        await ajudge_pairs([(_claim(), _req())], ajudge_fn=boom, timeout_s=None)
+
+
+async def test_build_acompliance_judge_fn_passes_both_sides_through_the_async_seam():
+    captured = {}
+
+    class _Model:
+        async def ainvoke(self, prompt):
+            captured["prompt"] = prompt
+            return JudgeVerdict(verdict="violation", rationale="undisclosed", confidence=0.9)
+
+    def fake_factory(model_id, schema):
+        assert schema is JudgeVerdict
+        return _Model()
+
+    judge = build_acompliance_judge_fn("granite", structured_factory=fake_factory)
+    verdict = await judge(_claim(), _req())
+    assert verdict.verdict == "violation"
+    assert "erase deep wrinkles" in captured["prompt"] and "material connection" in captured["prompt"].lower()
 
 
 # --- the real judge fn wires the seam + both sides into the prompt -------------------------------

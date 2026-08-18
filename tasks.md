@@ -25,12 +25,21 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (extract/write nodes async; _aguard; _awrite via to_thread) + build_requirement_extraction (extract node awaits
 > the async extract seam) + aextract_regulation_section + run_requirement_extraction/run_compliance_* async ->
 > the compliance path now gets the SAME true wall-clock deadline on every model call as the contract path. Both
-> ingest paths fully async, zero sync stragglers. Suite 1199 pass. REMAINING async arc:
+> ingest paths fully async, zero sync stragglers. Suite 1199 pass.
+> ASYNC-C1 DONE (2026-08-18): all 4 query subgraphs async end to end -> the query side gets the SAME true
+> wall-clock deadline on every model call as ingestion. C1a relational_qa, C1b intra_document_qa (both via the
+> new agenerate_answer leaf), C1c typed_property_retrieval (extract_constraints via aextract_clause), C1d
+> compliance_check (two model nodes: aclaim_extraction + async judge ajudge_pairs = gather+semaphore, order
+> preserved, timeout->needs_review, non-timeout error propagates). Each subgraph's MCP handler flipped async in
+> the same slice (folds the C3 MCP work per server); model-calling nodes async, store/embedder nodes stay sync
+> (threadpool under ainvoke). Suite 1208 pass. REMAINING async arc:
 >   - B4 (rest): ArcadeDB store reads/writes non-blocking (currently to_thread in aproduction closures; a native
 >     async client is the optional upgrade).
->   - Phase C (query side: intra_document_qa/relational_qa/typed_property_retrieval/compliance_check + generation
->     + FastMCP handlers async), Phase D (entrypoints/ARD, no sync shim), Phase E (RuleWright FastAPI async, its
->     session). Suite green throughout (~19 commits, main green).
+>   - Phase C remaining: C2 (generation gather/best-of-n + query-side remote encoders async). The 4 Tier-1
+>     FastMCP handlers are already async (done alongside C1); any remaining MCP servers -> C3.
+>   - Phase D (entrypoints + validator/query SCRIPTS, no sync shim -- phase_a_leg_validate / modal_query_app /
+>     adoption_query_validate / eval_compliance_gold still call .invoke on now-async graphs; ARD), Phase E
+>     (RuleWright FastAPI async, its session). Suite green throughout (main green).
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +

@@ -19,11 +19,11 @@ Query-side posture: every node degrades to empty on failure (never crash); the j
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Awaitable, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
-from rag_wright.capabilities.compliance_judgment import JudgeFn, judge_pairs
+from rag_wright.capabilities.compliance_judgment import AJudgeFn, ajudge_pairs
 from rag_wright.capabilities.retrieval_core import _cosine
 from rag_wright.contracts.compliance import (
     CheckableFact,
@@ -172,7 +172,8 @@ def build_select_fn(
     return select
 
 
-ClaimsFn = Callable[[str, str], list]  # (subject_text, source_doc) -> list[Claim]
+# ASYNC-C1 (ADR-0057): claims_fn is async (its extraction model call gets a true wall-clock deadline).
+ClaimsFn = Callable[[str, str], Awaitable[list]]  # (subject_text, source_doc) -> list[Claim]
 RequirementsFn = Callable[[], list]  # () -> list[Requirement]
 
 
@@ -196,17 +197,17 @@ def _enrich(claim: Claim, ad_disclosures: set[str]) -> Claim:
 
 
 def build_compliance_check(
-    *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: JudgeFn,
+    *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: AJudgeFn,
     select_fn: SelectFn | None = None, retry_policy: Any = DEFAULT_RETRY
 ):
     """Compile the compliance-check subgraph. All seams are injected for hermetic testing. `select_fn` (CC-8b) is
     the per-claim requirement narrower; when None, every APPLICABLE requirement is judged (the broad default).
     Query-side: each node degrades to empty on failure (never crashes) -- an empty report is a safe answer."""
 
-    def extract_claims(state: CheckState) -> CheckState:
+    async def extract_claims(state: CheckState) -> CheckState:
         with business_span("compliance_check.extract_claims"):
             try:
-                claims = claims_fn(state["subject_text"], state["source_doc"])
+                claims = await claims_fn(state["subject_text"], state["source_doc"])
             except Exception:  # noqa: BLE001 - degrade-to-empty (query-side never crashes)
                 return {"claims": [], "ad_disclosures": []}
         # ad-level disclosure union (CC-4 fix). getattr-tolerant: a generic CheckableFact has no disclosures ->
@@ -229,12 +230,13 @@ def build_compliance_check(
                      for claim in claims for req in requirements if applies_to(req, claim)]
         return {"pairs": pairs}
 
-    def judge(state: CheckState) -> CheckState:
+    async def judge(state: CheckState) -> CheckState:
         pairs = state.get("pairs", [])
         if not pairs:
             return {"findings": []}
         with business_span("compliance_check.judge"):
-            return {"findings": judge_pairs(pairs, judge_fn=judge_fn)}  # concurrent; conservative default inside
+            # concurrent (gather + semaphore); conservative default inside (a timed-out pair -> needs_review)
+            return {"findings": await ajudge_pairs(pairs, ajudge_fn=judge_fn)}
 
     def assemble(state: CheckState) -> CheckState:
         findings: list[ComplianceFinding] = state.get("findings", [])
@@ -294,27 +296,32 @@ def production_compliance_check(
     """Wire the real capabilities: claims = claim_extraction (CC-3), requirements = the store's Requirement KG
     (CC-5), judge = the Granite compliance judge (CC-4). Requirements are loaded ONCE here; when an `embedder` is
     given, CC-8b semantic narrowing is enabled (top-k content + always-include context + dedup), else broad."""
-    from rag_wright.capabilities.claim_extraction import claim_extraction
-    from rag_wright.capabilities.compliance_judgment import build_compliance_judge_fn
+    from rag_wright.capabilities.claim_extraction import aclaim_extraction
+    from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn
 
     requirements = [_requirement_from_row(r) for r in store.all_requirements()]
     select_fn = build_select_fn(embedder, requirements, k=k) if embedder is not None else None
+
+    async def _claims_fn(text: str, source: str) -> list:
+        return await aclaim_extraction(text, model=extract_model, source_doc=source)
+
     return build_compliance_check(
-        claims_fn=lambda text, source: claim_extraction(text, model=extract_model, source_doc=source),
+        claims_fn=_claims_fn,
         requirements_fn=lambda: requirements,
-        judge_fn=build_compliance_judge_fn(judge_model_id),
+        judge_fn=build_acompliance_judge_fn(judge_model_id),
         select_fn=select_fn,
     )
 
 
-def run_compliance_check(
+async def run_compliance_check(
     subject_text: str, source_doc: str, *, store: Any, extract_model: Any, judge_model_id: str,
     embedder: Any = None, k: int = 5,
 ) -> ComplianceReport:
     """Run a compliance check for one subject document against the Requirement KG -> a cited `ComplianceReport`."""
     graph = production_compliance_check(
         store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k)
-    return graph.invoke({"subject_text": subject_text, "source_doc": source_doc})["report"]
+    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
+    return out["report"]
 
 
 def generic_facts_fn(subject_text: str, source_doc: str) -> list:
@@ -334,26 +341,31 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
     and the GENERIC judge (text-only). Gives a cited LLM verdict in ANY compliance domain; enrichment
     (COMP-APPLIC-1) only ADDS structured precision on top. `embedder` is required (semantic retrieval is the
     narrowing here)."""
-    from rag_wright.capabilities.compliance_judgment import build_generic_judge_fn
+    from rag_wright.capabilities.compliance_judgment import build_ageneric_judge_fn
 
     requirements = [_requirement_from_row(r) for r in store.all_requirements()]
     select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False)
+
+    async def _claims_fn(text: str, source: str) -> list:
+        return generic_facts_fn(text, source)  # deterministic (no model), adapted to the async claims seam
+
     return build_compliance_check(
-        claims_fn=generic_facts_fn,
+        claims_fn=_claims_fn,
         requirements_fn=lambda: requirements,
-        judge_fn=build_generic_judge_fn(judge_model_id),
+        judge_fn=build_ageneric_judge_fn(judge_model_id),
         select_fn=select_fn,
     )
 
 
-def run_generic_compliance_verdict(
+async def run_generic_compliance_verdict(
     subject_text: str, source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
 ) -> ComplianceReport:
     """COMP-VERDICT-GENERIC: a domain-agnostic compliance verdict for a free-text subject against the Requirement
     KG -- semantic-retrieve the relevant requirements -> LLM-judge -> cited `ComplianceReport`. Works with NO
     domain applicability enrichment (the always-answer guarantee); suggest COMP-APPLIC-1 for structured precision."""
     graph = production_generic_compliance_check(store, judge_model_id=judge_model_id, embedder=embedder, k=k)
-    return graph.invoke({"subject_text": subject_text, "source_doc": source_doc})["report"]
+    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
+    return out["report"]
 
 
 def register_compliance_check(registry) -> None:

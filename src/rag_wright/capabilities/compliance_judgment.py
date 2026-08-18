@@ -18,9 +18,10 @@ not (verdict vocab, conservative default, citation) -- the SKILL.md teaches only
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from pydantic import BaseModel
 
@@ -47,6 +48,9 @@ class JudgeVerdict(BaseModel):
 # judge_fn: (subject_fact, requirement) -> JudgeVerdict, or None if the judge could not rule (-> conservative
 # default). Accepts any `CheckableFact` (the advertising `Claim` is one).
 JudgeFn = Callable[[CheckableFact, Requirement], Optional[JudgeVerdict]]
+# ASYNC-C1 (ADR-0057): the async judge seam -- same signature, awaitable result (the model call gets a true
+# wall-clock deadline via build_structured's .ainvoke).
+AJudgeFn = Callable[[CheckableFact, Requirement], Awaitable[Optional[JudgeVerdict]]]
 
 # The per-call appendix bound onto the SKILL method (the static method teaches the reading; the specific
 # requirement + subject are appended at call time, the okf_navigate `_with_question` pattern).
@@ -101,6 +105,17 @@ def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured
     return judge
 
 
+def build_ageneric_judge_fn(model_id: str, *, structured_factory=build_structured) -> AJudgeFn:
+    """ASYNC-C1 (ADR-0057): the async twin of `build_generic_judge_fn` -- the DOMAIN-AGNOSTIC judge on the async
+    structured seam (`.ainvoke`, a true wall-clock deadline on the model call). Same method + base tail."""
+    method = generic_judgment_method()
+
+    async def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
+        return await structured_factory(model_id, JudgeVerdict).ainvoke(method + _base_tail(fact, requirement))
+
+    return judge
+
+
 def build_compliance_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
     """The advertising `compliance_judgment` SKILL runtime: a Granite-backed judge `JudgeFn` through the model seam
     (product = vLLM-Granite; ADR-0039). Base tail (requirement + subject) + the ADVERTISING claim signals
@@ -115,6 +130,22 @@ def build_compliance_judge_fn(model_id: str, *, structured_factory=build_structu
             evidence=claim.evidence_referenced,
         )
         return structured_factory(model_id, JudgeVerdict).invoke(prompt)
+
+    return judge
+
+
+def build_acompliance_judge_fn(model_id: str, *, structured_factory=build_structured) -> AJudgeFn:
+    """ASYNC-C1 (ADR-0057): the async twin of `build_compliance_judge_fn` -- the advertising judge on the async
+    structured seam (`.ainvoke`, a true wall-clock deadline). Same method + base tail + claim signals."""
+    method = judgment_method()
+
+    async def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
+        prompt = method + _base_tail(claim, requirement) + _AD_ENRICHMENT.format(
+            claim_type=claim.claim_type.value,
+            disclosures=claim.disclosures_present or "none",
+            evidence=claim.evidence_referenced,
+        )
+        return await structured_factory(model_id, JudgeVerdict).ainvoke(prompt)
 
     return judge
 
@@ -177,6 +208,40 @@ def judge_pairs(
         else assemble_finding(claim, requirement, None)  # timed out -> conservative needs_review
         for (claim, requirement), result in zip(pairs, results)
     ]
+
+
+async def ajudge_pairs(
+    pairs: list[tuple[Claim, Requirement]], *, ajudge_fn: AJudgeFn, max_concurrency: int = 8,
+    timeout_s: float | None = _JUDGE_TIMEOUT_S, timeout_retries: int = 1,
+) -> list[ComplianceFinding]:
+    """ASYNC-C1 (ADR-0057): the async twin of `judge_pairs` -- run the async judge over many `(claim,
+    requirement)` pairs concurrently (asyncio.gather + Semaphore, the parallel-LLM rule), order preserved.
+
+    Matches `judge_pairs`/`map_concurrent_async` semantics exactly: each judgment is bounded by `timeout_s` (a
+    hard wall-clock deadline via `asyncio.timeout`); on the deadline the call is retried up to `timeout_retries`
+    times, then the pair becomes `None` -> a conservative needs_review finding. A NON-timeout judge error
+    propagates (the same as the sync path), so a genuine bug is never masked as needs_review."""
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def _rule(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
+        if timeout_s is None:
+            return await ajudge_fn(claim, requirement)  # no wall-clock bound (the seam still bounds each call)
+        for attempt in range(timeout_retries + 1):
+            try:
+                async with asyncio.timeout(timeout_s):
+                    return await ajudge_fn(claim, requirement)
+            except (asyncio.TimeoutError, TimeoutError):
+                if attempt >= timeout_retries:
+                    return None  # give up -> conservative needs_review (a stalled provider never hangs the batch)
+        return None
+
+    async def _one(pair: tuple[Claim, Requirement]) -> ComplianceFinding:
+        claim, requirement = pair
+        async with semaphore:  # backpressure
+            ruling = await _rule(claim, requirement)
+        return assemble_finding(claim, requirement, ruling)
+
+    return list(await asyncio.gather(*(_one(pair) for pair in pairs)))
 
 
 def register_compliance_judgment(registry) -> None:
