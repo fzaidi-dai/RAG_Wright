@@ -94,6 +94,20 @@ def production_extract_fn(*, model_id: str = DEFAULT_GRAPH_EXTRACT_MODEL) -> Par
     return lambda text: extract_parties(text, model)
 
 
+def aproduction_extract_fn(*, model_id: str = DEFAULT_GRAPH_EXTRACT_MODEL):
+    """ASYNC-B2c (ADR-0057): the async twin of `production_extract_fn` -- party extraction on the async
+    docling-graph seam (`aextract_parties`, true wall-clock deadline). Returns an async `(text) -> ContractParties
+    | None`."""
+    from rag_wright.capabilities.dg_extraction import aextract_parties, openrouter_model
+
+    model = openrouter_model("graph-extract", model_id)
+
+    async def _afn(text: str):
+        return await aextract_parties(text, model)
+
+    return _afn
+
+
 def default_extractors() -> list[Extractor]:
     """The default extractor: the GP-1B docling-graph party extractor (the live wiring; ADR-0035)."""
     return [DoclingGraphExtractor(production_extract_fn())]

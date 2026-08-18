@@ -356,21 +356,54 @@ def per_contract_graph_extraction(doc: SourceDocument, *, party_dir: Any, names_
     caches the result. `parties_to_extraction` rebuilds the exact `ExtractionResult` the live extractor would
     (its own body is `names = [p.name for p in parties]; parties_to_extraction(...)`), so the cache is lossless.
     Returns `[ExtractionResult]` (empty when no parties)."""
-    import json
+    cache_file = _party_cache_file(party_dir, doc)
+    names = _cached_party_names(cache_file)
+    if names is None:  # not cached -> extract once, then cache (empty results are cached too, as before)
+        names = names_fn(doc.text)
+        _write_party_cache(cache_file, names)
+    return _parties_extraction(names, doc)
+
+
+async def aper_contract_graph_extraction(
+    doc: SourceDocument, *, party_dir: Any, anames_fn: Callable[[str], Any]) -> list:
+    """ASYNC-B2c (ADR-0057): the async twin of `per_contract_graph_extraction`. The only model call (party
+    names) runs on the async seam via `anames_fn` (true wall-clock deadline); the cache and
+    `parties_to_extraction` are sync. Same cache semantics and result."""
+    cache_file = _party_cache_file(party_dir, doc)
+    names = _cached_party_names(cache_file)
+    if names is None:
+        names = await anames_fn(doc.text)
+        _write_party_cache(cache_file, names)
+    return _parties_extraction(names, doc)
+
+
+def _party_cache_file(party_dir: Any, doc: SourceDocument) -> Any:
     from pathlib import Path
 
+    return Path(party_dir) / f"{doc.source_doc_id}.json"
+
+
+def _cached_party_names(cache_file: Any) -> Optional[list]:
+    """The cached party names for a contract, or None when there is no cache entry (distinct from a cached
+    EMPTY result, which is `[]`)."""
+    import json
+
+    return json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.exists() else None
+
+
+def _write_party_cache(cache_file: Any, names: list) -> None:
+    import json
+
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps(names), encoding="utf-8")
+
+
+def _parties_extraction(names: list, doc: SourceDocument) -> list:
+    if not names:
+        return []
     from rag_wright.capabilities.graph_extraction import parties_to_extraction
     from rag_wright.contracts.identifiers import ChunkId
 
-    cache_file = Path(party_dir) / f"{doc.source_doc_id}.json"
-    if cache_file.exists():
-        names = json.loads(cache_file.read_text(encoding="utf-8"))
-    else:
-        names = names_fn(doc.text)
-        Path(party_dir).mkdir(parents=True, exist_ok=True)
-        cache_file.write_text(json.dumps(names), encoding="utf-8")
-    if not names:
-        return []
     return [parties_to_extraction(ChunkId.of(doc.source_doc_id, 0, doc.text), names)]
 
 
