@@ -53,7 +53,7 @@ def _clause_text_orphan(contract_id, clauses):
 def _capturing_generate():
     seen = {}
 
-    def generate(question, evidence):
+    async def generate(question, evidence):
         seen["evidence"] = evidence
         if not evidence:
             return GeneratedAnswer(answer="abstain", citations=[], abstained=True)
@@ -64,7 +64,7 @@ def _capturing_generate():
     return generate, seen
 
 
-def test_composes_serve_rehydrate_generate_into_a_cited_answer():
+async def test_composes_serve_rehydrate_generate_into_a_cited_answer():
     clauses = [_clause("k:0:h", "Cap On Liability", [("cap_scope", "mutual", "EXTRACTED", "s0")])]
     serve = _StubServe(clauses)
     generate, _ = _capturing_generate()
@@ -72,14 +72,14 @@ def test_composes_serve_rehydrate_generate_into_a_cited_answer():
         serve, _clause_text({"k:0:h": "Total liability shall not exceed the fees paid."}), generate,
         retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"contract_id": "k", "question": "What is the liability cap?"})
+    out = await graph.ainvoke({"contract_id": "k", "question": "What is the liability cap?"})
 
     assert out["answer"].abstained is False
     assert out["answer"].citations == ["k:0:h"]  # cited by clause_id (no claim without a citation)
     assert serve.calls == 1
 
 
-def test_real_clause_text_and_typed_facts_and_worst_case_confidence_in_evidence():
+async def test_real_clause_text_and_typed_facts_and_worst_case_confidence_in_evidence():
     clauses = [_clause("k:0:h", "Indemnity",
                        [("covers", "fraud", "EXTRACTED", "s0"), ("mutuality", "one-way", "AMBIGUOUS", "s0")])]
     generate, seen = _capturing_generate()
@@ -87,7 +87,7 @@ def test_real_clause_text_and_typed_facts_and_worst_case_confidence_in_evidence(
         _StubServe(clauses), _clause_text({"k:0:h": "Each party shall indemnify the other for fraud."}),
         generate, retry_policy=_FAST_RETRY)
 
-    graph.invoke({"contract_id": "k", "question": "q"})
+    await graph.ainvoke({"contract_id": "k", "question": "q"})
 
     item = seen["evidence"][0]
     assert "Each party shall indemnify the other for fraud." in item.text  # the REAL clause language
@@ -95,7 +95,7 @@ def test_real_clause_text_and_typed_facts_and_worst_case_confidence_in_evidence(
     assert item.confidence == "AMBIGUOUS"  # worst-case provenance surfaced (FR-S.4)
 
 
-def test_property_less_clause_with_no_text_is_dropped():
+async def test_property_less_clause_with_no_text_is_dropped():
     # engine issue 0002 / ADR-0054: a clause with no span text AND no typed facts is contentless -- nothing to
     # ground a citation on -- so it is dropped from evidence (it previously cited a bare function label). With it
     # the only clause, the generator abstains.
@@ -103,41 +103,41 @@ def test_property_less_clause_with_no_text_is_dropped():
     generate, seen = _capturing_generate()
     graph = build_intra_document_qa(_StubServe(clauses), _clause_text({}), generate, retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"contract_id": "k", "question": "q"})
+    out = await graph.ainvoke({"contract_id": "k", "question": "q"})
 
     assert seen["evidence"] == []  # contentless clause dropped, not cited by a bare label
     assert out["answer"].abstained and out["answer"].citations == []  # nothing to cite -> abstain
 
 
-def test_orphan_span_dead_letters_without_fabricating_or_crashing():
+async def test_orphan_span_dead_letters_without_fabricating_or_crashing():
     clauses = [_clause("k:0:h", "Cap On Liability", [("cap_scope", "mutual", "EXTRACTED", "s0")])]
     generate, seen = _capturing_generate()
     graph = build_intra_document_qa(_StubServe(clauses), _clause_text_orphan, generate, retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"contract_id": "k", "question": "q"})
+    out = await graph.ainvoke({"contract_id": "k", "question": "q"})
 
     assert out["dead_letter"]["reason"] == "clause_text_orphan_span"  # surfaced, not fabricated
     assert "answer" not in out  # generate skipped
     assert "evidence" not in seen
 
 
-def test_no_matching_clauses_abstains_without_fabrication():
+async def test_no_matching_clauses_abstains_without_fabrication():
     generate, seen = _capturing_generate()
     graph = build_intra_document_qa(_StubServe([]), _clause_text({}), generate, retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"contract_id": "k", "question": "q"})
+    out = await graph.ainvoke({"contract_id": "k", "question": "q"})
 
     assert out["answer"].abstained is True
     assert seen["evidence"] == []
 
 
-def test_transient_serve_retries_then_degrades_to_empty_and_abstains():
+async def test_transient_serve_retries_then_degrades_to_empty_and_abstains():
     clauses = [_clause("k:0:h", "Cap On Liability", [])]
     serve = _StubServe(clauses, fail_times=99)  # always fails
     generate, seen = _capturing_generate()
     graph = build_intra_document_qa(serve, _clause_text({}), generate, retry_policy=_FAST_RETRY)
 
-    out = graph.invoke({"contract_id": "k", "question": "q"})
+    out = await graph.ainvoke({"contract_id": "k", "question": "q"})
 
     assert serve.calls == 3  # retried up to max_attempts
     assert out["answer"].abstained is True  # degraded to empty -> abstain (query survives)
@@ -291,7 +291,7 @@ def test_production_defaults_answer_model_via_answer_model_for(monkeypatch):
     assert seen["model_id"] == "google/gemma-4-31B-it-qat-w4a16-ct"
 
 
-def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
+async def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
     """ADR-0047: production `serve` uses `contract_clause_index` (the WHOLE contract) and never the
     `clauses_of_function` narrowing / the query function classifier -- a mislabel can't hide the real clause."""
     from rag_wright.capabilities import answer_generator as ag
@@ -311,8 +311,11 @@ def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
 
     monkeypatch.setattr(cks, "contract_clause_index", _whole)
     monkeypatch.setattr(cks, "clauses_of_function", _by_function, raising=False)
-    monkeypatch.setattr(ag, "generate_answer",
-                        lambda q, ev, model=None: GeneratedAnswer(answer="", citations=[], abstained=True))
+
+    async def _agen(q, ev, model=None):
+        return GeneratedAnswer(answer="", citations=[], abstained=True)
+
+    monkeypatch.setattr(ag, "agenerate_answer", _agen)
 
     class _Store:
         def exceptions_of_clause(self, cid):
@@ -322,12 +325,12 @@ def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
             return []
 
     leg = idq.production_intra_document_qa(store=_Store(), answer_model=object())
-    leg.invoke({"contract_id": "c1", "question": "how is liability capped?"})
+    await leg.ainvoke({"contract_id": "c1", "question": "how is liability capped?"})
     assert calls["whole"] == 1        # the whole-contract index WAS used
     assert calls["by_function"] == 0  # the function-narrowing path was NOT
 
 
-def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
+async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
     """ADR-0047 rework: with more than top_k clauses, `serve` BGE-reranks the contract's clauses to the question
     and serves only the top-K (bounded evidence) -- mislabel-robust (ranks by meaning) AND avoids dumping the
     whole 100-clause contract into generation."""
@@ -349,11 +352,11 @@ def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
 
     captured = {}
 
-    def _gen(q, ev, model=None):
+    async def _gen(q, ev, model=None):
         captured["ids"] = [e.chunk_id for e in ev]  # EvidenceItem.chunk_id == the clause_id
         return GeneratedAnswer(answer="", citations=[], abstained=True)
 
-    monkeypatch.setattr(ag, "generate_answer", _gen)
+    monkeypatch.setattr(ag, "agenerate_answer", _gen)
 
     class _Store:
         def exceptions_of_clause(self, cid):
@@ -363,6 +366,6 @@ def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
             return []
 
     leg = idq.production_intra_document_qa(store=_Store(), reranker=_RR(), answer_model=object(), top_k=k)
-    leg.invoke({"contract_id": "c1", "question": "how is liability capped?"})
+    await leg.ainvoke({"contract_id": "c1", "question": "how is liability capped?"})
     assert len(captured["ids"]) == k  # generation saw only the top-K, not all 20
     assert set(captured["ids"]) == {f"c1:{i}:h" for i in range(15, 20)}  # the 5 highest-scored

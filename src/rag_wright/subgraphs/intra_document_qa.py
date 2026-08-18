@@ -32,7 +32,7 @@ per-node visibility is a `business_span`.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, TypedDict
+from typing import Any, Awaitable, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -49,7 +49,8 @@ ServeFn = Callable[[str, str], list[CitedClause]]
 # clause_text_fn: (contract_id, clauses) -> {clause_id: operative-span text}; a clause with a span_id that
 # cannot be resolved raises KeyError (no silent drop); a property-less clause is simply absent from the map.
 ClauseTextFn = Callable[[str, list[CitedClause]], dict[str, str]]
-GenerateFn = Callable[[str, list[EvidenceItem]], GeneratedAnswer]
+# ASYNC-C1 (ADR-0057): generate_fn is async (the model call gets a true wall-clock deadline via the seam).
+GenerateFn = Callable[[str, list[EvidenceItem]], Awaitable[GeneratedAnswer]]
 
 # Worst-case provenance surfaced to the generator: the least-trusted tag among a clause's properties wins.
 _CONFIDENCE_ORDER = ("AMBIGUOUS", "INFERRED", "EXTRACTED")
@@ -198,9 +199,9 @@ def build_intra_document_qa(
         evidence = [ev for c in clauses if (ev := _clause_to_evidence(c, texts.get(c.clause_id))) is not None]
         return {"evidence": evidence}
 
-    def generate(state: IntraDocumentQAState) -> IntraDocumentQAState:
+    async def generate(state: IntraDocumentQAState) -> IntraDocumentQAState:
         with business_span("intra_document_qa.generate"):
-            answer = generate_fn(state["question"], state.get("evidence", []))
+            answer = await generate_fn(state["question"], state.get("evidence", []))
         return {"answer": answer}
 
     g = StateGraph(IntraDocumentQAState)
@@ -241,7 +242,7 @@ def production_intra_document_qa(
     `client_side_structured` model (self-hosted Gemma), the structured-output seam otherwise. A caller may still
     inject a specific `answer_model` (tests, or to force a strategy). Imports are lazy so the subgraph module
     stays import-light and hermetic (tests inject stubs)."""
-    from rag_wright.capabilities.answer_generator import generate_answer
+    from rag_wright.capabilities.answer_generator import agenerate_answer
 
     if answer_model is None:
         answer_model = _answer_model_for_impl(answer_model_id)
@@ -272,8 +273,8 @@ def production_intra_document_qa(
     def clause_text(contract_id: str, clauses: list[CitedClause]) -> dict[str, str]:
         return rehydrate_clause_texts(store, contract_id, clauses)
 
-    def generate(question: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
-        return generate_answer(question, evidence, model=answer_model)
+    async def generate(question: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
+        return await agenerate_answer(question, evidence, model=answer_model)
 
     return build_intra_document_qa(serve, clause_text, generate)
 

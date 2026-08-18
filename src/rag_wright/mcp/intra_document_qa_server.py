@@ -24,14 +24,15 @@ demo answerer (`RAG_MCP_DEMO=1`, no infra) and serves over stdio (so a Deep Agen
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from fastmcp import FastMCP
 
 from rag_wright.capabilities.answer_generator import GeneratedAnswer
 
 # qa_fn: (contract_id, question) -> GeneratedAnswer. Injected so the server is testable without infra.
-QAFn = Callable[[str, str], GeneratedAnswer]
+# ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async intra_document_qa subgraph.
+QAFn = Callable[[str, str], Awaitable[GeneratedAnswer]]
 
 _TOOL_DESCRIPTION = (
     "Answer a natural-language question about ONE known contract from its clause knowledge graph, returning a "
@@ -59,7 +60,7 @@ def build_intra_document_qa_mcp(qa_fn: QAFn, *, name: str = "rag-wright-intra-do
     )
 
     @mcp.tool(name="answer_contract_question", description=_TOOL_DESCRIPTION)
-    def answer_contract_question(contract_id: str, question: str) -> dict[str, Any]:
+    async def answer_contract_question(contract_id: str, question: str) -> dict[str, Any]:
         """Answer one question about a known contract from its clause KG.
 
         Args:
@@ -70,7 +71,7 @@ def build_intra_document_qa_mcp(qa_fn: QAFn, *, name: str = "rag-wright-intra-do
             A cited answer: {answer, citations[], abstained}. `citations` are chunk_ids present in the evidence;
             `abstained` is true when the contract does not support an answer.
         """
-        return _answer_to_dict(qa_fn(contract_id, question))
+        return _answer_to_dict(await qa_fn(contract_id, question))
 
     return mcp
 
@@ -94,8 +95,8 @@ def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: s
     default_model = answer_model_id or function_model_id or model_for(ModelRole.GENERAL)
     leg = production_intra_document_qa(store=store, answer_model_id=default_model)
 
-    def _qa(contract_id: str, question: str) -> GeneratedAnswer:
-        out = leg.invoke({"contract_id": contract_id, "question": question})
+    async def _qa(contract_id: str, question: str) -> GeneratedAnswer:
+        out = await leg.ainvoke({"contract_id": contract_id, "question": question})
         ans = out.get("answer")
         if ans is None:  # a pipeline dead-letter (e.g. orphan span) -> an honest abstention, never a fabrication
             return GeneratedAnswer(
@@ -114,7 +115,7 @@ def demo_qa_fn() -> QAFn:
     prototype (and the hermetic test) exercise the full MCP path with no ArcadeDB / LLM."""
     _cid = "AcmeMSA:12:deadbeef01"
 
-    def _qa(contract_id: str, question: str) -> GeneratedAnswer:
+    async def _qa(contract_id: str, question: str) -> GeneratedAnswer:
         return GeneratedAnswer(
             answer=f"Seller's aggregate liability is capped at two times (2x) the fees paid in the "
                    f"preceding 12 months [{_cid}].",
