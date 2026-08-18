@@ -56,7 +56,7 @@ def test_registers_as_an_ard_mcp_tool():
 def test_retrieval_fn_is_injectable_no_store_or_encoders_needed():
     seen = {}
 
-    def stub(query: str) -> TypedPropertyRetrieval:
+    async def stub(query: str) -> TypedPropertyRetrieval:
         seen["query"] = query
         return TypedPropertyRetrieval(query=query, results=[RankedSpan(
             span_id="K:5:cafe01", text="liability capped at 2x fees", function="Cap On Liability",

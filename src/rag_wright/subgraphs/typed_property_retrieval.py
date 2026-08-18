@@ -18,7 +18,7 @@ registered FUNCTION capability; this subgraph composes it.
 
 from __future__ import annotations
 
-from typing import Any, Callable, TypedDict
+from typing import Any, Awaitable, Callable, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -28,7 +28,8 @@ from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
-ConstraintsFn = Callable[[str], set]  # query -> typed (dimension, value) constraints
+# ASYNC-C1 (ADR-0057): constraints_fn is async (its model call gets a true wall-clock deadline via aextract_clause).
+ConstraintsFn = Callable[[str], Awaitable[set]]  # query -> typed (dimension, value) constraints
 RetrieveFn = Callable[[str, set], list]  # (query, constraints) -> [RankedSpan]  (ADR-0047: whole-index pool)
 
 
@@ -59,6 +60,21 @@ def _degrading_io(name: str, work: Callable[[], dict], empty: dict, runtime: Run
             raise TransientExtraction(str(exc)) from exc
 
 
+async def _adegrading_io(
+    name: str, awork: Callable[[], Awaitable[dict]], empty: dict, runtime: Runtime, max_attempts: int
+) -> dict:
+    """ASYNC-C1 (ADR-0057): the async twin of `_degrading_io` for a model-calling node -- awaits `awork` (so the
+    model call gets its true wall-clock deadline), same transient-retry / degrade-to-empty posture."""
+    attempt = runtime.execution_info.node_attempt
+    with business_span(name):
+        try:
+            return await awork()
+        except Exception as exc:  # noqa: BLE001 - transient -> retry, or degrade to empty on exhaustion
+            if attempt >= max_attempts:
+                return empty
+            raise TransientExtraction(str(exc)) from exc
+
+
 def build_typed_property_retrieval(
     constraints_fn: ConstraintsFn,
     retrieve_fn: RetrieveFn,
@@ -70,10 +86,12 @@ def build_typed_property_retrieval(
     `retrieve` runs over the whole-index pool with the property boost."""
     max_attempts = int(getattr(retry_policy, "max_attempts", 3))
 
-    def extract_constraints(state: _State, runtime: Runtime) -> _State:
-        return _degrading_io("typed_property_retrieval.extract_constraints",
-                             lambda: {"constraints": set(constraints_fn(state["query"]))},
-                             {"constraints": set()}, runtime, max_attempts)
+    async def extract_constraints(state: _State, runtime: Runtime) -> _State:
+        async def _work() -> dict:
+            return {"constraints": set(await constraints_fn(state["query"]))}
+
+        return await _adegrading_io("typed_property_retrieval.extract_constraints", _work,
+                                    {"constraints": set()}, runtime, max_attempts)
 
     def retrieve(state: _State, runtime: Runtime) -> _State:
         return _degrading_io(
@@ -100,14 +118,14 @@ def production_typed_property_retrieval(
 ):
     """Wire the real Leg B: granite constraint-extraction + the `property_boosted_retrieval` capability over the
     store + encoders (local or the A100 adapters). ADR-0047: no function classifier -- the pool is whole-index."""
-    from rag_wright.capabilities.dg_extraction import extract_clause
+    from rag_wright.capabilities.dg_extraction import aextract_clause
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
     from rag_wright.contracts.function import NO_FUNCTION
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.spans.clause_kg_extractor import clause_to_record
 
-    def constraints_fn(query: str) -> set:
-        clause = extract_clause(query, extract_model)
+    async def constraints_fn(query: str) -> set:
+        clause = await aextract_clause(query, extract_model)
         if clause is None:
             return set()
         # a QUERY has no clause function -> the NO_FUNCTION sentinel (only the extracted properties are used).

@@ -27,7 +27,7 @@ deterministic demo retriever (`RAG_MCP_DEMO=1`, no infra) and serves over stdio 
 from __future__ import annotations
 
 import os
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable
 
 from fastmcp import FastMCP
 
@@ -35,7 +35,8 @@ from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
 from rag_wright.subgraphs.typed_property_retrieval import TypedPropertyRetrieval
 
 # retrieval_fn: (query) -> TypedPropertyRetrieval. Injected so the server is testable without infra.
-RetrievalFn = Callable[[str], TypedPropertyRetrieval]
+# ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async typed_property_retrieval subgraph.
+RetrievalFn = Callable[[str], Awaitable[TypedPropertyRetrieval]]
 
 _TOOL_DESCRIPTION = (
     "Retrieve the most relevant contract clauses for a query from across the corpus, property-boosted and "
@@ -67,7 +68,7 @@ def build_typed_property_retrieval_mcp(
     )
 
     @mcp.tool(name="retrieve_typed_property_spans", description=_TOOL_DESCRIPTION)
-    def retrieve_typed_property_spans(query: str) -> dict[str, Any]:
+    async def retrieve_typed_property_spans(query: str) -> dict[str, Any]:
         """Retrieve ranked, cited clause spans matching a query from across the corpus.
 
         Args:
@@ -78,7 +79,7 @@ def build_typed_property_retrieval_mcp(
             {query, results[]} where each result is a ranked cited span:
             {span_id, text, function, match_score, matched[], rank}. Empty results when nothing matches.
         """
-        return _retrieval_to_dict(retrieval_fn(query))
+        return _retrieval_to_dict(await retrieval_fn(query))
 
     return mcp
 
@@ -104,8 +105,9 @@ def production_retrieval_fn(*, k: int = 8) -> RetrievalFn:
         store=store, embedder=query_embedder(),
         extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"), k=k)
 
-    def _retrieve(query: str) -> TypedPropertyRetrieval:
-        return leg.invoke({"query": query})["retrieval"]
+    async def _retrieve(query: str) -> TypedPropertyRetrieval:
+        out = await leg.ainvoke({"query": query})
+        return out["retrieval"]
 
     return _retrieve
 
@@ -117,7 +119,7 @@ def demo_retrieval_fn() -> RetrievalFn:
     """A deterministic stub with the REAL contract shape -- two ranked, cited, property-matched cap spans. Lets
     the Deep-Agent prototype (and the hermetic test) exercise the full MCP path with no ArcadeDB / encoders."""
 
-    def _retrieve(query: str) -> TypedPropertyRetrieval:
+    async def _retrieve(query: str) -> TypedPropertyRetrieval:
         results = [
             RankedSpan(
                 span_id="AcmeMSA:12:deadbeef01",

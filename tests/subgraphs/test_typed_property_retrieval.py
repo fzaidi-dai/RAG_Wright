@@ -25,7 +25,7 @@ def _seams(*, constraints, results, fail_constraints=0, fail_retrieve=0):
     calls = {"constraints": 0, "retrieve": 0}
     seen: dict = {}
 
-    def constraints_fn(query):
+    async def constraints_fn(query):
         calls["constraints"] += 1
         if calls["constraints"] <= fail_constraints:
             raise RuntimeError("constraint blip")
@@ -41,36 +41,37 @@ def _seams(*, constraints, results, fail_constraints=0, fail_retrieve=0):
     return (constraints_fn, retrieve_fn), calls, seen
 
 
-def _run(seams):
+async def _run(seams):
     g = build_typed_property_retrieval(*seams, retry_policy=_FAST_RETRY)
-    return g.invoke({"query": "anti-assignment freely assignable"})["retrieval"]
+    out = await g.ainvoke({"query": "anti-assignment freely assignable"})
+    return out["retrieval"]
 
 
-def test_happy_path_produces_cited_results():
+async def test_happy_path_produces_cited_results():
     seams, _, _ = _seams(constraints={("assignment_consent", "free")},
                          results=[_span("s3"), _span("s1", 0.0)])
-    out = _run(seams)
+    out = await _run(seams)
     assert isinstance(out, TypedPropertyRetrieval)
     assert [r.span_id for r in out.results] == ["s3", "s1"]
     assert out.query == "anti-assignment freely assignable"
 
 
-def test_retrieve_receives_constraints_only():
+async def test_retrieve_receives_constraints_only():
     # ADR-0047: retrieve takes (query, constraints) -- no function filter (whole-index pool)
     seams, _, seen = _seams(constraints={("assignment_consent", "free")}, results=[_span("s3")])
-    _run(seams)
+    await _run(seams)
     assert seen["constraints"] == {("assignment_consent", "free")}
 
 
-def test_constraints_failure_degrades_to_empty_but_retrieval_proceeds():
+async def test_constraints_failure_degrades_to_empty_but_retrieval_proceeds():
     # constraints fail all attempts -> empty set; retrieve still runs (whole-index pool, no boost)
     seams, _, seen = _seams(constraints={("x", "y")}, results=[_span("s1", 0.0)], fail_constraints=99)
-    out = _run(seams)
+    out = await _run(seams)
     assert seen["constraints"] == set()  # degraded to empty
     assert [r.span_id for r in out.results] == ["s1"]
 
 
-def test_retrieve_failure_degrades_to_empty_results_never_crashes():
+async def test_retrieve_failure_degrades_to_empty_results_never_crashes():
     seams, _, _ = _seams(constraints={("assignment_consent", "free")}, results=[_span("s3")], fail_retrieve=99)
-    out = _run(seams)
+    out = await _run(seams)
     assert out.results == []  # empty, but a valid result -- no crash
