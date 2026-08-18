@@ -9,6 +9,7 @@ document" flow that needs NO domain ontology enrichment (COMP-VERDICT-GENERIC). 
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -19,7 +20,7 @@ def log(m: str) -> None:
     print(m, flush=True)
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
     os.environ.setdefault("RAG_SERVING", "openrouter")
     from rag_wright.capabilities.dg_extraction import default_extraction_model
@@ -41,7 +42,7 @@ def main() -> None:
     # 1. INGEST the policy DOCUMENT (bytes -> docling parse -> heading-split sections -> Requirement KG)
     data = policy.read_bytes()
     log(f"[demo] STEP 1: ingest policy document {policy.name} ({len(data)} bytes) -> {db!r}")
-    report = run_compliance_document_ingestion(policy.name, data, store, model=model, source=source)
+    report = await run_compliance_document_ingestion(policy.name, data, store, model=model, source=source)
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
     log(f"[demo]   -> {report.documents_ingested} sections, {len(report.dead_lettered)} dead-lettered, "
         f"{n} Requirement nodes")
@@ -65,4 +66,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

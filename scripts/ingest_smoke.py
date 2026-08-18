@@ -14,6 +14,7 @@ reused -- so a full run only pays the unavoidable clause-extraction pass.
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -40,9 +41,9 @@ def _prove_cache_reuse(cuad_path: Path, cache_dir: Path, limit: int) -> None:
           f"(no granite party call); the rest extract per-contract once", flush=True)
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
-    from rag_wright.corpus.cuad_ingestion import run_cuad_ingestion
+    from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
     from rag_wright.store.arcadedb import PARTY_TO_EDGE_TYPE, ArcadeDBStore
 
     db = os.environ.get("SMOKE_DB", "ragwright_ingest_smoke")
@@ -52,7 +53,7 @@ def main() -> None:
     store = ArcadeDBStore.from_env(database=db, reset=True)  # fresh scratch db -- non-destructive
     print(f"[smoke] ingesting {limit} CUAD docs through the generic pipeline into scratch db {db!r}", flush=True)
 
-    report = run_cuad_ingestion(
+    report = await arun_cuad_ingestion(
         Path("data/cuad/extracted/CUAD_v1.json"), store,
         cache_dir=Path("data/cache/ingest_smoke"), limit=limit)
 
@@ -78,4 +79,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

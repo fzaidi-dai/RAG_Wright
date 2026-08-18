@@ -7,6 +7,7 @@ but parameterized (SECTIONS / SOURCE / COMPLIANCE_DB) and with a fuller KG inspe
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from collections import Counter
 from pathlib import Path
@@ -18,7 +19,7 @@ def log(m: str) -> None:
     print(m, flush=True)
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv("/Users/farhan/work/RAG_Wright/.env")
     os.environ.setdefault("RAG_SERVING", "openrouter")
     from rag_wright.capabilities.dg_extraction import default_extraction_model
@@ -34,7 +35,7 @@ def main() -> None:
     model = default_extraction_model("requirement-extract", "ibm-granite/granite-4.1-8b")
     log(f"[prod2] ingesting {sections.name} ({source}) -> {db!r} (reset={reset})")
 
-    report = run_compliance_ingestion(sections, store, model=model, source=source)
+    report = await run_compliance_ingestion(sections, store, model=model, source=source)
 
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
     rows = store.all_requirements()
@@ -59,4 +60,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

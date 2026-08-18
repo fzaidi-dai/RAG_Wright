@@ -9,6 +9,7 @@ SEPARATE database (`ragwright_compliance`), so the contract KG stays clean. Stre
 
 from __future__ import annotations
 
+import asyncio
 import os
 from collections import Counter
 from pathlib import Path
@@ -16,7 +17,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
@@ -29,7 +30,7 @@ def main() -> None:
     sections = Path("data/compliance/ftc_16cfr255/16cfr255.sections.json")
     print(f"[compliance] ingesting {sections} -> {db!r} (reset={reset})", flush=True)
 
-    report = run_compliance_ingestion(sections, store, model=model, source="FTC 16 CFR 255")
+    report = await run_compliance_ingestion(sections, store, model=model, source="FTC 16 CFR 255")
 
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
     rows = store.all_requirements()
@@ -46,4 +47,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

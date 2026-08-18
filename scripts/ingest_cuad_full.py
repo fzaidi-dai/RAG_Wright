@@ -13,15 +13,16 @@ template changed since those were cached). Streams `[ingest] i/510` progress (CL
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
-    from rag_wright.corpus.cuad_ingestion import run_cuad_ingestion
+    from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
     from rag_wright.store.arcadedb import CONTRACT_TYPE, PARTY_TO_EDGE_TYPE, SPAN_TYPE, ArcadeDBStore
 
     db = os.environ.get("FULL_DB", "ragwright_cuad_full")
@@ -31,7 +32,7 @@ def main() -> None:
     print(f"[full] CUAD-FULL-COVERAGE: ingesting ALL CUAD docs through the generic pipeline into {db!r}",
           flush=True)
 
-    report = run_cuad_ingestion(
+    report = await arun_cuad_ingestion(
         Path("data/cuad/extracted/CUAD_v1.json"), store, cache_dir=cache_dir, limit=0)
 
     dl = report.dead_lettered
@@ -58,4 +59,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

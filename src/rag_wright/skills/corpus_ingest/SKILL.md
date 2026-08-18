@@ -51,7 +51,7 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 )
 from rag_wright.capabilities.party_clause_linking import party_clause_linking
 
-report = run_corpus_ingestion(
+report = await arun_corpus_ingestion(
     YourAdapter(path, limit=N),                 # test on a FEW docs first; never a full re-ingest without intent
     production_document_ingest(store, cache_dir=..., registry=...),
     link_fn=lambda: len(party_clause_linking(store).links),

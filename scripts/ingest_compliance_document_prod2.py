@@ -6,6 +6,7 @@ customer-PDF/DOCX path (via DocumentRegulationAdapter), the generic-input half t
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from collections import Counter
 from pathlib import Path
@@ -17,7 +18,7 @@ def log(m: str) -> None:
     print(m, flush=True)
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv("/Users/farhan/work/RAG_Wright/.env")
     os.environ.setdefault("RAG_SERVING", "openrouter")
     from rag_wright.capabilities.dg_extraction import default_extraction_model
@@ -34,7 +35,7 @@ def main() -> None:
     log(f"[docparse-2] ingesting DOCUMENT {doc_path.name} ({len(data)} bytes, {source}) -> {db!r} "
         f"via docling parse -> sections -> Requirement KG")
 
-    report = run_compliance_document_ingestion(doc_path.name, data, store, model=model, source=source)
+    report = await run_compliance_document_ingestion(doc_path.name, data, store, model=model, source=source)
 
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
     rows = store.all_requirements()
@@ -53,4 +54,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

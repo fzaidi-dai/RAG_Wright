@@ -11,6 +11,7 @@ granite (product substrate) falling back off coreweave automatically. Vision is 
 """
 from __future__ import annotations
 
+import asyncio
 import os
 
 from dotenv import load_dotenv
@@ -20,7 +21,7 @@ def log(m: str) -> None:
     print(m, flush=True)
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv("/Users/farhan/work/RAG_Wright/.env")  # SA creds (GCS) + ArcadeDB + OpenRouter
     os.environ.setdefault("RAG_SERVING", "openrouter")
     os.environ.setdefault("RAG_MODEL_GENERAL", "google/gemma-4-31b-it")   # validated classifier model
@@ -44,8 +45,8 @@ def main() -> None:
     from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.contract_ingestion_pipeline import (
-        production_document_ingest,
-        run_corpus_ingestion,
+        aproduction_document_ingest,
+        arun_corpus_ingestion,
     )
 
     log(f"[prod1] scratch DB={db} reset={reset} | GCS gs://{bucket}/{prefix} "
@@ -53,12 +54,12 @@ def main() -> None:
     store = ArcadeDBStore.from_env(database=db, reset=reset)
     store.ensure_schema()
     registry = build_verified_registry({"entities": []})  # GENERIC: no CUAD/EDGAR verified entity anchors
-    ingest_graph = production_document_ingest(
+    ingest_graph = aproduction_document_ingest(
         store, cache_dir="data/cache/prod1", registry=registry, party_seed_path=None)  # no CUAD party seed
     adapter = production_gcs_adapter(bucket, prefix, limit=0 if include else limit, include=include)
 
     log("[prod1] ingesting from GCS ...")
-    report = run_corpus_ingestion(
+    report = await arun_corpus_ingestion(
         adapter, ingest_graph, progress=log,
         # GENERIC party->clause linking (KG-7), no cache: the single-provenance join straight from the KG's own
         # extracted parties. (The CUAD many-to-many enrichment needs a mention cache; this cacheless path is the
@@ -93,4 +94,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

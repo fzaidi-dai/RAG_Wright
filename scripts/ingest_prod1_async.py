@@ -50,7 +50,7 @@ def main() -> None:
     from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.async_ingestion import JobStore, submit_ingestion
-    from rag_wright.subgraphs.contract_ingestion_pipeline import production_document_ingest
+    from rag_wright.subgraphs.contract_ingestion_pipeline import aproduction_document_ingest
 
     db = os.environ.get("PROD1_DB", "ragwright_prod1_async")
     bucket = "dreamai-pocs-ragwright-ingest"
@@ -60,7 +60,7 @@ def main() -> None:
     store = ArcadeDBStore.from_env(database=db, reset=True)
     store.ensure_schema()
     ingest_graph = _PoisonGraph(
-        production_document_ingest(store, cache_dir="data/cache/prod1_async",
+        aproduction_document_ingest(store, cache_dir="data/cache/prod1_async",
                                    registry=build_verified_registry({"entities": []}), party_seed_path=None),
         _POISON)
     adapter = production_gcs_adapter(bucket, "prod1-corpus/", include=include)
