@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
-from typing import Optional, Protocol, runtime_checkable
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.tools import tool
@@ -209,6 +209,11 @@ class SeamBoundaryDiscoverer:
         _validate_partition(spans, len(document.texts))
         return spans
 
+    async def adiscover(self, document) -> list[BoundarySpan]:
+        # ASYNC-B2a: the agentic (RLM) discoverer is the optional path (production uses SingleCall); run its sync
+        # agent off the event loop. The deadline-critical production discoverer (SingleCall) is truly async.
+        return await asyncio.to_thread(self.discover, document)
+
 
 def _final_text(messages) -> str:
     """The model's final answer text (the last non-empty assistant message, or the last eval result)."""
@@ -260,15 +265,27 @@ class SingleCallBoundaryDiscoverer:
         self._model_id = model_id or model_for(ModelRole.GENERAL)
         self._factory = structured_factory
 
-    def discover(self, document) -> list[BoundarySpan]:
+    def _prompt(self, document) -> tuple[str | None, int]:
         items = _document_items(document)
         n = len(items)
         if n == 0:
-            return []
+            return None, 0
         body = "\n".join(f"[{it['index']}] {it['text'][:140]}" for it in items)
-        out = self._factory(self._model_id, _BoundaryList).invoke(
-            _SINGLE_CALL_PROMPT.format(n=n, last=n - 1, body=body)
-        )
+        return _SINGLE_CALL_PROMPT.format(n=n, last=n - 1, body=body), n
+
+    def discover(self, document) -> list[BoundarySpan]:
+        prompt, n = self._prompt(document)
+        if prompt is None:
+            return []
+        out = self._factory(self._model_id, _BoundaryList).invoke(prompt)
+        return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
+
+    async def adiscover(self, document) -> list[BoundarySpan]:
+        # ASYNC-B2a (ADR-0057): the structured boundary call on the async seam (true wall-clock deadline).
+        prompt, n = self._prompt(document)
+        if prompt is None:
+            return []
+        out = await self._factory(self._model_id, _BoundaryList).ainvoke(prompt)
         return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
 
 
@@ -456,18 +473,59 @@ def chunk(
     texts; each is summarized concurrently; boundaries are validated; the manifest is cached. If a manifest
     for this document's content hash already exists it is reused (the gate; no re-chunk, no LLM call).
     """
+    cached, manifest_path, document, disc = _chunk_prepare(parsed, cache_dir, discoverer, token_cap)
+    if cached is not None:
+        return cached
+    spans = disc.discover(document)
+    texts = _chunk_texts(document, spans, token_cap)
+    summaries = asyncio.run(_summarize_all(texts, summarizer, max_concurrency))
+    return _chunk_manifest(parsed, texts, summaries, token_cap, manifest_path)
+
+
+async def achunk(
+    parsed: ParsedDocument,
+    *,
+    summarizer: Summarizer,
+    cache_dir: Path,
+    discoverer: Optional[BoundaryDiscoverer] = None,
+    token_cap: int = DEFAULT_TOKEN_CAP,
+    max_concurrency: int = DEFAULT_SUMMARY_CONCURRENCY,
+) -> ChunkManifest:
+    """ASYNC-B2a (ADR-0057): the async twin of `chunk`. Awaits the discoverer's async boundary call (the true
+    wall-clock deadline) and the concurrent summarize directly (no `asyncio.run` island), so it runs on the
+    ingestion event loop. Same content-hash gate + manifest as `chunk`."""
+    cached, manifest_path, document, disc = _chunk_prepare(parsed, cache_dir, discoverer, token_cap)
+    if cached is not None:
+        return cached
+    spans = await disc.adiscover(document)
+    texts = _chunk_texts(document, spans, token_cap)
+    summaries = await _summarize_all(texts, summarizer, max_concurrency)
+    return _chunk_manifest(parsed, texts, summaries, token_cap, manifest_path)
+
+
+def _chunk_prepare(parsed: ParsedDocument, cache_dir: Path, discoverer: Optional[BoundaryDiscoverer],
+                   token_cap: int) -> tuple[Optional[ChunkManifest], Path, Any, Any]:
+    """Shared chunk/achunk head: the content-hash gate (return the cached manifest if present) and, otherwise,
+    the loaded document + resolved discoverer."""
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / f"{parsed.source_doc_id}.{parsed.content_hash[:16]}.chunks.json"
     if manifest_path.exists():  # content-hash gate
-        return ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
-
+        return ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8")), manifest_path, None, None
     document = load_document(parsed)
-    discoverer = discoverer if discoverer is not None else SeamBoundaryDiscoverer(token_cap=token_cap)
-    spans = discoverer.discover(document)
+    disc = discoverer if discoverer is not None else SeamBoundaryDiscoverer(token_cap=token_cap)
+    return None, manifest_path, document, disc
+
+
+def _chunk_texts(document: Any, spans: list[BoundarySpan], token_cap: int) -> list[str]:
+    """Shared: validate the boundary partition and finalize it into capped chunk texts."""
     _validate_partition(spans, len(document.texts))
-    texts = _finalize_chunks(document, spans, token_cap)
+    return _finalize_chunks(document, spans, token_cap)
+
+
+def _chunk_manifest(parsed: ParsedDocument, texts: list[str], summaries: list[str], token_cap: int,
+                    manifest_path: Path) -> ChunkManifest:
+    """Shared chunk/achunk tail: assemble + validate the chunks, write and return the manifest."""
     offsets = _chunk_offsets(texts)  # CU-B1: char ranges in the canonical document text
-    summaries = asyncio.run(_summarize_all(texts, summarizer, max_concurrency))
     chunks = [
         Chunk(
             chunk_id=ChunkId.of(parsed.source_doc_id, index, text).value,
@@ -481,13 +539,9 @@ def chunk(
         for index, (text, summary) in enumerate(zip(texts, summaries))
     ]
     _validate_boundaries(chunks, token_cap)
-
     manifest = ChunkManifest(
-        source_doc_id=parsed.source_doc_id,
-        content_hash=parsed.content_hash,
-        token_cap=token_cap,
-        chunks=chunks,
-    )
+        source_doc_id=parsed.source_doc_id, content_hash=parsed.content_hash,
+        token_cap=token_cap, chunks=chunks)
     manifest_path.write_text(manifest.model_dump_json(indent=2), encoding="utf-8")
     return manifest
 
