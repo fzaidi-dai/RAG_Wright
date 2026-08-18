@@ -13,8 +13,10 @@ kwargs into the tool binding, so `extra_body` passed here binds to the structure
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
+import random
 import time
 from typing import Any
 
@@ -62,6 +64,26 @@ _STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (
     # calls (this `.with_retry` is now the only layer that will).
     ValueError, APITimeoutError, APIConnectionError, RateLimitError, InternalServerError,
 )
+
+
+# TRUE wall-clock deadline for the ASYNC path (engine issue 0003 / ADR-0057). An httpx timeout is per-socket-op,
+# so a slow-drip / SSE-keep-alive response resets the read clock indefinitely -- a single call ran 591s against a
+# 60s timeout, and a 399s call succeeded with no exception at all. Only elapsed wall clock, enforced OUTSIDE the
+# socket, can bound it. `asyncio.timeout` delivers a real CancelledError into the awaited call, so httpx closes
+# the socket -- a true cancel, not the soft/leaked-thread cancel a synchronous watchdog gives.
+_MODEL_DEADLINE_S = 180.0  # total wall-clock ceiling per LOGICAL model call (across bounded retries + backoff)
+
+
+class ModelCallTimeout(Exception):
+    """A logical model call exceeded the total wall-clock deadline (`_MODEL_DEADLINE_S`) and was truly cancelled
+    (socket torn down). TERMINAL: a stalling peer is not a transient worth re-hitting, so this is deliberately
+    NOT in `_STRUCTURED_RETRY_ON` and must be kept out of any pregel `retry_on` -- the caller degrades or
+    dead-letters on it. It is the async fix a per-socket-op timeout cannot be (engine issue 0003 / ADR-0057)."""
+
+
+def _backoff_s(attempt: int) -> float:
+    """Exponential backoff with jitter (the Retry-After substitute), capped. `attempt` is 1-based."""
+    return min(0.5 * (2 ** (attempt - 1)), 8.0) + random.uniform(0.0, 0.5)
 
 
 def _openrouter_config() -> dict[str, Any]:
@@ -171,7 +193,45 @@ def build_structured(
     if max_tokens is not None:
         overrides["max_tokens"] = max_tokens
     inner = build_model(model_id, temperature=temperature, **overrides).with_structured_output(schema, **kwargs)
-    return _with_bounded_retry(inner, model_id)
+    # Dual-path during the async migration (ADR-0057): `.invoke` keeps the sync bounded retry (ADR-0056) for
+    # not-yet-migrated callers; `.ainvoke` is the async bounded retry + TRUE wall-clock deadline. The sync path
+    # is removed once all callers are async (Phase D). `RunnableLambda(func, afunc=...)` routes each accordingly.
+    sync_runnable = _with_bounded_retry(inner, model_id)
+
+    async def _adeadline(x: Any) -> Any:
+        return await _ainvoke_bounded(inner, x, model_id)
+
+    return RunnableLambda(sync_runnable.invoke, afunc=_adeadline)
+
+
+async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str) -> Any:
+    """Async invoke with the single bounded retry layer AND a true total wall-clock deadline (ADR-0057).
+
+    Bounded transient retries (the `_STRUCTURED_RETRY_ON` set) with per-attempt logging and exponential-jitter
+    backoff, ALL under one `asyncio.timeout(_MODEL_DEADLINE_S)`. A slow-drip or connection-alive stall that a
+    per-socket-op timeout never catches is CANCELLED at the deadline -- `asyncio.timeout` delivers CancelledError
+    into `runnable.ainvoke`, httpx closes the socket -- and surfaces as a terminal `ModelCallTimeout`. Retry
+    sleeps count against the same budget, so the total is bounded regardless of how it is spent."""
+    async def _run() -> Any:
+        for attempt in range(1, _STRUCTURED_RETRY_ATTEMPTS + 1):
+            start = time.monotonic()
+            try:
+                return await runnable.ainvoke(x)
+            except _STRUCTURED_RETRY_ON as exc:
+                log.warning("model call to %s failed after %.1fs (%s); retry %d/%d",
+                            model_id, time.monotonic() - start, type(exc).__name__,
+                            attempt, _STRUCTURED_RETRY_ATTEMPTS)
+                if attempt >= _STRUCTURED_RETRY_ATTEMPTS:
+                    raise
+                await asyncio.sleep(_backoff_s(attempt))
+
+    try:
+        async with asyncio.timeout(_MODEL_DEADLINE_S):
+            return await _run()
+    except TimeoutError as exc:
+        log.warning("model call to %s exceeded the %.0fs total wall-clock deadline; cancelled",
+                    model_id, _MODEL_DEADLINE_S)
+        raise ModelCallTimeout(f"model call to {model_id} exceeded {_MODEL_DEADLINE_S}s deadline") from exc
 
 
 def _with_bounded_retry(runnable: Runnable, model_id: str) -> Runnable:

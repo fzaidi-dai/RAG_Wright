@@ -199,14 +199,18 @@ def test_build_model_sets_connection_resilience_retry_and_timeout():
     assert seam.build_model("vendor/whatever", max_retries=0).ctor_kwargs["max_retries"] == 0
 
 
-def test_build_structured_wraps_with_one_bounded_retry_layer():
-    # engine issue 0003 / ADR-0056: exactly ONE bounded retry layer, and the SDK's own loop disabled so the two
-    # cannot stack into a ~36 min worst case.
-    runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema)
-    # the single retry layer catches the OpenRouter-504-as-ValueError and stops after the bounded attempt count
-    assert ValueError in runnable.retry_exception_types
-    assert runnable.max_attempt_number == seam._STRUCTURED_RETRY_ATTEMPTS
-    # ...and the SDK's own retry loop is OFF for structured calls, with a tighter per-request timeout
+def test_build_structured_disables_the_sdk_retry_loop_with_a_tighter_timeout():
+    # engine issue 0003 / ADR-0056: the SDK's own retry loop is OFF for structured calls (no stacking), with a
+    # tighter per-request timeout.
+    seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema)
     base = _FakeChatOpenAI.last_structured.base
     assert base.ctor_kwargs["max_retries"] == 0
     assert base.ctor_kwargs["timeout"] == seam._STRUCTURED_TIMEOUT_S
+
+
+def test_build_structured_wires_both_the_sync_and_async_paths():
+    # ADR-0057 dual-path during the migration: `.invoke` keeps the sync bounded retry (ADR-0056) and `.ainvoke`
+    # routes through the async bounded-retry + true wall-clock deadline (an afunc is set on the returned lambda).
+    runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema)
+    assert getattr(runnable, "afunc", None) is not None  # async deadline path wired
+    assert callable(runnable.invoke)  # sync bounded-retry path preserved
