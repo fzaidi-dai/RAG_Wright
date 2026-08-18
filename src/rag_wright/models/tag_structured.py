@@ -25,7 +25,7 @@ from typing import Any, get_args, get_origin
 
 from pydantic import BaseModel, ValidationError
 
-from rag_wright.models.seam import build_model
+from rag_wright.models.seam import astream_text, build_model
 
 
 def _unwrap_optional(ann: Any) -> Any:
@@ -108,11 +108,15 @@ class _TagStructuredRunnable:
         self._max_tokens = max_tokens
         self._retries = retries
 
-    def invoke(self, prompt: Any, config: Any = None) -> BaseModel:  # config accepted for runnable-compat, unused
-        # Drop-in for build_structured: `prompt` is either a plain string or a LangChain message sequence
-        # (e.g. [SystemMessage, HumanMessage]). Append the tag instructions as a trailing human turn either way.
+    def _full_prompt(self, prompt: Any) -> Any:
+        # `prompt` is a plain string or a LangChain message sequence (e.g. [SystemMessage, HumanMessage]); append
+        # the tag instructions as a trailing human turn either way.
         instr = tag_instructions(self._schema)
-        full = f"{prompt}\n\n{instr}" if isinstance(prompt, str) else [*prompt, ("human", instr)]
+        return f"{prompt}\n\n{instr}" if isinstance(prompt, str) else [*prompt, ("human", instr)]
+
+    def invoke(self, prompt: Any, config: Any = None) -> BaseModel:  # config accepted for runnable-compat, unused
+        # Drop-in for build_structured.
+        full = self._full_prompt(prompt)
         last: Exception | None = None
         for _ in range(self._retries + 1):
             text = str(build_model(
@@ -120,6 +124,21 @@ class _TagStructuredRunnable:
             try:
                 return parse_tagged(text, self._schema)
             except ValidationError as exc:  # malformed/incomplete -> re-ask, bounded
+                last = exc
+        raise last  # type: ignore[misc]
+
+    async def ainvoke(self, prompt: Any, config: Any = None) -> BaseModel:
+        # ASYNC-A3 (ADR-0057): the async tag-parse structured path -- stream the free-text answer (idle-drip
+        # detection + true wall-clock deadline via astream_text), then parse the light tags client-side, with the
+        # same bounded re-ask on a ValidationError.
+        full = self._full_prompt(prompt)
+        last: Exception | None = None
+        for _ in range(self._retries + 1):
+            text = await astream_text(
+                self._model_id, full, temperature=self._temperature, max_tokens=self._max_tokens)
+            try:
+                return parse_tagged(text, self._schema)
+            except ValidationError as exc:
                 last = exc
         raise last  # type: ignore[misc]
 

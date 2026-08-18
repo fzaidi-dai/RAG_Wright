@@ -23,7 +23,7 @@ from pydantic import BaseModel, model_validator
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_model, build_structured
+from rag_wright.models.seam import astream_text, build_model, build_structured
 from rag_wright.util.concurrent import map_concurrent
 
 _ABSTENTION = "The retrieved context does not support an answer."
@@ -121,6 +121,10 @@ class SeamReasonModel:
     def reason(self, prompt: str) -> str:
         return str(build_model(self._model_id).invoke(prompt).content)
 
+    async def areason(self, prompt: str) -> str:
+        # ASYNC-A3 (ADR-0057): free-text via astream (idle-drip detection + true wall-clock deadline).
+        return await astream_text(self._model_id, prompt)
+
 
 # --- client-side structured output: free-text + light XML tags, parsed here (no server guided decoding) ------
 #
@@ -197,6 +201,13 @@ class TaggedFreeTextAnswerModel:
             self._model_id, temperature=self._temperature, max_tokens=self._max_tokens
         ).invoke(prompt + _TAG_INSTRUCTIONS).content
         return parse_tagged_answer(str(text))
+
+    async def agenerate(self, prompt: str) -> GeneratedAnswer:
+        # ASYNC-A3 (ADR-0057): stream the free-text answer (idle-drip detection + true deadline), then parse the
+        # light tags client-side -- same GeneratedAnswer the sync path yields.
+        text = await astream_text(self._model_id, prompt + _TAG_INSTRUCTIONS,
+                                  temperature=self._temperature, max_tokens=self._max_tokens)
+        return parse_tagged_answer(text)
 
 
 def answer_model_for(

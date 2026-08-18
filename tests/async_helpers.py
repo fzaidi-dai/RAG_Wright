@@ -35,3 +35,31 @@ class FakeAsyncRunnable:
         if self._raises is not None and self._fail_times == 0:
             raise self._raises
         return self._result
+
+
+class _FakeChunk:
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class FakeStreamingClient:
+    """A stand-in for `ChatOpenAI`'s streaming: an async-generator `.astream` yielding chunks with `.content`.
+    Configurable to yield a sequence, stall (sleep before yielding, to exercise the total deadline), or
+    fail-then-succeed across calls (to exercise the bounded retry).
+    """
+
+    def __init__(self, *, chunks: tuple[str, ...] = ("hel", "lo"), stall_s: float | None = None,
+                 fail_times: int = 0) -> None:
+        self._chunks = chunks
+        self._stall_s = stall_s
+        self._fail_times = fail_times
+        self.calls = 0
+
+    async def astream(self, prompt: Any = None):  # noqa: ANN201 - async generator
+        self.calls += 1
+        if self._stall_s is not None:
+            await asyncio.sleep(self._stall_s)
+        if self.calls <= self._fail_times:
+            raise ValueError("simulated transient")
+        for c in self._chunks:
+            yield _FakeChunk(c)

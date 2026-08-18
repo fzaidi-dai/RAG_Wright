@@ -18,6 +18,7 @@ import logging
 import os
 import random
 import time
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain_core.runnables import Runnable, RunnableLambda
@@ -204,19 +205,21 @@ def build_structured(
     return RunnableLambda(sync_runnable.invoke, afunc=_adeadline)
 
 
-async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str) -> Any:
-    """Async invoke with the single bounded retry layer AND a true total wall-clock deadline (ADR-0057).
+async def _bounded_deadline(make_awaitable: Callable[[], Awaitable[Any]], model_id: str) -> Any:
+    """Run an async model operation under the single bounded retry layer AND a true total wall-clock deadline
+    (ADR-0057). `make_awaitable` is a factory returning a FRESH awaitable per attempt (a coroutine is single-use).
+    Shared by the structured `.ainvoke` path and the free-text `astream` path.
 
     Bounded transient retries (the `_STRUCTURED_RETRY_ON` set) with per-attempt logging and exponential-jitter
     backoff, ALL under one `asyncio.timeout(_MODEL_DEADLINE_S)`. A slow-drip or connection-alive stall that a
     per-socket-op timeout never catches is CANCELLED at the deadline -- `asyncio.timeout` delivers CancelledError
-    into `runnable.ainvoke`, httpx closes the socket -- and surfaces as a terminal `ModelCallTimeout`. Retry
-    sleeps count against the same budget, so the total is bounded regardless of how it is spent."""
+    into the awaited call, httpx closes the socket -- and surfaces as a terminal `ModelCallTimeout`. Retry sleeps
+    count against the same budget, so the total is bounded regardless of how it is spent."""
     async def _run() -> Any:
         for attempt in range(1, _STRUCTURED_RETRY_ATTEMPTS + 1):
             start = time.monotonic()
             try:
-                return await runnable.ainvoke(x)
+                return await make_awaitable()
             except _STRUCTURED_RETRY_ON as exc:
                 log.warning("model call to %s failed after %.1fs (%s); retry %d/%d",
                             model_id, time.monotonic() - start, type(exc).__name__,
@@ -232,6 +235,38 @@ async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str) -> Any:
         log.warning("model call to %s exceeded the %.0fs total wall-clock deadline; cancelled",
                     model_id, _MODEL_DEADLINE_S)
         raise ModelCallTimeout(f"model call to {model_id} exceeded {_MODEL_DEADLINE_S}s deadline") from exc
+
+
+async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str) -> Any:
+    """The structured async path: `.ainvoke` under the shared bounded retry + total deadline (ADR-0057)."""
+    return await _bounded_deadline(lambda: runnable.ainvoke(x), model_id)
+
+
+# Idle-between-chunks guard for streamed free-text (ADR-0057, ASYNC-A3): if no chunk arrives within this window
+# the stream raises -- a PRECISE drip-stall catch (the exact failure mode OpenRouter's SSE keep-alive comments
+# hide) on top of the total deadline. A native `ChatOpenAI` field.
+_STREAM_CHUNK_TIMEOUT_S = 60.0
+
+
+async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
+                       max_tokens: int | None = None) -> str:
+    """Free-text generation via streaming (ADR-0057, ASYNC-A3). Streams with `stream_chunk_timeout` for precise
+    idle-drip detection, the total `asyncio.timeout` deadline for the whole call, and the bounded transient
+    retries -- accumulating the streamed chunks into the full text (the same value
+    `build_model(...).invoke(prompt).content` produced). `prompt` is a string or a message list."""
+    overrides: dict[str, Any] = {
+        "max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S, "stream_chunk_timeout": _STREAM_CHUNK_TIMEOUT_S}
+    if max_tokens is not None:
+        overrides["max_tokens"] = max_tokens
+    client = build_model(model_id, temperature=temperature, **overrides)
+
+    async def _consume() -> str:
+        parts: list[str] = []
+        async for chunk in client.astream(prompt):
+            parts.append(str(chunk.content))
+        return "".join(parts)
+
+    return await _bounded_deadline(_consume, model_id)
 
 
 def _with_bounded_retry(runnable: Runnable, model_id: str) -> Runnable:
