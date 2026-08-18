@@ -222,17 +222,61 @@ def _abstain(text: str = _ABSTENTION) -> GeneratedAnswer:
     return GeneratedAnswer(answer=text, citations=[], abstained=True)
 
 
+# --- output hygiene: keep the engine's internal annotations out of user-facing prose (engine issue 0001) -----
+#
+# The evidence block feeds the model machine-internal markers -- inline citation ids [id:idx:hash], the
+# [auto-tag: TYPE] classification (the engine's own sometimes-wrong guess), the [confidence: ...] tag, the
+# [dimension=value; ...] typed-property string, and the [Exception ... (inferred)] carve-out framing. These are
+# INPUTS to the model's judgement; a reader must never see them (a narrated auto-tag asserts a possibly-wrong
+# clause type in the engine's voice, and a raw id looks broken). Citation ids belong in `citations` only. The
+# SKILL now tells the model not to narrate them; this code is the hard guarantee for the bracketed forms it may
+# still echo. TARGETED, not a blanket bracket strip: only the known annotation formats and the exact evidence
+# chunk_ids are removed, so a legitimately quoted bracket (a defined term like "[Party A]") survives.
+_CID_SHAPE = re.compile(r"^[^\[\]]+:\d+:[0-9a-fA-F]{8,}$")
+_PROSE_ANNOTATION_RES = [
+    re.compile(r"\[[^\[\]]+:\d+:[0-9a-fA-F]{8,}\]"),   # a bracketed citation id (incl. a fabricated one)
+    re.compile(r"\[auto-tag:[^\[\]]*\]", re.IGNORECASE),
+    re.compile(r"\[confidence:[^\[\]]*\]", re.IGNORECASE),
+    re.compile(r"\[Exception[^\[\]]*\]", re.IGNORECASE),  # the inferred carve-out framing
+    re.compile(r"\[[^\[\]]*=[^\[\]]*\]"),                 # a typed-property fact group [dim=value; ...]
+]
+
+
+def _scrub_prose(text: str, evidence: list[EvidenceItem]) -> str:
+    """Remove the engine's internal annotation tokens from user-facing answer prose (issue 0001): the exact
+    evidence chunk_ids (bracketed and, for citation-shaped ids, bare), then the known bracketed annotation
+    formats, then tidy the whitespace/punctuation the removals leave behind. Quoted clause text and any other
+    bracketed text are left intact -- only the known formats and the exact ids are stripped."""
+    out = text
+    for item in evidence:  # the exact ids we know are in play (precise; avoids guessing)
+        out = re.sub(rf"\[\s*{re.escape(item.chunk_id)}\s*\]", "", out)
+        if _CID_SHAPE.match(item.chunk_id):  # bare removal only for real citation-shaped ids (not short test ids)
+            out = out.replace(item.chunk_id, "")
+    for rx in _PROSE_ANNOTATION_RES:
+        out = rx.sub("", out)
+    out = re.sub(r"\(\s*\)", "", out)             # empty parens left by a removed token
+    out = re.sub(r"[ \t]{2,}", " ", out)          # collapse runs of spaces
+    out = re.sub(r"[ \t]+([,.;:)])", r"\1", out)  # no space before punctuation
+    out = re.sub(r"\n[ \t]+", "\n", out)
+    return out.strip()
+
+
 def _finalize(raw: GeneratedAnswer, evidence: list[EvidenceItem]) -> GeneratedAnswer:
     """The code-level guarantees applied to a raw model answer (shared by every generation strategy):
     an abstention stays an abstention; a citation not present in the evidence is dropped (no fabrication);
-    an answer left with no valid citation is coerced to an abstention (no claim without a citation, FR-Q.6)."""
+    an answer left with no valid citation is coerced to an abstention (no claim without a citation, FR-Q.6);
+    and the answer prose is scrubbed of internal annotations/ids (issue 0001) -- if that leaves no readable
+    prose, abstain rather than return an empty answer."""
     if raw.abstained:
         return _abstain(raw.answer or _ABSTENTION)
     valid_ids = {item.chunk_id for item in evidence}
     citations = [chunk_id for chunk_id in raw.citations if chunk_id in valid_ids]  # drop fabricated
     if not citations:
         return _abstain()  # no valid citation -> abstain (even a PARTIAL needs a citation, FR-Q.6)
-    return GeneratedAnswer(answer=raw.answer, citations=citations, answer_kind=raw.answer_kind)
+    answer = _scrub_prose(raw.answer, evidence)  # keep internal annotations/ids out of the reader's prose
+    if not answer:
+        return _abstain()  # the prose was nothing but annotations -> abstain
+    return GeneratedAnswer(answer=answer, citations=citations, answer_kind=raw.answer_kind)
 
 
 def _answer_prompt(query: str, evidence: list[EvidenceItem]) -> str:

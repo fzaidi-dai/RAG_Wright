@@ -69,6 +69,58 @@ def test_fabricated_citations_are_dropped():
     assert result.citations == ["c1"]  # c99 is not in the evidence -> dropped
 
 
+# --- output hygiene: internal annotations never leak into user-facing prose (engine issue 0001) ---
+
+_CID = "ffe378605789f4540ff1877d1e9f87b6:2:6ff1e26368b002de57829719038499e2ef60057c938df4ef9404aec4c0051eda"
+
+
+def test_prose_scrubbed_of_ids_and_annotations():
+    """GeneratedAnswer.answer is prose for a person: no chunk_id substring, no bracketed annotation groups
+    ([auto-tag]/[confidence]/[dim=value]); citations still carry the id; the real clause quote survives."""
+    ev = [EvidenceItem(
+        chunk_id=_CID,
+        text="[auto-tag: Liquidated Damages] Supplier's total liability shall not exceed the fees paid "
+             "[cap_quantum=12_months; cap_basis=multiple_of_fees]",
+        confidence="AMBIGUOUS")]
+    dirty = GeneratedAnswer(
+        answer=('The cap is the fees paid in the prior twelve months, from the clause "Supplier\'s total '
+                'liability under this Agreement shall not exceed the fees paid". This is tagged '
+                '[auto-tag: Liquidated Damages] with [confidence: AMBIGUOUS] and '
+                f'[cap_quantum=12_months; cap_basis=multiple_of_fees]. [{_CID}]'),
+        citations=[_CID], abstained=False)
+    result = generate_answer("What is the limitation of liability?", ev, model=_StubModel(dirty))
+    assert result.citations == [_CID]                       # the id still lives in `citations`
+    assert _CID not in result.answer                        # ...but never in the prose
+    assert "[auto-tag" not in result.answer
+    assert "[confidence" not in result.answer
+    assert "cap_quantum" not in result.answer
+    assert "[" not in result.answer and "]" not in result.answer  # no annotation groups survive
+    assert "shall not exceed the fees paid" in result.answer      # the real clause quote is kept
+    assert "  " not in result.answer and " ." not in result.answer  # prose stays tidy after removal
+
+
+def test_scrub_preserves_legitimate_bracketed_quote_text():
+    """Only the known annotation formats and the exact evidence ids are stripped -- a legitimately quoted
+    bracket (e.g. a defined term '[Party A]') is not an annotation and must survive."""
+    ev = [EvidenceItem(chunk_id="c1", text="[auto-tag: Definitions] \"[Party A]\" means Acme.")]
+    dirty = GeneratedAnswer(
+        answer='The agreement defines "[Party A]" as Acme. [auto-tag: Definitions]',
+        citations=["c1"], abstained=False)
+    result = generate_answer("Who is Party A?", ev, model=_StubModel(dirty))
+    assert "[Party A]" in result.answer      # a real bracketed quote is kept
+    assert "[auto-tag" not in result.answer  # the annotation is removed
+    assert result.citations == ["c1"]
+
+
+def test_answer_that_is_only_annotations_is_coerced_to_abstention():
+    """If scrubbing an answer leaves no readable prose (it was nothing but annotations/ids), abstain rather
+    than return an empty answer -- consistent with the no-claim-without-a-citation guarantee."""
+    ev = [EvidenceItem(chunk_id="c1", text="[auto-tag: X] body")]
+    dirty = GeneratedAnswer(answer="[auto-tag: X] [c1]", citations=["c1"], abstained=False)
+    result = generate_answer("q", ev, model=_StubModel(dirty))
+    assert result.abstained and result.citations == []
+
+
 def test_model_abstention_is_respected():
     model = _StubModel(GeneratedAnswer(answer="Not stated.", citations=[], abstained=True))
     result = generate_answer("q", _EV, model=model)

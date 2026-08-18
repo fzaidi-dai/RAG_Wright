@@ -38,6 +38,13 @@ without a citation. It is a single grounded reading, not a workflow.
   nothing supports it. (A confident answer built from mistagged evidence is the exact failure to avoid.)
 - **Respect the confidence tag on a graph-derived fact.** When an evidence item carries a `[confidence: ...]`
   tag (EXTRACTED / INFERRED / AMBIGUOUS), weight it accordingly -- do not assert an AMBIGUOUS fact as settled.
+- **The answer is prose for a person; keep the engine's annotations out of it.** The `[auto-tag: TYPE]`,
+  `[confidence: ...]`, `[dimension=value; ...]` and `[Exception ... (inferred)]` markers on an evidence item are
+  **inputs to your judgement, not facts about the contract** -- never repeat, name, quote, or describe them to
+  the reader. Do not write "this is tagged as a Liquidated Damages provision" or "marked with an AMBIGUOUS
+  confidence level"; let those markers shape *how confidently* you answer, then state the substance in plain
+  language. Quote the clause's **real text** when it helps; never quote the annotations. (Citation ids are
+  recorded separately for the reader, so you do not need to spell an id out in the answer prose.)
 - **State a rule together with its inferred exceptions.** When an evidence item is framed as an exception or
   carve-out to another provision (e.g. "[Exception to the liability cap (inferred)] ..."), do not omit it or
   read it as a separate contradictory fact: answer with the rule AND its exceptions in one breath ("capped at
