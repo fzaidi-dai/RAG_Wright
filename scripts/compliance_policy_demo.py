@@ -54,7 +54,7 @@ async def main() -> None:
     log(f"\n[demo] STEP 2: assess {len(subjects)} document(s) against the {n}-requirement policy KG")
     for subj in subjects:
         text = subj.read_text(encoding="utf-8").strip()
-        rep = run_generic_compliance_verdict(
+        rep = await run_generic_compliance_verdict(
             text, subj.stem, store=store, judge_model_id=judge_id, embedder=embedder, k=6)
         breakdown = {k: rep.summary.get(k, 0) for k in ("violation", "needs_review", "compliant")}
         log(f"\n[demo] === {subj.name} ===")

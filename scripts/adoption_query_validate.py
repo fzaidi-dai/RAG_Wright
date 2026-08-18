@@ -11,6 +11,8 @@ end to end (no OpenRouter, no local GPU).
 
 from __future__ import annotations
 
+import asyncio
+
 from dotenv import load_dotenv
 
 
@@ -18,7 +20,7 @@ def _line(s=""):
     print(s, flush=True)
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.contract_kg_serve import clauses_of_function
     from rag_wright.capabilities.dg_extraction import default_extraction_model
@@ -40,7 +42,7 @@ def main() -> None:
         store=store, embedder=embedder, extract_model=extract_model, k=5)
     for q in ["anti-assignment clauses that allow a party to freely assign without consent",
               "cap on liability set at a multiple of the fees paid"]:
-        state = leg_b.invoke({"query": q})  # constraints + functions (parallel) -> retrieve -> assemble
+        state = await leg_b.ainvoke({"query": q})  # constraints + functions (parallel) -> retrieve -> assemble
         _line(f"\n  Q: {q!r}")
         _line(f"     granite constraints: {sorted(state.get('constraints', set()))}")
         _line(f"     routed functions (granite ∪ LegalBERT): {state.get('functions', [])}")
@@ -87,4 +89,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

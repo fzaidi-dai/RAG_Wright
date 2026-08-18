@@ -17,6 +17,7 @@ Capped to a few §255.5 disclosure requirements to sidestep the CC-6 cross-produ
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 from pathlib import Path
@@ -24,7 +25,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
     os.environ.setdefault("ARCADEDB_DATABASE", "ragwright_compliance")
     from rag_wright.capabilities.claim_extraction import claim_extraction
@@ -50,7 +51,7 @@ def main() -> None:
     for i, s in enumerate(samples, 1):
         name = s["file"].replace(".txt", "")
         text = Path(f"data/compliance/subject_samples/{name}.txt").read_text()
-        report = graph.invoke({"subject_text": text, "source_doc": name})["report"]
+        report = (await graph.ainvoke({"subject_text": text, "source_doc": name}))["report"]
         predicted = "violation" if report.summary.get("violation", 0) > 0 else "compliant"
         ok = predicted == s["expected_signal"]
         correct += ok
@@ -61,4 +62,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

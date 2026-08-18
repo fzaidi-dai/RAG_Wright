@@ -21,13 +21,14 @@ runs local or fully on Modal (KG on the rw-arcadedb Volume + Granite/BGE on the 
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
@@ -45,7 +46,7 @@ def main() -> None:
     rows = []
     for i, c in enumerate(gold, 1):
         text = Path(f"data/compliance/gold_cases/{c['id']}.txt").read_text()
-        report = graph.invoke({"subject_text": text, "source_doc": c["id"]})["report"]
+        report = (await graph.ainvoke({"subject_text": text, "source_doc": c["id"]}))["report"]
         s = report.summary
         predicted = report.verdict.value  # RG-5 ad-level rollup: >=2 violations -> violation; else any -> needs_review
         rows.append({**c, "predicted": predicted, "summary": s})
@@ -82,4 +83,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

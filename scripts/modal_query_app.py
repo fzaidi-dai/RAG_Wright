@@ -49,7 +49,6 @@ def _a100_ready() -> bool:
 @modal.asgi_app()
 def query():
     from fastapi import FastAPI, Request
-    from fastapi.concurrency import run_in_threadpool
 
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
@@ -70,10 +69,11 @@ def query():
         except Exception as exc:  # noqa: BLE001
             return {"kg": "error", "detail": str(exc)[:200]}
 
-    def _run(question: str, k: int) -> dict:
+    async def _run(question: str, k: int) -> dict:
         # EC-3 warm-on-request (serverless cold-start UX): a cold check triggers the A100 + returns fast, so the
         # request never exceeds Modal's web-request timeout. The client retries; once warm, the answer is fast.
-        # ADR-0039: "not real-time; first-query warm-up tolerated".
+        # ADR-0039: "not real-time; first-query warm-up tolerated". ASYNC-D1 (ADR-0057): the leg is now async --
+        # ainvoke runs the model nodes on the loop with the true wall-clock deadline (no thread-blocking).
         if not _a100_ready():
             return {"status": "warming",
                     "detail": "the A100 was cold; this request triggered it (~4 min). Retry shortly.",
@@ -82,7 +82,7 @@ def query():
         leg_b = production_typed_property_retrieval(  # ADR-0047: no classifier -- whole-index pool
             store=store, embedder=query_embedder(),
             extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"), k=k)
-        state = leg_b.invoke({"query": question})
+        state = await leg_b.ainvoke({"query": question})
         r = state["retrieval"]
         return {
             "question": question,
@@ -97,7 +97,7 @@ def query():
     @web.post("/query")
     async def q(req: Request):
         body = await req.json()
-        # warm-up + the sync leg run off the event loop (a cold first query may block ~4 min)
-        return await run_in_threadpool(_run, body["question"], int(body.get("k", 5)))
+        # the async leg runs the model nodes on the loop with the true wall-clock deadline (ASYNC-D1)
+        return await _run(body["question"], int(body.get("k", 5)))
 
     return web

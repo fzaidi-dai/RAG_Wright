@@ -16,6 +16,7 @@ Arg selects the leg(s): A (intra_document_qa), Crel (relational_qa, graph-struct
 
 from __future__ import annotations
 
+import asyncio
 import sys
 
 from dotenv import load_dotenv
@@ -25,7 +26,7 @@ def _line(s: str = "") -> None:
     print(s, flush=True)
 
 
-def validate_leg_a() -> None:
+async def validate_leg_a() -> None:
     """A1: intra_document_qa -- (contract_id, question) -> cited GeneratedAnswer, all on the Modal stack."""
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
@@ -47,7 +48,7 @@ def validate_leg_a() -> None:
     question = "How is liability capped in this contract, and under what conditions?"
     _line("=" * 90)
     _line(f"LEG A -- intra_document_qa SUBGRAPH | contract={contract_id} | Q={question!r}")
-    out = leg_a.invoke({"contract_id": contract_id, "question": question})
+    out = await leg_a.ainvoke({"contract_id": contract_id, "question": question})
     ans = out["answer"]
     _line(f"  abstained: {ans.abstained}")
     _line(f"  citations ({len(ans.citations)}): {[c[-16:] for c in ans.citations[:6]]}")
@@ -56,7 +57,7 @@ def validate_leg_a() -> None:
     store.close()
 
 
-def validate_leg_c_rel() -> None:
+async def validate_leg_c_rel() -> None:
     """A2: relational_qa -- GRAPH-STRUCTURAL evidence (cited by source contract, no text_store), on Modal."""
     from rag_wright.capabilities.answer_generator import SeamAnswerModel
     from rag_wright.models.profiles import ModelRole, model_for
@@ -73,7 +74,7 @@ def validate_leg_c_rel() -> None:
     leg = production_relational_qa(store=store, answer_model=SeamAnswerModel(model_for(ModelRole.GENERAL)))
     _line("=" * 90)
     _line(f"LEG C-rel -- relational_qa SUBGRAPH (graph-structural) | start={name!r} ({start})")
-    out = leg.invoke({"query": f"Which parties does {name} contract with?", "start_entity_id": start})
+    out = await leg.ainvoke({"query": f"Which parties does {name} contract with?", "start_entity_id": start})
     ans = out["answer"]
     _line(f"  abstained: {ans.abstained} | citations (contracts): {ans.citations[:6]}")
     _line(f"  answer: {ans.answer.strip()[:400]}")
@@ -81,7 +82,7 @@ def validate_leg_c_rel() -> None:
     store.close()
 
 
-def validate_leg_b() -> None:
+async def validate_leg_b() -> None:
     """Leg B: typed_property_retrieval -- THE corpus-wide function+property retrieval leg (BGE+property pool via
     property_boosted_retrieval). Standardized on this after retiring the redundant cross_corpus_retrieval."""
     from rag_wright.capabilities.dg_extraction import default_extraction_model
@@ -96,7 +97,7 @@ def validate_leg_b() -> None:
     q = "cap on liability set at a multiple of the fees paid"
     _line("=" * 90)
     _line(f"LEG B -- typed_property_retrieval SUBGRAPH | Q={q!r}")
-    results = leg.invoke({"query": q})["retrieval"].results
+    results = (await leg.ainvoke({"query": q}))["retrieval"].results
     _line(f"  -> top {len(results)} cited spans:")
     for r in results[:8]:
         tag = "  [MATCH]" if getattr(r, "matched", False) else ""
@@ -108,12 +109,12 @@ def validate_leg_b() -> None:
 _LEGS = {"A": validate_leg_a, "Crel": validate_leg_c_rel, "B": validate_leg_b}
 
 
-def main() -> None:
+async def main() -> None:
     load_dotenv()
     which = sys.argv[1] if len(sys.argv) > 1 else "A"
     for key in ([which] if which in _LEGS else list(_LEGS)):
-        _LEGS[key]()
+        await _LEGS[key]()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -35,11 +35,20 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (threadpool under ainvoke). Suite 1208 pass. REMAINING async arc:
 >   - B4 (rest): ArcadeDB store reads/writes non-blocking (currently to_thread in aproduction closures; a native
 >     async client is the optional upgrade).
->   - Phase C remaining: C2 (generation gather/best-of-n + query-side remote encoders async). The 4 Tier-1
->     FastMCP handlers are already async (done alongside C1); any remaining MCP servers -> C3.
->   - Phase D (entrypoints + validator/query SCRIPTS, no sync shim -- phase_a_leg_validate / modal_query_app /
->     adoption_query_validate / eval_compliance_gold still call .invoke on now-async graphs; ARD), Phase E
->     (RuleWright FastAPI async, its session). Suite green throughout (main green).
+>   - C2 DECISION (2026-08-19): SKIPPED as largely speculative. The deadline goal is met by C1; generation
+>     strategies (reasoned/best_of_n) are eval-only with NO async caller, and the query-side remote encoders run
+>     in SYNC nodes (threadpool under ainvoke). FOLLOW-UP (logged): the remote BGE encoder's `_post_json`
+>     (remote_encoders.py) uses urllib `timeout=120` = a PER-SOCKET timeout, the SAME slow-drip bug class as
+>     0003; low-risk in practice (embed returns fixed-size JSON in one shot, not a token stream; in a threadpool
+>     so the loop never blocks). Bound it with a true wall-clock deadline IF/WHEN those retrieve nodes ever go
+>     async, or add a lightweight guard. Not worth the cross-module scope expansion now.
+>   - ASYNC-D1 query/validator SCRIPTS DONE (2026-08-19): phase_a_leg_validate (3 legs), compliance_engine_smoke,
+>     eval_compliance_gold, adoption_query_validate, modal_query_app (Modal/FastAPI _run async, dropped the
+>     run_in_threadpool hop), compliance_policy_demo (await run_generic_compliance_verdict) -> async main +
+>     asyncio.run + await ainvoke. Ingestion scripts were already async (B2e). ruff + py_compile clean; not in the
+>     test suite (infra-gated), verified by grep (zero remaining .invoke-on-async-graph) + compile.
+>   - Phase D remaining: engine public async API + ARD (ASYNC-D2). Phase E (RuleWright FastAPI async, its
+>     session). Suite green throughout (main green).
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
