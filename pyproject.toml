@@ -32,6 +32,7 @@ dependencies = [
 dev = [
     "modal>=1.5.3",
     "pytest>=8.0",
+    "pytest-asyncio>=1.4.0",
     "ruff>=0.6",
 ]
 
@@ -45,6 +46,9 @@ packages = ["src/rag_wright"]
 [tool.pytest.ini_options]
 testpaths = ["tests", "eval"]
 pythonpath = ["src", "."]
+# ASYNC-A1 (ADR-0057): the engine is going async; "auto" mode runs an `async def test_*` natively without a
+# per-test marker, so async tests read like sync ones. Sync tests are unaffected.
+asyncio_mode = "auto"
 markers = [
     "model: opt-in live model call via OpenRouter (needs .env); run with -m model",
     "store: opt-in test needing a local ArcadeDB instance; run with -m store",
