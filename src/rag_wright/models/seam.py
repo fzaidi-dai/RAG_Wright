@@ -13,26 +13,55 @@ kwargs into the tool binding, so `extra_body` passed here binds to the structure
 
 from __future__ import annotations
 
+import logging
 import os
+import time
 from typing import Any
 
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_openai import ChatOpenAI
+from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
 
 from rag_wright.models.profiles import profile_for
 
+log = logging.getLogger(__name__)
 
-# Framework-native connection resilience (grounded: ChatOpenAI.max_retries/timeout + Runnable.with_retry;
-# LangChain docs "Connection resilience" / "Fault tolerance"). Retry is configured HERE at the single model
-# construction point (ADR-0006), never hand-rolled at call sites, so every caller inherits it uniformly.
-# `max_retries` covers the OpenAI-native transient errors (429 / 5xx APIStatusError / connection / timeout);
-# the `.with_retry` on the structured runnable additionally catches the transient errors OpenRouter surfaces as
-# a plain ValueError (e.g. a 504 "operation was aborted"), which the status-code retry does not classify. The
-# okf_navigate agent's own model/sub-agent calls are covered separately by ModelRetryMiddleware.
-_MAX_RETRIES = 6  # matches the documented default connection-resilience budget for 5xx/429/network
-_TIMEOUT_S = 120.0  # per-request timeout; OpenRouter can be slow on structured calls
-_STRUCTURED_RETRY_ATTEMPTS = 3  # bounded retries for the OpenRouter-surfaced ValueError transient
-_STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (ValueError,)
+
+# Framework-native connection resilience (grounded: ChatOpenAI.max_retries/timeout + Runnable.with_retry).
+# Retry is configured HERE at the single model construction point (ADR-0006), never hand-rolled at call sites.
+#
+# FREE-TEXT / plain build_model: the OpenAI SDK's own retry loop (max_retries) is the single layer, covering the
+# native transients (429 / 5xx APIStatusError / connection / timeout), with the SDK's exponential backoff and
+# Retry-After (429) handling intact. The okf_navigate agent's own model/sub-agent calls are covered separately
+# by ModelRetryMiddleware.
+#
+# Bounded worst case (engine issue 0003 / ADR-0056): a persistent upstream stall makes each attempt hit the
+# per-request timeout, then the SDK retries -- so the worst case is timeout x (max_retries + 1). At the old
+# 120 x 7 that was ~14 min of idle-socket waiting (indistinguishable from a hang) on ANY free-text call
+# (generation, reasoning, the ADR-0045 tag-parse structured path, vision-to-text, RLM chunk/synthesis). Bounded
+# to 90 x 3 = 270s (~4.5 min): max_retries back to the SDK's own default of 2, timeout tightened but kept
+# generous enough for legitimately longer free-text prose. (Unlike the structured path, the SDK loop stays, so
+# its Retry-After handling is preserved -- there is no trade-off here.)
+_MAX_RETRIES = 2  # SDK connection-resilience budget for 5xx/429/network on plain (free-text) calls (SDK default)
+_TIMEOUT_S = 90.0  # per-request timeout for a plain call (a hang fails at 90s; worst case = 90 x (2+1) = 270s)
+#
+# STRUCTURED build_structured: ONE bounded retry layer, not two stacked (engine issue 0003 / ADR-0056). Before,
+# build_structured wrapped `.with_retry` (3 attempts) AROUND a client that ALSO retried at the SDK (max_retries
+# 6), so one logical structured call had a worst case of timeout x 6 x 3 = ~36 min -- long enough to look like a
+# hang and to hold a synchronous single-doc ingest past any acceptable bound (NFR-1). Now the SDK loop is
+# disabled for structured calls (max_retries=0) and the LangChain `.with_retry` is the SOLE layer, so the worst
+# case is timeout x attempts = 60 x 3 = 180s, and the classifier's degrade path (empty sub-batch on exception)
+# is reachable in ~3 min instead of ~36. TRADE-OFF: disabling the SDK loop loses its Retry-After (429) header
+# handling; the tenacity exponential-jitter backoff on `.with_retry` substitutes for it (a documented, accepted
+# substitution -- exponential-jitter backoff spaces out 429/5xx retries in its place).
+_STRUCTURED_TIMEOUT_S = 60.0  # per-request timeout for a structured call (a hang fails here, not at 120s)
+_STRUCTURED_RETRY_ATTEMPTS = 3  # the SOLE retry layer for structured calls; worst case ~= 60 x 3 = 180s
+_STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (
+    # OpenRouter surfaces a 504 "operation was aborted" as a plain ValueError the status-code retry cannot
+    # classify; the SDK transients are included here too because the SDK no longer retries them for structured
+    # calls (this `.with_retry` is now the only layer that will).
+    ValueError, APITimeoutError, APIConnectionError, RateLimitError, InternalServerError,
+)
 
 
 def _openrouter_config() -> dict[str, Any]:
@@ -120,7 +149,8 @@ def build_structured(
 
     The profile supplies the method and the optional structured-only `extra_body`; the `extra_body`
     is bound to this forced structured call only. This is the sole path to `with_structured_output`. The
-    runnable is wrapped with `.with_retry` so the OpenRouter-504-as-ValueError transient is retried (bounded).
+    runnable is wrapped in a SINGLE bounded retry layer (`_with_bounded_retry`); the SDK's own retry loop is
+    disabled here (max_retries=0) so the two do not stack into a ~36 min worst case (engine issue 0003 / ADR-0056).
 
     `temperature` defaults to 0 (deterministic-intent); a caller doing best-of-N self-consistency raises it
     to sample GENUINELY diverse structured completions (the base client's temperature, not a provider flag).
@@ -134,9 +164,35 @@ def build_structured(
     structured_extra = {**(profile.structured_extra_body or {}), **_provider_pin()}
     if structured_extra:
         kwargs["extra_body"] = structured_extra
-    overrides: dict[str, Any] = {"max_tokens": max_tokens} if max_tokens is not None else {}
-    runnable = build_model(model_id, temperature=temperature, **overrides).with_structured_output(schema, **kwargs)
-    return runnable.with_retry(
+    # ONE retry layer for structured calls (engine issue 0003 / ADR-0056): disable the SDK's own retry loop
+    # (max_retries=0) and use a tighter per-request timeout, so `_with_bounded_retry` is the sole, bounded layer
+    # (worst case = timeout x attempts, not multiplied by the SDK budget).
+    overrides: dict[str, Any] = {"max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S}
+    if max_tokens is not None:
+        overrides["max_tokens"] = max_tokens
+    inner = build_model(model_id, temperature=temperature, **overrides).with_structured_output(schema, **kwargs)
+    return _with_bounded_retry(inner, model_id)
+
+
+def _with_bounded_retry(runnable: Runnable, model_id: str) -> Runnable:
+    """Wrap a structured runnable in the SINGLE bounded retry layer (engine issue 0003 / ADR-0056): log each
+    failed attempt (elapsed + exception type) so a retrying call is visibly working rather than a silent hang,
+    then let `.with_retry` apply bounded, exponential-jitter backoff over the transient set. This is the ONLY
+    retry layer for structured calls -- the SDK's own loop is disabled (max_retries=0 in `build_structured`) --
+    so the worst-case wall clock is `_STRUCTURED_TIMEOUT_S x _STRUCTURED_RETRY_ATTEMPTS`, never multiplied by the
+    SDK budget. The exponential-jitter backoff also substitutes for the SDK's lost Retry-After (429) handling."""
+
+    def _attempt(x: Any) -> Any:
+        start = time.monotonic()
+        try:
+            return runnable.invoke(x)
+        except Exception as exc:  # noqa: BLE001 - log the transient, then re-raise for the bounded retry above
+            log.warning(
+                "structured call to %s failed after %.1fs (%s); retrying within the %d-attempt budget",
+                model_id, time.monotonic() - start, type(exc).__name__, _STRUCTURED_RETRY_ATTEMPTS)
+            raise
+
+    return RunnableLambda(_attempt).with_retry(
         retry_if_exception_type=_STRUCTURED_RETRY_ON,
         wait_exponential_jitter=True,
         stop_after_attempt=_STRUCTURED_RETRY_ATTEMPTS,

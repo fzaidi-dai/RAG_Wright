@@ -32,12 +32,17 @@ class _FakeStructured:
 
 
 class _FakeChatOpenAI:
+    # build_structured now returns a bounded-retry wrapper around the structured handle (ADR-0056), not the
+    # handle itself, so capture the last-built handle here for inspection.
+    last_structured: "_FakeStructured | None" = None
+
     def __init__(self, **kwargs):
         self.ctor_kwargs = kwargs
 
     def with_structured_output(self, schema, **kwargs):
         self.structured_kwargs = kwargs
-        return _FakeStructured(self, schema, kwargs)
+        _FakeChatOpenAI.last_structured = _FakeStructured(self, schema, kwargs)
+        return _FakeChatOpenAI.last_structured
 
 
 @pytest.fixture(autouse=True)
@@ -128,13 +133,14 @@ def test_structured_only_extra_body_binds_to_structured_call_not_base(monkeypatc
     )
     monkeypatch.setitem(profiles.PROFILES, "vendor/reasoner", profile)
 
-    runnable = seam.build_structured("vendor/reasoner", _Schema)
+    seam.build_structured("vendor/reasoner", _Schema)
+    structured = _FakeChatOpenAI.last_structured
 
     # the extra_body reached the forced structured call...
-    assert runnable.kwargs["method"] == "function_calling"
-    assert runnable.kwargs["extra_body"] == {"reasoning": {"enabled": False}}
+    assert structured.kwargs["method"] == "function_calling"
+    assert structured.kwargs["extra_body"] == {"reasoning": {"enabled": False}}
     # ...and never the base client (free-text / reasoning calls are unaffected).
-    assert "extra_body" not in runnable.base.ctor_kwargs
+    assert "extra_body" not in structured.base.ctor_kwargs
 
 
 def test_no_extra_body_kwarg_when_profile_has_none(monkeypatch):
@@ -147,9 +153,10 @@ def test_no_extra_body_kwarg_when_profile_has_none(monkeypatch):
         profiles.PROFILES, "vendor/plain",
         ModelProfile(model_id="vendor/plain", structured_method="function_calling"),
     )
-    runnable = seam.build_structured("vendor/plain", _Schema)
-    assert "extra_body" not in runnable.kwargs
-    assert runnable.kwargs["method"] == "function_calling"
+    seam.build_structured("vendor/plain", _Schema)
+    structured = _FakeChatOpenAI.last_structured
+    assert "extra_body" not in structured.kwargs
+    assert structured.kwargs["method"] == "function_calling"
 
 
 # --- base extra_body (provider routing, ADR-0027): binds to the BASE client, every call --------
@@ -180,8 +187,8 @@ def test_build_model_uses_openrouter_base_and_key_no_hardcoded_flag(monkeypatch)
 
 
 def test_build_structured_forwards_include_raw(monkeypatch):
-    runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema, include_raw=True)
-    assert runnable.kwargs["include_raw"] is True
+    seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema, include_raw=True)
+    assert _FakeChatOpenAI.last_structured.kwargs["include_raw"] is True
 
 
 def test_build_model_sets_connection_resilience_retry_and_timeout():
@@ -192,9 +199,14 @@ def test_build_model_sets_connection_resilience_retry_and_timeout():
     assert seam.build_model("vendor/whatever", max_retries=0).ctor_kwargs["max_retries"] == 0
 
 
-def test_build_structured_wraps_with_bounded_retry():
+def test_build_structured_wraps_with_one_bounded_retry_layer():
+    # engine issue 0003 / ADR-0056: exactly ONE bounded retry layer, and the SDK's own loop disabled so the two
+    # cannot stack into a ~36 min worst case.
     runnable = seam.build_structured(profiles.model_for(ModelRole.GENERAL), _Schema)
-    # the structured runnable is wrapped with a bounded retry that catches the OpenRouter-504-as-ValueError
-    assert runnable.retry_kwargs is not None
-    assert ValueError in runnable.retry_kwargs["retry_if_exception_type"]
-    assert runnable.retry_kwargs["stop_after_attempt"] == seam._STRUCTURED_RETRY_ATTEMPTS
+    # the single retry layer catches the OpenRouter-504-as-ValueError and stops after the bounded attempt count
+    assert ValueError in runnable.retry_exception_types
+    assert runnable.max_attempt_number == seam._STRUCTURED_RETRY_ATTEMPTS
+    # ...and the SDK's own retry loop is OFF for structured calls, with a tighter per-request timeout
+    base = _FakeChatOpenAI.last_structured.base
+    assert base.ctor_kwargs["max_retries"] == 0
+    assert base.ctor_kwargs["timeout"] == seam._STRUCTURED_TIMEOUT_S
