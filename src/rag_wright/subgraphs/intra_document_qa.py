@@ -72,21 +72,25 @@ def _clause_confidence(properties: list[CitedProperty]) -> Optional[str]:
     return None
 
 
-def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> EvidenceItem:
+def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> Optional[EvidenceItem]:
     """One cited evidence item: the clause's REAL span text (when rehydrated) with its typed facts appended,
-    cited by `clause_id`, confidence surfaced. A property-less clause with no span text cites its function."""
+    cited by `clause_id`, confidence surfaced.
+
+    Engine issue 0002 / ADR-0054: the KG-assigned function label is NOT put in the evidence text. It is
+    generation-only, not load-bearing for the SKILL's judge-by-actual-text method (the model verifies the TEXT
+    against the QUESTION, not the label), and its presence in the evidence was the source of the auto-tag
+    paraphrase leak -- a sometimes-wrong classification narrated to the reader in the engine's voice. Retrieval
+    and routing use `clause.function` directly, so removing the label here changes only what the generator sees.
+
+    A clause with no span text AND no typed facts is contentless -- there is nothing to ground a citation on --
+    so it is DROPPED (returns None), rather than cited by a bare function label (superseding PREC-1a's fallback)."""
     facts = "; ".join(f"{p.dimension}={p.value}" for p in clause.properties)
-    # PREC-1a (a): present the KG-assigned function as an AUTO-TAG to verify, NOT an asserted fact prefix
-    # ("Cap On Liability: <force-majeure text>"). A mislabeled clause no longer tells the generator it IS that
-    # type; the generation SKILL teaches the model to judge each item by its actual text (and hedge/abstain when
-    # the text does not instantiate the concept asked). One-place framing; the silver fixture mirrors it.
-    tag = f"[auto-tag: {clause.function}]"
     if body:
-        text = f"{tag} {body}" + (f" [{facts}]" if facts else "")
+        text = body + (f" [{facts}]" if facts else "")
     elif facts:
-        text = f"{tag} {facts}"  # no span text (property-less path): the typed facts stand in
+        text = f"[{facts}]"  # no span text (property-less path): the typed facts stand in
     else:
-        text = tag
+        return None  # contentless: no span text, no facts -> not citable -> drop
     if clause.exception_of:
         # ADR-0044: an INFERRED carve-out/exception to a cap clause -> frame it as such and surface INFERRED
         # confidence, so the generator answers "capped, EXCEPT ..." and treats it as inferred, never a hard claim.
@@ -190,7 +194,9 @@ def build_intra_document_qa(
                     return {"dead_letter": dead_letter(
                         "clause_text_rehydration_failed", contract_id=contract_id, error=str(exc))}
                 raise TransientExtraction(str(exc)) from exc
-        return {"evidence": [_clause_to_evidence(c, texts.get(c.clause_id)) for c in clauses]}
+        # drop contentless clauses (no span text, no facts) -> None (engine issue 0002 / ADR-0054)
+        evidence = [ev for c in clauses if (ev := _clause_to_evidence(c, texts.get(c.clause_id))) is not None]
+        return {"evidence": evidence}
 
     def generate(state: IntraDocumentQAState) -> IntraDocumentQAState:
         with business_span("intra_document_qa.generate"):

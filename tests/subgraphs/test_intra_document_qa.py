@@ -95,15 +95,18 @@ def test_real_clause_text_and_typed_facts_and_worst_case_confidence_in_evidence(
     assert item.confidence == "AMBIGUOUS"  # worst-case provenance surfaced (FR-S.4)
 
 
-def test_property_less_clause_cites_its_function_label():
+def test_property_less_clause_with_no_text_is_dropped():
+    # engine issue 0002 / ADR-0054: a clause with no span text AND no typed facts is contentless -- nothing to
+    # ground a citation on -- so it is dropped from evidence (it previously cited a bare function label). With it
+    # the only clause, the generator abstains.
     clauses = [_clause("k:0:h", "Governing Law", [])]  # no properties -> no span text
     generate, seen = _capturing_generate()
     graph = build_intra_document_qa(_StubServe(clauses), _clause_text({}), generate, retry_policy=_FAST_RETRY)
 
     out = graph.invoke({"contract_id": "k", "question": "q"})
 
-    assert seen["evidence"][0].text == "[auto-tag: Governing Law]"  # falls back to the auto-tag, no crash
-    assert out["answer"].citations == ["k:0:h"]
+    assert seen["evidence"] == []  # contentless clause dropped, not cited by a bare label
+    assert out["answer"].abstained and out["answer"].citations == []  # nothing to cite -> abstain
 
 
 def test_orphan_span_dead_letters_without_fabricating_or_crashing():
@@ -224,15 +227,37 @@ def test_attach_marks_an_already_served_uncapped_clause_and_does_not_duplicate()
     assert next(c for c in out if c.clause_id == "C:6:h").exception_of == "C:5:h"
 
 
-def test_clause_evidence_frames_function_as_an_auto_tag_not_an_asserted_fact():
-    # PREC-1a (a): the KG function is a to-verify auto-tag, never a bare asserted prefix ("Cap On Liability: ...")
+def test_clause_evidence_is_span_text_without_the_function_label():
+    # engine issue 0002 / ADR-0054: the KG function label is generation-only and is NOT placed in the evidence
+    # text (it was the source of the auto-tag paraphrase leak; the SKILL judges by actual text, not the label).
+    # Evidence is the clause's real span text -- no "[auto-tag: ...]" prefix and no asserted "Function: ..." one.
     from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
 
     c = CitedClause(contract_id="C", clause_id="C:7:h", function="Cap On Liability", span_id="s7")
     ev = _clause_to_evidence(c, "the Company shall not be liable for acts of God")
-    assert ev.text.startswith("[auto-tag: Cap On Liability]")  # framed as a guess to verify
-    assert "the Company shall not be liable for acts of God" in ev.text  # the real text stands on its own
-    assert not ev.text.startswith("Cap On Liability:")  # NOT asserted as fact
+    assert ev is not None
+    assert ev.text == "the Company shall not be liable for acts of God"  # just the real text
+    assert "auto-tag" not in ev.text and "Cap On Liability" not in ev.text  # no function label at all
+
+
+def test_clause_evidence_facts_only_has_no_function_label():
+    # facts-only path (no span text): the typed facts stand in, bracketed, still without the function label.
+    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+
+    c = CitedClause(contract_id="C", clause_id="C:8:h", function="Cap On Liability", span_id="s8",
+                    properties=[CitedProperty(dimension="cap_quantum", value="$500,000", edge_type="HAS",
+                                              confidence="EXTRACTED", span_id="s8")])
+    ev = _clause_to_evidence(c, None)
+    assert ev is not None
+    assert ev.text == "[cap_quantum=$500,000]" and "auto-tag" not in ev.text
+
+
+def test_clause_evidence_contentless_returns_none():
+    # no span text and no facts -> nothing citable -> dropped (returns None).
+    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+
+    c = CitedClause(contract_id="C", clause_id="C:9:h", function="Governing Law", span_id="s9")
+    assert _clause_to_evidence(c, None) is None
 
 
 def test_exception_clause_evidence_is_framed_and_tagged_inferred():
