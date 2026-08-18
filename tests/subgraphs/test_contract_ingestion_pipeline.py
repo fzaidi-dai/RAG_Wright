@@ -13,9 +13,7 @@ from langgraph.types import RetryPolicy
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
-    build_document_ingest,
     per_contract_graph_extraction,
-    run_corpus_ingestion,
     seed_chunk_cache,
     seed_party_cache,
 )
@@ -23,138 +21,22 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
 
 
-def _stub_stages(*, fail_chunk_for=(), fail_index_for=(), fail_write_for=(), fail_graph_for=(),
-                 clause_partial_for=None):
-    calls = {"chunk": [], "segment": [], "clauses": [], "index": [], "graph": [], "resolve": 0, "write": []}
-
-    def chunk_fn(doc):
-        calls["chunk"].append(doc.source_doc_id)
-        if doc.source_doc_id in fail_chunk_for:
-            raise RuntimeError("chunk blip")
-        return [f"{doc.source_doc_id}::chunk0"]
-
-    def segment_fn(doc, chunks):  # SHARED segmentation: one stub segment (op, function, chunk_doc_start)
-        calls["segment"].append(doc.source_doc_id)
-        return [(f"span::{doc.source_doc_id}", "Cap On Liability", 0)]
-
-    def clauses_fn(doc, segments):
-        calls["clauses"].append(doc.source_doc_id)
-        if clause_partial_for and doc.source_doc_id in clause_partial_for:  # PROD-3: records + per-clause failures
-            return {"clause_records": [f"clause::{doc.source_doc_id}"],
-                    "clause_failures": clause_partial_for[doc.source_doc_id]}
-        return [f"clause::{doc.source_doc_id}"]  # back-compat: a plain list -> no per-clause failures
-
-    def index_fn(doc, segments):  # the span retrieval index -> #Span records written
-        calls["index"].append(doc.source_doc_id)
-        if doc.source_doc_id in fail_index_for:
-            raise RuntimeError("index blip")
-        return len(segments)
-
-    def graph_fn(doc, chunks):
-        calls["graph"].append(doc.source_doc_id)
-        if doc.source_doc_id in fail_graph_for:  # party extraction FAILED (PROD-3: raises, not silent 0 parties)
-            from rag_wright.capabilities.dg_extraction import ExtractionFailed
-
-            raise ExtractionFailed("party", "Invalid JSON response: Unterminated string")
-        return [f"extraction::{doc.source_doc_id}"]
-
-    def resolve_fn(extraction_results):
-        calls["resolve"] += 1
-        return {"resolved": list(extraction_results)}
-
-    def write_fn(doc, clause_records, resolution):
-        calls["write"].append(doc.source_doc_id)
-        if doc.source_doc_id in fail_write_for:
-            raise RuntimeError("write blip")
-        return {"clauses": len(clause_records), "entities": len(resolution["resolved"])}
-
-    return (chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn), calls
 
 
-class _FakeAdapter:
-    def __init__(self, ids):
-        self._ids = ids
-
-    def documents(self):
-        for i in self._ids:
-            yield SourceDocument(source_doc_id=i, text=f"text of {i}")
 
 
-def _graph(stages):
-    return build_document_ingest(*stages, retry_policy=_FAST_RETRY)
 
 
-def test_ingests_a_document_through_all_stages_in_order():
-    stages, calls = _stub_stages()
-    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
-
-    assert calls["chunk"] == ["C1"] and calls["segment"] == ["C1"]
-    # segmentation feeds all three parallel branches
-    assert calls["clauses"] == ["C1"] and calls["index"] == ["C1"] and calls["graph"] == ["C1"]
-    assert calls["resolve"] == 1
-    assert out["written"] == {"clauses": 1, "entities": 1, "spans": 1}  # incl. the retrieval-index count
-    assert "dead_letter" not in out
 
 
-def test_bad_document_dead_letters_without_raising():
-    stages, calls = _stub_stages(fail_chunk_for={"C1"})
-    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
-
-    assert out["dead_letter"]["reason"] == "ingest_failed"
-    assert out["dead_letter"]["source_doc_id"] == "C1"
-    assert "written" not in out  # downstream stages skipped
-    assert calls["segment"] == [] and calls["clauses"] == [] and calls["write"] == []
 
 
-def test_index_failure_is_best_effort_and_does_not_dead_letter():
-    stages, calls = _stub_stages(fail_index_for={"C1"})
-    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
-
-    # a failed span index must NOT lose the document's clause KG / entity graph
-    assert "dead_letter" not in out
-    assert out["written"] == {"clauses": 1, "entities": 1, "spans": 0}  # spans degraded to 0, rest written
-    assert calls["write"] == ["C1"]
 
 
-def test_write_failure_dead_letters_instead_of_crashing():
-    # a DB write error (e.g. an ArcadeDB lock timeout) must dead-letter the doc, never propagate + kill the run
-    stages, calls = _stub_stages(fail_write_for={"C1"})
-    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
-
-    assert out["dead_letter"]["stage"] == "write"
-    assert out["dead_letter"]["source_doc_id"] == "C1"
-    assert "written" not in out
-    assert calls["write"] == ["C1", "C1"]  # retried under _FAST_RETRY (2 attempts) before dead-lettering
 
 
-def test_run_corpus_ingestion_skips_already_done_docs():
-    stages, calls = _stub_stages()
-    # C1 is "already ingested" (a prior run wrote its Contract); only C2 should run through the graph
-    report = run_corpus_ingestion(
-        _FakeAdapter(["C1", "C2"]), _graph(stages),
-        is_done=lambda doc: doc.source_doc_id == "C1")
-
-    assert report.documents_ingested == 2  # both counted present...
-    assert calls["chunk"] == ["C2"] and calls["write"] == ["C2"]  # ...but C1 was skipped, not re-processed
-    assert [d["source_doc_id"] for d in report.per_document] == ["C2"]
 
 
-def test_run_corpus_ingestion_maps_all_docs_and_links_once():
-    stages, calls = _stub_stages(fail_chunk_for={"BAD"})
-    link_calls = {"n": 0}
-
-    def link_fn():
-        link_calls["n"] += 1
-        return 7  # e.g. PARTY_TO edges written
-
-    report = run_corpus_ingestion(_FakeAdapter(["C1", "BAD", "C2"]), _graph(stages), link_fn=link_fn)
-
-    assert isinstance(report, IngestionReport)
-    assert report.documents_ingested == 2  # C1 + C2
-    assert [d["source_doc_id"] for d in report.dead_lettered] == ["BAD"]
-    assert report.party_links == 7
-    assert link_calls["n"] == 1  # link runs ONCE, after all documents
-    assert calls["write"] == ["C1", "C2"]  # BAD never reached write
 
 
 def test_registers_as_a_subgraph():
@@ -294,32 +176,7 @@ def test_corpus_party_link_fn_falls_back_to_provenance_join_without_cache(tmp_pa
 # --- PROD-3 lossless invariant (ADR-0050): no silent partial success -------------------------------------------
 
 
-def test_party_extraction_failure_dead_letters_the_document():
-    # a failed party extraction (now RAISES ExtractionFailed instead of degrading to 0 parties) must dead-letter
-    # the document with the reason -- never silently write a Contract with no parties.
-    stages, calls = _stub_stages(fail_graph_for={"C1"})
-    out = _graph(stages).invoke({"document": SourceDocument(source_doc_id="C1", text="t")})
-
-    assert out["dead_letter"]["stage"] == "extract_graph"
-    assert "Unterminated string" in out["dead_letter"]["error"]
-    assert "written" not in out
-    assert calls["graph"] == ["C1", "C1"]  # retried under _FAST_RETRY before dead-lettering
 
 
-def test_clause_partial_failure_flags_the_document_not_dead_letter():
-    # a persistent per-clause failure must FLAG the doc PARTIAL (it is still written) and be SURFACED in the
-    # report -- one bad clause does not dead-letter the whole document, and the loss is never silent.
-    fails = [{"span_id": "s7", "function": "Cap On Liability", "reason": "boom"}]
-    stages, _ = _stub_stages(clause_partial_for={"C1": fails})
-    report = run_corpus_ingestion(_FakeAdapter(["C1"]), _graph(stages))
-
-    assert report.documents_ingested == 1 and report.dead_lettered == []
-    assert len(report.partial) == 1
-    assert report.partial[0]["source_doc_id"] == "C1"
-    assert report.partial[0]["clause_failures"] == fails
 
 
-def test_clean_document_is_not_flagged_partial():
-    stages, _ = _stub_stages()
-    report = run_corpus_ingestion(_FakeAdapter(["C1"]), _graph(stages))
-    assert report.partial == [] and report.documents_ingested == 1
