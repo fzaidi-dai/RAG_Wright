@@ -131,14 +131,16 @@ class _FakeStructured:
 def test_discoverer_applies_repair_to_a_garbage_model_partition():
     # model returns an overlapping + out-of-range mess; the discoverer must still hand chunk() a valid partition
     garbage = [BoundarySpan(start_index=0, end_index=8), BoundarySpan(start_index=3, end_index=20)]
-    disc = SingleCallBoundaryDiscoverer(model_id="fake", structured_factory=lambda _m, _s: _FakeStructured(garbage))
+    disc = SingleCallBoundaryDiscoverer(model_id="fake",
+                                        structured_factory=lambda _m, _s, **_kw: _FakeStructured(garbage))
     spans = disc.discover(_doc(10))
     assert _pairs(spans) == [(0, 2), (3, 9)]  # start 3 the only in-range break
     assert _is_valid_partition(spans, 10)
 
 
 def test_discoverer_empty_document_returns_no_spans():
-    disc = SingleCallBoundaryDiscoverer(model_id="fake", structured_factory=lambda _m, _s: _FakeStructured([]))
+    disc = SingleCallBoundaryDiscoverer(model_id="fake",
+                                        structured_factory=lambda _m, _s, **_kw: _FakeStructured([]))
     assert disc.discover(_doc(0)) == []
 
 

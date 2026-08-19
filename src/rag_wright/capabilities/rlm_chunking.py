@@ -273,11 +273,14 @@ class SingleCallBoundaryDiscoverer:
         body = "\n".join(f"[{it['index']}] {it['text'][:140]}" for it in items)
         return _SINGLE_CALL_PROMPT.format(n=n, last=n - 1, body=body), n
 
+    # ADR-0058 side-fix (issue 0004): name the stage so a deadline warning says WHICH call was cancelled.
+    _STAGE = "semantic_chunking.discover"
+
     def discover(self, document) -> list[BoundarySpan]:
         prompt, n = self._prompt(document)
         if prompt is None:
             return []
-        out = self._factory(self._model_id, _BoundaryList).invoke(prompt)
+        out = self._factory(self._model_id, _BoundaryList, label=self._STAGE).invoke(prompt)
         return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
 
     async def adiscover(self, document) -> list[BoundarySpan]:
@@ -285,7 +288,7 @@ class SingleCallBoundaryDiscoverer:
         prompt, n = self._prompt(document)
         if prompt is None:
             return []
-        out = await self._factory(self._model_id, _BoundaryList).ainvoke(prompt)
+        out = await self._factory(self._model_id, _BoundaryList, label=self._STAGE).ainvoke(prompt)
         return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
 
 

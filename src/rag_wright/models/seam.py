@@ -166,7 +166,7 @@ def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) ->
 
 def build_structured(
     model_id: str, schema: Any, *, include_raw: bool = False, temperature: float = 0.0,
-    max_tokens: int | None = None,
+    max_tokens: int | None = None, label: str | None = None,
 ) -> Runnable:
     """A structured-output runnable for `model_id`, driven by its profile.
 
@@ -200,21 +200,33 @@ def build_structured(
     sync_runnable = _with_bounded_retry(inner, model_id)
 
     async def _adeadline(x: Any) -> Any:
-        return await _ainvoke_bounded(inner, x, model_id)
+        return await _ainvoke_bounded(inner, x, model_id, label)
 
     return RunnableLambda(sync_runnable.invoke, afunc=_adeadline)
 
 
-async def _bounded_deadline(make_awaitable: Callable[[], Awaitable[Any]], model_id: str) -> Any:
+def _call_desc(model_id: str, label: str | None) -> str:
+    """The model-call description used in the deadline/retry warnings + the timeout message. ADR-0058 side-fix
+    (issue 0004): include the STAGE/call-site (`label`) when the caller supplies it, so a timeout names WHICH
+    stage was cancelled (e.g. `granite-4.1-8b for semantic_chunking.discover`), not just the model."""
+    return f"{model_id} for {label}" if label else model_id
+
+
+async def _bounded_deadline(
+    make_awaitable: Callable[[], Awaitable[Any]], model_id: str, label: str | None = None
+) -> Any:
     """Run an async model operation under the single bounded retry layer AND a true total wall-clock deadline
     (ADR-0057). `make_awaitable` is a factory returning a FRESH awaitable per attempt (a coroutine is single-use).
-    Shared by the structured `.ainvoke` path and the free-text `astream` path.
+    Shared by the structured `.ainvoke` path and the free-text `astream` path. `label` names the call-site/stage
+    in the warnings (ADR-0058, issue 0004 side-fix).
 
     Bounded transient retries (the `_STRUCTURED_RETRY_ON` set) with per-attempt logging and exponential-jitter
     backoff, ALL under one `asyncio.timeout(_MODEL_DEADLINE_S)`. A slow-drip or connection-alive stall that a
     per-socket-op timeout never catches is CANCELLED at the deadline -- `asyncio.timeout` delivers CancelledError
     into the awaited call, httpx closes the socket -- and surfaces as a terminal `ModelCallTimeout`. Retry sleeps
     count against the same budget, so the total is bounded regardless of how it is spent."""
+    desc = _call_desc(model_id, label)
+
     async def _run() -> Any:
         for attempt in range(1, _STRUCTURED_RETRY_ATTEMPTS + 1):
             start = time.monotonic()
@@ -222,7 +234,7 @@ async def _bounded_deadline(make_awaitable: Callable[[], Awaitable[Any]], model_
                 return await make_awaitable()
             except _STRUCTURED_RETRY_ON as exc:
                 log.warning("model call to %s failed after %.1fs (%s); retry %d/%d",
-                            model_id, time.monotonic() - start, type(exc).__name__,
+                            desc, time.monotonic() - start, type(exc).__name__,
                             attempt, _STRUCTURED_RETRY_ATTEMPTS)
                 if attempt >= _STRUCTURED_RETRY_ATTEMPTS:
                     raise
@@ -233,13 +245,13 @@ async def _bounded_deadline(make_awaitable: Callable[[], Awaitable[Any]], model_
             return await _run()
     except TimeoutError as exc:
         log.warning("model call to %s exceeded the %.0fs total wall-clock deadline; cancelled",
-                    model_id, _MODEL_DEADLINE_S)
-        raise ModelCallTimeout(f"model call to {model_id} exceeded {_MODEL_DEADLINE_S}s deadline") from exc
+                    desc, _MODEL_DEADLINE_S)
+        raise ModelCallTimeout(f"model call to {desc} exceeded {_MODEL_DEADLINE_S}s deadline") from exc
 
 
-async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str) -> Any:
+async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str, label: str | None = None) -> Any:
     """The structured async path: `.ainvoke` under the shared bounded retry + total deadline (ADR-0057)."""
-    return await _bounded_deadline(lambda: runnable.ainvoke(x), model_id)
+    return await _bounded_deadline(lambda: runnable.ainvoke(x), model_id, label)
 
 
 # Idle-between-chunks guard for streamed free-text (ADR-0057, ASYNC-A3): if no chunk arrives within this window
@@ -249,7 +261,7 @@ _STREAM_CHUNK_TIMEOUT_S = 60.0
 
 
 async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
-                       max_tokens: int | None = None) -> str:
+                       max_tokens: int | None = None, label: str | None = None) -> str:
     """Free-text generation via streaming (ADR-0057, ASYNC-A3). Streams with `stream_chunk_timeout` for precise
     idle-drip detection, the total `asyncio.timeout` deadline for the whole call, and the bounded transient
     retries -- accumulating the streamed chunks into the full text (the same value
@@ -266,7 +278,7 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
             parts.append(str(chunk.content))
         return "".join(parts)
 
-    return await _bounded_deadline(_consume, model_id)
+    return await _bounded_deadline(_consume, model_id, label)
 
 
 def _with_bounded_retry(runnable: Runnable, model_id: str) -> Runnable:

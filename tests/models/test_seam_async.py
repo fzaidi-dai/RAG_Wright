@@ -50,6 +50,38 @@ async def test_each_failed_attempt_is_logged(monkeypatch, caplog):
     assert any("modelX" in rec.getMessage() and "failed" in rec.getMessage() for rec in caplog.records)
 
 
+async def test_deadline_warning_and_timeout_name_the_stage_label(monkeypatch, caplog):
+    # ADR-0058 side-fix (issue 0004): when the caller supplies a stage label, the deadline warning AND the
+    # ModelCallTimeout message name WHICH stage was cancelled -- not just the model id.
+    monkeypatch.setattr(seam, "_MODEL_DEADLINE_S", 0.05)
+    r = FakeAsyncRunnable(stall_s=5.0)
+    with caplog.at_level("WARNING"):
+        with pytest.raises(ModelCallTimeout) as ei:
+            await _ainvoke_bounded(r, "x", "modelX", "semantic_chunking.discover")
+    assert "semantic_chunking.discover" in str(ei.value)  # the terminal message names the stage
+    assert any("semantic_chunking.discover" in rec.getMessage() and "deadline" in rec.getMessage()
+               for rec in caplog.records)  # the cancelled-warning names the stage
+
+
+async def test_retry_warning_names_the_stage_label(monkeypatch, caplog):
+    monkeypatch.setattr(seam, "_backoff_s", lambda _a: 0.0)
+    monkeypatch.setattr(seam, "_STRUCTURED_RETRY_ATTEMPTS", 1)
+    r = FakeAsyncRunnable(raises=ValueError("boom"))
+    with caplog.at_level("WARNING"):
+        with pytest.raises(ValueError):
+            await _ainvoke_bounded(r, "x", "modelX", "some.stage")
+    assert any("some.stage" in rec.getMessage() and "failed" in rec.getMessage() for rec in caplog.records)
+
+
+async def test_no_label_warning_is_unchanged_backward_compatible(monkeypatch, caplog):
+    monkeypatch.setattr(seam, "_MODEL_DEADLINE_S", 0.05)
+    r = FakeAsyncRunnable(stall_s=5.0)
+    with caplog.at_level("WARNING"):
+        with pytest.raises(ModelCallTimeout):
+            await _ainvoke_bounded(r, "x", "modelX")  # no label -> just the model id, no " for " suffix
+    assert any("modelX" in rec.getMessage() and " for " not in rec.getMessage() for rec in caplog.records)
+
+
 async def test_retry_sleeps_count_against_the_same_total_deadline(monkeypatch):
     # the total is bounded however it is spent: a fast-but-always-failing call whose backoff sleeps exceed the
     # deadline is cancelled as a ModelCallTimeout, not allowed to run the full attempt budget.

@@ -47,7 +47,7 @@ async def test_single_call_adiscover_goes_through_the_async_seam(tmp_path):
         async def ainvoke(self, _prompt):
             return _BoundaryList.model_validate({"spans": [{"start_index": 0, "end_index": 1}]})
 
-    disc = SingleCallBoundaryDiscoverer(model_id="m", structured_factory=lambda *_a: _FakeAsyncStructured())
+    disc = SingleCallBoundaryDiscoverer(model_id="m", structured_factory=lambda *_a, **_kw: _FakeAsyncStructured())
     document = load_document(_parsed(tmp_path, _two_section_doc()))
     spans = await disc.adiscover(document)
     assert spans and all(isinstance(s, BoundarySpan) for s in spans)  # repaired to a valid partition
