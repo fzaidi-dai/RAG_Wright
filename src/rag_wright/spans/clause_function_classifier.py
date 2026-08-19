@@ -13,6 +13,7 @@ becomes NONE, exactly as an off-taxonomy span does today)."""
 from __future__ import annotations
 
 import asyncio
+import re
 from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
@@ -276,18 +277,103 @@ class LegalBertClauseAdapter:
         return out
 
 
-def production_llm_clause_classifier(model_id: str) -> LlmClauseClassifier:
-    """Wire the single-clause LLM classifier over the model-profile structured seam (ingestion uses server-side
-    `build_structured`, ADR-0045). Lazy import so this module stays import-light and hermetic."""
-    from rag_wright.models.seam import build_structured
+# --- issue 0005 / route (b): CLIENT-SIDE free-text tag classification (no server-side guided decoding) ---------
+#
+# The classifier schemas are nested list[BaseModel] (BatchSpanClassification.spans -> SpanFunctions.functions ->
+# RawScore), so `build_tag_structured` (FLAT only) can't serve them. Server-side guided decoding
+# (`build_structured`) runs away on self-hosted Granite (profiles.py: no `client_side_structured` escape) -- the
+# ADR-0058 boundary-call failure at a new call site. So, like `answer_generator.parse_tagged_answer`, the
+# classifier uses its OWN compact free-text tag format that FLATTENS the nesting into the tag BODY, parsed
+# CLIENT-SIDE into the same Pydantic contract. `function` stays raw -- the downstream categorize/floor/cap cleans
+# a stray, so a malformed token never crashes a sub-batch.
 
-    return LlmClauseClassifier(build_structured(
-        model_id, ClauseFunctionClassification, label="clause_function_classifier.classify"))
+_BATCH_TAG_INSTRUCTIONS = (
+    "\n\nReturn ONLY the classification as tagged lines -- ONE per span you assign a function to (OMIT any span "
+    "with no function). Between the tags put the applicable function labels PRIMARY-FIRST as `Label:confidence` "
+    "(confidence = high, medium, or low), comma-separated. For a real clause type NOT in the list above, use "
+    "`OTHER:confidence:short_name`. Use ONLY the [n] span indices shown. Example:\n"
+    '<span index="0">Cap On Liability:high, Indemnification:medium</span>\n'
+    '<span index="3">Governing Law:high</span>'
+)
+_CLAUSE_TAG_INSTRUCTIONS = (
+    "\n\nReturn ONLY the applicable function labels PRIMARY-FIRST as `Label:confidence` (confidence = high, "
+    "medium, or low), comma-separated, between <functions></functions> tags; for a real clause type NOT in the "
+    "list above, use `OTHER:confidence:short_name`. If none apply, return `<functions></functions>`. Example:\n"
+    "<functions>Cap On Liability:high, Indemnification:low</functions>"
+)
+
+_SPAN_TAG_RE = re.compile(r'<span\s+index="?(\d+)"?\s*>(.*?)</span>', re.DOTALL | re.IGNORECASE)
+_FUNCTIONS_TAG_RE = re.compile(r"<functions>(.*?)</functions>", re.DOTALL | re.IGNORECASE)
+
+
+def _parse_score_item(item: str) -> RawScore | None:
+    """One `Label:confidence` (or `OTHER:confidence:other_label`) token -> a RawScore, kept RAW."""
+    parts = [p.strip() for p in item.split(":")]
+    if not parts or not parts[0]:
+        return None
+    if parts[0].upper() == "OTHER":
+        return RawScore(function="OTHER", confidence=parts[1] if len(parts) > 1 else "low",
+                        other_label=parts[2] if len(parts) > 2 else "")
+    if len(parts) == 1:
+        return RawScore(function=parts[0], confidence="low")  # no confidence given -> lowest (dropped by floor)
+    return RawScore(function=":".join(parts[:-1]), confidence=parts[-1])  # rejoin a label that itself had a colon
+
+
+def _parse_scores(body: str) -> list[RawScore]:
+    return [rs for item in re.split(r"[,\n]", body) if (rs := _parse_score_item(item.strip())) is not None]
+
+
+def parse_batch_span_tags(text: str) -> BatchSpanClassification:
+    """CLIENT-SIDE parse of the batched free-text tags -> BatchSpanClassification. Sparse (a no-function span is
+    absent) and aligned by the EXPLICIT index in each tag, matching the schema's span_index contract."""
+    spans = [SpanFunctions(span_index=int(m.group(1)), functions=scores)
+             for m in _SPAN_TAG_RE.finditer(text) if (scores := _parse_scores(m.group(2)))]
+    return BatchSpanClassification(spans=spans)
+
+
+def parse_clause_function_tags(text: str) -> ClauseFunctionClassification:
+    """CLIENT-SIDE parse of the single-clause free-text tags -> ClauseFunctionClassification."""
+    m = _FUNCTIONS_TAG_RE.search(text)
+    return ClauseFunctionClassification(functions=_parse_scores(m.group(1)) if m else [])
+
+
+class _TagClassifierRunnable:
+    """A `build_structured`-shaped runnable (`.invoke`/`.ainvoke(prompt) -> the Pydantic contract`) that drives the
+    classifier CLIENT-SIDE: a plain free-text call (NO server guided decoding) whose tagged output is parsed by
+    `parse`. `.ainvoke` streams via `astream_text` (true wall-clock deadline + the stage `label`, issue 0005)."""
+
+    def __init__(self, model_id: str, *, instructions: str, parse: Any, label: str, max_tokens: int = 2048) -> None:
+        self._model_id = model_id
+        self._instructions = instructions
+        self._parse = parse
+        self._label = label
+        self._max_tokens = max_tokens
+
+    def invoke(self, prompt: Any, config: Any = None) -> Any:  # config accepted for runnable-compat, unused
+        from rag_wright.models.seam import build_model
+
+        text = build_model(self._model_id, max_tokens=self._max_tokens).invoke(prompt + self._instructions).content
+        return self._parse(str(text))
+
+    async def ainvoke(self, prompt: Any, config: Any = None) -> Any:
+        from rag_wright.models.seam import astream_text
+
+        text = await astream_text(self._model_id, prompt + self._instructions,
+                                  max_tokens=self._max_tokens, label=self._label)
+        return self._parse(text)
+
+
+def production_llm_clause_classifier(model_id: str) -> LlmClauseClassifier:
+    """Wire the single-clause classifier over CLIENT-SIDE free-text tag parse (issue 0005: no server-side guided
+    decoding, which runs away on self-hosted Granite). Same `ClauseFunctionClassification` contract."""
+    return LlmClauseClassifier(_TagClassifierRunnable(
+        model_id, instructions=_CLAUSE_TAG_INSTRUCTIONS, parse=parse_clause_function_tags,
+        label="clause_function_classifier.classify"))
 
 
 def production_batch_clause_classifier(model_id: str) -> LlmBatchClauseClassifier:
-    """Wire the BATCHED (option B) clause classifier over the structured seam -- the ingestion default."""
-    from rag_wright.models.seam import build_structured
-
-    return LlmBatchClauseClassifier(build_structured(
-        model_id, BatchSpanClassification, label="clause_function_classifier.classify_spans"))
+    """Wire the BATCHED (option B) classifier -- the ingestion default -- over CLIENT-SIDE free-text tag parse
+    (issue 0005). Same `BatchSpanClassification` contract; parsed by `parse_batch_span_tags`."""
+    return LlmBatchClauseClassifier(_TagClassifierRunnable(
+        model_id, instructions=_BATCH_TAG_INSTRUCTIONS, parse=parse_batch_span_tags,
+        label="clause_function_classifier.classify_spans"))

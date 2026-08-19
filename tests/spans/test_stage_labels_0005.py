@@ -5,28 +5,22 @@ via the seam) that logged the bare model id; the path-B docling-graph stage carr
 
 from __future__ import annotations
 
-import rag_wright.models.seam as seam
 from rag_wright.contracts.property import PropertyDimension
 
 
-def test_batch_clause_classifier_labels_its_structured_call(monkeypatch):
-    captured = {}
-    monkeypatch.setattr(seam, "build_structured",
-                        lambda model_id, schema, **kw: captured.update(label=kw.get("label")) or object())
+def test_batch_clause_classifier_labels_its_free_text_call():
+    # issue 0005 route (b): the batched classifier now runs CLIENT-SIDE tag-parse; its runnable carries the stage
     from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
 
-    production_batch_clause_classifier("granite")
-    assert captured["label"] == "clause_function_classifier.classify_spans"  # the prime suspect names itself
+    clf = production_batch_clause_classifier("granite")
+    assert clf._runnable._label == "clause_function_classifier.classify_spans"  # the prime suspect names itself
 
 
-def test_per_clause_classifier_labels_its_structured_call(monkeypatch):
-    captured = {}
-    monkeypatch.setattr(seam, "build_structured",
-                        lambda model_id, schema, **kw: captured.update(label=kw.get("label")) or object())
+def test_per_clause_classifier_labels_its_free_text_call():
     from rag_wright.spans.clause_function_classifier import production_llm_clause_classifier
 
-    production_llm_clause_classifier("granite")
-    assert captured["label"] == "clause_function_classifier.classify"
+    clf = production_llm_clause_classifier("granite")
+    assert clf._runnable._label == "clause_function_classifier.classify"
 
 
 async def test_semantic_judge_labels_its_structured_call():

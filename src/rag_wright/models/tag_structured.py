@@ -9,10 +9,13 @@ field body needs no escaping -- unlike a JSON string full of legal quotes/bracke
 `build_tag_structured` is a DROP-IN for `models.seam.build_structured` (same `(model_id, schema)` -> runnable
 with `.invoke(prompt) -> schema instance`), so a caller swaps the mechanism by swapping the factory.
 
-Scope now (query side, ADR-0045): FLAT schemas -- scalars (str/int/float/bool), enum/Literal, `str | None`, and
-`list[<scalar>]`. That covers every query-side schema (generation, function classifier, query understanding,
-highlight field-extract, reader judgments). `list[<BaseModel>]` (the one nested case, ingestion's
-PropertyExtraction) is a documented EXTENSION POINT for a later task, not built here.
+Scope now (ADR-0045): FLAT schemas -- scalars (str/int/float/bool), enum/Literal, `str | None`, and
+`list[<scalar>]`. That covers the query-side schemas (generation, query understanding, highlight field-extract,
+reader judgments) and the flat ingest judges (extraction_semantic_judge -> SemanticVerdict). `list[<BaseModel>]`
+(nested) is NOT covered here: ingestion's PropertyExtraction is the documented EXTENSION POINT for a later task;
+and the ingest clause-function classifier (nested `list[SpanFunctions]` / `list[RawScore]`) uses its OWN bespoke
+free-text tags + client-side parse in `spans/clause_function_classifier.py`, not this generic parser (issue
+0005). So "function classifier" is deliberately NOT in the flat-covered list above -- its schema is nested.
 """
 
 from __future__ import annotations

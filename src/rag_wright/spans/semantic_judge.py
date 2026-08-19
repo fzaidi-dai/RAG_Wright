@@ -30,7 +30,7 @@ from pydantic import BaseModel
 
 from rag_wright.contracts.property import CLOSED_VOCAB, ClausePropertyRecord, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.models.seam import build_structured
+from rag_wright.models.tag_structured import build_tag_structured
 from rag_wright.spans.property_grounding import GROUNDING_CUES
 from rag_wright.util.concurrent import map_concurrent
 
@@ -92,7 +92,7 @@ def _judge_prompt(method: str, dimension: PropertyDimension, value: str, text: s
         gloss=_DIMENSION_GLOSS.get(dimension, dimension.value), clause=text)
 
 
-def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
+def build_semantic_judge_fn(model_id: str, *, structured_factory=build_tag_structured) -> JudgeFn:
     """The `extraction_semantic_judge` SKILL's runtime: a Granite-backed verify-or-refute `JudgeFn` through the
     model seam (model-neutral; the product points the seam at self-hosted vLLM-Granite). The SKILL.md method is
     the system prompt; the specific property + clause are appended. `structured_factory` is injected for tests."""
@@ -105,7 +105,7 @@ def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structure
     return judge
 
 
-def build_asemantic_judge_fn(model_id: str, *, structured_factory=build_structured):
+def build_asemantic_judge_fn(model_id: str, *, structured_factory=build_tag_structured):
     """ASYNC-B2b (ADR-0057): the async twin of `build_semantic_judge_fn` -- the judge call on the async seam
     (`.ainvoke`, true wall-clock deadline)."""
     method = judgment_method()
