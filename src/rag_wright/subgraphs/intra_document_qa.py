@@ -254,8 +254,11 @@ def production_intra_document_qa(
     def serve(contract_id: str, question: str) -> list[CitedClause]:
         # ADR-0044: pull each cap clause's INFERRED carve-outs (IsExceptionTo) so "how is liability capped, and
         # under what conditions?" sees "capped, except uncapped for ...".
-        base = attach_exception_links(contract_clause_index(store, contract_id), store.exceptions_of_clause,
-                                      contract_id=contract_id)
+        # 0006-D: include_untyped so a clause the classifier left NONE is still a candidate (recall must not
+        # depend on classification -- else a classifier miss is a silent recall hole, engine issue 0006).
+        base = attach_exception_links(
+            contract_clause_index(store, contract_id, include_untyped=True), store.exceptions_of_clause,
+            contract_id=contract_id)
         if len(base) <= top_k:
             return base  # small contract -> no narrowing needed
         # SEMANTIC top-K (ADR-0047): BGE-rerank the contract's clauses by relevance to the question.

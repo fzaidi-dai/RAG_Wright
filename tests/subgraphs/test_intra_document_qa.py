@@ -301,7 +301,7 @@ async def test_production_serves_whole_contract_not_function_narrowed(monkeypatc
 
     calls = {"whole": 0, "by_function": 0}
 
-    def _whole(store, contract_id):
+    def _whole(store, contract_id, **kw):  # kw: 0006-D include_untyped
         calls["whole"] += 1
         return []  # no clauses -> empty evidence -> the stub generator abstains
 
@@ -342,7 +342,7 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
     n, k = 20, 5
     clauses = [CitedClause(contract_id="c1", clause_id=f"c1:{i}:h", function="F",
                            span_id=f"c1:{i}:h#0", properties=[]) for i in range(n)]
-    monkeypatch.setattr(cks, "contract_clause_index", lambda store, cid: list(clauses))
+    monkeypatch.setattr(cks, "contract_clause_index", lambda store, cid, **kw: list(clauses))
     monkeypatch.setattr(idq, "rehydrate_clause_texts",
                         lambda store, cid, cl: {c.clause_id: f"text-{c.clause_id}" for c in cl})
 

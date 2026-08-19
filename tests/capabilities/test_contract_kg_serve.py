@@ -67,6 +67,37 @@ def test_contract_clause_index_assembles_every_clause_with_properties() -> None:
     assert gl.properties == []
 
 
+class _StoreWithSpans(_FakeStore):
+    """A store that also exposes all_spans_by_contract (typed clause span + an UNTYPED span the classifier
+    returned NONE for) -- the issue-0006 recall-hole case."""
+
+    def clauses_in_contract(self, contract_id):
+        return [{"clause_id": _A, "function": "Cap On Liability", "folio_iri": "", "span_id": "sA"}]
+
+    def all_spans_by_contract(self, contract_id):
+        return [
+            {"span_id": "sA", "text": "cap body", "function": "Cap On Liability"},                 # typed, covered
+            {"span_id": "sT", "text": "This Agreement renews automatically...", "function": "NONE"},  # UNTYPED
+            {"span_id": "sBlank", "text": "   ", "function": "NONE"},                                # empty -> skip
+        ]
+
+
+def test_include_untyped_serves_unclassified_spans() -> None:
+    # 0006-D: a clause the classifier left NONE must still be served (was a silent recall hole in intra_document_qa)
+    idx = contract_clause_index(_StoreWithSpans(), _CID, include_untyped=True)
+    ids = {c.span_id for c in idx}
+    assert "sA" in ids and "sT" in ids           # the untyped span is now served
+    assert "sBlank" not in ids                    # an empty span is not a candidate
+    untyped = next(c for c in idx if c.span_id == "sT")
+    assert untyped.function == "NONE" and untyped.properties == []  # bare, rehydratable by its own span_id
+    assert sum(1 for c in idx if c.span_id == "sA") == 1            # typed span not double-counted as untyped
+
+
+def test_default_excludes_untyped_backward_compatible() -> None:
+    idx = contract_clause_index(_StoreWithSpans(), _CID)  # include_untyped defaults False
+    assert {c.span_id for c in idx} == {"sA"}  # only the typed clause -- unchanged for every other caller
+
+
 def test_contract_clause_index_skips_non_property_edges_no_crash() -> None:
     """ADR-0044 regression: an IsExceptionTo (clause->clause) edge carries NO dimension/value. The
     clause_kg outE traversal can surface such a row; serving must skip it (not a typed property), never

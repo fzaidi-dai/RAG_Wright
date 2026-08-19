@@ -54,6 +54,7 @@ class _KGStore(Protocol):
     def clauses_in_contract(self, contract_id: str) -> list[dict]: ...
     def contract_clause_kg(self, contract_id: str) -> list[dict]: ...
     def clauses_with_property(self, contract_id: str, dimension: str, value: str) -> list[dict]: ...
+    def all_spans_by_contract(self, contract_id: str) -> list[dict]: ...  # 0006-D: untyped-span fallback
 
 
 def _contract_of(clause_id: str) -> str:
@@ -68,8 +69,16 @@ def _prop(row: dict) -> CitedProperty:
     )
 
 
-def contract_clause_index(store: _KGStore, contract_id: str) -> list[CitedClause]:
-    """The full per-contract KG: every clause (incl. property-less ones) with its typed properties, cited."""
+def contract_clause_index(
+    store: _KGStore, contract_id: str, *, include_untyped: bool = False
+) -> list[CitedClause]:
+    """The full per-contract KG: every clause (incl. property-less ones) with its typed properties, cited.
+
+    `include_untyped` (issue 0006-D): also serve the spans the classifier left UNTYPED (`function == NONE`),
+    which produce no Clause-KG node. Without this, a clause the classifier misses (e.g. a renewal clause it can't
+    map to the taxonomy) is ABSENT from what Leg-A serves -> a silent recall hole ("not_found" on a clause that
+    plainly exists). With it, an untyped span is served as a bare `CitedClause` (no properties), rehydrated from
+    its own `span_id` -- so recall is decoupled from classification (the ADR-0047 whole-index posture)."""
     by_clause: dict[str, list[CitedProperty]] = {}
     for row in store.contract_clause_kg(contract_id):
         if not row.get("dimension"):  # a non-property clause edge (e.g. IsExceptionTo, ADR-0044) -> not a fact
@@ -83,6 +92,14 @@ def contract_clause_index(store: _KGStore, contract_id: str) -> list[CitedClause
             folio_iri=c.get("folio_iri") or "", span_id=c.get("span_id") or "",
             properties=by_clause.get(cid, []),
         ))
+    if include_untyped:
+        covered = {c.span_id for c in index if c.span_id}  # spans a typed clause already carries
+        for row in store.all_spans_by_contract(contract_id):
+            sid = row.get("span_id")
+            if sid and sid not in covered and (row.get("text") or "").strip():
+                index.append(CitedClause(
+                    contract_id=contract_id, clause_id=sid, function=row.get("function") or "NONE",
+                    span_id=sid, properties=[]))  # bare; rehydrate_clause_texts fetches its text by function+span
     return index
 
 
