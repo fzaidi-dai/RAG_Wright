@@ -74,6 +74,37 @@ def test_non_text_blob_uses_the_injected_parse_bytes_seam():
     assert docs[0].text == "parsed:prod1-corpus/deal.pdf:12"
 
 
+def test_non_text_blob_uses_the_structure_preserving_parse_doc_seam():
+    # CHUNK-7 (ADR-0058): a non-text customer document routes through parse_doc, which carries `.parsed` (the real
+    # docling parse) so the chunker's structural pass fires -- and the gcs metadata is merged in.
+    from rag_wright.capabilities.parsing import ParsedDocument
+
+    seen = {}
+
+    def parse_doc(sid, name, data):
+        seen["args"] = (sid, name, len(data))
+        return SourceDocument(
+            source_doc_id=sid, text="Section 1 body",
+            parsed=ParsedDocument(source_doc_id=sid, content_hash="a" * 64, manifest_path="/m"))
+
+    docs = list(_adapter([_FakeBlob("prod1-corpus/deal.pdf", data=b"%PDF-1.7")], parse_doc=parse_doc).documents())
+    assert docs[0].parsed is not None and docs[0].text == "Section 1 body"  # structure carried
+    assert docs[0].metadata["source"] == "gcs" and docs[0].metadata["blob"] == "prod1-corpus/deal.pdf"  # meta merged
+    assert seen["args"] == (docs[0].source_doc_id, "prod1-corpus/deal.pdf", 8)
+
+
+def test_parse_doc_is_preferred_over_parse_bytes_when_both_set():
+    from rag_wright.capabilities.parsing import ParsedDocument
+
+    def parse_doc(sid, name, data):
+        return SourceDocument(source_doc_id=sid, text="structured",
+                              parsed=ParsedDocument(source_doc_id=sid, content_hash="b" * 64, manifest_path="/m"))
+
+    docs = list(_adapter([_FakeBlob("prod1-corpus/deal.pdf", data=b"x")],
+                         parse_doc=parse_doc, parse_bytes=lambda n, d: "flat-text").documents())
+    assert docs[0].text == "structured" and docs[0].parsed is not None  # parse_doc wins (structure preserved)
+
+
 def test_non_text_blob_without_a_parser_fails_clearly():
     with pytest.raises(NotImplementedError, match="parse_bytes"):
         list(_adapter([_FakeBlob("prod1-corpus/deal.pdf", data=b"x")]).documents())
