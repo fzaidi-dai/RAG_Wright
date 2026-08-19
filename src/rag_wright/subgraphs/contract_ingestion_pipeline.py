@@ -240,10 +240,17 @@ def abuild_document_ingest(
 
 
 def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures: list) -> Optional[dict]:
-    """ENG-1: the single PARTIAL-entry shape, shared by the blocking driver AND the async job runner so the two
-    can never drift. A UNIFIED, always-present `failures` list (kind-tagged) lets an integrator read ONE field
-    and never silently miss a span-only loss; the per-kind `clause_failures`/`span_failures` keys stay for
-    back-compat. Returns None when the document is fully complete (no loss -> not partial)."""
+    """The single PARTIAL-entry shape, shared by the blocking driver AND the async job runner so the two can
+    never drift. A UNIFIED, always-present `failures` list (kind-tagged) lets an integrator read ONE field and
+    never silently miss a span-only loss; the per-kind `clause_failures`/`span_failures` keys stay for
+    back-compat. Returns None when the document is fully complete (no loss -> not partial). Does not mutate the
+    input lists.
+
+    STABLE PUBLIC API (ENG-1/ENG-2): the product imports this helper and depends on its signature, this import
+    path, and the `failures` entry shape. Pinned by `tests/subgraphs/test_partial_entry_contract.py` -- changing
+    any of them is a breaking change requiring a versioned decision. FORWARD-COMPAT RULE: a new loss kind is a
+    new `kind` value inside `failures` (e.g. `{"kind": "embed", ...}`), NEVER a replacement top-level key -- so an
+    integrator counting the kind-tagged list keeps surfacing losses it has no dedicated field for."""
     clause_failures = clause_failures or []
     span_failures = span_failures or []
     if not (clause_failures or span_failures):

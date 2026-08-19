@@ -90,6 +90,24 @@ looks clean). `failures` is the always-present, kind-tagged (`{"kind": "clause"|
 union; the per-kind keys remain for back-compat. `report.per_document` lists what was written; `partial` and
 `dead_lettered` list what was not — join by `source_doc_id`.
 
+**Build partial entries through the engine, don't re-derive them.** If your worker owns the per-document loop
+(e.g. it drives the compiled graph itself rather than calling `arun_corpus_ingestion`), assemble each partial
+entry with the engine helper instead of comparing loss keys yourself — one definition, no drift:
+
+```python
+from rag_wright.subgraphs.contract_ingestion_pipeline import build_partial_entry   # STABLE public helper
+
+entry = build_partial_entry(doc_id, out.get("clause_failures"), out.get("span_failures"))  # None if complete
+if entry is not None:
+    partial.append(entry)
+```
+
+`build_partial_entry(source_doc_id, clause_failures, span_failures) -> dict | None` is **stable public API**:
+its signature, this import path, and the `failures` shape are pinned by a contract test and will not change
+without a versioned decision. **Forward-compat:** a new loss kind arrives as a new `kind` value inside
+`failures` (never a replacement top-level key), so counting the kind-tagged list — rather than summing known
+per-kind fields — keeps surfacing loss kinds your code predates.
+
 ## ARD / discovery
 
 Every capability is registered under its FR-C name (`capabilities/registry.py`, 52 registrations) for Agentic

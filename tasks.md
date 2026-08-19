@@ -161,6 +161,17 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > The four 0006 decisions (D+B+A+C) + ENG-1 are recorded in **ADR-0059** (recall decoupled from classification;
 > structure survives ingest; a partial loss is never silent).
 
+> **ENG-2 — DONE: ratify `build_partial_entry` + the `failures` list as STABLE PUBLIC engine API.** RuleWright now
+> IMPORTS `build_partial_entry` and calls it through their seam (partial semantics get ONE definition that can't
+> drift from ours) and counts a `total_failures` off the kind-tagged list so an unknown loss kind still surfaces;
+> they said their future ingest worker will depend on it being importable + stable. So: (a) pinned by a contract
+> test `tests/subgraphs/test_partial_entry_contract.py` (+7: import path, signature, `failures` shape, per-kind
+> back-compat keys, None-when-complete, extra-detail flow-through, no input mutation); (b) documented as stable
+> public API in `engine_async_api.md` ("Build partial entries through the engine...") + the source docstring;
+> (c) FORWARD-COMPAT RULE stated: a new loss kind is a new `kind` value inside `failures`, never a replacement
+> top-level key. Import path kept as-is (`subgraphs.contract_ingestion_pipeline`; RuleWright already imports it).
+> Suite 1277 pass. Next: send RuleWright the stability confirmation.
+
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
 > ingest -- a SILENT trap for any integrator, since the per-kind keys are optional. FIX: every `partial[]` entry now
