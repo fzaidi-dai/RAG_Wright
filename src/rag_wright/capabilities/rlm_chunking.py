@@ -34,6 +34,7 @@ from pydantic import BaseModel, Field
 
 from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.registry import CapabilityRegistry
+from rag_wright.corpus.document_parser import _HEADING_LABELS  # the single docling heading-label authority (ADR-0058)
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
@@ -290,6 +291,34 @@ class SingleCallBoundaryDiscoverer:
             return []
         out = await self._factory(self._model_id, _BoundaryList, label=self._STAGE).ainvoke(prompt)
         return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
+
+
+class StructuralBoundaryDiscoverer:
+    """Tier-1 (ADR-0058, issue 0004): DETERMINISTIC boundaries from docling's structural labels -- a new chunk
+    starts at every heading item (SECTION_HEADER / TITLE / FIELD_HEADING, the `_HEADING_LABELS` authority docling
+    already assigns while parsing). NO model call, so cost is O(items) and INDEPENDENT of document length -- the
+    fix for the whole-document boundary call that blew the 180s deadline. Generic across any docling-parsed
+    document (contract, policy, regulation), because the structural labels are domain-neutral.
+
+    Only decides the semantic boundaries; the token cap (hard-split) and the lone-heading fold are enforced
+    downstream by `_finalize_chunks`, and `repair_partition` guarantees a valid partition. A document with NO
+    headings degrades to one span (then cap-split) -- the case CHUNK-4's per-section model fallback improves."""
+
+    def _starts(self, document) -> list[int]:
+        # boundary START indices: 0, plus every heading-labelled item's index (deduped, sorted).
+        return sorted({0} | {i for i, item in enumerate(document.texts)
+                             if getattr(item, "label", None) in _HEADING_LABELS})
+
+    def discover(self, document) -> list[BoundarySpan]:
+        n = len(document.texts)
+        if n == 0:
+            return []
+        starts = self._starts(document)
+        pairs = [(starts[k], (starts[k + 1] - 1 if k + 1 < len(starts) else n - 1)) for k in range(len(starts))]
+        return repair_partition(pairs, n)  # safety net; the partition is valid by construction
+
+    async def adiscover(self, document) -> list[BoundarySpan]:
+        return self.discover(document)  # deterministic, no IO/model -> the async twin just delegates
 
 
 @runtime_checkable
