@@ -94,6 +94,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > in aproduction_document_ingest (SingleCall retired from the default; still exists for direct tests / A/B).
 > Suite 1238 pass. RuleWright will retest A0004 on the new default (they filed it).
 >   - **CHUNK-6** remains: docs-only b2 dynamic-agent seam plug-point.
+>   - **ISSUE 0005 DONE (2026-08-19, RuleWright): label the remaining model-calling INGEST stages.** 0004 CONFIRMED
+>     FIXED by RuleWright (24-clause: 33.9s best rep vs rock-steady ~208s before -- impossible on the old path).
+>     0005 = three deadline cancellations remain in UNLABELLED stages (all logged the bare model id via the seam
+>     warning = path A). Labeled: clause_function_classifier.classify_spans (batched, prime suspect) + .classify;
+>     semantic_judge.judge; and path-B docling-graph now carries dg_extraction.{party,clause} in its timeout. Every
+>     model-calling ingest stage now names itself -> the next timeout is a statement. No deadline/mechanism change
+>     (per RuleWright's ask). Suite 1248. RuleWright re-runs to NAME the 0005 culprit.
 >   - **CHUNK-7 DONE (2026-08-19): carry docling structure to the chunker (was follow-up #1).** SourceDocument
 >     gains `parsed: ParsedDocument|None`; `_parsed_for` uses it (else the text fallback); `parsed_source_document`
 >     helper (bytes -> structure-bearing SourceDocument) for hand-built ingest (RuleWright); GcsCorpusAdapter

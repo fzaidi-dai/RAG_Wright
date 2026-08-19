@@ -281,11 +281,13 @@ def production_llm_clause_classifier(model_id: str) -> LlmClauseClassifier:
     `build_structured`, ADR-0045). Lazy import so this module stays import-light and hermetic."""
     from rag_wright.models.seam import build_structured
 
-    return LlmClauseClassifier(build_structured(model_id, ClauseFunctionClassification))
+    return LlmClauseClassifier(build_structured(
+        model_id, ClauseFunctionClassification, label="clause_function_classifier.classify"))
 
 
 def production_batch_clause_classifier(model_id: str) -> LlmBatchClauseClassifier:
     """Wire the BATCHED (option B) clause classifier over the structured seam -- the ingestion default."""
     from rag_wright.models.seam import build_structured
 
-    return LlmBatchClauseClassifier(build_structured(model_id, BatchSpanClassification))
+    return LlmBatchClauseClassifier(build_structured(
+        model_id, BatchSpanClassification, label="clause_function_classifier.classify_spans"))

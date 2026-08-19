@@ -274,7 +274,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
                           max_retries: int = _DEFAULT_MAX_RETRIES,
                           temperature: float | None = None,
                           structured_output: bool = False,
-                          extraction_contract: str = "direct") -> Any:
+                          extraction_contract: str = "direct", stage_label: str | None = None) -> Any:
     """The docling-graph `PipelineConfig` for a model choice, with the reliability fixes baked in
     (structured_output=False + max_tokens cap + a sane per-call `timeout_s`/`max_retries`, NOT docling-graph's
     300s default). Kept import-light so hermetic tests need no LLM.
@@ -309,6 +309,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
     # docling-graph's own request-building and response-parsing are reused unchanged; NO fork.
     effective = resolve_effective_model_config(model.provider, model.model, overrides=overrides)
     llm_client = _deadline_bounded_client_class()(model_config=effective)
+    llm_client._stage_label = stage_label  # ADR-0058/issue 0005: name the stage in the deadline timeout message
     return PipelineConfig(
         source=source_path, template=template, backend="llm", inference=model.inference,
         extraction_contract=extraction_contract, processing_mode="many-to-one",
@@ -349,8 +350,8 @@ def _deadline_bounded_client_class() -> type:
                 response = asyncio.run(_go())
             except TimeoutError as exc:
                 raise seam.ModelCallTimeout(
-                    f"docling-graph extraction on {self.model} exceeded the "
-                    f"{seam._MODEL_DEADLINE_S}s deadline") from exc
+                    f"docling-graph extraction on {seam._call_desc(self.model, getattr(self, '_stage_label', None))} "
+                    f"exceeded the {seam._MODEL_DEADLINE_S}s deadline") from exc
             except Exception as exc:  # noqa: BLE001 - wrap like the base's _call_api (docling-graph ClientError)
                 raise ClientError(f"LiteLLM async call failed: {type(exc).__name__}",
                                   details={"model": self.model, "error": str(exc)}, cause=exc) from exc
@@ -392,7 +393,8 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
         ctx = run_pipeline(build_pipeline_config(str(md), model, template=template, max_tokens=max_tokens,
                                                  timeout_s=timeout_s, temperature=temperature,
                                                  structured_output=structured_output,
-                                                 extraction_contract=extraction_contract),
+                                                 extraction_contract=extraction_contract,
+                                                 stage_label=f"dg_extraction.{stage}"),  # issue 0005
                            mode="api")
     if errors:  # docling logged an error then swallowed it -> a failure, NOT a clean-empty result -> raise
         raise ExtractionFailed(stage, errors[-1][:300])

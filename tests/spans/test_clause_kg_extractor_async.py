@@ -65,6 +65,6 @@ async def test_build_asemantic_judge_fn_uses_the_async_seam():
         async def ainvoke(self, _prompt):
             return SemanticVerdict(supported=True, reason="ok")
 
-    ajudge = build_asemantic_judge_fn("m", structured_factory=lambda *_a: _FakeAsync())
+    ajudge = build_asemantic_judge_fn("m", structured_factory=lambda *_a, **_kw: _FakeAsync())
     verdict = await ajudge(PropertyDimension.MUTUALITY, "mutual", "text")
     assert verdict.supported

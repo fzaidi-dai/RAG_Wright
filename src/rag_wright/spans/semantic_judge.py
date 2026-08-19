@@ -99,7 +99,8 @@ def build_semantic_judge_fn(model_id: str, *, structured_factory=build_structure
     method = judgment_method()
 
     def judge(dimension: PropertyDimension, value: str, text: str) -> Optional[SemanticVerdict]:
-        return structured_factory(model_id, SemanticVerdict).invoke(_judge_prompt(method, dimension, value, text))
+        return structured_factory(model_id, SemanticVerdict, label="semantic_judge.judge").invoke(
+            _judge_prompt(method, dimension, value, text))
 
     return judge
 
@@ -110,7 +111,7 @@ def build_asemantic_judge_fn(model_id: str, *, structured_factory=build_structur
     method = judgment_method()
 
     async def ajudge(dimension: PropertyDimension, value: str, text: str) -> Optional[SemanticVerdict]:
-        return await structured_factory(model_id, SemanticVerdict).ainvoke(
+        return await structured_factory(model_id, SemanticVerdict, label="semantic_judge.judge").ainvoke(
             _judge_prompt(method, dimension, value, text))
 
     return ajudge
