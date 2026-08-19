@@ -382,6 +382,69 @@ class StructuralBoundaryDiscoverer:
         return self.discover(document)  # deterministic, no IO/model -> the async twin just delegates
 
 
+class _SubDocument:
+    """A contiguous item-range viewed as a stand-alone document (`.texts`), so a per-section refine call runs the
+    model over ONLY that section's items (0-based indices) -- never the whole document."""
+
+    __slots__ = ("texts",)
+
+    def __init__(self, texts: list) -> None:
+        self.texts = texts
+
+
+class StructuralModelFallbackDiscoverer:
+    """CHUNK-4 (ADR-0058, issue 0004, Tier-2 b1): structural boundaries first (deterministic, no model); any
+    section that would be HARD-SPLIT by the token cap (over-cap -- and structureless by construction, since the
+    structural pass already cut at every heading) is refined by a BOUNDED PER-SECTION model call
+    (`TagBoundaryDiscoverer`, tag-parse), run CONCURRENTLY. The model only ever sees ONE over-cap section at a
+    time, so cost never scales with document length. A section within the cap keeps its structural boundary (no
+    model call); a fully-structured document makes ZERO model calls. `structural`/`fallback` are injectable."""
+
+    def __init__(self, model_id: str | None = None, *, token_cap: int = DEFAULT_TOKEN_CAP,
+                 structural: Any = None, fallback: Any = None,
+                 max_concurrency: int = DEFAULT_SUMMARY_CONCURRENCY) -> None:
+        self._cap_chars = token_cap * 4  # matches _finalize_chunks' hard-split trigger exactly
+        self._structural = structural if structural is not None else StructuralBoundaryDiscoverer()
+        self._fallback = fallback if fallback is not None else TagBoundaryDiscoverer(model_id)
+        self._max_concurrency = max_concurrency
+
+    def _needs_refine(self, document, span: BoundarySpan) -> bool:
+        # exactly the multi-item sections _finalize_chunks would hard-split (fixed-size, SPEC-forbidden). A
+        # single over-cap item cannot be split by boundaries -> left for finalize's hard-split.
+        return span.end_index > span.start_index and len(_join_span(document, span)) > self._cap_chars
+
+    def _map_back(self, sub_spans: list[BoundarySpan], span: BoundarySpan) -> list[BoundarySpan]:
+        offset = span.start_index
+        mapped = [BoundarySpan(start_index=s.start_index + offset, end_index=s.end_index + offset)
+                  for s in sub_spans]
+        return mapped or [span]  # a non-splittable section keeps its span (finalize hard-splits it)
+
+    def discover(self, document) -> list[BoundarySpan]:
+        out: list[BoundarySpan] = []
+        for span in self._structural.discover(document):
+            if self._needs_refine(document, span):
+                sub = _SubDocument(document.texts[span.start_index:span.end_index + 1])
+                out.extend(self._map_back(self._fallback.discover(sub), span))
+            else:
+                out.append(span)
+        return out
+
+    async def adiscover(self, document) -> list[BoundarySpan]:
+        base = await self._structural.adiscover(document)
+        sem = asyncio.Semaphore(self._max_concurrency)
+
+        async def _one(span: BoundarySpan) -> list[BoundarySpan]:
+            if not self._needs_refine(document, span):
+                return [span]
+            sub = _SubDocument(document.texts[span.start_index:span.end_index + 1])
+            async with sem:  # bound the concurrent per-section model calls
+                sub_spans = await self._fallback.adiscover(sub)
+            return self._map_back(sub_spans, span)
+
+        groups = await asyncio.gather(*(_one(span) for span in base))  # order preserved
+        return [sp for group in groups for sp in group]
+
+
 @runtime_checkable
 class Summarizer(Protocol):
     """The per-chunk summarization seam."""
