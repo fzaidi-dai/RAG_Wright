@@ -58,6 +58,38 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     to_thread, non-blocking). Phase E (RuleWright FastAPI async) is PRODUCT work in its own session.
 >     Suite green throughout (main green).
 
+> **STRUCTURE-FIRST CHUNKING (ADR-0058, APPROVED 2026-08-19; engine issue 0004). NEXT UP = CHUNK-1.** Root cause
+> code-confirmed: `SingleCallBoundaryDiscoverer.adiscover` makes ONE whole-document server-side-guided-decoding
+> structured call to find clause boundaries -> cost scales with length + runs away on self-hosted Granite (the
+> ADR-0045 failure) -> hits the 180s deadline on ~24-clause docs, cancelled, then falls back to a deterministic
+> partition anyway (180s = pure waste). FIX = use docling's ALREADY-cached generic structure (labels/levels) as
+> the deterministic default; model only for genuinely ambiguous sections (bounded, tag-parsed). Task ledger:
+>   - **CHUNK-1 (side-fix, standalone):** name the STAGE/call-site in the deadline warning (seam.py:235 logs only
+>     model_id). Thread a `label` through build_structured/build_tag_structured -> _bounded_deadline. Files:
+>     models/seam.py, models/tag_structured.py, callers passing a stage label. Verify: a test asserts the warning
+>     text includes the stage. Small, no behavior change.
+>   - **CHUNK-2 (Tier 1, the core):** `StructuralBoundaryDiscoverer` — deterministic boundaries from the cached
+>     DoclingDocument labels/levels (reuse document_to_sections logic), behind the `BoundaryDiscoverer` seam; make
+>     it the DEFAULT for the contract-ingestion chunk stage. Files: capabilities/rlm_chunking.py (or a new module),
+>     subgraphs/contract_ingestion_pipeline.py (wire the default). Verify: hermetic tests — structured doc ->
+>     correct boundaries at headings, ZERO model calls; empty/degenerate -> valid partition.
+>   - **CHUNK-3 (Option 3 mechanism):** reshape the boundary output to a FLAT cut-index contract (`list[int]`) so
+>     it fits tag-parse's current scope; add/route a boundary model call through `build_tag_structured` (ADR-0045),
+>     no nested-schema work. Files: capabilities/rlm_chunking.py, models/tag_structured.py (if needed). Verify:
+>     tag-parse round-trip test on the flat contract; a runaway-style output still parses/degrades.
+>   - **CHUNK-4 (Tier 2 b1 fallback):** bounded PER-SECTION model boundary calls (concurrent gather+semaphore, via
+>     CHUNK-3 tag-parse) for sections the structural pass flags ambiguous — never a whole-doc call. Files:
+>     capabilities/rlm_chunking.py. Verify: hermetic — an ambiguous section triggers per-section calls, a
+>     structured doc triggers none.
+>   - **CHUNK-5 (A/B gate):** clause-integrity A/B, StructuralBoundaryDiscoverer vs SingleCall on a CUAD sample
+>     (structural must be equal-or-better, not just faster) before the default switch is final. Files: a
+>     scripts/ eval + a results note. Verify: measured integrity report.
+>   - **CHUNK-6 (b2 seam, docs-only):** document the opt-in Deep-Agents dynamic-subagent discoverer as a plug-point
+>     on the `BoundaryDiscoverer` seam (product-side/future, beta langchain-quickjs). No build. Files: ADR-0058 +
+>     a short note in the chunking module / engine_async_api.md.
+> Order: CHUNK-1 (quick safe win) -> CHUNK-2/3 (the fix) -> CHUNK-4 -> CHUNK-5 (gate) -> CHUNK-6. Each its own
+> approval gate. Phase-4 chunker + data-model (boundary contract) change -> ask-first; approved in principle.
+
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
 > ontology machinery). The user-facing **product** (contract mgmt + compliance app: UI, product-named tools,
