@@ -133,7 +133,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > Indemnity x2). Problem 2 = Defect B: heading-only spans ("9. Limitation of Liability") get typed (name in the
 > heading) -> heading-only clauses -> evidence pollution. CORRECTION: the classifier IS load-bearing for Leg-A
 > recall (earlier "mostly unused" was WRONG); a NONE miss silently drops a clause. TASK BREAKDOWN (revised):
-> [STATUS: D+B+C DONE; A reprioritized to a robustness follow-up. B+D fix both user-facing problems end-to-end.]
+> [STATUS: ALL FOUR (D+B+C+A) DONE. Issue 0006 fully resolved end-to-end.]
 >   - **0006-D (PRIMARY, Problem 1) — DONE:** decoupled Leg-A recall from classification -- intra_document_qa serves
 >     the WHOLE span index (typed AND untyped, `include_untyped=True`), per ADR-0047 whole-index; a classifier NONE
 >     no longer drops a clause. Verified end-to-end (full re-ingest): Term&Renewal served 0->3.
@@ -145,10 +145,16 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     also surfaces a reason; `span_failures` threads through `IngestionState` -> doc flagged PARTIAL in
 >     `IngestionReport` + the X/N line (mirrors `clause_failures`). Best-effort invariant kept (never dead-letters).
 >     NFR-2 satisfied. Tests: `test_contract_ingestion_pipeline_graph_async.py` (+2).
->   - **0006-A — REPRIORITIZED (robustness, not a recall bug):** B+D fix both user-facing problems with the chunk
->     still whole-doc, so the `MIN_CHUNK_CHARS=1000` floor folding 24 sections->1 no longer blocks 0006. Still worth
->     doing for large-doc robustness + cleaner classifier context (don't fold across a structural section cut).
->   - Each: contract-first TDD + gate. Order run: D -> B -> C (A deferred). RuleWright's store-dump ask is now a
+>   - **0006-A — DONE:** structure-first chunking no longer folds complete docling sections away. The structural
+>     discoverers advertise `respects_structure=True`; when set, `_finalize_chunks` skips the 1000-char PROSE floor
+>     (`_merge_below_floor`) and instead runs `_merge_bare_headings` -- every complete section keeps its own chunk
+>     however short, and ONLY a bare heading/title folds into a neighbour (reuses `segment._is_bare_heading`, the
+>     0006-B authority; token cap still hard-splits). Prose path unchanged. Verified end-to-end: the 24-clause
+>     fixture now chunks per-section (distinct parent-chunk hashes) instead of collapsing to 1. BONUS confirmed:
+>     per-section context (not whole-doc) let the classifier correctly TYPE the Term&Renewal clauses
+>     (Renewal Term / Expiration Date, all 3; NONE 29->25) and pick up the 3rd Indemnity -- the "cleaner classifier
+>     context" benefit, empirically. Tests: `test_rlm_chunking.py` (+3).
+>   - Each: contract-first TDD + gate. Order run: D -> B -> C -> A. RuleWright's store-dump ask is now a
 >     CONFIRMATORY cross-check (we've reproduced it). REPRO scripts in scratchpad.
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the

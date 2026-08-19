@@ -34,6 +34,7 @@ from rag_wright.capabilities.rlm_chunking import (
     Chunk,
     ChunkManifest,
     SeamBoundaryDiscoverer,
+    StructuralBoundaryDiscoverer,
     _MIN_NONEMPTY_CHARS,
     _finalize_chunks,
     _summarize_all,
@@ -242,6 +243,74 @@ def test_asiandragon_dense_header_pathology_over_discoverer_spans():
     assert 2 <= len(texts) < 40  # was 113 chunks on the real doc; several now, not one fragment per header
     assert lens[0] >= _MIN_NONEMPTY_CHARS  # no near-empty / heading-only chunk (was 10)
     assert all(length >= MIN_CHUNK_CHARS for length in lens)  # the size floor holds
+
+
+# --- 0006-A: structure-first chunking must not fold complete sections away (issue 0006) ----------
+
+
+_SHORT_CLAUSE_BODIES = [
+    "Supplier's total liability shall not exceed the fees paid in the prior twelve months.",
+    "This Agreement renews automatically for successive one-year terms unless notice is given.",
+    "Each party shall keep the other's Confidential Information secret for five years.",
+    "The Seller shall indemnify the Buyer against all third-party claims for defects.",
+    "Neither party may assign this Agreement without the other's prior written consent.",
+    "This Agreement is governed by the laws of the State of New York.",
+]
+
+
+def _short_clause_doc(n: int = 6) -> SimpleNamespace:
+    # a lone TITLE, then n complete SECTIONS (heading + a short one-sentence body), each ~110 chars << the
+    # 1000-char prose floor -- exactly RuleWright's 0006 fixture shape.
+    items: list[SimpleNamespace] = [_item("Master Services Agreement", "title")]
+    for i in range(n):
+        items.append(_item(f"{i + 1}. Clause {i + 1}", "section_header", level=1))
+        items.append(_item(_SHORT_CLAUSE_BODIES[i % len(_SHORT_CLAUSE_BODIES)]))
+    return _doc(items)
+
+
+def test_structural_sections_survive_the_prose_floor_0006a():
+    doc = _short_clause_doc(6)
+    spans = StructuralBoundaryDiscoverer().discover(doc)  # (0,0) title + 6 (heading,body) sections
+
+    # the bug: the 1000-char prose floor coalesces every short section into ONE chunk -> structure lost
+    prose = _finalize_chunks(doc, spans, token_cap=DEFAULT_TOKEN_CAP)
+    assert len(prose) == 1
+
+    # 0006-A: structure-first keeps each docling section as its own chunk, however short
+    structural = _finalize_chunks(doc, spans, token_cap=DEFAULT_TOKEN_CAP, respect_structure=True)
+    assert len(structural) == 6                                    # one chunk per section, not folded to 1
+    assert all("Clause" in t for t in structural)                 # every section survives
+    assert "Master Services Agreement" in structural[0]           # the lone TITLE folded forward, not standalone
+    assert all("." in t for t in structural)                      # each carries a body sentence, not a lone heading
+    assert all(len(t.strip()) >= _MIN_NONEMPTY_CHARS for t in structural)
+
+
+def test_a_trailing_lone_heading_folds_backward_under_respect_structure_0006a():
+    # a document that ends on a bare heading (no body after it) must not leave a heading-only chunk
+    doc = _doc([
+        _item("1. Term", "section_header", level=1),
+        _item("This Agreement runs for one year and then renews automatically each year thereafter."),
+        _item("2. Schedule", "section_header", level=1),  # trailing heading with NO body item after it
+    ])
+    spans = StructuralBoundaryDiscoverer().discover(doc)
+    texts = _finalize_chunks(doc, spans, token_cap=DEFAULT_TOKEN_CAP, respect_structure=True)
+    assert not any(t.strip() == "2. Schedule" for t in texts)     # the trailing heading never stands alone
+    assert "2. Schedule" in texts[-1]                             # it folded backward into the previous section
+
+
+def test_chunk_end_to_end_preserves_structural_sections_0006a(tmp_path):
+    # through the real chunk() with the structural discoverer: a short-clause doc yields one chunk per section
+    doc = DoclingDocument(name="short")
+    doc.add_text(label="title", text="Master Services Agreement")
+    for i, body in enumerate(_SHORT_CLAUSE_BODIES):
+        doc.add_text(label="section_header", text=f"{i + 1}. Clause {i + 1}")
+        doc.add_text(label="text", text=body)
+    parsed = _parsed(tmp_path, doc)
+
+    manifest = chunk(parsed, summarizer=_StubSummarizer(),
+                     discoverer=StructuralBoundaryDiscoverer(), cache_dir=tmp_path / "chunks")
+
+    assert len(manifest.chunks) == 6  # NOT folded into 1 by the prose floor (0006-A)
 
 
 def test_validate_rejects_near_empty_chunk_but_allows_a_lone_short_chunk():

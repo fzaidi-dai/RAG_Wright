@@ -36,6 +36,7 @@ from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.corpus.document_parser import _HEADING_LABELS  # the single docling heading-label authority (ADR-0058)
 from rag_wright.models.tag_structured import build_tag_structured
+from rag_wright.spans.segment import _is_bare_heading  # the single bare-heading text authority (0006-B)
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
@@ -365,6 +366,9 @@ class StructuralBoundaryDiscoverer:
     downstream by `_finalize_chunks`, and `repair_partition` guarantees a valid partition. A document with NO
     headings degrades to one span (then cap-split) -- the case CHUNK-4's per-section model fallback improves."""
 
+    respects_structure = True  # 0006-A: authoritative section boundaries -> finalize keeps each section, does NOT
+    #                            apply the 1000-char prose floor that would coalesce short clauses into one chunk.
+
     def _starts(self, document) -> list[int]:
         # boundary START indices: 0, plus every heading-labelled item's index (deduped, sorted).
         return sorted({0} | {i for i, item in enumerate(document.texts)
@@ -399,6 +403,8 @@ class StructuralModelFallbackDiscoverer:
     (`TagBoundaryDiscoverer`, tag-parse), run CONCURRENTLY. The model only ever sees ONE over-cap section at a
     time, so cost never scales with document length. A section within the cap keeps its structural boundary (no
     model call); a fully-structured document makes ZERO model calls. `structural`/`fallback` are injectable."""
+
+    respects_structure = True  # 0006-A: structural section boundaries are authoritative (see StructuralBoundaryDiscoverer)
 
     def __init__(self, model_id: str | None = None, *, token_cap: int = DEFAULT_TOKEN_CAP,
                  structural: Any = None, fallback: Any = None,
@@ -530,14 +536,18 @@ def _join_span(document, span: BoundarySpan) -> str:
     return _SEP.join(parts)
 
 
-def _finalize_chunks(document, spans: list[BoundarySpan], token_cap: int) -> list[str]:
+def _finalize_chunks(document, spans: list[BoundarySpan], token_cap: int,
+                     *, respect_structure: bool = False) -> list[str]:
     """Deterministic given the boundaries: join each span, enforce the cap, apply the T-CHK floor/merge.
 
     Runs after the discoverer chooses boundaries and is independent of how they were found. The token cap
-    always wins (an over-cap span is hard-split); below-floor spans fold into a neighbour so a discoverer
-    that returned a lone-heading or two-token span does not become a tiny fragment (T-CHK)."""
+    always wins (an over-cap span is hard-split). Then either:
+      - prose/heuristic boundaries (default): below-floor spans fold into a neighbour so a discoverer that
+        returned a lone-heading or two-token span does not become a tiny fragment (T-CHK); or
+      - `respect_structure` (ADR-0058/0006-A, set by the structural discoverers): the boundaries are
+        AUTHORITATIVE docling sections, so the 1000-char prose floor does NOT apply -- each complete section
+        keeps its own chunk however short -- and only a bare heading is folded so it never stands alone."""
     cap_chars = token_cap * 4
-    floor = min(MIN_CHUNK_CHARS, cap_chars)  # a tiny cap (tests) cannot demand a larger floor
     texts: list[str] = []
     for span in spans:
         text = _join_span(document, span)
@@ -547,7 +557,40 @@ def _finalize_chunks(document, spans: list[BoundarySpan], token_cap: int) -> lis
             texts.extend(_hard_split(text, token_cap))
         else:
             texts.append(text)
+    if respect_structure:
+        return _merge_bare_headings(texts, token_cap)
+    floor = min(MIN_CHUNK_CHARS, cap_chars)  # a tiny cap (tests) cannot demand a larger floor
     return _merge_below_floor(texts, floor, cap_chars)
+
+
+def _merge_bare_headings(chunks: list[str], token_cap: int) -> list[str]:
+    """Structure-first (ADR-0058 / 0006-A): every docling section is a legitimate chunk, however short, so the
+    1000-char prose floor does NOT apply -- a complete short clause keeps its own chunk. Only a BARE HEADING (a
+    lone section header / title with no operative body) is folded into a neighbour, so a heading never becomes a
+    standalone chunk (issue 0006 Problem 2 at chunk granularity): leading heading(s) fold FORWARD into the next
+    section, a trailing heading folds BACKWARD. The token cap still wins (a rare heading+near-cap section is
+    hard-split), so no chunk exceeds the cap and no text is lost."""
+    if len(chunks) <= 1:
+        return chunks
+    cap_chars = token_cap * 4
+
+    def _capped(text: str) -> list[str]:
+        return _hard_split(text, token_cap) if len(text) > cap_chars else [text]
+
+    merged: list[str] = []
+    carry = ""  # leading bare heading(s) awaiting the next body-bearing section
+    for c in chunks:
+        if _is_bare_heading(c) or len(c.strip()) < _MIN_NONEMPTY_CHARS:
+            carry = f"{carry}{_SEP}{c}" if carry else c
+            continue
+        merged.extend(_capped(f"{carry}{_SEP}{c}" if carry else c))
+        carry = ""
+    if carry:  # trailing heading(s) with no following body -> fold backward into the last section
+        if merged:
+            merged[-1:] = _capped(f"{merged[-1]}{_SEP}{carry}")
+        else:
+            merged.append(carry)  # a document that is ONLY headings (degenerate; nothing to fold into)
+    return merged
 
 
 def _merge_below_floor(chunks: list[str], floor: int, cap_chars: int) -> list[str]:
@@ -633,7 +676,7 @@ def chunk(
     if cached is not None:
         return cached
     spans = disc.discover(document)
-    texts = _chunk_texts(document, spans, token_cap)
+    texts = _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
     summaries = asyncio.run(_summarize_all(texts, summarizer, max_concurrency))
     return _chunk_manifest(parsed, texts, summaries, token_cap, manifest_path)
 
@@ -654,7 +697,7 @@ async def achunk(
     if cached is not None:
         return cached
     spans = await disc.adiscover(document)
-    texts = _chunk_texts(document, spans, token_cap)
+    texts = _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
     summaries = await _summarize_all(texts, summarizer, max_concurrency)
     return _chunk_manifest(parsed, texts, summaries, token_cap, manifest_path)
 
@@ -672,10 +715,11 @@ def _chunk_prepare(parsed: ParsedDocument, cache_dir: Path, discoverer: Optional
     return None, manifest_path, document, disc
 
 
-def _chunk_texts(document: Any, spans: list[BoundarySpan], token_cap: int) -> list[str]:
+def _chunk_texts(document: Any, spans: list[BoundarySpan], token_cap: int,
+                 *, respect_structure: bool = False) -> list[str]:
     """Shared: validate the boundary partition and finalize it into capped chunk texts."""
     _validate_partition(spans, len(document.texts))
-    return _finalize_chunks(document, spans, token_cap)
+    return _finalize_chunks(document, spans, token_cap, respect_structure=respect_structure)
 
 
 def _chunk_manifest(parsed: ParsedDocument, texts: list[str], summaries: list[str], token_cap: int,
