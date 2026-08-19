@@ -93,6 +93,14 @@ def test_role_is_env_overridable(monkeypatch):
     assert profiles.model_for(ModelRole.STRUCTURED_REASONING) == "vendor/custom-primary"
 
 
+def test_function_classify_role_moves_only_the_classifier(monkeypatch):
+    # issue 0005: the classifier can run on a different model than GENERAL without moving the other stages.
+    monkeypatch.setenv("RAG_MODEL_FUNCTION_CLASSIFY", "google/gemma-4-31b-it")
+    assert profiles.model_for(ModelRole.FUNCTION_CLASSIFY) == "google/gemma-4-31b-it"  # classifier -> Gemma
+    assert "granite" in profiles.model_for(ModelRole.GENERAL).lower()                   # GENERAL unchanged
+    assert "granite" in profiles.model_for(ModelRole.STRUCTURED_REASONING).lower()      # extraction unchanged
+
+
 def test_all_roles_override_points_every_role_at_one_model(monkeypatch):
     monkeypatch.setenv("RAG_MODEL_ALL", "vendor/experiment")
     for role in ModelRole:

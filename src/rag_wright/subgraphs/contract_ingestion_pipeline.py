@@ -532,7 +532,10 @@ def aproduction_document_ingest(
     if classify_fn is None:
         from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
 
-        classify_fn = production_batch_clause_classifier(model_for(ModelRole.GENERAL))
+        # issue 0005: the classifier has its OWN role (FUNCTION_CLASSIFY) -- defaults to the product LLM (granite,
+        # unchanged), but RAG_MODEL_FUNCTION_CLASSIFY moves JUST this stage (e.g. to Gemma-4) without touching the
+        # others. Route (b) tag-parse runs on any model. A `classify_fn` passed in still overrides everything.
+        classify_fn = production_batch_clause_classifier(model_for(ModelRole.FUNCTION_CLASSIFY))
     embedder = embedder if embedder is not None else BGEM3Embedder()
     template_version = hashlib.sha256(
         json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]

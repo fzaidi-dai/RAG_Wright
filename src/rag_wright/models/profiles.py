@@ -56,6 +56,10 @@ class ModelRole(str, Enum):
     GENERAL = "general"  # reasoning, generation, vision-to-text, RLM; the local-deployment default
     SUMMARIZATION = "summarization"  # a smaller model for chunking and summarization (FR-I.6 tiering)
     OKF_ENRICHMENT = "okf_enrichment"  # cheap classify + one-line description for OKF signposts (FR-K.2, ADR-0023)
+    # issue 0005: the ingest clause-function classifier as its OWN role, so it can run on a different model than
+    # GENERAL (e.g. Gemma-4) without moving the other stages. Route (b) is CLIENT-SIDE tag-parse -> works on any
+    # model. Defaults to the product LLM (unchanged behavior); set RAG_MODEL_FUNCTION_CLASSIFY to override.
+    FUNCTION_CLASSIFY = "function_classify"
 
 
 # Default model ids per role, confirmed against the live OpenRouter catalog at T12 (ADR-0006).
@@ -83,6 +87,7 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.GENERAL: ("RAG_MODEL_GENERAL", _PRODUCT_LLM),
     ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", _PRODUCT_LLM),
     ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", _PRODUCT_LLM),
+    ModelRole.FUNCTION_CLASSIFY: ("RAG_MODEL_FUNCTION_CLASSIFY", _PRODUCT_LLM),
 }
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default
