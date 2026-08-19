@@ -45,6 +45,23 @@ _ENUM = re.compile(
 # A sentence/list terminator followed by whitespace + start of a new provision.
 _TERM = re.compile(r"[.;:]\s+(?=[A-Z\"'(])")
 
+# 0006-B: a leading enumeration marker to strip before deciding if a span is a bare HEADING ('9.', '(a)', '12.1').
+_LEADING_ENUM = re.compile(r"^\s*(?:\(?[\dA-Za-z]{1,4}\s*[.)]|\d+(?:\.\d+){0,3}\.?|§+)\s+")
+
+
+def _is_bare_heading(text: str) -> bool:
+    """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
+    sentence terminator. It must fold INTO its body, never stand alone: a standalone heading gets classified as
+    a clause pointing at a bare heading, which pollutes evidence and can hide the real clause (issue 0006). A
+    genuine short provision carries an operative sentence (terminal '.'/';'/':'), so it is NOT a heading."""
+    t = text.strip()
+    if not t or len(t) > 60:
+        return False
+    rest = _LEADING_ENUM.sub("", t, count=1)  # drop a leading '9.' / '(a)' / '12.1' enumeration marker
+    if not rest or not rest[0].isupper():  # a heading's title starts capitalised
+        return False
+    return not re.search(r"[.;:]", rest)  # a bare title has no sentence punctuation; a provision does
+
 
 class OperativeSpan(BaseModel):
     """One operative span of a clause, pointing back to its parent clause (FR-R small-to-big unit)."""
@@ -86,8 +103,9 @@ def _merge_subfloor(ranges: list[tuple[int, int]], body: str, min_chars: int) ->
     for i, (s, e) in enumerate(ranges):
         start = carry if carry is not None else s
         is_last = i == len(ranges) - 1
-        if len(body[start:e].strip()) < min_chars and not is_last:
-            carry = start  # too small: carry its start into the next span
+        # fold FORWARD a sub-floor fragment OR a bare heading (0006-B) -- so a heading never stands alone
+        if (len(body[start:e].strip()) < min_chars or _is_bare_heading(body[start:e])) and not is_last:
+            carry = start  # carry its start into the next span (its body)
             continue
         merged.append((start, e))
         carry = None

@@ -81,6 +81,32 @@ def test_bare_heading_folds_into_following_provision():
     assert not any(s.text.strip().rstrip(".").replace(".", "").isdigit() for s in spans)  # no bare-number span
 
 
+def test_numbered_title_heading_folds_into_body_not_standalone():
+    # 0006-B: "9. Limitation of Liability" (26 chars, ABOVE the 25 sub-floor) must NOT be a standalone span --
+    # a standalone heading gets classified as a clause pointing at a bare heading (issue 0006 Problem 2).
+    body = "9. Limitation of Liability\n\nSupplier's total liability shall not exceed the fees paid."
+    spans = segment_clause("c:0:h", body)
+    texts = [s.text.strip() for s in spans]
+    assert "9. Limitation of Liability" not in texts                       # no standalone heading-only span
+    assert any("Limitation of Liability" in t and "total liability" in t for t in texts)  # heading stays with body
+    assert "".join(s.text for s in spans) == body                          # tiling invariant preserved
+
+
+def test_unnumbered_title_heading_also_folds():
+    body = "Term and Renewal\n\nThis Agreement renews automatically for successive one-year terms."
+    spans = segment_clause("c:0:h", body)
+    assert "Term and Renewal" not in [s.text.strip() for s in spans]       # not standalone
+    assert "".join(s.text for s in spans) == body
+
+
+def test_short_body_sentence_is_not_treated_as_a_heading():
+    # a genuine short provision (has a sentence terminator) is NOT a heading -- must not wrongly fold away
+    body = "10. Governing Law\n\nThis Agreement is governed by New York law. The parties consent to jurisdiction."
+    spans = segment_clause("c:0:h", body)
+    assert any("governed by New York law" in s.text for s in spans)        # the provision survives
+    assert "".join(s.text for s in spans) == body
+
+
 def test_span_id_embeds_parent_and_index():
     spans = _reconstructs(_MESSY)
     for i, s in enumerate(spans):
