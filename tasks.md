@@ -89,6 +89,18 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     a short note in the chunking module / engine_async_api.md.
 > Order: CHUNK-1 (quick safe win) -> CHUNK-2/3 (the fix) -> CHUNK-4 -> CHUNK-5 (gate) -> CHUNK-6. Each its own
 > approval gate. Phase-4 chunker + data-model (boundary contract) change -> ask-first; approved in principle.
+> STATUS (2026-08-19): CHUNK-1..5 DONE + committed. GATE CLEARED (24 CUAD PDFs: 24/24 lossless, 0 timeouts,
+> 0.00s median discovery, 0.86 median heading-align). **PROD DEFAULT FLIPPED** -> StructuralModelFallbackDiscoverer
+> in aproduction_document_ingest (SingleCall retired from the default; still exists for direct tests / A/B).
+> Suite 1238 pass. RuleWright will retest A0004 on the new default (they filed it).
+>   - **CHUNK-6** remains: docs-only b2 dynamic-agent seam plug-point.
+>   - **FOLLOW-UP (new finding, important):** the contract ingest FLATTENS to text (`_parsed_from_text`) before
+>     chunking, DISCARDING docling's structural labels -> on that path structural finds no headings and only the
+>     tag-parse fallback fires (which already fixes 0004's runaway). Preserve docling structure THROUGH the
+>     contract ingest (parse bytes -> keep the DoclingDocument, don't flatten to text) to unlock the full
+>     zero-model structural win. Bigger change (ingest takes SourceDocument.text today). Separate follow-up task.
+>   - **FOLLOW-UP (future):** window very large HEADINGLESS sections (RuleWright Option A) so the tag-parse
+>     fallback never prefills an extreme whole-doc; fine for typical 15-30pp contracts today.
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +

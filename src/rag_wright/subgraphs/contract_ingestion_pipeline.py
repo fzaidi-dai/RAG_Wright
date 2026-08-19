@@ -455,7 +455,7 @@ def aproduction_document_ingest(
     from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.capabilities.graph_extraction import aproduction_extract_fn
     from rag_wright.capabilities.graph_storage import to_graph
-    from rag_wright.capabilities.rlm_chunking import SingleCallBoundaryDiscoverer, achunk
+    from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, achunk
     from rag_wright.contracts.contract_meta import ContractRecord
     from rag_wright.contracts.function import canonical_function
     from rag_wright.contracts.identifiers import ChunkId
@@ -473,7 +473,12 @@ def aproduction_document_ingest(
         directory.mkdir(parents=True, exist_ok=True)
     if party_seed_path is not None:
         seed_party_cache(party_dir, party_seed_path)
-    discoverer = SingleCallBoundaryDiscoverer()  # SingleCall.adiscover -> the async seam
+    # ADR-0058 (issue 0004): structure-first default -- deterministic boundaries from docling labels where present
+    # (zero model calls), bounded per-section TAG-PARSE fallback for over-cap sections (never the server-side
+    # guided-decoding whole-doc call that ran away past the 180s deadline). NOTE: this ingest currently flattens
+    # to text (`_parsed_from_text`), so labels are absent here and only the tag-parse fallback fires; preserving
+    # docling structure through ingest (a follow-up) unlocks the full zero-model structural win.
+    discoverer = StructuralModelFallbackDiscoverer()
     summarizer = _NoSummary()
     from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
     clause_extractor = granite_clause_extractor(
