@@ -38,6 +38,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 from pydantic import BaseModel
 
+from rag_wright.capabilities.parsing import ParsedDocument
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
 
@@ -49,6 +50,10 @@ class SourceDocument(BaseModel):
     source_doc_id: str
     text: str
     metadata: dict = {}
+    # CHUNK-7 (ADR-0058, issue 0004): the REAL docling parse (structure preserved), set by a BYTE-source adapter
+    # (or `parsed_source_document`). When present, the chunk stage uses it so the structural pass fires on the
+    # document's actual headings; when None (genuinely text-only input) the chunker falls back to a text parse.
+    parsed: Optional[ParsedDocument] = None
 
 
 class IngestionReport(BaseModel):
@@ -301,6 +306,46 @@ def _parsed_from_text(source_doc_id: str, text: str, parse_dir: Any):
     return ParsedDocument(source_doc_id=source_doc_id, content_hash=content_hash, manifest_path=str(manifest_path))
 
 
+def _parsed_for(doc: SourceDocument, parse_dir: Any) -> ParsedDocument:
+    """CHUNK-7 (ADR-0058): the ParsedDocument the chunker chunks. Use the document's REAL docling parse
+    (`doc.parsed`, structure preserved) when a byte-source adapter provided one -- so the structural pass fires
+    on the document's own headings; otherwise fall back to a text-only parse of `doc.text` (genuinely
+    structureless input, which the chunker's tag-parse fallback handles). This is what carries docling structure
+    to the chunker."""
+    if doc.parsed is not None:
+        return doc.parsed
+    return _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
+
+
+def parsed_source_document(
+    source_doc_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: Optional[dict] = None
+) -> SourceDocument:
+    """Build a STRUCTURE-BEARING `SourceDocument` from raw document BYTES (PDF/DOCX/HTML/MD): docling-parse ONCE
+    (content-hash gated + cached), carry the `DoclingDocument` on `.parsed` (so the chunker's structural pass
+    fires on real headings), and set `.text` to the flattened text (for the text-consuming stages). This is how a
+    byte-source corpus adapter -- or the product (RuleWright), which hand-builds its ingest -- feeds a real
+    document to the engine; a plain-text `SourceDocument` (no `.parsed`) still uses the text fallback."""
+    import hashlib
+    from pathlib import Path
+
+    from rag_wright.capabilities.parsing import load_document
+    from rag_wright.corpus.document_parser import document_to_text, parse_document_bytes
+
+    cache_dir = Path(cache_dir)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    content_hash = hashlib.sha256(data).hexdigest()
+    manifest_path = cache_dir / f"{source_doc_id}.{content_hash[:16]}.json"
+    parsed = ParsedDocument(
+        source_doc_id=source_doc_id, content_hash=content_hash, manifest_path=str(manifest_path))
+    if manifest_path.exists():  # content-hash gate: parse once
+        document = load_document(parsed)
+    else:
+        document = parse_document_bytes(name, data)
+        document.save_as_json(manifest_path)
+    return SourceDocument(
+        source_doc_id=source_doc_id, text=document_to_text(document), parsed=parsed, metadata=metadata or {})
+
+
 class _NoSummary:
     """A no-op summarizer -- the ingest smoke targets the typed KG + entity graph, not chunk summaries."""
 
@@ -499,7 +544,7 @@ def aproduction_document_ingest(
         return [p.name for p in parties.parties] if parties is not None else []
 
     async def chunk_fn(doc: SourceDocument) -> list:
-        parsed = _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
+        parsed = _parsed_for(doc, parse_dir)  # CHUNK-7: real docling parse if provided, else a text-only parse
         manifest = await achunk(parsed, summarizer=summarizer, cache_dir=chunk_dir, discoverer=discoverer)
         return list(manifest.chunks)
 
