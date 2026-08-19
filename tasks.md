@@ -158,6 +158,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     CONFIRMATORY cross-check (we've reproduced it). REPRO scripts in scratchpad.
 > VERIFIED FIXED by RuleWright (fresh salt, caches couldn't fake it): 30/30 answered, zero not_found; Term&Renewal
 > 0/5->5/5 retrieved, LoL abstains 3/5->0/5; ingest clean (0 clause, 0 span failures).
+> The four 0006 decisions (D+B+A+C) + ENG-1 are recorded in **ADR-0059** (recall decoupled from classification;
+> structure survives ingest; a partial loss is never silent).
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
