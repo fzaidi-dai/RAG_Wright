@@ -100,13 +100,15 @@ class _TagStructuredRunnable:
     """A `build_structured`-shaped runnable that drives structured output client-side (free-text + tag parse)."""
 
     def __init__(
-        self, model_id: str, schema: type[BaseModel], *, temperature: float, max_tokens: int | None, retries: int
+        self, model_id: str, schema: type[BaseModel], *, temperature: float, max_tokens: int | None, retries: int,
+        label: str | None = None,
     ) -> None:
         self._model_id = model_id
         self._schema = schema
         self._temperature = temperature
         self._max_tokens = max_tokens
         self._retries = retries
+        self._label = label  # ADR-0058: stage/call-site name for the deadline warning (threaded to astream_text)
 
     def _full_prompt(self, prompt: Any) -> Any:
         # `prompt` is a plain string or a LangChain message sequence (e.g. [SystemMessage, HumanMessage]); append
@@ -135,7 +137,8 @@ class _TagStructuredRunnable:
         last: Exception | None = None
         for _ in range(self._retries + 1):
             text = await astream_text(
-                self._model_id, full, temperature=self._temperature, max_tokens=self._max_tokens)
+                self._model_id, full, temperature=self._temperature, max_tokens=self._max_tokens,
+                label=self._label)
             try:
                 return parse_tagged(text, self._schema)
             except ValidationError as exc:
@@ -145,13 +148,14 @@ class _TagStructuredRunnable:
 
 def build_tag_structured(
     model_id: str, schema: type[BaseModel], *, include_raw: bool = False, temperature: float = 0.0,
-    max_tokens: int | None = 2048, retries: int = 1,
+    max_tokens: int | None = 2048, retries: int = 1, label: str | None = None,
 ) -> _TagStructuredRunnable:
     """Drop-in for `models.seam.build_structured`: returns a runnable whose `.invoke(prompt)` yields a validated
     `schema` instance -- but via CLIENT-SIDE tag parsing (no server guided decoding), so it works on any model/
-    provider. `max_tokens` defaults to a generous cap (free-text terminates on its own). `include_raw` is accepted
-    for signature-compat but not supported (no query-side caller uses it)."""
+    provider. `max_tokens` defaults to a generous cap (free-text terminates on its own). `label` (ADR-0058) names
+    the stage/call-site in the deadline warning. `include_raw` is accepted for signature-compat but not
+    supported (no query-side caller uses it)."""
     if include_raw:
         raise NotImplementedError("tag_structured: include_raw is not supported")
     return _TagStructuredRunnable(
-        model_id, schema, temperature=temperature, max_tokens=max_tokens, retries=retries)
+        model_id, schema, temperature=temperature, max_tokens=max_tokens, retries=retries, label=label)

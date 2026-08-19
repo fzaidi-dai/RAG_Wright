@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.corpus.document_parser import _HEADING_LABELS  # the single docling heading-label authority (ADR-0058)
+from rag_wright.models.tag_structured import build_tag_structured
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
@@ -291,6 +292,66 @@ class SingleCallBoundaryDiscoverer:
             return []
         out = await self._factory(self._model_id, _BoundaryList, label=self._STAGE).ainvoke(prompt)
         return repair_partition([(s.start_index, s.end_index) for s in out.spans], n)
+
+
+_CUT_PROMPT = (
+    "Below are {n} numbered structural items of a document (indices 0 to {last}). Group CONTIGUOUS items into "
+    "semantically coherent clauses/sections (never split a single clause). List the item index where EACH new "
+    "chunk BEGINS -- the first item of every clause/section, in increasing order; index 0 always begins the "
+    "first chunk.\n\n{body}"
+)
+
+
+class _CutIndices(BaseModel):
+    """CHUNK-3 (ADR-0058): the boundary output as a FLAT list of chunk-START item indices (a `list[int]`), so it
+    fits `tag_structured`'s flat-schema scope -- no nested `list[BaseModel]`. `repair_partition` forces full,
+    valid coverage regardless of what the model returns (missing 0, out-of-range, dupes, unordered)."""
+
+    cuts: list[int] = Field(default_factory=list,
+                            description="the item index where each new chunk begins, one per line")
+
+
+def _cuts_to_spans(cuts: list[int], n: int) -> list[BoundarySpan]:
+    """A flat cut-index list (chunk-start indices) -> a valid `BoundarySpan` partition. Each cut is a
+    break-before point; `repair_partition` sorts/de-dupes/drops out-of-range and guarantees a contiguous,
+    gap-free partition covering 0..n-1 (so a bad model list can never lose text)."""
+    return repair_partition([(c, c) for c in cuts], n)
+
+
+class TagBoundaryDiscoverer:
+    """CHUNK-3 (ADR-0058): boundary discovery via CLIENT-SIDE tag-parse (`build_tag_structured`, ADR-0045) over
+    the FLAT `_CutIndices` contract -- the model emits chunk-start indices in light XML tags, parsed on our side.
+    Unlike the server-side guided-decoding `_BoundaryList` call (which ran away past the 180s deadline on
+    self-hosted Granite), a free-text tag call terminates cleanly. Seam-compatible; CHUNK-4's per-section
+    fallback runs it over one section's items at a time (small, bounded input). `structured_factory` injectable."""
+
+    _STAGE = "semantic_chunking.discover"
+
+    def __init__(self, model_id: str | None = None, *, structured_factory=build_tag_structured) -> None:
+        self._model_id = model_id or model_for(ModelRole.GENERAL)
+        self._factory = structured_factory
+
+    def _prompt(self, document) -> tuple[str | None, int]:
+        items = _document_items(document)
+        n = len(items)
+        if n == 0:
+            return None, 0
+        body = "\n".join(f"[{it['index']}] {it['text'][:140]}" for it in items)
+        return _CUT_PROMPT.format(n=n, last=n - 1, body=body), n
+
+    def discover(self, document) -> list[BoundarySpan]:
+        prompt, n = self._prompt(document)
+        if prompt is None:
+            return []
+        out = self._factory(self._model_id, _CutIndices, label=self._STAGE).invoke(prompt)
+        return _cuts_to_spans(out.cuts, n)
+
+    async def adiscover(self, document) -> list[BoundarySpan]:
+        prompt, n = self._prompt(document)
+        if prompt is None:
+            return []
+        out = await self._factory(self._model_id, _CutIndices, label=self._STAGE).ainvoke(prompt)
+        return _cuts_to_spans(out.cuts, n)
 
 
 class StructuralBoundaryDiscoverer:

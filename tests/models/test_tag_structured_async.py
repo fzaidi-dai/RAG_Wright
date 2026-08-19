@@ -22,6 +22,19 @@ async def test_ainvoke_streams_then_parses(monkeypatch):
     assert isinstance(result, _Party) and result.name == "Acme Corporation"
 
 
+async def test_label_is_threaded_to_astream_text_for_the_deadline_warning(monkeypatch):
+    # ADR-0058: the stage label reaches astream_text, so a tag-parse call's timeout names its stage
+    seen = {}
+
+    async def fake_astream(model_id, prompt, **kw):
+        seen["label"] = kw.get("label")
+        return "<name>Acme</name>"
+
+    monkeypatch.setattr(ts, "astream_text", fake_astream)
+    out = await build_tag_structured("m", _Party, label="semantic_chunking.discover").ainvoke("q")
+    assert out.name == "Acme" and seen["label"] == "semantic_chunking.discover"
+
+
 async def test_ainvoke_re_asks_on_validation_error_then_succeeds(monkeypatch):
     calls = {"n": 0}
 
