@@ -110,6 +110,39 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   - **FOLLOW-UP (future):** window very large HEADINGLESS sections (RuleWright Option A) so the tag-parse
 >     fallback never prefills an extreme whole-doc; fine for typical 15-30pp contracts today.
 
+> **ENGINE ISSUE 0006 (RuleWright): "not_found" on clauses that EXIST — a silent recall hole. INVESTIGATING.**
+> RuleWright's probe (production_intra_document_qa, top_k=12, 24-clause near-dup fixture, scripts/probe_qa_layers.py
+> in the RuleWright repo) split it into TWO problems, both INGESTION/INDEXING (chunker cleared; generation is
+> downstream): (1) SERIOUS — "Term and Renewal" body 0-retrievable even by verbatim text (never in the index);
+> (2) "Limitation of Liability" retrieved but heading-only fragments pollute evidence -> intermittent abstain.
+> Reproduced model-free (segmentation) -- CONFIRMED DEFECTS:
+>   - **Defect A** (chunk floor discards structure): docling found 24 section headers but MIN_CHUNK_CHARS=1000
+>     folds the short-clause doc into 1 chunk -> structural cuts thrown away.
+>   - **Defect B** (segment_clause mis-segments): splits at sentence terminators + paragraph breaks, 25-char
+>     sub-floor too low -> standalone heading-only spans (LoL heading 26ch) + the distinguishing 'Reference salt-i'
+>     split off the body -> near-dup bodies become BYTE-IDENTICAL (LoL body collides x3 = RuleWright's "one span
+>     carries the body").
+>   - **Defect C** (silent recall hole): index_fn._write_all wraps store.upsert_span in `except Exception:
+>     continue`; span_id has a UNIQUE index -> any write failure (incl. duplicate span_id) is DROPPED with no log/
+>     dead-letter. This is exactly what NFR-2 forbids.
+> ROOT CAUSE PINNED (0006-REPRO DONE, full ingest vs live ArcadeDB + local BGE-M3): SPAN INDEX IS FINE (52/52
+> stored, 0 upsert failures, T&R body present x3). Problem 1 is a CLASSIFICATION-GATED RECALL HOLE (Defect D):
+> intra_document_qa serves clauses from the CLAUSE KG (`clauses_in_contract`), which holds ONLY clauses the
+> classifier TYPED. The classifier returned NONE for all 3 Term&Renewal spans (33/52 spans = NONE) -> no clause
+> -> absent from the Clause KG -> not_found, though the body is indexed. 5/24 clause instances lost (T&R x3,
+> Indemnity x2). Problem 2 = Defect B: heading-only spans ("9. Limitation of Liability") get typed (name in the
+> heading) -> heading-only clauses -> evidence pollution. CORRECTION: the classifier IS load-bearing for Leg-A
+> recall (earlier "mostly unused" was WRONG); a NONE miss silently drops a clause. TASK BREAKDOWN (revised):
+>   - **0006-D (PRIMARY, Problem 1):** decouple Leg-A recall from classification -- intra_document_qa serves the
+>     WHOLE span index (typed AND untyped), per ADR-0047 whole-index; a classifier NONE must not drop a clause.
+>   - **0006-B (Problem 2):** clause-aligned segmentation -- heading stays with its body; no standalone
+>     heading-only spans (fix segment_clause's paragraph/sentence split + the 25-char sub-floor).
+>   - **0006-A:** don't fold structural section cuts away for short clauses (MIN_CHUNK_CHARS folds 24 sections->1
+>     chunk); compounds B.
+>   - **0006-C:** span-write failures must dead-letter/log, never `except: continue` silently (NFR-2 safety).
+>   - Each: contract-first TDD + gate. Recommended order: D (the recall hole) -> B -> A -> C. RuleWright's
+>     store-dump ask is now a CONFIRMATORY cross-check (we've reproduced it). REPRO scripts in scratchpad.
+
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
 > ontology machinery). The user-facing **product** (contract mgmt + compliance app: UI, product-named tools,
