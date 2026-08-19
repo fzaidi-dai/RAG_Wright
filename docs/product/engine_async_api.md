@@ -71,6 +71,25 @@ background async runner (`run_job` → `await ingest_graph.ainvoke(...)`) so the
 returns immediately. `JobStore` writes are atomic (write-temp-then-`os.replace`) so a poll never reads a partial
 job record.
 
+### Reading an `IngestionReport` — do not miss a partial loss
+
+A document can be written but **incomplete**: a clause extraction failed after retries, *or* a span-index write
+failed (best-effort index; the doc is never dead-lettered for it). Both are reported in `report.partial`, one
+entry per affected document:
+
+```python
+for p in report.partial:                       # p["source_doc_id"]
+    for f in p["failures"]:                     # ALWAYS present; covers BOTH kinds
+        log(f'{p["source_doc_id"]} lost {f["kind"]} {f["span_id"]}: {f["reason"]}')
+```
+
+**Key on `failures` (or simply on the document appearing in `partial`).** The per-kind keys `clause_failures`
+and `span_failures` are **optional** — each is present only when that kind of loss occurred — so reading only
+`clause_failures` **silently misses a span-only loss** (a document that dropped only spans still ingested and
+looks clean). `failures` is the always-present, kind-tagged (`{"kind": "clause"|"span", "span_id", "reason"}`)
+union; the per-kind keys remain for back-compat. `report.per_document` lists what was written; `partial` and
+`dead_lettered` list what was not — join by `source_doc_id`.
+
 ## ARD / discovery
 
 Every capability is registered under its FR-C name (`capabilities/registry.py`, 52 registrations) for Agentic

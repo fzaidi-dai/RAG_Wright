@@ -76,9 +76,10 @@ def test_list_jobs_returns_all(tmp_path):
 class _FakeGraph:
     """A per-document graph stub: returns dead_letter / partial / clean per doc id, mirroring the real out dict."""
 
-    def __init__(self, *, dead_letter_for=(), partial_for=(), raise_for=()):
+    def __init__(self, *, dead_letter_for=(), partial_for=(), span_partial_for=(), raise_for=()):
         self.dl = set(dead_letter_for)
         self.pf = set(partial_for)
+        self.spf = set(span_partial_for)
         self.raise_for = set(raise_for)
 
     def invoke(self, state):
@@ -88,7 +89,8 @@ class _FakeGraph:
         if doc.source_doc_id in self.dl:
             return {"dead_letter": {"source_doc_id": doc.source_doc_id, "stage": "extract_graph", "reason": "boom"}}
         cf = [{"span_id": "s1", "reason": "trunc"}] if doc.source_doc_id in self.pf else []
-        return {"written": {"clauses": 1}, "clause_failures": cf}
+        sf = [{"span_id": "s9", "reason": "SQL newline"}] if doc.source_doc_id in self.spf else []
+        return {"written": {"clauses": 1}, "clause_failures": cf, "span_failures": sf}
 
     async def ainvoke(self, state):  # run_job now uses ainvoke (ASYNC-B2e); delegate to invoke (patchable in tests)
         return self.invoke(state)
@@ -110,6 +112,22 @@ def test_run_job_ingests_all_and_succeeds_with_dead_letter_and_partial(tmp_path)
     assert [d["source_doc_id"] for d in job.dead_lettered] == ["C2"]
     assert [p["source_doc_id"] for p in job.partial] == ["C3"]
     assert job.party_links == 5
+
+
+def test_run_job_surfaces_a_span_only_loss_with_unified_failures(tmp_path):
+    # ENG-1: the fire-and-forget job path previously read only clause_failures -> a span-only loss vanished into a
+    # clean-looking ingest. It must now flag PARTIAL with the same kind-tagged `failures` shape as the blocking driver.
+    store = JobStore(tmp_path)
+    store.create(_job(job_id="jobspan"))
+    graph = _FakeGraph(span_partial_for={"C2"})
+    job = asyncio.run(run_job("jobspan", _docs("C1", "C2"), graph, store, link_fn=lambda: 0))
+
+    assert job.status is JobStatus.SUCCEEDED and job.ingested == 2  # span index is best-effort: not dead-lettered
+    assert [p["source_doc_id"] for p in job.partial] == ["C2"]      # but the loss IS surfaced
+    entry = job.partial[0]
+    assert "clause_failures" not in entry                          # the trap: reading only this key misses it
+    assert entry["failures"] == [{"kind": "span", "span_id": "s9", "reason": "SQL newline"}]
+    assert entry["span_failures"] == [{"span_id": "s9", "reason": "SQL newline"}]
 
 
 def test_run_job_resume_skips_done_docs(tmp_path):

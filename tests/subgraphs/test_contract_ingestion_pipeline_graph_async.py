@@ -117,7 +117,10 @@ async def test_async_clause_partial_failure_flags_the_document_not_dead_letter()
     report = await arun_corpus_ingestion(
         _FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
     assert report.documents_ingested == 1 and report.dead_lettered == []
-    assert report.partial == [{"source_doc_id": "C1", "clause_failures": [{"span_id": "s1", "reason": "trunc"}]}]
+    assert report.partial == [{
+        "source_doc_id": "C1",
+        "failures": [{"kind": "clause", "span_id": "s1", "reason": "trunc"}],  # ENG-1: unified, always present
+        "clause_failures": [{"span_id": "s1", "reason": "trunc"}]}]            # back-compat key preserved
 
 
 async def test_async_span_write_failures_surface_as_partial_not_swallowed():
@@ -128,7 +131,37 @@ async def test_async_span_write_failures_surface_as_partial_not_swallowed():
     report = await arun_corpus_ingestion(
         _FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
     assert report.documents_ingested == 1 and report.dead_lettered == []  # best-effort: not dead-lettered
-    assert report.partial == [{"source_doc_id": "C1", "span_failures": fails}]  # but SURFACED, not swallowed
+    assert report.partial == [{                                           # SURFACED, not swallowed
+        "source_doc_id": "C1",
+        "failures": [{"kind": "span", **f} for f in fails],               # ENG-1: unified, always present
+        "span_failures": fails}]                                          # back-compat key preserved
+
+
+async def test_partial_entry_has_a_unified_failures_list_across_both_loss_kinds():
+    # ENG-1: EITHER loss kind must be readable from ONE always-present `failures` list (kind-tagged), so an
+    # integrator mapping per-document outcomes cannot silently miss a span-only loss (the trap RuleWright hit).
+    cf = [{"span_id": "C1#2", "reason": "trunc"}]
+    sf = [{"span_id": "C1#5", "reason": "SQL newline"}]
+    stages, _ = _astub_stages(clause_partial_for={"C1": cf}, index_partial_for={"C1": sf})
+    report = await arun_corpus_ingestion(_FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
+    assert len(report.partial) == 1
+    entry = report.partial[0]
+    assert entry["source_doc_id"] == "C1"
+    assert entry["failures"] == [                                         # clause first, then span; kind-tagged
+        {"kind": "clause", "span_id": "C1#2", "reason": "trunc"},
+        {"kind": "span", "span_id": "C1#5", "reason": "SQL newline"}]
+    assert entry["clause_failures"] == cf and entry["span_failures"] == sf  # both back-compat keys preserved
+
+
+async def test_span_only_loss_is_readable_from_the_unified_failures_list():
+    # the exact trap: a span-ONLY loss -- an integrator reading `clause_failures` alone sees a clean doc, but the
+    # always-present `failures` list makes the loss impossible to miss.
+    sf = [{"span_id": "C1#3", "reason": "boom"}]
+    stages, _ = _astub_stages(index_partial_for={"C1": sf})
+    report = await arun_corpus_ingestion(_FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
+    entry = report.partial[0]
+    assert "clause_failures" not in entry                                 # the trap: this key is absent
+    assert entry["failures"] == [{"kind": "span", "span_id": "C1#3", "reason": "boom"}]  # always present
 
 
 async def test_async_ingest_graph_threads_span_failures_into_state():

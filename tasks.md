@@ -156,6 +156,23 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     context" benefit, empirically. Tests: `test_rlm_chunking.py` (+3).
 >   - Each: contract-first TDD + gate. Order run: D -> B -> C -> A. RuleWright's store-dump ask is now a
 >     CONFIRMATORY cross-check (we've reproduced it). REPRO scripts in scratchpad.
+> VERIFIED FIXED by RuleWright (fresh salt, caches couldn't fake it): 30/30 answered, zero not_found; Term&Renewal
+> 0/5->5/5 retrieved, LoL abstains 3/5->0/5; ingest clean (0 clause, 0 span failures).
+
+> **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
+> outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
+> ingest -- a SILENT trap for any integrator, since the per-kind keys are optional. FIX: every `partial[]` entry now
+> carries an always-present, kind-tagged `failures` list (`{kind: "clause"|"span", span_id, reason}`) via one shared
+> `build_partial_entry` helper used by BOTH the blocking driver (`arun_corpus_ingestion`) AND the async job runner
+> (`async_ingestion.run_job`) -- the latter previously DROPPED span failures entirely (worse trap). Per-kind
+> `clause_failures`/`span_failures` kept for back-compat. Contract documented on `IngestionReport.partial` +
+> `docs/product/engine_async_api.md` ("Reading an IngestionReport"). Tests +3. Suite 1270 pass.
+> RECORDED PERF FOLLOW-UP (not scheduled): 0006-A's section-per-chunk cost RuleWright ~70% on large docs (15pg
+> 28.6->48.9s) and pushed their 1-page case 9.2->12.1s past their NFR-1 <=10s. They ACCEPTED it (correctness >
+> UX) and are NOT asking for it back. Lever if revisited = batch the per-section summary/classify fan-out for small
+> docs (NOT coarser chunks -- per-section context is what fixed T&R typing; coarsening hands the recall win back).
+> Still open on this arc: ADR-0059 (fold the four 0006 decisions) + ACORD graded-recall gate re-run (A+D can move
+> corpus-wide numbers).
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +

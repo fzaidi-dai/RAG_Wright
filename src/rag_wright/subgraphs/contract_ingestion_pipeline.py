@@ -65,7 +65,15 @@ class IngestionReport(BaseModel):
     party_links: int
     per_document: list[dict]
     # PROD-3 lossless invariant (ADR-0050): documents written but INCOMPLETE (>=1 clause extraction failed after
-    # retries). Surfaced here so a partial is KNOWN at job completion, never discovered later by grepping logs.
+    # retries, OR >=1 span-index write failed -- 0006-C). Surfaced here so a partial is KNOWN at job completion,
+    # never discovered later by grepping logs. Each entry:
+    #   {"source_doc_id": str,
+    #    "failures": [{"kind": "clause"|"span", "span_id": str, "reason": str}, ...],  # ENG-1: read THIS -- always
+    #                                                                                   #  present, covers BOTH kinds
+    #    "clause_failures": [...],   # present only if a clause loss (back-compat)
+    #    "span_failures":   [...]}   # present only if a span loss   (back-compat)
+    # Integrators: key on `failures` (or on the doc being in `partial` at all). Reading only `clause_failures`
+    # SILENTLY misses a span-only loss -- the per-kind keys are optional, `failures` is not.
     partial: list[dict] = []
 
 
@@ -231,6 +239,25 @@ def abuild_document_ingest(
                               retry_policy)
 
 
+def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures: list) -> Optional[dict]:
+    """ENG-1: the single PARTIAL-entry shape, shared by the blocking driver AND the async job runner so the two
+    can never drift. A UNIFIED, always-present `failures` list (kind-tagged) lets an integrator read ONE field
+    and never silently miss a span-only loss; the per-kind `clause_failures`/`span_failures` keys stay for
+    back-compat. Returns None when the document is fully complete (no loss -> not partial)."""
+    clause_failures = clause_failures or []
+    span_failures = span_failures or []
+    if not (clause_failures or span_failures):
+        return None
+    failures = ([{"kind": "clause", **f} for f in clause_failures]
+                + [{"kind": "span", **f} for f in span_failures])
+    entry: dict = {"source_doc_id": source_doc_id, "failures": failures}
+    if clause_failures:
+        entry["clause_failures"] = clause_failures
+    if span_failures:
+        entry["span_failures"] = span_failures
+    return entry
+
+
 def _print_progress(message: str) -> None:
     print(message, flush=True)
 
@@ -274,12 +301,8 @@ async def arun_corpus_ingestion(
         summary = " ".join(f"{k}={v}" for k, v in written.items()) or "ok"
         clause_failures = out.get("clause_failures") or []
         span_failures = out.get("span_failures") or []
-        if clause_failures or span_failures:  # 0006-C: EITHER kind of loss flags the doc PARTIAL (never silent)
-            entry = {"source_doc_id": document.source_doc_id}
-            if clause_failures:
-                entry["clause_failures"] = clause_failures
-            if span_failures:
-                entry["span_failures"] = span_failures
+        entry = build_partial_entry(document.source_doc_id, clause_failures, span_failures)
+        if entry is not None:  # 0006-C: EITHER kind of loss flags the doc PARTIAL (never silent)
             partial.append(entry)
             reasons = ", ".join(
                 p for p in (f"{len(clause_failures)} clause(s)" if clause_failures else "",

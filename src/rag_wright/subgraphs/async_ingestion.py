@@ -22,6 +22,8 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
+from rag_wright.subgraphs.contract_ingestion_pipeline import build_partial_entry  # ENG-1: one PARTIAL-entry shape
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -150,9 +152,10 @@ async def run_job(
                 dead_lettered.append(out["dead_letter"])
             else:
                 ingested += 1
-                clause_failures = (out or {}).get("clause_failures") or []
-                if clause_failures:
-                    partial.append({"source_doc_id": doc.source_doc_id, "clause_failures": clause_failures})
+                entry = build_partial_entry(  # ENG-1: same shape as the blocking driver; also surfaces span losses
+                    doc.source_doc_id, (out or {}).get("clause_failures"), (out or {}).get("span_failures"))
+                if entry is not None:
+                    partial.append(entry)
             store.update(job_id, documents_done=done, ingested=ingested,
                          dead_lettered=dead_lettered, partial=partial)
 
