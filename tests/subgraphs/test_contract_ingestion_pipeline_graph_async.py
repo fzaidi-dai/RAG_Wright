@@ -16,10 +16,11 @@ _FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)
 
 
 def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset(), fail_index_for=frozenset(),
-                  fail_write_for=frozenset(), clause_partial_for=None):
+                  fail_write_for=frozenset(), clause_partial_for=None, index_partial_for=None):
     calls: dict = {k: [] for k in ("chunk", "segment", "clauses", "index", "graph", "write")}
     calls["resolve"] = 0
     clause_partial_for = clause_partial_for or {}
+    index_partial_for = index_partial_for or {}
 
     async def chunk_fn(doc):
         calls["chunk"].append(doc.source_doc_id)
@@ -42,6 +43,9 @@ def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset(), fai
         calls["index"].append(doc.source_doc_id)
         if doc.source_doc_id in fail_index_for:
             raise RuntimeError("index blip")
+        if doc.source_doc_id in index_partial_for:  # 0006-C: some spans fail to write -> surfaced, not swallowed
+            failures = index_partial_for[doc.source_doc_id]
+            return {"span_count": len(segments) - len(failures), "span_failures": failures}
         return len(segments)
 
     async def graph_fn(doc, _chunks):
@@ -114,6 +118,26 @@ async def test_async_clause_partial_failure_flags_the_document_not_dead_letter()
         _FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
     assert report.documents_ingested == 1 and report.dead_lettered == []
     assert report.partial == [{"source_doc_id": "C1", "clause_failures": [{"span_id": "s1", "reason": "trunc"}]}]
+
+
+async def test_async_span_write_failures_surface_as_partial_not_swallowed():
+    # 0006-C (NFR-2): a per-span index-write failure must be SURFACED (PARTIAL + reason), never silently dropped.
+    # The span index is best-effort -- the doc is still ingested (not dead-lettered) -- but the loss is visible.
+    fails = [{"span_id": "C1#3", "reason": "SQL newline"}, {"span_id": "C1#7", "reason": "bad vector"}]
+    stages, _ = _astub_stages(index_partial_for={"C1": fails})
+    report = await arun_corpus_ingestion(
+        _FakeAdapter(["C1"]), _agraph(stages), progress=lambda _m: None)
+    assert report.documents_ingested == 1 and report.dead_lettered == []  # best-effort: not dead-lettered
+    assert report.partial == [{"source_doc_id": "C1", "span_failures": fails}]  # but SURFACED, not swallowed
+
+
+async def test_async_ingest_graph_threads_span_failures_into_state():
+    # the graph node must propagate span_failures out of state (so the driver can report it)
+    fails = [{"span_id": "C1#1", "reason": "boom"}]
+    stages, _ = _astub_stages(index_partial_for={"C1": fails})
+    out = await _agraph(stages).ainvoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+    assert out.get("span_failures") == fails
+    assert out["written"]["spans"] == 0  # 1 segment, 1 failed -> 0 written
 
 
 async def test_arun_corpus_ingestion_maps_all_and_dead_letters_one():

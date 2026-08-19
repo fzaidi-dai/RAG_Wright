@@ -97,6 +97,7 @@ class IngestionState(TypedDict, total=False):
     clause_records: list
     clause_failures: list  # PROD-3 lossless: per-clause extraction failures (span_id + reason) -> doc flagged PARTIAL
     span_count: int  # Span records written to the retrieval index (best-effort)
+    span_failures: list  # 0006-C (NFR-2): per-span index-write failures (span_id + reason) -> doc flagged PARTIAL
     extraction_results: list
     resolution: Any
     written: dict
@@ -191,9 +192,14 @@ def abuild_document_ingest(
         doc = state["document"]
         with business_span("contract_ingestion.index_spans"):
             try:
-                return {"span_count": await index_fn(doc, state.get("segments", []))}
-            except Exception:  # noqa: BLE001 - the retrieval index is a separate, best-effort output
-                return {"span_count": 0}
+                res = await index_fn(doc, state.get("segments", []))
+            except Exception as exc:  # noqa: BLE001 - best-effort index: never dead-letters, but the loss is VISIBLE
+                return {"span_count": 0,
+                        "span_failures": [{"span_id": "*", "reason": f"index node failed: {exc!r}"}]}
+            if isinstance(res, dict):  # 0006-C: richer return surfaces per-span write failures (else a bare count)
+                return {"span_count": res.get("span_count", 0),
+                        "span_failures": res.get("span_failures", [])}
+            return {"span_count": res}
 
     async def extract_graph(state: IngestionState, runtime: Runtime) -> IngestionState:
         doc = state["document"]
@@ -267,10 +273,18 @@ async def arun_corpus_ingestion(
         per_document.append({"source_doc_id": document.source_doc_id, "written": written})
         summary = " ".join(f"{k}={v}" for k, v in written.items()) or "ok"
         clause_failures = out.get("clause_failures") or []
-        if clause_failures:
-            partial.append({"source_doc_id": document.source_doc_id, "clause_failures": clause_failures})
-            progress(f"[ingest] {i}/{total} {document.source_doc_id} PARTIAL ({len(clause_failures)} clause(s) "
-                     f"failed) {summary}")
+        span_failures = out.get("span_failures") or []
+        if clause_failures or span_failures:  # 0006-C: EITHER kind of loss flags the doc PARTIAL (never silent)
+            entry = {"source_doc_id": document.source_doc_id}
+            if clause_failures:
+                entry["clause_failures"] = clause_failures
+            if span_failures:
+                entry["span_failures"] = span_failures
+            partial.append(entry)
+            reasons = ", ".join(
+                p for p in (f"{len(clause_failures)} clause(s)" if clause_failures else "",
+                            f"{len(span_failures)} span(s)" if span_failures else "") if p)
+            progress(f"[ingest] {i}/{total} {document.source_doc_id} PARTIAL ({reasons} failed) {summary}")
         else:
             progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
 
@@ -595,23 +609,24 @@ def aproduction_document_ingest(
         results = [r for r in await asyncio.gather(*(_bounded(j) for j in jobs)) if r is not None]
         return {"clause_records": results, "clause_failures": failures}
 
-    async def index_fn(doc: SourceDocument, segments: list) -> int:
+    async def index_fn(doc: SourceDocument, segments: list) -> dict:
         if not segments:
-            return 0
+            return {"span_count": 0, "span_failures": []}
         dense_vecs, sparse_vecs = await asyncio.to_thread(
             embedder.encode_batch, [op.text.strip() for op, _, _, _ in segments])
 
-        def _write_all() -> int:
+        def _write_all() -> dict:
             count = 0
+            failures: list[dict] = []
             for (op, function, chunk_doc_start, _scores), dense, sparse in zip(segments, dense_vecs, sparse_vecs):
                 try:
                     store.upsert_span(to_span_record(
                         op, contract_id=doc.source_doc_id, chunk_doc_start=chunk_doc_start,
                         dense_vector=list(dense), sparse_vector=sparse, function=function))
                     count += 1
-                except Exception:  # noqa: BLE001 - a per-span index write must not sink the document's KG
-                    continue
-            return count
+                except Exception as exc:  # noqa: BLE001 - a per-span write must not sink the KG, but is NOT swallowed
+                    failures.append({"span_id": op.span_id, "reason": repr(exc)})  # 0006-C: surfaced -> PARTIAL
+            return {"span_count": count, "span_failures": failures}
 
         return await asyncio.to_thread(_write_all)
 

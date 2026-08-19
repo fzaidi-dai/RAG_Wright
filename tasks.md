@@ -133,15 +133,23 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > Indemnity x2). Problem 2 = Defect B: heading-only spans ("9. Limitation of Liability") get typed (name in the
 > heading) -> heading-only clauses -> evidence pollution. CORRECTION: the classifier IS load-bearing for Leg-A
 > recall (earlier "mostly unused" was WRONG); a NONE miss silently drops a clause. TASK BREAKDOWN (revised):
->   - **0006-D (PRIMARY, Problem 1):** decouple Leg-A recall from classification -- intra_document_qa serves the
->     WHOLE span index (typed AND untyped), per ADR-0047 whole-index; a classifier NONE must not drop a clause.
->   - **0006-B (Problem 2):** clause-aligned segmentation -- heading stays with its body; no standalone
->     heading-only spans (fix segment_clause's paragraph/sentence split + the 25-char sub-floor).
->   - **0006-A:** don't fold structural section cuts away for short clauses (MIN_CHUNK_CHARS folds 24 sections->1
->     chunk); compounds B.
->   - **0006-C:** span-write failures must dead-letter/log, never `except: continue` silently (NFR-2 safety).
->   - Each: contract-first TDD + gate. Recommended order: D (the recall hole) -> B -> A -> C. RuleWright's
->     store-dump ask is now a CONFIRMATORY cross-check (we've reproduced it). REPRO scripts in scratchpad.
+> [STATUS: D+B+C DONE; A reprioritized to a robustness follow-up. B+D fix both user-facing problems end-to-end.]
+>   - **0006-D (PRIMARY, Problem 1) — DONE:** decoupled Leg-A recall from classification -- intra_document_qa serves
+>     the WHOLE span index (typed AND untyped, `include_untyped=True`), per ADR-0047 whole-index; a classifier NONE
+>     no longer drops a clause. Verified end-to-end (full re-ingest): Term&Renewal served 0->3.
+>   - **0006-B (Problem 2) — DONE:** clause-aligned segmentation -- `_is_bare_heading` + `_LEADING_ENUM` fold a bare
+>     heading forward into its body (`segment.py::_merge_subfloor`); no standalone heading-only spans. Verified:
+>     spans 52->49, content-hash collisions 1->0; no heading-only typed clauses in the re-ingested Clause KG.
+>   - **0006-C — DONE:** span-write failures are SURFACED, never swallowed -- `_write_all` collects `{span_id,
+>     reason}` per failed `upsert_span` and returns `{span_count, span_failures}`; the node-level best-effort catch
+>     also surfaces a reason; `span_failures` threads through `IngestionState` -> doc flagged PARTIAL in
+>     `IngestionReport` + the X/N line (mirrors `clause_failures`). Best-effort invariant kept (never dead-letters).
+>     NFR-2 satisfied. Tests: `test_contract_ingestion_pipeline_graph_async.py` (+2).
+>   - **0006-A — REPRIORITIZED (robustness, not a recall bug):** B+D fix both user-facing problems with the chunk
+>     still whole-doc, so the `MIN_CHUNK_CHARS=1000` floor folding 24 sections->1 no longer blocks 0006. Still worth
+>     doing for large-doc robustness + cleaner classifier context (don't fold across a structural section cut).
+>   - Each: contract-first TDD + gate. Order run: D -> B -> C (A deferred). RuleWright's store-dump ask is now a
+>     CONFIRMATORY cross-check (we've reproduced it). REPRO scripts in scratchpad.
 
 > **STANDING FRAME (2026-08-12, ADR-0052): ENGINE / PRODUCT split + GraphWright PARKED.** THIS repo is now the
 > reusable open-core **engine/platform** (FR-C/FR-I/FR-Q capabilities + ingestion/query pipelines + MCP + ARD +
