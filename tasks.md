@@ -94,11 +94,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > in aproduction_document_ingest (SingleCall retired from the default; still exists for direct tests / A/B).
 > Suite 1238 pass. RuleWright will retest A0004 on the new default (they filed it).
 >   - **CHUNK-6** remains: docs-only b2 dynamic-agent seam plug-point.
->   - **FOLLOW-UP (new finding, important):** the contract ingest FLATTENS to text (`_parsed_from_text`) before
->     chunking, DISCARDING docling's structural labels -> on that path structural finds no headings and only the
->     tag-parse fallback fires (which already fixes 0004's runaway). Preserve docling structure THROUGH the
->     contract ingest (parse bytes -> keep the DoclingDocument, don't flatten to text) to unlock the full
->     zero-model structural win. Bigger change (ingest takes SourceDocument.text today). Separate follow-up task.
+>   - **CHUNK-7 DONE (2026-08-19): carry docling structure to the chunker (was follow-up #1).** SourceDocument
+>     gains `parsed: ParsedDocument|None`; `_parsed_for` uses it (else the text fallback); `parsed_source_document`
+>     helper (bytes -> structure-bearing SourceDocument) for hand-built ingest (RuleWright); GcsCorpusAdapter
+>     `parse_doc` seam preserves structure for customer PDFs (7b). A0004 CLOSE-OUT MEASURED: bytes -> structural
+>     pass cuts at the document's own headings, lossless, ZERO model (fallback asserted un-called). Structure now
+>     flows on both byte-source paths; `_parsed_from_text` remains only for genuinely text-only input. Suite 1245.
 >   - **FOLLOW-UP (future):** window very large HEADINGLESS sections (RuleWright Option A) so the tag-parse
 >     fallback never prefills an extreme whole-doc; fine for typical 15-30pp contracts today.
 
