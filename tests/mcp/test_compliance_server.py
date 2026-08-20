@@ -57,7 +57,7 @@ def test_check_fn_is_injectable_no_store_or_llm_needed():
     # a custom stub proves the MCP surface is decoupled from ArcadeDB/models -- the whole point of the wrapper
     seen = {}
 
-    async def stub(ad_text: str, source_doc: str) -> ComplianceReport:
+    async def stub(ad_text: str, source_doc: str, sources=None) -> ComplianceReport:
         seen["ad"] = ad_text
         return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 4})
 
@@ -70,7 +70,7 @@ def test_generic_check_compliance_tool_is_exposed_and_returns_a_noted_report():
     # COMP-VERDICT-GENERIC: the domain-agnostic tool is added when a generic_check_fn is provided
     from rag_wright.contracts.compliance import ComplianceFinding, ComplianceReport, Verdict
 
-    async def _generic(subject_text, source_doc):
+    async def _generic(subject_text, source_doc, sources=None):
         return ComplianceReport(
             source_doc=source_doc,
             findings=[ComplianceFinding(
@@ -104,3 +104,56 @@ def test_generic_tool_absent_when_no_generic_check_fn():
 
     tools = asyncio.run(_run())
     assert "check_compliance" not in tools and "check_ad_compliance" in tools
+
+
+def test_check_compliance_tool_forwards_sources_and_exposes_the_param():
+    # issue 0007: the MCP tool must expose the SAME `sources` scoping the function gained -- not left store-wide
+    from rag_wright.contracts.compliance import ComplianceReport
+
+    seen = {}
+
+    async def _generic(subject_text, source_doc, sources=None):
+        seen["sources"] = sources
+        return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 1})
+
+    mcp = build_compliance_mcp(demo_check_fn(), generic_check_fn=_generic)
+
+    async def _run():
+        async with Client(mcp) as client:
+            tool = {t.name: t for t in await client.list_tools()}["check_compliance"]
+            result = await client.call_tool(
+                "check_compliance", {"subject_text": "x", "source_doc": "s", "sources": ["p1", "p2"]})
+            return tool, result.data
+
+    tool, data = asyncio.run(_run())
+    assert seen["sources"] == ["p1", "p2"]                       # scoping reaches the checker
+    assert "sources" in tool.inputSchema["properties"]           # and is exposed on the tool's input schema
+    assert data["source_doc"] == "s"
+
+
+def test_check_ad_compliance_tool_forwards_sources():
+    # symmetry: the advertising tool exposes the same parameter (harmless None default)
+    from rag_wright.contracts.compliance import ComplianceReport
+
+    seen = {}
+
+    async def stub(ad_text, source_doc, sources=None):
+        seen["sources"] = sources
+        return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 1})
+
+    _call(build_compliance_mcp(stub), {"ad_text": "x", "source_doc": "s", "sources": ["ftc-255"]})
+    assert seen["sources"] == ["ftc-255"]
+
+
+def test_sources_defaults_to_none_when_omitted():
+    # back-compat: omitting `sources` keeps store-wide semantics (None reaches the checker)
+    from rag_wright.contracts.compliance import ComplianceReport
+
+    seen = {}
+
+    async def stub(ad_text, source_doc, sources=None):
+        seen["sources"] = sources
+        return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 1})
+
+    _call(build_compliance_mcp(stub), {"ad_text": "x", "source_doc": "s"})
+    assert seen["sources"] is None

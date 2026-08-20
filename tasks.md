@@ -182,13 +182,20 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > [names]=those / []=no rules -> existing not_checked; unknown source name -> explicit `UnknownComplianceSourceError`
 > (distinct from "zero consulted"); same param on `run_compliance_check` for symmetry; ADR-0060 records the
 > assumption shift (one-corpus-per-DB -> source-scoped) + why it's DB-side. TASK BREAKDOWN:
->   - **0007-STORE (in-progress):** the scale-ready store seam -- `all_requirements(sources=None)` gains a
+>   - **0007-STORE — DONE:** the scale-ready store seam -- `all_requirements(sources=None)` gains a
 >     `WHERE source IN [...]` filter (empty list -> [] without a query); new `requirement_sources()` (DISTINCT
->     source, type-guarded) powers unknown-source validation WITHOUT loading rows. Ground the ArcadeDB IN-clause
->     first (reuse `_str_array`/`_sql_str`, per line 535). Tests: hermetic SQL-construction + live `-m store`.
->   - **0007-PATH:** thread `sources` through `_load_requirements` (shared loader + validation ->
->     `UnknownComplianceSourceError`), `production_generic_compliance_check` + `run_generic_compliance_verdict`
->     (required) and `production_compliance_check` + `run_compliance_check` (symmetry).
+>     source, type-guarded) powers unknown-source validation WITHOUT loading rows. Grounded on the tested line-535
+>     `_str_array`/`_sql_str` IN pattern. Tests: 5 hermetic SQL-construction + 1 live `-m store` round-trip.
+>   - **0007-PATH — DONE:** shared `_load_requirements(store, sources)` (None -> whole store, does NOT consult
+>     `requirement_sources()`; a list -> validate vs `requirement_sources()` -> `UnknownComplianceSourceError`
+>     on an unknown name, then DB-side scoped load; [] -> zero requirements). Threaded `sources` through
+>     `production_generic_compliance_check` + `run_generic_compliance_verdict` (required) AND
+>     `production_compliance_check` + `run_compliance_check` (symmetry). ALSO threaded through the MCP tool
+>     surface (`compliance_server.py`): both `check_compliance` + `check_ad_compliance` gain a `sources` param
+>     (FastMCP exposes it on the tool schema) forwarded to the checker; `CheckFn` is now a Protocol with the
+>     `sources` kwarg; all `_check`/demo closures accept it. (Corrected an initial half-fix that left MCP
+>     store-wide -- every surface exposing the capability must get it, per design-for-scale/no-half-fixes.)
+>     Tests +7 (4 path + 3 MCP). Suite 1289 pass.
 >   - **0007-ADR:** ADR-0060.
 >   - Each: contract-first TDD + gate. Order: STORE -> PATH -> ADR.
 

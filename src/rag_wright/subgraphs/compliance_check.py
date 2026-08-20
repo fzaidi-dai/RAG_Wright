@@ -19,7 +19,7 @@ Query-side posture: every node degrades to empty on failure (never crash); the j
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, TypedDict
+from typing import Any, Awaitable, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -290,8 +290,37 @@ def _requirement_from_row(row: dict) -> Requirement:
         confidence=ConfidenceTag(row.get("confidence") or "EXTRACTED"))
 
 
+class UnknownComplianceSourceError(ValueError):
+    """Issue 0007: a `sources` filter named a policy `source` that has no requirements in the store. Distinct from
+    a zero-requirement check (which a caller may treat as `not_checked`): naming a policy that does not exist is a
+    caller error, surfaced explicitly rather than silently matching nothing. Carries `.unknown` and `.present`."""
+
+    def __init__(self, unknown: list[str], present: list[str]) -> None:
+        self.unknown = unknown
+        self.present = present
+        super().__init__(f"unknown compliance source(s): {unknown}; present in store: {present}")
+
+
+def _load_requirements(store: Any, sources: Optional[list[str]] = None) -> list[Requirement]:
+    """Issue 0007: load the Requirement rows the check runs against, optionally scoped to named policy `source`s.
+
+    `sources=None` -> the whole store (unchanged; `requirement_sources()` is NOT consulted, so a store without it
+    still works). A list -> validate the names against `store.requirement_sources()` (an unknown one raises
+    `UnknownComplianceSourceError`, not a silent empty match), then load ONLY those via the DB-side filter
+    (`store.all_requirements(sources=...)`). An empty list is a valid scope-to-nothing -> zero requirements."""
+    if sources is None:
+        rows = store.all_requirements()
+    else:
+        unknown = sorted(set(sources) - store.requirement_sources())
+        if unknown:
+            raise UnknownComplianceSourceError(unknown, sorted(store.requirement_sources()))
+        rows = store.all_requirements(sources=list(sources))
+    return [_requirement_from_row(r) for r in rows]
+
+
 def production_compliance_check(
-    store: Any, *, extract_model: Any, judge_model_id: str, embedder: Any = None, k: int = 5
+    store: Any, *, extract_model: Any, judge_model_id: str, embedder: Any = None, k: int = 5,
+    sources: Optional[list[str]] = None,
 ):
     """Wire the real capabilities: claims = claim_extraction (CC-3), requirements = the store's Requirement KG
     (CC-5), judge = the Granite compliance judge (CC-4). Requirements are loaded ONCE here; when an `embedder` is
@@ -299,7 +328,7 @@ def production_compliance_check(
     from rag_wright.capabilities.claim_extraction import aclaim_extraction
     from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn
 
-    requirements = [_requirement_from_row(r) for r in store.all_requirements()]
+    requirements = _load_requirements(store, sources)
     select_fn = build_select_fn(embedder, requirements, k=k) if embedder is not None else None
 
     async def _claims_fn(text: str, source: str) -> list:
@@ -315,11 +344,12 @@ def production_compliance_check(
 
 async def run_compliance_check(
     subject_text: str, source_doc: str, *, store: Any, extract_model: Any, judge_model_id: str,
-    embedder: Any = None, k: int = 5,
+    embedder: Any = None, k: int = 5, sources: Optional[list[str]] = None,
 ) -> ComplianceReport:
-    """Run a compliance check for one subject document against the Requirement KG -> a cited `ComplianceReport`."""
+    """Run a compliance check for one subject document against the Requirement KG -> a cited `ComplianceReport`.
+    `sources` (issue 0007) optionally scopes the check to named policy `source`s (None = the whole store)."""
     graph = production_compliance_check(
-        store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k)
+        store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
     out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
     return out["report"]
 
@@ -335,15 +365,17 @@ def generic_facts_fn(subject_text: str, source_doc: str) -> list:
                           assertion_text=text)]
 
 
-def production_generic_compliance_check(store: Any, *, judge_model_id: str, embedder: Any, k: int = 8):
+def production_generic_compliance_check(store: Any, *, judge_model_id: str, embedder: Any, k: int = 8,
+                                        sources: Optional[list[str]] = None):
     """COMP-VERDICT-GENERIC: wire the DOMAIN-AGNOSTIC verdict path -- generic subject facts (no claim_type),
     SEMANTIC-ONLY requirement narrowing (`filter_applicability=False`, no domain applicability ontology needed),
     and the GENERIC judge (text-only). Gives a cited LLM verdict in ANY compliance domain; enrichment
     (COMP-APPLIC-1) only ADDS structured precision on top. `embedder` is required (semantic retrieval is the
-    narrowing here)."""
+    narrowing here). `sources` (issue 0007) optionally scopes the check to named policy `source`s (None = the
+    whole store) -- the bring-your-own-policy case where the store holds more than the one policy being checked."""
     from rag_wright.capabilities.compliance_judgment import build_ageneric_judge_fn
 
-    requirements = [_requirement_from_row(r) for r in store.all_requirements()]
+    requirements = _load_requirements(store, sources)
     select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False)
 
     async def _claims_fn(text: str, source: str) -> list:
@@ -359,11 +391,17 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
 
 async def run_generic_compliance_verdict(
     subject_text: str, source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
+    sources: Optional[list[str]] = None,
 ) -> ComplianceReport:
     """COMP-VERDICT-GENERIC: a domain-agnostic compliance verdict for a free-text subject against the Requirement
     KG -- semantic-retrieve the relevant requirements -> LLM-judge -> cited `ComplianceReport`. Works with NO
-    domain applicability enrichment (the always-answer guarantee); suggest COMP-APPLIC-1 for structured precision."""
-    graph = production_generic_compliance_check(store, judge_model_id=judge_model_id, embedder=embedder, k=k)
+    domain applicability enrichment (the always-answer guarantee); suggest COMP-APPLIC-1 for structured precision.
+
+    `sources` (issue 0007) optionally scopes the check to named policy `source`s -- None checks against the whole
+    store (unchanged); a list checks against ONLY those policies (bring-your-own-policy / a curated standard named
+    by id); `[]` scopes to nothing (zero requirements); an unknown name raises `UnknownComplianceSourceError`."""
+    graph = production_generic_compliance_check(
+        store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
     out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
     return out["report"]
 

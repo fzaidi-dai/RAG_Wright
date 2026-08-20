@@ -326,3 +326,110 @@ def test_build_select_fn_constraint_scope_mode_routes_by_generic_matching():
     select = build_select_fn(_Emb(), [r_small, r_large], k=5, context_k=3, constraint_scope_fn=scope_fn)
     got = {r.requirement_id for r in select(subject, [r_small, r_large])}
     assert got == {r_small.requirement_id}  # only the small-employer rule applies -- generic routing, no ad code
+
+
+# --- issue 0007 (0007-PATH): scope a verdict to named policy `source`s -----------------------------
+
+import pytest  # noqa: E402
+
+
+def _row(source: str, citation: str, text: str) -> dict:
+    return {"requirement_id": f"{source}:{citation}", "source": source, "citation": citation,
+            "deontic_type": "obligation", "actor": "party", "requirement_text": text,
+            "evidence_standard": None, "severity": None, "applicability_json": "[]", "confidence": "EXTRACTED"}
+
+
+class _MultiPolicyStore:
+    """A hermetic store mirroring the real seam: `all_requirements(sources=...)` filters, `requirement_sources()`
+    returns the distinct policy names."""
+
+    def __init__(self, rows: list[dict]) -> None:
+        self._rows = rows
+
+    def all_requirements(self, sources=None) -> list[dict]:
+        if sources is None:
+            return list(self._rows)
+        s = set(sources)
+        return [r for r in self._rows if r["source"] in s]
+
+    def requirement_sources(self) -> set[str]:
+        return {r["source"] for r in self._rows}
+
+
+class _Emb1:
+    def encode_dense(self, text):
+        return [1.0, 0.0]
+
+
+def _inject_generic_violation_judge():
+    """Patch the generic judge to a stub that flags every requirement as a violation; returns a restore fn."""
+    import rag_wright.capabilities.compliance_judgment as cj
+
+    async def _judge(fact, requirement):
+        return JudgeVerdict(verdict="violation", rationale="stub", confidence=0.9)
+
+    orig = cj.build_ageneric_judge_fn
+    cj.build_ageneric_judge_fn = lambda model_id: _judge
+    return cj, orig
+
+
+async def test_run_generic_compliance_verdict_scopes_to_named_sources():
+    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "P1 rule: a party must record injuries."),
+                               _row("p2", "§ 2", "P2 rule: a party must disclose connections.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_generic_compliance_verdict(
+            "the party did the thing", "doc", store=store, judge_model_id="stub", embedder=_Emb1(), sources=["p1"])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    cited = [f.citation_requirement for f in report.findings]
+    assert cited and all(c.startswith("§ 1") for c in cited)      # only p1's requirement was judged
+    assert not any(c.startswith("§ 2") for c in cited)            # p2 was never in scope
+
+
+async def test_unknown_source_raises_unknown_compliance_source_error():
+    from rag_wright.subgraphs.compliance_check import (
+        UnknownComplianceSourceError,
+        run_generic_compliance_verdict,
+    )
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "P1 rule.")])
+    with pytest.raises(UnknownComplianceSourceError) as ei:
+        await run_generic_compliance_verdict(
+            "subj", "doc", store=store, judge_model_id="stub", embedder=_Emb1(), sources=["p1", "ghost"])
+    assert ei.value.unknown == ["ghost"] and ei.value.present == ["p1"]  # distinct names, not a bare ValueError
+    assert "ghost" in str(ei.value)
+
+
+async def test_empty_sources_scopes_to_nothing_no_findings():
+    # `[]` = scope to no policy -> zero requirements -> no findings (product maps this to not_checked). NOT an error.
+    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "P1 rule.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_generic_compliance_verdict(
+            "subj", "doc", store=store, judge_model_id="stub", embedder=_Emb1(), sources=[])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert report.findings == []
+
+
+async def test_sources_none_does_not_consult_requirement_sources():
+    # back-compat: sources=None must NOT call requirement_sources() -> a store without it still works
+    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+
+    class _NoValidateStore:
+        def all_requirements(self, sources=None):
+            return [_row("p1", "§ 1", "P1 rule: a party must act.")]
+        # deliberately NO requirement_sources()
+
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_generic_compliance_verdict(
+            "the party acted", "doc", store=_NoValidateStore(), judge_model_id="stub", embedder=_Emb1(), sources=None)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert [f.citation_requirement for f in report.findings]  # ran fine, produced findings
