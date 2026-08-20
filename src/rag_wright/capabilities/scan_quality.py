@@ -114,9 +114,20 @@ def _page_texts(doc) -> dict[int, str]:
     return {pg: "\n".join(v) for pg, v in pages.items()}
 
 
-def assess_document(doc) -> dict[int, ScanAssessment]:
-    """Assess each page of a parsed document from its OCR text -> {page_no: ScanAssessment}."""
-    return {pg: assess_scan(text) for pg, text in _page_texts(doc).items()}
+def assess_document(doc, *, page_images: dict | None = None) -> dict[int, ScanAssessment]:
+    """Assess each page of a parsed document -> {page_no: ScanAssessment}. When `page_images` (a {page_no:
+    grayscale numpy image} map) is given, the IMAGE metrics (blur/faintness) are folded in alongside the OCR
+    text -- the strong signal that separates a degraded scan whose OCR is garbled-but-common-word (which a
+    text-only gate misses) from a readable one. A page present only in the image map (no OCR text) is still
+    assessed. Pass NO images to re-check VLM output (the image stays blurry after the VLM recovers the text)."""
+    page_images = page_images or {}
+    texts = _page_texts(doc)
+    out: dict[int, ScanAssessment] = {}
+    for pg in sorted(set(texts) | set(page_images)):
+        img = page_images.get(pg)
+        metrics = image_quality(img) if img is not None else {}
+        out[pg] = assess_scan(texts.get(pg, ""), **metrics)
+    return out
 
 
 def register_scan_quality(registry) -> None:

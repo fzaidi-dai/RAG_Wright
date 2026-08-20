@@ -258,8 +258,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     VLM for data sovereignty + true thread cancellation (route vision via the async model seam).
 >   - **0009-ADR — DONE:** ADR-0062 (tiered OCR: fast engine -> scan-quality gate -> VLM escalation (Gemma-4/
 >     OpenRouter, VISION_OCR seam exception) -> structured `ocr` PARTIAL; async-bounded; the 4 named follow-ups).
-> ISSUE 0009 COMPLETE (functionally). NEXT: a live end-to-end smoke of the wired tiered path (heavy fixture ->
-> parse_document_bytes default -> gate flags -> Gemma-4 recovers; + graceful-degrade no-key -> PARTIAL).
+> **0009-GATE-CAL — DONE:** the live smoke caught that the text-only gate did NOT fire on the heavy scan (macOS
+> Apple Vision produces garbled-but-common-word text, word-hit 0.296 > 0.08 threshold). FIX: `assess_document`
+> folds in IMAGE metrics (Laplacian var + dark_frac); `TieredOCRParser` renders the source (`_render_gray_pages`,
+> 200 DPI) and passes them to the escalation decision (VLM re-check stays text-only -- the image stays blurry
+> after recovery). +1 test.
+> ISSUE 0009 COMPLETE + LIVE-VERIFIED end-to-end: heavy fixture via parse_document_bytes default ->
+> gate flags all 10 pages -> Gemma-4/OpenRouter recovers (readability 0.296->0.506, clean text, unreadable=[]);
+> NO-KEY -> graceful degrade -> all pages flagged PARTIAL, fast doc kept, no crash.
 >   - **0009-ADR:** ADR-0062.
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's

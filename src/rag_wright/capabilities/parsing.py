@@ -99,7 +99,9 @@ class TieredOCRParser:
         from rag_wright.capabilities.scan_quality import ScanQuality, assess_document
 
         fast_doc = (self._fast or DoclingParser()).convert(source)
-        assessed = assess_document(fast_doc)
+        # 0009-GATE-CAL: fold in IMAGE metrics (blur/faintness) -- the strong signal a text-only gate misses when
+        # the fast OCR is garbled-but-common-word. The VLM re-check below is text-only (the image stays blurry).
+        assessed = assess_document(fast_doc, page_images=_render_gray_pages(source))
         degraded = sorted(pg for pg, a in assessed.items() if a.quality is not ScanQuality.READABLE)
         if not degraded:  # common case: readable scan -> no VLM cost
             self.report = TieredOCRReport()
@@ -130,6 +132,20 @@ def _default_vlm_parser() -> Parser:
     from rag_wright.capabilities.vlm_ocr import VlmOCRParser
 
     return VlmOCRParser()
+
+
+def _render_gray_pages(source: Path, dpi: int = 200) -> dict:
+    """Render each PDF page to a grayscale image {page_no(1-based): ndarray} for the scan-quality gate's image
+    metrics. 200 DPI to match the validated Laplacian/dark_frac thresholds. Best-effort: a non-PDF or any render
+    error -> {} (the gate falls back to text-only), so a text/office source never breaks the parse."""
+    try:
+        import numpy as np
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(str(source))
+        return {i + 1: np.asarray(pdf[i].render(scale=dpi / 72.0).to_pil().convert("L")) for i in range(len(pdf))}
+    except Exception:  # noqa: BLE001 - image metrics are an optional gate signal; never fail the parse over them
+        return {}
 
 
 def _vlm_available() -> bool:

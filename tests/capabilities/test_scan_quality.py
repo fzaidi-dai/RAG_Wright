@@ -10,6 +10,7 @@ import numpy as np
 
 from rag_wright.capabilities.scan_quality import (
     ScanQuality,
+    assess_document,
     assess_scan,
     image_quality,
     text_readability,
@@ -71,3 +72,19 @@ def test_low_docling_confidence_is_degraded():
 def test_empty_text_with_no_signals_is_unreadable():
     # nothing recognised and no other signal -> the strongest verdict (a blank/failed page)
     assert assess_scan("").quality is ScanQuality.UNREADABLE
+
+
+def test_assess_document_folds_in_image_metrics_0009_gate_cal():
+    # 0009-GATE-CAL: a page whose OCR TEXT looks readable but whose IMAGE is blurred/faded -> DEGRADED. This is
+    # the case a text-only gate misses (garbled-but-common-word OCR passes the word-hit threshold).
+    from types import SimpleNamespace
+
+    class _Doc:
+        def iterate_items(self):
+            return [(SimpleNamespace(
+                text="shall not exceed the total fees paid by the party under this agreement",
+                prov=[SimpleNamespace(page_no=1)]), 0)]
+
+    blurry = np.full((300, 300), 245, np.uint8)              # flat/faded -> laplacian ~0, dark_frac ~0
+    assert assess_document(_Doc(), page_images={1: blurry})[1].quality is ScanQuality.DEGRADED
+    assert assess_document(_Doc())[1].quality is ScanQuality.READABLE  # same text, no image -> passes
