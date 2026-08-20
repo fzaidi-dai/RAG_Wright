@@ -236,8 +236,9 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     ~0.01-0.10 for everything else), ~32s/pg. VLM = escalation, not default.
 >   - DECISION: TIERED OCR -- fast OCR default -> scan-quality gate -> OpenRouter VLM escalation (default Gemma-4,
 >     swappable via seam) -> PARTIAL fallback for genuine info-loss. Build order: GATE -> VLM+role -> WIRE.
->   - **0009-GATE:** scan-quality gate (Laplacian var + dark_frac pre-OCR + docling PageConfidenceScores +
->     garbage-ratio) -> readable/degraded/unreadable verdict.
+>   - **0009-GATE — DONE:** `capabilities/scan_quality.py` -- `text_readability` (common-word hit rate, no dep),
+>     `image_quality` (Laplacian var + dark_frac, cv2), `assess_scan(...) -> ScanAssessment{READABLE/DEGRADED/
+>     UNREADABLE}`. Validated thresholds (word-hit<0.08, laplacian<150, dark_frac<0.008, confidence<0.5). +8 tests.
 >   - **0009-VLM:** OpenRouter VLM OCR capability via docling ApiVlmOptions + a `VISION_OCR` model role (default
 >     Gemma-4, `RAG_MODEL_VISION_OCR` override).
 >   - **0009-WIRE:** tiered orchestration in the DoclingParser seam (fast -> gate -> VLM -> PARTIAL).
