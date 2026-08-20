@@ -36,6 +36,13 @@ class CheckFn(Protocol):
     async def __call__(self, text: str, source_doc: str,
                        sources: Optional[list[str]] = None) -> ComplianceReport: ...
 
+
+# The injected DOCUMENT checker (issue 0008): (doc_name, raw bytes, optional policy `sources`) -> report. Parses
+# and segments the uploaded subject document, then checks each section. Injected so the server stays testable.
+class DocumentCheckFn(Protocol):
+    async def __call__(self, doc_name: str, data: bytes,
+                       sources: Optional[list[str]] = None) -> ComplianceReport: ...
+
 _TOOL_DESCRIPTION = (
     "Check an advertisement's claims against the FTC endorsement & testimonial rules (16 CFR Part 255). "
     "Extracts the ad's objective claims, matches each to the applicable regulatory requirements, and judges "
@@ -63,10 +70,12 @@ _GENERIC_TOOL_DESCRIPTION = (
 
 
 def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-compliance",
-                         generic_check_fn: CheckFn | None = None) -> FastMCP:
+                         generic_check_fn: CheckFn | None = None,
+                         document_check_fn: "DocumentCheckFn | None" = None) -> FastMCP:
     """Build the FastMCP server exposing the compliance tools. `check_fn` = the advertising `check_ad_compliance`
     (injected: real subgraph in production, a stub in tests). `generic_check_fn` (optional) adds the
-    domain-agnostic `check_compliance` tool (COMP-VERDICT-GENERIC). Both testable with no ArcadeDB / LLM."""
+    domain-agnostic `check_compliance` tool (COMP-VERDICT-GENERIC). `document_check_fn` (optional, issue 0008)
+    adds the `check_compliance_document` tool for uploaded subject documents. All testable with no ArcadeDB / LLM."""
     mcp: FastMCP = FastMCP(
         name=name,
         instructions=(
@@ -114,6 +123,31 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
             out = _report_to_dict(await generic_check_fn(subject_text, source_doc, sources=sources))
             out["note"] = ("Generic domain-agnostic verdict (semantic retrieval + LLM judge). For more precise "
                            "claim<->requirement routing in this domain, enrich its applicability dimensions.")
+            return out
+
+    if document_check_fn is not None:  # issue 0008: check an uploaded subject DOCUMENT (parsed + segmented)
+        @mcp.tool(name="check_compliance_document", description=_GENERIC_TOOL_DESCRIPTION)
+        async def check_compliance_document(doc_name: str, data_base64: str,
+                                            sources: Optional[list[str]] = None) -> dict[str, Any]:
+            """Check an uploaded subject DOCUMENT (PDF/DOCX/MD/TXT) against the ingested regulation KG. The
+            document is parsed, split at its headings, and EACH section is judged -> per-section cited findings.
+
+            Args:
+                doc_name: The document's file name, WITH extension (e.g. "policy_subject.pdf") -- the extension
+                    selects the parser backend.
+                data_base64: The raw document bytes, base64-encoded (JSON cannot carry binary directly).
+                sources: Optional list of policy `source` names to scope the check to (issue 0007). Omit (null)
+                    to check against every curated policy; name one or more to check ONLY against those.
+
+            Returns:
+                A cited compliance report {verdict, source_doc, summary, findings[], gap_matrix[]}.
+            """
+            import base64
+
+            data = base64.b64decode(data_base64)
+            out = _report_to_dict(await document_check_fn(doc_name, data, sources=sources))
+            out["note"] = ("Per-section verdict over the uploaded document (parsed + heading-split). For more "
+                           "precise claim<->requirement routing in this domain, enrich its applicability dimensions.")
             return out
 
     return mcp
@@ -171,6 +205,28 @@ def production_generic_check_fn(*, k: int = 8) -> CheckFn:
     return _check
 
 
+def production_document_check_fn(*, k: int = 8) -> "DocumentCheckFn":
+    """Issue 0008: wire the DOMAIN-AGNOSTIC subject-DOCUMENT verdict over the env-selected store + models -- parse
+    the uploaded bytes, heading-split, judge each section. Same infra as `production_generic_check_fn`."""
+    from dotenv import load_dotenv
+
+    load_dotenv()
+    from rag_wright.capabilities.remote_encoders import query_embedder
+    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
+
+    store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
+    judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
+    embedder = query_embedder()
+
+    async def _check(doc_name: str, data: bytes, sources: Optional[list[str]] = None) -> ComplianceReport:
+        return await run_compliance_document_verdict(
+            doc_name, data, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
+
+    return _check
+
+
 # --- demo checker: a deterministic, real-shaped report (no ArcadeDB / LLM) for the Deep-Agent prototype -------
 
 
@@ -217,9 +273,17 @@ def register_compliance_check_mcp(registry) -> None:
 
 
 def main() -> None:
-    """Serve the compliance MCP tool over stdio. `RAG_MCP_DEMO=1` uses the no-infra demo checker."""
-    check_fn = demo_check_fn() if os.environ.get("RAG_MCP_DEMO") == "1" else production_check_fn()
-    build_compliance_mcp(check_fn).run(transport="stdio")
+    """Serve the compliance MCP tools over stdio. `RAG_MCP_DEMO=1` uses the no-infra demo checker (advertising
+    tool only); otherwise all three real tools are exposed: `check_ad_compliance`, `check_compliance` (generic
+    text), and `check_compliance_document` (issue 0008, uploaded subject document)."""
+    if os.environ.get("RAG_MCP_DEMO") == "1":
+        build_compliance_mcp(demo_check_fn()).run(transport="stdio")
+        return
+    build_compliance_mcp(
+        production_check_fn(),
+        generic_check_fn=production_generic_check_fn(),
+        document_check_fn=production_document_check_fn(),
+    ).run(transport="stdio")
 
 
 if __name__ == "__main__":

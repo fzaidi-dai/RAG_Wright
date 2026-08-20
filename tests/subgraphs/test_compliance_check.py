@@ -433,3 +433,55 @@ async def test_sources_none_does_not_consult_requirement_sources():
     finally:
         cj.build_ageneric_judge_fn = orig
     assert [f.citation_requirement for f in report.findings]  # ran fine, produced findings
+
+
+# --- issue 0008 (0008-A): check a subject DOCUMENT (upload), segmented per section -----------------
+
+async def test_run_compliance_document_verdict_checks_each_section():
+    from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
+
+    def _sections_fn(name, data):
+        assert name == "subject.pdf" and data == b"%PDF fake"          # the bytes reach the parse seam
+        return [{"section": "1", "heading": "Endorsement", "text": "The influencer was paid but did not disclose it."},
+                {"section": "2", "heading": "Pricing", "text": "The product costs forty-nine dollars."}]
+
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_compliance_document_verdict(
+            "subject.pdf", b"%PDF fake", store=store, judge_model_id="stub", embedder=_Emb1(), sections_fn=_sections_fn)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(report.findings) == 2                                   # per-section facts -> a finding per section
+    assert report.summary.get("violation") == 2
+    claims = " || ".join(f.citation_claim for f in report.findings)
+    assert "paid but did not disclose" in claims and "forty-nine dollars" in claims  # each section is cited
+
+
+async def test_document_verdict_headingless_doc_is_one_fact():
+    from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
+
+    def sfn(name, data):  # no headings -> document_to_sections yields ONE whole-doc section -> one fact
+        return [{"section": "1", "heading": "", "text": "One flat paragraph, no headings at all here."}]
+
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_compliance_document_verdict(
+            "flat.txt", b"...", store=store, judge_model_id="stub", embedder=_Emb1(), sections_fn=sfn)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(report.findings) == 1
+
+
+async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
+    # 0007 integration: the document path honours `sources` and raises on an unknown one, like the text path
+    from rag_wright.subgraphs.compliance_check import UnknownComplianceSourceError, run_compliance_document_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
+    with pytest.raises(UnknownComplianceSourceError):
+        await run_compliance_document_verdict(
+            "s.txt", b"x", store=store, judge_model_id="stub", embedder=_Emb1(),
+            sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "body"}], sources=["ghost"])

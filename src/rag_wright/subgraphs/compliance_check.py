@@ -366,20 +366,23 @@ def generic_facts_fn(subject_text: str, source_doc: str) -> list:
 
 
 def production_generic_compliance_check(store: Any, *, judge_model_id: str, embedder: Any, k: int = 8,
-                                        sources: Optional[list[str]] = None):
+                                        sources: Optional[list[str]] = None, facts_fn: Any = None):
     """COMP-VERDICT-GENERIC: wire the DOMAIN-AGNOSTIC verdict path -- generic subject facts (no claim_type),
     SEMANTIC-ONLY requirement narrowing (`filter_applicability=False`, no domain applicability ontology needed),
     and the GENERIC judge (text-only). Gives a cited LLM verdict in ANY compliance domain; enrichment
     (COMP-APPLIC-1) only ADDS structured precision on top. `embedder` is required (semantic retrieval is the
     narrowing here). `sources` (issue 0007) optionally scopes the check to named policy `source`s (None = the
-    whole store) -- the bring-your-own-policy case where the store holds more than the one policy being checked."""
+    whole store) -- the bring-your-own-policy case where the store holds more than the one policy being checked.
+    `facts_fn` (issue 0008) is the subject producer `(subject_text, source) -> [CheckableFact]`; defaults to
+    `generic_facts_fn` (whole subject as ONE fact), and the document path injects a per-section producer."""
     from rag_wright.capabilities.compliance_judgment import build_ageneric_judge_fn
 
     requirements = _load_requirements(store, sources)
     select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False)
+    _facts = facts_fn or generic_facts_fn
 
     async def _claims_fn(text: str, source: str) -> list:
-        return generic_facts_fn(text, source)  # deterministic (no model), adapted to the async claims seam
+        return _facts(text, source)  # deterministic (no model), adapted to the async claims seam
 
     return build_compliance_check(
         claims_fn=_claims_fn,
@@ -403,6 +406,52 @@ async def run_generic_compliance_verdict(
     graph = production_generic_compliance_check(
         store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
     out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
+    return out["report"]
+
+
+def document_facts_fn(sections: list[dict], source_doc: str) -> list:
+    """Issue 0008: turn a parsed subject document's sections (`[{section, heading, text}]`) into PER-SECTION
+    `CheckableFact`s, so each section gets its own cited finding -- vs `generic_facts_fn`'s whole-subject single
+    fact. Empty sections are skipped; a section's heading is prepended to its body for judge context."""
+    facts: list = []
+    for i, sec in enumerate(sections):
+        text = (sec.get("text") or "").strip()
+        if not text:
+            continue
+        heading = (sec.get("heading") or "").strip()
+        assertion = f"{heading}\n{text}" if heading else text
+        facts.append(CheckableFact(fact_id=CheckableFact.make_id(source_doc, i, assertion),
+                                   source_doc=source_doc, assertion_text=assertion))
+    return facts
+
+
+def _default_sections_fn(doc_name: str, data: bytes) -> list[dict]:
+    """Production subject parse: docling parse of the raw bytes -> heading-split sections (the SAME seam the
+    policy-document ingest uses, so any PDF/DOCX/MD/TXT subject flows through the identical parser)."""
+    from rag_wright.corpus.document_parser import document_to_sections, parse_document_bytes
+
+    return document_to_sections(parse_document_bytes(doc_name, data))
+
+
+async def run_compliance_document_verdict(
+    doc_name: str, data: bytes, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
+    sources: Optional[list[str]] = None, sections_fn: Any = None,
+) -> ComplianceReport:
+    """Issue 0008: check an uploaded subject DOCUMENT (raw bytes: PDF/DOCX/MD/TXT) for compliance.
+
+    Parses the document and splits it at its headings (`document_to_sections`), then judges EACH section against
+    the Requirement KG -> a `ComplianceReport` with per-section cited findings (a multi-page subject is no longer
+    one coarse blob). A document with no headings degrades to one whole-doc section. The subject is TRANSIENT --
+    parsed and checked, never written to the store. `sources` (issue 0007) scopes to named policies; an unknown
+    name raises `UnknownComplianceSourceError`. `sections_fn` is injectable (default = the real docling parse)."""
+    sfn = sections_fn or _default_sections_fn
+    sections = sfn(doc_name, data)
+    facts = document_facts_fn(sections, doc_name)
+    graph = production_generic_compliance_check(
+        store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
+        facts_fn=lambda _text, _source: facts)  # per-section facts, precomputed from the parsed document
+    subject_text = "\n\n".join((s.get("text") or "") for s in sections)
+    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": doc_name})
     return out["report"]
 
 

@@ -200,6 +200,25 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     surface incl. MCP; unknown-source explicit error; Phase-2 tenancy uses the same filter).
 >   - Each: contract-first TDD + gate. Order: STORE -> PATH -> ADR. ISSUE 0007 COMPLETE (pending RuleWright retest).
 
+> **ENGINE ISSUE 0008 (RuleWright): check a subject DOCUMENT (upload), not just text.** Today every compliance
+> entrypoint takes `subject_text: str` and `generic_facts_fn` wraps the WHOLE subject as ONE CheckableFact -- no
+> document upload, and coarse (a multi-page subject = one blob). Mirror the POLICY-doc path
+> (`run_compliance_document_ingestion` + `parse_document_bytes` + `document_to_sections`) on the SUBJECT side:
+>   - **0008-A — DONE:** `run_compliance_document_verdict(doc_name, data: bytes, *, store, judge_model_id,
+>     embedder, k=8, sources=None, sections_fn=None)` -- parse bytes -> `document_to_sections` -> per-section
+>     `CheckableFact`s -> generic verdict -> per-section CITED report. Solves upload AND subject segmentation at
+>     once (reuses tested seams). Adds a `facts_fn` seam to `production_generic_compliance_check` (default =
+>     `generic_facts_fn`). `sources` (0007) threaded. Subject is TRANSIENT (parsed+checked, never stored). One
+>     doc/call; many = caller loops. Whole-doc fallback when no headings.
+>   - **0008-B (MCP) — DONE:** `check_compliance_document` MCP tool -- base64 `data` param, decoded + forwarded to
+>     a `DocumentCheckFn`; `production_document_check_fn` wiring; `main()` now serves all three tools (also fixed a
+>     pre-existing gap where generic/document tools weren't wired into the stdio entry).
+>   - **0008-ADR — DONE:** ADR-0061 (subject-document compliance + per-section segmentation + the finding-count note).
+>   - VERIFIED LIVE (real docling parse + BGE + Granite judge vs live FTC 255 KG): a 5-section subject doc ->
+>     per-section cited findings, violations correctly attributed (Clinical Results -> 255.1/255.2; Testimonials ->
+>     255.5). KNOWN CHARACTERISTIC: per-section x per-requirement = many findings (44 on 5 sections) -> future UX
+>     refinement (per-section rollup), recorded in ADR-0061, not a blocker. Tests +5. Suite 1294 pass.
+
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
 > ingest -- a SILENT trap for any integrator, since the per-kind keys are optional. FIX: every `partial[]` entry now

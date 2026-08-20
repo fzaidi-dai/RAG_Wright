@@ -157,3 +157,44 @@ def test_sources_defaults_to_none_when_omitted():
 
     _call(build_compliance_mcp(stub), {"ad_text": "x", "source_doc": "s"})
     assert seen["sources"] is None
+
+
+def test_check_compliance_document_tool_decodes_base64_and_forwards():
+    # issue 0008: the document tool accepts base64 bytes (JSON can't carry raw bytes), decodes + forwards them
+    import base64
+
+    from rag_wright.contracts.compliance import ComplianceReport
+
+    seen = {}
+
+    async def _doc_check(doc_name, data, sources=None):
+        seen.update(doc_name=doc_name, data=data, sources=sources)
+        return ComplianceReport(source_doc=doc_name, findings=[], summary={"compliant": 1})
+
+    mcp = build_compliance_mcp(demo_check_fn(), document_check_fn=_doc_check)
+    raw = b"%PDF-1.4 real subject bytes"
+    b64 = base64.b64encode(raw).decode()
+
+    async def _run():
+        async with Client(mcp) as client:
+            tool = {t.name: t for t in await client.list_tools()}["check_compliance_document"]
+            result = await client.call_tool(
+                "check_compliance_document",
+                {"doc_name": "subject.pdf", "data_base64": b64, "sources": ["p1"]})
+            return tool, result.data
+
+    tool, data = asyncio.run(_run())
+    assert seen["doc_name"] == "subject.pdf" and seen["data"] == raw and seen["sources"] == ["p1"]  # decoded bytes
+    assert "data_base64" in tool.inputSchema["properties"]                                          # exposed on schema
+    assert data["source_doc"] == "subject.pdf"
+
+
+def test_document_tool_absent_when_no_document_check_fn():
+    mcp = build_compliance_mcp(demo_check_fn())  # no document_check_fn
+
+    async def _run():
+        async with Client(mcp) as client:
+            return [t.name for t in await client.list_tools()]
+
+    tools = asyncio.run(_run())
+    assert "check_compliance_document" not in tools and "check_ad_compliance" in tools
