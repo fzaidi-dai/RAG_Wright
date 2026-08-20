@@ -49,8 +49,39 @@ rough GT's ceiling, not OCR error; with exact GT (above) readable-scan OCR is ne
   platform — Apple Vision (macOS, the default), Tesseract (Linux CPU), or a GPU engine on the A100/Modal
   substrate. Granite-Docling is worth it only for **structured** readable docs (tables/forms), never as a
   degraded-scan rescue.
-- **The accuracy lever is upstream of OCR:** (a) an image **pre-processing** stage (deskew, denoise,
-  binarize/threshold, contrast/CLAHE, optional super-resolution) to push a "heavy" scan toward "moderate" where
-  OCR already scores 1.000; and (b) a **scan-quality gate** that flags an unreadable page (low OCR confidence /
-  high garbage-ratio) as PARTIAL / needs-rescan rather than silently ingesting gibberish — ties into the
-  lossless/visible-loss philosophy (0006-C / ENG-1).
+- **The accuracy lever is upstream of / around OCR** (see the 0009 results below).
+
+## 0009 — preprocessing A/B and the VLM escalation (the real fix)
+
+**Classical preprocessing does NOT recover a heavily degraded scan.** `--preprocess {sauvola,enhance}` on the
+heavy fixture (denoise → deskew → Sauvola binarize, or CLAHE + unsharp at 300 DPI, no binarize) left it at
+char_sim ~0.01–0.04 (clean/moderate stayed ~1.000). Diagnosis: heavy = severe **blur** (Laplacian variance 54
+vs clean's 2440) + **faded** text (dark_frac 0.003 vs 0.03). Blur destroys glyph *shapes*, which is what
+character-based OCR matches; contrast/binarization cannot un-blur smeared glyphs.
+
+**But the heavy text is human-readable** — so a strong **VLM** (language context, like a human) reads it. Via
+docling's `ApiVlmOptions` pointed at **OpenRouter** (the same provider we use for Gemma-4; no Modal, no local
+download, model swappable):
+
+| approach (best per family) | clean | moderate | **heavy** | speed |
+|---|---|---|---|---|
+| traditional OCR (tesseract/ocrmac/rapidocr) | 1.000 | ~1.000 | 0.006–0.10 | 1–4 s/pg |
+| + classical preprocessing (sauvola/enhance) | 1.000 | ~1.000 | 0.004–0.04 | 1–4 s/pg |
+| Granite-Docling-258M (small local VLM) | 1.000 | 1.000 | 0.023 | 4–35 s/pg |
+| **Gemma-4 (OpenRouter VLM)** | 0.991ʷ | ~1.0 | **0.991** | ~32 s/pg |
+| **Qwen-2.5-VL-72B (OpenRouter VLM)** | 0.995 | ~1.0 | **0.977** | ~34 s/pg |
+
+A strong OpenRouter VLM is the ONLY thing that reads the degraded-but-readable scan (0.99 vs ~0.01–0.10), at
+~10–30× the latency — so it is an **escalation**, not the blanket default.
+
+## Decision: a tiered OCR architecture (issue 0009)
+
+1. **Fast OCR by default** (Apple Vision / Tesseract) — perfect on readable scans, ~1s/page.
+2. **Scan-quality gate** flags a degraded/unreadable page — Laplacian variance + dark_frac (pre-OCR, validated
+   above) + docling's built-in `PageConfidenceScores` + a garbage-ratio backstop.
+3. **Flagged pages → OpenRouter VLM (default Gemma-4, model swappable via the seam)** — reads the blur (0.991).
+4. **Still unreadable** (genuine info loss) → **PARTIAL / needs-rescan** (0006-C / ENG-1 lossless principle:
+   surface the loss, never ingest gibberish).
+
+Classical preprocessing stays available as a cheap first pass (harmless on clean/moderate) but is not the
+heavy-scan fix.

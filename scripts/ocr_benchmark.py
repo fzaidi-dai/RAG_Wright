@@ -58,15 +58,39 @@ def _pdf_ocr_converter(ocr_options):
 
 
 def _vlm_converter(vlm_spec):
-    """The end-to-end VLM pipeline (image -> structured DocTags): Granite-Docling / SmolDocling / etc."""
+    """The end-to-end VLM pipeline (image -> transcription): local (Granite/SmolDocling) or a remote API VLM."""
     from docling.datamodel.base_models import InputFormat
     from docling.datamodel.pipeline_options import VlmPipelineOptions
     from docling.document_converter import DocumentConverter, PdfFormatOption
     from docling.pipeline.vlm_pipeline import VlmPipeline
 
     opts = VlmPipelineOptions(vlm_options=vlm_spec)
+    opts.enable_remote_services = True  # allow API-based VLMs (OpenRouter); harmless for local specs
     return DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_cls=VlmPipeline, pipeline_options=opts)})
+
+
+def _openrouter_vlm(model_id: str):
+    """A remote VLM via OpenRouter (OpenAI-compatible) -- the same provider we already use for Gemma-4. Reads a
+    document page image and transcribes its text; language context lets it read blurred/degraded scans that
+    character-based OCR cannot. `scale=3.0` renders the page at higher resolution for the model."""
+    import os
+
+    from docling.datamodel.pipeline_options import ApiVlmOptions, ResponseFormat
+
+    return ApiVlmOptions(
+        url="https://openrouter.ai/api/v1/chat/completions",
+        headers={"Authorization": f"Bearer {os.environ['OPENROUTER_API_KEY']}"},
+        params={"model": model_id, "max_tokens": 8192},
+        prompt=("Transcribe ALL text from this document page exactly as it appears, preserving reading order. "
+                "Output only the transcribed text (markdown), no commentary."),
+        response_format=ResponseFormat.MARKDOWN, scale=3.0, timeout=180.0)
+
+
+def _openrouter_avail():
+    import os
+
+    return (bool(os.environ.get("OPENROUTER_API_KEY")), "OPENROUTER_API_KEY not set")
 
 
 def _spec(name):
@@ -108,6 +132,10 @@ BACKENDS: dict[str, tuple] = {
     "granite_docling_transformers": (
         lambda: _vlm_converter(_spec("GRANITEDOCLING_TRANSFORMERS")), lambda: _importable("transformers")),
     "smoldocling_mlx": (lambda: _vlm_converter(_spec("SMOLDOCLING_MLX")), lambda: _importable("mlx_vlm")),
+    # remote VLMs via OpenRouter (no local model, no Modal) -- language-context OCR for degraded scans
+    "openrouter_gemma4": (lambda: _vlm_converter(_openrouter_vlm("google/gemma-4-31b-it")), _openrouter_avail),
+    "openrouter_qwen25vl": (
+        lambda: _vlm_converter(_openrouter_vlm("qwen/qwen-2.5-vl-72b-instruct")), _openrouter_avail),
 }
 
 
@@ -177,11 +205,18 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="OCR accuracy/speed benchmark over docling engines")
     ap.add_argument("--corpus", type=Path, default=_DEFAULT_CORPUS)
     ap.add_argument("--backends", nargs="*", default=list(BACKENDS))
+    ap.add_argument("--preprocess", choices=["none", "basic", "sauvola", "enhance"], default="none",
+                    help="0009: classical image preprocessing before OCR (render->denoise->deskew->binarize)")
+    ap.add_argument("--dpi", type=int, default=200, help="render DPI when preprocessing")
     ap.add_argument("--out", type=Path, default=Path("temp/ocr_test/results.json"))
     args = ap.parse_args()
 
     pdfs = sorted(args.corpus.glob("*.pdf"))
-    print(f"[ocr-bench] corpus={args.corpus} pdfs={[p.name for p in pdfs]} backends={args.backends}\n", flush=True)
+    print(f"[ocr-bench] corpus={args.corpus} pdfs={[p.name for p in pdfs]} backends={args.backends} "
+          f"preprocess={args.preprocess}\n", flush=True)
+
+    import tempfile
+    prep_dir = Path(tempfile.mkdtemp(prefix="ocr_prep_")) if args.preprocess != "none" else None
 
     rows = []
     for pdf in pdfs:
@@ -190,11 +225,17 @@ def main() -> None:
             print(f"[ocr-bench] no ground truth for {pdf.name}, skipping", flush=True)
             continue
         n = _n_pages(pdf)
-        print(f"[ocr-bench] === {pdf.name} ({n} pages, {gt_kind} GT) ===", flush=True)
+        run_pdf = pdf
+        if args.preprocess != "none":  # build the cleaned PDF ONCE, then run every backend on it
+            from scripts.ocr_preprocess import preprocess_pdf
+
+            run_pdf = preprocess_pdf(pdf, prep_dir / f"{pdf.stem}.{args.preprocess}.pdf", args.preprocess, args.dpi)
+        print(f"[ocr-bench] === {pdf.name} ({n} pages, {gt_kind} GT, preprocess={args.preprocess}) ===", flush=True)
         for name in args.backends:
             if name not in BACKENDS:
                 continue
-            r = run_backend(name, pdf, gt_kind, gt, n)
+            r = run_backend(name, run_pdf, gt_kind, gt, n)
+            r["pdf"] = pdf.name  # report under the ORIGINAL name, even when run on the cleaned PDF
             rows.append(r)
             if not r.get("available"):
                 print(f"    {name:30} SKIP ({r['reason']})", flush=True)

@@ -219,6 +219,30 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     255.5). KNOWN CHARACTERISTIC: per-section x per-requirement = many findings (44 on 5 sections) -> future UX
 >     refinement (per-section rollup), recorded in ADR-0061, not a blocker. Tests +5. Suite 1294 pass.
 
+> **ENGINE ISSUE 0009 (OCR): scanned-document accuracy -- preprocessing + quality gate.** The OCR benchmark
+> (`docs/eval/ocr_benchmark.md`, `scripts/ocr_benchmark.py`) reframed the "RapidOCR too slow" report: on READABLE
+> scans EVERY engine is ~1.000 (accuracy is NOT engine-differentiated; speed is 0.8-4s/page, a non-issue); on a
+> HEAVILY DEGRADED scan ALL engines fail incl. the Granite-Docling VLM (char_sim 0.006-0.10; VLM 0.023 @ 35s/pg).
+> So the lever is UPSTREAM of OCR. Defaults agreed: classical-first (OpenCV, CPU, NO GPU; SR only if needed);
+> add scikit-image for Sauvola local binarization + A/B vs cv2 adaptiveThreshold; quality gate = docling's
+> built-in PageConfidenceScores primary + garbage-ratio backstop; prototype via pre-render+preprocess in the
+> harness. cv2 already installed; docling exposes TextCell.confidence / ConfidenceReport / PageConfidenceScores.
+>   - **0009-PREP-AB — DONE (negative result):** `--preprocess {basic,sauvola,enhance}` in `ocr_benchmark.py`
+>     (`scripts/ocr_preprocess.py`: render->denoise->deskew->binarize/enhance->temp PDF). Classical preprocessing
+>     does NOT recover the heavy scan (~0.01-0.04); heavy = severe blur (Laplacian 54 vs 2440) + fade
+>     (dark_frac 0.003). Blur destroys glyph shapes -> char-OCR + binarization can't fix it. Clean/moderate stay ~1.0.
+>   - **0009-VLM finding — DONE:** the heavy text IS human-readable -> a strong VLM via OpenRouter (docling
+>     `ApiVlmOptions`, no Modal/local) READS it: **Gemma-4 char_sim 0.991**, Qwen-2.5-VL 0.977 on heavy (vs
+>     ~0.01-0.10 for everything else), ~32s/pg. VLM = escalation, not default.
+>   - DECISION: TIERED OCR -- fast OCR default -> scan-quality gate -> OpenRouter VLM escalation (default Gemma-4,
+>     swappable via seam) -> PARTIAL fallback for genuine info-loss. Build order: GATE -> VLM+role -> WIRE.
+>   - **0009-GATE:** scan-quality gate (Laplacian var + dark_frac pre-OCR + docling PageConfidenceScores +
+>     garbage-ratio) -> readable/degraded/unreadable verdict.
+>   - **0009-VLM:** OpenRouter VLM OCR capability via docling ApiVlmOptions + a `VISION_OCR` model role (default
+>     Gemma-4, `RAG_MODEL_VISION_OCR` override).
+>   - **0009-WIRE:** tiered orchestration in the DoclingParser seam (fast -> gate -> VLM -> PARTIAL).
+>   - **0009-ADR:** ADR-0062.
+
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
 > ingest -- a SILENT trap for any integrator, since the per-kind keys are optional. FIX: every `partial[]` entry now

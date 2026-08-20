@@ -33,6 +33,7 @@ ocr-bench = [
     "mlx-vlm>=0.3.9",
     "ocrmac>=1.0.1",
     "onnxruntime>=1.29.0",
+    "scikit-image>=0.26.0",
 ]
 
 [dependency-groups]
