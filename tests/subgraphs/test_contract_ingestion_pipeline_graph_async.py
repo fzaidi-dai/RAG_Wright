@@ -189,3 +189,22 @@ async def test_arun_corpus_ingestion_resume_skips_already_done():
         is_done=lambda doc: doc.source_doc_id == "C1")  # C1 already ingested
     assert report.documents_ingested == 2  # both counted present...
     assert calls["chunk"] == ["C2"]  # ...but only C2 was re-processed (C1 resume-skipped)
+
+
+async def test_ocr_unreadable_pages_surface_as_an_ocr_partial():
+    # 0009-WIRE2: a degraded scan (tiered OCR could not read some pages even after VLM) surfaces as an `ocr`
+    # PARTIAL in the IngestionReport -- structured, not just a log line.
+    class _OcrAdapter:
+        def documents(self):
+            yield SourceDocument(source_doc_id="C1", text="t", ocr_unreadable_pages=[2, 4])
+
+    stages, _ = _astub_stages()
+    report = await arun_corpus_ingestion(_OcrAdapter(), _agraph(stages), progress=lambda _m: None)
+    assert report.documents_ingested == 1
+    entry = report.partial[0]
+    assert entry["source_doc_id"] == "C1"
+    assert entry["failures"] == [
+        {"kind": "ocr", "page": 2, "reason": "unreadable scan (OCR + VLM failed)"},
+        {"kind": "ocr", "page": 4, "reason": "unreadable scan (OCR + VLM failed)"}]
+    assert entry["ocr_failures"] == [{"page": 2, "reason": "unreadable scan (OCR + VLM failed)"},
+                                     {"page": 4, "reason": "unreadable scan (OCR + VLM failed)"}]

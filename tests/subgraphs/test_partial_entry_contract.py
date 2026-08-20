@@ -20,8 +20,20 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import build_partial_entry
 
 
 def test_signature_is_stable():
+    # ocr_failures (0009-WIRE2) is a new OPTIONAL trailing arg -> 3-positional callers (the product) are unaffected
     params = list(inspect.signature(build_partial_entry).parameters)
-    assert params == ["source_doc_id", "clause_failures", "span_failures"]
+    assert params == ["source_doc_id", "clause_failures", "span_failures", "ocr_failures"]
+    assert inspect.signature(build_partial_entry).parameters["ocr_failures"].default is None
+
+
+def test_new_ocr_kind_flows_through_the_unified_failures_list():
+    # FORWARD-COMPAT: a new loss kind (ocr) arrives as a new `kind` in `failures` -- an integrator counting the
+    # kind-tagged list surfaces it with no code change; a 3-arg caller never passes it.
+    entry = build_partial_entry("D1", [], [], [{"page": 3, "reason": "unreadable scan"}])
+    assert entry["failures"] == [{"kind": "ocr", "page": 3, "reason": "unreadable scan"}]
+    assert entry["ocr_failures"] == [{"page": 3, "reason": "unreadable scan"}]
+    assert "clause_failures" not in entry and "span_failures" not in entry
+    assert build_partial_entry("D1", [], [], []) is None  # no loss of any kind -> not partial
 
 
 def test_no_loss_returns_none():

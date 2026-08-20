@@ -15,6 +15,7 @@ Grounded against `docling.document_converter.DocumentConverter.convert` and
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -104,11 +105,24 @@ class TieredOCRParser:
             self.report = TieredOCRReport()
             return fast_doc
 
-        vlm_doc = (self._vlm or _default_vlm_parser()).convert(source)
+        vlm = self._vlm if self._vlm is not None else (_default_vlm_parser() if _vlm_available() else None)
+        if vlm is None:  # GRACEFUL DEGRADE: no VLM configured -> cannot escalate; flag PARTIAL, keep the fast doc
+            self.report = TieredOCRReport(escalated_pages=[], unreadable_pages=degraded)
+            _log_unreadable(source, degraded, "no VLM configured (set OPENROUTER_API_KEY)")
+            return fast_doc
+        try:
+            vlm_doc = vlm.convert(source)
+        except Exception as exc:  # noqa: BLE001 - a VLM failure must not sink the parse; flag PARTIAL, keep fast doc
+            self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=degraded)
+            _log_unreadable(source, degraded, f"VLM escalation failed: {exc!r}")
+            return fast_doc
+
         vlm_assessed = assess_document(vlm_doc)
-        unreadable = [pg for pg in degraded
-                      if (vlm_assessed.get(pg) is None or vlm_assessed[pg].quality is not ScanQuality.READABLE)]
-        self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=sorted(unreadable))
+        unreadable = sorted(pg for pg in degraded
+                            if vlm_assessed.get(pg) is None or vlm_assessed[pg].quality is not ScanQuality.READABLE)
+        self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=unreadable)
+        if unreadable:  # even the VLM could not read these -> surface, never silently ingest gibberish
+            _log_unreadable(source, unreadable, "unreadable even after VLM escalation")
         return vlm_doc
 
 
@@ -116,6 +130,20 @@ def _default_vlm_parser() -> Parser:
     from rag_wright.capabilities.vlm_ocr import VlmOCRParser
 
     return VlmOCRParser()
+
+
+def _vlm_available() -> bool:
+    """The escalation VLM is usable only if an OpenRouter key is configured. Absent -> graceful degrade."""
+    import os
+
+    return bool(os.environ.get("OPENROUTER_API_KEY"))
+
+
+def _log_unreadable(source: Path, pages: list[int], why: str) -> None:
+    """Surface unreadable/degraded pages (never silently ingest gibberish -- 0006-C / ENG-1 applied to OCR)."""
+    logging.getLogger(__name__).warning(
+        "[ocr] %s: pages %s could not be read (%s) -- flagged PARTIAL / needs-rescan", getattr(source, "name", source),
+        pages, why)
 
 
 def _source_doc_id(source: Path) -> str:

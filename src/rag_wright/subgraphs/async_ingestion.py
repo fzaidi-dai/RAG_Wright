@@ -152,8 +152,11 @@ async def run_job(
                 dead_lettered.append(out["dead_letter"])
             else:
                 ingested += 1
-                entry = build_partial_entry(  # ENG-1: same shape as the blocking driver; also surfaces span losses
-                    doc.source_doc_id, (out or {}).get("clause_failures"), (out or {}).get("span_failures"))
+                ocr_failures = [{"page": pg, "reason": "unreadable scan (OCR + VLM failed)"}  # 0009-WIRE2
+                                for pg in (getattr(doc, "ocr_unreadable_pages", None) or [])]
+                entry = build_partial_entry(  # ENG-1: same shape as the blocking driver; also surfaces span/ocr losses
+                    doc.source_doc_id, (out or {}).get("clause_failures"), (out or {}).get("span_failures"),
+                    ocr_failures)
                 if entry is not None:
                     partial.append(entry)
             store.update(job_id, documents_done=done, ingested=ingested,

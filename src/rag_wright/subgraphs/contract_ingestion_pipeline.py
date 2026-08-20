@@ -54,6 +54,9 @@ class SourceDocument(BaseModel):
     # (or `parsed_source_document`). When present, the chunk stage uses it so the structural pass fires on the
     # document's actual headings; when None (genuinely text-only input) the chunker falls back to a text parse.
     parsed: Optional[ParsedDocument] = None
+    # 0009-WIRE2: pages the tiered OCR could not read even after VLM escalation (a degraded scan) -- surfaced as an
+    # `ocr` PARTIAL in the IngestionReport, never silently ingested as gibberish.
+    ocr_unreadable_pages: list[int] = []
 
 
 class IngestionReport(BaseModel):
@@ -239,7 +242,8 @@ def abuild_document_ingest(
                               retry_policy)
 
 
-def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures: list) -> Optional[dict]:
+def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures: list,
+                        ocr_failures: Optional[list] = None) -> Optional[dict]:
     """The single PARTIAL-entry shape, shared by the blocking driver AND the async job runner so the two can
     never drift. A UNIFIED, always-present `failures` list (kind-tagged) lets an integrator read ONE field and
     never silently miss a span-only loss; the per-kind `clause_failures`/`span_failures` keys stay for
@@ -247,21 +251,26 @@ def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures
     input lists.
 
     STABLE PUBLIC API (ENG-1/ENG-2): the product imports this helper and depends on its signature, this import
-    path, and the `failures` entry shape. Pinned by `tests/subgraphs/test_partial_entry_contract.py` -- changing
-    any of them is a breaking change requiring a versioned decision. FORWARD-COMPAT RULE: a new loss kind is a
-    new `kind` value inside `failures` (e.g. `{"kind": "embed", ...}`), NEVER a replacement top-level key -- so an
-    integrator counting the kind-tagged list keeps surfacing losses it has no dedicated field for."""
+    path, and the `failures` entry shape. Pinned by `tests/subgraphs/test_partial_entry_contract.py`. FORWARD-COMPAT
+    RULE: a new loss kind is a new `kind` value inside `failures` (0009-WIRE2 adds `ocr` -- a page a degraded scan
+    left unreadable), NEVER a replacement top-level key -- so an integrator counting the kind-tagged list keeps
+    surfacing losses it has no dedicated field for. `ocr_failures` is a new OPTIONAL trailing arg (3-arg callers
+    are unaffected)."""
     clause_failures = clause_failures or []
     span_failures = span_failures or []
-    if not (clause_failures or span_failures):
+    ocr_failures = ocr_failures or []
+    if not (clause_failures or span_failures or ocr_failures):
         return None
     failures = ([{"kind": "clause", **f} for f in clause_failures]
-                + [{"kind": "span", **f} for f in span_failures])
+                + [{"kind": "span", **f} for f in span_failures]
+                + [{"kind": "ocr", **f} for f in ocr_failures])
     entry: dict = {"source_doc_id": source_doc_id, "failures": failures}
     if clause_failures:
         entry["clause_failures"] = clause_failures
     if span_failures:
         entry["span_failures"] = span_failures
+    if ocr_failures:
+        entry["ocr_failures"] = ocr_failures
     return entry
 
 
@@ -308,12 +317,15 @@ async def arun_corpus_ingestion(
         summary = " ".join(f"{k}={v}" for k, v in written.items()) or "ok"
         clause_failures = out.get("clause_failures") or []
         span_failures = out.get("span_failures") or []
-        entry = build_partial_entry(document.source_doc_id, clause_failures, span_failures)
-        if entry is not None:  # 0006-C: EITHER kind of loss flags the doc PARTIAL (never silent)
+        ocr_failures = [{"page": pg, "reason": "unreadable scan (OCR + VLM failed)"}  # 0009-WIRE2
+                        for pg in (getattr(document, "ocr_unreadable_pages", None) or [])]
+        entry = build_partial_entry(document.source_doc_id, clause_failures, span_failures, ocr_failures)
+        if entry is not None:  # 0006-C / 0009: ANY kind of loss flags the doc PARTIAL (never silent)
             partial.append(entry)
             reasons = ", ".join(
                 p for p in (f"{len(clause_failures)} clause(s)" if clause_failures else "",
-                            f"{len(span_failures)} span(s)" if span_failures else "") if p)
+                            f"{len(span_failures)} span(s)" if span_failures else "",
+                            f"{len(ocr_failures)} unreadable page(s)" if ocr_failures else "") if p)
             progress(f"[ingest] {i}/{total} {document.source_doc_id} PARTIAL ({reasons} failed) {summary}")
         else:
             progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
@@ -370,24 +382,31 @@ def parsed_source_document(
     byte-source corpus adapter -- or the product (RuleWright), which hand-builds its ingest -- feeds a real
     document to the engine; a plain-text `SourceDocument` (no `.parsed`) still uses the text fallback."""
     import hashlib
+    import json
     from pathlib import Path
 
-    from rag_wright.capabilities.parsing import load_document
+    from rag_wright.capabilities.parsing import TieredOCRParser, load_document
     from rag_wright.corpus.document_parser import document_to_text, parse_document_bytes
 
     cache_dir = Path(cache_dir)
     cache_dir.mkdir(parents=True, exist_ok=True)
     content_hash = hashlib.sha256(data).hexdigest()
     manifest_path = cache_dir / f"{source_doc_id}.{content_hash[:16]}.json"
+    ocr_sidecar = cache_dir / f"{source_doc_id}.{content_hash[:16]}.ocr.json"  # the OCR verdict, cached alongside
     parsed = ParsedDocument(
         source_doc_id=source_doc_id, content_hash=content_hash, manifest_path=str(manifest_path))
-    if manifest_path.exists():  # content-hash gate: parse once
+    if manifest_path.exists():  # content-hash gate: parse once (restore the OCR verdict from the sidecar)
         document = load_document(parsed)
-    else:
-        document = parse_document_bytes(name, data)
+        unreadable = json.loads(ocr_sidecar.read_text()) if ocr_sidecar.exists() else []
+    else:  # 0009-WIRE2: tiered OCR -- capture which pages stayed unreadable even after VLM, so they surface PARTIAL
+        tiered = TieredOCRParser()
+        document = parse_document_bytes(name, data, parser=tiered)
         document.save_as_json(manifest_path)
+        unreadable = list(tiered.report.unreadable_pages)
+        ocr_sidecar.write_text(json.dumps(unreadable))
     return SourceDocument(
-        source_doc_id=source_doc_id, text=document_to_text(document), parsed=parsed, metadata=metadata or {})
+        source_doc_id=source_doc_id, text=document_to_text(document), parsed=parsed, metadata=metadata or {},
+        ocr_unreadable_pages=unreadable)
 
 
 class _NoSummary:

@@ -425,14 +425,6 @@ def document_facts_fn(sections: list[dict], source_doc: str) -> list:
     return facts
 
 
-def _default_sections_fn(doc_name: str, data: bytes) -> list[dict]:
-    """Production subject parse: docling parse of the raw bytes -> heading-split sections (the SAME seam the
-    policy-document ingest uses, so any PDF/DOCX/MD/TXT subject flows through the identical parser)."""
-    from rag_wright.corpus.document_parser import document_to_sections, parse_document_bytes
-
-    return document_to_sections(parse_document_bytes(doc_name, data))
-
-
 async def run_compliance_document_verdict(
     doc_name: str, data: bytes, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
     sources: Optional[list[str]] = None, sections_fn: Any = None,
@@ -443,9 +435,14 @@ async def run_compliance_document_verdict(
     the Requirement KG -> a `ComplianceReport` with per-section cited findings (a multi-page subject is no longer
     one coarse blob). A document with no headings degrades to one whole-doc section. The subject is TRANSIENT --
     parsed and checked, never written to the store. `sources` (issue 0007) scopes to named policies; an unknown
-    name raises `UnknownComplianceSourceError`. `sections_fn` is injectable (default = the real docling parse)."""
-    sfn = sections_fn or _default_sections_fn
-    sections = sfn(doc_name, data)
+    name raises `UnknownComplianceSourceError`. `sections_fn` is injectable (tests); the default parse is
+    ASYNC-bounded (0009-WIRE2) so the tiered VLM OCR never stalls the loop."""
+    if sections_fn is not None:
+        sections = sections_fn(doc_name, data)  # injected (hermetic tests) -- sync
+    else:  # production: async-bounded parse (off-loop, wall-clock deadline) + heading-split
+        from rag_wright.corpus.document_parser import aparse_document_bytes, document_to_sections
+
+        sections = document_to_sections(await aparse_document_bytes(doc_name, data))
     facts = document_facts_fn(sections, doc_name)
     graph = production_generic_compliance_check(
         store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,

@@ -79,14 +79,15 @@ entry per affected document:
 
 ```python
 for p in report.partial:                       # p["source_doc_id"]
-    for f in p["failures"]:                     # ALWAYS present; covers BOTH kinds
-        log(f'{p["source_doc_id"]} lost {f["kind"]} {f["span_id"]}: {f["reason"]}')
+    for f in p["failures"]:                     # ALWAYS present; covers EVERY loss kind
+        where = f.get("span_id") or f.get("page")   # kind-specific detail (span_id, page, ...) -- don't assume one
+        log(f'{p["source_doc_id"]} lost {f["kind"]} {where}: {f["reason"]}')
 ```
 
 **Key on `failures` (or simply on the document appearing in `partial`).** The per-kind keys `clause_failures`
 and `span_failures` are **optional** — each is present only when that kind of loss occurred — so reading only
 `clause_failures` **silently misses a span-only loss** (a document that dropped only spans still ingested and
-looks clean). `failures` is the always-present, kind-tagged (`{"kind": "clause"|"span", "span_id", "reason"}`)
+looks clean). `failures` is the always-present, kind-tagged (`{"kind": "clause"|"span"|"ocr", ...}`; new kinds may be added)
 union; the per-kind keys remain for back-compat. `report.per_document` lists what was written; `partial` and
 `dead_lettered` list what was not — join by `source_doc_id`.
 
@@ -102,11 +103,12 @@ if entry is not None:
     partial.append(entry)
 ```
 
-`build_partial_entry(source_doc_id, clause_failures, span_failures) -> dict | None` is **stable public API**:
-its signature, this import path, and the `failures` shape are pinned by a contract test and will not change
-without a versioned decision. **Forward-compat:** a new loss kind arrives as a new `kind` value inside
-`failures` (never a replacement top-level key), so counting the kind-tagged list — rather than summing known
-per-kind fields — keeps surfacing loss kinds your code predates.
+`build_partial_entry(source_doc_id, clause_failures, span_failures, ocr_failures=None) -> dict | None` is
+**stable public API**: this import path and the `failures` shape are pinned by a contract test. **Forward-compat:**
+a new loss kind arrives as a new `kind` value inside `failures` (never a replacement top-level key) and, if the
+producer needs it, a new *optional trailing* arg — so a 3-positional caller is unaffected, and counting the
+kind-tagged list (rather than summing known per-kind fields) keeps surfacing loss kinds your code predates.
+`ocr` (a page a degraded scan left unreadable, 0009) is the first kind added this way.
 
 ## ARD / discovery
 

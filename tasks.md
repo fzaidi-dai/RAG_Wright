@@ -246,12 +246,17 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   - **0009-WIRE — DONE:** `parsing.TieredOCRParser` (a `Parser`: fast parse -> `assess_document` gate ->
 >     whole-doc VLM escalation for degraded pages -> `report.{escalated_pages, unreadable_pages}`). +
 >     `scan_quality.assess_document`, `vlm_ocr.VlmOCRParser`. +3 tests.
->   - **0009-WIRE2 (in-progress):** make BOTH ingestion pipelines + the MCP doc tool use it. (a) chokepoint default:
->     `parse_document_bytes` -> TieredOCRParser + GRACEFUL DEGRADE (no VLM key / VLM error -> flag PARTIAL, return
->     fast doc); (b) ASYNC-bounded escalation: `aparse_document_bytes` (to_thread + asyncio.timeout, ADR-0057) wired
->     into the async parse sites (compliance doc verdict is the live async/MCP path; the VLM OCR ~35s/pg is the
->     slowest call -> MUST be deadline-bounded); (c) PARTIAL surfacing: tiered `unreadable_pages` -> visible. Default
->     ON (ingestion already makes OpenRouter calls), Gemma-4 via OpenRouter.
+>   - **0009-WIRE2 — DONE:** BOTH ingestion pipelines + the MCP doc tool now use tiered OCR. (a) chokepoint:
+>     `parse_document_bytes` defaults to TieredOCRParser (+ GRACEFUL DEGRADE: no VLM key / VLM error -> flag PARTIAL,
+>     keep fast doc, no crash); (b) ASYNC-bounded: `aparse_document_bytes` (to_thread + asyncio.timeout 600s) wired
+>     into `run_compliance_document_verdict` (the live async/MCP path that previously parsed ON the loop); contract
+>     bulk-ingest parses upfront/sync (not on loop). (c) STRUCTURED PARTIAL: `ocr` is a NEW loss KIND in the unified
+>     `failures` list -- `SourceDocument.ocr_unreadable_pages` (captured by parsed_source_document + `.ocr.json`
+>     sidecar for resume) -> `build_partial_entry(... ocr_failures)` -> IngestionReport.partial in BOTH drivers.
+>     Validates the ENG-1/ENG-2 forward-compat design (RuleWright's total_failures picks up `ocr` free). Default ON,
+>     Gemma-4/OpenRouter. Tests +8. Suite 1318. Follow-ups noted: per-page (not whole-doc) escalation + self-hosted
+>     VLM for data sovereignty + true thread cancellation (route vision via the async model seam).
+>   - **0009-ADR:** ADR-0062 (next).
 >   - **0009-ADR:** ADR-0062.
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's

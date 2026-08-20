@@ -59,3 +59,26 @@ def test_unreadable_after_vlm_is_flagged_partial():
     p = TieredOCRParser(fast=fast, vlm=vlm)
     p.convert(Path("x.pdf"))
     assert p.report.escalated_pages == [1] and p.report.unreadable_pages == [1]
+
+
+# --- 0009-WIRE2: graceful degrade (default-on safety) -------------------------------------------
+
+def test_graceful_degrade_when_no_vlm_configured(monkeypatch):
+    # default-on: a degraded page with NO VLM key must NOT crash -- return the fast doc, flag PARTIAL
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    fast = _FakeParser(_Doc([_item(_GARBAGE, 1)]))
+    p = TieredOCRParser(fast=fast)  # no vlm injected + no key -> cannot escalate
+    doc = p.convert(Path("x.pdf"))
+    assert doc is fast.doc                                       # no crash; keep the fast doc
+    assert p.report.escalated_pages == [] and p.report.unreadable_pages == [1]  # flagged PARTIAL
+
+
+def test_graceful_degrade_when_vlm_errors():
+    class _BoomVlm:
+        def convert(self, source):
+            raise RuntimeError("openrouter 500")
+
+    fast = _FakeParser(_Doc([_item(_GARBAGE, 1)]))
+    p = TieredOCRParser(fast=fast, vlm=_BoomVlm())
+    doc = p.convert(Path("x.pdf"))
+    assert doc is fast.doc and p.report.unreadable_pages == [1]  # VLM failed -> PARTIAL, no crash

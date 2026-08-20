@@ -24,20 +24,46 @@ _HEADING_LABELS = frozenset({DocItemLabel.SECTION_HEADER, DocItemLabel.TITLE, Do
 _TEXT_EXTS = frozenset({"txt", "md", "text"})
 
 
+# 0009-WIRE2: a generous per-document OCR ceiling. A degraded multi-page doc escalated whole to the VLM is a
+# batch op (~30s/page), so it needs more than the per-model-call deadline; per-page escalation would let us
+# tighten this. Overridable via `deadline_s`.
+_OCR_PARSE_DEADLINE_S = 600.0
+
+
+def _default_document_parser() -> Any:
+    """0009-WIRE2: the default parser for raw-document bytes is the TIERED OCR parser -- fast OCR, then a
+    scan-quality gate escalates only degraded pages to the VLM (default Gemma-4 via OpenRouter), and flags what
+    even the VLM cannot read. Graceful degrade when no VLM is configured. So BOTH ingestion pipelines and the MCP
+    document tool get degraded-scan handling through this one chokepoint."""
+    from rag_wright.capabilities.parsing import TieredOCRParser
+
+    return TieredOCRParser()
+
+
 def parse_document_bytes(name: str, data: bytes, *, parser: Any = None) -> Any:
     """Parse raw document BYTES into a `DoclingDocument`. `.txt`/`.md` bytes are wrapped directly; binary docs
-    (PDF/DOCX/HTML) go through docling's `DocumentConverter` (the existing `DoclingParser`, injectable for tests).
-    `name` supplies the file extension docling needs to pick a backend."""
+    (PDF/DOCX/HTML) go through docling. `parser` defaults to the tiered OCR parser (0009-WIRE2), injectable for
+    tests. `name` supplies the file extension docling needs to pick a backend."""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
-    if parser is None:
-        from rag_wright.capabilities.parsing import DoclingParser
-
-        parser = DoclingParser()
+    parser = parser or _default_document_parser()
     # docling reads a file path, not raw bytes -> write to a temp file preserving the extension for backend choice
     suffix = f".{ext}" if ext else ".txt"
     tmp = Path(tempfile.mkdtemp(prefix="docparse_")) / f"doc{suffix}"
     tmp.write_bytes(data)
     return parser.convert(tmp)
+
+
+async def aparse_document_bytes(name: str, data: bytes, *, parser: Any = None,
+                                deadline_s: float = _OCR_PARSE_DEADLINE_S) -> Any:
+    """ASYNC-bounded document parse (ADR-0057): run the sync `parse_document_bytes` (incl. the tiered VLM
+    escalation -- the slowest call in the pipeline) OFF the event loop via `to_thread`, under a wall-clock
+    `asyncio.timeout` so a hung/slow OCR never stalls the async ingestion. NOTE: `to_thread` cannot cancel the
+    worker thread, so the deadline unblocks the CALLER (raises TimeoutError); the docling parse thread finishes
+    in the background. True cancellation would require routing the vision call through the async model seam."""
+    import asyncio
+
+    async with asyncio.timeout(deadline_s):
+        return await asyncio.to_thread(parse_document_bytes, name, data, parser=parser)
 
 
 def document_to_text(doc: Any) -> str:
