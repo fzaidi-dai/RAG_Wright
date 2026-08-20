@@ -32,6 +32,8 @@ KG-7 link is a clean join.
 
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional, Protocol, TypedDict, runtime_checkable
 
 from langgraph.graph import END, START, StateGraph
@@ -242,6 +244,29 @@ def abuild_document_ingest(
                               retry_policy)
 
 
+@dataclass
+class PendingDocument:
+    """0009-ASYNC-INGEST: a document whose parse (incl. tiered OCR + the VLM escalation, the slowest call in the
+    pipeline) is DEFERRED. The async ingest parses it CONCURRENTLY and deadline-bounded PER DOCUMENT -- so a slow
+    scan on one document never blocks the loop or serializes the others -- instead of parsing every document
+    synchronously upfront. The GCS adapter yields these; a pre-parsed `SourceDocument` is used as-is."""
+
+    source_doc_id: str
+    parse: Callable[[], SourceDocument]  # deferred: downloads + parses when called (run off-loop via to_thread)
+    metadata: dict
+
+
+_INGEST_PARSE_DEADLINE_S = 600.0  # per-document parse ceiling (a degraded multi-page doc escalated to the VLM)
+
+
+async def aparse_pending(pending: PendingDocument, *, deadline_s: float = _INGEST_PARSE_DEADLINE_S) -> SourceDocument:
+    """Run a `PendingDocument`'s deferred parse OFF the event loop (`to_thread`) under a wall-clock deadline
+    (ADR-0057), so the tiered OCR escalation is concurrency-safe and bounded during ingestion."""
+    async with asyncio.timeout(deadline_s):
+        sd = await asyncio.to_thread(pending.parse)
+    return sd.model_copy(update={"metadata": {**pending.metadata, **sd.metadata}})
+
+
 def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures: list,
                         ocr_failures: Optional[list] = None) -> Optional[dict]:
     """The single PARTIAL-entry shape, shared by the blocking driver AND the async job runner so the two can
@@ -298,12 +323,19 @@ async def arun_corpus_ingestion(
     dead_lettered: list[dict] = []
     partial: list[dict] = []
     per_document: list[dict] = []
-    for i, document in enumerate(documents, 1):
-        if is_done(document):
+    for i, item in enumerate(documents, 1):
+        if is_done(item):
             ingested += 1
             skipped += 1
             if skipped % 25 == 0 or i == total:
                 progress(f"[ingest] {i}/{total} resume-skipping already-done docs ({skipped} skipped so far)")
+            continue
+        try:  # 0009-ASYNC-INGEST: parse a deferred doc off-loop + deadline-bounded (no upfront-sync block)
+            document = await aparse_pending(item) if isinstance(item, PendingDocument) else item
+        except Exception as exc:  # noqa: BLE001 - a parse-timeout/crash dead-letters THAT doc, never the run
+            dead_lettered.append({"source_doc_id": item.source_doc_id, "stage": "parse",
+                                  "reason": "parse_failed", "error": str(exc)[:200]})
+            progress(f"[ingest] {i}/{total} {item.source_doc_id} DEAD-LETTER (parse: {str(exc)[:80]})")
             continue
         out = await ingest_graph.ainvoke({"document": document})
         if out.get("dead_letter"):

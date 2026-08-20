@@ -256,6 +256,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     Validates the ENG-1/ENG-2 forward-compat design (RuleWright's total_failures picks up `ocr` free). Default ON,
 >     Gemma-4/OpenRouter. Tests +8. Suite 1318. Follow-ups noted: per-page (not whole-doc) escalation + self-hosted
 >     VLM for data sovereignty + true thread cancellation (route vision via the async model seam).
+>   - **0009-ASYNC-INGEST — DONE (corrects a WIRE2 overclaim):** WIRE2 said "async-bounded escalation" but only
+>     wired the compliance-VERDICT path; the INGESTION pipelines still parsed every doc SYNC+UPFRONT via
+>     `list(adapter.documents())` (blocking the loop / serializing escalations). FIX: `PendingDocument` (deferred
+>     parse thunk) + `aparse_pending` (to_thread + asyncio.timeout 600s); the GCS adapter yields PendingDocuments
+>     for binary docs; run_job (_one) + arun_corpus_ingestion parse them INSIDE the concurrent/sequential per-doc
+>     flow -> off-loop, bounded, concurrent. Pre-parsed SourceDocuments pass through unchanged. LIVE-VERIFIED: 2
+>     heavy docs parsed concurrently in 365s (serial ~640s), both recovered (readability 0.296->0.506, unreadable=[]).
+>     Tests +6.
 >   - **0009-ADR — DONE:** ADR-0062 (tiered OCR: fast engine -> scan-quality gate -> VLM escalation (Gemma-4/
 >     OpenRouter, VISION_OCR seam exception) -> structured `ocr` PARTIAL; async-bounded; the 4 named follow-ups).
 > **0009-GATE-CAL — DONE:** the live smoke caught that the text-only gate did NOT fire on the heavy scan (macOS

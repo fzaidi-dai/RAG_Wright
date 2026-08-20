@@ -22,7 +22,11 @@ from typing import Any, Callable
 
 from pydantic import BaseModel, Field
 
-from rag_wright.subgraphs.contract_ingestion_pipeline import build_partial_entry  # ENG-1: one PARTIAL-entry shape
+from rag_wright.subgraphs.contract_ingestion_pipeline import (  # ENG-1 shape + 0009 deferred parse
+    PendingDocument,
+    aparse_pending,
+    build_partial_entry,
+)
 
 
 def _now() -> str:
@@ -131,17 +135,22 @@ async def run_job(
         done = 0
         ingested = 0
 
-        async def _one(doc: Any) -> tuple[str, Any, Any]:
-            async with sem:  # bound concurrent LLM/DB work (rate limits)
-                if is_done(doc):  # RESUME: a prior run already wrote this document
-                    return ("skip", doc, None)
+        async def _one(item: Any) -> tuple[str, Any, Any]:
+            async with sem:  # bound concurrent LLM/DB + PARSE work (rate limits)
+                if is_done(item):  # RESUME: a prior run already wrote this document (skip before parsing)
+                    return ("skip", item, None)
+                doc = item
                 try:
+                    # 0009-ASYNC-INGEST: parse a deferred doc HERE -- concurrently + deadline-bounded, off the loop
+                    # (its tiered OCR/VLM escalation is the slowest call) -- so it never blocks the others.
+                    if isinstance(item, PendingDocument):
+                        doc = await aparse_pending(item)
                     # ASYNC-B2e (ADR-0057): ainvoke runs an async-node graph on the loop (true deadline) and a
                     # sync-node graph in LangGraph's threadpool -- so it is safe on any compiled graph.
                     out = await ingest_graph.ainvoke({"document": doc})  # per-doc LangGraph graph
-                except Exception as exc:  # noqa: BLE001 - a per-doc CRASH must dead-letter THAT doc, never fail the
-                    out = {"dead_letter": {                                                # whole job (lossless)
-                        "source_doc_id": doc.source_doc_id, "stage": "invoke",
+                except Exception as exc:  # noqa: BLE001 - a per-doc CRASH/parse-timeout must dead-letter THAT doc,
+                    out = {"dead_letter": {                                          # never fail the whole job
+                        "source_doc_id": item.source_doc_id, "stage": "invoke",
                         "reason": "ingest_crashed", "error": str(exc)[:200]}}
                 return ("out", doc, out)
 

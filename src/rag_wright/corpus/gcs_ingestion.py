@@ -55,7 +55,7 @@ class GcsCorpusAdapter:
 
         return storage.Client()
 
-    def _to_source(self, blob: Any, source_doc_id: str, meta: dict) -> Optional[SourceDocument]:
+    def _to_source(self, blob: Any, source_doc_id: str, meta: dict) -> Any:  # SourceDocument | PendingDocument | None
         """One blob -> a SourceDocument (or None to skip an empty object). A text blob is read as text; a non-text
         blob prefers the structure-preserving `parse_doc` seam (carries `.parsed`), else the `parse_bytes` text
         seam, else raises (no way to ingest a binary document without a parser)."""
@@ -64,9 +64,11 @@ class GcsCorpusAdapter:
         if ext in _TEXT_EXTS:
             text = blob.download_as_text()
             return SourceDocument(source_doc_id=source_doc_id, text=text, metadata=meta) if text.strip() else None
-        if self._parse_doc is not None:  # CHUNK-7: structure preserved (.parsed set), gcs metadata merged in
-            sd = self._parse_doc(source_doc_id, name, blob.download_as_bytes())
-            return sd.model_copy(update={"metadata": {**meta, **sd.metadata}}) if (sd.text or "").strip() else None
+        if self._parse_doc is not None:  # 0009-ASYNC-INGEST: DEFER download+parse (incl. OCR/VLM escalation) so the
+            from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument  # ingest parses it
+            _parse = self._parse_doc                                                       # concurrently + bounded
+            return PendingDocument(source_doc_id=source_doc_id,
+                                   parse=lambda: _parse(source_doc_id, name, blob.download_as_bytes()), metadata=meta)
         if self._parse_bytes is not None:  # legacy text-only seam (no structure)
             text = self._parse_bytes(name, blob.download_as_bytes())
             return SourceDocument(source_doc_id=source_doc_id, text=text, metadata=meta) if text.strip() else None
@@ -74,7 +76,7 @@ class GcsCorpusAdapter:
             f"non-text blob {name!r}: inject `parse_doc` (structure-preserving, the production default) or "
             f"`parse_bytes` (text) to ingest PDF/DOCX/HTML customer documents. The PROD-1 corpus is text (.txt).")
 
-    def documents(self) -> Iterable[SourceDocument]:
+    def documents(self) -> Iterable[Any]:  # SourceDocument (text) or PendingDocument (binary, deferred parse)
         from rag_wright.contracts.identifiers import canonical_source_doc_id
 
         client = self._get_client()

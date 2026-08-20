@@ -208,3 +208,16 @@ async def test_ocr_unreadable_pages_surface_as_an_ocr_partial():
         {"kind": "ocr", "page": 4, "reason": "unreadable scan (OCR + VLM failed)"}]
     assert entry["ocr_failures"] == [{"page": 2, "reason": "unreadable scan (OCR + VLM failed)"},
                                      {"page": 4, "reason": "unreadable scan (OCR + VLM failed)"}]
+
+
+async def test_arun_parses_a_pending_document():
+    # 0009-ASYNC-INGEST: the sequential driver parses a deferred (PendingDocument) inside the loop, off-loop.
+    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
+
+    class _PendingAdapter:
+        def documents(self):
+            yield PendingDocument("C1", lambda: SourceDocument(source_doc_id="C1", text="parsed"), {"source": "gcs"})
+
+    stages, calls = _astub_stages()
+    report = await arun_corpus_ingestion(_PendingAdapter(), _agraph(stages), progress=lambda _m: None)
+    assert report.documents_ingested == 1 and calls["chunk"] == ["C1"]  # the PARSED doc reached the graph

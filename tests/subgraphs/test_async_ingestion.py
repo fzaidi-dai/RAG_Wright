@@ -182,3 +182,44 @@ def test_run_job_per_document_crash_dead_letters_that_doc_not_the_whole_job(tmp_
     assert job.status is JobStatus.SUCCEEDED and job.ingested == 2
     assert [d["source_doc_id"] for d in job.dead_lettered] == ["C2"]
     assert job.dead_lettered[0]["stage"] == "invoke" and "blew up" in job.dead_lettered[0]["error"]
+
+
+# --- 0009-ASYNC-INGEST: deferred parse runs off-loop, bounded, concurrent ------------------------
+
+async def test_aparse_pending_parses_off_loop_and_merges_metadata():
+    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument, aparse_pending
+
+    def _parse():
+        return SourceDocument(source_doc_id="C1", text="parsed", metadata={"a": 1})
+
+    sd = await aparse_pending(PendingDocument("C1", _parse, {"source": "gcs"}))
+    assert sd.text == "parsed" and sd.metadata == {"source": "gcs", "a": 1}  # adapter meta merged in
+
+
+async def test_aparse_pending_is_wall_clock_bounded():
+    import time
+
+    import pytest
+
+    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument, aparse_pending
+
+    def _slow():
+        time.sleep(0.5)  # a hung OCR/VLM escalation
+        return SourceDocument(source_doc_id="C1", text="x")
+
+    with pytest.raises(TimeoutError):  # the deadline unblocks the caller -> the doc dead-letters, job survives
+        await aparse_pending(PendingDocument("C1", _slow, {}), deadline_s=0.02)
+
+
+def test_run_job_parses_pending_documents(tmp_path):
+    # the job path parses deferred docs itself (concurrently) instead of upfront
+    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
+
+    store = JobStore(tmp_path)
+    store.create(_job(job_id="jp"))
+
+    def mk(sid):
+        return PendingDocument(sid, lambda sid=sid: SourceDocument(source_doc_id=sid, text=f"t{sid}"), {})
+
+    job = asyncio.run(run_job("jp", [mk("C1"), mk("C2")], _FakeGraph(), store, link_fn=lambda: 0))
+    assert job.status is JobStatus.SUCCEEDED and job.ingested == 2

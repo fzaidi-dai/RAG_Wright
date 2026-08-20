@@ -74,10 +74,12 @@ def test_non_text_blob_uses_the_injected_parse_bytes_seam():
     assert docs[0].text == "parsed:prod1-corpus/deal.pdf:12"
 
 
-def test_non_text_blob_uses_the_structure_preserving_parse_doc_seam():
-    # CHUNK-7 (ADR-0058): a non-text customer document routes through parse_doc, which carries `.parsed` (the real
-    # docling parse) so the chunker's structural pass fires -- and the gcs metadata is merged in.
+def test_non_text_blob_defers_to_a_pending_document_via_parse_doc():
+    # CHUNK-7 (ADR-0058) + 0009-ASYNC-INGEST: a non-text customer document yields a PendingDocument (the parse --
+    # incl. OCR/VLM escalation -- is DEFERRED so the async ingest runs it concurrently + bounded, not upfront).
+    # Its `parse` thunk routes through parse_doc (structure-preserving `.parsed`); the gcs metadata rides along.
     from rag_wright.capabilities.parsing import ParsedDocument
+    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
 
     seen = {}
 
@@ -88,13 +90,16 @@ def test_non_text_blob_uses_the_structure_preserving_parse_doc_seam():
             parsed=ParsedDocument(source_doc_id=sid, content_hash="a" * 64, manifest_path="/m"))
 
     docs = list(_adapter([_FakeBlob("prod1-corpus/deal.pdf", data=b"%PDF-1.7")], parse_doc=parse_doc).documents())
-    assert docs[0].parsed is not None and docs[0].text == "Section 1 body"  # structure carried
-    assert docs[0].metadata["source"] == "gcs" and docs[0].metadata["blob"] == "prod1-corpus/deal.pdf"  # meta merged
+    assert isinstance(docs[0], PendingDocument)  # DEFERRED, not parsed upfront
+    assert docs[0].metadata["source"] == "gcs" and docs[0].metadata["blob"] == "prod1-corpus/deal.pdf"
+    sd = docs[0].parse()  # the thunk parses (downloads + parses) on demand
+    assert sd.parsed is not None and sd.text == "Section 1 body"
     assert seen["args"] == (docs[0].source_doc_id, "prod1-corpus/deal.pdf", 8)
 
 
 def test_parse_doc_is_preferred_over_parse_bytes_when_both_set():
     from rag_wright.capabilities.parsing import ParsedDocument
+    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
 
     def parse_doc(sid, name, data):
         return SourceDocument(source_doc_id=sid, text="structured",
@@ -102,7 +107,8 @@ def test_parse_doc_is_preferred_over_parse_bytes_when_both_set():
 
     docs = list(_adapter([_FakeBlob("prod1-corpus/deal.pdf", data=b"x")],
                          parse_doc=parse_doc, parse_bytes=lambda n, d: "flat-text").documents())
-    assert docs[0].text == "structured" and docs[0].parsed is not None  # parse_doc wins (structure preserved)
+    assert isinstance(docs[0], PendingDocument)          # parse_doc path chosen (deferred), not parse_bytes
+    assert docs[0].parse().text == "structured"          # parse_doc wins (structure preserved)
 
 
 def test_non_text_blob_without_a_parser_fails_clearly():
