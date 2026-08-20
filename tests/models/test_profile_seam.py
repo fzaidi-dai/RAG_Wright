@@ -84,8 +84,18 @@ def test_unknown_model_gets_safe_default_profile():
 def test_every_role_defaults_to_single_granite():
     # MS1-2 (ADR-0039): the product substrate is a single self-hosted Granite for EVERY role (OKF included --
     # it is not in the ingestion/query pipeline). Gemma/DeepSeek dropped from the default (still registered).
+    # EXCEPTION (0009-VLM): VISION_OCR needs a VISION model, which the text-only Granite-8B product LLM is not --
+    # it defaults to a vision model (Gemma-4), self-hostable so the data-sovereign posture holds.
     for role in ModelRole:
+        if role is ModelRole.VISION_OCR:
+            continue
         assert "granite" in profiles.model_for(role).lower()
+
+
+def test_vision_ocr_defaults_to_a_vision_model_not_granite():
+    # 0009-VLM: OCR of degraded scans needs vision; Granite-8B is text-only. Defaults to Gemma-4 (a vision model,
+    # self-hostable), swappable via RAG_MODEL_VISION_OCR -- the model id is provider-agnostic (OpenRouter or vLLM).
+    assert profiles.model_for(ModelRole.VISION_OCR) == "google/gemma-4-31b-it"
 
 
 def test_role_is_env_overridable(monkeypatch):

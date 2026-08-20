@@ -60,6 +60,9 @@ class ModelRole(str, Enum):
     # GENERAL (e.g. Gemma-4) without moving the other stages. Route (b) is CLIENT-SIDE tag-parse -> works on any
     # model. Defaults to the product LLM (unchanged behavior); set RAG_MODEL_FUNCTION_CLASSIFY to override.
     FUNCTION_CLASSIFY = "function_classify"
+    # 0009-VLM: VLM-based OCR escalation for degraded scans (via docling ApiVlmOptions -> OpenRouter). Defaults to
+    # Gemma-4 (a vision model, unlike the Granite product LLM); set RAG_MODEL_VISION_OCR to swap the model.
+    VISION_OCR = "vision_ocr"
 
 
 # Default model ids per role, confirmed against the live OpenRouter catalog at T12 (ADR-0006).
@@ -88,6 +91,8 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", _PRODUCT_LLM),
     ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", _PRODUCT_LLM),
     ModelRole.FUNCTION_CLASSIFY: ("RAG_MODEL_FUNCTION_CLASSIFY", _PRODUCT_LLM),
+    # 0009-VLM: defaults to Gemma-4 (a vision model), NOT the Granite product LLM -- OCR needs vision.
+    ModelRole.VISION_OCR: ("RAG_MODEL_VISION_OCR", DEFAULT_GENERAL),
 }
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default

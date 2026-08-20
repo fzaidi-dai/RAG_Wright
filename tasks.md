@@ -239,8 +239,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   - **0009-GATE — DONE:** `capabilities/scan_quality.py` -- `text_readability` (common-word hit rate, no dep),
 >     `image_quality` (Laplacian var + dark_frac, cv2), `assess_scan(...) -> ScanAssessment{READABLE/DEGRADED/
 >     UNREADABLE}`. Validated thresholds (word-hit<0.08, laplacian<150, dark_frac<0.008, confidence<0.5). +8 tests.
->   - **0009-VLM:** OpenRouter VLM OCR capability via docling ApiVlmOptions + a `VISION_OCR` model role (default
->     Gemma-4, `RAG_MODEL_VISION_OCR` override).
+>   - **0009-VLM — DONE:** `capabilities/vlm_ocr.py` -- `openrouter_vlm_options` / `build_vlm_ocr_converter` /
+>     `vlm_ocr(bytes)->markdown` via docling ApiVlmOptions -> OpenRouter; new `ModelRole.VISION_OCR` defaults to
+>     Gemma-4 (`RAG_MODEL_VISION_OCR` override) -- a documented exception to the Granite-for-all posture (OCR needs
+>     vision; model id is provider-agnostic / self-hostable). +5 tests (incl. the seam-exception test).
 >   - **0009-WIRE:** tiered orchestration in the DoclingParser seam (fast -> gate -> VLM -> PARTIAL).
 >   - **0009-ADR:** ADR-0062.
 
