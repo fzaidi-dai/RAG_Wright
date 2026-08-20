@@ -61,6 +61,18 @@ def vlm_ocr(data: bytes, name: str = "scan.pdf", *, converter: Any = None, model
     return conv.convert(str(tmp)).document.export_to_markdown()
 
 
+class VlmOCRParser:
+    """A `Parser` (convert(source) -> DoclingDocument) backed by the remote VLM converter -- the 0009 escalation
+    parser the tiered path routes degraded scans to. The converter is injectable for tests."""
+
+    def __init__(self, converter: Any = None) -> None:
+        self._converter = converter
+
+    def convert(self, source):
+        conv = self._converter or build_vlm_ocr_converter()
+        return conv.convert(str(source)).document
+
+
 def register_vlm_ocr(registry) -> None:
     """0009-VLM: register `vlm_ocr` (function; document bytes -> transcribed text via a remote VLM)."""
     registry.register("vlm_ocr", contract=str, kind="function",

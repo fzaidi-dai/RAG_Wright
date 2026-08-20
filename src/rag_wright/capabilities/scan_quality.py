@@ -100,6 +100,25 @@ def assess_scan(text: str | None, *, laplacian_var: float | None = None, dark_fr
     return _a(ScanQuality.READABLE, "ok")
 
 
+def _page_texts(doc) -> dict[int, str]:
+    """Group a parsed document's text by page number (from each item's `prov[0].page_no`). Duck-typed on
+    `iterate_items()` so it works on a real DoclingDocument or a hermetic fake."""
+    pages: dict[int, list[str]] = {}
+    for item, _level in doc.iterate_items():
+        text = (getattr(item, "text", "") or "").strip()
+        if not text:
+            continue
+        prov = getattr(item, "prov", None) or []
+        pg = prov[0].page_no if prov else 1
+        pages.setdefault(pg, []).append(text)
+    return {pg: "\n".join(v) for pg, v in pages.items()}
+
+
+def assess_document(doc) -> dict[int, ScanAssessment]:
+    """Assess each page of a parsed document from its OCR text -> {page_no: ScanAssessment}."""
+    return {pg: assess_scan(text) for pg, text in _page_texts(doc).items()}
+
+
 def register_scan_quality(registry) -> None:
     """0009-GATE: register `scan_quality` (function; page signals -> a readable/degraded/unreadable verdict)."""
     registry.register("scan_quality", contract=ScanAssessment, kind="function",

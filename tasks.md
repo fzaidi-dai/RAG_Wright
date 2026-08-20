@@ -243,7 +243,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     `vlm_ocr(bytes)->markdown` via docling ApiVlmOptions -> OpenRouter; new `ModelRole.VISION_OCR` defaults to
 >     Gemma-4 (`RAG_MODEL_VISION_OCR` override) -- a documented exception to the Granite-for-all posture (OCR needs
 >     vision; model id is provider-agnostic / self-hostable). +5 tests (incl. the seam-exception test).
->   - **0009-WIRE:** tiered orchestration in the DoclingParser seam (fast -> gate -> VLM -> PARTIAL).
+>   - **0009-WIRE — DONE:** `parsing.TieredOCRParser` (a `Parser`: fast parse -> `assess_document` gate ->
+>     whole-doc VLM escalation for degraded pages -> `report.{escalated_pages, unreadable_pages}`). +
+>     `scan_quality.assess_document`, `vlm_ocr.VlmOCRParser`. +3 tests.
+>   - **0009-WIRE2 (in-progress):** make BOTH ingestion pipelines + the MCP doc tool use it. (a) chokepoint default:
+>     `parse_document_bytes` -> TieredOCRParser + GRACEFUL DEGRADE (no VLM key / VLM error -> flag PARTIAL, return
+>     fast doc); (b) ASYNC-bounded escalation: `aparse_document_bytes` (to_thread + asyncio.timeout, ADR-0057) wired
+>     into the async parse sites (compliance doc verdict is the live async/MCP path; the VLM OCR ~35s/pg is the
+>     slowest call -> MUST be deadline-bounded); (c) PARTIAL surfacing: tiered `unreadable_pages` -> visible. Default
+>     ON (ingestion already makes OpenRouter calls), Gemma-4 via OpenRouter.
 >   - **0009-ADR:** ADR-0062.
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's

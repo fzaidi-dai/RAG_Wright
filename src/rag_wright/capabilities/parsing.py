@@ -71,6 +71,53 @@ class DoclingParser:
         return self._converter.convert(source).document
 
 
+class TieredOCRReport(BaseModel):
+    """0009-WIRE: which pages the tiered parser escalated to the VLM, and which remained unreadable even after
+    the VLM (genuine info loss -> the caller should flag PARTIAL / needs-rescan)."""
+
+    escalated_pages: list[int] = []
+    unreadable_pages: list[int] = []
+
+
+class TieredOCRParser:
+    """0009-WIRE: fast OCR -> scan-quality gate -> VLM escalation for degraded pages -> PARTIAL for what the VLM
+    still cannot read. A `Parser`, so it drops into `parse(..., parser=TieredOCRParser())` unchanged.
+
+    Benchmark (docs/eval/ocr_benchmark.md): fast OCR is perfect on readable scans and worthless on a heavily
+    degraded one (char_sim ~0.01); a VLM reads the degraded-but-readable scan (Gemma-4 0.991). So: run the cheap
+    fast parse, and ONLY when a page's OCR is untrustworthy re-parse via the VLM (whole-document escalation --
+    the VLM reads good pages fine too, so this is safe and keeps the common readable case at zero VLM cost).
+    `fast` and `vlm` are `Parser`s (injectable); the last run's `report` is exposed for PARTIAL reporting."""
+
+    def __init__(self, *, fast: Parser | None = None, vlm: Parser | None = None) -> None:
+        self._fast = fast
+        self._vlm = vlm
+        self.report = TieredOCRReport()
+
+    def convert(self, source: Path) -> DoclingDocument:
+        from rag_wright.capabilities.scan_quality import ScanQuality, assess_document
+
+        fast_doc = (self._fast or DoclingParser()).convert(source)
+        assessed = assess_document(fast_doc)
+        degraded = sorted(pg for pg, a in assessed.items() if a.quality is not ScanQuality.READABLE)
+        if not degraded:  # common case: readable scan -> no VLM cost
+            self.report = TieredOCRReport()
+            return fast_doc
+
+        vlm_doc = (self._vlm or _default_vlm_parser()).convert(source)
+        vlm_assessed = assess_document(vlm_doc)
+        unreadable = [pg for pg in degraded
+                      if (vlm_assessed.get(pg) is None or vlm_assessed[pg].quality is not ScanQuality.READABLE)]
+        self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=sorted(unreadable))
+        return vlm_doc
+
+
+def _default_vlm_parser() -> Parser:
+    from rag_wright.capabilities.vlm_ocr import VlmOCRParser
+
+    return VlmOCRParser()
+
+
 def _source_doc_id(source: Path) -> str:
     """A delimiter-safe id from the file stem via the ONE canonical slug (HYG-1)."""
     return canonical_source_doc_id(source.stem)
