@@ -196,8 +196,9 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     `sources` kwarg; all `_check`/demo closures accept it. (Corrected an initial half-fix that left MCP
 >     store-wide -- every surface exposing the capability must get it, per design-for-scale/no-half-fixes.)
 >     Tests +7 (4 path + 3 MCP). Suite 1289 pass.
->   - **0007-ADR:** ADR-0060.
->   - Each: contract-first TDD + gate. Order: STORE -> PATH -> ADR.
+>   - **0007-ADR — DONE:** ADR-0060 (scope a compliance check to named policy sources; DB-side filter; whole
+>     surface incl. MCP; unknown-source explicit error; Phase-2 tenancy uses the same filter).
+>   - Each: contract-first TDD + gate. Order: STORE -> PATH -> ADR. ISSUE 0007 COMPLETE (pending RuleWright retest).
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
