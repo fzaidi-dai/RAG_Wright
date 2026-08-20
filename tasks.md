@@ -256,7 +256,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     Validates the ENG-1/ENG-2 forward-compat design (RuleWright's total_failures picks up `ocr` free). Default ON,
 >     Gemma-4/OpenRouter. Tests +8. Suite 1318. Follow-ups noted: per-page (not whole-doc) escalation + self-hosted
 >     VLM for data sovereignty + true thread cancellation (route vision via the async model seam).
->   - **0009-ADR:** ADR-0062 (next).
+>   - **0009-ADR — DONE:** ADR-0062 (tiered OCR: fast engine -> scan-quality gate -> VLM escalation (Gemma-4/
+>     OpenRouter, VISION_OCR seam exception) -> structured `ocr` PARTIAL; async-bounded; the 4 named follow-ups).
+> ISSUE 0009 COMPLETE (functionally). NEXT: a live end-to-end smoke of the wired tiered path (heavy fixture ->
+> parse_document_bytes default -> gate flags -> Gemma-4 recovers; + graceful-degrade no-key -> PARTIAL).
 >   - **0009-ADR:** ADR-0062.
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
