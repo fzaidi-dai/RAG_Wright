@@ -172,6 +172,26 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > top-level key. Import path kept as-is (`subgraphs.contract_ingestion_pipeline`; RuleWright already imports it).
 > Suite 1277 pass. Next: send RuleWright the stability confirmation.
 
+> **ENGINE ISSUE 0007 (RuleWright): scope a compliance check to named policy sources.** Capability gap (not a
+> defect): `run_generic_compliance_verdict` -> `production_generic_compliance_check` reads `store.all_requirements()`
+> (the WHOLE Requirement KG, every policy) with no source param, so PR-41's bring-your-own-policy check draws on
+> ALL curated policies, not the one supplied. Add an optional `sources: list[str] | None` filter (None = today's
+> store-wide behaviour, unchanged). DECISION (design-for-scale, NOT a Python load-all-filter): push the filter
+> into the DATABASE so we never load/embed other policies' rows -- the store holds 1000s of requirement rows
+> across many policies/tenants (Phase-2 workspace scoping is the same filter). Decisions locked: None=all /
+> [names]=those / []=no rules -> existing not_checked; unknown source name -> explicit `UnknownComplianceSourceError`
+> (distinct from "zero consulted"); same param on `run_compliance_check` for symmetry; ADR-0060 records the
+> assumption shift (one-corpus-per-DB -> source-scoped) + why it's DB-side. TASK BREAKDOWN:
+>   - **0007-STORE (in-progress):** the scale-ready store seam -- `all_requirements(sources=None)` gains a
+>     `WHERE source IN [...]` filter (empty list -> [] without a query); new `requirement_sources()` (DISTINCT
+>     source, type-guarded) powers unknown-source validation WITHOUT loading rows. Ground the ArcadeDB IN-clause
+>     first (reuse `_str_array`/`_sql_str`, per line 535). Tests: hermetic SQL-construction + live `-m store`.
+>   - **0007-PATH:** thread `sources` through `_load_requirements` (shared loader + validation ->
+>     `UnknownComplianceSourceError`), `production_generic_compliance_check` + `run_generic_compliance_verdict`
+>     (required) and `production_compliance_check` + `run_compliance_check` (symmetry).
+>   - **0007-ADR:** ADR-0060.
+>   - Each: contract-first TDD + gate. Order: STORE -> PATH -> ADR.
+
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
 > ingest -- a SILENT trap for any integrator, since the per-kind keys are optional. FIX: every `partial[]` entry now

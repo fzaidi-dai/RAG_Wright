@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Iterable
+from typing import Any, Iterable, Optional
 
 from arcadedb_python import DatabaseDao, SyncClient
 
@@ -505,12 +505,32 @@ class ArcadeDBStore:
             count += 1
         return count
 
-    def all_requirements(self) -> list[dict]:
-        """Every stored `Requirement` row (CC-6 loads these to match a claim's scope against applicability)."""
-        return self._query(
+    def all_requirements(self, sources: Optional[Iterable[str]] = None) -> list[dict]:
+        """Stored `Requirement` rows (CC-6 loads these to match a claim's scope against applicability).
+
+        `sources=None` returns every row (store-wide, unchanged). Issue 0007: when a list of policy `source`s is
+        given, the filter is pushed into the QUERY (`WHERE source IN [...]`) so a store holding thousands of rows
+        across many policies/tenants never fetches the ones outside the scope -- scale-ready, not an in-memory
+        filter. An empty scope (`sources=[]`) returns `[]` without a query (scope-to-nothing; also avoids an
+        invalid `IN []`)."""
+        select = (
             f"SELECT requirement_id, source, citation, deontic_type, actor, requirement_text,"
-            f" evidence_standard, severity, applicability_json, confidence FROM {REQUIREMENT_TYPE}"
-        )
+            f" evidence_standard, severity, applicability_json, confidence FROM {REQUIREMENT_TYPE}")
+        if sources is None:
+            return self._query(select)
+        sources = list(sources)
+        if not sources:
+            return []
+        return self._query(f"{select} WHERE source IN {_str_array(sources)}")
+
+    def requirement_sources(self) -> set[str]:
+        """Issue 0007: the DISTINCT set of policy `source`s present in the Requirement KG -- powers unknown-source
+        validation (naming a policy that does not exist) WITHOUT loading any requirement rows. The Requirement type
+        may not exist yet on a fresh DB -> empty set."""
+        if REQUIREMENT_TYPE not in self.type_names():
+            return set()
+        rows = self._query(f"SELECT DISTINCT(source) AS s FROM {REQUIREMENT_TYPE}")
+        return {r["s"] for r in rows if r.get("s")}
 
     def ingested_citations(self, source: str) -> set[str]:
         """COMP-ASYNC-1 resume (PROD-2 #2): the set of `citation`s that ALREADY have >=1 `Requirement` for `source`
