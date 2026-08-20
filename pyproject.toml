@@ -28,6 +28,13 @@ dependencies = [
     "transformers>=4.44.2,<5",
 ]
 
+[project.optional-dependencies]
+ocr-bench = [
+    "mlx-vlm>=0.3.9",
+    "ocrmac>=1.0.1",
+    "onnxruntime>=1.29.0",
+]
+
 [dependency-groups]
 dev = [
     "modal>=1.5.3",
