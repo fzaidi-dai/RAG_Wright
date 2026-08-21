@@ -223,3 +223,34 @@ def test_run_job_parses_pending_documents(tmp_path):
 
     job = asyncio.run(run_job("jp", [mk("C1"), mk("C2")], _FakeGraph(), store, link_fn=lambda: 0))
     assert job.status is JobStatus.SUCCEEDED and job.ingested == 2
+
+
+# --- aparsed_source_document: the async-bounded twin of parsed_source_document (for a hand-built ingest) --------
+
+async def test_aparsed_source_document_is_the_async_bounded_twin(monkeypatch):
+    import rag_wright.subgraphs.contract_ingestion_pipeline as cip
+
+    seen = {}
+
+    def _stub(sid, name, data, *, cache_dir, metadata=None):
+        seen.update(sid=sid, name=name, data=data, cache_dir=cache_dir, metadata=metadata)
+        return SourceDocument(source_doc_id=sid, text="parsed", metadata=metadata or {})
+
+    monkeypatch.setattr(cip, "parsed_source_document", _stub)
+    sd = await cip.aparsed_source_document("D1", "d.pdf", b"%PDF", cache_dir="/tmp/x", metadata={"a": 1})
+    assert isinstance(sd, SourceDocument) and sd.source_doc_id == "D1" and sd.text == "parsed"   # returns SourceDocument
+    assert seen == {"sid": "D1", "name": "d.pdf", "data": b"%PDF", "cache_dir": "/tmp/x", "metadata": {"a": 1}}
+
+
+async def test_aparsed_source_document_is_wall_clock_bounded(monkeypatch):
+    import time
+
+    import rag_wright.subgraphs.contract_ingestion_pipeline as cip
+
+    def _slow(sid, name, data, *, cache_dir, metadata=None):
+        time.sleep(0.5)  # a hung OCR/VLM escalation
+        return SourceDocument(source_doc_id=sid, text="x")
+
+    monkeypatch.setattr(cip, "parsed_source_document", _slow)
+    with pytest.raises(TimeoutError):  # the deadline unblocks the caller off-loop
+        await cip.aparsed_source_document("D1", "d.pdf", b"x", cache_dir="/tmp/x", deadline_s=0.02)

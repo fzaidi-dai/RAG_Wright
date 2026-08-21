@@ -441,6 +441,21 @@ def parsed_source_document(
         ocr_unreadable_pages=unreadable)
 
 
+async def aparsed_source_document(
+    source_doc_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: Optional[dict] = None,
+    deadline_s: float = _INGEST_PARSE_DEADLINE_S,
+) -> SourceDocument:
+    """The ASYNC, deadline-bounded twin of `parsed_source_document` (ADR-0057) -- STABLE PUBLIC API. Runs the sync
+    build (docling parse + the tiered OCR/VLM escalation, the slowest call in the pipeline) OFF the event loop
+    (`to_thread`) under an `asyncio.timeout`, so a hand-built async ingest can parse a document into the
+    structure-bearing `SourceDocument` the chunker needs WITHOUT reimplementing the wrapper (or blocking the loop).
+    Same caveat as every `to_thread` bound: the deadline unblocks the CALLER; the docling worker thread finishes in
+    the background (true cancellation would route the vision call through the async model seam)."""
+    async with asyncio.timeout(deadline_s):
+        return await asyncio.to_thread(
+            parsed_source_document, source_doc_id, name, data, cache_dir=cache_dir, metadata=metadata)
+
+
 class _NoSummary:
     """A no-op summarizer -- the ingest smoke targets the typed KG + entity graph, not chunk summaries."""
 

@@ -110,6 +110,24 @@ producer needs it, a new *optional trailing* arg — so a 3-positional caller is
 kind-tagged list (rather than summing known per-kind fields) keeps surfacing loss kinds your code predates.
 `ocr` (a page a degraded scan left unreadable, 0009) is the first kind added this way.
 
+**Parse a document ASYNC — don't hand-roll the wrapper.** A hand-built ingest needs the *structure-bearing*
+`SourceDocument` (carries `.parsed` for the chunker, `.text`, and `.ocr_unreadable_pages`), which
+`parsed_source_document` builds. Its async, deadline-bounded twin is:
+
+```python
+from rag_wright.subgraphs.contract_ingestion_pipeline import aparsed_source_document
+
+sd = await aparsed_source_document(source_doc_id, name, data, *, cache_dir, metadata=None, deadline_s=600)
+```
+
+It runs the sync build (docling parse + the tiered OCR/VLM escalation — the slowest call) OFF the event loop via
+`to_thread` under an `asyncio.timeout`, so it never blocks the loop. Use this instead of writing your own
+`to_thread(parsed_source_document, …)` wrapper — one engine definition, no drift in the deadline, the OCR
+escalation, or the `.ocr.json` caching. (Note `aparse_document_bytes` returns a raw `DoclingDocument`, NOT a
+`SourceDocument` — use `aparsed_source_document` when your pipeline needs the `SourceDocument`.) Same `to_thread`
+caveat as the engine's own async parse: the deadline unblocks the caller; the docling worker thread finishes in
+the background.
+
 ## ARD / discovery
 
 Every capability is registered under its FR-C name (`capabilities/registry.py`, 52 registrations) for Agentic
