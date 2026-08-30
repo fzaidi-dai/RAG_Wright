@@ -19,6 +19,7 @@ Query-side posture: every node degrades to empty on failure (never crash); the j
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Awaitable, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
@@ -320,37 +321,77 @@ def _load_requirements(store: Any, sources: Optional[list[str]] = None) -> list[
 
 def production_compliance_check(
     store: Any, *, extract_model: Any, judge_model_id: str, embedder: Any = None, k: int = 5,
-    sources: Optional[list[str]] = None,
+    sources: Optional[list[str]] = None, claims_fn: Any = None,
 ):
     """Wire the real capabilities: claims = claim_extraction (CC-3), requirements = the store's Requirement KG
     (CC-5), judge = the Granite compliance judge (CC-4). Requirements are loaded ONCE here; when an `embedder` is
-    given, CC-8b semantic narrowing is enabled (top-k content + always-include context + dedup), else broad."""
+    given, CC-8b semantic narrowing is enabled (top-k content + always-include context + dedup), else broad.
+
+    UNIFY-F: `claims_fn` (async `(text, source) -> [Claim]`) overrides the default whole-text extractor -- the ad
+    entrypoint injects PRECOMPUTED per-section claims through it (parsed once via the shared front-end)."""
     from rag_wright.capabilities.claim_extraction import aclaim_extraction
     from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn
 
     requirements = _load_requirements(store, sources)
     select_fn = build_select_fn(embedder, requirements, k=k) if embedder is not None else None
 
-    async def _claims_fn(text: str, source: str) -> list:
+    async def _default_claims_fn(text: str, source: str) -> list:
         return await aclaim_extraction(text, model=extract_model, source_doc=source)
 
     return build_compliance_check(
-        claims_fn=_claims_fn,
+        claims_fn=claims_fn or _default_claims_fn,
         requirements_fn=lambda: requirements,
         judge_fn=build_acompliance_judge_fn(judge_model_id),
         select_fn=select_fn,
     )
 
 
+async def _aextract_ad_claims(sections: list[dict], source_doc: str, extract_model: Any,
+                              *, max_concurrency: int = 4) -> list:
+    """UNIFY-F: the advertising claim extractor over the shared front-end's sections -- extract typed `Claim`s
+    PER SECTION (concurrently, per the parallel-LLM rule) and stamp each with its section locator (UNIFY-A), so
+    an uploaded ad's findings cite "§ {section}: claim". The typed-Claim tail (claim_type / disclosures) is
+    UNTOUCHED. A plain-text paste is one section (locator None) -> extraction over the whole text, as before."""
+    from rag_wright.capabilities.claim_extraction import aclaim_extraction
+
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def _one(sec: dict) -> list:
+        text = (sec.get("text") or "").strip()
+        if not text:
+            return []
+        async with sem:
+            claims = await aclaim_extraction(text, model=extract_model, source_doc=source_doc)
+        locator = sec.get("section") or None
+        for c in claims:
+            c.section = locator  # stamp the section provenance (Claim is mutable; id unaffected)
+        return claims
+
+    per_section = await asyncio.gather(*(_one(s) for s in sections))
+    return [c for group in per_section for c in group]
+
+
 async def run_compliance_check(
-    subject_text: str, source_doc: str, *, store: Any, extract_model: Any, judge_model_id: str,
-    embedder: Any = None, k: int = 5, sources: Optional[list[str]] = None,
+    subject_text: Optional[str] = None, source_doc: str = "", *, store: Any, extract_model: Any,
+    judge_model_id: str, embedder: Any = None, k: int = 5, sources: Optional[list[str]] = None,
+    name: Optional[str] = None, data: Optional[bytes] = None, sections_fn: Any = None,
 ) -> ComplianceReport:
-    """Run a compliance check for one subject document against the Requirement KG -> a cited `ComplianceReport`.
-    `sources` (issue 0007) optionally scopes the check to named policy `source`s (None = the whole store)."""
+    """The ADVERTISING compliance path -> a cited `ComplianceReport`. UNIFY-F: now accepts EITHER a pasted
+    `subject_text` OR an uploaded ad (`name` + raw `data` bytes: PDF/DOCX/HTML/TXT), preprocessed through the
+    SAME shared front-end (`_subject_sections`) as the generic path -- so an uploaded ad flyer is parsed the same
+    way. The typed-Claim extractor is the tail (claim_type/disclosure routing UNCHANGED); it runs PER SECTION and
+    stamps each claim with its "§ {section}" locator. `sources` (0007) scopes to named policies."""
+    sections = await _subject_sections(text=subject_text, name=name, data=data, sections_fn=sections_fn)
+    claims = await _aextract_ad_claims(sections, source_doc, extract_model)
+
+    async def _precomputed_claims_fn(_text: str, _source: str) -> list:
+        return claims  # extracted once, per-section, above
+
     graph = production_compliance_check(
-        store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
-    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
+        store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
+        claims_fn=_precomputed_claims_fn)
+    subject_text_joined = "\n\n".join((s.get("text") or "") for s in sections)
+    out = await graph.ainvoke({"subject_text": subject_text_joined, "source_doc": source_doc})
     return out["report"]
 
 

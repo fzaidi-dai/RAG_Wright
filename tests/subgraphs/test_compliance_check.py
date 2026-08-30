@@ -650,6 +650,53 @@ async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_s
     assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
 
 
+async def test_aextract_ad_claims_extracts_per_section_and_stamps_locator(monkeypatch):
+    # UNIFY-F: the advertising extractor runs PER SECTION and stamps each Claim with its "§ {section}" locator,
+    # while the typed-Claim tail (claim_type) is preserved. Empty sections are skipped.
+    import rag_wright.capabilities.claim_extraction as ce
+    from rag_wright.contracts.compliance import Claim, ClaimType
+    from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
+
+    async def fake_aclaim(text, *, model, source_doc, **kw):  # one claim per section body
+        return [Claim(fact_id=Claim.make_id(source_doc, 0, text), source_doc=source_doc,
+                      assertion_text=text.strip(), claim_type=ClaimType.HEALTH)]
+
+    monkeypatch.setattr(ce, "aclaim_extraction", fake_aclaim)
+    sections = [{"section": "1", "heading": "", "text": "Our product cures arthritis fast."},
+                {"section": "2.1", "heading": "", "text": "It was ninety-nine dollars, now forty-nine."},
+                {"section": "3", "heading": "", "text": "   "}]                     # empty -> skipped
+    claims = await _aextract_ad_claims(sections, "ad.pdf", object())
+    assert len(claims) == 2                                                        # empty section skipped
+    assert {c.section for c in claims} == {"1", "2.1"}                             # each stamped with its locator
+    assert all(c.claim_type is ClaimType.HEALTH for c in claims)                  # typed-Claim tail preserved
+
+
+async def test_ad_path_routes_text_and_upload_through_the_shared_front_end(monkeypatch):
+    # UNIFY-F: run_compliance_check accepts BOTH a paste and an upload, and both go through _subject_sections
+    # (the SAME shared front-end as the generic path) before the ad claim extractor.
+    import rag_wright.subgraphs.compliance_check as cc
+
+    modes: list[str] = []
+    real_sections = cc._subject_sections
+
+    async def spy_sections(**kw):
+        modes.append("text" if kw.get("text") is not None else "data")
+        return await real_sections(**kw)
+
+    async def no_claims(sections, source_doc, extract_model, **kw):  # [] -> graph -> empty report (no judge call)
+        return []
+
+    monkeypatch.setattr(cc, "_subject_sections", spy_sections)
+    monkeypatch.setattr(cc, "_aextract_ad_claims", no_claims)
+    store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
+    await cc.run_compliance_check("some ad text", "ad.txt", store=store, extract_model=object(),
+                                  judge_model_id="stub", embedder=_Emb1())                     # paste
+    await cc.run_compliance_check(source_doc="ad.pdf", name="ad.pdf", data=b"%PDF", store=store,
+                                  extract_model=object(), judge_model_id="stub", embedder=_Emb1(),
+                                  sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "b"}])  # upload
+    assert modes == ["text", "data"]                                              # both routed through the front-end
+
+
 async def test_unified_multi_section_document_maps_each_sentence_to_its_section():
     # UNIFY-E (arc gate): a genuine MULTI-section subject -> each sentence cites ITS OWN "§ {section}", so the
     # cross-section mapping is correct (not just 1-2 sections). Numeric locators come from the section ids.

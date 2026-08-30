@@ -332,9 +332,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > multi-section regression test (each sentence cites its OWN §, 3 distinct sections). Suite 1343. LIVE: real docling
 > parse of a 3-numbered-section markdown -> real judge -> 18 findings each cite correct "§ {section}: {sentence}",
 > 3 distinct numeric sections, cures + undisclosed-compensation -> violation, paste matches (all no §). Subject-side
-> unification A->E COMPLETE + live-validated.** Remaining:
-> **-F (advertising path: route run_compliance_check through the SHARED parse layer so
-> it accepts text|bytes; ad claim-extractor stays the tail, optionally per-section; typed-Claim routing unchanged)**.
+> unification A->E COMPLETE + live-validated.** **-F DONE (2026-08-30): advertising path through the shared front-end. production_compliance_check gains a
+> claims_fn override; _aextract_ad_claims extracts typed Claims PER SECTION (parallel) + stamps each with its §
+> locator (typed-Claim tail untouched); run_compliance_check accepts text|bytes via _subject_sections. MCP caller
+> unchanged. Tests +2. Suite 1345. LIVE: real Granite per-section extraction (efficacy §1 / pricing §2, typed +
+> stamped), upload findings cite § locators, paste no §. UNIFY ARC A->F COMPLETE + live-validated.**
+> ORIGINAL breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
 > ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,
 > locator granularity, ad per-section-vs-blob extraction.
