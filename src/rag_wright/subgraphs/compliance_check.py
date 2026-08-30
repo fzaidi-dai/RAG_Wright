@@ -302,6 +302,18 @@ class UnknownComplianceSourceError(ValueError):
         super().__init__(f"unknown compliance source(s): {unknown}; present in store: {present}")
 
 
+def _validate_sources(store: Any, sources: Optional[list[str]]) -> None:
+    """SEG-7a: validate named policy `sources` against the store EARLY -- so an unknown source raises
+    `UnknownComplianceSourceError` BEFORE the expensive parse + assertion extraction, never wasting that work.
+    `None` (whole store) is not validated (a store without `requirement_sources()` still works)."""
+    if sources is None:
+        return
+    present = store.requirement_sources()
+    unknown = sorted(set(sources) - present)
+    if unknown:
+        raise UnknownComplianceSourceError(unknown, sorted(present))
+
+
 def _load_requirements(store: Any, sources: Optional[list[str]] = None) -> list[Requirement]:
     """Issue 0007: load the Requirement rows the check runs against, optionally scoped to named policy `source`s.
 
@@ -456,31 +468,23 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
 
 async def run_generic_compliance_verdict(
     subject_text: str, source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
-    sources: Optional[list[str]] = None, facts_fn: Any = None,
+    sources: Optional[list[str]] = None, extract_model: Any = None, discoverer: Any = None,
+    aextract_fn: Any = None,
 ) -> ComplianceReport:
     """COMP-VERDICT-GENERIC: a domain-agnostic compliance verdict for a free-text subject against the Requirement
-    KG -- semantic-retrieve the relevant requirements -> LLM-judge -> cited `ComplianceReport`. Works with NO
-    domain applicability enrichment (the always-answer guarantee); suggest COMP-APPLIC-1 for structured precision.
+    KG -> a cited `ComplianceReport`. Works with NO domain applicability enrichment (the always-answer guarantee).
 
     `sources` (issue 0007) optionally scopes the check to named policy `source`s -- None checks against the whole
-    store (unchanged); a list checks against ONLY those policies (bring-your-own-policy / a curated standard named
-    by id); `[]` scopes to nothing (zero requirements); an unknown name raises `UnknownComplianceSourceError`.
+    store; a list checks against ONLY those policies; `[]` scopes to nothing; an unknown name raises
+    `UnknownComplianceSourceError`.
 
-    `facts_fn` (issue 0010) controls subject granularity. The DEFAULT is per-SENTENCE, so each finding cites the
-    sentence it is about rather than the whole document. Pass `facts_fn=generic_facts_fn` for the old
-    whole-subject-as-one-fact behavior, or any `(subject_text, source) -> [CheckableFact]` producer.
-
-    UNIFY-D: now a thin shim over `run_subject_compliance_verdict` (text mode / plain-text short-circuit), so a
-    paste and an upload flow through the SAME `subject_facts_fn` producer. Behavior is unchanged: a structureless
-    paste yields per-sentence facts with NO `§` locator. `facts_fn` here stays TEXT-based `(subject_text, source)`
-    (back-compat); it is adapted onto the front-end's section-based seam by reconstructing the subject text."""
-    section_facts_fn = None
-    if facts_fn is not None:  # adapt a TEXT-based override (generic_facts_fn/...) onto the section-based seam
-        def section_facts_fn(sections: list[dict], source: str, _f: Any = facts_fn) -> list:
-            return _f("\n".join((s.get("text") or "") for s in sections), source)
+    SEG-7a: a thin shim over `run_subject_compliance_verdict` (text mode). The paste is parsed through docling and
+    run through the SAME semantic pipeline as an upload (chunk -> verbatim assertion extraction -> locator ->
+    judge); a structureless paste yields per-assertion facts with NO `§` locator. `extract_model`/`discoverer`/
+    `aextract_fn` are passed through (the latter two inject for tests)."""
     return await run_subject_compliance_verdict(
         source_doc, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
-        text=subject_text, facts_fn=section_facts_fn)
+        text=subject_text, extract_model=extract_model, discoverer=discoverer, aextract_fn=aextract_fn)
 
 
 _HEADING_KINDS = frozenset({"section_header", "title", "field_heading"})
@@ -615,6 +619,42 @@ async def subject_chunks(parsed_doc: Any, *, discoverer: Any = None) -> list[str
     return await achunk_texts(parsed_doc, discoverer=discoverer)
 
 
+async def semantic_subject_facts(parsed_doc: Any, *, source_doc: str, model: Any = None, discoverer: Any = None,
+                                 aextract_fn: Any = None) -> list:
+    """SEG-7a: the SUBJECT fact producer -- the composed semantic pipeline that supersedes the regex
+    `subject_facts_fn`. Chunk the parsed doc (SEG-2/SEG-5, the production ingestion discoverer) -> extract the
+    checkable assertions VERBATIM per chunk (SEG-3) -> attach each to its docling element for the structural
+    locator (SEG-4). Returns `CheckableFact`s cited "doc § {section} ¶{n}: {verbatim}" (or just the span for a
+    flat doc). `model` (assertion extractor) defaults to the production extraction model; `discoverer`/`aextract_fn`
+    are injected for hermetic tests (no model/parse)."""
+    m = model
+    if m is None and aextract_fn is None:
+        from rag_wright.capabilities.dg_extraction import default_extraction_model
+
+        m = default_extraction_model("subject-assert", "ibm-granite/granite-4.1-8b")
+    chunks = await subject_chunks(parsed_doc, discoverer=discoverer)
+    facts = await aextract_subject_facts(chunks, source_doc=source_doc, model=m, aextract_fn=aextract_fn)
+    attach_structural_locators(facts, parsed_doc)
+    return facts
+
+
+async def _aparse_subject_any(*, text: Optional[str], name: Optional[str], data: Optional[bytes],
+                              doc: Any = None) -> tuple[Any, list[int]]:
+    """SEG-7a: parse ANY subject input to a docling document + OCR unreadable pages, for the uniform semantic
+    pipeline. `doc` (a test injection) is returned as-is. Upload (`data`): `aparse_subject` (tiered OCR, captures
+    unreadable pages). Paste (`text`): parsed through docling as `.txt` bytes (decision A -- uniform semantic
+    handling, no OCR pages), NOT the old short-circuit."""
+    if doc is not None:
+        return doc, []
+    if data is not None:
+        return await aparse_subject(name, data)
+    if text is not None:
+        from rag_wright.corpus.document_parser import aparse_document_bytes
+
+        return await aparse_document_bytes("subject.txt", text.encode("utf-8")), []
+    raise ValueError("run_subject_compliance_verdict needs either text= or (name=, data=)")
+
+
 def subject_facts_fn(sections: list[dict], source_doc: str) -> list:
     """UNIFY-B: the unified section->sentence subject producer. For each parsed section (`{section, heading, text}`)
     split its body into sentences (`segment_clause`, abbreviation/decimal-safe: "Dr. Miller"/"$99" don't split) and
@@ -696,23 +736,27 @@ async def _subject_sections(
 async def run_subject_compliance_verdict(
     source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
     sources: Optional[list[str]] = None, text: Optional[str] = None, name: Optional[str] = None,
-    data: Optional[bytes] = None, facts_fn: Any = None, sections_fn: Any = None,
+    data: Optional[bytes] = None, extract_model: Any = None, discoverer: Any = None, aextract_fn: Any = None,
+    doc: Any = None,
 ) -> ComplianceReport:
-    """UNIFY-C: the ONE subject-compliance front-end. Accepts EITHER a pasted `text` OR an uploaded document
-    (`name` + raw `data` bytes: PDF/DOCX/HTML/TXT), preprocesses BOTH to sections via `_subject_sections`, and
-    judges per (section, sentence) via `subject_facts_fn` -> a `ComplianceReport` whose findings cite
-    "doc § {section}: sentence" (the section from structure, the sentence from segmentation). The subject is
-    TRANSIENT (parsed/checked, never written to the store).
+    """SEG-7a: the ONE subject-compliance front-end. Accepts EITHER a pasted `text` OR an uploaded document
+    (`name` + raw `data` bytes: PDF/DOCX/HTML/TXT), and runs the SEMANTIC pipeline uniformly: parse -> semantic
+    chunk (the production ingestion discoverer) -> extract the checkable assertions VERBATIM per chunk -> attach
+    each to its docling element -> judge. Findings cite "doc § {section} ¶{n}: {verbatim}" (or just the span for a
+    structureless subject). The subject is TRANSIENT (parsed/checked, never written to the store); a scanned
+    subject's unreadable pages surface on `report.ocr_unreadable_pages` (SEG-6).
 
-    `facts_fn` (default `subject_facts_fn`) is the granularity override `(sections, source) -> [CheckableFact]` --
-    pass `document_facts_fn` for the old per-SECTION behavior, or any sections->facts producer. `sources` (0007)
-    scopes to named policies (unknown -> `UnknownComplianceSourceError`). `sections_fn` injects the parse (tests)."""
-    sections, unreadable = await _subject_sections(text=text, name=name, data=data, sections_fn=sections_fn)
-    facts = (facts_fn or subject_facts_fn)(sections, source_doc)
+    `extract_model` (assertion extractor) defaults to the production extraction model. `sources` (0007) scopes to
+    named policies (unknown -> `UnknownComplianceSourceError`). `discoverer`/`aextract_fn`/`doc` are injected for
+    hermetic tests. (SEG-7a replaced the old sections/`subject_facts_fn` regex dial with the semantic producer.)"""
+    _validate_sources(store, sources)  # SEG-7a: reject an unknown policy BEFORE the expensive parse + extraction
+    parsed_doc, unreadable = await _aparse_subject_any(text=text, name=name, data=data, doc=doc)
+    facts = await semantic_subject_facts(
+        parsed_doc, source_doc=source_doc, model=extract_model, discoverer=discoverer, aextract_fn=aextract_fn)
     graph = production_generic_compliance_check(
         store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
-        facts_fn=lambda _text, _source: facts)  # precomputed subject facts (deterministic, no model)
-    subject_text = "\n\n".join((s.get("text") or "") for s in sections)
+        facts_fn=lambda _text, _source: facts)  # precomputed semantic subject facts
+    subject_text = "\n\n".join(f.assertion_text for f in facts)
     out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
     report = out["report"]
     report.ocr_unreadable_pages = unreadable  # SEG-6: surface the OCR PARTIAL so a verdict is never silently partial
@@ -721,18 +765,17 @@ async def run_subject_compliance_verdict(
 
 async def run_compliance_document_verdict(
     doc_name: str, data: bytes, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
-    sources: Optional[list[str]] = None, sections_fn: Any = None, facts_fn: Any = None,
+    sources: Optional[list[str]] = None, extract_model: Any = None, discoverer: Any = None,
+    aextract_fn: Any = None, doc: Any = None,
 ) -> ComplianceReport:
-    """Issue 0008 / UNIFY-C: check an uploaded subject DOCUMENT (raw bytes: PDF/DOCX/HTML/TXT) for compliance.
-    Now a thin shim over `run_subject_compliance_verdict` (the shared front-end).
-
-    DEFAULT granularity CHANGED (UNIFY-C): per-(section, sentence) via `subject_facts_fn` instead of the old
-    per-SECTION `document_facts_fn` -- uploads gain sentence-precise citations + the "§ {section}" locator. Pass
-    `facts_fn=document_facts_fn` to restore the old per-section behavior. `sources` (0007) scopes to named
-    policies; `sections_fn` injects the parse (tests). The parse is ASYNC-bounded (0009-WIRE2)."""
+    """Issue 0008 / SEG-7a: check an uploaded subject DOCUMENT (raw bytes: PDF/DOCX/HTML/TXT) for compliance --
+    a thin shim over `run_subject_compliance_verdict` (the shared SEMANTIC front-end). Findings cite each verbatim
+    assertion's "§ {section} ¶{n}" locator; a scanned subject's unreadable pages surface on the report (SEG-6).
+    `sources` (0007) scopes to named policies; `discoverer`/`aextract_fn`/`doc` inject for tests."""
     return await run_subject_compliance_verdict(
         doc_name, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
-        name=doc_name, data=data, sections_fn=sections_fn, facts_fn=facts_fn)
+        name=doc_name, data=data, extract_model=extract_model, discoverer=discoverer, aextract_fn=aextract_fn,
+        doc=doc)
 
 
 def register_compliance_check(registry) -> None:

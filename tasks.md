@@ -374,8 +374,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > TieredOCRParser, capture unreadable pages); _subject_sections returns (sections, pages); both entrypoints
 > (run_subject_compliance_verdict + ad run_compliance_check) set report.ocr_unreadable_pages -> verdict never
 > silently on half-read text (ENG-1 principle). Tests +4. Suite 1363. LIVE: real heavy scan, VLM down -> all 10
-> pages flagged -> report.ocr_unreadable_pages=[1..10] end-to-end; VLM up -> [] (both cases).** / -7 (wire front-end,
-> unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
+> pages flagged -> report.ocr_unreadable_pages=[1..10] end-to-end; VLM up -> [] (both cases).** / **-7a DONE (2026-08-30): semantic_subject_facts (composes SEG-2/3/4: chunk->verbatim extract->attach locators)
+> replaces regex subject_facts_fn; _aparse_subject_any (paste->docling.txt [decision A], upload->aparse_subject);
+> run_subject_compliance_verdict rewired to semantic; run_generic/run_compliance_document = thin shims;
+> facts_fn/sections_fn DIAL DROPPED (decision B); new params extract_model/discoverer/aextract_fn/doc. IN-TASK
+> HARDENING: _validate_sources rejects unknown policy BEFORE parse+extract. ~14 tests rewritten hermetic + 2
+> dropped-dial tests removed. Suite 1362. LIVE: full pipeline end-to-end -- upload (real parse->chunk->Granite
+> extract->judge, "§ N ¶n" citations) + paste (no §), cures->violation.** Remaining -7b (ad path per-chunk over
+> subject_chunks, typed Claim tail intact -- still on legacy _subject_sections)
+> / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
 > BUILD AFTER REVIEW.
 >
 > ORIGINAL UNIFY breakdown was:

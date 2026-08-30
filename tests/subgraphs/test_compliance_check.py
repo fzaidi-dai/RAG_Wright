@@ -266,7 +266,8 @@ async def test_run_generic_compliance_verdict_produces_a_cited_report_without_on
     try:
         report = await run_generic_compliance_verdict(
             "The employer failed to record a work-related injury on the OSHA log.",
-            "osha_case", store=_Store(), judge_model_id="stub", embedder=_Emb())
+            "osha_case", store=_Store(), judge_model_id="stub", embedder=_Emb(),
+            aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     assert report.findings and report.findings[0].verdict.value == "violation"
@@ -373,6 +374,59 @@ def _inject_generic_violation_judge():
     return cj, orig
 
 
+def _stub_sentence_extractor():
+    """SEG-7a hermetic assertion extractor: split a chunk into its sentences (VERBATIM) as ExtractedAssertions,
+    so the semantic path (chunk -> extract -> attach) runs with NO model. Splits on sentence terminators AND
+    newlines and drops short fragments (headings), mimicking a real extractor's clean per-assertion output."""
+    import re
+
+    from rag_wright.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
+
+    async def _extract(text, model, *, template, **kw):
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\n+", text or "") if len(p.strip()) > 15]
+        return ExtractedAssertions(subject="s", assertions=[ExtractedAssertion(assertion_text=p) for p in parts])
+
+    return _extract
+
+
+def _text_doc(*paragraphs, heading=None):
+    """A minimal docling-like doc: an optional section heading + body paragraphs as text items (`.texts`)."""
+    from types import SimpleNamespace
+
+    items = []
+    if heading is not None:
+        items.append(SimpleNamespace(text=heading, label="section_header", level=1))
+    items.extend(SimpleNamespace(text=p, label="text", level=None) for p in paragraphs)
+    return SimpleNamespace(texts=items)
+
+
+def _doc_of(*items):
+    """A docling-like doc from (label, text) tuples -- for arbitrary structure (multi-section, bullets)."""
+    from types import SimpleNamespace
+
+    return SimpleNamespace(texts=[SimpleNamespace(text=t, label=lbl, level=None) for lbl, t in items])
+
+
+async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
+    # SEG-7a: run_subject_compliance_verdict now chunks -> extracts VERBATIM assertions -> attaches locators ->
+    # judges. Injected doc + stub extractor (hermetic, no model/parse). Findings cite each assertion's § locator.
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    doc = _text_doc("Our product cures arthritis fast. It also reverses aging completely.",
+                    heading="4. Advertising")
+    store = _MultiPolicyStore([_row("p1", "§ 1", "An advertisement must not claim a cure.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_subject_compliance_verdict(
+            "ad.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=_stub_sentence_extractor(), sources=["p1"])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    claims = [f.citation_claim for f in report.findings]
+    assert any("§ 4" in c and "cures arthritis" in c for c in claims)   # a semantic assertion cites its § locator
+    assert any("reverses aging" in c for c in claims)                    # both sentences became checkable facts
+
+
 async def test_run_generic_compliance_verdict_scopes_to_named_sources():
     from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
 
@@ -381,7 +435,8 @@ async def test_run_generic_compliance_verdict_scopes_to_named_sources():
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_generic_compliance_verdict(
-            "the party did the thing", "doc", store=store, judge_model_id="stub", embedder=_Emb1(), sources=["p1"])
+            "the party did the thing here in the subject.", "doc", store=store, judge_model_id="stub",
+            embedder=_Emb1(), sources=["p1"], aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     cited = [f.citation_requirement for f in report.findings]
@@ -411,7 +466,8 @@ async def test_empty_sources_scopes_to_nothing_no_findings():
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_generic_compliance_verdict(
-            "subj", "doc", store=store, judge_model_id="stub", embedder=_Emb1(), sources=[])
+            "The subject makes a checkable claim here.", "doc", store=store, judge_model_id="stub",
+            embedder=_Emb1(), sources=[], aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     assert report.findings == []
@@ -429,7 +485,8 @@ async def test_sources_none_does_not_consult_requirement_sources():
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_generic_compliance_verdict(
-            "the party acted", "doc", store=_NoValidateStore(), judge_model_id="stub", embedder=_Emb1(), sources=None)
+            "The party acted in a way that must be recorded.", "doc", store=_NoValidateStore(),
+            judge_model_id="stub", embedder=_Emb1(), sources=None, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     assert [f.citation_requirement for f in report.findings]  # ran fine, produced findings
@@ -438,42 +495,43 @@ async def test_sources_none_does_not_consult_requirement_sources():
 # --- issue 0008 (0008-A): check a subject DOCUMENT (upload), segmented per section -----------------
 
 async def test_run_compliance_document_verdict_checks_each_section():
+    # SEG-7a: an uploaded document -> semantic pipeline -> assertions cite their § section locator.
     from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
-
-    def _sections_fn(name, data):
-        assert name == "subject.pdf" and data == b"%PDF fake"          # the bytes reach the parse seam
-        return [{"section": "1", "heading": "Endorsement", "text": "The influencer was paid but did not disclose it."},
-                {"section": "2", "heading": "Pricing", "text": "The product costs forty-nine dollars."}]
+    doc = _doc_of(("section_header", "1. Endorsement"),
+                  ("text", "The influencer was paid but did not disclose it."),
+                  ("section_header", "2. Pricing"),
+                  ("text", "The product costs only forty-nine dollars today."))
 
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_compliance_document_verdict(
-            "subject.pdf", b"%PDF fake", store=store, judge_model_id="stub", embedder=_Emb1(), sections_fn=_sections_fn)
+            "subject.pdf", b"%PDF fake", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
-    assert len(report.findings) == 2                                   # per-section facts -> a finding per section
-    assert report.summary.get("violation") == 2
+    assert len(report.findings) == 2                                   # one assertion per section
     claims = " || ".join(f.citation_claim for f in report.findings)
-    assert "paid but did not disclose" in claims and "forty-nine dollars" in claims  # each section is cited
+    assert "§ 1" in claims and "paid but did not disclose" in claims   # each assertion cites its section
+    assert "§ 2" in claims and "forty-nine dollars" in claims
 
 
-async def test_document_verdict_headingless_doc_is_one_fact():
+async def test_document_verdict_headingless_doc_has_no_section_locator():
+    # SEG-7a: a headingless (flat) uploaded doc -> assertions with NO § locator (honest, not degraded).
     from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
-
-    def sfn(name, data):  # no headings -> document_to_sections yields ONE whole-doc section -> one fact
-        return [{"section": "1", "heading": "", "text": "One flat paragraph, no headings at all here."}]
+    doc = _text_doc("One flat paragraph, no headings at all present here.")
 
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_compliance_document_verdict(
-            "flat.txt", b"...", store=store, judge_model_id="stub", embedder=_Emb1(), sections_fn=sfn)
+            "flat.txt", b"...", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
-    assert len(report.findings) == 1
+    assert len(report.findings) == 1 and "§" not in report.findings[0].citation_claim
 
 
 async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
@@ -484,46 +542,48 @@ async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
     with pytest.raises(UnknownComplianceSourceError):
         await run_compliance_document_verdict(
             "s.txt", b"x", store=store, judge_model_id="stub", embedder=_Emb1(),
-            sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "body"}], sources=["ghost"])
+            doc=_text_doc("body text here for the subject."), aextract_fn=_stub_sentence_extractor(),
+            sources=["ghost"])
 
 
 async def test_run_subject_compliance_verdict_upload_mode_cites_section_and_sentence():
-    # UNIFY-C: the unified front-end, upload mode -> per-(section, sentence) findings that cite "§ {section}".
+    # SEG-7a: the unified front-end, upload mode -> per-assertion findings citing "§ {section}".
     from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
-
-    def sfn(name, data):  # a multi-SENTENCE section (sentences > the min-chars floor) -> per-sentence facts
-        return [{"section": "2.1", "heading": "Endorsement",
-                 "text": "The influencer was paid a substantial fee for this sponsored post. "
-                         "She did not disclose the paid relationship to her audience anywhere."}]
+    doc = _doc_of(("section_header", "2.1 Endorsement"),
+                  ("text", "The influencer was paid a substantial fee for this sponsored post. "
+                           "She did not disclose the paid relationship to her audience anywhere."))
 
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_subject_compliance_verdict(
             "subject.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
-            name="subject.pdf", data=b"%PDF fake", sections_fn=sfn)
+            name="subject.pdf", data=b"%PDF fake", doc=doc, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
-    assert len(report.findings) == 2                                   # two sentences in the one section
+    assert len(report.findings) == 2                                   # two assertions in the one section
     assert all("§ 2.1" in f.citation_claim for f in report.findings)   # both cite the section locator
     claims = " || ".join(f.citation_claim for f in report.findings)
-    assert "was paid a substantial fee" in claims and "did not disclose" in claims  # distinct sentence spans
+    assert "was paid a substantial fee" in claims and "did not disclose" in claims  # distinct verbatim spans
 
 
-async def test_run_subject_compliance_verdict_text_mode_short_circuits_no_locator():
-    # UNIFY-C/D: paste mode -> one headingless section, per-sentence facts, NO spurious "§" (structureless paste).
+async def test_run_subject_compliance_verdict_text_mode_no_locator():
+    # SEG-7a: paste mode -> the semantic pipeline over a structureless doc -> NO spurious "§".
     from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
+    doc = _text_doc("Our new supplement cures arthritis in just two weeks. "
+                    "Dr. Miller recommends it to all her patients. Was ninety-nine, now only forty-nine.")
+
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_subject_compliance_verdict(
-            "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1(), text=_ADCOPY)
+            "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
-    assert len(report.findings) == 3                                   # per sentence
-    assert all("§" not in f.citation_claim for f in report.findings)   # no structure -> no spurious locator
+    assert report.findings and all("§" not in f.citation_claim for f in report.findings)  # structureless -> no §
     assert any("cures arthritis" in f.citation_claim for f in report.findings)
 
 
@@ -533,26 +593,7 @@ async def test_run_subject_compliance_verdict_requires_an_input():
     store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
     with pytest.raises(ValueError):
         await run_subject_compliance_verdict(
-            "s", store=store, judge_model_id="stub", embedder=_Emb1())  # neither text nor data
-
-
-async def test_document_verdict_facts_fn_override_restores_per_section():
-    # UNIFY-C back-compat: pass document_facts_fn to get the old per-SECTION behavior (one fact per section).
-    from rag_wright.subgraphs.compliance_check import document_facts_fn, run_compliance_document_verdict
-
-    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
-
-    def sfn(name, data):
-        return [{"section": "1", "heading": "Endorsement", "text": "She was paid. She did not disclose it."}]
-
-    cj, orig = _inject_generic_violation_judge()
-    try:
-        report = await run_compliance_document_verdict(
-            "subject.pdf", b"%PDF fake", store=store, judge_model_id="stub", embedder=_Emb1(),
-            sections_fn=sfn, facts_fn=document_facts_fn)
-    finally:
-        cj.build_ageneric_judge_fn = orig
-    assert len(report.findings) == 1                                   # per-section: the two sentences stay one fact
+            "s", store=store, judge_model_id="stub", embedder=_Emb1())  # neither text nor data nor doc
 
 
 # --- issue 0010: per-sentence subject facts (sentence segmentation is the DEFAULT) ----------------
@@ -617,37 +658,26 @@ def test_subject_facts_fn_ids_are_unique_across_sections():
     assert facts[0].section == "1" and facts[1].section == "2"
 
 
-async def test_run_generic_compliance_verdict_defaults_to_per_sentence_citations():
-    # issue 0010: DEFAULT is now per-sentence -> each finding cites the sentence it is about, not the whole subject
+async def test_run_generic_compliance_verdict_cites_each_assertion():
+    # SEG-7a: the generic text path parses the paste through docling and runs the SAME semantic pipeline ->
+    # a finding per checkable assertion, each citing its own verbatim span, NO § (structureless paste).
     from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive or unsubstantiated claims.")])
+    paste = ("Our new supplement cures arthritis in just two weeks of use. "
+             "Doctor Miller recommends it to all of her patients regularly. "
+             "The price was ninety-nine dollars and is now only forty-nine.")
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_generic_compliance_verdict(
-            _ADCOPY, "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1())
+            paste, "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1(),
+            aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     claims = [f.citation_claim for f in report.findings]
-    assert len(report.findings) == 3                                   # one finding per sentence
-    assert any("cures arthritis" in c and "Dr. Miller" not in c for c in claims)   # distinct spans, not the whole doc
-    assert any("Dr. Miller recommends" in c and "cures arthritis" not in c for c in claims)
-    assert any("only $49" in c and "cures arthritis" not in c for c in claims)
-
-
-async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_subject():
-    # back-compat: pass generic_facts_fn to get the old whole-subject-as-one-fact behavior
-    from rag_wright.subgraphs.compliance_check import generic_facts_fn, run_generic_compliance_verdict
-
-    store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
-    cj, orig = _inject_generic_violation_judge()
-    try:
-        report = await run_generic_compliance_verdict(
-            _ADCOPY, "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1(), facts_fn=generic_facts_fn)
-    finally:
-        cj.build_ageneric_judge_fn = orig
-    assert len(report.findings) == 1                                   # whole subject = one fact -> one finding
-    assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
+    assert len(report.findings) >= 2                                   # multiple checkable assertions
+    assert all("§" not in c for c in claims)                           # structureless paste -> no spurious §
+    assert any("cures arthritis" in c for c in claims)
 
 
 def _seg4_doc():
@@ -851,28 +881,27 @@ async def test_unified_multi_section_document_maps_each_sentence_to_its_section(
         _row("p3", "§ C", "A material connection between advertiser and endorser must be disclosed."),
     ])
 
-    def sfn(name, data):
-        return [
-            {"section": "1", "heading": "1. Product Claims",
-             "text": "Our supplement cures arthritis in just two weeks of daily use."},
-            {"section": "2", "heading": "2. Pricing",
-             "text": "The regular price was ninety-nine dollars only last month."},
-            {"section": "3", "heading": "3. Endorsements",
-             "text": "Doctor Miller personally recommends this product to all of her patients."},
-        ]
+    doc = _doc_of(
+        ("section_header", "1. Product Claims"),
+        ("text", "Our supplement cures arthritis in just two weeks of daily use."),
+        ("section_header", "2. Pricing"),
+        ("text", "The regular price was ninety-nine dollars only last month here."),
+        ("section_header", "3. Endorsements"),
+        ("text", "Doctor Miller personally recommends this product to all of her patients."),
+    )
 
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_subject_compliance_verdict(
             "policy_subject.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
-            name="policy_subject.pdf", data=b"%PDF", sections_fn=sfn)
+            name="policy_subject.pdf", data=b"%PDF", doc=doc, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     claims = {f.citation_claim for f in report.findings}
-    assert any("§ 1" in c and "cures arthritis" in c for c in claims)         # each sentence cites its section
+    assert any("§ 1" in c and "cures arthritis" in c for c in claims)         # each assertion cites its section
     assert any("§ 2" in c and "ninety-nine dollars" in c for c in claims)
     assert any("§ 3" in c and "Miller" in c for c in claims)
-    assert {c.split("§")[1].strip().split(":")[0] for c in claims} == {"1", "2", "3"}   # three distinct sections
+    assert {c.split("§")[1].strip().split()[0] for c in claims} == {"1", "2", "3"}   # three distinct sections
 
 
 async def test_subject_sections_paste_short_circuits_without_docling(monkeypatch):
@@ -908,44 +937,46 @@ async def test_subject_sections_returns_ocr_pages_tuple():
 
 
 async def test_subject_verdict_propagates_ocr_unreadable_pages(monkeypatch):
-    # SEG-6: the OCR PARTIAL (unreadable pages) reaches the ComplianceReport.
+    # SEG-6/SEG-7a: the OCR PARTIAL (unreadable pages) from the parse reaches the ComplianceReport.
     import rag_wright.subgraphs.compliance_check as cc
 
-    async def _fake_sections(**kw):
-        return [{"section": None, "heading": "", "text": "The subject makes a checkable claim here."}], [3, 4]
+    async def _fake_parse(**kw):  # parse -> (docling doc, unreadable pages)
+        return _text_doc("The subject makes a checkable claim here today."), [3, 4]
 
-    monkeypatch.setattr(cc, "_subject_sections", _fake_sections)
+    monkeypatch.setattr(cc, "_aparse_subject_any", _fake_parse)
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await cc.run_subject_compliance_verdict(
-            "scan.pdf", store=store, judge_model_id="stub", embedder=_Emb1(), text="x", sources=["p1"])
+            "scan.pdf", store=store, judge_model_id="stub", embedder=_Emb1(), name="scan.pdf", data=b"x",
+            aextract_fn=_stub_sentence_extractor(), sources=["p1"])
     finally:
         cj.build_ageneric_judge_fn = orig
     assert report.ocr_unreadable_pages == [3, 4]                      # surfaced on the report
 
 
 async def test_paste_and_upload_reach_the_same_producer(monkeypatch):
-    # UNIFY-D: paste (text mode) AND upload (bytes mode) both flow through the SAME subject_facts_fn producer
-    # (vs the old split: paste->sentence_facts_fn, upload->document_facts_fn).
+    # SEG-7a: paste (text mode) AND upload (doc mode) both flow through the SAME semantic_subject_facts producer.
     import rag_wright.subgraphs.compliance_check as cc
 
     seen: list[int] = []
-    real = cc.subject_facts_fn
+    real = cc.semantic_subject_facts
 
-    def spy(sections, source):
-        seen.append(len(sections))
-        return real(sections, source)
+    async def spy(parsed_doc, **kw):
+        seen.append(1)
+        return await real(parsed_doc, **kw)
 
-    monkeypatch.setattr(cc, "subject_facts_fn", spy)
+    monkeypatch.setattr(cc, "semantic_subject_facts", spy)
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
     cj, orig = _inject_generic_violation_judge()
     try:
         await cc.run_generic_compliance_verdict(
-            _ADCOPY, "p.txt", store=store, judge_model_id="stub", embedder=_Emb1())                 # paste
+            "A pasted claim sentence here for the test.", "p.txt", store=store, judge_model_id="stub",
+            embedder=_Emb1(), aextract_fn=_stub_sentence_extractor())                                # paste
         await cc.run_compliance_document_verdict(
             "d.pdf", b"x", store=store, judge_model_id="stub", embedder=_Emb1(),
-            sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": _ADCOPY}])             # upload
+            doc=_text_doc("An uploaded claim sentence here for the test."),
+            aextract_fn=_stub_sentence_extractor())                                                  # upload
     finally:
         cj.build_ageneric_judge_fn = orig
-    assert len(seen) == 2                                              # subject_facts_fn produced for BOTH paths
+    assert len(seen) == 2                                              # semantic_subject_facts produced for BOTH
