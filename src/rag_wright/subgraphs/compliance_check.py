@@ -381,7 +381,7 @@ async def run_compliance_check(
     SAME shared front-end (`_subject_sections`) as the generic path -- so an uploaded ad flyer is parsed the same
     way. The typed-Claim extractor is the tail (claim_type/disclosure routing UNCHANGED); it runs PER SECTION and
     stamps each claim with its "§ {section}" locator. `sources` (0007) scopes to named policies."""
-    sections = await _subject_sections(text=subject_text, name=name, data=data, sections_fn=sections_fn)
+    sections, unreadable = await _subject_sections(text=subject_text, name=name, data=data, sections_fn=sections_fn)
     claims = await _aextract_ad_claims(sections, source_doc, extract_model)
 
     async def _precomputed_claims_fn(_text: str, _source: str) -> list:
@@ -392,7 +392,9 @@ async def run_compliance_check(
         claims_fn=_precomputed_claims_fn)
     subject_text_joined = "\n\n".join((s.get("text") or "") for s in sections)
     out = await graph.ainvoke({"subject_text": subject_text_joined, "source_doc": source_doc})
-    return out["report"]
+    report = out["report"]
+    report.ocr_unreadable_pages = unreadable  # SEG-6: the ad path surfaces the OCR PARTIAL too
+    return report
 
 
 def generic_facts_fn(subject_text: str, source_doc: str) -> list:
@@ -657,22 +659,37 @@ def document_facts_fn(sections: list[dict], source_doc: str) -> list:
     return facts
 
 
+async def aparse_subject(name: str, data: bytes, *, parser: Any = None) -> tuple[Any, list[int]]:
+    """SEG-6: parse an uploaded subject ONCE through the tiered OCR chokepoint (`TieredOCRParser`, the SAME OCR as
+    ingestion), returning `(docling_document, ocr_unreadable_pages)`. The unreadable pages (a degraded scan the
+    VLM still could not read) are captured from the tiered parser's report so they can surface on the
+    `ComplianceReport` -- a verdict is never silently based on half-read text. `parser` injected for tests."""
+    from rag_wright.capabilities.parsing import TieredOCRParser
+    from rag_wright.corpus.document_parser import aparse_document_bytes
+
+    tiered = parser if parser is not None else TieredOCRParser()
+    document = await aparse_document_bytes(name, data, parser=tiered)
+    unreadable = list(getattr(getattr(tiered, "report", None), "unreadable_pages", []) or [])
+    return document, unreadable
+
+
 async def _subject_sections(
     *, text: Optional[str], name: Optional[str], data: Optional[bytes], sections_fn: Any,
-) -> list[dict]:
-    """UNIFY-C: the ONE subject preprocessing front-end -> `[{section, heading, text}]`, shared with the ingestion
-    front-end. Upload (`data`): async-bounded parse (off-loop, wall-clock deadline -- 0009-WIRE2) + heading-split
-    (`document_to_sections`); `sections_fn` injects the parse for tests. Paste (`text`): the plain-text
-    SHORT-CIRCUIT -- one headingless section, NO docling round-trip (UNIFY-D), `section=None` so a structureless
-    paste keeps the old "doc: sentence" citation (no spurious "§ 1")."""
+) -> tuple[list[dict], list[int]]:
+    """UNIFY-C / SEG-6: the ONE subject preprocessing front-end -> `([{section, heading, text}],
+    ocr_unreadable_pages)`, shared with the ingestion front-end. Upload (`data`): parse ONCE via `aparse_subject`
+    (tiered OCR, async-bounded) capturing the unreadable pages, then heading-split (`document_to_sections`);
+    `sections_fn` injects the parse for tests (no OCR pages). Paste (`text`): the plain-text SHORT-CIRCUIT -- one
+    headingless section, NO docling round-trip (UNIFY-D), `section=None`, no OCR pages."""
     if data is not None:
         if sections_fn is not None:
-            return sections_fn(name, data)  # injected (hermetic tests) -- sync
-        from rag_wright.corpus.document_parser import aparse_document_bytes, document_to_sections
+            return sections_fn(name, data), []  # injected (hermetic tests) -- sync, no OCR
+        from rag_wright.corpus.document_parser import document_to_sections
 
-        return document_to_sections(await aparse_document_bytes(name, data))
+        document, unreadable = await aparse_subject(name, data)
+        return document_to_sections(document), unreadable
     if text is not None:
-        return [{"section": None, "heading": "", "text": text}]  # short-circuit: no structure, no locator
+        return [{"section": None, "heading": "", "text": text}], []  # short-circuit: no structure, no OCR pages
     raise ValueError("run_subject_compliance_verdict needs either text= or (name=, data=)")
 
 
@@ -690,14 +707,16 @@ async def run_subject_compliance_verdict(
     `facts_fn` (default `subject_facts_fn`) is the granularity override `(sections, source) -> [CheckableFact]` --
     pass `document_facts_fn` for the old per-SECTION behavior, or any sections->facts producer. `sources` (0007)
     scopes to named policies (unknown -> `UnknownComplianceSourceError`). `sections_fn` injects the parse (tests)."""
-    sections = await _subject_sections(text=text, name=name, data=data, sections_fn=sections_fn)
+    sections, unreadable = await _subject_sections(text=text, name=name, data=data, sections_fn=sections_fn)
     facts = (facts_fn or subject_facts_fn)(sections, source_doc)
     graph = production_generic_compliance_check(
         store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
         facts_fn=lambda _text, _source: facts)  # precomputed subject facts (deterministic, no model)
     subject_text = "\n\n".join((s.get("text") or "") for s in sections)
     out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
-    return out["report"]
+    report = out["report"]
+    report.ocr_unreadable_pages = unreadable  # SEG-6: surface the OCR PARTIAL so a verdict is never silently partial
+    return report
 
 
 async def run_compliance_document_verdict(

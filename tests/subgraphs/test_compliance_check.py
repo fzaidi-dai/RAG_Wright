@@ -884,8 +884,45 @@ async def test_subject_sections_paste_short_circuits_without_docling(monkeypatch
         raise AssertionError("docling parse must NOT run for a plain-text paste")
 
     monkeypatch.setattr(dp, "aparse_document_bytes", _boom)
-    sections = await _subject_sections(text="Just a pasted sentence here.", name=None, data=None, sections_fn=None)
+    sections, pages = await _subject_sections(text="Just a pasted sentence here.", name=None, data=None,
+                                              sections_fn=None)
     assert sections == [{"section": None, "heading": "", "text": "Just a pasted sentence here."}]  # short-circuit
+    assert pages == []                                                # SEG-6: a paste has no OCR pages
+
+
+def test_compliance_report_has_ocr_unreadable_pages_field():
+    # SEG-6: the report carries which pages the tiered OCR could not read, so a verdict is never silently based on
+    # half-read text (the ENG-1 principle, compliance side).
+    from rag_wright.contracts.compliance import ComplianceReport
+
+    assert ComplianceReport(source_doc="d").ocr_unreadable_pages == []                 # default empty
+    assert ComplianceReport(source_doc="d", ocr_unreadable_pages=[3, 4]).ocr_unreadable_pages == [3, 4]
+
+
+async def test_subject_sections_returns_ocr_pages_tuple():
+    from rag_wright.subgraphs.compliance_check import _subject_sections
+
+    sections, pages = await _subject_sections(
+        text=None, name="d.pdf", data=b"x", sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "b"}])
+    assert sections == [{"section": "1", "heading": "", "text": "b"}] and pages == []  # injected -> no OCR pages
+
+
+async def test_subject_verdict_propagates_ocr_unreadable_pages(monkeypatch):
+    # SEG-6: the OCR PARTIAL (unreadable pages) reaches the ComplianceReport.
+    import rag_wright.subgraphs.compliance_check as cc
+
+    async def _fake_sections(**kw):
+        return [{"section": None, "heading": "", "text": "The subject makes a checkable claim here."}], [3, 4]
+
+    monkeypatch.setattr(cc, "_subject_sections", _fake_sections)
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await cc.run_subject_compliance_verdict(
+            "scan.pdf", store=store, judge_model_id="stub", embedder=_Emb1(), text="x", sources=["p1"])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert report.ocr_unreadable_pages == [3, 4]                      # surfaced on the report
 
 
 async def test_paste_and_upload_reach_the_same_producer(monkeypatch):

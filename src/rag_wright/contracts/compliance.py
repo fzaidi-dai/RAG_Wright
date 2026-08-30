@@ -236,6 +236,10 @@ class ComplianceReport(BaseModel):
     findings: list[ComplianceFinding] = []
     summary: dict[str, int] = {}  # verdict -> count (compliant/violation/needs_review)
     gap_matrix: list[dict] = []  # per-requirement rollup: {requirement_id, citation, verdict, claims_checked}
+    # SEG-6 (0009-WIRE2 / ENG-1 principle): pages the tiered OCR could not read even after VLM escalation, so a
+    # verdict on a scanned subject is never SILENTLY based on half-read text. Empty = fully readable. The product
+    # surfaces this as "pages X-Y unreadable; results for those pages are incomplete".
+    ocr_unreadable_pages: list[int] = []
 
     @property
     def verdict(self) -> Verdict:
