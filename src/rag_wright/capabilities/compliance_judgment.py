@@ -168,12 +168,15 @@ def assemble_finding(
         verdict = _to_verdict(ruling.verdict)
         rationale = ruling.rationale
         confidence = min(1.0, max(0.0, ruling.confidence))
+    # UNIFY-A: when the fact carries a section locator, cite "doc § {section}: {assertion}" so the finding points
+    # at the section AND the sentence; absent -> the old "doc: assertion" (back-compat). Still input-authored.
+    _sec = f" § {claim.section}" if (claim.section and claim.section.strip()) else ""
     return ComplianceFinding(
         claim_id=claim.fact_id,
         requirement_id=requirement.requirement_id,
         verdict=verdict,
         rationale=rationale,
-        citation_claim=f"{claim.source_doc}: {claim.assertion_text}",
+        citation_claim=f"{claim.source_doc}{_sec}: {claim.assertion_text}",
         citation_requirement=f"{requirement.citation} ({requirement.requirement_id}): {requirement.requirement_text}",
         confidence=confidence,
     )

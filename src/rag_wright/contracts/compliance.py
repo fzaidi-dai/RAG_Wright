@@ -125,6 +125,8 @@ class CheckableFact(BaseModel):
     fact_id: str
     source_doc: str
     assertion_text: str  # the checkable statement text (domain-neutral: an "assertion" is any checkable claim/fact)
+    section: str | None = None  # UNIFY-A: the section/heading locator this fact came from (e.g. "4.2"); the
+    # finding cites "doc § {section}: {assertion}" when set. Additive/optional: None -> the old "doc: assertion".
     doc_start: int | None = None  # span provenance: char offsets in source_doc (optional)
     doc_end: int | None = None
     confidence: ConfidenceTag = ConfidenceTag.EXTRACTED

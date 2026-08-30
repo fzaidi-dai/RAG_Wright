@@ -22,6 +22,7 @@ from rag_wright.capabilities.compliance_judgment import (
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.compliance import (
+    CheckableFact,
     Claim,
     ClaimType,
     ComplianceFinding,
@@ -200,6 +201,29 @@ def test_assemble_finding_is_deterministic_and_conservative():
     assert none_finding.verdict is Verdict.NEEDS_REVIEW and none_finding.claim_id == claim.fact_id
     viol = assemble_finding(claim, req, JudgeVerdict(verdict="violation", rationale="x", confidence=0.9))
     assert viol.verdict is Verdict.VIOLATION and req.citation in viol.citation_requirement
+
+
+def test_checkable_fact_carries_optional_section_locator():
+    # UNIFY-A: additive, back-compat -- absent by default, settable to a locator.
+    assert CheckableFact(fact_id="f0", source_doc="s", assertion_text="x").section is None
+    f = CheckableFact(fact_id="f0", source_doc="s", assertion_text="x", section="4.2")
+    assert f.section == "4.2"
+
+
+def test_assemble_finding_cites_the_section_locator_when_present():
+    # UNIFY-A: a section-bearing fact -> the claim-side citation reads "doc § 4.2: <sentence>", so a finding
+    # points at the section AND the sentence. The model never authors it (assembled from the input, as before).
+    claim = _claim(section="4.2")
+    finding = assemble_finding(claim, _req(), JudgeVerdict(verdict="violation", rationale="x", confidence=0.9))
+    assert "§ 4.2" in finding.citation_claim
+    assert claim.assertion_text in finding.citation_claim and claim.source_doc in finding.citation_claim
+
+
+def test_assemble_finding_citation_unchanged_when_no_section():
+    # UNIFY-A back-compat: no section -> the citation is exactly the old "doc: sentence" (no "§").
+    claim = _claim()  # no section
+    finding = assemble_finding(claim, _req(), JudgeVerdict(verdict="compliant", rationale="ok", confidence=0.8))
+    assert finding.citation_claim == f"{claim.source_doc}: {claim.assertion_text}" and "§" not in finding.citation_claim
 
 
 def test_skill_method_loads_from_the_skill_md():

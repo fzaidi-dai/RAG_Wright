@@ -320,8 +320,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
 > ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,
 > locator granularity, ad per-section-vs-blob extraction.
->   - **UNIFY-A APPROVED (2026-08-30):** the `CheckableFact.section: str | None` additive contract change is
->     pre-approved by the product owner. Build it as the first task of this arc (still TDD + gate per task).
+>   - **UNIFY-A DONE (2026-08-30):** `CheckableFact.section: str | None` (additive/optional, inherited by Claim;
+>     fact_id/make_id unchanged); `assemble_finding` cites "doc § {section}: {assertion}" when set, exact old
+>     "doc: {assertion}" when None (back-compat). Tests +3. Suite 1333. LIVE: real BGE-M3 + real judge -> 4/4
+>     findings cite "§ section".
+>   - **STANDING (2026-08-30): EACH UNIFY gate ends with a LIVE test** (real model / real data end-to-end), not
+>     just the unit suite. A task is not presented for approval until its live test passes.
 >   - **RULEWRIGHT MESSAGE PENDING (standing reminder):** once the implementation is COMPLETE, write a message for
 >     RuleWright listing the SPECIFIC caller-side changes required (new unified entrypoint signature, the
 >     text|bytes input, the `section` locator now in findings, ad-path upload support, any deprecated shims).
