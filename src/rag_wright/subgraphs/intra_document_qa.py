@@ -73,23 +73,39 @@ def _clause_confidence(properties: list[CitedProperty]) -> Optional[str]:
     return None
 
 
+def _humanize_properties(clause: CitedClause) -> str:
+    """Body-less path (issue 0011): render typed facts as reader-safe natural text -- NOT the `[dim=value]`
+    schema syntax the model latched onto and paraphrased. Domain-agnostic prettify (snake_case -> spaces); the
+    structured form still rides out-of-band on `EvidenceItem.properties`. No `[`, no `=`, no backticks."""
+    def pretty(s: str) -> str:
+        return str(s).replace("_", " ")
+    return "; ".join(f"{pretty(p.dimension)}: {pretty(p.value)}" for p in clause.properties)
+
+
 def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> Optional[EvidenceItem]:
-    """One cited evidence item: the clause's REAL span text (when rehydrated) with its typed facts appended,
-    cited by `clause_id`, confidence surfaced.
+    """One cited evidence item: the clause's REAL span text (when rehydrated), cited by `clause_id`, confidence
+    surfaced. Typed properties ride OUT-OF-BAND on `EvidenceItem.properties`, never in the evidence text.
 
-    Engine issue 0002 / ADR-0054: the KG-assigned function label is NOT put in the evidence text. It is
-    generation-only, not load-bearing for the SKILL's judge-by-actual-text method (the model verifies the TEXT
-    against the QUESTION, not the label), and its presence in the evidence was the source of the auto-tag
-    paraphrase leak -- a sometimes-wrong classification narrated to the reader in the engine's voice. Retrieval
-    and routing use `clause.function` directly, so removing the label here changes only what the generator sees.
+    Engine issue 0002 / ADR-0054: the KG-assigned function label is NOT put in the evidence text (it was the
+    source of the auto-tag paraphrase leak -- a sometimes-wrong classification narrated in the engine's voice).
 
-    A clause with no span text AND no typed facts is contentless -- there is nothing to ground a citation on --
-    so it is DROPPED (returns None), rather than cited by a bare function label (superseding PREC-1a's fallback)."""
-    facts = "; ".join(f"{p.dimension}={p.value}" for p in clause.properties)
+    Engine issue 0011 / ADR-0064: the SAME move for typed properties. They used to be concatenated into the text
+    as `[dimension=value; ...]`; the model paraphrased that schema string into prose ("as indicated by the typed
+    property cap_quantum=..."), around the bracket scrub. They now travel out-of-band on `EvidenceItem.properties`
+    (code-generated `{dimension, value}`), so the generator never sees the schema tokens and narration is
+    structurally impossible. The body span already states in natural language what the properties encode, so
+    dropping them from the text costs the generator nothing; they stay available for the product's UI chips.
+
+    Body-less path: where a clause has NO span text, the properties are the only content, so they must stay
+    citable -- rendered as reader-safe natural text (`_humanize_properties`), never the `[dim=value]` syntax.
+
+    A clause with no span text AND no typed facts is contentless -- nothing to ground a citation on -- so it is
+    DROPPED (returns None), rather than cited by a bare function label (superseding PREC-1a's fallback)."""
+    props = [{"dimension": p.dimension, "value": p.value} for p in clause.properties] or None
     if body:
-        text = body + (f" [{facts}]" if facts else "")
-    elif facts:
-        text = f"[{facts}]"  # no span text (property-less path): the typed facts stand in
+        text = body  # 0011: properties NOT appended -> the generator cannot quote the schema tokens
+    elif props:
+        text = _humanize_properties(clause)  # body-less: reader-safe natural text, still citable
     else:
         return None  # contentless: no span text, no facts -> not citable -> drop
     if clause.exception_of:
@@ -98,8 +114,9 @@ def _clause_to_evidence(clause: CitedClause, body: Optional[str]) -> Optional[Ev
         return EvidenceItem(
             chunk_id=clause.clause_id,
             text=f"[Exception to the liability cap (inferred)] {text}",
-            confidence=ConfidenceTag.INFERRED.value)
-    return EvidenceItem(chunk_id=clause.clause_id, text=text, confidence=_clause_confidence(clause.properties))
+            confidence=ConfidenceTag.INFERRED.value, properties=props)
+    return EvidenceItem(chunk_id=clause.clause_id, text=text,
+                        confidence=_clause_confidence(clause.properties), properties=props)
 
 
 def attach_exception_links(

@@ -276,32 +276,39 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > NO-KEY -> graceful degrade -> all pages flagged PARTIAL, fast doc kept, no crash.
 >   - **0009-ADR:** ADR-0062.
 
-> **ENGINE ISSUE 0010 (RuleWright): a compliance finding cites the WHOLE subject, not the offending span.**
-> `run_generic_compliance_verdict` doesn't forward the `facts_fn` its graph builder already accepts (0008), so the
-> text path always uses `generic_facts_fn` (whole subject = ONE fact) -> every finding quotes the entire document
-> (worst at document scale). Capability exists; only the seam is missing. PLAN:
->   - **0010-A (in-progress):** add `facts_fn: Any = None` to `run_generic_compliance_verdict`, forwarded to
+> **ENGINE ISSUE 0010 (RuleWright): a compliance finding cites the WHOLE subject, not the offending span. DONE (2026-08-30), commit d31e24a.**
+> `run_generic_compliance_verdict` didn't forward the `facts_fn` its graph builder already accepts (0008), so the
+> text path always used `generic_facts_fn` (whole subject = ONE fact) -> every finding quoted the entire document
+> (worst at document scale). Capability existed; only the seam was missing. DONE:
+>   - **0010-A DONE:** add `facts_fn: Any = None` to `run_generic_compliance_verdict`, forwarded to
 >     `production_generic_compliance_check`.
->   - **0010-B:** add `sentence_facts_fn(subject_text, source_doc)` -- per-sentence CheckableFacts via
+>   - **0010-B DONE:** add `sentence_facts_fn(subject_text, source_doc)` -- per-sentence CheckableFacts via
 >     `segment_clause` (abbrev/decimal-safe: "Dr. Miller"/"$99" don't split). DECISION (USER OVERRODE my
 >     recommendation): sentence segmentation is the DEFAULT for run_generic_compliance_verdict (better citation
 >     precision out-of-box), NOT opt-in; caller passes `facts_fn=generic_facts_fn` for the old whole-subject behavior.
->     COST recorded (ADR-0063): per-sentence x k requirements is a cross-product (~Nx judge calls at doc scale) --
->     cap/paragraph-fallback is a noted follow-up.
->   - **0010-ADR:** ADR-0063.
+>     COST recorded (ADR-0063): in the generic path claims==facts==sentences 1:1 (extract_claims does not distill);
+>     per-sentence x min(k,#requirements) is a cross-product (~Nx judge calls at doc scale) -- cap/paragraph-fallback
+>     + an LLM claim-extractor facts_fn are noted follow-ups.
+>   - **0010-ADR DONE:** ADR-0063. Tests +3. Suite 1328.
 
-> **ENGINE ISSUE 0011 (RuleWright): typed-property facts reach answer prose by paraphrase (defect; continues 0002).**
-> `_evidence_from_clause` concatenates `[dim=value]` INTO the evidence text; the generator paraphrases it (backticks)
-> around the bracket-only scrub -> "as indicated by the typed property `cap_quantum=12_months; cap_basis=...`" leaks
-> engine vocabulary. Same mechanism ADR-0054 fixed for the function label. PLAN (Option A / structural):
->   - **0011-A:** `EvidenceItem.properties: Optional[list[dict]]` ({dimension,value}, out-of-band; CODE-generated,
->     not LLM). 0011-B: `_evidence_from_clause` with body -> `text = body` (drop inline `[facts]`), properties
->     out-of-band -> model never sees engine vocab (narration structurally impossible). 0011-C: property-less path
->     stays citable via a HUMANIZED natural-language text (no `[]`/`=`/"typed property"). 0011-D: keep bracket scrub
->     as defense-in-depth (+ optional backtick/`dim=value`/phrase patterns). 0011-E: measure paraphrase rate + live
->     repro ("How is the supplier's liability capped?") -> no leak.
->   - **0011-ADR:** ADR-0064.
->   - Order: 0010 first (quick), then 0011.
+> **ENGINE ISSUE 0011 (RuleWright): typed-property facts reach answer prose by paraphrase (defect; continues 0002). DONE (2026-08-30), awaiting approval.**
+> `_clause_to_evidence` concatenated `[dim=value]` INTO the evidence text; the generator paraphrased it (backticks)
+> around the bracket-only scrub -> "as indicated by the typed property `cap_quantum=12_months; cap_basis=...`" leaked
+> engine vocabulary. Same mechanism ADR-0054 fixed for the function label. Option A / structural:
+>   - **0011-A DONE:** `EvidenceItem.properties: Optional[list[dict]]` ({dimension,value}, out-of-band; CODE-generated,
+>     not LLM; `_evidence_block` never renders it). **0011-B DONE:** `_clause_to_evidence` body path -> `text = body`
+>     (inline `[facts]` dropped), properties out-of-band -> schema tokens NEVER reach the prompt (narration
+>     structurally impossible). **0011-C DONE:** body-less path stays citable via `_humanize_properties` (reader-safe
+>     natural text, no `[]`/`=`/backticks). **0011-D DONE:** bracket scrub kept as defense-in-depth (did NOT extend to
+>     backtick/phrase forms -- the whack-a-mole path the issue de-prioritized; the structural fix removes the source).
+>     **0011-E DONE (live):** real Gemma-4 -- OLD prompt contains cap_quantum/cap_basis (True), NEW does not (False) =>
+>     leak structurally impossible; behavioral N=30 OLD 0/30 NEW 0/30 (intermittent literal-token leak did not
+>     reproduce on the synthetic single-clause fixture, so no rate claimed -- the structural absence is the guarantee).
+>   - **0011-ADR DONE:** ADR-0064. Tests: 1 existing updated + 3 new. Suite 1330.
+>   - **NEXT (approved arc):** ground + write up the "unify subject preprocessing with the ingestion front-end" issue
+>     (parse_document_bytes/document_to_sections/segment_clause reused for ALL subject inputs; section locator +
+>     sentence span; drop KG-persist/rules-extract tail). Open Qs to ground: docling plain-text behavior;
+>     document_to_sections + segment_clause compose for the subject tail.
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean

@@ -44,11 +44,19 @@ def generation_method() -> str:
 
 class EvidenceItem(BaseModel):
     """One piece of grounding evidence: a chunk's text, its `chunk_id` (the citation), and — for a
-    graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4)."""
+    graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4).
+
+    Engine issue 0011 / ADR-0064: a clause's typed properties ride OUT-OF-BAND here, NOT concatenated into
+    `text`. `_evidence_block` renders only `text`, so the generator never sees the `dimension=value` schema
+    tokens and cannot paraphrase them into prose ("the typed property cap_quantum=..."). The structured facts
+    stay available on this field for a caller that wants them (the product's UI chips); they are never fed to
+    the model. This is the ADR-0054 treatment (function label) applied to properties, but out-of-band rather
+    than dropped, because the properties do real work elsewhere."""
 
     chunk_id: str
     text: str
     confidence: Optional[str] = None  # graph-fact confidence tag; None for plain retrieved text
+    properties: Optional[list[dict]] = None  # code-generated {dimension, value}; out-of-band, never in `text`
 
 
 class AnswerKind(str, Enum):

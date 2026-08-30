@@ -140,6 +140,20 @@ def test_confidence_is_surfaced_out_of_band_not_as_an_inline_marker():
     assert "tentative" in model.prompt.lower()  # ...but the hedging directive is present
 
 
+def test_typed_properties_are_never_rendered_into_the_prompt():
+    # engine issue 0011 (ADR-0064): typed properties ride out-of-band on EvidenceItem.properties. The evidence
+    # block -- and thus the prompt the model reads and may quote -- carries ONLY [chunk_id] text, never the
+    # structured facts, so the "typed property cap_quantum=..." paraphrase leak is structurally impossible.
+    evidence = [EvidenceItem(chunk_id="c1", text="Supplier's liability is capped at the fees paid.",
+                             properties=[{"dimension": "cap_quantum", "value": "12_months"}])]
+    model = _StubModel(GeneratedAnswer(answer="Capped at the fees paid.", citations=["c1"], abstained=False))
+    generate_answer("q", evidence, model=model)
+    block = _evidence_block(evidence)
+    assert "cap_quantum" not in block and "=" not in block  # structured facts never enter the evidence text
+    assert "cap_quantum" not in model.prompt  # ...nor the prompt the model reads
+    assert "[c1] Supplier's liability is capped at the fees paid." in block  # just cited text
+
+
 def test_extracted_confidence_adds_no_hedging_directive():
     evidence = [EvidenceItem(chunk_id="c1", text="Acme affiliates Beta.", confidence="EXTRACTED")]
     model = _StubModel(GeneratedAnswer(answer="x", citations=["c1"], abstained=False))

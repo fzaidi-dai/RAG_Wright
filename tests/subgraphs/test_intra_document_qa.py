@@ -90,8 +90,12 @@ async def test_real_clause_text_and_typed_facts_and_worst_case_confidence_in_evi
     await graph.ainvoke({"contract_id": "k", "question": "q"})
 
     item = seen["evidence"][0]
-    assert "Each party shall indemnify the other for fraud." in item.text  # the REAL clause language
-    assert "covers=fraud" in item.text  # typed facts appended
+    assert item.text == "Each party shall indemnify the other for fraud."  # the REAL clause language, ONLY
+    # engine issue 0011 / ADR-0064: typed facts are NO LONGER appended to the text (the model paraphrased them);
+    # they ride out-of-band on .properties, so the generator never sees the schema tokens.
+    assert "covers=fraud" not in item.text and "=" not in item.text
+    assert item.properties == [{"dimension": "covers", "value": "fraud"},
+                               {"dimension": "mutuality", "value": "one-way"}]
     assert item.confidence == "AMBIGUOUS"  # worst-case provenance surfaced (FR-S.4)
 
 
@@ -240,8 +244,26 @@ def test_clause_evidence_is_span_text_without_the_function_label():
     assert "auto-tag" not in ev.text and "Cap On Liability" not in ev.text  # no function label at all
 
 
-def test_clause_evidence_facts_only_has_no_function_label():
-    # facts-only path (no span text): the typed facts stand in, bracketed, still without the function label.
+def test_clause_evidence_properties_are_out_of_band_not_in_the_text():
+    # engine issue 0011 / ADR-0064: typed properties do NOT go into the evidence text (the [dim=value] schema
+    # syntax the model paraphrased into prose). The span text is the whole text; the structured facts ride
+    # out-of-band on EvidenceItem.properties (code-generated {dimension, value}), so narration is structurally
+    # impossible -- the generator never sees "cap_quantum" or "=".
+    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+
+    c = CitedClause(contract_id="C", clause_id="C:7:h", function="Cap On Liability", span_id="s7",
+                    properties=[CitedProperty(dimension="cap_quantum", value="12_months", edge_type="HAS",
+                                              confidence="EXTRACTED", span_id="s7")])
+    ev = _clause_to_evidence(c, "Supplier's total liability shall not exceed the fees paid in the prior year")
+    assert ev is not None
+    assert ev.text == "Supplier's total liability shall not exceed the fees paid in the prior year"  # body only
+    assert "cap_quantum" not in ev.text and "=" not in ev.text and "[" not in ev.text  # no schema token leaks
+    assert ev.properties == [{"dimension": "cap_quantum", "value": "12_months"}]  # structured, out-of-band
+
+
+def test_clause_evidence_facts_only_is_humanized_and_out_of_band():
+    # facts-only path (no span text): the facts are the only content, so they must stay citable -- but as
+    # reader-safe natural text (no [dim=value] syntax), with the structured form still out-of-band (issue 0011).
     from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
 
     c = CitedClause(contract_id="C", clause_id="C:8:h", function="Cap On Liability", span_id="s8",
@@ -249,7 +271,9 @@ def test_clause_evidence_facts_only_has_no_function_label():
                                               confidence="EXTRACTED", span_id="s8")])
     ev = _clause_to_evidence(c, None)
     assert ev is not None
-    assert ev.text == "[cap_quantum=$500,000]" and "auto-tag" not in ev.text
+    assert "[" not in ev.text and "=" not in ev.text and "cap_quantum" not in ev.text  # no schema syntax
+    assert "$500,000" in ev.text  # still citable: the value survives in reader-safe form
+    assert ev.properties == [{"dimension": "cap_quantum", "value": "$500,000"}]  # structured, out-of-band
 
 
 def test_clause_evidence_contentless_returns_none():
