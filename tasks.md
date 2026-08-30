@@ -348,8 +348,11 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > unreadable-pages MUST reach ComplianceReport (mirrors ENG-1). GROUNDED: docling labels distinguish paragraph/
 > list_item/section; SingleCallBoundaryDiscoverer + token_cap 20k exist (no auto-escalation yet = SEG-5);
 > docling-graph verbatim provenance binding exists (char-span mapping = new wiring); aparsed_source_document +
-> ocr_unreadable_pages + build_partial_entry exist (subject path drops signal today = SEG-6). TASKS SEG-1
-> (CheckableFact structural provenance, ask-first) / -2 (chunk step) / -3 (verbatim assertion extractor) / -4
+> ocr_unreadable_pages + build_partial_entry exist (subject path drops signal today = SEG-6). TASKS **SEG-1 DONE (2026-08-30): CheckableFact +element_kind +element_ordinal +locator() render helper
+> (§4.2 / §4.2 ¶3 / §4.2 · bullet 2 / none), additive+inherited by Claim; assemble_finding cites via locator().
+> Tests +2. Suite 1347. LIVE: real judge -> §4 ¶1 / §4 ¶2 / §5 · bullet 1 render in finding citations. Nothing sets
+> the fields yet = SEG-2..4.**
+> / -2 (chunk step) / -3 (verbatim assertion extractor) / -4
 > (locator + citation render) / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
 > code; just verify + test) / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
 > unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.

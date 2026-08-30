@@ -219,6 +219,31 @@ def test_assemble_finding_cites_the_section_locator_when_present():
     assert claim.assertion_text in finding.citation_claim and claim.source_doc in finding.citation_claim
 
 
+def test_checkable_fact_structural_locator_render_helper():
+    # SEG-1: locator() renders the structural path -- "§ {section}" + a within-section element marker
+    # ("¶N" for a paragraph, "· bullet N" for a list item); empty when there is no section (a paste).
+    F = CheckableFact
+    base = dict(fact_id="f0", source_doc="s", assertion_text="x")
+    assert F(**base).locator() == ""                                              # no structure
+    assert F(**base, section="4.2").locator() == "§ 4.2"                          # section only
+    assert F(**base, section="4.2", element_kind="paragraph", element_ordinal=3).locator() == "§ 4.2 ¶3"
+    assert F(**base, section="4.2", element_kind="list_item", element_ordinal=2).locator() == "§ 4.2 · bullet 2"
+    # defaults are None (additive / back-compat)
+    f = F(**base)
+    assert f.element_kind is None and f.element_ordinal is None
+
+
+def test_assemble_finding_cites_the_full_structural_locator():
+    # SEG-1: the finding's claim-side citation carries the full locator when present.
+    para = _claim(section="4.2", element_kind="paragraph", element_ordinal=3)
+    f1 = assemble_finding(para, _req(), JudgeVerdict(verdict="violation", rationale="x", confidence=0.9))
+    assert "§ 4.2 ¶3" in f1.citation_claim and para.assertion_text in f1.citation_claim
+
+    bullet = _claim(section="4.2", element_kind="list_item", element_ordinal=2)
+    f2 = assemble_finding(bullet, _req(), JudgeVerdict(verdict="violation", rationale="x", confidence=0.9))
+    assert "§ 4.2 · bullet 2" in f2.citation_claim
+
+
 def test_assemble_finding_citation_unchanged_when_no_section():
     # UNIFY-A back-compat: no section -> the citation is exactly the old "doc: sentence" (no "§").
     claim = _claim()  # no section

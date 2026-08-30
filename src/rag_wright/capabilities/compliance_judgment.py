@@ -168,9 +168,11 @@ def assemble_finding(
         verdict = _to_verdict(ruling.verdict)
         rationale = ruling.rationale
         confidence = min(1.0, max(0.0, ruling.confidence))
-    # UNIFY-A: when the fact carries a section locator, cite "doc § {section}: {assertion}" so the finding points
-    # at the section AND the sentence; absent -> the old "doc: assertion" (back-compat). Still input-authored.
-    _sec = f" § {claim.section}" if (claim.section and claim.section.strip()) else ""
+    # UNIFY-A / SEG-1: cite "doc {locator}: {assertion}" where the locator is the fact's structural path
+    # ("§ 4.2", "§ 4.2 ¶3", "§ 4.2 · bullet 2") when present, else "" -> the old "doc: assertion" (back-compat).
+    # Still input-authored (the model never writes the citation).
+    _loc = claim.locator()
+    _sec = f" {_loc}" if _loc else ""
     return ComplianceFinding(
         claim_id=claim.fact_id,
         requirement_id=requirement.requirement_id,

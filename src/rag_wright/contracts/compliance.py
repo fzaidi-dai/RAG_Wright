@@ -127,9 +127,26 @@ class CheckableFact(BaseModel):
     assertion_text: str  # the checkable statement text (domain-neutral: an "assertion" is any checkable claim/fact)
     section: str | None = None  # UNIFY-A: the section/heading locator this fact came from (e.g. "4.2"); the
     # finding cites "doc § {section}: {assertion}" when set. Additive/optional: None -> the old "doc: assertion".
+    element_kind: str | None = None  # SEG-1: docling structural label of the source element (paragraph /
+    # list_item / section_header / ...); selects the within-section marker in `locator()`.
+    element_ordinal: int | None = None  # SEG-1: the element's within-section ordinal (the ¶ / bullet number).
     doc_start: int | None = None  # span provenance: char offsets in source_doc (optional)
     doc_end: int | None = None
     confidence: ConfidenceTag = ConfidenceTag.EXTRACTED
+
+    def locator(self) -> str:
+        """SEG-1: the human structural locator -- `§ {section}` plus a within-section element marker when present
+        (`¶N` for a paragraph, `· bullet N` for a list item). Empty string when the fact has no section (e.g. a
+        structureless paste), so the finding cites just `doc: {assertion}`. The citation is built from this."""
+        if not (self.section and self.section.strip()):
+            return ""
+        loc = f"§ {self.section}"
+        if self.element_ordinal is not None:
+            if self.element_kind == "list_item":
+                loc += f" · bullet {self.element_ordinal}"
+            else:  # paragraph / text / default
+                loc += f" ¶{self.element_ordinal}"
+        return loc
 
     @field_validator("fact_id", "source_doc", "assertion_text")
     @classmethod
