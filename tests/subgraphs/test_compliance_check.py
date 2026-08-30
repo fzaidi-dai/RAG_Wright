@@ -650,6 +650,22 @@ async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_s
     assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
 
 
+async def test_aextract_subject_facts_runs_per_chunk_with_unique_ids():
+    # SEG-3: extract checkable assertions from each subject CHUNK (concurrently) -> CheckableFacts, re-indexed
+    # globally so fact_ids are unique across chunks. Domain-neutral (no claim_type). Injected extractor.
+    from rag_wright.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
+    from rag_wright.subgraphs.compliance_check import aextract_subject_facts
+
+    async def _stub(text, model, *, template, **kw):  # one assertion per chunk = the chunk text
+        return ExtractedAssertions(subject="s", assertions=[ExtractedAssertion(assertion_text=text.strip())])
+
+    facts = await aextract_subject_facts(
+        ["First chunk assertion.", "Second chunk assertion."], source_doc="d", model=object(), aextract_fn=_stub)
+    assert [f.assertion_text for f in facts] == ["First chunk assertion.", "Second chunk assertion."]
+    assert facts[0].fact_id != facts[1].fact_id                       # globally unique across chunks
+    assert all(getattr(f, "claim_type", None) is None for f in facts)  # domain-neutral
+
+
 async def test_subject_chunks_uses_the_shared_chunker_seam():
     # SEG-2: subject_chunks semantically chunks a parsed subject via the SAME shared chunker as ingestion
     # (single-call discoverer + finalize; no cache/summarize -- the subject is transient). Injected stub.

@@ -356,7 +356,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > NO cache/summarize, single-call default, RLM future); compliance_check.subject_chunks (async) chunks a parsed
 > subject via it. Item->structure mapping deferred to SEG-4 (verbatim match). Tests +3. Suite 1350. LIVE: real
 > docling parse (9 items) -> real single-call chunker -> coherent chunk, full coverage.**
-> / -3 (verbatim assertion extractor) / -4
+> / **-3 DONE (2026-08-30): capabilities/assertion_extraction.py = domain-neutral verbatim assertion extractor
+> (ExtractedAssertions template, no claim_type; to_facts; aassertion_extraction via the SAME docling-graph binder);
+> compliance_check.aextract_subject_facts = per-chunk concurrent extraction + global re-index. Tests +4. Suite
+> 1354. LIVE: real chunk + real Granite -> 3 verbatim CheckableFacts, domain-neutral, unique ids.** / -4
 > (locator + citation render) / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
 > code; just verify + test) / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
 > unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.

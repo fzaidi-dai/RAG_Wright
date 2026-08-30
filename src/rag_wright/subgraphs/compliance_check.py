@@ -481,6 +481,29 @@ async def run_generic_compliance_verdict(
         text=subject_text, facts_fn=section_facts_fn)
 
 
+async def aextract_subject_facts(chunks: list[str], *, source_doc: str, model: Any, aextract_fn: Any = None,
+                                 max_concurrency: int = 4) -> list:
+    """SEG-3: extract the checkable assertions (verbatim) from each subject CHUNK CONCURRENTLY (semaphore, per the
+    parallel-LLM rule) -> `CheckableFact`s, re-indexed globally so `fact_id`s are unique across chunks.
+    Domain-neutral (`CheckableFact`, no `claim_type` -- that is the ad path). The structural locator
+    (section / ¶ / bullet) is attached later, in SEG-4. `aextract_fn` is injected for hermetic tests."""
+    from rag_wright.capabilities.assertion_extraction import aassertion_extraction
+    from rag_wright.capabilities.dg_extraction import aextract_parties
+
+    fn = aextract_fn or aextract_parties
+    sem = asyncio.Semaphore(max_concurrency)
+
+    async def _one(chunk: str) -> list:
+        async with sem:
+            return await aassertion_extraction(chunk, model=model, source_doc=source_doc, aextract_fn=fn)
+
+    per_chunk = await asyncio.gather(*(_one(c) for c in chunks))
+    facts = [f for group in per_chunk for f in group]
+    for i, f in enumerate(facts):  # global re-index -> unique fact_ids across chunks
+        f.fact_id = CheckableFact.make_id(source_doc, i, f.assertion_text)
+    return facts
+
+
 async def subject_chunks(parsed_doc: Any, *, discoverer: Any = None) -> list[str]:
     """SEG-2: semantically chunk a parsed subject document into coherent chunk texts, via the SAME shared chunker
     as ingestion (`achunk_texts`: single-call boundary discoverer + finalize; no cache/summarize -- the subject
