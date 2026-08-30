@@ -385,8 +385,18 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > subject_chunks->per-chunk claims->attach_structural_locators->judge; dropped sections_fn + REMOVED dead
 > _subject_sections + its 2 tests. Tests 2 rewritten. Suite 1360. LIVE: ad upload cites §1 ¶1/§2 ¶1 + typed claims
 > (cures->violation), paste no §. BOTH generic+ad now on one pipeline.**
-> / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
-> BUILD AFTER REVIEW.
+> / **-8 DONE (2026-08-30): arc-level live gate. No prod code + bullet-locator regression test (list-item cites
+> "§ N · bullet M" through the verdict). Suite 1361. LIVE 3 inputs: (1) structured+bullets -- docling labels
+> bullets list_item, § 3 ¶1 + § 3 · bullet 1/2 render live (first live bullet proof); (2) long flat 1203 chars ->
+> 5 findings 5.8s no § (no bottleneck); (3) scanned PDF VLM-down -> ocr_unreadable_pages=[1..10].**
+>
+> **SEG ARC A->8 COMPLETE + live-validated (2026-08-30).** Subject compliance (generic + ad) is now ONE pipeline:
+> parse (tiered OCR) -> semantic chunk (production ingestion discoverer, no subject-specific large-doc code) ->
+> verbatim/typed per-chunk extraction -> structural locator (§/¶/bullet, real-world hardened: paragraph-merge +
+> cross-item match) -> judge -> report with OCR PARTIAL. Regex subject_facts_fn retired as the default.
+> FOLLOW-UPS: (a) REVISE + send the RuleWright handoff (citation format now "§ N ¶n"/"· bullet n"; OCR-PARTIAL
+> contract new; the docs/handoff draft is stale). (b) DEAD-CODE decision: generic_facts_fn / sentence_facts_fn /
+> subject_facts_fn / document_facts_fn (+ their direct tests) are now unused (dial dropped) -- prune or keep?
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,

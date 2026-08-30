@@ -427,6 +427,24 @@ async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
     assert any("reverses aging" in c for c in claims)                    # both sentences became checkable facts
 
 
+async def test_subject_verdict_cites_bullet_locator():
+    # SEG-8: a list-item assertion cites "§ {section} · bullet {n}" end-to-end through the verdict (SEG-1 render
+    # + SEG-4 list_item detection composed). Injected doc (a section + a bullet) + stub extractor.
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    doc = _doc_of(("section_header", "5. Guarantees"),
+                  ("list_item", "We guarantee a full refund within thirty days for any reason."))
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A refund guarantee must be substantiated.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_subject_compliance_verdict(
+            "ad.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=_stub_sentence_extractor(), sources=["p1"])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert report.findings and any("§ 5 · bullet 1" in f.citation_claim for f in report.findings)  # bullet locator
+
+
 async def test_run_generic_compliance_verdict_scopes_to_named_sources():
     from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
 
