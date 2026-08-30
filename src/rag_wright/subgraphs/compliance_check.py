@@ -416,54 +416,22 @@ async def run_compliance_check(
     return report
 
 
-def generic_facts_fn(subject_text: str, source_doc: str) -> list:
-    """COMP-VERDICT-GENERIC: the domain-agnostic subject producer -- the subject as ONE `CheckableFact` (no
-    advertising claim structure). MVP granularity: the whole subject is one fact judged against the semantically
-    relevant requirements. (Sentence/paragraph segmentation for finer citations is a later refinement.)"""
-    text = (subject_text or "").strip()
-    if not text:
-        return []
-    return [CheckableFact(fact_id=CheckableFact.make_id(source_doc, 0, text), source_doc=source_doc,
-                          assertion_text=text)]
-
-
-def sentence_facts_fn(subject_text: str, source_doc: str) -> list:
-    """Issue 0010: the per-SENTENCE subject producer -- one `CheckableFact` per sentence, so each finding cites
-    the sentence it is actually about rather than the whole document. Splits via `segment_clause` (sentence
-    terminators, abbreviation- and decimal-safe: "Dr. Miller" / "$99" do not split). This is the DEFAULT for
-    `run_generic_compliance_verdict` (better citation precision out of the box); pass `generic_facts_fn` for the
-    old whole-subject behavior. Falls back to the whole subject if segmentation yields nothing."""
-    from rag_wright.spans.segment import segment_clause
-
-    text = (subject_text or "").strip()
-    if not text:
-        return []
-    facts = [
-        CheckableFact(fact_id=CheckableFact.make_id(source_doc, i, s), source_doc=source_doc, assertion_text=s)
-        for i, sp in enumerate(segment_clause(source_doc, text))
-        if (s := sp.text.strip())
-    ]
-    return facts or generic_facts_fn(subject_text, source_doc)
-
-
 def production_generic_compliance_check(store: Any, *, judge_model_id: str, embedder: Any, k: int = 8,
-                                        sources: Optional[list[str]] = None, facts_fn: Any = None):
+                                        sources: Optional[list[str]] = None, facts_fn: Any):
     """COMP-VERDICT-GENERIC: wire the DOMAIN-AGNOSTIC verdict path -- generic subject facts (no claim_type),
     SEMANTIC-ONLY requirement narrowing (`filter_applicability=False`, no domain applicability ontology needed),
     and the GENERIC judge (text-only). Gives a cited LLM verdict in ANY compliance domain; enrichment
     (COMP-APPLIC-1) only ADDS structured precision on top. `embedder` is required (semantic retrieval is the
     narrowing here). `sources` (issue 0007) optionally scopes the check to named policy `source`s (None = the
-    whole store) -- the bring-your-own-policy case where the store holds more than the one policy being checked.
-    `facts_fn` (issue 0008) is the subject producer `(subject_text, source) -> [CheckableFact]`; defaults to
-    `generic_facts_fn` (whole subject as ONE fact), and the document path injects a per-section producer."""
+    whole store). `facts_fn` (required) is the async-adapted producer `(text, source) -> [CheckableFact]`; the
+    caller (`run_subject_compliance_verdict`) precomputes the SEMANTIC facts and injects them here (SEG-7a)."""
     from rag_wright.capabilities.compliance_judgment import build_ageneric_judge_fn
 
     requirements = _load_requirements(store, sources)
     select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False)
-    _facts = facts_fn or generic_facts_fn
 
     async def _claims_fn(text: str, source: str) -> list:
-        return _facts(text, source)  # deterministic (no model), adapted to the async claims seam
+        return facts_fn(text, source)  # precomputed semantic facts, adapted to the async claims seam
 
     return build_compliance_check(
         claims_fn=_claims_fn,
@@ -628,8 +596,8 @@ async def subject_chunks(parsed_doc: Any, *, discoverer: Any = None) -> list[str
 
 async def semantic_subject_facts(parsed_doc: Any, *, source_doc: str, model: Any = None, discoverer: Any = None,
                                  aextract_fn: Any = None) -> list:
-    """SEG-7a: the SUBJECT fact producer -- the composed semantic pipeline that supersedes the regex
-    `subject_facts_fn`. Chunk the parsed doc (SEG-2/SEG-5, the production ingestion discoverer) -> extract the
+    """SEG-7a: the SUBJECT fact producer -- the composed semantic pipeline that supersedes the old regex
+    sections producer. Chunk the parsed doc (SEG-2/SEG-5, the production ingestion discoverer) -> extract the
     checkable assertions VERBATIM per chunk (SEG-3) -> attach each to its docling element for the structural
     locator (SEG-4). Returns `CheckableFact`s cited "doc § {section} ¶{n}: {verbatim}" (or just the span for a
     flat doc). `model` (assertion extractor) defaults to the production extraction model; `discoverer`/`aextract_fn`
@@ -662,50 +630,6 @@ async def _aparse_subject_any(*, text: Optional[str], name: Optional[str], data:
     raise ValueError("run_subject_compliance_verdict needs either text= or (name=, data=)")
 
 
-def subject_facts_fn(sections: list[dict], source_doc: str) -> list:
-    """UNIFY-B: the unified section->sentence subject producer. For each parsed section (`{section, heading, text}`)
-    split its body into sentences (`segment_clause`, abbreviation/decimal-safe: "Dr. Miller"/"$99" don't split) and
-    emit one `CheckableFact` per sentence carrying BOTH the SECTION locator (UNIFY-A) and the CLEAN sentence as
-    `assertion_text`. So each finding cites "doc § {section}: sentence" -- the section from document structure, the
-    sentence from segmentation, neither polluting the other.
-
-    Contrast with the producers it unifies: `document_facts_fn` (0008) is per-SECTION and folds the heading INTO
-    `assertion_text` (coarse citation); `sentence_facts_fn` (0010) is per-SENTENCE but has NO section locator. This
-    is per-(section, sentence) WITH the locator as a field. Empty sections and blank sentences are skipped; a
-    running index keeps every fact_id unique across sections."""
-    from rag_wright.spans.segment import segment_clause
-
-    facts: list = []
-    for sec in sections:
-        text = (sec.get("text") or "").strip()
-        if not text:
-            continue
-        locator = sec.get("section") or None
-        for sp in segment_clause(source_doc, text):
-            s = sp.text.strip()
-            if not s:
-                continue
-            facts.append(CheckableFact(fact_id=CheckableFact.make_id(source_doc, len(facts), s),
-                                       source_doc=source_doc, assertion_text=s, section=locator))
-    return facts
-
-
-def document_facts_fn(sections: list[dict], source_doc: str) -> list:
-    """Issue 0008: turn a parsed subject document's sections (`[{section, heading, text}]`) into PER-SECTION
-    `CheckableFact`s, so each section gets its own cited finding -- vs `generic_facts_fn`'s whole-subject single
-    fact. Empty sections are skipped; a section's heading is prepended to its body for judge context."""
-    facts: list = []
-    for i, sec in enumerate(sections):
-        text = (sec.get("text") or "").strip()
-        if not text:
-            continue
-        heading = (sec.get("heading") or "").strip()
-        assertion = f"{heading}\n{text}" if heading else text
-        facts.append(CheckableFact(fact_id=CheckableFact.make_id(source_doc, i, assertion),
-                                   source_doc=source_doc, assertion_text=assertion))
-    return facts
-
-
 async def aparse_subject(name: str, data: bytes, *, parser: Any = None) -> tuple[Any, list[int]]:
     """SEG-6: parse an uploaded subject ONCE through the tiered OCR chokepoint (`TieredOCRParser`, the SAME OCR as
     ingestion), returning `(docling_document, ocr_unreadable_pages)`. The unreadable pages (a degraded scan the
@@ -735,7 +659,7 @@ async def run_subject_compliance_verdict(
 
     `extract_model` (assertion extractor) defaults to the production extraction model. `sources` (0007) scopes to
     named policies (unknown -> `UnknownComplianceSourceError`). `discoverer`/`aextract_fn`/`doc` are injected for
-    hermetic tests. (SEG-7a replaced the old sections/`subject_facts_fn` regex dial with the semantic producer.)"""
+    hermetic tests. (SEG-7a replaced the old regex sections/granularity dial with the semantic producer.)"""
     _validate_sources(store, sources)  # SEG-7a: reject an unknown policy BEFORE the expensive parse + extraction
     parsed_doc, unreadable = await _aparse_subject_any(text=text, name=name, data=data, doc=doc)
     facts = await semantic_subject_facts(
