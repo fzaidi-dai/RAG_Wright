@@ -481,6 +481,102 @@ async def run_generic_compliance_verdict(
         text=subject_text, facts_fn=section_facts_fn)
 
 
+_HEADING_KINDS = frozenset({"section_header", "title", "field_heading"})
+
+
+def _merge_wrapped_items(raw: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """SEG-4: coalesce docling's line-split of a wrapped paragraph back into ONE logical element. A line-based
+    backend (markdown, a hard-wrapped .txt) emits each physical line as a separate `text` item; a mid-sentence
+    line break is a soft-wrap, NOT a paragraph boundary. Signal: the previous same-kind body item does NOT end
+    with sentence-terminal punctuation (`.`/`!`/`?`) -> the current item continues it, so merge. Headings never
+    merge; a line ending in terminal punctuation starts a new element (a genuine paragraph break)."""
+    merged: list[list[str]] = []
+    for kind, text in raw:
+        if (kind not in _HEADING_KINDS and text and merged
+                and merged[-1][0] == kind and merged[-1][1] and merged[-1][1][-1] not in ".!?"):
+            merged[-1][1] = f"{merged[-1][1]} {text}"  # soft-wrap continuation of the same logical element
+        else:
+            merged.append([kind, text])
+    return [(k, t) for k, t in merged]
+
+
+def _item_provenance(parsed_doc: Any) -> list[dict]:
+    """SEG-4: docling items -> per-LOGICAL-ELEMENT structural provenance `{text, section, element_kind,
+    element_ordinal}`. Line-wrapped paragraphs are merged first (`_merge_wrapped_items`) so ordinals count real
+    paragraphs, not physical lines. `section` = the enclosing section number (shared `_section_number`; None
+    before the first heading -> a flat doc stays section-less). Ordinals count WITHIN a section, PER KIND (¶ for
+    body text, bullet for list items), reset at each heading."""
+    from rag_wright.corpus.document_parser import _section_number
+
+    raw: list[tuple[str, str]] = []
+    for item in getattr(parsed_doc, "texts", []) or []:
+        lab = getattr(item, "label", "")
+        kind = str(getattr(lab, "value", lab) or "")  # DocItemLabel enum -> its value; a plain string stays as-is
+        text = (getattr(item, "text", "") or "").strip()
+        if not text and kind not in _HEADING_KINDS:
+            continue  # empty body item: nothing to locate or count
+        raw.append((kind, text))
+
+    out: list[dict] = []
+    section: Optional[str] = None
+    n_sections = 0
+    para_ord = 0
+    bullet_ord = 0
+    for kind, text in _merge_wrapped_items(raw):
+        if kind in _HEADING_KINDS:  # a heading opens a new section and resets the within-section ordinals
+            n_sections += 1
+            section = _section_number(text, n_sections)
+            para_ord = bullet_ord = 0
+            out.append({"text": text, "section": section, "element_kind": kind, "element_ordinal": None})
+            continue
+        if kind == "list_item":
+            bullet_ord += 1
+            ordinal: Optional[int] = bullet_ord
+        else:
+            para_ord += 1
+            ordinal = para_ord
+        out.append({"text": text, "section": section, "element_kind": kind, "element_ordinal": ordinal})
+    return out
+
+
+def _norm_ws(s: str) -> str:
+    return " ".join((s or "").split())
+
+
+def attach_structural_locators(facts: list, parsed_doc: Any) -> list:
+    """SEG-4: stamp each `CheckableFact` with the structural locator of the docling element its VERBATIM assertion
+    came from (`section`, `element_kind`, `element_ordinal`) -> `locator()` renders `§ N ¶M` / `§ N · bullet M`.
+
+    Robust to real-world parsing: docling can split a soft-wrapped paragraph (or a hard-wrapped .txt) into several
+    consecutive `text` items, so an assertion may SPAN items. We therefore match against the whitespace-normalized
+    CONCATENATION of the body items (each item's char range recorded), find the assertion, and attribute it to the
+    item where it STARTS -- so a cross-item assertion is located, never dropped. Unmatched (genuinely absent /
+    heavily paraphrased) stays unlocated, still citable by its text. Line-wrapped paragraphs are merged in
+    `_item_provenance` so ordinals count real paragraphs, not physical lines. Mutates + returns `facts`."""
+    body = [p for p in _item_provenance(parsed_doc) if _norm_ws(p["text"])]
+    concat = ""
+    ranges: list[tuple[int, int, dict]] = []  # (start, end, provenance) in the normalized concatenation
+    for p in body:
+        t = _norm_ws(p["text"])
+        start = len(concat)
+        concat += t + " "
+        ranges.append((start, start + len(t), p))
+    for f in facts:
+        needle = _norm_ws(f.assertion_text)
+        if not needle:
+            continue
+        pos = concat.find(needle)
+        if pos < 0:
+            continue
+        for start, end, p in ranges:  # attribute to the item where the assertion STARTS
+            if start <= pos < end:
+                f.section = p["section"]
+                f.element_kind = p["element_kind"]
+                f.element_ordinal = p["element_ordinal"]
+                break
+    return facts
+
+
 async def aextract_subject_facts(chunks: list[str], *, source_doc: str, model: Any, aextract_fn: Any = None,
                                  max_concurrency: int = 4) -> list:
     """SEG-3: extract the checkable assertions (verbatim) from each subject CHUNK CONCURRENTLY (semaphore, per the

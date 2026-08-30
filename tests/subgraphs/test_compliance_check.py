@@ -650,6 +650,107 @@ async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_s
     assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
 
 
+def _seg4_doc():
+    from types import SimpleNamespace
+    return SimpleNamespace(texts=[
+        SimpleNamespace(text="4. Advertising", label="section_header", level=1),
+        SimpleNamespace(text="Our supplement cures arthritis fast in most adults.", label="text", level=None),
+        SimpleNamespace(text="It reverses the visible signs of aging completely.", label="text", level=None),
+        SimpleNamespace(text="Guaranteed results within thirty days or your money back.", label="list_item", level=None),
+        SimpleNamespace(text="5. Pricing", label="section_header", level=1),
+        SimpleNamespace(text="The price was ninety-nine dollars and is now forty-nine.", label="text", level=None),
+    ])
+
+
+def test_attach_structural_locators_maps_assertions_to_section_and_element():
+    # SEG-4: each verbatim assertion is matched to its docling item -> section + element_kind + ¶/bullet ordinal,
+    # so locator() renders "§ N ¶M" / "§ N · bullet M". Ordinals count per-kind, reset per section.
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+
+    def _f(t):
+        return CheckableFact(fact_id=CheckableFact.make_id("d", 0, t), source_doc="d", assertion_text=t)
+
+    facts = [_f("Our supplement cures arthritis fast in most adults."),
+             _f("It reverses the visible signs of aging completely."),
+             _f("Guaranteed results within thirty days or your money back."),
+             _f("The price was ninety-nine dollars and is now forty-nine.")]
+    attach_structural_locators(facts, _seg4_doc())
+    assert facts[0].section == "4" and facts[0].element_kind == "text" and facts[0].locator() == "§ 4 ¶1"
+    assert facts[1].element_ordinal == 2 and facts[1].locator() == "§ 4 ¶2"                # 2nd paragraph in § 4
+    assert facts[2].element_kind == "list_item" and facts[2].locator() == "§ 4 · bullet 1"  # 1st bullet in § 4
+    assert facts[3].section == "5" and facts[3].locator() == "§ 5 ¶1"                       # ordinal resets per section
+
+
+def test_attach_merges_soft_wrapped_lines_so_paragraph_ordinals_are_correct():
+    # SEG-4 hardening: docling line-splits a wrapped paragraph; the merge coalesces it back to ONE logical
+    # paragraph, so the NEXT real paragraph is ¶2 (not ¶3), and the whole wrapped text is one ¶.
+    from types import SimpleNamespace
+
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+
+    doc = SimpleNamespace(texts=[
+        SimpleNamespace(text="4. Claims", label="section_header", level=1),
+        SimpleNamespace(text="Our supplement cures arthritis and also reverses the visible", label="text",
+                        level=None),                                          # line 1 (no terminal punctuation)
+        SimpleNamespace(text="signs of aging in most adults.", label="text", level=None),   # soft-wrap continuation
+        SimpleNamespace(text="The manufacturer guarantees a full refund to buyers.", label="text", level=None),
+    ])
+
+    def _f(t):
+        return CheckableFact(fact_id=CheckableFact.make_id("d", 0, t), source_doc="d", assertion_text=t)
+
+    f_wrapcont = _f("signs of aging in most adults.")              # sits in the merged paragraph 1
+    f_refund = _f("The manufacturer guarantees a full refund to buyers.")
+    attach_structural_locators([f_wrapcont, f_refund], doc)
+    assert f_wrapcont.locator() == "§ 4 ¶1"                        # merged into paragraph 1, not a separate ¶
+    assert f_refund.locator() == "§ 4 ¶2"                          # the next real paragraph is ¶2, not ¶3
+
+
+def test_attach_locates_assertion_that_spans_soft_wrapped_items():
+    # SEG-4 robustness: docling can split a soft-wrapped paragraph into consecutive `text` items; an assertion
+    # spanning the wrap must still be located (concatenation-based match), not dropped.
+    from types import SimpleNamespace
+
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+
+    doc = SimpleNamespace(texts=[
+        SimpleNamespace(text="4. Claims", label="section_header", level=1),
+        SimpleNamespace(text="It also completely reverses the visible", label="text", level=None),
+        SimpleNamespace(text="signs of aging in most adults over time.", label="text", level=None),
+    ])
+    f = CheckableFact(fact_id="f0", source_doc="d",
+                      assertion_text="It also completely reverses the visible signs of aging in most adults over time.")
+    attach_structural_locators([f], doc)
+    assert f.section == "4" and f.locator().startswith("§ 4")      # located despite the line-wrap split
+
+
+def test_attach_flat_doc_has_no_section_locator():
+    # SEG-4 / decision 5: a headingless (flat) document -> no section -> no "§" (honest, not degraded).
+    from types import SimpleNamespace
+
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+
+    doc = SimpleNamespace(texts=[SimpleNamespace(text="A flat claim with no heading at all here.", label="text",
+                                                 level=None)])
+    f = CheckableFact(fact_id="f0", source_doc="d", assertion_text="A flat claim with no heading at all here.")
+    attach_structural_locators([f], doc)
+    assert f.section is None and f.locator() == ""
+
+
+def test_attach_unmatched_assertion_stays_unlocated():
+    # a paraphrased/absent assertion matches no item -> stays unlocated (still citable by its text).
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+
+    f = CheckableFact(fact_id="f0", source_doc="d", assertion_text="This exact text is not in the document.")
+    attach_structural_locators([f], _seg4_doc())
+    assert f.section is None and f.element_kind is None and f.element_ordinal is None
+
+
 async def test_aextract_subject_facts_runs_per_chunk_with_unique_ids():
     # SEG-3: extract checkable assertions from each subject CHUNK (concurrently) -> CheckableFacts, re-indexed
     # globally so fact_ids are unique across chunks. Domain-neutral (no claim_type). Injected extractor.

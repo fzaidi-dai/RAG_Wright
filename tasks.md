@@ -359,8 +359,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > / **-3 DONE (2026-08-30): capabilities/assertion_extraction.py = domain-neutral verbatim assertion extractor
 > (ExtractedAssertions template, no claim_type; to_facts; aassertion_extraction via the SAME docling-graph binder);
 > compliance_check.aextract_subject_facts = per-chunk concurrent extraction + global re-index. Tests +4. Suite
-> 1354. LIVE: real chunk + real Granite -> 3 verbatim CheckableFacts, domain-neutral, unique ids.** / -4
-> (locator + citation render) / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
+> 1354. LIVE: real chunk + real Granite -> 3 verbatim CheckableFacts, domain-neutral, unique ids.** / **-4 DONE (2026-08-30): _item_provenance (docling items -> per-LOGICAL-ELEMENT provenance; _merge_wrapped_items
+> coalesces line-split paragraphs BEFORE ordinal counting -- HARDENED IN-TASK after user pushback on deferring it;
+> section via _section_number, per-kind within-section ¶/bullet ordinals, heading set incl. `title`);
+> attach_structural_locators (concatenation match, robust to cross-item/soft-wrap assertions, attribute-by-start).
+> Tests +5. Suite 1359. LIVE: 4/4 facts located from real docling; wrapped-para continuation ¶1, refund ¶2 (not
+> ¶3), pricing §5 ¶1 -- ordinals reflect real paragraphs.** / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
 > code; just verify + test) / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
 > unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
 > BUILD AFTER REVIEW.
