@@ -337,7 +337,25 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > locator (typed-Claim tail untouched); run_compliance_check accepts text|bytes via _subject_sections. MCP caller
 > unchanged. Tests +2. Suite 1345. LIVE: real Granite per-section extraction (efficacy §1 / pricing §2, typed +
 > stamped), upload findings cite § locators, paste no §. UNIFY ARC A->F COMPLETE + live-validated.**
-> ORIGINAL breakdown was:
+> **FOLLOW-ON ARC (SEG): semantic segmentation for the subject pipeline. Write-up:
+> `docs/design/semantic-subject-segmentation.md` (approved to write up; NOT yet building).** UNIFY's segmentation
+> guts were a shortcut (regex segment_clause, skipping the LLM semantic-chunk step ingestion uses). SEG replaces
+> them with the ingestion machinery. SETTLED: (1) semantic chunk -> per-chunk assertion extraction w/ VERBATIM
+> spans [option 1b]; (2) single-call discoverer default, RLM only as auto-escalation past the single-call budget;
+> (3) segment_clause kept as INTERNAL deterministic sub-split, not primary/user-facing (0011 untouched); (4)
+> citation = structural locator when available + verbatim text (`§4.2 ¶3`/`§4.2 · bullet 2`/`§4.2`/none); (5) flat
+> text first-class, no size bottleneck; (6) OCR reused identically (already thru TieredOCRParser) + OCR PARTIAL/
+> unreadable-pages MUST reach ComplianceReport (mirrors ENG-1). GROUNDED: docling labels distinguish paragraph/
+> list_item/section; SingleCallBoundaryDiscoverer + token_cap 20k exist (no auto-escalation yet = SEG-5);
+> docling-graph verbatim provenance binding exists (char-span mapping = new wiring); aparsed_source_document +
+> ocr_unreadable_pages + build_partial_entry exist (subject path drops signal today = SEG-6). TASKS SEG-1
+> (CheckableFact structural provenance, ask-first) / -2 (chunk step) / -3 (verbatim assertion extractor) / -4
+> (locator + citation render) / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
+> code; just verify + test) / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
+> unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
+> BUILD AFTER REVIEW.
+>
+> ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
 > ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,
 > locator granularity, ad per-section-vs-blob extraction.
