@@ -365,6 +365,25 @@ def generic_facts_fn(subject_text: str, source_doc: str) -> list:
                           assertion_text=text)]
 
 
+def sentence_facts_fn(subject_text: str, source_doc: str) -> list:
+    """Issue 0010: the per-SENTENCE subject producer -- one `CheckableFact` per sentence, so each finding cites
+    the sentence it is actually about rather than the whole document. Splits via `segment_clause` (sentence
+    terminators, abbreviation- and decimal-safe: "Dr. Miller" / "$99" do not split). This is the DEFAULT for
+    `run_generic_compliance_verdict` (better citation precision out of the box); pass `generic_facts_fn` for the
+    old whole-subject behavior. Falls back to the whole subject if segmentation yields nothing."""
+    from rag_wright.spans.segment import segment_clause
+
+    text = (subject_text or "").strip()
+    if not text:
+        return []
+    facts = [
+        CheckableFact(fact_id=CheckableFact.make_id(source_doc, i, s), source_doc=source_doc, assertion_text=s)
+        for i, sp in enumerate(segment_clause(source_doc, text))
+        if (s := sp.text.strip())
+    ]
+    return facts or generic_facts_fn(subject_text, source_doc)
+
+
 def production_generic_compliance_check(store: Any, *, judge_model_id: str, embedder: Any, k: int = 8,
                                         sources: Optional[list[str]] = None, facts_fn: Any = None):
     """COMP-VERDICT-GENERIC: wire the DOMAIN-AGNOSTIC verdict path -- generic subject facts (no claim_type),
@@ -394,7 +413,7 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
 
 async def run_generic_compliance_verdict(
     subject_text: str, source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
-    sources: Optional[list[str]] = None,
+    sources: Optional[list[str]] = None, facts_fn: Any = None,
 ) -> ComplianceReport:
     """COMP-VERDICT-GENERIC: a domain-agnostic compliance verdict for a free-text subject against the Requirement
     KG -- semantic-retrieve the relevant requirements -> LLM-judge -> cited `ComplianceReport`. Works with NO
@@ -402,9 +421,15 @@ async def run_generic_compliance_verdict(
 
     `sources` (issue 0007) optionally scopes the check to named policy `source`s -- None checks against the whole
     store (unchanged); a list checks against ONLY those policies (bring-your-own-policy / a curated standard named
-    by id); `[]` scopes to nothing (zero requirements); an unknown name raises `UnknownComplianceSourceError`."""
+    by id); `[]` scopes to nothing (zero requirements); an unknown name raises `UnknownComplianceSourceError`.
+
+    `facts_fn` (issue 0010) controls subject granularity. The DEFAULT is per-SENTENCE (`sentence_facts_fn`), so
+    each finding cites the sentence it is about rather than the whole document (a deliberate default change for
+    citation precision out of the box). Pass `facts_fn=generic_facts_fn` for the old whole-subject-as-one-fact
+    behavior, or any `(subject_text, source) -> [CheckableFact]` producer."""
     graph = production_generic_compliance_check(
-        store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
+        store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
+        facts_fn=facts_fn or sentence_facts_fn)
     out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
     return out["report"]
 

@@ -276,6 +276,33 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > NO-KEY -> graceful degrade -> all pages flagged PARTIAL, fast doc kept, no crash.
 >   - **0009-ADR:** ADR-0062.
 
+> **ENGINE ISSUE 0010 (RuleWright): a compliance finding cites the WHOLE subject, not the offending span.**
+> `run_generic_compliance_verdict` doesn't forward the `facts_fn` its graph builder already accepts (0008), so the
+> text path always uses `generic_facts_fn` (whole subject = ONE fact) -> every finding quotes the entire document
+> (worst at document scale). Capability exists; only the seam is missing. PLAN:
+>   - **0010-A (in-progress):** add `facts_fn: Any = None` to `run_generic_compliance_verdict`, forwarded to
+>     `production_generic_compliance_check`.
+>   - **0010-B:** add `sentence_facts_fn(subject_text, source_doc)` -- per-sentence CheckableFacts via
+>     `segment_clause` (abbrev/decimal-safe: "Dr. Miller"/"$99" don't split). DECISION (USER OVERRODE my
+>     recommendation): sentence segmentation is the DEFAULT for run_generic_compliance_verdict (better citation
+>     precision out-of-box), NOT opt-in; caller passes `facts_fn=generic_facts_fn` for the old whole-subject behavior.
+>     COST recorded (ADR-0063): per-sentence x k requirements is a cross-product (~Nx judge calls at doc scale) --
+>     cap/paragraph-fallback is a noted follow-up.
+>   - **0010-ADR:** ADR-0063.
+
+> **ENGINE ISSUE 0011 (RuleWright): typed-property facts reach answer prose by paraphrase (defect; continues 0002).**
+> `_evidence_from_clause` concatenates `[dim=value]` INTO the evidence text; the generator paraphrases it (backticks)
+> around the bracket-only scrub -> "as indicated by the typed property `cap_quantum=12_months; cap_basis=...`" leaks
+> engine vocabulary. Same mechanism ADR-0054 fixed for the function label. PLAN (Option A / structural):
+>   - **0011-A:** `EvidenceItem.properties: Optional[list[dict]]` ({dimension,value}, out-of-band; CODE-generated,
+>     not LLM). 0011-B: `_evidence_from_clause` with body -> `text = body` (drop inline `[facts]`), properties
+>     out-of-band -> model never sees engine vocab (narration structurally impossible). 0011-C: property-less path
+>     stays citable via a HUMANIZED natural-language text (no `[]`/`=`/"typed property"). 0011-D: keep bracket scrub
+>     as defense-in-depth (+ optional backtick/`dim=value`/phrase patterns). 0011-E: measure paraphrase rate + live
+>     repro ("How is the supplier's liability capped?") -> no leak.
+>   - **0011-ADR:** ADR-0064.
+>   - Order: 0010 first (quick), then 0011.
+
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
 > ingest -- a SILENT trap for any integrator, since the per-kind keys are optional. FIX: every `partial[]` entry now

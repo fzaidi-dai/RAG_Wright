@@ -485,3 +485,54 @@ async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
         await run_compliance_document_verdict(
             "s.txt", b"x", store=store, judge_model_id="stub", embedder=_Emb1(),
             sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "body"}], sources=["ghost"])
+
+
+# --- issue 0010: per-sentence subject facts (sentence segmentation is the DEFAULT) ----------------
+
+_ADCOPY = ("Our new supplement cures arthritis in just two weeks. Dr. Miller recommends it to all her patients. "
+           "Was $99, now only $49 this week.")
+
+
+def test_sentence_facts_fn_splits_sentences_abbrev_and_price_safe():
+    from rag_wright.subgraphs.compliance_check import sentence_facts_fn
+
+    facts = sentence_facts_fn(_ADCOPY, "subject.txt")
+    texts = [f.assertion_text.strip() for f in facts]
+    assert len(facts) == 3                                              # three sentences, not one blob
+    assert any("cures arthritis" in t for t in texts)
+    assert any("Dr. Miller recommends" in t for t in texts)            # "Dr." NOT split
+    assert any("only $49" in t for t in texts)                         # "$99"/"$49" NOT split
+    assert sentence_facts_fn("", "s.txt") == []
+
+
+async def test_run_generic_compliance_verdict_defaults_to_per_sentence_citations():
+    # issue 0010: DEFAULT is now per-sentence -> each finding cites the sentence it is about, not the whole subject
+    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive or unsubstantiated claims.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_generic_compliance_verdict(
+            _ADCOPY, "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1())
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    claims = [f.citation_claim for f in report.findings]
+    assert len(report.findings) == 3                                   # one finding per sentence
+    assert any("cures arthritis" in c and "Dr. Miller" not in c for c in claims)   # distinct spans, not the whole doc
+    assert any("Dr. Miller recommends" in c and "cures arthritis" not in c for c in claims)
+    assert any("only $49" in c and "cures arthritis" not in c for c in claims)
+
+
+async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_subject():
+    # back-compat: pass generic_facts_fn to get the old whole-subject-as-one-fact behavior
+    from rag_wright.subgraphs.compliance_check import generic_facts_fn, run_generic_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_generic_compliance_verdict(
+            _ADCOPY, "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1(), facts_fn=generic_facts_fn)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(report.findings) == 1                                   # whole subject = one fact -> one finding
+    assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
