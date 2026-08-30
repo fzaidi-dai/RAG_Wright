@@ -364,8 +364,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > section via _section_number, per-kind within-section ¶/bullet ordinals, heading set incl. `title`);
 > attach_structural_locators (concatenation match, robust to cross-item/soft-wrap assertions, attribute-by-start).
 > Tests +5. Suite 1359. LIVE: 4/4 facts located from real docling; wrapped-para continuation ¶1, refund ¶2 (not
-> ¶3), pricing §5 ¶1 -- ordinals reflect real paragraphs.** / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
-> code; just verify + test) / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
+> ¶3), pricing §5 ¶1 -- ordinals reflect real paragraphs.** / **-5 DONE (2026-08-30): CAUGHT A REAL DIVERGENCE -- subject_chunks defaulted to SingleCallBoundaryDiscoverer
+> (scales with length) but PRODUCTION INGESTION uses StructuralModelFallbackDiscoverer (contract_ingestion_pipeline
+> L636). Fixed: chunk_texts/achunk_texts now default to StructuralModelFallbackDiscoverer = structural boundaries
+> first (0 model calls for structured docs), only over-cap sections get a BOUNDED per-section refinement -> cost
+> never scales with length, NO subject-specific large-doc code. RLM future, as ingestion. Tests +1 (default is the
+> production discoverer; structured doc chunks OFFLINE, 0 model calls). Suite 1360. LIVE: 6-section 7.2KB doc -> 6
+> structural chunks in 0.00s, 0 model calls, full coverage.** / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
 > unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
 > BUILD AFTER REVIEW.
 >

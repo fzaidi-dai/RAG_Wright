@@ -219,6 +219,30 @@ async def test_achunk_texts_awaits_the_async_discoverer():
     assert "Alpha" in joined and "Beta" in joined
 
 
+def test_chunk_texts_defaults_to_the_production_ingestion_discoverer(monkeypatch):
+    # SEG-5: the subject's chunker default is StructuralModelFallbackDiscoverer -- the SAME discoverer production
+    # ingestion uses (contract_ingestion_pipeline). Proven by: a fully-structured, under-cap doc chunks with ZERO
+    # model calls (structural boundaries), which only the structural-first discoverer can do -- single-call would
+    # attempt a model call. A spy subclass records that the default was used.
+    import rag_wright.capabilities.rlm_chunking as rc
+
+    used = {"n": 0}
+    real = rc.StructuralModelFallbackDiscoverer
+
+    class _Spy(real):
+        def discover(self, document):
+            used["n"] += 1
+            return super().discover(document)  # real structural pass: deterministic, no model for this doc
+
+    monkeypatch.setattr(rc, "StructuralModelFallbackDiscoverer", _Spy)
+    doc = _doc([_item("Section One", "section_header"), _item("The first section body sentence."),
+                _item("Section Two", "section_header"), _item("The second section body sentence.")])
+    texts = rc.chunk_texts(doc)  # NO discoverer, NO model configured
+    assert used["n"] == 1                                              # the production ingestion default was used
+    joined = " ".join(texts)
+    assert "first section body" in joined and "second section body" in joined  # coverage, offline
+
+
 def test_finalize_joins_span_items_and_honors_the_cap():
     doc = _doc([_item("word " * 400)])  # ~2000 chars, one item
     texts = _finalize_chunks(doc, [BoundarySpan(start_index=0, end_index=0)], token_cap=100)

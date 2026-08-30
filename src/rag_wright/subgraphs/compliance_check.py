@@ -601,10 +601,13 @@ async def aextract_subject_facts(chunks: list[str], *, source_doc: str, model: A
 
 
 async def subject_chunks(parsed_doc: Any, *, discoverer: Any = None) -> list[str]:
-    """SEG-2: semantically chunk a parsed subject document into coherent chunk texts, via the SAME shared chunker
-    as ingestion (`achunk_texts`: single-call boundary discoverer + finalize; no cache/summarize -- the subject
-    is transient). `parsed_doc` is the docling document from the subject parse (exposes `.texts`). RLM is a future
-    escalation, as on the ingestion side. SEG-3 extracts the checkable assertions from each returned chunk."""
+    """SEG-2/SEG-5: semantically chunk a parsed subject document into coherent chunk texts, via the SAME shared
+    chunker as ingestion (`achunk_texts`; no cache/summarize -- the subject is transient). The default discoverer
+    is `StructuralModelFallbackDiscoverer` -- the exact discoverer PRODUCTION INGESTION uses: structural boundaries
+    first (no model for a structured doc), a BOUNDED per-section model refinement only for an over-cap section, so
+    cost never scales with document length (no size bottleneck) and there is NO subject-specific large-doc code.
+    `parsed_doc` is the docling document (exposes `.texts`). RLM is a future escalation, as on ingestion. SEG-3
+    extracts the checkable assertions from each returned chunk."""
     from rag_wright.capabilities.rlm_chunking import achunk_texts
 
     return await achunk_texts(parsed_doc, discoverer=discoverer)

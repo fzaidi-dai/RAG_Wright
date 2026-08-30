@@ -724,22 +724,28 @@ def _chunk_texts(document: Any, spans: list[BoundarySpan], token_cap: int,
 
 def chunk_texts(document: Any, *, discoverer: Optional[BoundaryDiscoverer] = None,
                 token_cap: int = DEFAULT_TOKEN_CAP, model_id: str | None = None) -> list[str]:
-    """SEG-2: the shared semantic-chunk seam WITHOUT the retrieval-only cache/summarize steps -- for a TRANSIENT
-    document (a compliance subject) that is chunked but never embedded or persisted. Reuses the exact ingestion
-    path: an LLM `discoverer` partitions the document's structural items, then `_chunk_texts` validates + caps +
-    floors + merges into coherent chunk texts. `document` is any parsed doc exposing `.texts` (docling items).
-    Default discoverer = the single-call one (the ingestion default); RLM is a FUTURE escalation, as on the
-    ingestion side, not wired here."""
-    disc = discoverer if discoverer is not None else SingleCallBoundaryDiscoverer(model_id)
+    """SEG-2/SEG-5: the shared semantic-chunk seam WITHOUT the retrieval-only cache/summarize steps -- for a
+    TRANSIENT document (a compliance subject) that is chunked but never embedded or persisted. Reuses the exact
+    ingestion path: a `discoverer` partitions the document's structural items, then `_chunk_texts` validates +
+    caps + floors + merges into coherent chunk texts. `document` is any parsed doc exposing `.texts` (docling
+    items).
+
+    SEG-5: the default discoverer is `StructuralModelFallbackDiscoverer` -- the SAME discoverer PRODUCTION
+    INGESTION uses (`contract_ingestion_pipeline` passes exactly this). Structural boundaries first (deterministic,
+    cut at every heading, ZERO model calls for a structured doc); only an over-cap section gets a BOUNDED
+    per-section model refinement, run concurrently, seeing one section at a time -- so cost never scales with
+    document length (no size bottleneck), NO subject-specific large-doc code. RLM (`SeamBoundaryDiscoverer`) is a
+    FUTURE escalation, as on the ingestion side, not wired here."""
+    disc = discoverer if discoverer is not None else StructuralModelFallbackDiscoverer(model_id)
     spans = disc.discover(document)
     return _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
 
 
 async def achunk_texts(document: Any, *, discoverer: Optional[BoundaryDiscoverer] = None,
                        token_cap: int = DEFAULT_TOKEN_CAP, model_id: str | None = None) -> list[str]:
-    """ASYNC twin of `chunk_texts` (SEG-2): awaits the discoverer's async boundary call, so it runs on the
-    subject verdict's event loop. Same reuse, same single-call default."""
-    disc = discoverer if discoverer is not None else SingleCallBoundaryDiscoverer(model_id)
+    """ASYNC twin of `chunk_texts` (SEG-2/SEG-5): awaits the discoverer's async boundary call, so it runs on the
+    subject verdict's event loop. Same reuse, same default = the production ingestion `StructuralModelFallbackDiscoverer`."""
+    disc = discoverer if discoverer is not None else StructuralModelFallbackDiscoverer(model_id)
     spans = await disc.adiscover(document)
     return _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
 
