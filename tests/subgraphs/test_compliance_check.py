@@ -650,6 +650,41 @@ async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_s
     assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
 
 
+async def test_unified_multi_section_document_maps_each_sentence_to_its_section():
+    # UNIFY-E (arc gate): a genuine MULTI-section subject -> each sentence cites ITS OWN "§ {section}", so the
+    # cross-section mapping is correct (not just 1-2 sections). Numeric locators come from the section ids.
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    store = _MultiPolicyStore([
+        _row("p1", "§ A", "An advertisement must not claim a product cures a disease."),
+        _row("p2", "§ B", "A strike-through 'was' price must reflect a bona fide former selling price."),
+        _row("p3", "§ C", "A material connection between advertiser and endorser must be disclosed."),
+    ])
+
+    def sfn(name, data):
+        return [
+            {"section": "1", "heading": "1. Product Claims",
+             "text": "Our supplement cures arthritis in just two weeks of daily use."},
+            {"section": "2", "heading": "2. Pricing",
+             "text": "The regular price was ninety-nine dollars only last month."},
+            {"section": "3", "heading": "3. Endorsements",
+             "text": "Doctor Miller personally recommends this product to all of her patients."},
+        ]
+
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_subject_compliance_verdict(
+            "policy_subject.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
+            name="policy_subject.pdf", data=b"%PDF", sections_fn=sfn)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    claims = {f.citation_claim for f in report.findings}
+    assert any("§ 1" in c and "cures arthritis" in c for c in claims)         # each sentence cites its section
+    assert any("§ 2" in c and "ninety-nine dollars" in c for c in claims)
+    assert any("§ 3" in c and "Miller" in c for c in claims)
+    assert {c.split("§")[1].strip().split(":")[0] for c in claims} == {"1", "2", "3"}   # three distinct sections
+
+
 async def test_subject_sections_paste_short_circuits_without_docling(monkeypatch):
     # UNIFY-D: a plain-text paste is turned into ONE headingless section directly -- no docling round-trip.
     import rag_wright.corpus.document_parser as dp

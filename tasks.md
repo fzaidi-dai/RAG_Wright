@@ -328,8 +328,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (text mode / plain-text short-circuit); its TEXT-based facts_fn (generic_facts_fn/sentence_facts_fn) adapted onto
 > the section-based seam. Paste + upload provably reach the SAME subject_facts_fn producer. Tests +2 (short-circuit
 > no docling round-trip via monkeypatch-raise; same-producer spy). Suite 1342. LIVE: paste shim (no §, cures->
-> violation) + real .txt upload (docling parse -> § 1), same producer both.** Remaining:
-> UNIFY-E (arc-level live: broader real end-to-end on a genuine MULTI-SECTION document) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
+> violation) + real .txt upload (docling parse -> § 1), same producer both.** **-E DONE (2026-08-30): arc-level live gate for the subject side. No new production code (built in A-D) +1
+> multi-section regression test (each sentence cites its OWN §, 3 distinct sections). Suite 1343. LIVE: real docling
+> parse of a 3-numbered-section markdown -> real judge -> 18 findings each cite correct "§ {section}: {sentence}",
+> 3 distinct numeric sections, cures + undisclosed-compensation -> violation, paste matches (all no §). Subject-side
+> unification A->E COMPLETE + live-validated.** Remaining:
+> **-F (advertising path: route run_compliance_check through the SHARED parse layer so
 > it accepts text|bytes; ad claim-extractor stays the tail, optionally per-section; typed-Claim routing unchanged)**.
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
 > ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,
