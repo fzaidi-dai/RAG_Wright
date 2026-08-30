@@ -305,10 +305,28 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >     leak structurally impossible; behavioral N=30 OLD 0/30 NEW 0/30 (intermittent literal-token leak did not
 >     reproduce on the synthetic single-clause fixture, so no rate claimed -- the structural absence is the guarantee).
 >   - **0011-ADR DONE:** ADR-0064. Tests: 1 existing updated + 3 new. Suite 1330.
->   - **NEXT (approved arc):** ground + write up the "unify subject preprocessing with the ingestion front-end" issue
->     (parse_document_bytes/document_to_sections/segment_clause reused for ALL subject inputs; section locator +
->     sentence span; drop KG-persist/rules-extract tail). Open Qs to ground: docling plain-text behavior;
->     document_to_sections + segment_clause compose for the subject tail.
+
+> **ENGINE DESIGN: unify subject preprocessing with the ingestion front-end (approved arc; write-up done, awaiting review).**
+> Write-up: `docs/design/unify-subject-preprocessing.md`. GROUNDED: (1) docling already ingests plain text
+> (parse_document_bytes wraps .txt/.md bytes; TXT already accepted); (2) document_to_sections + segment_clause
+> compose cleanly; (3) the asymmetry is exact -- run_generic_compliance_verdict(str) = sentences, NO section
+> locator; run_compliance_document_verdict(bytes) = sections, NO sentence precision; two entrypoints. DESIGN =
+> ONE subject front-end (parse-or-short-circuit -> section locator -> sentence span), subsuming all 3 facts
+> producers as one dial. THE ask-first decision: add optional `section: str | None` to CheckableFact (finding cites
+> "§ N -> sentence"; folding heading into assertion_text per-sentence would pollute the cited text). TASK BREAKDOWN
+> UNIFY-A (contract, ask-first) / -B (subject_facts_fn producer) / -C (entrypoint consolidation) / -D (plain-text
+> short-circuit) / -E (live) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
+> it accepts text|bytes; ad claim-extractor stays the tail, optionally per-section; typed-Claim routing unchanged)**.
+> TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
+> ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,
+> locator granularity, ad per-section-vs-blob extraction.
+>   - **UNIFY-A APPROVED (2026-08-30):** the `CheckableFact.section: str | None` additive contract change is
+>     pre-approved by the product owner. Build it as the first task of this arc (still TDD + gate per task).
+>   - **RULEWRIGHT MESSAGE PENDING (standing reminder):** once the implementation is COMPLETE, write a message for
+>     RuleWright listing the SPECIFIC caller-side changes required (new unified entrypoint signature, the
+>     text|bytes input, the `section` locator now in findings, ad-path upload support, any deprecated shims).
+>     Do NOT send before implementation is done.
+>   - BUILD AFTER REVIEW of this write-up.
 
 > **ENG-1 (from RuleWright's 0006 retest feedback) — DONE: make the PARTIAL loss signal un-missable.** RuleWright's
 > outcome-mapping read only `clause_failures`, so the new span-only PARTIAL (0006-C) would have surfaced as a clean
