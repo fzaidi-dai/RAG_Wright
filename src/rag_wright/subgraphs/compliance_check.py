@@ -478,31 +478,63 @@ def document_facts_fn(sections: list[dict], source_doc: str) -> list:
     return facts
 
 
-async def run_compliance_document_verdict(
-    doc_name: str, data: bytes, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
-    sources: Optional[list[str]] = None, sections_fn: Any = None,
-) -> ComplianceReport:
-    """Issue 0008: check an uploaded subject DOCUMENT (raw bytes: PDF/DOCX/MD/TXT) for compliance.
-
-    Parses the document and splits it at its headings (`document_to_sections`), then judges EACH section against
-    the Requirement KG -> a `ComplianceReport` with per-section cited findings (a multi-page subject is no longer
-    one coarse blob). A document with no headings degrades to one whole-doc section. The subject is TRANSIENT --
-    parsed and checked, never written to the store. `sources` (issue 0007) scopes to named policies; an unknown
-    name raises `UnknownComplianceSourceError`. `sections_fn` is injectable (tests); the default parse is
-    ASYNC-bounded (0009-WIRE2) so the tiered VLM OCR never stalls the loop."""
-    if sections_fn is not None:
-        sections = sections_fn(doc_name, data)  # injected (hermetic tests) -- sync
-    else:  # production: async-bounded parse (off-loop, wall-clock deadline) + heading-split
+async def _subject_sections(
+    *, text: Optional[str], name: Optional[str], data: Optional[bytes], sections_fn: Any,
+) -> list[dict]:
+    """UNIFY-C: the ONE subject preprocessing front-end -> `[{section, heading, text}]`, shared with the ingestion
+    front-end. Upload (`data`): async-bounded parse (off-loop, wall-clock deadline -- 0009-WIRE2) + heading-split
+    (`document_to_sections`); `sections_fn` injects the parse for tests. Paste (`text`): the plain-text
+    SHORT-CIRCUIT -- one headingless section, NO docling round-trip (UNIFY-D), `section=None` so a structureless
+    paste keeps the old "doc: sentence" citation (no spurious "§ 1")."""
+    if data is not None:
+        if sections_fn is not None:
+            return sections_fn(name, data)  # injected (hermetic tests) -- sync
         from rag_wright.corpus.document_parser import aparse_document_bytes, document_to_sections
 
-        sections = document_to_sections(await aparse_document_bytes(doc_name, data))
-    facts = document_facts_fn(sections, doc_name)
+        return document_to_sections(await aparse_document_bytes(name, data))
+    if text is not None:
+        return [{"section": None, "heading": "", "text": text}]  # short-circuit: no structure, no locator
+    raise ValueError("run_subject_compliance_verdict needs either text= or (name=, data=)")
+
+
+async def run_subject_compliance_verdict(
+    source_doc: str, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
+    sources: Optional[list[str]] = None, text: Optional[str] = None, name: Optional[str] = None,
+    data: Optional[bytes] = None, facts_fn: Any = None, sections_fn: Any = None,
+) -> ComplianceReport:
+    """UNIFY-C: the ONE subject-compliance front-end. Accepts EITHER a pasted `text` OR an uploaded document
+    (`name` + raw `data` bytes: PDF/DOCX/HTML/TXT), preprocesses BOTH to sections via `_subject_sections`, and
+    judges per (section, sentence) via `subject_facts_fn` -> a `ComplianceReport` whose findings cite
+    "doc § {section}: sentence" (the section from structure, the sentence from segmentation). The subject is
+    TRANSIENT (parsed/checked, never written to the store).
+
+    `facts_fn` (default `subject_facts_fn`) is the granularity override `(sections, source) -> [CheckableFact]` --
+    pass `document_facts_fn` for the old per-SECTION behavior, or any sections->facts producer. `sources` (0007)
+    scopes to named policies (unknown -> `UnknownComplianceSourceError`). `sections_fn` injects the parse (tests)."""
+    sections = await _subject_sections(text=text, name=name, data=data, sections_fn=sections_fn)
+    facts = (facts_fn or subject_facts_fn)(sections, source_doc)
     graph = production_generic_compliance_check(
         store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
-        facts_fn=lambda _text, _source: facts)  # per-section facts, precomputed from the parsed document
+        facts_fn=lambda _text, _source: facts)  # precomputed subject facts (deterministic, no model)
     subject_text = "\n\n".join((s.get("text") or "") for s in sections)
-    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": doc_name})
+    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
     return out["report"]
+
+
+async def run_compliance_document_verdict(
+    doc_name: str, data: bytes, *, store: Any, judge_model_id: str, embedder: Any, k: int = 8,
+    sources: Optional[list[str]] = None, sections_fn: Any = None, facts_fn: Any = None,
+) -> ComplianceReport:
+    """Issue 0008 / UNIFY-C: check an uploaded subject DOCUMENT (raw bytes: PDF/DOCX/HTML/TXT) for compliance.
+    Now a thin shim over `run_subject_compliance_verdict` (the shared front-end).
+
+    DEFAULT granularity CHANGED (UNIFY-C): per-(section, sentence) via `subject_facts_fn` instead of the old
+    per-SECTION `document_facts_fn` -- uploads gain sentence-precise citations + the "§ {section}" locator. Pass
+    `facts_fn=document_facts_fn` to restore the old per-section behavior. `sources` (0007) scopes to named
+    policies; `sections_fn` injects the parse (tests). The parse is ASYNC-bounded (0009-WIRE2)."""
+    return await run_subject_compliance_verdict(
+        doc_name, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
+        name=doc_name, data=data, sections_fn=sections_fn, facts_fn=facts_fn)
 
 
 def register_compliance_check(registry) -> None:

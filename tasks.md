@@ -319,8 +319,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > unique ids across sections. Tests +3. Suite 1336. LIVE: real docling parse -> document_to_sections ->
 > subject_facts_fn -> real judge -> 6 findings each cite "§ section: sentence", 2 distinct sections. Producer
 > built + proven; NOT yet wired into entrypoints (that is -C/-D).** Remaining:
-> UNIFY-A (contract, ask-first) / -B (subject_facts_fn producer) / -C (entrypoint consolidation) / -D (plain-text
-> short-circuit) / -E (live) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
+> **-C DONE (2026-08-30): run_subject_compliance_verdict -- the ONE front-end (text= | name=+data=), shared
+> _subject_sections helper (upload=async parse+document_to_sections; paste=short-circuit one headingless section,
+> section=None so no spurious §), judges per-(section,sentence) via subject_facts_fn. run_compliance_document_verdict
+> now a thin SHIM; its default granularity CHANGED per-section -> per-(section,sentence) (uploads gain sentence
+> precision + § locator); facts_fn=document_facts_fn restores per-section. MCP caller unchanged. Tests +4. Suite
+> 1340. LIVE: unified entrypoint both modes -- upload (real parse -> §1/§2, 2 sections) + paste (no §).** Remaining:
+> UNIFY-D (migrate run_generic to a shim over the front-end + prove paste≡.txt-upload reach the same producer, no
+> docling round-trip for paste) / -E (live) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
 > it accepts text|bytes; ad claim-extractor stays the tail, optionally per-section; typed-Claim routing unchanged)**.
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
 > ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,

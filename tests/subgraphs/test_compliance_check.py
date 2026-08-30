@@ -487,6 +487,74 @@ async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
             sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "body"}], sources=["ghost"])
 
 
+async def test_run_subject_compliance_verdict_upload_mode_cites_section_and_sentence():
+    # UNIFY-C: the unified front-end, upload mode -> per-(section, sentence) findings that cite "§ {section}".
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
+
+    def sfn(name, data):  # a multi-SENTENCE section (sentences > the min-chars floor) -> per-sentence facts
+        return [{"section": "2.1", "heading": "Endorsement",
+                 "text": "The influencer was paid a substantial fee for this sponsored post. "
+                         "She did not disclose the paid relationship to her audience anywhere."}]
+
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_subject_compliance_verdict(
+            "subject.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
+            name="subject.pdf", data=b"%PDF fake", sections_fn=sfn)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(report.findings) == 2                                   # two sentences in the one section
+    assert all("§ 2.1" in f.citation_claim for f in report.findings)   # both cite the section locator
+    claims = " || ".join(f.citation_claim for f in report.findings)
+    assert "was paid a substantial fee" in claims and "did not disclose" in claims  # distinct sentence spans
+
+
+async def test_run_subject_compliance_verdict_text_mode_short_circuits_no_locator():
+    # UNIFY-C/D: paste mode -> one headingless section, per-sentence facts, NO spurious "§" (structureless paste).
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_subject_compliance_verdict(
+            "subject.txt", store=store, judge_model_id="stub", embedder=_Emb1(), text=_ADCOPY)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(report.findings) == 3                                   # per sentence
+    assert all("§" not in f.citation_claim for f in report.findings)   # no structure -> no spurious locator
+    assert any("cures arthritis" in f.citation_claim for f in report.findings)
+
+
+async def test_run_subject_compliance_verdict_requires_an_input():
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
+    with pytest.raises(ValueError):
+        await run_subject_compliance_verdict(
+            "s", store=store, judge_model_id="stub", embedder=_Emb1())  # neither text nor data
+
+
+async def test_document_verdict_facts_fn_override_restores_per_section():
+    # UNIFY-C back-compat: pass document_facts_fn to get the old per-SECTION behavior (one fact per section).
+    from rag_wright.subgraphs.compliance_check import document_facts_fn, run_compliance_document_verdict
+
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
+
+    def sfn(name, data):
+        return [{"section": "1", "heading": "Endorsement", "text": "She was paid. She did not disclose it."}]
+
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_compliance_document_verdict(
+            "subject.pdf", b"%PDF fake", store=store, judge_model_id="stub", embedder=_Emb1(),
+            sections_fn=sfn, facts_fn=document_facts_fn)
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(report.findings) == 1                                   # per-section: the two sentences stay one fact
+
+
 # --- issue 0010: per-sentence subject facts (sentence segmentation is the DEFAULT) ----------------
 
 _ADCOPY = ("Our new supplement cures arthritis in just two weeks. Dr. Miller recommends it to all her patients. "
