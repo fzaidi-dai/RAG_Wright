@@ -434,6 +434,34 @@ async def run_generic_compliance_verdict(
     return out["report"]
 
 
+def subject_facts_fn(sections: list[dict], source_doc: str) -> list:
+    """UNIFY-B: the unified section->sentence subject producer. For each parsed section (`{section, heading, text}`)
+    split its body into sentences (`segment_clause`, abbreviation/decimal-safe: "Dr. Miller"/"$99" don't split) and
+    emit one `CheckableFact` per sentence carrying BOTH the SECTION locator (UNIFY-A) and the CLEAN sentence as
+    `assertion_text`. So each finding cites "doc § {section}: sentence" -- the section from document structure, the
+    sentence from segmentation, neither polluting the other.
+
+    Contrast with the producers it unifies: `document_facts_fn` (0008) is per-SECTION and folds the heading INTO
+    `assertion_text` (coarse citation); `sentence_facts_fn` (0010) is per-SENTENCE but has NO section locator. This
+    is per-(section, sentence) WITH the locator as a field. Empty sections and blank sentences are skipped; a
+    running index keeps every fact_id unique across sections."""
+    from rag_wright.spans.segment import segment_clause
+
+    facts: list = []
+    for sec in sections:
+        text = (sec.get("text") or "").strip()
+        if not text:
+            continue
+        locator = sec.get("section") or None
+        for sp in segment_clause(source_doc, text):
+            s = sp.text.strip()
+            if not s:
+                continue
+            facts.append(CheckableFact(fact_id=CheckableFact.make_id(source_doc, len(facts), s),
+                                       source_doc=source_doc, assertion_text=s, section=locator))
+    return facts
+
+
 def document_facts_fn(sections: list[dict], source_doc: str) -> list:
     """Issue 0008: turn a parsed subject document's sections (`[{section, heading, text}]`) into PER-SECTION
     `CheckableFact`s, so each section gets its own cited finding -- vs `generic_facts_fn`'s whole-subject single

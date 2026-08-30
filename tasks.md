@@ -314,6 +314,11 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > ONE subject front-end (parse-or-short-circuit -> section locator -> sentence span), subsuming all 3 facts
 > producers as one dial. THE ask-first decision: add optional `section: str | None` to CheckableFact (finding cites
 > "§ N -> sentence"; folding heading into assertion_text per-sentence would pollute the cited text). TASK BREAKDOWN
+> UNIFY-A DONE / **-B DONE (2026-08-30): subject_facts_fn(sections, source_doc) -- per-(section, sentence)
+> CheckableFacts via segment_clause, carrying the section locator + clean sentence (heading NOT folded in),
+> unique ids across sections. Tests +3. Suite 1336. LIVE: real docling parse -> document_to_sections ->
+> subject_facts_fn -> real judge -> 6 findings each cite "§ section: sentence", 2 distinct sections. Producer
+> built + proven; NOT yet wired into entrypoints (that is -C/-D).** Remaining:
 > UNIFY-A (contract, ask-first) / -B (subject_facts_fn producer) / -C (entrypoint consolidation) / -D (plain-text
 > short-circuit) / -E (live) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
 > it accepts text|bytes; ad claim-extractor stays the tail, optionally per-section; typed-Claim routing unchanged)**.

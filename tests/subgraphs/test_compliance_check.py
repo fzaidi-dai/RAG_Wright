@@ -505,6 +505,50 @@ def test_sentence_facts_fn_splits_sentences_abbrev_and_price_safe():
     assert sentence_facts_fn("", "s.txt") == []
 
 
+_SUBJECT_SECTIONS = [
+    {"section": "1", "heading": "Health Claims",
+     "text": "Our supplement cures arthritis in two weeks. Dr. Miller recommends it to all her patients."},
+    {"section": "2.1", "heading": "Pricing", "text": "Was $99, now only $49 this week."},
+]
+
+
+def test_subject_facts_fn_splits_sections_into_sentences_with_section_locator():
+    # UNIFY-B: the unified section->sentence producer. Each parsed section is split into sentences (abbrev/decimal
+    # safe); each sentence -> a CheckableFact carrying the SECTION locator + the CLEAN sentence (heading NOT folded
+    # in, unlike document_facts_fn), so a finding cites "doc § {section}: sentence".
+    from rag_wright.subgraphs.compliance_check import subject_facts_fn
+
+    facts = subject_facts_fn(_SUBJECT_SECTIONS, "subject.txt")
+    assert len(facts) == 3                                                  # 2 sentences in §1 + 1 in §2.1
+    assert [f.section for f in facts] == ["1", "1", "2.1"]                  # each carries its section locator
+    texts = [f.assertion_text.strip() for f in facts]
+    assert any("cures arthritis" in t for t in texts)
+    assert any("Dr. Miller recommends" in t for t in texts)                # "Dr." NOT split
+    assert any("only $49" in t for t in texts)                             # "$99"/"$49" NOT split
+    assert all("Health Claims" not in t and "Pricing" not in t for t in texts)  # heading NOT in the cited text
+
+
+def test_subject_facts_fn_skips_empty_sections_and_blank_sentences():
+    from rag_wright.subgraphs.compliance_check import subject_facts_fn
+
+    sections = [{"section": "1", "heading": "", "text": "   "},           # empty body -> skipped
+                {"section": "2", "heading": "H", "text": "A real sentence here."}]
+    facts = subject_facts_fn(sections, "s.txt")
+    assert len(facts) == 1 and facts[0].section == "2"
+    assert subject_facts_fn([], "s.txt") == []
+
+
+def test_subject_facts_fn_ids_are_unique_across_sections():
+    # a repeated sentence in two sections -> distinct fact_ids (running index), so nothing collides
+    from rag_wright.subgraphs.compliance_check import subject_facts_fn
+
+    sections = [{"section": "1", "text": "Same sentence here."},
+                {"section": "2", "text": "Same sentence here."}]
+    facts = subject_facts_fn(sections, "s.txt")
+    assert len(facts) == 2 and facts[0].fact_id != facts[1].fact_id
+    assert facts[0].section == "1" and facts[1].section == "2"
+
+
 async def test_run_generic_compliance_verdict_defaults_to_per_sentence_citations():
     # issue 0010: DEFAULT is now per-sentence -> each finding cites the sentence it is about, not the whole subject
     from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
