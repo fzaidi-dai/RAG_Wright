@@ -423,15 +423,21 @@ async def run_generic_compliance_verdict(
     store (unchanged); a list checks against ONLY those policies (bring-your-own-policy / a curated standard named
     by id); `[]` scopes to nothing (zero requirements); an unknown name raises `UnknownComplianceSourceError`.
 
-    `facts_fn` (issue 0010) controls subject granularity. The DEFAULT is per-SENTENCE (`sentence_facts_fn`), so
-    each finding cites the sentence it is about rather than the whole document (a deliberate default change for
-    citation precision out of the box). Pass `facts_fn=generic_facts_fn` for the old whole-subject-as-one-fact
-    behavior, or any `(subject_text, source) -> [CheckableFact]` producer."""
-    graph = production_generic_compliance_check(
-        store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
-        facts_fn=facts_fn or sentence_facts_fn)
-    out = await graph.ainvoke({"subject_text": subject_text, "source_doc": source_doc})
-    return out["report"]
+    `facts_fn` (issue 0010) controls subject granularity. The DEFAULT is per-SENTENCE, so each finding cites the
+    sentence it is about rather than the whole document. Pass `facts_fn=generic_facts_fn` for the old
+    whole-subject-as-one-fact behavior, or any `(subject_text, source) -> [CheckableFact]` producer.
+
+    UNIFY-D: now a thin shim over `run_subject_compliance_verdict` (text mode / plain-text short-circuit), so a
+    paste and an upload flow through the SAME `subject_facts_fn` producer. Behavior is unchanged: a structureless
+    paste yields per-sentence facts with NO `§` locator. `facts_fn` here stays TEXT-based `(subject_text, source)`
+    (back-compat); it is adapted onto the front-end's section-based seam by reconstructing the subject text."""
+    section_facts_fn = None
+    if facts_fn is not None:  # adapt a TEXT-based override (generic_facts_fn/...) onto the section-based seam
+        def section_facts_fn(sections: list[dict], source: str, _f: Any = facts_fn) -> list:
+            return _f("\n".join((s.get("text") or "") for s in sections), source)
+    return await run_subject_compliance_verdict(
+        source_doc, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
+        text=subject_text, facts_fn=section_facts_fn)
 
 
 def subject_facts_fn(sections: list[dict], source_doc: str) -> list:

@@ -648,3 +648,42 @@ async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_s
         cj.build_ageneric_judge_fn = orig
     assert len(report.findings) == 1                                   # whole subject = one fact -> one finding
     assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
+
+
+async def test_subject_sections_paste_short_circuits_without_docling(monkeypatch):
+    # UNIFY-D: a plain-text paste is turned into ONE headingless section directly -- no docling round-trip.
+    import rag_wright.corpus.document_parser as dp
+    from rag_wright.subgraphs.compliance_check import _subject_sections
+
+    async def _boom(*a, **k):
+        raise AssertionError("docling parse must NOT run for a plain-text paste")
+
+    monkeypatch.setattr(dp, "aparse_document_bytes", _boom)
+    sections = await _subject_sections(text="Just a pasted sentence here.", name=None, data=None, sections_fn=None)
+    assert sections == [{"section": None, "heading": "", "text": "Just a pasted sentence here."}]  # short-circuit
+
+
+async def test_paste_and_upload_reach_the_same_producer(monkeypatch):
+    # UNIFY-D: paste (text mode) AND upload (bytes mode) both flow through the SAME subject_facts_fn producer
+    # (vs the old split: paste->sentence_facts_fn, upload->document_facts_fn).
+    import rag_wright.subgraphs.compliance_check as cc
+
+    seen: list[int] = []
+    real = cc.subject_facts_fn
+
+    def spy(sections, source):
+        seen.append(len(sections))
+        return real(sections, source)
+
+    monkeypatch.setattr(cc, "subject_facts_fn", spy)
+    store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        await cc.run_generic_compliance_verdict(
+            _ADCOPY, "p.txt", store=store, judge_model_id="stub", embedder=_Emb1())                 # paste
+        await cc.run_compliance_document_verdict(
+            "d.pdf", b"x", store=store, judge_model_id="stub", embedder=_Emb1(),
+            sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": _ADCOPY}])             # upload
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    assert len(seen) == 2                                              # subject_facts_fn produced for BOTH paths

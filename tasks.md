@@ -324,9 +324,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > section=None so no spurious §), judges per-(section,sentence) via subject_facts_fn. run_compliance_document_verdict
 > now a thin SHIM; its default granularity CHANGED per-section -> per-(section,sentence) (uploads gain sentence
 > precision + § locator); facts_fn=document_facts_fn restores per-section. MCP caller unchanged. Tests +4. Suite
-> 1340. LIVE: unified entrypoint both modes -- upload (real parse -> §1/§2, 2 sections) + paste (no §).** Remaining:
-> UNIFY-D (migrate run_generic to a shim over the front-end + prove paste≡.txt-upload reach the same producer, no
-> docling round-trip for paste) / -E (live) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
+> 1340. LIVE: unified entrypoint both modes -- upload (real parse -> §1/§2, 2 sections) + paste (no §).** **-D DONE (2026-08-30): run_generic_compliance_verdict now a thin shim over run_subject_compliance_verdict
+> (text mode / plain-text short-circuit); its TEXT-based facts_fn (generic_facts_fn/sentence_facts_fn) adapted onto
+> the section-based seam. Paste + upload provably reach the SAME subject_facts_fn producer. Tests +2 (short-circuit
+> no docling round-trip via monkeypatch-raise; same-producer spy). Suite 1342. LIVE: paste shim (no §, cures->
+> violation) + real .txt upload (docling parse -> § 1), same producer both.** Remaining:
+> UNIFY-E (arc-level live: broader real end-to-end on a genuine MULTI-SECTION document) / **-F (advertising path: route run_compliance_check through the SHARED parse layer so
 > it accepts text|bytes; ad claim-extractor stays the tail, optionally per-section; typed-Claim routing unchanged)**.
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
 > ad=LLM Claim extractor). Open Qs: cost (0010 cross-product on upload too), back-compat shims vs migrate RuleWright,
