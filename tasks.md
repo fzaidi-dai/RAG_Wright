@@ -380,8 +380,11 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > facts_fn/sections_fn DIAL DROPPED (decision B); new params extract_model/discoverer/aextract_fn/doc. IN-TASK
 > HARDENING: _validate_sources rejects unknown policy BEFORE parse+extract. ~14 tests rewritten hermetic + 2
 > dropped-dial tests removed. Suite 1362. LIVE: full pipeline end-to-end -- upload (real parse->chunk->Granite
-> extract->judge, "§ N ¶n" citations) + paste (no §), cures->violation.** Remaining -7b (ad path per-chunk over
-> subject_chunks, typed Claim tail intact -- still on legacy _subject_sections)
+> extract->judge, "§ N ¶n" citations) + paste (no §), cures->violation.** **-7b DONE (2026-08-30): ad path unified onto the semantic pipeline. _aextract_ad_claims per-CHUNK (typed Claim
+> tail intact, global re-index, no section stamp -- attach does it); run_compliance_check rewired parse->
+> subject_chunks->per-chunk claims->attach_structural_locators->judge; dropped sections_fn + REMOVED dead
+> _subject_sections + its 2 tests. Tests 2 rewritten. Suite 1360. LIVE: ad upload cites §1 ¶1/§2 ¶1 + typed claims
+> (cures->violation), paste no §. BOTH generic+ad now on one pipeline.**
 > / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.
 > BUILD AFTER REVIEW.
 >

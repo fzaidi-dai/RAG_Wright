@@ -823,51 +823,54 @@ async def test_subject_chunks_uses_the_shared_chunker_seam():
     assert all(s in joined for s in ("First assertion", "Second assertion", "third, separate claim"))
 
 
-async def test_aextract_ad_claims_extracts_per_section_and_stamps_locator(monkeypatch):
-    # UNIFY-F: the advertising extractor runs PER SECTION and stamps each Claim with its "§ {section}" locator,
-    # while the typed-Claim tail (claim_type) is preserved. Empty sections are skipped.
-    import rag_wright.capabilities.claim_extraction as ce
+async def test_aextract_ad_claims_extracts_per_chunk_typed_tail_preserved():
+    # SEG-7b: the advertising extractor runs PER CHUNK, re-indexed for unique ids; the typed-Claim tail
+    # (claim_type) is preserved. The structural locator is attached separately (SEG-4), not here.
     from rag_wright.contracts.compliance import Claim, ClaimType
     from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
 
-    async def fake_aclaim(text, *, model, source_doc, **kw):  # one claim per section body
+    async def fake_aclaim(text, *, model, source_doc, **kw):  # one claim per chunk
         return [Claim(fact_id=Claim.make_id(source_doc, 0, text), source_doc=source_doc,
                       assertion_text=text.strip(), claim_type=ClaimType.HEALTH)]
 
-    monkeypatch.setattr(ce, "aclaim_extraction", fake_aclaim)
-    sections = [{"section": "1", "heading": "", "text": "Our product cures arthritis fast."},
-                {"section": "2.1", "heading": "", "text": "It was ninety-nine dollars, now forty-nine."},
-                {"section": "3", "heading": "", "text": "   "}]                     # empty -> skipped
-    claims = await _aextract_ad_claims(sections, "ad.pdf", object())
-    assert len(claims) == 2                                                        # empty section skipped
-    assert {c.section for c in claims} == {"1", "2.1"}                             # each stamped with its locator
+    chunks = ["Our product cures arthritis fast.", "It was ninety-nine dollars, now forty-nine.", "   "]
+    claims = await _aextract_ad_claims(chunks, "ad.pdf", object(), aclaim_fn=fake_aclaim)
+    assert len(claims) == 2                                                        # empty chunk skipped
+    assert claims[0].fact_id != claims[1].fact_id                                  # globally unique ids
     assert all(c.claim_type is ClaimType.HEALTH for c in claims)                  # typed-Claim tail preserved
 
 
-async def test_ad_path_routes_text_and_upload_through_the_shared_front_end(monkeypatch):
-    # UNIFY-F: run_compliance_check accepts BOTH a paste and an upload, and both go through _subject_sections
-    # (the SAME shared front-end as the generic path) before the ad claim extractor.
+async def test_ad_path_upload_cites_section_locators(monkeypatch):
+    # SEG-7b: run_compliance_check runs the SEMANTIC front-end (parse -> chunk -> per-chunk Claim extraction ->
+    # attach locators -> judge). An uploaded ad's typed claims cite their "§ {section}" locator.
     import rag_wright.subgraphs.compliance_check as cc
+    from rag_wright.contracts.compliance import Claim, ClaimType
 
-    modes: list[str] = []
-    real_sections = cc._subject_sections
+    async def fake_aclaim(text, *, model, source_doc, **kw):  # extract the verbatim sentences of the chunk
+        import re
+        sents = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if len(s.strip()) > 15]
+        return [Claim(fact_id=Claim.make_id(source_doc, i, s), source_doc=source_doc,
+                      assertion_text=s, claim_type=ClaimType.HEALTH) for i, s in enumerate(sents)]
 
-    async def spy_sections(**kw):
-        modes.append("text" if kw.get("text") is not None else "data")
-        return await real_sections(**kw)
+    # the ad judge stub (build_acompliance_judge_fn) -- async, like the real one
+    import rag_wright.capabilities.compliance_judgment as cj
 
-    async def no_claims(sections, source_doc, extract_model, **kw):  # [] -> graph -> empty report (no judge call)
-        return []
+    async def _ad_judge(claim, req):
+        return JudgeVerdict(verdict="violation", rationale="x", confidence=0.9)
 
-    monkeypatch.setattr(cc, "_subject_sections", spy_sections)
-    monkeypatch.setattr(cc, "_aextract_ad_claims", no_claims)
-    store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
-    await cc.run_compliance_check("some ad text", "ad.txt", store=store, extract_model=object(),
-                                  judge_model_id="stub", embedder=_Emb1())                     # paste
-    await cc.run_compliance_check(source_doc="ad.pdf", name="ad.pdf", data=b"%PDF", store=store,
-                                  extract_model=object(), judge_model_id="stub", embedder=_Emb1(),
-                                  sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "b"}])  # upload
-    assert modes == ["text", "data"]                                              # both routed through the front-end
+    orig = cj.build_acompliance_judge_fn
+    cj.build_acompliance_judge_fn = lambda mid: _ad_judge
+    doc = _doc_of(("section_header", "4. Advertising"),
+                  ("text", "Our product cures arthritis fast in most adults."))
+    store = _MultiPolicyStore([_row("p1", "§ 1", "An ad must not claim a cure.")])
+    try:
+        report = await cc.run_compliance_check(
+            source_doc="ad.pdf", name="ad.pdf", data=b"%PDF", store=store, extract_model=object(),
+            judge_model_id="stub", embedder=_Emb1(), doc=doc, aclaim_fn=fake_aclaim, sources=["p1"])
+    finally:
+        cj.build_acompliance_judge_fn = orig
+    assert report.findings and any("§ 4" in f.citation_claim and "cures arthritis" in f.citation_claim
+                                   for f in report.findings)
 
 
 async def test_unified_multi_section_document_maps_each_sentence_to_its_section():
@@ -904,21 +907,6 @@ async def test_unified_multi_section_document_maps_each_sentence_to_its_section(
     assert {c.split("§")[1].strip().split()[0] for c in claims} == {"1", "2", "3"}   # three distinct sections
 
 
-async def test_subject_sections_paste_short_circuits_without_docling(monkeypatch):
-    # UNIFY-D: a plain-text paste is turned into ONE headingless section directly -- no docling round-trip.
-    import rag_wright.corpus.document_parser as dp
-    from rag_wright.subgraphs.compliance_check import _subject_sections
-
-    async def _boom(*a, **k):
-        raise AssertionError("docling parse must NOT run for a plain-text paste")
-
-    monkeypatch.setattr(dp, "aparse_document_bytes", _boom)
-    sections, pages = await _subject_sections(text="Just a pasted sentence here.", name=None, data=None,
-                                              sections_fn=None)
-    assert sections == [{"section": None, "heading": "", "text": "Just a pasted sentence here."}]  # short-circuit
-    assert pages == []                                                # SEG-6: a paste has no OCR pages
-
-
 def test_compliance_report_has_ocr_unreadable_pages_field():
     # SEG-6: the report carries which pages the tiered OCR could not read, so a verdict is never silently based on
     # half-read text (the ENG-1 principle, compliance side).
@@ -926,14 +914,6 @@ def test_compliance_report_has_ocr_unreadable_pages_field():
 
     assert ComplianceReport(source_doc="d").ocr_unreadable_pages == []                 # default empty
     assert ComplianceReport(source_doc="d", ocr_unreadable_pages=[3, 4]).ocr_unreadable_pages == [3, 4]
-
-
-async def test_subject_sections_returns_ocr_pages_tuple():
-    from rag_wright.subgraphs.compliance_check import _subject_sections
-
-    sections, pages = await _subject_sections(
-        text=None, name="d.pdf", data=b"x", sections_fn=lambda n, d: [{"section": "1", "heading": "", "text": "b"}])
-    assert sections == [{"section": "1", "heading": "", "text": "b"}] and pages == []  # injected -> no OCR pages
 
 
 async def test_subject_verdict_propagates_ocr_unreadable_pages(monkeypatch):

@@ -358,51 +358,58 @@ def production_compliance_check(
     )
 
 
-async def _aextract_ad_claims(sections: list[dict], source_doc: str, extract_model: Any,
-                              *, max_concurrency: int = 4) -> list:
-    """UNIFY-F: the advertising claim extractor over the shared front-end's sections -- extract typed `Claim`s
-    PER SECTION (concurrently, per the parallel-LLM rule) and stamp each with its section locator (UNIFY-A), so
-    an uploaded ad's findings cite "§ {section}: claim". The typed-Claim tail (claim_type / disclosures) is
-    UNTOUCHED. A plain-text paste is one section (locator None) -> extraction over the whole text, as before."""
+async def _aextract_ad_claims(chunks: list[str], source_doc: str, extract_model: Any,
+                              *, aclaim_fn: Any = None, max_concurrency: int = 4) -> list:
+    """SEG-7b: the advertising claim extractor over the SAME semantic CHUNKS as the generic path -- extract typed
+    `Claim`s PER CHUNK (concurrently, per the parallel-LLM rule), re-indexed globally for unique ids. The
+    typed-Claim tail (claim_type / disclosures / routing) is UNTOUCHED. The structural locator (§/¶/bullet) is
+    attached AFTER, by `attach_structural_locators` (SEG-4, verbatim match), same as the generic path. `aclaim_fn`
+    is injected for hermetic tests."""
     from rag_wright.capabilities.claim_extraction import aclaim_extraction
+    from rag_wright.contracts.compliance import Claim
 
+    fn = aclaim_fn or aclaim_extraction
     sem = asyncio.Semaphore(max_concurrency)
 
-    async def _one(sec: dict) -> list:
-        text = (sec.get("text") or "").strip()
+    async def _one(chunk: str) -> list:
+        text = (chunk or "").strip()
         if not text:
             return []
         async with sem:
-            claims = await aclaim_extraction(text, model=extract_model, source_doc=source_doc)
-        locator = sec.get("section") or None
-        for c in claims:
-            c.section = locator  # stamp the section provenance (Claim is mutable; id unaffected)
-        return claims
+            return await fn(text, model=extract_model, source_doc=source_doc)
 
-    per_section = await asyncio.gather(*(_one(s) for s in sections))
-    return [c for group in per_section for c in group]
+    per_chunk = await asyncio.gather(*(_one(c) for c in chunks))
+    claims = [c for group in per_chunk for c in group]
+    for i, c in enumerate(claims):  # global re-index -> unique claim ids across chunks
+        c.fact_id = Claim.make_id(source_doc, i, c.assertion_text)
+    return claims
 
 
 async def run_compliance_check(
     subject_text: Optional[str] = None, source_doc: str = "", *, store: Any, extract_model: Any,
     judge_model_id: str, embedder: Any = None, k: int = 5, sources: Optional[list[str]] = None,
-    name: Optional[str] = None, data: Optional[bytes] = None, sections_fn: Any = None,
+    name: Optional[str] = None, data: Optional[bytes] = None, discoverer: Any = None, aclaim_fn: Any = None,
+    doc: Any = None,
 ) -> ComplianceReport:
-    """The ADVERTISING compliance path -> a cited `ComplianceReport`. UNIFY-F: now accepts EITHER a pasted
-    `subject_text` OR an uploaded ad (`name` + raw `data` bytes: PDF/DOCX/HTML/TXT), preprocessed through the
-    SAME shared front-end (`_subject_sections`) as the generic path -- so an uploaded ad flyer is parsed the same
-    way. The typed-Claim extractor is the tail (claim_type/disclosure routing UNCHANGED); it runs PER SECTION and
-    stamps each claim with its "§ {section}" locator. `sources` (0007) scopes to named policies."""
-    sections, unreadable = await _subject_sections(text=subject_text, name=name, data=data, sections_fn=sections_fn)
-    claims = await _aextract_ad_claims(sections, source_doc, extract_model)
+    """The ADVERTISING compliance path -> a cited `ComplianceReport`. SEG-7b: accepts EITHER a pasted
+    `subject_text` OR an uploaded ad (`name` + raw `data` bytes), and runs the SAME semantic front-end as the
+    generic path -- parse -> semantic chunk -> per-chunk typed-`Claim` extraction -> attach structural locators
+    (§/¶/bullet) -> judge. The typed-Claim tail (claim_type / disclosure routing) is UNCHANGED; a scanned ad's
+    unreadable pages surface on `report.ocr_unreadable_pages` (SEG-6). `sources` (0007) scopes to named policies;
+    `discoverer`/`aclaim_fn`/`doc` inject for tests."""
+    _validate_sources(store, sources)  # reject an unknown policy BEFORE the expensive parse + extraction
+    parsed_doc, unreadable = await _aparse_subject_any(text=subject_text, name=name, data=data, doc=doc)
+    chunks = await subject_chunks(parsed_doc, discoverer=discoverer)
+    claims = await _aextract_ad_claims(chunks, source_doc, extract_model, aclaim_fn=aclaim_fn)
+    attach_structural_locators(claims, parsed_doc)  # SEG-4: verbatim-match each claim to its docling element
 
     async def _precomputed_claims_fn(_text: str, _source: str) -> list:
-        return claims  # extracted once, per-section, above
+        return claims  # extracted once, per-chunk, above
 
     graph = production_compliance_check(
         store, extract_model=extract_model, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources,
         claims_fn=_precomputed_claims_fn)
-    subject_text_joined = "\n\n".join((s.get("text") or "") for s in sections)
+    subject_text_joined = "\n\n".join(c.assertion_text for c in claims)
     out = await graph.ainvoke({"subject_text": subject_text_joined, "source_doc": source_doc})
     report = out["report"]
     report.ocr_unreadable_pages = unreadable  # SEG-6: the ad path surfaces the OCR PARTIAL too
@@ -711,26 +718,6 @@ async def aparse_subject(name: str, data: bytes, *, parser: Any = None) -> tuple
     document = await aparse_document_bytes(name, data, parser=tiered)
     unreadable = list(getattr(getattr(tiered, "report", None), "unreadable_pages", []) or [])
     return document, unreadable
-
-
-async def _subject_sections(
-    *, text: Optional[str], name: Optional[str], data: Optional[bytes], sections_fn: Any,
-) -> tuple[list[dict], list[int]]:
-    """UNIFY-C / SEG-6: the ONE subject preprocessing front-end -> `([{section, heading, text}],
-    ocr_unreadable_pages)`, shared with the ingestion front-end. Upload (`data`): parse ONCE via `aparse_subject`
-    (tiered OCR, async-bounded) capturing the unreadable pages, then heading-split (`document_to_sections`);
-    `sections_fn` injects the parse for tests (no OCR pages). Paste (`text`): the plain-text SHORT-CIRCUIT -- one
-    headingless section, NO docling round-trip (UNIFY-D), `section=None`, no OCR pages."""
-    if data is not None:
-        if sections_fn is not None:
-            return sections_fn(name, data), []  # injected (hermetic tests) -- sync, no OCR
-        from rag_wright.corpus.document_parser import document_to_sections
-
-        document, unreadable = await aparse_subject(name, data)
-        return document_to_sections(document), unreadable
-    if text is not None:
-        return [{"section": None, "heading": "", "text": text}], []  # short-circuit: no structure, no OCR pages
-    raise ValueError("run_subject_compliance_verdict needs either text= or (name=, data=)")
 
 
 async def run_subject_compliance_verdict(
