@@ -481,6 +481,16 @@ async def run_generic_compliance_verdict(
         text=subject_text, facts_fn=section_facts_fn)
 
 
+async def subject_chunks(parsed_doc: Any, *, discoverer: Any = None) -> list[str]:
+    """SEG-2: semantically chunk a parsed subject document into coherent chunk texts, via the SAME shared chunker
+    as ingestion (`achunk_texts`: single-call boundary discoverer + finalize; no cache/summarize -- the subject
+    is transient). `parsed_doc` is the docling document from the subject parse (exposes `.texts`). RLM is a future
+    escalation, as on the ingestion side. SEG-3 extracts the checkable assertions from each returned chunk."""
+    from rag_wright.capabilities.rlm_chunking import achunk_texts
+
+    return await achunk_texts(parsed_doc, discoverer=discoverer)
+
+
 def subject_facts_fn(sections: list[dict], source_doc: str) -> list:
     """UNIFY-B: the unified section->sentence subject producer. For each parsed section (`{section, heading, text}`)
     split its body into sentences (`segment_clause`, abbreviation/decimal-safe: "Dr. Miller"/"$99" don't split) and

@@ -178,6 +178,47 @@ def _one_span_per_item(n: int) -> list[BoundarySpan]:
     return [BoundarySpan(start_index=i, end_index=i) for i in range(n)]
 
 
+class _SegStubDiscoverer:
+    """SEG-2 stub: returns fixed spans; counts sync + async calls."""
+
+    def __init__(self, spans: list[tuple[int, int]]) -> None:
+        self._spans = spans
+        self.calls = 0
+        self.acalls = 0
+
+    def discover(self, document) -> list[BoundarySpan]:
+        self.calls += 1
+        return [BoundarySpan(start_index=a, end_index=b) for a, b in self._spans]
+
+    async def adiscover(self, document) -> list[BoundarySpan]:
+        self.acalls += 1
+        return [BoundarySpan(start_index=a, end_index=b) for a, b in self._spans]
+
+
+def test_chunk_texts_reuses_the_shared_discover_finalize_seam():
+    # SEG-2: chunk_texts = the shared discover->finalize path (no cache, no summarize). Given a discoverer's
+    # spans it returns the finalized chunk texts with FULL coverage (no item text lost).
+    from rag_wright.capabilities.rlm_chunking import chunk_texts
+
+    doc = _doc([_item("Alpha statement."), _item("Beta statement."), _item("Gamma statement.")])
+    disc = _SegStubDiscoverer([(0, 1), (2, 2)])
+    texts = chunk_texts(doc, discoverer=disc)
+    assert disc.calls == 1                                       # the shared single-call-style discoverer was used
+    joined = " ".join(texts)
+    assert "Alpha" in joined and "Beta" in joined and "Gamma" in joined   # coverage: nothing dropped
+
+
+async def test_achunk_texts_awaits_the_async_discoverer():
+    from rag_wright.capabilities.rlm_chunking import achunk_texts
+
+    doc = _doc([_item("Alpha statement."), _item("Beta statement.")])
+    disc = _SegStubDiscoverer([(0, 0), (1, 1)])
+    texts = await achunk_texts(doc, discoverer=disc)
+    assert disc.acalls == 1 and disc.calls == 0                  # async path used adiscover
+    joined = " ".join(texts)
+    assert "Alpha" in joined and "Beta" in joined
+
+
 def test_finalize_joins_span_items_and_honors_the_cap():
     doc = _doc([_item("word " * 400)])  # ~2000 chars, one item
     texts = _finalize_chunks(doc, [BoundarySpan(start_index=0, end_index=0)], token_cap=100)

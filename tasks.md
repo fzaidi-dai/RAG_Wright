@@ -352,7 +352,11 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (§4.2 / §4.2 ¶3 / §4.2 · bullet 2 / none), additive+inherited by Claim; assemble_finding cites via locator().
 > Tests +2. Suite 1347. LIVE: real judge -> §4 ¶1 / §4 ¶2 / §5 · bullet 1 render in finding citations. Nothing sets
 > the fields yet = SEG-2..4.**
-> / -2 (chunk step) / -3 (verbatim assertion extractor) / -4
+> / **-2 DONE (2026-08-30): rlm_chunking.chunk_texts/achunk_texts = shared semantic-chunk seam (discover->finalize,
+> NO cache/summarize, single-call default, RLM future); compliance_check.subject_chunks (async) chunks a parsed
+> subject via it. Item->structure mapping deferred to SEG-4 (verbatim match). Tests +3. Suite 1350. LIVE: real
+> docling parse (9 items) -> real single-call chunker -> coherent chunk, full coverage.**
+> / -3 (verbatim assertion extractor) / -4
 > (locator + citation render) / -5 (large docs = SAME shared chunk() as ingestion, NO subject-specific large-doc
 > code; just verify + test) / -6 (OCR PARTIAL propagation) / -7 (wire front-end,
 > unify generic+ad) / -8 (arc live gate: structured+bullets, long flat, scanned PDF). Each TDD + live gate.

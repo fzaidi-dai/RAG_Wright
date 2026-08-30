@@ -650,6 +650,32 @@ async def test_run_generic_compliance_verdict_facts_fn_override_restores_whole_s
     assert "cures arthritis" in report.findings[0].citation_claim and "only $49" in report.findings[0].citation_claim
 
 
+async def test_subject_chunks_uses_the_shared_chunker_seam():
+    # SEG-2: subject_chunks semantically chunks a parsed subject via the SAME shared chunker as ingestion
+    # (single-call discoverer + finalize; no cache/summarize -- the subject is transient). Injected stub.
+    from types import SimpleNamespace
+
+    from rag_wright.capabilities.rlm_chunking import BoundarySpan
+    from rag_wright.subgraphs.compliance_check import subject_chunks
+
+    class _Disc:
+        def __init__(self):
+            self.acalls = 0
+
+        async def adiscover(self, document):
+            self.acalls += 1
+            return [BoundarySpan(start_index=0, end_index=1), BoundarySpan(start_index=2, end_index=2)]
+
+    doc = SimpleNamespace(texts=[SimpleNamespace(text="First assertion here.", label="text", level=None),
+                                 SimpleNamespace(text="Second assertion here.", label="text", level=None),
+                                 SimpleNamespace(text="A third, separate claim.", label="list_item", level=None)])
+    disc = _Disc()
+    texts = await subject_chunks(doc, discoverer=disc)
+    assert disc.acalls == 1                                       # went through the shared async chunker
+    joined = " ".join(texts)
+    assert all(s in joined for s in ("First assertion", "Second assertion", "third, separate claim"))
+
+
 async def test_aextract_ad_claims_extracts_per_section_and_stamps_locator(monkeypatch):
     # UNIFY-F: the advertising extractor runs PER SECTION and stamps each Claim with its "§ {section}" locator,
     # while the typed-Claim tail (claim_type) is preserved. Empty sections are skipped.

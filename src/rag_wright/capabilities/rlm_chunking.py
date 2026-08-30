@@ -722,6 +722,28 @@ def _chunk_texts(document: Any, spans: list[BoundarySpan], token_cap: int,
     return _finalize_chunks(document, spans, token_cap, respect_structure=respect_structure)
 
 
+def chunk_texts(document: Any, *, discoverer: Optional[BoundaryDiscoverer] = None,
+                token_cap: int = DEFAULT_TOKEN_CAP, model_id: str | None = None) -> list[str]:
+    """SEG-2: the shared semantic-chunk seam WITHOUT the retrieval-only cache/summarize steps -- for a TRANSIENT
+    document (a compliance subject) that is chunked but never embedded or persisted. Reuses the exact ingestion
+    path: an LLM `discoverer` partitions the document's structural items, then `_chunk_texts` validates + caps +
+    floors + merges into coherent chunk texts. `document` is any parsed doc exposing `.texts` (docling items).
+    Default discoverer = the single-call one (the ingestion default); RLM is a FUTURE escalation, as on the
+    ingestion side, not wired here."""
+    disc = discoverer if discoverer is not None else SingleCallBoundaryDiscoverer(model_id)
+    spans = disc.discover(document)
+    return _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
+
+
+async def achunk_texts(document: Any, *, discoverer: Optional[BoundaryDiscoverer] = None,
+                       token_cap: int = DEFAULT_TOKEN_CAP, model_id: str | None = None) -> list[str]:
+    """ASYNC twin of `chunk_texts` (SEG-2): awaits the discoverer's async boundary call, so it runs on the
+    subject verdict's event loop. Same reuse, same single-call default."""
+    disc = discoverer if discoverer is not None else SingleCallBoundaryDiscoverer(model_id)
+    spans = await disc.adiscover(document)
+    return _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
+
+
 def _chunk_manifest(parsed: ParsedDocument, texts: list[str], summaries: list[str], token_cap: int,
                     manifest_path: Path) -> ChunkManifest:
     """Shared chunk/achunk tail: assemble + validate the chunks, write and return the manifest."""
