@@ -26,6 +26,9 @@ from rag_wright.contracts.provenance import ConfidenceTag
 BRIDGE_TTL_PATH = Path(__file__).resolve().parent.parent / "ontology" / "compliance_bridge.ttl"
 
 
+# ADR-0066 P3b: the closed vocabularies below (DeonticType / ClaimType / Severity / RuleScope / Verdict) are
+# AUTHORITATIVE in compliance_bridge.ttl (owl:oneOf). To change one, edit the ttl -- these enums are drift-locked
+# to it by tests/ontology/test_compliance_ontology_authoritative.py.
 class DeonticType(str, Enum):
     """The rule's deontic force (LKIF/ODRL closed vocab): what it obliges, forbids, or permits."""
 

@@ -21,6 +21,21 @@ from rdflib.collection import Collection
 from rdflib.namespace import OWL, RDF, RDFS, SH, SKOS
 
 _TTL_PATH = Path(__file__).with_name("contract_bridge.ttl")
+_COMPLIANCE_TTL_PATH = Path(__file__).with_name("compliance_bridge.ttl")
+
+
+def load_compliance_vocab(path: Path | str = _COMPLIANCE_TTL_PATH) -> dict[str, set[str]]:
+    """ADR-0066 P3b: the closed vocabularies declared in compliance_bridge.ttl, keyed by class local-name
+    (`DeonticType`, `ClaimType`, `Severity`, `RuleScope`, `Verdict`) -> the set of `owl:oneOf` value local-names.
+    The Python enums in contracts/compliance.py are drift-locked to this (the ttl is the source of truth)."""
+    g = Graph()
+    g.parse(str(path), format="turtle")
+    out: dict[str, set[str]] = {}
+    for cls in g.subjects(OWL.oneOf, None):
+        local = str(cls).rsplit("#", 1)[-1]
+        members = {str(m).rsplit("#", 1)[-1] for m in Collection(g, g.value(cls, OWL.oneOf))}
+        out[local] = members
+    return out
 
 
 @lru_cache(maxsize=4)

@@ -41,7 +41,11 @@ cmp:requirementText a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain
 cmp:citation a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string ;
     rdfs:subPropertyOf prov:wasDerivedFrom ; rdfs:comment "Section/paragraph provenance; always present (FR-Q.6)." .
 cmp:evidenceStandard a owl:DatatypeProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string .
-cmp:severity a owl:DatatypeProperty ; rdfs:domain cmp:Requirement ; rdfs:range xsd:string .
+cmp:severity a owl:DatatypeProperty ; rdfs:domain cmp:Requirement ; rdfs:range cmp:Severity .
+
+# ADR-0066 P3b: Severity is a closed vocab (completes the ontology; was an open xsd:string). low/med/high.
+cmp:Severity a owl:Class ; skos:prefLabel "Severity" ; owl:oneOf ( cmp:low cmp:med cmp:high ) .
+cmp:low a cmp:Severity . cmp:med a cmp:Severity . cmp:high a cmp:Severity .
 
 # Applicability — typed (dimension, value) conditions the rule applies under. Same odrl:Constraint pattern as
 # the contract bridge, matched against a Claim's scope by the reused retrieval router (CC-6).
