@@ -2622,3 +2622,23 @@ cbr:PROHIBITS a cbr:KgEdgeType ;
     rdfs:label "PROHIBITS" ;
     cbr:predicateIri "http://www.w3.org/ns/odrl/2/prohibition" .
 
+
+# =============================================================================
+# ADR-0067 P5b -- the DOMAIN KG node/edge storage schema. The engine infra (Chunk/Span/Entity + the retrieval
+# vector indexes) stays generic in store/arcadedb.py; these DOMAIN vertex/edge types are PACK-declared, so a new
+# domain ships its own node schema. cbr:kgProperty = "name:TYPE"; cbr:uniqueIndexOn = a UNIQUE id index.
+# =============================================================================
+cbr:ClauseNode a cbr:KgVertexType ; cbr:vertexName "Clause" ;
+    cbr:kgProperty "clause_id:STRING", "function:STRING", "folio_iri:STRING", "span_id:STRING", "functions:STRING" ;
+    cbr:uniqueIndexOn "clause_id" .
+cbr:PropertyValueNode a cbr:KgVertexType ; cbr:vertexName "PropertyValue" ;
+    cbr:kgProperty "value_key:STRING", "dimension:STRING", "value:STRING", "folio_iri:STRING", "canonical_value:STRING" ;
+    cbr:uniqueIndexOn "value_key" .
+cbr:ContractNode a cbr:KgVertexType ; cbr:vertexName "Contract" ;
+    cbr:kgProperty "contract_id:STRING", "name:STRING", "agreement_type:STRING", "parties_json:STRING",
+                   "agreement_date:STRING", "effective_date:STRING", "source_doc_id:STRING",
+                   "content_hash:STRING", "page_count:INTEGER" ;
+    cbr:uniqueIndexOn "contract_id" .
+cbr:HasPropertyEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "HasProperty" .
+cbr:PartyToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "PartyTo" .
+cbr:IsExceptionToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "IsExceptionTo" .

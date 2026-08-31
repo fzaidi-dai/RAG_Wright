@@ -31,7 +31,10 @@ from rag_wright.contracts.property import (
     PropertyDimension,
 )
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.ontology.loader import load_typed_edges  # ADR-0067 P5a: typed-edge map from the ontology
+from rag_wright.ontology.loader import (  # ADR-0067: KG schema from the ontology
+    load_kg_schema,  # P5b: domain vertex/edge types
+    load_typed_edges,  # P5a: typed-edge map
+)
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
 
@@ -86,9 +89,8 @@ _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
 _SPAN_ID_INDEX = f"{SPAN_TYPE}[span_id]"
 _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
-_CLAUSE_ID_INDEX = f"{CLAUSE_TYPE}[clause_id]"
-_PROPVALUE_KEY_INDEX = f"{PROPVALUE_TYPE}[value_key]"
-_CONTRACT_ID_INDEX = f"{CONTRACT_TYPE}[contract_id]"
+# ADR-0067 P5b: the domain vertex UNIQUE id indexes (Clause/PropertyValue/Contract) are pack-declared
+# (cbr:uniqueIndexOn) and built by the generic ensure_schema loop, not hardcoded here.
 
 
 def _property_value_key(dimension: str, value: str) -> str:
@@ -254,42 +256,19 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.contract_id STRING")  # CU-B2: within-contract filter
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_start INTEGER")  # CU-B2: doc-absolute char offset
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_end INTEGER")  # CU-B2: exclusive (citation)
-        if CLAUSE_TYPE not in types:  # FR-R (ADR-0026): the property graph (clause node)
-            self._command(f"CREATE VERTEX TYPE {CLAUSE_TYPE}")
-            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.clause_id STRING")  # parent chunk / OKF pointer
-            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.function STRING")
-            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.folio_iri STRING")
-            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.span_id STRING")  # the operative span (1:1; ADR-0025)
-            # ADR-0048: multi-label classification, JSON-encoded [{function, confidence}] ranked primary-first.
-            self._command(f"CREATE PROPERTY {CLAUSE_TYPE}.functions STRING")
-        if PROPVALUE_TYPE not in types:  # shared, deduped (dimension,value) node
-            self._command(f"CREATE VERTEX TYPE {PROPVALUE_TYPE}")
-            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value_key STRING")
-            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.dimension STRING")
-            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.value STRING")
-            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.folio_iri STRING")
-            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.canonical_value STRING")  # KG-5a
-        if PROPERTY_EDGE_TYPE not in types:  # legacy flat edge; kept for back-compat, superseded by typed
-            self._command(f"CREATE EDGE TYPE {PROPERTY_EDGE_TYPE}")
-        for typed_edge in TYPED_PROPERTY_EDGE_TYPES:  # KG-3: the typed property-edge layer (ADR-0033)
-            if typed_edge not in types:
-                self._command(f"CREATE EDGE TYPE {typed_edge}")
-        if CONTRACT_TYPE not in types:  # CU-B3: contract metadata (the CUAD document lookup unit)
-            self._command(f"CREATE VERTEX TYPE {CONTRACT_TYPE}")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.contract_id STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.name STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.agreement_type STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.parties_json STRING")  # json.dumps(parties)
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.agreement_date STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.effective_date STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.source_doc_id STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.content_hash STRING")
-            self._command(f"CREATE PROPERTY {CONTRACT_TYPE}.page_count INTEGER")
-
-        if PARTY_TO_EDGE_TYPE not in types:  # KG-7 (ADR-0036): Entity(party) -> Contract unifying link
-            self._command(f"CREATE EDGE TYPE {PARTY_TO_EDGE_TYPE}")
-        if IS_EXCEPTION_TO_EDGE_TYPE not in types:  # ADR-0044: exception clause -> the Cap clause it excepts
-            self._command(f"CREATE EDGE TYPE {IS_EXCEPTION_TO_EDGE_TYPE}")
+        # ADR-0067 P5b: the DOMAIN vertex types (Clause / PropertyValue / Contract) + structural edges
+        # (HasProperty / PartyTo / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
+        # whatever the pack declares, so a new domain ships its own node schema without editing this method.
+        vertex_types, structural_edges = load_kg_schema()
+        for vt in vertex_types:
+            if vt.name not in types:
+                self._command(f"CREATE VERTEX TYPE {vt.name}")
+                for pname, ptype in vt.properties:
+                    self._command(f"CREATE PROPERTY {vt.name}.{pname} {ptype}")
+        # edge types: the structural edges (pack) + the typed property edges (P5a, ttl-driven)
+        for edge in sorted(structural_edges) + list(TYPED_PROPERTY_EDGE_TYPES):
+            if edge not in types:
+                self._command(f"CREATE EDGE TYPE {edge}")
 
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
@@ -316,12 +295,10 @@ class ArcadeDBStore:
             self._command(
                 f"CREATE INDEX ON {SPAN_TYPE} (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR"
             )
-        if _CLAUSE_ID_INDEX not in indexes:
-            self._command(f"CREATE INDEX ON {CLAUSE_TYPE} (clause_id) UNIQUE")
-        if _PROPVALUE_KEY_INDEX not in indexes:
-            self._command(f"CREATE INDEX ON {PROPVALUE_TYPE} (value_key) UNIQUE")
-        if _CONTRACT_ID_INDEX not in indexes:
-            self._command(f"CREATE INDEX ON {CONTRACT_TYPE} (contract_id) UNIQUE")
+        # ADR-0067 P5b: the domain vertex UNIQUE id indexes (pack-declared, `cbr:uniqueIndexOn`)
+        for vt in vertex_types:
+            if vt.unique_index and f"{vt.name}[{vt.unique_index}]" not in indexes:
+                self._command(f"CREATE INDEX ON {vt.name} ({vt.unique_index}) UNIQUE")
 
     def type_names(self) -> set[str]:
         return {row["name"] for row in self._query("SELECT name FROM schema:types")}

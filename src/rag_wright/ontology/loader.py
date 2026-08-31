@@ -200,6 +200,35 @@ def load_contract_ontology(path: Path | str = _TTL_PATH) -> ContractOntologyView
         value_rollup=value_rollup)
 
 
+@dataclass(frozen=True)
+class KgVertexType:
+    """ADR-0067 P5b: a domain KG vertex-type declaration the store creates -- name, its `(property, SQL type)`
+    pairs, and the property to build a UNIQUE index on (if any)."""
+
+    name: str
+    properties: tuple[tuple[str, str], ...]
+    unique_index: str | None
+
+
+@lru_cache(maxsize=4)
+def load_kg_schema(path: str = str(_TTL_PATH)) -> tuple[tuple[KgVertexType, ...], frozenset[str]]:
+    """ADR-0067 P5b: the DOMAIN KG node/edge storage schema from the ttl -- `(vertex types, structural edge names)`.
+    The engine infra (Chunk/Span/Entity) stays generic in store code; these domain types are pack-declared. Cached."""
+    g = Graph()
+    g.parse(str(path), format="turtle")
+    vertices = []
+    for v in g.subjects(RDF.type, _cbr("KgVertexType")):
+        props = tuple(sorted((str(p).split(":", 1)[0], str(p).split(":", 1)[1])
+                             for p in g.objects(v, _cbr("kgProperty")) if ":" in str(p)))
+        ui = g.value(v, _cbr("uniqueIndexOn"))
+        vertices.append(KgVertexType(name=str(g.value(v, _cbr("vertexName"))), properties=props,
+                                     unique_index=(str(ui) if ui is not None else None)))
+    vertices.sort(key=lambda x: x.name)
+    edges = frozenset(str(g.value(e, _cbr("edgeName")))
+                      for e in g.subjects(RDF.type, _cbr("KgStructuralEdge")))
+    return tuple(vertices), edges
+
+
 @lru_cache(maxsize=4)
 def load_typed_edges(path: str = str(_TTL_PATH)) -> tuple[dict[str, str], dict[str, str]]:
     """ADR-0067 P5a: the KG typed-edge map from contract_bridge.ttl. Returns `(dim_edge, edge_iri)`:
