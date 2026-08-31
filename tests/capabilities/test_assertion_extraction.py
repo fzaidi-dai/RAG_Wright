@@ -26,6 +26,26 @@ def test_to_facts_adapts_verbatim_assertions_and_skips_blank():
     assert getattr(facts[0], "claim_type", None) is None              # no ad claim_type
 
 
+def test_to_facts_carries_actor_as_a_scope_constraint():
+    # DEON-5: an extracted actor rides as a dimension-agnostic Constraint("actor", ...) on the fact's scope;
+    # no actor -> empty scope. CheckableFact stays dimension-agnostic (no typed actor field).
+    from rag_wright.contracts.compliance import Constraint
+
+    ex = ExtractedAssertions(subject="s", assertions=[
+        ExtractedAssertion(assertion_text="Dr. Miller endorses the product warmly.", actor="Endorser"),
+        ExtractedAssertion(assertion_text="The price was ninety-nine, now forty-nine."),  # no actor
+    ])
+    facts = to_facts(ex, source_doc="d")
+    assert facts[0].scope == [Constraint(dimension="actor", value="endorser")]   # lower-cased, dimension-agnostic
+    assert facts[1].scope == []                                                  # no actor -> no scope
+
+
+def test_checkable_fact_scope_defaults_empty():
+    from rag_wright.contracts.compliance import CheckableFact
+
+    assert CheckableFact(fact_id="f", source_doc="d", assertion_text="x").scope == []
+
+
 async def test_aassertion_extraction_uses_the_injected_extractor():
     async def _stub(text, model, *, template, **kw):
         assert template is ExtractedAssertions

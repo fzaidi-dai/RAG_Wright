@@ -130,6 +130,9 @@ class CheckableFact(BaseModel):
     element_kind: str | None = None  # SEG-1: docling structural label of the source element (paragraph /
     # list_item / section_header / ...); selects the within-section marker in `locator()`.
     element_ordinal: int | None = None  # SEG-1: the element's within-section ordinal (the ¶ / bullet number).
+    scope: list["Constraint"] = []  # DEON-5: the assertion's inferred applicability constraints (e.g.
+    # Constraint("actor", "endorser")); dimension-agnostic, matched against a requirement's applicability_scope by
+    # the generic `constraint_applies` router (DEON-6), and aggregated to the document's SubjectScope (DEON-7).
     doc_start: int | None = None  # span provenance: char offsets in source_doc (optional)
     doc_end: int | None = None
     confidence: ConfidenceTag = ConfidenceTag.EXTRACTED

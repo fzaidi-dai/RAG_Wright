@@ -419,9 +419,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > budget (4000), claims embedded once; seam document_fact_fn -> obligation_pairs_fn. Tests +2. Suite 1360. LIVE:
 > 18-sentence/983-char doc -> obligation judged over 350 chars bounded evidence (buried connection sentence
 > retrieved by BGE) -> violation. PHASE 1 (DEON-1+2) COMPLETE: obligations judged once, definitively, over bounded
-> evidence -- scalable to document length.** ; Phase 2 DEON-5 (subject scope producer,
-> ask-first) / -6 (constraint routing) / -7 (actor gate) / -8 (ad-path parity) / -9 (permission-as-defense) / -10
-> (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. BUILD AFTER REVIEW.
+> evidence -- scalable to document length.** ; Phase 2 **DEON-5 DONE (2026-08-31): CheckableFact.scope: list[Constraint]
+> (dimension-agnostic, ask-first, inherited by Claim); ExtractedAssertion.actor (ROLE-biased) -> to_facts maps to
+> Constraint("actor", role); subject_scope(facts) = document SubjectScope (deduped union). Tests +3. Suite 1363.
+> LIVE: real Granite emits ROLES (endorser/manufacturer -- role-vs-entity fixed in the extractor prompt IN-TASK,
+> not deferred) -> SubjectScope ['endorser','manufacturer'].** / -6 (constraint routing: wire constraint_scope_fn
+> in the generic path) / -7 (actor gate + role-aware matching) / -8 (ad-path parity) / -9 (permission-as-defense) /
+> -10 (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate.
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,

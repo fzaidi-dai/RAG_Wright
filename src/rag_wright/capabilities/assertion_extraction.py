@@ -28,6 +28,13 @@ class ExtractedAssertion(BaseModel):
         description=("One checkable factual assertion / claim / statement the document makes, quoted VERBATIM "
                      "from the source text -- the exact words (one assertion per entry), so it can be cited "
                      "faithfully. Do NOT paraphrase, summarize, or merge multiple assertions."))
+    actor: str = Field(
+        default="",
+        description=("DEON-5: the ROLE of the party this assertion involves -- a role word, NOT a person's or "
+                     "company's name. Choose the general role: advertiser, endorser, expert, manufacturer, "
+                     "seller, employer, or party. (E.g. 'Dr. Miller recommends ...' -> endorser, not 'Dr. "
+                     "Miller'.) Lets a rule that binds a role be gated to documents where that role appears. "
+                     "Empty if no clear actor."))
 
 
 class ExtractedAssertions(BaseModel):
@@ -44,14 +51,20 @@ class ExtractedAssertions(BaseModel):
 def to_facts(extracted: ExtractedAssertions, *, source_doc: str) -> list[CheckableFact]:
     """DETERMINISTIC (no model): adapt extracted assertions to `CheckableFact`s. Blank assertion skipped;
     `fact_id` = content-hash. Domain-neutral -- no `claim_type` (that is the `claim_extraction` specialization).
-    The structural locator (section / ¶ / bullet) is attached later, in SEG-4."""
+    The structural locator (section / ¶ / bullet) is attached later, in SEG-4. DEON-5: an extracted `actor` rides
+    as a dimension-agnostic `Constraint("actor", ...)` on the fact's `scope`."""
+    from rag_wright.contracts.compliance import Constraint
+
     out: list[CheckableFact] = []
     for index, item in enumerate(extracted.assertions):
         text = (item.assertion_text or "").strip()
         if not text:
             continue
+        actor = (getattr(item, "actor", "") or "").strip().lower()
+        scope = [Constraint(dimension="actor", value=actor)] if actor else []
         out.append(CheckableFact(
-            fact_id=CheckableFact.make_id(source_doc, index, text), source_doc=source_doc, assertion_text=text))
+            fact_id=CheckableFact.make_id(source_doc, index, text), source_doc=source_doc, assertion_text=text,
+            scope=scope))
     return out
 
 

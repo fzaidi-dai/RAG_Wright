@@ -447,6 +447,26 @@ async def test_deontic_split_obligation_once_prohibition_per_assertion_permissio
     assert "p:§ 3" not in by_req             # permission EXCLUDED from violation-judging
 
 
+def test_subject_scope_aggregates_and_dedups_actor_constraints():
+    # DEON-5: the document SubjectScope is the deduped union of the facts' scope constraints.
+    from rag_wright.contracts.compliance import CheckableFact, Constraint
+    from rag_wright.subgraphs.compliance_check import subject_scope
+
+    facts = [
+        CheckableFact(fact_id="f0", source_doc="d", assertion_text="a",
+                      scope=[Constraint(dimension="actor", value="endorser")]),
+        CheckableFact(fact_id="f1", source_doc="d", assertion_text="b",
+                      scope=[Constraint(dimension="actor", value="endorser")]),   # dup
+        CheckableFact(fact_id="f2", source_doc="d", assertion_text="c",
+                      scope=[Constraint(dimension="actor", value="advertiser")]),
+        CheckableFact(fact_id="f3", source_doc="d", assertion_text="d"),           # no scope
+    ]
+    scope = subject_scope(facts)
+    actors = {c.value for c in scope if c.dimension == "actor"}
+    assert actors == {"endorser", "advertiser"}                                   # deduped union
+    assert len(scope) == 2                                                        # the duplicate endorser collapsed
+
+
 def test_obligation_pairs_are_bounded_and_relevance_ranked():
     # DEON-2: an obligation is judged over the TOP-N most-relevant passages up to a char budget -- NOT the whole
     # document. A discriminating embedder ranks the connection sentence first; the bound caps the evidence.

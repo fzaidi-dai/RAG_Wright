@@ -176,6 +176,22 @@ def _within_budget(claims: list, *, top_n: int, char_budget: int) -> list:
     return out
 
 
+def subject_scope(facts: list) -> list:
+    """DEON-5: the document-level SubjectScope -- the deduped union of every fact's per-assertion `scope`
+    `Constraint`s (actor + any inferred dimension). Feeds the obligation actor-gate (DEON-7: is the rule's actor
+    present in the document at all?) and, per-assertion, the prohibition constraint router (DEON-6). Returns a
+    `list[Constraint]`; the actor-set is the values on dimension 'actor'."""
+    seen: set = set()
+    out: list = []
+    for f in facts:
+        for c in getattr(f, "scope", None) or []:
+            key = (c.dimension, c.value)
+            if key not in seen:
+                seen.add(key)
+                out.append(c)
+    return out
+
+
 def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
                               char_budget: int = OBLIGATION_CHAR_BUDGET) -> Any:
     """DEON-2: the obligation evidence retriever. For each obligation, embed it and RANK the subject assertions,
