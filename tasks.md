@@ -468,7 +468,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > {§1,§3}. Helpers _actor_sentence_extractor/_rowa. Tests +1. Suite 1375. LIVE (real Granite + Gemma): the combined
 > scenario -- §1 judged once->violation (undisclosed), §2 skipped (employer absent, 0 findings), §3 compliant (§4
 > FDA carve-out honored), §4 excluded; 3 findings total (cost = relevant pairs, not assertions x rules).** /
-> **-ADR (next)**. BOTH PHASES DONE. Each TDD + live gate. **NEXT-UP = DEON-ADR (extend ADR-0040).**
+> **-ADR DONE (2026-08-31): ADR-0065 (deontic type + actor as the primary query-side applicability gates; FTC
+> tables demoted to curated overrides; obligation-once judge-unit split; permission-as-defense). Extends ADR-0040
+> (same neuro-symbolic axiom, now query-side too), reuses ADR-0044 (carve-out), notes ADR-0045.** BOTH PHASES DONE.
+> **DEON ARC (issue 0012) COMPLETE.** Each TDD + live gate.
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
