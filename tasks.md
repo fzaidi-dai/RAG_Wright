@@ -18,7 +18,18 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > P3 requirement side = the deferred INGEST-NS Gaps 1&2 (dimension-general applicability + symbolic gate, built ON
 > the substrate) → P4 migrate DEON query-side rules (SECTION_RULE_SCOPE, _ACTOR_SYNONYMS) to the ontology → P5
 > (separate later ADR) domain-pack retargeting (KG schema + edge-types + EDGAR-CIK entity resolution). Supersedes
-> ADR-0037/0040's "Python authoritative to avoid ttl drift." **NEXT = ADR-0066 Phase 0.** See [[ontology-single-source-of-truth]].
+> ADR-0037/0040's "Python authoritative to avoid ttl drift." See [[ontology-single-source-of-truth]].
+> **P0 DONE (2026-08-31): the contract ontology is now the COMPLETE, provably-faithful source of truth.** Augmented
+> contract_bridge.ttl (+1427 triples: a uniform machine layer — cbr:PropertyDimension vocab+cardinality, 52
+> cbr:ClauseFunction nodes, 52 sh:NodeShape applicability/cardinality/deontic shapes reusing _shapes_graph's IRI
+> scheme, skos:broader rollups; kept the legacy FOLIO layer = known transitional duplication, reconcile later);
+> ontology/loader.py (runtime ttl reader); scripts/bootstrap_contract_ontology_augmentation.py (one-time emitter);
+> tests/ontology/test_ttl_is_source_of_truth.py (5 equivalence tests: ttl == CLOSED_VOCAB / MULTI_VALUED /
+> FUNCTION_APPLICABLE_DIMS / polarity+restrictive / VALUE_ROLLUP). Retired contract_bridge.spec.yaml. Suite 1380.
+> LIVE gate: real granite-4.1-8b extraction of 2 real clauses + violation records -> ttl-loaded SHACL flags ==
+> production Python-shape flags byte-identical (incl. a real Cap-On-Liability over-extraction caught by the
+> ontology via pyshacl-on-the-ttl). **NEXT = P1** (generate Python vocab/enums FROM the ttl + CI-diff + separate
+> the prompt-engineering into a YAML overlay).
 >
 > **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
 > A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran
