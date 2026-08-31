@@ -436,8 +436,20 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > 1366. LIVE (real Granite extract + Gemma judge): manufacturer-cure claim -> canonical 'advertiser' -> advertiser
 > prohibition STILL fires (no recall regression) -> violation; undisclosed endorser -> obligation violation;
 > employer obligation SKIPPED (absent, zero calls). Merged 6+7 to avoid a regressive intermediate (gate needs both
-> the constraint routing and the matcher).** / -8 (ad-path parity) / -9 (permission-as-defense) /
-> -10 (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. **NEXT-UP = DEON-8.**
+> the constraint routing and the matcher).** / **-8 DONE (2026-08-31): AD-PATH PARITY. (A) applicable_claim_types
+> is OVERRIDE-based -- FTC SECTION_CLAIM_TYPES wins when the section is pinned (FTC byte-identical), else the
+> extracted claim_type scope NARROWS for a customer policy (empty=recall-first) -> the KG claim_type field is
+> load-bearing, the ad analog of the DEON-6/7 actor gate. (B) the ad path gets the SAME deontic split as generic:
+> production_compliance_check wires obligation_pairs_fn when an embedder is present (obligations judged ONCE +
+> actor-gated, prohibitions per-assertion, permissions excluded; no-embedder = prior per-assertion, back-compat).
+> The ad judge (sync+async) now appends _deontic_framing (obligation framing) + _ad_signals (getattr-tolerant ->
+> tolerates a plain evidence bundle). Obligation bundle carries the ad-level disclosure union + evidence forward
+> as document content (Option 1, getattr-tolerant so generic is unaffected) so a once-judged disclosure obligation
+> still sees a disclosure made anywhere. to_claims surfaces the Claim role actor onto .scope (mirrors to_facts);
+> the ad extractor actor field role-biased. Tests +5. Suite 1371. LIVE (real Granite + Gemma ad judge): endorser
+> obligation judged ONCE (1 finding, not per-claim), customer pricing-scoped rule narrows (1 vs the broad cure
+> rule's 4).** / -9 (permission-as-defense) /
+> -10 (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. **NEXT-UP = DEON-9.**
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,

@@ -114,6 +114,18 @@ def _deontic_framing(requirement: Requirement) -> str:
     return _OBLIGATION_FRAMING if requirement.deontic_type is DeonticType.OBLIGATION else ""
 
 
+def _ad_signals(fact: CheckableFact) -> str:
+    """DEON-8: the ADVERTISING claim-signals line -- rendered only for a typed `Claim`. An obligation judged ONCE
+    (DEON-1) hands the judge a plain `CheckableFact` EVIDENCE BUNDLE with no claim_type; return '' so the ad judge
+    TOLERATES it (the bundle's disclosure signals ride in its text via DEON-8 Option 1) instead of crashing on a
+    missing attribute."""
+    ct = getattr(fact, "claim_type", None)
+    if ct is None:
+        return ""
+    return _AD_ENRICHMENT.format(
+        claim_type=ct.value, disclosures=fact.disclosures_present or "none", evidence=fact.evidence_referenced)
+
+
 def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
     """COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC judge -- rules a `(subject_fact, requirement)` pair on TEXT alone
     using the GENERIC judgment method (no advertising doctrine; reasons about "the subject" in any domain), so it
@@ -148,11 +160,7 @@ def build_compliance_judge_fn(model_id: str, *, structured_factory=build_structu
     method = judgment_method()
 
     def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
-        prompt = method + _base_tail(claim, requirement) + _AD_ENRICHMENT.format(
-            claim_type=claim.claim_type.value,
-            disclosures=claim.disclosures_present or "none",
-            evidence=claim.evidence_referenced,
-        )
+        prompt = method + _base_tail(claim, requirement) + _ad_signals(claim) + _deontic_framing(requirement)
         return structured_factory(model_id, JudgeVerdict).invoke(prompt)
 
     return judge
@@ -164,11 +172,7 @@ def build_acompliance_judge_fn(model_id: str, *, structured_factory=build_struct
     method = judgment_method()
 
     async def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
-        prompt = method + _base_tail(claim, requirement) + _AD_ENRICHMENT.format(
-            claim_type=claim.claim_type.value,
-            disclosures=claim.disclosures_present or "none",
-            evidence=claim.evidence_referenced,
-        )
+        prompt = method + _base_tail(claim, requirement) + _ad_signals(claim) + _deontic_framing(requirement)
         return await structured_factory(model_id, JudgeVerdict).ainvoke(prompt)
 
     return judge

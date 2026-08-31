@@ -24,7 +24,10 @@ class ExtractedClaim(BaseModel):
         default="",
         description=("The kind of claim, chosen from: efficacy, comparative, pricing, health, environmental, "
                      "endorsement, performance, guarantee"))
-    actor: str = Field(default="", description="Who makes or is featured in the claim (advertiser, endorser, expert)")
+    actor: str = Field(default="", description=(
+        "DEON-8: the ROLE of the party this claim involves -- a role word, NOT a person's or company's name. "
+        "Choose the general role: advertiser, endorser, expert, manufacturer, seller. (E.g. 'Dr. Miller "
+        "recommends ...' -> endorser, not 'Dr. Miller'.) Empty if no clear actor."))
     subject_product: str = Field(default="", description="The product or brand the claim is about")
     quantitative_value: str = Field(
         default="", description="Any specific number/quantity claimed, e.g. '30 pounds in one month', '2x faster'")

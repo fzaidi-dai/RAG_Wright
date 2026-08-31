@@ -563,6 +563,112 @@ def test_obligation_evidence_respects_the_char_budget():
     assert len(evidence) <= 300                                     # capped by the char budget, not all 10
 
 
+# --- DEON-8 (issue 0012): AD-PATH PARITY -- claim_type override routing + the deontic split on the ad path ------
+
+
+def test_customer_section_claim_type_scope_narrows():
+    # DEON-8 Part A: for a CUSTOMER policy (a section NOT in the curated FTC override table) the extracted
+    # claim_type scope is LOAD-BEARING -- it NARROWS (a pricing-scoped rule does not apply to a health claim);
+    # an empty scope is recall-first (applies to all). The FTC override still WINS for a pinned FTC section, so
+    # a noisy granite claim_type can neither narrow a context section nor rescue §255.0.
+    from rag_wright.subgraphs.compliance_check import applicable_claim_types
+
+    pricing_rule = _req(section="policy.7", scope=("pricing",), text="Price claims must state the base price.")
+    assert applies_to(pricing_rule, _claim(ctype=ClaimType.PRICING)) is True
+    assert applies_to(pricing_rule, _claim(ctype=ClaimType.HEALTH)) is False       # NARROWS (was inert before DEON-8)
+    unscoped = _req(section="policy.8", scope=(), text="All ads must be truthful.")
+    assert applies_to(unscoped, _claim(ctype=ClaimType.HEALTH)) is True            # empty scope -> recall-first
+    # FTC override wins: a §255.5 rule applies to ALL claim types regardless of an extracted 'pricing' scope
+    assert applicable_claim_types(_req(section="255.5", scope=("pricing",))) == {c.value for c in ClaimType}
+
+
+def test_to_claims_populates_actor_scope():
+    # DEON-8 Part B: an ad Claim surfaces its ROLE actor as a Constraint on `.scope` (mirroring the generic
+    # `to_facts`), so the obligation actor gate (DEON-7) works on the ad path too. The typed `.actor` is kept.
+    from rag_wright.capabilities.claim_extraction import to_claims
+    from rag_wright.skills.claim_extraction.template import ExtractedAd, ExtractedClaim
+
+    ad = ExtractedAd(subject="s", claims=[
+        ExtractedClaim(assertion_text="Dr. Miller recommends it.", claim_type="endorsement", actor="Endorser")])
+    claim = to_claims(ad, source_doc="ad")[0]
+    assert claim.actor == "Endorser"                                               # typed field preserved
+    assert any(c.dimension == "actor" and c.value == "endorser" for c in claim.scope)  # + on scope (lower-cased)
+
+
+async def test_ad_judge_frames_obligations_and_tolerates_a_bundle():
+    # DEON-8 Part B: the ADVERTISING judge (a) appends the OBLIGATION deontic framing (parity with the generic
+    # judge) and (b) tolerates a plain CheckableFact evidence BUNDLE (no claim_type) -- rendering no per-claim
+    # CLAIM SIGNALS instead of crashing on the missing attribute.
+    from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn
+    from rag_wright.contracts.compliance import CheckableFact
+
+    prompts: list[str] = []
+
+    class _Fac:
+        async def ainvoke(self, prompt):
+            prompts.append(prompt)
+            return JudgeVerdict(verdict="violation", rationale="", confidence=0.9)
+
+    judge = build_acompliance_judge_fn("stub", structured_factory=lambda mid, schema: _Fac())
+    ob = _req_obj("obligation", citation="§ D", text="An endorser must disclose a connection.")
+    bundle = CheckableFact(fact_id="b", source_doc="d", assertion_text="the ad content")  # no claim_type
+    assert await judge(bundle, ob) is not None                                     # did NOT crash on the bundle
+    assert "OBLIGATION" in prompts[0]                                              # obligation framing appended
+    assert "CLAIM SIGNALS" not in prompts[0]                                       # a bundle has no per-claim signals
+    prompts.clear()
+    await judge(_claim(ctype=ClaimType.HEALTH, disc=["#ad"]), _req_obj("prohibition", text="no cure claims"))
+    assert "CLAIM SIGNALS" in prompts[0] and "#ad" in prompts[0]                    # a typed Claim still gets signals
+
+
+def test_obligation_bundle_carries_ad_disclosures():
+    # DEON-8 Part B (Option 1): an obligation judged ONCE must still see a disclosure made ANYWHERE in the ad.
+    # build_obligation_pairs_fn carries the ad-level disclosure union into the evidence bundle TEXT (getattr-
+    # tolerant: a generic CheckableFact has no disclosures -> nothing appended, domain-neutral).
+    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+
+    claims = [
+        _claim(text="Two shades whiter in a week.", ctype=ClaimType.ENDORSEMENT, disc=["#ad", "paid partnership"]),
+        _claim(text="Dr. Miller recommends it.", ctype=ClaimType.ENDORSEMENT, disc=[]),
+    ]
+    ob = _req_obj("obligation", citation="§ 255.5", text="An endorser must disclose a material connection.")
+    pairs = build_obligation_pairs_fn(_Emb1())([ob], claims, "ad")                  # actor 'party' -> recall-first
+    assert len(pairs) == 1
+    bundle_text = pairs[0][0].assertion_text
+    assert "#ad" in bundle_text and "paid partnership" in bundle_text              # disclosure union carried forward
+
+
+async def test_ad_path_splits_obligations_once_with_an_embedder():
+    # DEON-8 Part B: production_compliance_check wires the deontic split on the AD path too (when an embedder is
+    # given) -- an obligation judged ONCE, a prohibition per-assertion -- parity with the generic path.
+    import rag_wright.capabilities.compliance_judgment as cj
+    from rag_wright.subgraphs.compliance_check import production_compliance_check
+
+    async def _judge(fact, req):
+        return JudgeVerdict(verdict="violation", rationale="", confidence=0.9)
+
+    orig = cj.build_acompliance_judge_fn
+    cj.build_acompliance_judge_fn = lambda mid, **k: _judge
+    try:
+        store = _MultiPolicyStore([
+            _row("p", "§ 1", "An endorser must disclose a material connection.", deontic="obligation"),
+            _row("p", "§ 2", "An ad must not claim a product cures a disease.", deontic="prohibition"),
+        ])
+        claims = [_claim(text="Cures arthritis fast.", ctype=ClaimType.HEALTH),
+                  _claim(text="Doctor recommends it.", ctype=ClaimType.ENDORSEMENT)]
+
+        async def _claims_fn(t, s):
+            return claims
+
+        graph = production_compliance_check(store, extract_model=None, judge_model_id="stub",
+                                            embedder=_Emb1(), claims_fn=_claims_fn)
+        out = await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
+        by = [f.requirement_id for f in out["report"].findings]
+        assert by.count("p:§ 1") == 1                                              # obligation judged ONCE
+        assert by.count("p:§ 2") == 2                                              # prohibition per-assertion (2 claims)
+    finally:
+        cj.build_acompliance_judge_fn = orig
+
+
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
     # SEG-7a: run_subject_compliance_verdict now chunks -> extracts VERBATIM assertions -> attaches locators ->
     # judges. Injected doc + stub extractor (hermetic, no model/parse). Findings cite each assertion's § locator.

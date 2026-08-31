@@ -50,18 +50,25 @@ def to_claims(extracted: ExtractedAd, *, source_doc: str) -> list[Claim]:
     """`claim_adaptation` (FUNCTION -- deterministic, no model): adapt an extracted ad to validated `Claim`s.
     Off-vocab claim_type -> fallback + AMBIGUOUS; blank assertion skipped. `claim_id` uses the content-hash
     scheme; the (source_doc, assertion) is the span cite."""
+    from rag_wright.contracts.compliance import Constraint
+
     out: list[Claim] = []
     for index, item in enumerate(extracted.claims):
         text = (item.assertion_text or "").strip()
         if not text:
             continue
         claim_type, ambiguous = _coerce_claim_type(item.claim_type)
+        actor = _clean(item.actor)
+        # DEON-8: surface the ROLE actor as a dimension-agnostic Constraint on `.scope` (mirroring the generic
+        # `to_facts`), so the obligation actor gate (DEON-7) works on the ad path too. The typed `.actor` is kept.
+        scope = [Constraint(dimension="actor", value=actor.lower())] if actor else []
         out.append(Claim(
             fact_id=Claim.make_id(source_doc, index, text),
             source_doc=source_doc,
             claim_type=claim_type,
             assertion_text=text,
-            actor=_clean(item.actor),
+            scope=scope,
+            actor=actor,
             subject_product=_clean(item.subject_product),
             quantitative_value=_clean(item.quantitative_value),
             disclosures_present=[d.strip() for d in item.disclosures_present if d and d.strip()],

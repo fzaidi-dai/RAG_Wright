@@ -69,15 +69,19 @@ def _section_of(citation: str) -> str:
 
 
 def applicable_claim_types(requirement: Requirement) -> set[str]:
-    """The claim types a requirement applies to: the section's applicable set (context-based, the authoritative
-    axis for these context-scoped guides) BROADENED by any extracted claim_type scope. Extracted scope can only
-    ADD (granite's per-rule claim_type is noisy and must not wrongly EXCLUDE a claim the section covers); an
-    unknown section defaults to all (recall-first). So for the FTC guides every operative section applies broadly
-    and only definitions (255.0, empty set + no scope) are excluded -- the honest applicability for this corpus.
-    The real per-claim narrowing (most-relevant rule) is semantic retrieval (Leg-B), the CC-7 refinement."""
-    section = SECTION_CLAIM_TYPES.get(_section_of(requirement.citation), _ALL_CLAIM_TYPES)
+    """DEON-8 (issue 0012): the claim types a requirement applies to. A CURATED override (`SECTION_CLAIM_TYPES`,
+    the FTC reference pack) WINS when the requirement's section is pinned there -- FTC behavior is byte-identical
+    (context sections apply to ALL claim types; §255.0 to none), and a noisy extracted claim_type can neither
+    narrow a context section nor rescue definitions. For ANY OTHER (customer) section the extracted `claim_type`
+    scope is LOAD-BEARING: it NARROWS (a pricing-scoped rule does not apply to a health claim); an empty scope is
+    recall-first (applies to all). So the KG's claim_type field routes for ANY policy, not just FTC -- the ad-path
+    analog of the DEON-6/7 actor gate (a curated override on top of a load-bearing typed field). The real per-
+    claim narrowing (most-relevant rule) is still semantic retrieval (Leg-B), the CC-7 refinement."""
+    section = _section_of(requirement.citation)
+    if section in SECTION_CLAIM_TYPES:  # curated FTC override wins (context = all types, definitions = none)
+        return SECTION_CLAIM_TYPES[section]
     scope = {c.value for c in requirement.applicability_scope if c.dimension == "claim_type"}
-    return section | scope
+    return scope or _ALL_CLAIM_TYPES  # customer policy: extracted scope narrows; empty -> recall-first
 
 
 def _constraints_by_dimension(constraints: list) -> dict:
@@ -233,12 +237,32 @@ def subject_scope(facts: list) -> list:
     return out
 
 
+def _document_signal_line(claims: list) -> str:
+    """DEON-8 (Option 1): the ad-level structured SIGNALS rendered as document content for the obligation judge --
+    the disclosure union + whether evidence is referenced, aggregated across ALL claims (a disclosure made
+    ANYWHERE in the ad satisfies a disclosure obligation, so the whole-document union matters, not just the top-N
+    evidence window). getattr-tolerant so a generic (non-ad) fact contributes nothing -> '' (domain-neutral: the
+    engine's obligation retriever stays free of ad concepts, the signals only appear when the facts carry them)."""
+    disclosures = sorted({d for c in claims for d in (getattr(c, "disclosures_present", None) or [])})
+    evidence = any(getattr(c, "evidence_referenced", False) for c in claims)
+    parts: list[str] = []
+    if disclosures:
+        parts.append("disclosures present in the document: " + "; ".join(disclosures))
+    if evidence:
+        parts.append("the document references supporting evidence")
+    return ("\n\n[DOCUMENT SIGNALS] " + "; ".join(parts) + ".") if parts else ""
+
+
 def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
                               char_budget: int = OBLIGATION_CHAR_BUDGET) -> Any:
     """DEON-2: the obligation evidence retriever. For each obligation, embed it and RANK the subject assertions,
     take the top-N most-relevant up to a char budget, and build one bounded evidence `CheckableFact` -> one
     `(evidence_fact, obligation)` pair. Symbolic/vector narrowing (KG deontic route + embeddings) selects the
-    small evidence set; the LLM then judges once over it (breach = absence). Claims are embedded ONCE."""
+    small evidence set; the LLM then judges once over it (breach = absence). Claims are embedded ONCE.
+
+    DEON-8 (Option 1): the ad-level structured SIGNALS (the disclosure union / evidence-referenced) are appended
+    to each bundle as document content, so an obligation judged ONCE on the ad path still sees a disclosure made
+    anywhere in the ad. getattr-tolerant, so the generic path is unaffected."""
     def obligation_pairs(obligations: list, claims: list, source_doc: str) -> list:
         if not (obligations and claims):
             return []
@@ -249,13 +273,14 @@ def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
         obligations = [ob for ob in obligations if actor_matches(ob.actor, doc_actors)]
         if not obligations:
             return []
+        signal_line = _document_signal_line(claims)  # DEON-8: carry the ad-level disclosure/evidence signals
         claim_vecs = [(c, embedder.encode_dense(c.assertion_text)) for c in claims]  # embed the subject once
         pairs: list = []
         for ob in obligations:
             ob_vec = embedder.encode_dense(ob.requirement_text)
             ranked = [c for c, _ in sorted(claim_vecs, key=lambda cv: _cosine(ob_vec, cv[1]), reverse=True)]
             evidence = _within_budget(ranked, top_n=top_n, char_budget=char_budget)
-            text = "\n\n".join(c.assertion_text for c in evidence) or "(empty subject)"
+            text = ("\n\n".join(c.assertion_text for c in evidence) or "(empty subject)") + signal_line
             fact = CheckableFact(fact_id=CheckableFact.make_id(source_doc, ob.requirement_id, text),
                                  source_doc=source_doc, assertion_text=text)
             pairs.append((fact, ob))
@@ -512,6 +537,11 @@ def production_compliance_check(
 
     requirements = _load_requirements(store, sources)
     select_fn = build_select_fn(embedder, requirements, k=k) if embedder is not None else None
+    # DEON-8 (issue 0012): the ad path gets the SAME deontic split as the generic path when an embedder is
+    # available -- OBLIGATIONS judged ONCE over bounded, actor-gated evidence (not per-sentence), PROHIBITIONS
+    # per-assertion (claim_type-routed via select_fn), PERMISSIONS excluded. Without an embedder (no semantic
+    # narrowing) the prior per-assertion pairing is kept (back-compat).
+    obligation_pairs_fn = build_obligation_pairs_fn(embedder) if embedder is not None else None
 
     async def _default_claims_fn(text: str, source: str) -> list:
         return await aclaim_extraction(text, model=extract_model, source_doc=source)
@@ -521,6 +551,7 @@ def production_compliance_check(
         requirements_fn=lambda: requirements,
         judge_fn=build_acompliance_judge_fn(judge_model_id),
         select_fn=select_fn,
+        obligation_pairs_fn=obligation_pairs_fn,
     )
 
 
