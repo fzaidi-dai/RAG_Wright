@@ -394,9 +394,24 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > parse (tiered OCR) -> semantic chunk (production ingestion discoverer, no subject-specific large-doc code) ->
 > verbatim/typed per-chunk extraction -> structural locator (§/¶/bullet, real-world hardened: paragraph-merge +
 > cross-item match) -> judge -> report with OCR PARTIAL. Regex subject_facts_fn retired as the default.
-> FOLLOW-UPS: (a) REVISE + send the RuleWright handoff (citation format now "§ N ¶n"/"· bullet n"; OCR-PARTIAL
-> contract new; the docs/handoff draft is stale). (b) DEAD-CODE decision: generic_facts_fn / sentence_facts_fn /
-> subject_facts_fn / document_facts_fn (+ their direct tests) are now unused (dial dropped) -- prune or keep?
+> FOLLOW-UPS DONE: (a) RuleWright handoff REWRITTEN (890b113, docs/handoff/2026-08-30_subject_compliance_final_
+> rulewright.md; stale one deleted). (b) DEAD-CODE PRUNED (4bb755f: generic/sentence/subject/document_facts_fn +
+> tests removed).
+>
+> **NEXT ARC (DEON): deontic + actor applicability routing (engine issue 0012). Design doc:
+> docs/design/deontic-applicability-routing.md (approved to write up; NOT building yet).** 0012 = the ontology
+> routing (rule_scope_of/applicable_claim_types) is HARDCODED to FTC 255.x section numbers -> does nothing for a
+> customer policy (§1/§2/§3): every rule -> CONTENT, applies_to true for all, assertions×rules judge cross-product
+> (~800-1100 calls/100-assertion doc), obligations judged per-sentence -> "unclear". deontic_type/actor extracted
+> +persisted but INERT in routing. VALIDATED (grounded); aligns with ADR-0040 + [[neuro-symbolic-core-principle]]
+> ([[mvp-is-not-an-excuse-for-hardcoding]]). DESIGN: make KG fields load-bearing symbolic gates + LLM reasons ONCE
+> over retrieved evidence. 4 deontic cases (obligation=doc-scoped-once actor-gated; prohibition=per-assertion;
+> permission=excluded/exception-link; ambiguous=recall-first). "Document-scoped" = question once, NOT whole-doc-in-
+> prompt (actor gate + vector retrieval -> 1 bounded LLM call). Subject scope via dimension-agnostic Constraint
+> producer (NOT hardcoded actor field). FTC tables -> curated overrides. TASKS Phase 1 DEON-1 (deontic routing) /
+> -2 (judge split) / -3 (obligation-once retrieved) / -4 (live gate) ; Phase 2 DEON-5 (subject scope producer,
+> ask-first) / -6 (constraint routing) / -7 (actor gate) / -8 (ad-path parity) / -9 (permission-as-defense) / -10
+> (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. BUILD AFTER REVIEW.
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
