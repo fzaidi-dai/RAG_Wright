@@ -382,6 +382,31 @@ def _stub_sentence_extractor():
     return _extract
 
 
+def _actor_sentence_extractor(actor_map: dict):
+    """Like `_stub_sentence_extractor` but tags each sentence with a ROLE actor by substring, so the DEON-6/7
+    actor gate has real per-assertion scope in a hermetic run (no model)."""
+    import re
+
+    from rag_wright.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
+
+    async def _extract(text, model, *, template, **kw):
+        parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\n+", text or "") if len(p.strip()) > 15]
+        items = []
+        for p in parts:
+            role = next((r for key, r in actor_map.items() if key.lower() in p.lower()), "")
+            items.append(ExtractedAssertion(assertion_text=p, actor=role))
+        return ExtractedAssertions(subject="s", assertions=items)
+
+    return _extract
+
+
+def _rowa(citation: str, text: str, deontic: str, actor: str) -> dict:
+    """A store row with an explicit ROLE actor (the `_row` helper defaults to the generic 'party')."""
+    return {"requirement_id": f"policy:{citation}", "source": "policy", "citation": citation,
+            "deontic_type": deontic, "actor": actor, "requirement_text": text,
+            "evidence_standard": None, "severity": None, "applicability_json": "[]", "confidence": "EXTRACTED"}
+
+
 def _text_doc(*paragraphs, heading=None):
     """A minimal docling-like doc: an optional section heading + body paragraphs as text items (`.texts`)."""
     from types import SimpleNamespace
@@ -751,6 +776,57 @@ async def test_permission_defense_is_linked_and_reaches_the_judge():
     await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
     assert any("§ 2" in d for d in seen.get(proh.requirement_id, []))   # the permission linked as a defense
     assert perm.requirement_id not in seen                             # the permission is not judged for violation
+
+
+# --- DEON-10 (issue 0012): the PHASE-2 combined gate -- routing + actor gate + carve-out + cost, together --------
+
+
+async def test_deon_phase2_combined_routing_gating_and_cost():
+    # DEON-10: ONE customer policy (obligation/obligation/prohibition/permission) over a 3-sentence document.
+    #   §1 obligation(endorser) -- endorser PRESENT -> judged ONCE (1 call)
+    #   §2 obligation(employer) -- employer ABSENT   -> SKIPPED entirely (0 calls, the actor gate)
+    #   §3 prohibition(advertiser) -- per-assertion, actor-gated (dropped on the endorser sentence) + carries §4
+    #   §4 permission(advertiser) -- EXCLUDED from judging, linked as a defense to §3
+    # Total judge calls = 3 (the RELEVANT pairs), NOT assertions x rules = 3 x 4 = 12.
+    import rag_wright.capabilities.compliance_judgment as cj
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    calls: list = []
+
+    async def _judge(fact, req):
+        calls.append((req.requirement_id, list(getattr(req, "defenses", []))))
+        return JudgeVerdict(verdict="violation", rationale="stub", confidence=0.9)
+
+    store = _MultiPolicyStore([
+        _rowa("§ 1", "An endorser must disclose a material connection.", "obligation", "endorser"),
+        _rowa("§ 2", "An employer must provide annual safety training.", "obligation", "employer"),
+        _rowa("§ 3", "An advertiser must not claim a product cures a disease.", "prohibition", "advertiser"),
+        _rowa("§ 4", "An advertiser may claim a benefit if a study is cited.", "permission", "advertiser"),
+    ])
+    doc = _text_doc("Dr. Miller, an endorser, recommends the supplement warmly. "
+                    "The supplement cures arthritis fast for everyone. It is available online today.")
+    extractor = _actor_sentence_extractor({"endorser": "endorser", "recommends": "endorser"})
+
+    orig = cj.build_ageneric_judge_fn
+    cj.build_ageneric_judge_fn = lambda mid: _judge
+    try:
+        report = await run_subject_compliance_verdict(
+            "policy_doc.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=extractor, sources=["policy"])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+
+    ids = [rid for rid, _ in calls]
+    assert ids.count("policy:§ 1") == 1                 # obligation judged ONCE (endorser present)
+    assert "policy:§ 2" not in ids                       # employer obligation SKIPPED (actor absent) -> ZERO calls
+    assert ids.count("policy:§ 3") == 2                   # prohibition per-assertion, actor-gated (2 non-endorser)
+    assert "policy:§ 4" not in ids                        # permission EXCLUDED from violation-judging
+    assert len(calls) == 3                                # cost = RELEVANT pairs (3), NOT assertions x rules (12)
+    # the prohibition carries the permission carve-out as a defense (DEON-9)
+    s3_defenses = next(d for rid, d in calls if rid == "policy:§ 3")
+    assert any("§ 4" in x for x in s3_defenses)
+    # the report is well-formed (findings for the pairs actually judged)
+    assert {r["requirement_id"] for r in report.gap_matrix} == {"policy:§ 1", "policy:§ 3"}
 
 
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():

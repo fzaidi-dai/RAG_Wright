@@ -460,7 +460,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > LIVE (real Granite + Gemma generic judge): a prohibition + a permission carve-out (FDA-approval safe-harbor) ->
 > Subject A (cites FDA, within carve-out) COMPLIANT (defense rescued it), Subject B (no FDA) VIOLATION (exception
 > did NOT apply) -- selective, not a blanket excuse; permission excluded from judging on both.** /
-> **-10 (Phase-2 live gate)** / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. **NEXT-UP = DEON-10.**
+> **-10 DONE (2026-08-31): the PHASE-2 INTEGRATION GATE (no new production code -- the verification task).
+> Hermetic test_deon_phase2_combined_routing_gating_and_cost: ONE 4-rule customer policy (obligation/obligation/
+> prohibition/permission) over a 3-sentence doc -> obligation-once (§1, 1 call), absent-actor obligation SKIPPED
+> (§2, 0 calls), prohibition per-assertion + actor-gated (§3, 2 calls), permission excluded but linked as §3's
+> defense (§4, 0 calls); asserts EXACTLY 3 judge calls (vs naive 3x4=12), the §4->§3 defense link, gap matrix
+> {§1,§3}. Helpers _actor_sentence_extractor/_rowa. Tests +1. Suite 1375. LIVE (real Granite + Gemma): the combined
+> scenario -- §1 judged once->violation (undisclosed), §2 skipped (employer absent, 0 findings), §3 compliant (§4
+> FDA carve-out honored), §4 excluded; 3 findings total (cost = relevant pairs, not assertions x rules).** /
+> **-ADR (next)**. BOTH PHASES DONE. Each TDD + live gate. **NEXT-UP = DEON-ADR (extend ADR-0040).**
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,
