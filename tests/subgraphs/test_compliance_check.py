@@ -447,6 +447,66 @@ async def test_deontic_split_obligation_once_prohibition_per_assertion_permissio
     assert "p:§ 3" not in by_req             # permission EXCLUDED from violation-judging
 
 
+def test_actor_matches_canonical_exact_and_recall_first():
+    # DEON-6/7: exact match on the CANONICAL role vocabulary; a known synonym normalizes (manufacturer ->
+    # advertiser); distinct roles do NOT match; a generic/absent rule actor or a subject with no actor never gates.
+    from rag_wright.subgraphs.compliance_check import actor_matches, canonical_actor
+
+    assert canonical_actor("Manufacturer") == "advertiser"                     # synonym -> canonical
+    assert canonical_actor("distributor") == "distributor"                     # unknown role kept as-is
+    assert actor_matches("endorser", {"endorser"})                             # exact
+    assert actor_matches("advertiser", {"advertiser"})                         # subject already canonical (from manufacturer)
+    assert not actor_matches("advertiser", {"endorser"})                       # distinct roles -> no match
+    assert not actor_matches("employer", {"advertiser", "endorser"})           # employer absent -> no match
+    assert actor_matches("party", {"endorser"})                                # generic rule actor -> recall-first
+    assert actor_matches("endorser", set())                                    # subject has no actor -> recall-first
+
+
+def test_prohibition_narrows_by_canonical_actor():
+    # DEON-6: a prohibition binding an endorser is DROPPED for a distinct-actor claim, KEPT for an endorser claim
+    # and a SYNONYM (manufacturer->advertiser vs an advertiser rule), and KEPT for an actor-less claim (recall-first).
+    from rag_wright.contracts.compliance import CheckableFact, Constraint
+    from rag_wright.subgraphs.compliance_check import build_select_fn
+
+    endorser_rule = _req_obj("prohibition", citation="§ E",
+                             text="An endorser must not fail to disclose a connection.").model_copy(
+        update={"actor": "endorser"})
+    advertiser_rule = _req_obj("prohibition", citation="§ A",
+                               text="An advertiser must not claim a cure.").model_copy(update={"actor": "advertiser"})
+    emb = _FakeEmbedder({"disclose": [0, 1, 0], "cure": [1, 0, 0]})  # distinct rule vectors (avoid dedup collapse)
+    select = build_select_fn(emb, [endorser_rule, advertiser_rule], k=8,
+                             constraint_scope_fn=lambda c: getattr(c, "scope", None) or [])
+
+    def _fact(actor):
+        return CheckableFact(fact_id="f", source_doc="d", assertion_text="x",
+                             scope=[Constraint(dimension="actor", value=actor)] if actor else [])
+
+    picked = select(_fact("endorser"), [endorser_rule, advertiser_rule])
+    assert endorser_rule in picked and advertiser_rule not in picked           # endorser claim -> only endorser rule
+    picked = select(_fact("manufacturer"), [endorser_rule, advertiser_rule])   # manufacturer -> advertiser (synonym)
+    assert advertiser_rule in picked and endorser_rule not in picked           # -> only the advertiser rule (no regression)
+    picked = select(_fact(None), [endorser_rule, advertiser_rule])
+    assert endorser_rule in picked and advertiser_rule in picked               # no actor scope -> recall-first, both
+
+
+def test_obligation_actor_gate_skips_absent_actor():
+    # DEON-7: an obligation whose bound actor is ABSENT from the document actor-set is SKIPPED entirely (zero
+    # judge calls); present (incl. via a synonym) -> a pair is built. Recall-first.
+    from rag_wright.contracts.compliance import CheckableFact, Constraint
+    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+
+    ob = _req_obj("obligation", citation="§ D",
+                  text="An endorser must disclose a connection.").model_copy(update={"actor": "endorser"})
+    make = build_obligation_pairs_fn(_Emb1())
+
+    advertiser_doc = [CheckableFact(fact_id="f", source_doc="d", assertion_text="advertiser",
+                                    scope=[Constraint(dimension="actor", value="manufacturer")])]  # -> advertiser
+    assert make([ob], advertiser_doc, "d") == []                               # no endorser in the doc -> SKIP
+    endorser_doc = [CheckableFact(fact_id="f", source_doc="d", assertion_text="endorser",
+                                  scope=[Constraint(dimension="actor", value="influencer")])]  # influencer->endorser
+    assert len(make([ob], endorser_doc, "d")) == 1                             # endorser present (synonym) -> judged
+
+
 def test_subject_scope_aggregates_and_dedups_actor_constraints():
     # DEON-5: the document SubjectScope is the deduped union of the facts' scope constraints.
     from rag_wright.contracts.compliance import CheckableFact, Constraint

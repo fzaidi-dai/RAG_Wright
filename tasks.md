@@ -423,9 +423,21 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > (dimension-agnostic, ask-first, inherited by Claim); ExtractedAssertion.actor (ROLE-biased) -> to_facts maps to
 > Constraint("actor", role); subject_scope(facts) = document SubjectScope (deduped union). Tests +3. Suite 1363.
 > LIVE: real Granite emits ROLES (endorser/manufacturer -- role-vs-entity fixed in the extractor prompt IN-TASK,
-> not deferred) -> SubjectScope ['endorser','manufacturer'].** / -6 (constraint routing: wire constraint_scope_fn
-> in the generic path) / -7 (actor gate + role-aware matching) / -8 (ad-path parity) / -9 (permission-as-defense) /
-> -10 (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate.
+> not deferred) -> SubjectScope ['endorser','manufacturer'].** / **-6+7 DONE (2026-08-31, MERGED): the neuro-symbolic
+> actor gate. constraint_scope_fn wired in the generic path (build_select_fn constraint branch) + a document-level
+> actor gate on obligations (build_obligation_pairs_fn: skip an obligation whose actor is absent from the doc ->
+> zero judge calls). Role matching = CANONICAL-VOCABULARY normalization, NOT embeddings: measured that NO BGE
+> cosine threshold separates same-role from different-role single words (advertiser~manufacturer 0.630 <
+> employer~manufacturer 0.684 -- inverted), so pivoted to canonical_actor(raw) + _ACTOR_SYNONYMS (generic role-
+> synonym map, e.g. manufacturer/marketer/brand->advertiser, influencer/reviewer->endorser) + exact-match
+> actor_matches(rule_actor, subject_actors) with recall-first on empty/generic/absent-scope. Deterministic,
+> domain-retargetable, no embedder in the gate (build_obligation_pairs_fn keeps embedder for retrieval ranking
+> only). Tests +3 rewritten (discriminating _FakeEmbedder so dedup doesn't collapse the recall-first pair). Suite
+> 1366. LIVE (real Granite extract + Gemma judge): manufacturer-cure claim -> canonical 'advertiser' -> advertiser
+> prohibition STILL fires (no recall regression) -> violation; undisclosed endorser -> obligation violation;
+> employer obligation SKIPPED (absent, zero calls). Merged 6+7 to avoid a regressive intermediate (gate needs both
+> the constraint routing and the matcher).** / -8 (ad-path parity) / -9 (permission-as-defense) /
+> -10 (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. **NEXT-UP = DEON-8.**
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,

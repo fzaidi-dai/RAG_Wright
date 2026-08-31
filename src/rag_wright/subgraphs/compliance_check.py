@@ -34,6 +34,7 @@ from rag_wright.contracts.compliance import (
     ClaimType,
     ComplianceFinding,
     ComplianceReport,
+    Constraint,
     DeonticType,
     Requirement,
     RuleScope,
@@ -85,6 +86,46 @@ def _constraints_by_dimension(constraints: list) -> dict:
     for c in constraints:
         out.setdefault(c.dimension, set()).add(c.value)
     return out
+
+
+_ROLE_GENERIC = frozenset({"", "party", "anyone", "any", "all", "everyone", "subject", "person", "other"})
+
+# DEON-6/7: generic, DOMAIN-agnostic role-synonym normalization -- collapse common variants to one canonical role
+# so the rule side and the subject side align (BGE cosine on bare role words does NOT encode role equivalence:
+# employer~manufacturer 0.68 > advertiser~manufacturer 0.63, so a similarity threshold cannot separate them).
+# An unknown role is KEPT as-is (both sides normalize identically, so an exotic domain still matches on its own
+# term); this is role knowledge, NOT an FTC/corpus hardcode.
+_ACTOR_SYNONYMS = {
+    "manufacturer": "advertiser", "marketer": "advertiser", "brand": "advertiser", "company": "advertiser",
+    "business": "advertiser", "sponsor": "advertiser",
+    "influencer": "endorser", "spokesperson": "endorser", "ambassador": "endorser", "reviewer": "endorser",
+    "physician": "expert", "doctor": "expert", "specialist": "expert", "professional": "expert",
+    "buyer": "consumer", "customer": "consumer", "user": "consumer",
+    "merchant": "seller", "retailer": "seller", "vendor": "seller",
+}
+
+
+def canonical_actor(raw: str) -> str:
+    """DEON-6/7: normalize an actor ROLE to its canonical form -- collapse a known synonym (manufacturer ->
+    advertiser), else keep the role as-is (lower-cased). Applied identically to the rule and subject side, so the
+    KG actor gate matches on aligned roles."""
+    a = (raw or "").strip().lower()
+    return _ACTOR_SYNONYMS.get(a, a)
+
+
+def _actor_set(scope: list) -> set:
+    """The canonical `actor` roles in a scope (a claim's, or the document's aggregated)."""
+    return {canonical_actor(c.value) for c in (scope or []) if c.dimension == "actor" and c.value}
+
+
+def actor_matches(rule_actor: str, subject_actors: set) -> bool:
+    """DEON-6/7: does the requirement's actor ROLE appear among the subject's (already-canonical) actors? Exact
+    match on the CANONICAL role vocabulary (both sides normalized by `canonical_actor`). RECALL-FIRST: a
+    generic/absent rule actor, or a subject with no actor info, never gates (True)."""
+    ra = canonical_actor(rule_actor)
+    if not ra or ra in _ROLE_GENERIC or not subject_actors:
+        return True  # recall-first: nothing to gate on
+    return ra in subject_actors
 
 
 def constraint_applies(requirement_scope: list, subject_scope: list) -> bool:
@@ -201,6 +242,13 @@ def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
     def obligation_pairs(obligations: list, claims: list, source_doc: str) -> list:
         if not (obligations and claims):
             return []
+        # DEON-7: the ACTOR GATE (symbolic, zero LLM) -- an obligation whose bound actor is NOT present in the
+        # document's actor-set is out of scope, so it is SKIPPED entirely (no retrieval, no judge call). Robust to
+        # role synonyms via `actor_matches`; recall-first (a generic/absent actor never gates).
+        doc_actors = _actor_set(subject_scope(claims))
+        obligations = [ob for ob in obligations if actor_matches(ob.actor, doc_actors)]
+        if not obligations:
+            return []
         claim_vecs = [(c, embedder.encode_dense(c.assertion_text)) for c in claims]  # embed the subject once
         pairs: list = []
         for ob in obligations:
@@ -255,7 +303,9 @@ def build_select_fn(
     def select(claim: Any, reqs: list) -> list:
         if constraint_scope_fn is not None:  # generic structured routing (any domain, ontology-driven, DATA)
             subject_scope = constraint_scope_fn(claim)
-            applicable = [r for r in reqs if constraint_applies(r.applicability_scope, subject_scope)]
+            actors = _actor_set(subject_scope)  # DEON-6: prohibition gated by (non-actor constraints) AND actor role
+            applicable = [r for r in reqs if constraint_applies(r.applicability_scope, subject_scope)
+                          and actor_matches(r.actor, actors)]
         elif filter_applicability:  # advertising claim_type routing
             applicable = [r for r in reqs if applies_to(r, claim)]
         else:  # semantic-only (generic verdict)
@@ -393,7 +443,7 @@ def _requirement_from_row(row: dict) -> Requirement:
     constraints. Lenient: a bad row would raise, but the store wrote validated contracts."""
     import json
 
-    from rag_wright.contracts.compliance import Constraint, DeonticType, Severity
+    from rag_wright.contracts.compliance import DeonticType, Severity
     from rag_wright.contracts.provenance import ConfidenceTag
 
     scope = [Constraint(dimension=d, value=v) for d, v in json.loads(row.get("applicability_json") or "[]")]
@@ -544,7 +594,11 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
     from rag_wright.capabilities.compliance_judgment import build_ageneric_judge_fn
 
     requirements = _load_requirements(store, sources)
-    select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False)
+    # DEON-6: prohibitions narrow by the dimension-agnostic constraint router -- a claim's inferred scope (its
+    # actor, DEON-5) matched against each requirement's effective scope. Recall-first: a claim with no scope, or a
+    # requirement with a generic actor, is not excluded.
+    select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False,
+                                constraint_scope_fn=lambda claim: getattr(claim, "scope", None) or [])
 
     async def _claims_fn(text: str, source: str) -> list:
         return facts_fn(text, source)  # precomputed semantic facts, adapted to the async claims seam
