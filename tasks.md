@@ -30,6 +30,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > production Python-shape flags byte-identical (incl. a real Cap-On-Liability over-extraction caught by the
 > ontology via pyshacl-on-the-ttl). **NEXT = P1** (generate Python vocab/enums FROM the ttl + CI-diff + separate
 > the prompt-engineering into a YAML overlay).
+> **P1a DONE (2026-08-31): CLOSED_VOCAB generated FROM the ttl + CI drift-diff.** ontology/codegen.py (render) +
+> scripts/generate_contract_python.py (CLI) emit _generated_vocab.py (29 closed dims); property.py builds
+> CLOSED_VOCAB from it (hand literal deleted, values unchanged); tests/ontology/test_generated_vocab_in_sync.py =
+> the CI drift-diff (negative-proven: a hand-edit fails it) + idempotency. Suite 1382. Live A/B: real granite
+> extraction identical. **P1b (design REVISED per product owner): NO YAML overlay** -- audit clause_template.py,
+> move the KNOWLEDGE (LOOK-FOR meanings->skos:definition, examples->skos:example, normalizer synonyms->skos:altLabel)
+> INTO the ttl -> generate the template from it; residual GLOBAL extraction mechanics -> the extraction PROMPT as a
+> Skill (not per-field config); document_reference stays a mechanism exception. Gate: live A/B extracts real clauses
+> identically to today's hand template. **NEXT = P1b audit** (classify each field: knowledge vs mechanics).
 >
 > **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
 > A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran

@@ -80,10 +80,18 @@ first-class separate concern.
   constraints as `sh:NodeShape` (function→dimension applicability, scalar cardinality, deontic polarity). Retire
   `contract_bridge.spec.yaml` (or regenerate it FROM the ttl). Gate: the ttl alone reproduces today's Python
   `CLOSED_VOCAB` + `FUNCTION_APPLICABLE_DIMS` exactly (a one-time equivalence test).
-- **Phase 1 — generate vocab/schema from the ttl + CI-diff; separate the prompt overlay.** A deterministic
-  generator (ttl → Pydantic enums / `CLOSED_VOCAB` / edge-map); extract the prompt-engineering into a declarative
-  overlay composed at generation; CI regenerates + diffs. Delete the hand-authored vocab. Gate: `uv run <gen>`
-  is idempotent; CI fails on a hand-edit; the composed template equals today's `clause_template.py` behavior.
+- **Phase 1 — generate vocab/schema from the ttl + CI-diff; move the extraction knowledge INTO the ttl.**
+  - **P1a (DONE 2026-08-31):** generate `CLOSED_VOCAB` from the ttl into `_generated_vocab.py`; `property.py`
+    consumes it (hand-authored literal deleted); CI drift-diff (`test_generated_vocab_in_sync.py`) fails on any
+    ttl-edit-not-regenerated or hand-edit; live A/B (real extraction identical). Proves the generate + enforce
+    pattern.
+  - **P1b:** audit `clause_template.py` field-by-field and classify each piece of "tuning": KNOWLEDGE (LOOK-FOR
+    meanings → `skos:definition`, value examples → `skos:example`, normalizer synonyms → `skos:altLabel`) moves
+    INTO the ttl and generates into the template's field descriptions / examples / synonym map; the residual GLOBAL
+    extraction mechanics go into the extraction PROMPT as a Skill (not a per-field YAML, decision 3); the
+    `document_reference` deviation stays a hand-carried mechanism exception. Gate: `uv run <gen>` idempotent; CI
+    fails on a hand-edit; a **live A/B** proves the generated-from-ttl template extracts real clauses IDENTICALLY
+    to today's hand-maintained template (the migration is faithful AND the enriched ttl prompts as well).
 - **Phase 2 — load SHACL from the ttl at runtime.** `symbolic_validate` loads the ttl's `sh:` shapes via pyshacl;
   delete Python `FUNCTION_APPLICABLE_DIMS` / `_shapes_graph`. Gate: the contract cascade behaves identically on a
   fixture set, now driven by the ttl.
@@ -118,9 +126,18 @@ first-class separate concern.
 2. **Generation: build-time codegen + CI-diff for the Pydantic types** (they are static types imported across the
    codebase — runtime-only construction would be fragile), and **runtime pyshacl for the SHACL shapes** (the
    symbolic layer reads the symbolic artifact directly).
-3. **The prompt-engineering overlay is a YAML** keyed by `Class.field`, composed onto the generated schema at
-   generation time — NOT a hand-authored subclass. Rationale (product owner): a YAML overlay is **configurable**
-   (declarative, editable without touching code), keeping the "knowledge/tuning separated, both declarative" shape.
+3. **No separate overlay layer** (REVISED 2026-09-01, superseding the earlier "YAML overlay" choice). The
+   field-level "tuning" in `clause_template.py` was audited and found to be mostly KNOWLEDGE the ttl was simply
+   missing (Rule 1): the LOOK-FOR meanings, value examples, and normalizer synonyms are ontology knowledge, so
+   they move INTO the ttl (`skos:definition`, `skos:example`, `skos:altLabel`) and generate into the Pydantic
+   field descriptions / examples / the normalizer's synonym map. What remains is a handful of GLOBAL extraction
+   MECHANICS ("output the canonical value, terse, one per field") — these are prompt text, not per-field config,
+   so they live in the extraction PROMPT authored as a **Skill** (`SKILL.md`), the same way every other LLM
+   instruction in this system is authored — NOT a bespoke `Class.field` YAML. The one deliberate deviation
+   (`document_reference`) stays a hand-carried extraction-mechanism exception. Future: formalize the whole
+   extraction prompt as a `SKILL.md`. Rationale (product owner): if the residual is instructions, not data, a YAML
+   config is the wrong shape — put instructions in the prompt/Skill; and "the ttl can't express it" is a signal to
+   ENRICH the ttl (Rule 2), not to park knowledge in a config file.
 4. **Sequencing:** land Phase 0–2 (the contract ontology substrate) BEFORE Phase 3 (the requirement side / the
    deferred INGEST-NS Gaps 1 & 2), so the requirement work is built on the ontology-driven substrate, never
    Python-first-then-redone.

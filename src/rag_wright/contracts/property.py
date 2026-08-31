@@ -32,6 +32,7 @@ from pydantic import BaseModel, field_validator, model_validator
 from rag_wright.contracts.function import FUNCTION_LABEL_SET, NO_FUNCTION, FunctionScore
 from rag_wright.contracts.ontology import ClauseCategory
 from rag_wright.contracts.provenance import ConfidenceTag, GraphFact
+from rag_wright.ontology._generated_vocab import VOCAB as _GENERATED_VOCAB  # ADR-0066: generated FROM the ttl
 
 
 class PropertyDimension(str, Enum):
@@ -84,66 +85,11 @@ class PropertyDimension(str, Enum):
 # (jurisdiction, cap_quantum, temporal_bound, notice_period) -- any non-empty value with an
 # EXTRACTED/INFERRED confidence is admissible. `cap_basis` keeps a closed enum (the shape of the cap)
 # while `cap_quantum` carries the light open scalar (no structured money object -- SPEC section 8).
+# ADR-0066: the closed vocabularies are GENERATED FROM contract_bridge.ttl (the source of truth) into
+# _generated_vocab.VOCAB (string-keyed); here they are re-keyed by PropertyDimension. To change a vocabulary,
+# edit the ttl and re-run scripts/generate_contract_python.py -- never edit the value sets in Python.
 CLOSED_VOCAB: dict[PropertyDimension, frozenset[str]] = {
-    PropertyDimension.MUTUALITY: frozenset({"mutual", "unilateral"}),
-    PropertyDimension.FAVORABILITY: frozenset({"buyer_favorable", "seller_favorable"}),
-    PropertyDimension.CARVE_OUT: frozenset(
-        {
-            "indemnification",
-            "confidentiality",
-            "third_party_ip_infringement",
-            "fraud",
-            "gross_negligence",
-            "willful_misconduct",
-            "bodily_injury",
-            "applicable_law",
-        }
-    ),
-    PropertyDimension.COVERED_SUBJECT: frozenset(
-        {"ip_infringement", "trademark", "copyright", "violation_of_law", "fraud", "gross_negligence"}
-    ),
-    PropertyDimension.COVERED_PARTIES: frozenset(
-        {"affiliates", "licensor_affiliates", "licensee_affiliates"}
-    ),
-    PropertyDimension.PARTY_ASYMMETRY: frozenset({"symmetric", "different_per_party"}),
-    PropertyDimension.CAP_BASIS: frozenset({"fixed_fee", "multiple_of_fees", "other"}),
-    PropertyDimension.DAMAGE_TYPE: frozenset(
-        {"indirect", "consequential", "incidental", "punitive", "special"}
-    ),
-    PropertyDimension.WARRANTY_SCOPE: frozenset({"implied", "express", "as_is", "non_reliance"}),
-    PropertyDimension.CLAIM_SCOPE: frozenset({"first_party", "third_party", "broad_based"}),
-    PropertyDimension.PROCEDURAL: frozenset({"duty_to_defend", "control_of_defense"}),
-    PropertyDimension.LAW_MULTIPLICITY: frozenset({"single", "multiple"}),
-    PropertyDimension.IP_OWNERSHIP: frozenset({"assigned", "joint", "retained"}),
-    PropertyDimension.NONSOLICIT_TARGET: frozenset({"employees", "customers"}),
-    PropertyDimension.RENEWAL_MECHANISM: frozenset({"auto", "requires_notice"}),
-    # tier 3 -- CUAD-family extensions (KG-4). audit_frequency / commitment_quantum / ld_trigger are
-    # open-valued (NOT listed here). `both`-style values are disambiguated to keep OWL individuals unique.
-    PropertyDimension.EXCLUSIVITY_TYPE: frozenset({"exclusive", "sole", "non_exclusive"}),
-    PropertyDimension.RIGHT_OF_FIRST_TYPE: frozenset({"rofr", "rofo", "rofn"}),
-    PropertyDimension.RESTRICTION_SCOPE: frozenset({"geographic", "activity", "geographic_and_activity"}),
-    PropertyDimension.COC_CONSENT: frozenset({"consent_required", "notice_only", "unrestricted"}),
-    PropertyDimension.ASSIGNMENT_CONSENT: frozenset({"consent_required", "notice_only", "free"}),
-    PropertyDimension.ESCROW_RELEASE_TRIGGER: frozenset({"bankruptcy", "breach", "discontinuance"}),
-    PropertyDimension.MFN_SCOPE: frozenset({"price", "terms", "price_and_terms"}),
-    PropertyDimension.TERMINATION_RIGHT: frozenset({"either_party", "one_party"}),
-    # ADR-0049 (2): the taxonomy-gap types' defining facets (domain-designed, corpus-checked).
-    PropertyDimension.DISPUTE_METHOD: frozenset(
-        {"arbitration", "litigation", "mediation", "expert_determination", "negotiation"}),
-    PropertyDimension.COLLATERAL_TYPE: frozenset(
-        {"accounts_receivable", "inventory", "equipment", "fixtures", "ip", "real_property",
-         "deposit_accounts", "general_intangibles", "all_assets"}),
-    PropertyDimension.FORCE_MAJEURE_EVENT: frozenset(
-        {"act_of_god", "war", "pandemic", "government_action", "labor_dispute", "supply_failure",
-         "natural_disaster"}),
-    PropertyDimension.ROYALTY_BASIS: frozenset(
-        {"pct_net_sales", "pct_gross_sales", "per_unit", "fixed", "tiered"}),
-    PropertyDimension.CONFIDENTIALITY_EXCEPTION: frozenset(
-        {"required_by_law", "publicly_available", "independently_developed", "prior_possession",
-         "third_party_source"}),
-    PropertyDimension.CONDITION_TYPE: frozenset(
-        {"regulatory_approval", "financing", "third_party_consent", "due_diligence", "board_approval",
-         "no_material_adverse_change", "court_approval", "closing_condition"}),
+    PropertyDimension(dim): values for dim, values in _GENERATED_VOCAB.items()
 }
 
 _FOLIO_BASE = "https://folio.openlegalstandard.org/"
