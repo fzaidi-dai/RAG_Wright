@@ -669,6 +669,90 @@ async def test_ad_path_splits_obligations_once_with_an_embedder():
         cj.build_acompliance_judge_fn = orig
 
 
+# --- DEON-9 (issue 0012): PERMISSION-AS-DEFENSE -- a carve-out linked to its O/F rule, passed to that judge -----
+
+
+def test_defense_linker_links_same_source_actor_compatible_permission():
+    # DEON-9: within a policy SOURCE, a same-actor PERMISSION is linked as a defense to an O/F rule; an
+    # actor-incompatible permission and a different-source permission are NOT; a permission itself gets none.
+    from rag_wright.subgraphs.compliance_check import build_defense_linker
+
+    proh = _req_obj("prohibition", citation="§ 1",
+                    text="An advertiser must not make a health claim.").model_copy(update={"actor": "advertiser"})
+    perm_ok = _req_obj("permission", citation="§ 2",
+                       text="An advertiser may make a health claim if a study is cited.").model_copy(
+        update={"actor": "advertiser"})
+    perm_actor_mismatch = _req_obj("permission", citation="§ 3",
+                                   text="An endorser may share an opinion.").model_copy(update={"actor": "endorser"})
+    perm_other_source = Requirement(requirement_id="q:§ 4", source="q", citation="§ 4",
+                                    deontic_type=DeonticType.PERMISSION, actor="advertiser",
+                                    requirement_text="Anything goes here.")
+    linker = build_defense_linker(_Emb1(), [proh, perm_ok, perm_actor_mismatch, perm_other_source])
+
+    ids = {p.requirement_id for p in linker(proh)}
+    assert perm_ok.requirement_id in ids                         # same source + actor-compatible -> linked
+    assert perm_actor_mismatch.requirement_id not in ids         # endorser vs advertiser -> not compatible
+    assert perm_other_source.requirement_id not in ids           # different policy source -> not linked
+    assert linker(perm_ok) == []                                 # a permission itself gets no defenses
+
+
+async def test_defense_framing_reaches_generic_and_ad_judges():
+    # DEON-9: a requirement carrying linked defenses renders an EXCEPTIONS/DEFENSES block in BOTH judges.
+    from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn, build_ageneric_judge_fn
+    from rag_wright.contracts.compliance import CheckableFact
+
+    prompts: list[str] = []
+
+    class _Fac:
+        async def ainvoke(self, prompt):
+            prompts.append(prompt)
+            return JudgeVerdict(verdict="compliant", rationale="", confidence=1.0)
+
+    req = _req_obj("prohibition", citation="§ 1", text="No health claims.").model_copy(
+        update={"defenses": ["§ 2: An advertiser may make a health claim if a study is cited."]})
+    fact = CheckableFact(fact_id="f", source_doc="d", assertion_text="lowers cholesterol, per a study")
+    for build in (build_ageneric_judge_fn, build_acompliance_judge_fn):
+        prompts.clear()
+        judge = build("stub", structured_factory=lambda mid, schema: _Fac())
+        await judge(fact, req)
+        assert "study is cited" in prompts[0] and "EXCEPTION" in prompts[0].upper()   # the carve-out is in context
+
+
+async def test_permission_defense_is_linked_and_reaches_the_judge():
+    # DEON-9 wiring: build_compliance_check with a defense_linker attaches the linked permission to the
+    # prohibition's requirement, so the judge sees it; the permission itself is EXCLUDED from violation-judging.
+    from rag_wright.subgraphs.compliance_check import (
+        build_compliance_check,
+        build_defense_linker,
+        build_obligation_pairs_fn,
+    )
+
+    seen: dict = {}
+
+    async def judge(fact, req):
+        seen[req.requirement_id] = list(getattr(req, "defenses", []))
+        return JudgeVerdict(verdict="compliant", rationale="", confidence=1.0)
+
+    proh = _req_obj("prohibition", citation="§ 1",
+                    text="An advertiser must not make a health claim.").model_copy(update={"actor": "advertiser"})
+    perm = _req_obj("permission", citation="§ 2",
+                    text="An advertiser may make a health claim if a study is cited.").model_copy(
+        update={"actor": "advertiser"})
+    reqs = [proh, perm]
+    claim = _claim(text="Lowers cholesterol, per a study.", ctype=ClaimType.HEALTH)
+
+    async def _claims_fn(t, s):
+        return [claim]
+
+    graph = build_compliance_check(
+        claims_fn=_claims_fn, requirements_fn=lambda: reqs, judge_fn=judge,
+        obligation_pairs_fn=build_obligation_pairs_fn(_Emb1()),
+        defense_linker=build_defense_linker(_Emb1(), reqs))
+    await graph.ainvoke({"subject_text": "x", "source_doc": "ad"})
+    assert any("§ 2" in d for d in seen.get(proh.requirement_id, []))   # the permission linked as a defense
+    assert perm.requirement_id not in seen                             # the permission is not judged for violation
+
+
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
     # SEG-7a: run_subject_compliance_verdict now chunks -> extracts VERBATIM assertions -> attaches locators ->
     # judges. Injected doc + stub extractor (hermetic, no model/parse). Findings cite each assertion's § locator.

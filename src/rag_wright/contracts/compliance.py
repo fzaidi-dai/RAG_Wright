@@ -100,6 +100,9 @@ class Requirement(BaseModel):
     trigger_condition: str | None = None
     severity: Severity | None = None
     confidence: ConfidenceTag = ConfidenceTag.EXTRACTED
+    defenses: list[str] = []  # DEON-9 (query-time only, never persisted): same-source PERMISSIONS linked as
+    # carve-outs/exceptions that may EXCUSE this O/F rule -- passed to the judge as structured context so a
+    # legitimate exception is not a false violation (ADR-0044 pattern, requirement side).
 
     @field_validator("requirement_id", "source", "citation", "requirement_text")
     @classmethod

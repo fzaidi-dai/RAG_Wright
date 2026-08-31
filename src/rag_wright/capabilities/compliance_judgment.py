@@ -114,6 +114,22 @@ def _deontic_framing(requirement: Requirement) -> str:
     return _OBLIGATION_FRAMING if requirement.deontic_type is DeonticType.OBLIGATION else ""
 
 
+# DEON-9 (issue 0012): permission-as-defense -- the same-source PERMISSIONS linked to this O/F rule (carve-outs /
+# safe-harbors). The judge reasons over the rule AND its exceptions: a subject that falls within a permitted
+# carve-out is NOT a violation. Only apply an exception that genuinely fits the subject (never a blanket excuse).
+_DEFENSE_FRAMING = (
+    "\n\nEXCEPTIONS / DEFENSES (permitted carve-outs that may EXCUSE this rule):\n{defenses}\n"
+    "If the subject falls within one of these permitted exceptions, the rule is NOT violated -- rule COMPLIANT, "
+    "and say which exception applies. Only apply an exception that genuinely fits the subject.")
+
+
+def _defense_framing(requirement: Requirement) -> str:
+    defenses = getattr(requirement, "defenses", None) or []
+    if not defenses:
+        return ""
+    return _DEFENSE_FRAMING.format(defenses="\n".join(f"- {d}" for d in defenses))
+
+
 def _ad_signals(fact: CheckableFact) -> str:
     """DEON-8: the ADVERTISING claim-signals line -- rendered only for a typed `Claim`. An obligation judged ONCE
     (DEON-1) hands the judge a plain `CheckableFact` EVIDENCE BUNDLE with no claim_type; return '' so the ad judge
@@ -135,7 +151,7 @@ def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured
 
     def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
         return structured_factory(model_id, JudgeVerdict).invoke(
-            method + _base_tail(fact, requirement) + _deontic_framing(requirement))
+            method + _base_tail(fact, requirement) + _defense_framing(requirement) + _deontic_framing(requirement))
 
     return judge
 
@@ -147,7 +163,7 @@ def build_ageneric_judge_fn(model_id: str, *, structured_factory=build_structure
 
     async def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
         return await structured_factory(model_id, JudgeVerdict).ainvoke(
-            method + _base_tail(fact, requirement) + _deontic_framing(requirement))
+            method + _base_tail(fact, requirement) + _defense_framing(requirement) + _deontic_framing(requirement))
 
     return judge
 
@@ -160,7 +176,8 @@ def build_compliance_judge_fn(model_id: str, *, structured_factory=build_structu
     method = judgment_method()
 
     def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
-        prompt = method + _base_tail(claim, requirement) + _ad_signals(claim) + _deontic_framing(requirement)
+        prompt = (method + _base_tail(claim, requirement) + _ad_signals(claim)
+                  + _defense_framing(requirement) + _deontic_framing(requirement))
         return structured_factory(model_id, JudgeVerdict).invoke(prompt)
 
     return judge
@@ -172,7 +189,8 @@ def build_acompliance_judge_fn(model_id: str, *, structured_factory=build_struct
     method = judgment_method()
 
     async def judge(claim: Claim, requirement: Requirement) -> Optional[JudgeVerdict]:
-        prompt = method + _base_tail(claim, requirement) + _ad_signals(claim) + _deontic_framing(requirement)
+        prompt = (method + _base_tail(claim, requirement) + _ad_signals(claim)
+                  + _defense_framing(requirement) + _deontic_framing(requirement))
         return await structured_factory(model_id, JudgeVerdict).ainvoke(prompt)
 
     return judge

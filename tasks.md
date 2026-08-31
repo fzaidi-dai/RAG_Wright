@@ -448,8 +448,19 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > still sees a disclosure made anywhere. to_claims surfaces the Claim role actor onto .scope (mirrors to_facts);
 > the ad extractor actor field role-biased. Tests +5. Suite 1371. LIVE (real Granite + Gemma ad judge): endorser
 > obligation judged ONCE (1 finding, not per-claim), customer pricing-scoped rule narrows (1 vs the broad cure
-> rule's 4).** / -9 (permission-as-defense) /
-> -10 (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. **NEXT-UP = DEON-9.**
+> rule's 4).** / **-9 DONE (2026-08-31): PERMISSION-AS-DEFENSE (ADR-0044 pattern, requirement side, query-time,
+> zero extra LLM). build_defense_linker: for each O/F rule, the same-source PERMISSIONS that may excuse it --
+> symbolic candidacy (same source + actor-compatible via _actor_compatible, canonical/recall-first), ranked by
+> cosine, capped at top_n (rank+cap, NO fragile threshold); a permission carries no defenses of its own.
+> _with_defenses attaches them (rendered 'citation: text') as the query-time Requirement.defenses field;
+> build_compliance_check gained a defense_linker seam (enriches every rule once, up front); both production
+> builders wire it when an embedder is present. _defense_framing renders an EXCEPTIONS/DEFENSES block in ALL FOUR
+> judges (generic+ad, sync+async): if the subject falls within a permitted exception -> COMPLIANT, name it, only
+> if it genuinely fits. Requirement.defenses: list[str] added (query-only, never persisted). Tests +3. Suite 1374.
+> LIVE (real Granite + Gemma generic judge): a prohibition + a permission carve-out (FDA-approval safe-harbor) ->
+> Subject A (cites FDA, within carve-out) COMPLIANT (defense rescued it), Subject B (no FDA) VIOLATION (exception
+> did NOT apply) -- selective, not a blanket excuse; permission excluded from judging on both.** /
+> **-10 (Phase-2 live gate)** / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. **NEXT-UP = DEON-10.**
 >
 > ORIGINAL UNIFY breakdown was:
 > TWO-LAYER factoring: shared parse/segment layer (universal) + path-specific producer tail (generic=sentence facts,

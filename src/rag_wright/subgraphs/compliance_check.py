@@ -132,6 +132,12 @@ def actor_matches(rule_actor: str, subject_actors: set) -> bool:
     return ra in subject_actors
 
 
+def _actor_compatible(a: str, b: str) -> bool:
+    """DEON-9: two CANONICAL actor roles are compatible if equal, or either is generic/absent (recall-first) --
+    the symbolic gate for which permissions can defend which O/F rule."""
+    return not a or not b or a in _ROLE_GENERIC or b in _ROLE_GENERIC or a == b
+
+
 def constraint_applies(requirement_scope: list, subject_scope: list) -> bool:
     """COMP-APPLIC-1 Increment 0: the DIMENSION-AGNOSTIC applicability matcher. A requirement applies to a subject
     iff, for EVERY dimension the requirement constrains, the subject's value(s) on that dimension INTERSECT the
@@ -289,6 +295,50 @@ def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
     return obligation_pairs
 
 
+DEFENSE_TOP_N = 3
+
+
+def build_defense_linker(embedder: Any, requirements: list, *, top_n: int = DEFENSE_TOP_N) -> Any:
+    """DEON-9 (issue 0012): the PERMISSION-AS-DEFENSE linker (ADR-0044 pattern, requirement side). For an
+    obligation/prohibition rule, return the same-`source` PERMISSIONS that may EXCUSE it (a carve-out/safe-harbor),
+    so the judge can rule a legitimate exception COMPLIANT instead of a false violation. Symbolic candidacy: same
+    policy source + actor-compatible (canonical, recall-first); ranked by semantic proximity and capped at `top_n`
+    -- rank+cap, NOT a fragile similarity threshold. Zero extra LLM: the ONE judge call now reasons over the rule
+    plus its linked defenses. Vectors are precomputed ONCE (like `build_select_fn`)."""
+    vectors = {r.requirement_id: embedder.encode_dense(r.requirement_text) for r in requirements}
+    perms_by_source: dict[str, list] = {}
+    for r in requirements:
+        if deontic_route(r) is DeonticRoute.PERMISSION:
+            perms_by_source.setdefault(r.source, []).append(r)
+
+    def defenses_for(rule: Any) -> list:
+        if deontic_route(rule) is DeonticRoute.PERMISSION:
+            return []  # a permission is not judged for violation, so it carries no defenses of its own
+        perms = perms_by_source.get(rule.source, [])
+        if not perms:
+            return []
+        ra = canonical_actor(rule.actor)
+        cands = [p for p in perms if _actor_compatible(ra, canonical_actor(p.actor))]
+        rule_vec = vectors.get(rule.requirement_id, [])
+        ranked = sorted(cands, key=lambda p: _cosine(rule_vec, vectors.get(p.requirement_id, [])), reverse=True)
+        return ranked[:top_n]
+
+    return defenses_for
+
+
+def _with_defenses(requirement: Any, defense_linker: Any) -> Any:
+    """DEON-9: attach the linked permissions (rendered `citation: text`) to a rule as query-time `defenses`, so
+    the judge renders them as structured exception context. A no-op (returns the rule unchanged) when nothing is
+    linked, so an unrelated rule is untouched."""
+    if defense_linker is None:
+        return requirement
+    linked = defense_linker(requirement)
+    if not linked:
+        return requirement
+    return requirement.model_copy(
+        update={"defenses": [f"{p.citation}: {p.requirement_text}" for p in linked]})
+
+
 SelectFn = Callable[[Claim, list], list]  # (claim, requirements) -> the narrowed requirements to judge
 
 
@@ -371,7 +421,8 @@ def _enrich(claim: Claim, ad_disclosures: set[str]) -> Claim:
 
 def build_compliance_check(
     *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: AJudgeFn,
-    select_fn: SelectFn | None = None, obligation_pairs_fn: Any = None, retry_policy: Any = DEFAULT_RETRY
+    select_fn: SelectFn | None = None, obligation_pairs_fn: Any = None, defense_linker: Any = None,
+    retry_policy: Any = DEFAULT_RETRY
 ):
     """Compile the compliance-check subgraph. All seams are injected for hermetic testing. `select_fn` (CC-8b) is
     the per-claim requirement narrower; when None, every APPLICABLE requirement is judged (the broad default).
@@ -380,8 +431,12 @@ def build_compliance_check(
     obligation)]`) is provided, the requirements are split by `deontic_route`: PROHIBITION/AMBIGUOUS rules are
     judged PER-ASSERTION (narrowed by `select_fn`), OBLIGATION rules are judged ONCE each over a BOUNDED retrieved
     evidence bundle (breach = absence, unanswerable per-sentence), and PERMISSION rules are excluded from
-    violation-judging. When None (the ad path, until DEON-8), the prior per-assertion pairing is kept. Query-side:
-    each node degrades to empty on failure (never crashes)."""
+    violation-judging. When None (the ad path, until DEON-8), the prior per-assertion pairing is kept.
+
+    DEON-9: when `defense_linker` (`rule -> [permission]`) is provided, each O/F rule is enriched with the same-
+    source PERMISSIONS that may EXCUSE it (attached as query-time `defenses`), passed to that rule's judge as
+    structured exception context so a legitimate carve-out is not a false violation. Query-side: each node degrades
+    to empty on failure (never crashes)."""
 
     async def extract_claims(state: CheckState) -> CheckState:
         with business_span("compliance_check.extract_claims"):
@@ -402,6 +457,8 @@ def build_compliance_check(
                 requirements = requirements_fn()
             except Exception:  # noqa: BLE001 - degrade-to-empty
                 return {"pairs": []}
+        if defense_linker is not None:  # DEON-9: enrich each O/F rule with its same-source permission carve-outs
+            requirements = [_with_defenses(r, defense_linker) for r in requirements]
         if obligation_pairs_fn is None:  # ad path (until DEON-8): the prior per-assertion pairing
             if select_fn is not None:  # CC-8b: semantic narrowing (top-k content + always-include context + dedup)
                 pairs = [(_enrich(claim, ad), req) for claim in claims for req in select_fn(claim, requirements)]
@@ -542,6 +599,8 @@ def production_compliance_check(
     # per-assertion (claim_type-routed via select_fn), PERMISSIONS excluded. Without an embedder (no semantic
     # narrowing) the prior per-assertion pairing is kept (back-compat).
     obligation_pairs_fn = build_obligation_pairs_fn(embedder) if embedder is not None else None
+    # DEON-9: permission carve-outs linked as defenses to the O/F rules they modify (needs the embedder for ranking).
+    defense_linker = build_defense_linker(embedder, requirements) if embedder is not None else None
 
     async def _default_claims_fn(text: str, source: str) -> list:
         return await aclaim_extraction(text, model=extract_model, source_doc=source)
@@ -552,6 +611,7 @@ def production_compliance_check(
         judge_fn=build_acompliance_judge_fn(judge_model_id),
         select_fn=select_fn,
         obligation_pairs_fn=obligation_pairs_fn,
+        defense_linker=defense_linker,
     )
 
 
@@ -640,6 +700,7 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
         judge_fn=build_ageneric_judge_fn(judge_model_id),
         select_fn=select_fn,
         obligation_pairs_fn=build_obligation_pairs_fn(embedder),  # DEON-2: bounded per-obligation evidence
+        defense_linker=build_defense_linker(embedder, requirements),  # DEON-9: permission carve-outs as defenses
     )
 
 
