@@ -79,8 +79,19 @@ def to_requirements(extracted: ExtractedRegulationSection, *, source: str, secti
         if not text:
             continue
         deontic, ambiguous = _coerce_deontic(item.deontic_type)
+        # claim_type is the ADVERTISING reference (closed FTC vocab -> off-vocab dropped, unchanged).
         scope = [Constraint(dimension="claim_type", value=ct.strip().lower())
                  for ct in item.claim_types if ct.strip().lower() in _CLAIM_TYPES]
+        # P3a (Gap 2): generic 'dimension: value' applicability conditions for ANY policy domain -- kept
+        # RECALL-FIRST (an unknown customer dimension is NOT dropped; the query-side matcher is dimension-agnostic).
+        seen = {c.as_tuple() for c in scope}
+        for cond in getattr(item, "applicability", None) or []:
+            dim, sep, val = (cond or "").partition(":")
+            dim, val = dim.strip().lower(), val.strip().lower()
+            if not (sep and dim and val) or (dim, val) in seen:
+                continue
+            seen.add((dim, val))
+            scope.append(Constraint(dimension=dim, value=val))
         out.append(Requirement(
             requirement_id=Requirement.make_id(source, section, text),
             source=source,

@@ -67,6 +67,36 @@ def test_offvocab_claim_type_is_dropped_not_fabricated():
     assert {c.value for c in reqs[0].applicability_scope} == {"health"}  # 'vibes' dropped
 
 
+def test_generic_applicability_conditions_become_constraints():
+    # P3a (Gap 2): a CUSTOMER policy's applicability conditions -- ANY dimension, not just claim_type -- survive
+    # into the KG as Constraints, recall-first (an unknown dimension is NOT dropped; the query side matches it).
+    reqs = to_requirements(
+        _section(ExtractedRequirement(
+            requirement_text="Hourly employees must receive annual safety training.",
+            deontic_type="obligation", actor="employer",
+            applicability=["jurisdiction: California", "employee_class: Hourly"])),
+        source="Cal Labor Code", section="6401")
+    scope = {c.as_tuple() for c in reqs[0].applicability_scope}
+    assert ("jurisdiction", "california") in scope
+    assert ("employee_class", "hourly") in scope   # unknown dimension KEPT (recall-first, not dropped)
+
+
+def test_applicability_and_claim_types_coexist_and_malformed_is_skipped():
+    reqs = to_requirements(
+        _section(ExtractedRequirement(
+            requirement_text="Pricing claims in California must state the base price.",
+            deontic_type="prohibition", claim_types=["pricing"],
+            applicability=["jurisdiction: california", "no-colon", "  :  ", "product: supplement",
+                           "claim_type: pricing"])),
+        source="reg", section="1")
+    scope = {c.as_tuple() for c in reqs[0].applicability_scope}
+    assert ("claim_type", "pricing") in scope            # FTC claim_type path unchanged (+ not double-added)
+    assert ("jurisdiction", "california") in scope        # generic dimension
+    assert ("product", "supplement") in scope
+    assert not any(dim in ("", "no-colon") for dim, _ in scope)  # malformed skipped
+    assert sum(1 for d, v in scope if (d, v) == ("claim_type", "pricing")) == 1  # deduped across both fields
+
+
 def test_blank_requirement_text_is_skipped():
     reqs = to_requirements(
         _section(ExtractedRequirement(requirement_text="   ", deontic_type="obligation"),

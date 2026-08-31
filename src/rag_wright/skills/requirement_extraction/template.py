@@ -29,6 +29,12 @@ class ExtractedRequirement(BaseModel):
         default_factory=list,
         description=("Which advertising claim types this rule applies to, chosen from: efficacy, comparative, "
                      "pricing, health, environmental, endorsement, performance, guarantee"))
+    applicability: list[str] = Field(
+        default_factory=list,
+        description=("P3a (Gap 2): the conditions under which THIS rule applies, as 'dimension: value' pairs (one "
+                     "per entry) -- for ANY policy domain, not only advertising. E.g. 'jurisdiction: California', "
+                     "'employee_class: hourly', 'data_category: biometric', 'product_category: supplement'. Leave "
+                     "empty if the rule applies unconditionally. (Advertising claim types go in claim_types.)"))
     evidence_standard: str = Field(
         default="", description="The substantiation the rule requires, if any (e.g. competent and reliable scientific evidence)")
 
