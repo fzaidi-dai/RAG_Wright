@@ -46,7 +46,8 @@ The line, drawn explicitly so this does not become "stuff everything into RDF":
 | **Constraints** (applicability, cardinality, deontic polarity) | ontology **SHACL** (`sh:NodeShape`) | `FUNCTION_APPLICABLE_DIMS`, `MULTI_VALUED_DIMENSIONS`, `PERMISSION_POLARITY_VALUES`, `RESTRICTIVE_FUNCTIONS` |
 | **Mappings / synonyms / rollups** | ontology `skos:altLabel` / `skos:broader` | `_ACTOR_SYNONYMS`, `VALUE_ROLLUP`, FTC `SECTION_*` overrides (as a domain-pack ttl) |
 | **Mechanism** (the pipeline, the router, the judge, the cascade) | **code** — stays | `deontic_route` logic, `symbolic_validate` runner, `reground`, the judges |
-| **Prompt-engineering** (LLM-guiding descriptions, examples, brevity, normalizers) | a declarative **overlay**, composed at generation (NOT merged into the source, NOT the source itself) | the field `Field(description=...)`, `examples`, `max_length`, `_normalize_enum` in `clause_template.py` |
+| **Field descriptions / examples** (LLM-guiding knowledge) | ontology `skos:definition` / `skos:example`, GENERATED into the template's field metadata | `Field(description=...)`, `examples=...` in `clause_template.py` |
+| **Prompt mechanics + normalizers** (brevity/format instructions, the normalize algorithm) | the extraction PROMPT (a Skill) + clean **code** — NOT the ontology, NOT byte-generated (Rule 3) | the terse "answer ONLY..." instructions, `max_length`, `_normalize_enum`, `__str__`, the dedup model-validators |
 
 ### Rule 2 — Solve staleness with enforced synchronization, never by demoting the source.
 
@@ -56,6 +57,21 @@ express (prompt-tuning), **SEPARATE** the concerns into `(authoritative source) 
 NEVER merge the two into one hand-edited artifact and demote the source. A generated-file-goes-stale problem is a
 *tooling* problem (make regeneration deterministic and CI-enforced); trading it for "truth lives in code" is an
 *architectural* problem — strictly worse, and the origin of hodge-podge. This rule is general and binds future work.
+
+### Rule 3 — When generating code from the ontology, generate the KNOWLEDGE; keep MECHANISM as clean code.
+
+A generator that produces code from the ontology must emit only the **knowledge-bearing** content (vocabularies,
+field descriptions, examples, the schema the ontology declares). The **mechanism** in that same artifact
+(normalizers, `__str__`, model-validators, dedup logic, config, helpers) STAYS as ordinary hand-authored code —
+it is drift-locked to the ontology by a test, not byte-generated. Do NOT byte-generate mechanism: that would drag
+clean, readable code *into* a generator as string-templates, which is the very inversion Rule 1 forbids (code
+encoded as data). The test for what to generate is Rule 1's line — "is this knowledge or mechanism?" — applied to
+every span of the artifact, not to the artifact as a whole. Consequence: a "generated" file is usually a small
+generated **knowledge module** that clean hand-code **consumes**, plus drift tests locking the hand-code's
+structure to the ontology — NOT a wholesale machine-emitted file. (This is why ADR-0066 P1b-2 chose Option B:
+generate the field descriptions/examples + the vocab enums from the ttl; keep the validators / `__str__` / dedup
+model-validators / configs as clean code, drift-locked. Byte-generating them — Option A — was rejected precisely
+because it violates this rule.)
 
 ## How the drift problem is actually solved (the mechanism behind Rule 2)
 
@@ -93,10 +109,15 @@ first-class separate concern.
     needed); descriptions carry the LOOK-FOR meaning + examples + a terse instruction; and **10 of 43 fields have
     EMPTY descriptions** (`# TODO` gaps). Captured verbatim (empties as empty) so P1b-2 reproduces the template
     exactly. No live A/B here (P1b-1 changes no model path).
-  - **P1b-2 (next):** the generator emits `clause_template.py` FROM the ttl capture + the generic normalizer + the
-    `document_reference` hand-carried exception; the residual GLOBAL terse mechanics live in the extraction PROMPT
-    (a Skill, decision 3). Gate: `uv run <gen>` idempotent; CI fails on a hand-edit; a **live A/B (parity)** proves
-    the generated-from-ttl template extracts real clauses IDENTICALLY to today's hand-maintained template.
+  - **P1b-2 (next) — Option B (Rule 3): generate the KNOWLEDGE, keep MECHANISM as clean drift-locked code.** The
+    920-line template is mostly mechanism (2 helpers, ~25 trivial per-field normalizer validators, 3 bespoke
+    `_deduplicate_*` model-validators, 4 bespoke `__str__`, configs, the `CAP_OTHER`/`OTHER` enum quirks). So the
+    generator emits only a **generated knowledge module** (each field's `description` + `examples` from the ttl
+    capture; the vocab enums are already ttl-generated via P1a + drift-locked); `clause_template.py` CONSUMES that
+    module for its field metadata and keeps all mechanism as clean hand-code. Full-file byte-generation (Option A)
+    was REJECTED — it would drag the bespoke mechanism into the generator as string-templates, violating Rule 3.
+    Gate: `uv run <gen>` idempotent; CI drift-diff fails on a hand-edit; a **live A/B (parity)** proves real clauses
+    extract IDENTICALLY to today's template.
   - **P1b-3 (MEASURED IMPROVEMENT — only AFTER P1b-2 parity is proven):** fill the 10 empty `skos:definition`s
     with real LOOK-FOR meanings (and, as a clean-up, split the terse mechanics out of the per-field descriptions
     into the global extraction Skill). Each change measured by its OWN live A/B against the parity baseline, so a
