@@ -152,6 +152,32 @@ def test_adapter_skips_definitions_sections(tmp_path):
     assert secs2 == ["255.0", "255.5"]
 
 
+def test_is_operative_is_a_deontic_cue_gate():
+    # P3c (Gap 1): operative iff the text carries a deontic CUE (from the ttl), with word boundaries.
+    from rag_wright.subgraphs.compliance_ingestion import is_operative
+
+    assert is_operative("The advertiser must disclose the connection.")       # obligation cue
+    assert is_operative("An endorser may not conceal a paid relationship.")   # prohibition cue
+    assert is_operative("The licensee may use the mark.")                     # permission cue
+    assert not is_operative("Endorsement means any advertising message.")     # definitional -> no cue
+    assert not is_operative("This part sets forth the general purpose.")      # purpose -> no cue
+    assert not is_operative("Maybe later at the muster point.")               # word-boundary: 'maybe'/'muster' != cue
+
+
+def test_adapter_gates_by_deontic_cue_not_heading(tmp_path):
+    # P3c: the gate is CUE-based, not heading-based -- the INVERSION of the old hack: a "Definitions" heading with
+    # an OPERATIVE rule is KEPT (the heading hack wrongly dropped it), and a normal-heading section with NO rule is
+    # SKIPPED (the heading hack wrongly kept it).
+    import json
+    p = tmp_path / "reg.sections.json"
+    p.write_text(json.dumps([
+        {"section": "1", "heading": "1. Definitions", "text": "The manufacturer must not overstate results."},
+        {"section": "2", "heading": "2. Scope", "text": "This policy applies to all product categories."},
+    ]), encoding="utf-8")
+    secs = [d.metadata["section"] for d in RegulationAdapter(p, source="x").documents()]
+    assert secs == ["1"]  # operative rule under a "Definitions" heading KEPT; no-cue "Scope" section SKIPPED
+
+
 # --- DOCPARSE-1: DocumentRegulationAdapter -- a customer's OWN document (PDF/DOCX) -> sections -> SourceDocuments
 
 
@@ -163,7 +189,7 @@ def test_document_regulation_adapter_splits_a_parsed_doc_into_section_documents(
         return [
             {"section": "1", "heading": "1. Data Retention", "text": "Records must be kept for seven years."},
             {"section": "2", "heading": "2. Definitions", "text": "Personal Data means ..."},  # skipped
-            {"section": "3", "heading": "3. Access", "text": "Access is logged and audited."},
+            {"section": "3", "heading": "3. Access", "text": "Access must be logged and audited."},
         ]
 
     adapter = DocumentRegulationAdapter("policy.pdf", b"%PDF...", "ACME Privacy Policy", sections_fn=_sections_fn)
@@ -180,7 +206,7 @@ def test_document_regulation_adapter_skips_empty_sections():
     adapter = DocumentRegulationAdapter(
         "p.pdf", b"x", "src",
         sections_fn=lambda n, d: [{"section": "1", "heading": "H", "text": "  "},
-                                  {"section": "2", "heading": "H2", "text": "real body"}])
+                                  {"section": "2", "heading": "H2", "text": "The body must comply."}])
     assert [d.metadata["section"] for d in adapter.documents()] == ["2"]
 
 
@@ -192,9 +218,9 @@ async def test_run_compliance_document_ingestion_parses_a_doc_and_writes_require
 
     def _sections_fn(name, data):  # inject the docling parse (hermetic)
         return [
-            {"section": "1", "heading": "1. Retention", "text": "Records kept seven years."},
+            {"section": "1", "heading": "1. Retention", "text": "Records must be kept for seven years."},
             {"section": "2", "heading": "2. Definitions", "text": "PII means ..."},   # skipped
-            {"section": "3", "heading": "3. Access", "text": "Access is audited."},
+            {"section": "3", "heading": "3. Access", "text": "Access must be audited."},
         ]
 
     async def _ov(doc):

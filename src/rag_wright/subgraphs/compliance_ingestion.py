@@ -15,6 +15,8 @@ from __future__ import annotations
 import asyncio
 
 import json
+import re
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Iterable, Optional, TypedDict
 
@@ -35,6 +37,22 @@ ExtractReqFn = Callable[[SourceDocument], list]
 WriteReqFn = Callable[[SourceDocument, list], int]
 
 
+@lru_cache(maxsize=1)
+def _deontic_cue_pattern() -> re.Pattern:
+    from rag_wright.ontology.loader import load_deontic_cues
+
+    cues = sorted(load_deontic_cues(), key=len, reverse=True)
+    return re.compile(r"\b(?:" + "|".join(re.escape(c) for c in cues) + r")\b", re.IGNORECASE)
+
+
+def is_operative(text: str) -> bool:
+    """ADR-0066 P3c (Gap 1): a section states an OPERATIVE rule iff its text carries a deontic CUE (must / shall /
+    may / prohibited / ... -- authored in compliance_bridge.ttl `cmp:cue`). A section with NO cue is non-operative
+    (a definitions / purpose / scope statement) and is skipped -- the domain-neutral, heading-agnostic replacement
+    for the brittle 'definition'-in-heading keyword hack. Recall-first: any cue -> operative -> extracted."""
+    return bool(text and _deontic_cue_pattern().search(text))
+
+
 class RegulationAdapter:
     """The per-corpus seam (`CorpusAdapter`) for a regulation: an eCFR-style `sections.json`
     ([{section, heading, text}]) -> one `SourceDocument` per § section, carrying the section number and source
@@ -44,10 +62,10 @@ class RegulationAdapter:
         self._path = sections_path
         self._source = source
         self._limit = limit
-        # EXTRACT-TUNE: a "Purpose and definitions" section states NO operative deontic rules -- extracting it
-        # over-generates spurious "requirements" (61 from FTC §255.0, ~40% of the KG, a leak surface into
-        # judging). Skip any section whose heading indicates definitions (universally non-operative). The robust
-        # general version is a deontic-cue/SHACL validity gate ([[ontology-lever-vs-extraction-lever]]).
+        # P3c (Gap 1): skip NON-OPERATIVE sections -- ones with no deontic cue (definitions / purpose / scope).
+        # Extracting them over-generates spurious "requirements" (61 from FTC §255.0, ~40% of the KG, a leak
+        # surface into judging). `is_operative` is the domain-neutral, ontology-driven cue gate that replaced the
+        # brittle "definition"-in-heading keyword hack. `skip_definitions` keeps its name for back-compat.
         self._skip_definitions = skip_definitions
 
     def documents(self) -> Iterable[SourceDocument]:
@@ -57,8 +75,8 @@ class RegulationAdapter:
         for sec in sections:
             if not sec.get("text", "").strip():
                 continue
-            if self._skip_definitions and "definition" in sec.get("heading", "").lower():
-                continue  # skip a definitions section (no operative rules)
+            if self._skip_definitions and not is_operative(sec.get("text", "")):
+                continue  # P3c: a section with no deontic cue is non-operative (definitions/purpose) -> skip
             yield SourceDocument(
                 source_doc_id=canonical_source_doc_id(f"{self._source}_{sec['section']}"),
                 text=sec["text"],
@@ -94,8 +112,8 @@ class DocumentRegulationAdapter:
         for i, sec in enumerate(sections, 1):
             if not (sec.get("text") or "").strip():
                 continue
-            if self._skip_definitions and "definition" in (sec.get("heading") or "").lower():
-                continue
+            if self._skip_definitions and not is_operative(sec.get("text") or ""):
+                continue  # P3c: non-operative section (no deontic cue) -> skip
             # a headingless preamble section still ingests -- its citation is its position (never dropped)
             citation = sec.get("section") or str(i)
             yield SourceDocument(

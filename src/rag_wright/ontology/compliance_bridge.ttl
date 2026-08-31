@@ -29,6 +29,16 @@ cmp:obligation  a cmp:DeonticType ; rdfs:subClassOf lkif:Obligation, odrl:Duty  
 cmp:prohibition a cmp:DeonticType ; rdfs:subClassOf lkif:Prohibition, odrl:Prohibition ; skos:prefLabel "prohibition" .
 cmp:permission  a cmp:DeonticType ; rdfs:subClassOf lkif:Permission, odrl:Permission  ; skos:prefLabel "permission" .
 
+# ADR-0066 P3c (Gap 1): the deontic CUES -- the lexical markers of operative normative force, per deontic type.
+# The requirement-ingestion validity gate uses them: a section with NONE of these cues is non-operative (a
+# definitions / purpose / scope statement) and is skipped SYMBOLICALLY -- replacing the brittle
+# "definition"-in-heading keyword hack (domain-neutral, heading-agnostic). Linguistic KNOWLEDGE -> the ontology.
+cmp:cue a owl:DatatypeProperty ; rdfs:domain cmp:DeonticType ; rdfs:range xsd:string ;
+    rdfs:comment "A lexical marker that this deontic force is present in a rule's text." .
+cmp:obligation  cmp:cue "must", "shall", "will", "required", "requires", "obligated", "responsible for", "agrees to" .
+cmp:prohibition cmp:cue "must not", "shall not", "may not", "will not", "prohibited", "forbidden", "not permitted" .
+cmp:permission  cmp:cue "may", "permitted", "allowed", "entitled", "at its discretion", "reserves the right" .
+
 # =============================================================================
 # Requirement — a single regulatory rule (the rulebook side). requirement_id = <source_reg>:<section>:<hash>.
 # =============================================================================

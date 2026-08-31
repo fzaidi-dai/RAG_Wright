@@ -38,6 +38,21 @@ def load_compliance_vocab(path: Path | str = _COMPLIANCE_TTL_PATH) -> dict[str, 
     return out
 
 
+_CMP = "https://ragwright.local/ontology/compliance-bridge#"
+
+
+@lru_cache(maxsize=4)
+def load_deontic_cues(path: str = str(_COMPLIANCE_TTL_PATH)) -> frozenset[str]:
+    """ADR-0066 P3c (Gap 1): the deontic CUES declared in compliance_bridge.ttl (`cmp:cue` on each deontic type) --
+    the lexical markers of operative normative force. The requirement-ingestion validity gate uses them: a section
+    with none of these cues is non-operative and is skipped. Cached per path."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    return frozenset(str(v).strip().lower() for v in g.objects(None, URIRef(_CMP + "cue")) if str(v).strip())
+
+
 @lru_cache(maxsize=4)
 def load_shapes_graph(path: str = str(_TTL_PATH)) -> Graph:
     """ADR-0066 P2: the ttl parsed as an rdflib Graph -- its `sh:NodeShape`s ARE the SHACL shapes handed to pyshacl
