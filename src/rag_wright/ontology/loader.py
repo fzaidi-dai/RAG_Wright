@@ -72,6 +72,38 @@ def load_actor_synonyms(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]
     return out
 
 
+_FTC_PACK_PATH = Path(__file__).parent / "packs" / "ftc_16cfr255.ttl"
+
+
+@lru_cache(maxsize=4)
+def load_section_overrides(path: str = str(_FTC_PACK_PATH)) -> tuple[dict[str, str], dict[str, frozenset[str]]]:
+    """ADR-0066 P4b: a domain pack's per-section overrides from `cmp:SectionOverride` instances. Returns
+    `(rule_scope, claim_types)`: `{section -> 'content'|'context'}` (only sections that pin a scope) and
+    `{section -> {claim type value}}` (all claim types when `cmp:appliesToAllClaimTypes` is true, else the explicit
+    `cmp:appliesToClaimType` set -- empty for a definitions section). Cached per path."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    all_claim_types = frozenset(load_compliance_vocab().get("ClaimType", set()))
+    rule_scope: dict[str, str] = {}
+    claim_types: dict[str, frozenset[str]] = {}
+    for so in g.subjects(RDF.type, URIRef(_CMP + "SectionOverride")):
+        section = str(g.value(so, URIRef(_CMP + "section")) or "").strip()
+        if not section:
+            continue
+        all_flag = g.value(so, URIRef(_CMP + "appliesToAllClaimTypes"))
+        if all_flag is not None and bool(all_flag.toPython()):
+            claim_types[section] = all_claim_types
+        else:
+            claim_types[section] = frozenset(
+                str(ct).rsplit("#", 1)[-1] for ct in g.objects(so, URIRef(_CMP + "appliesToClaimType")))
+        rs = g.value(so, URIRef(_CMP + "overrideRuleScope"))
+        if rs is not None:
+            rule_scope[section] = str(rs).rsplit("#", 1)[-1]
+    return rule_scope, claim_types
+
+
 @lru_cache(maxsize=4)
 def load_shapes_graph(path: str = str(_TTL_PATH)) -> Graph:
     """ADR-0066 P2: the ttl parsed as an rdflib Graph -- its `sh:NodeShape`s ARE the SHACL shapes handed to pyshacl

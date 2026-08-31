@@ -41,27 +41,20 @@ from rag_wright.contracts.compliance import (
     Verdict,
 )
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.ontology.loader import load_actor_synonyms  # ADR-0066 P4a: actor synonyms from the ontology
+from rag_wright.ontology.loader import (  # ADR-0066 P4: query-side knowledge from the ontology + FTC domain pack
+    load_actor_synonyms,
+    load_section_overrides,
+)
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
 
 _ALL_CLAIM_TYPES = {c.value for c in ClaimType}
 
-# The authored section -> applicable claim_types map (the ontology enrichment; backfills empty-scope requirements).
-# KEY FINDING (CC-6 live smoke): the FTC endorsement guides apply by CONTEXT (is the ad an endorsement?), NOT by
-# claim_type -- an efficacy/health claim inside an influencer post IS subject to §255.5 disclosure. So claim_type
-# is the wrong narrowing axis for THIS corpus: every operative section applies broadly; only the definitions
-# section (255.0) is excluded. The map still narrows for a genuinely type-scoped corpus (its real value); here it
-# mostly just drops definitions. The real per-claim narrowing (which specific rule is most relevant) is SEMANTIC
-# retrieval (Leg-B), the CC-7 refinement. See [[ontology-lever-vs-extraction-lever]].
-SECTION_CLAIM_TYPES: dict[str, set[str]] = {
-    "255.0": set(),  # Purpose and definitions -- not an operative rule; applies to nothing
-    "255.1": _ALL_CLAIM_TYPES,  # General considerations
-    "255.2": _ALL_CLAIM_TYPES,  # Consumer endorsements -- any claim made via a testimonial
-    "255.3": _ALL_CLAIM_TYPES,  # Expert endorsements -- any claim made by/through an expert
-    "255.4": _ALL_CLAIM_TYPES,  # Endorsements by organizations
-    "255.5": _ALL_CLAIM_TYPES,  # Disclosure of material connections -- any claim in an endorsement needs disclosure
-    "255.6": _ALL_CLAIM_TYPES,  # Endorsements directed to children
-}
+# ADR-0066 P4b: the per-section overrides (DEON-8 applicable claim types + DEON-1 rule scope) are AUTHORITATIVE in
+# a DOMAIN PACK ttl (packs/ftc_16cfr255.ttl), not Python literals. To retarget a domain, ship its own pack; nothing
+# FTC-specific is hardcoded here. (FTC finding CC-6: the endorsement guides apply by CONTEXT, not claim_type, so
+# every operative section applies to ALL claim types and only definitions (255.0) is excluded -- now in the pack.)
+_SECTION_RULE_SCOPE_RAW, SECTION_CLAIM_TYPES = load_section_overrides()
+SECTION_RULE_SCOPE: dict[str, RuleScope] = {sec: RuleScope(v) for sec, v in _SECTION_RULE_SCOPE_RAW.items()}
 
 
 def _section_of(citation: str) -> str:
@@ -155,14 +148,6 @@ def constraint_applies(requirement_scope: list, subject_scope: list) -> bool:
 def applies_to(requirement: Requirement, claim: Claim) -> bool:
     """Does `requirement` apply to `claim`? (the claim's type is in the requirement's applicable claim types)."""
     return claim.claim_type.value in applicable_claim_types(requirement)
-
-
-# CC-8a: the ontology content/context tag (the narrowing routing lever). A CONTEXT section applies regardless of
-# claim content (disclosure -> always included); everything else is CONTENT (narrowed by semantic similarity).
-SECTION_RULE_SCOPE: dict[str, RuleScope] = {
-    "255.5": RuleScope.CONTEXT,  # Disclosure of material connections -- applies to any claim in an endorsement
-    "255.4": RuleScope.CONTEXT,  # Endorsements by organizations -- the disclosure/relationship angle
-}
 
 
 class DeonticRoute(str, Enum):

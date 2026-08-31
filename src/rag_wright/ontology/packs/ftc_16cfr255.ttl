@@ -1,0 +1,29 @@
+# ftc_16cfr255.ttl -- the FTC 16 CFR Part 255 (Endorsement Guides) DOMAIN PACK (ADR-0066 P4b).
+#
+# The REFERENCE domain pack: the curated per-section overrides for the FTC endorsement guides, as
+# cmp:SectionOverride instances (the shape is declared in compliance_bridge.ttl). Loaded by the query side to
+# override DEON-1 rule scope + DEON-8 applicable claim types for FTC-cited requirements. A customer domain ships
+# its OWN pack; nothing FTC-specific is hardcoded in engine code.
+#
+# KEY FINDING (CC-6): the FTC endorsement guides apply by CONTEXT (is the ad an endorsement?), NOT by claim_type,
+# so every operative section applies to ALL claim types; only the definitions section (255.0) applies to none.
+# 255.5 (material-connection disclosure) + 255.4 (organization endorsements) are CONTEXT rules (always included).
+
+@prefix ftc:  <https://ragwright.local/ontology/packs/ftc-16cfr255#> .
+@prefix cmp:  <https://ragwright.local/ontology/compliance-bridge#> .
+@prefix owl:  <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+<https://ragwright.local/ontology/packs/ftc-16cfr255> a owl:Ontology ;
+    rdfs:label "FTC 16 CFR 255 domain pack" ;
+    rdfs:comment "Curated per-section overrides for the FTC Endorsement Guides (the engine's reference domain pack)." .
+
+ftc:s255_0 a cmp:SectionOverride ; cmp:section "255.0" ; cmp:appliesToAllClaimTypes false .  # definitions -> none
+ftc:s255_1 a cmp:SectionOverride ; cmp:section "255.1" ; cmp:appliesToAllClaimTypes true .   # general considerations
+ftc:s255_2 a cmp:SectionOverride ; cmp:section "255.2" ; cmp:appliesToAllClaimTypes true .   # consumer endorsements
+ftc:s255_3 a cmp:SectionOverride ; cmp:section "255.3" ; cmp:appliesToAllClaimTypes true .   # expert endorsements
+ftc:s255_4 a cmp:SectionOverride ; cmp:section "255.4" ; cmp:appliesToAllClaimTypes true ;   # organization endorsements
+    cmp:overrideRuleScope cmp:context .
+ftc:s255_5 a cmp:SectionOverride ; cmp:section "255.5" ; cmp:appliesToAllClaimTypes true ;   # material-connection disclosure
+    cmp:overrideRuleScope cmp:context .
+ftc:s255_6 a cmp:SectionOverride ; cmp:section "255.6" ; cmp:appliesToAllClaimTypes true .   # endorsements to children

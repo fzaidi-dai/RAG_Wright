@@ -36,3 +36,15 @@ def test_actor_synonyms_are_authoritative_in_the_ttl() -> None:
     assert syn["customer"] == "consumer"
     assert syn["vendor"] == "seller"
     assert len(syn) == 20  # the full role pack (5 roles x their synonyms)
+
+
+def test_ftc_domain_pack_section_overrides() -> None:
+    # ADR-0066 P4b: the FTC section overrides (DEON-1 rule scope + DEON-8 applicable claim types) load from the
+    # domain pack (packs/ftc_16cfr255.ttl), not Python literals.
+    from rag_wright.ontology.loader import load_section_overrides
+
+    rule_scope, claim_types = load_section_overrides()
+    assert rule_scope == {"255.4": "context", "255.5": "context"}
+    assert claim_types["255.0"] == frozenset()                              # definitions -> applies to nothing
+    assert claim_types["255.5"] == frozenset(m.value for m in ClaimType)    # every operative section -> all types
+    assert set(claim_types) == {"255.0", "255.1", "255.2", "255.3", "255.4", "255.5", "255.6"}

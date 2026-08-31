@@ -111,6 +111,21 @@ cmp:context a cmp:RuleScope ; skos:prefLabel "context rule (disclosure; applies 
 cmp:ruleScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:Requirement ; rdfs:range cmp:RuleScope .
 
 # =============================================================================
+# ADR-0066 P4b: SectionOverride -- a DOMAIN PACK's curated per-section override (DEON-1 rule scope + DEON-8
+# applicable claim types). The engine ontology declares the SHAPE here; the INSTANCES live in a domain-pack ttl
+# (e.g. packs/ftc_16cfr255.ttl). A customer domain ships its own pack; nothing is FTC-hardcoded in code.
+# =============================================================================
+cmp:SectionOverride a owl:Class ; skos:prefLabel "Section override" ;
+    rdfs:comment "Pins a cited section's rule scope and/or its applicable claim types; a domain pack provides instances." .
+cmp:section a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:SectionOverride ; rdfs:range xsd:string ;
+    rdfs:comment "The section citation this override applies to, e.g. '255.5'." .
+cmp:overrideRuleScope a owl:ObjectProperty, owl:FunctionalProperty ; rdfs:domain cmp:SectionOverride ; rdfs:range cmp:RuleScope .
+cmp:appliesToAllClaimTypes a owl:DatatypeProperty, owl:FunctionalProperty ; rdfs:domain cmp:SectionOverride ; rdfs:range xsd:boolean ;
+    rdfs:comment "true -> the section applies to ALL claim types; false with no cmp:appliesToClaimType -> none (e.g. a definitions section)." .
+cmp:appliesToClaimType a owl:ObjectProperty ; rdfs:domain cmp:SectionOverride ; rdfs:range cmp:ClaimType ;
+    rdfs:comment "A specific claim type the section applies to (used only when cmp:appliesToAllClaimTypes is false)." .
+
+# =============================================================================
 # Verdict — the judgment output (CC-4). Closed vocab; every 'violation' is human-gated before it leaves.
 # =============================================================================
 cmp:Verdict a owl:Class ; skos:prefLabel "Compliance verdict" ;
