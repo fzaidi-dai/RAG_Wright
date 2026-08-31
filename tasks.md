@@ -38,7 +38,16 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > move the KNOWLEDGE (LOOK-FOR meanings->skos:definition, examples->skos:example, normalizer synonyms->skos:altLabel)
 > INTO the ttl -> generate the template from it; residual GLOBAL extraction mechanics -> the extraction PROMPT as a
 > Skill (not per-field config); document_reference stays a mechanism exception. Gate: live A/B extracts real clauses
-> identically to today's hand template. **NEXT = P1b audit** (classify each field: knowledge vs mechanics).
+> identically to today's hand template. **P1b-1 DONE (2026-09-01): the extraction template is fully CAPTURED in
+> the ttl** (350 triples, keyed by cbr:field_<Model>__<name>): template_introspect.py (shared 43-field
+> introspection), scripts/bootstrap_template_capture.py (one-time emitter), loader.load_template_fields(),
+> test_template_captured_in_ttl.py (drift gate, negative-proven). Audit finding: NO synonyms (normalizer is a
+> generic algo, stays code); **10/43 fields have EMPTY descriptions** (captured verbatim as empty for exact
+> parity). Suite 1384. **NEXT = P1b-2** (generate clause_template.py FROM the ttl + generic normalizer +
+> document_reference exception; live A/B parity vs today's template). **THEN P1b-3 (STANDING, not optional): fill
+> the 10 empty descriptions + split terse mechanics into the extraction Skill -- a MEASURED IMPROVEMENT, each with
+> its OWN live A/B, done ONLY AFTER P1b-2 parity is proven so we never conflate faithful migration with quality
+> change.**
 >
 > **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
 > A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran

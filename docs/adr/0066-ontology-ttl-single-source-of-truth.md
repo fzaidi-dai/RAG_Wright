@@ -85,13 +85,22 @@ first-class separate concern.
     consumes it (hand-authored literal deleted); CI drift-diff (`test_generated_vocab_in_sync.py`) fails on any
     ttl-edit-not-regenerated or hand-edit; live A/B (real extraction identical). Proves the generate + enforce
     pattern.
-  - **P1b:** audit `clause_template.py` field-by-field and classify each piece of "tuning": KNOWLEDGE (LOOK-FOR
-    meanings → `skos:definition`, value examples → `skos:example`, normalizer synonyms → `skos:altLabel`) moves
-    INTO the ttl and generates into the template's field descriptions / examples / synonym map; the residual GLOBAL
-    extraction mechanics go into the extraction PROMPT as a Skill (not a per-field YAML, decision 3); the
-    `document_reference` deviation stays a hand-carried mechanism exception. Gate: `uv run <gen>` idempotent; CI
-    fails on a hand-edit; a **live A/B** proves the generated-from-ttl template extracts real clauses IDENTICALLY
-    to today's hand-maintained template (the migration is faithful AND the enriched ttl prompts as well).
+  - **P1b-1 (DONE 2026-09-01):** audit `clause_template.py` field-by-field, then CAPTURE its full schema +
+    knowledge into the ttl keyed by field (`cbr:field_<Model>__<name>`: kind, default, enum/model ref, edge,
+    max_length, `skos:definition`, ordered `cbr:examples`). Shared introspection (`template_introspect.py`) feeds
+    both the emitter and the drift test (`test_template_captured_in_ttl.py`, negative-proven). Audit findings: the
+    template has NO hand-authored synonyms (the normalizer is a generic algorithm → stays code, no `skos:altLabel`
+    needed); descriptions carry the LOOK-FOR meaning + examples + a terse instruction; and **10 of 43 fields have
+    EMPTY descriptions** (`# TODO` gaps). Captured verbatim (empties as empty) so P1b-2 reproduces the template
+    exactly. No live A/B here (P1b-1 changes no model path).
+  - **P1b-2 (next):** the generator emits `clause_template.py` FROM the ttl capture + the generic normalizer + the
+    `document_reference` hand-carried exception; the residual GLOBAL terse mechanics live in the extraction PROMPT
+    (a Skill, decision 3). Gate: `uv run <gen>` idempotent; CI fails on a hand-edit; a **live A/B (parity)** proves
+    the generated-from-ttl template extracts real clauses IDENTICALLY to today's hand-maintained template.
+  - **P1b-3 (MEASURED IMPROVEMENT — only AFTER P1b-2 parity is proven):** fill the 10 empty `skos:definition`s
+    with real LOOK-FOR meanings (and, as a clean-up, split the terse mechanics out of the per-field descriptions
+    into the global extraction Skill). Each change measured by its OWN live A/B against the parity baseline, so a
+    quality change is NEVER conflated with the faithful migration. This is a standing follow-up, not optional.
 - **Phase 2 — load SHACL from the ttl at runtime.** `symbolic_validate` loads the ttl's `sh:` shapes via pyshacl;
   delete Python `FUNCTION_APPLICABLE_DIMS` / `_shapes_graph`. Gate: the contract cascade behaves identically on a
   fixture set, now driven by the ttl.

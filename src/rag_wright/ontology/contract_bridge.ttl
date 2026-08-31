@@ -2043,3 +2043,396 @@ cbr:dim_party_asymmetry a cbr:PropertyDimension ;
     owl:oneOf cbr:dim_party_asymmetry_vocab ;
     cbr:cardinality "scalar" .
 
+# =============================================================================
+# ADR-0066 P1b-1 -- the EXTRACTION TEMPLATE captured (schema + knowledge), keyed by field.
+# Bootstrapped ONCE from clause_template.py; the ttl describes the template henceforth.
+# Verified by tests/ontology/test_template_captured_in_ttl.py (ttl == introspect(clause_template)).
+# =============================================================================
+
+cbr:field_CapConstraint__cap_basis a cbr:TemplateField ;
+    rdfs:label "cap_basis" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "CapBasis" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 35 ;
+    cbr:onModel "CapConstraint" .
+
+cbr:field_CapConstraint__cap_operator a cbr:TemplateField ;
+    rdfs:label "cap_operator" ;
+    skos:definition "The comparison operator ONLY (a few words), e.g. 'lteq' (at most), 'eq' (fixed)." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 36 ;
+    cbr:maxLength 40 ;
+    cbr:onModel "CapConstraint" .
+
+cbr:field_CapConstraint__cap_quantum a cbr:TemplateField ;
+    rdfs:label "cap_quantum" ;
+    skos:definition "The cap amount ONLY (a short value, not a sentence), e.g. '12_months', '1x_fees', '$1,000,000'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 37 ;
+    cbr:maxLength 80 ;
+    cbr:onModel "CapConstraint" .
+
+cbr:field_Clause__audit_frequency a cbr:TemplateField ;
+    rdfs:label "audit_frequency" ;
+    skos:definition "How often an audit-rights clause permits audits, a short value ONLY, e.g. 'annual', 'quarterly', 'once per year'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 1 ;
+    cbr:maxLength 60 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__bounded_by a cbr:TemplateField ;
+    rdfs:label "bounded_by" ;
+    skos:definition "A temporal bound (term or notice period), if any." ;
+    cbr:default "model_none" ;
+    cbr:edgeLabel "BOUNDED_BY" ;
+    cbr:fieldKind "model_ref" ;
+    cbr:fieldOrder 32 ;
+    cbr:modelRef "TemporalConstraint" ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__caps a cbr:TemplateField ;
+    rdfs:label "caps" ;
+    skos:definition "The liability cap, if any." ;
+    cbr:default "model_none" ;
+    cbr:edgeLabel "HAS_CAPS" ;
+    cbr:fieldKind "model_ref" ;
+    cbr:fieldOrder 33 ;
+    cbr:modelRef "CapConstraint" ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__clause_type a cbr:TemplateField ;
+    rdfs:label "clause_type" ;
+    skos:definition "The clause function/type LABEL ONLY (a few words), e.g. 'Cap on Liability', 'Governing Law', 'Non-Solicit of Employees'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 2 ;
+    cbr:maxLength 80 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__collateral_type a cbr:TemplateField ;
+    rdfs:label "collateral_type" ;
+    skos:definition "The collateral / assets a SECURITY-INTEREST clause attaches to (may be several), e.g. inventory, equipment, accounts receivable, all assets." ;
+    cbr:default "list" ;
+    cbr:enumClass "CollateralType" ;
+    cbr:fieldKind "list_enum" ;
+    cbr:fieldOrder 3 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__commitment_quantum a cbr:TemplateField ;
+    rdfs:label "commitment_quantum" ;
+    skos:definition "The minimum-commitment / volume amount ONLY (a short value), e.g. '$1,000,000', '100 units/year'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 4 ;
+    cbr:maxLength 80 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__condition_type a cbr:TemplateField ;
+    rdfs:label "condition_type" ;
+    skos:definition "The kind of condition a CONDITION-PRECEDENT clause requires: regulatory approval / financing / third-party consent / due diligence / board approval / no material adverse change / court approval / closing condition." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "ConditionType" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 5 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__confidentiality_exception a cbr:TemplateField ;
+    rdfs:label "confidentiality_exception" ;
+    skos:definition "Permitted disclosures / exceptions to a CONFIDENTIALITY obligation (may be several): required by law, publicly available, independently developed, prior possession, received from a third party." ;
+    cbr:default "list" ;
+    cbr:enumClass "ConfidentialityException" ;
+    cbr:fieldKind "list_enum" ;
+    cbr:fieldOrder 6 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__covers a cbr:TemplateField ;
+    rdfs:label "covers" ;
+    skos:definition "Subjects the clause covers (ODRL target; may be several)." ;
+    cbr:default "list" ;
+    cbr:enumClass "Subject" ;
+    cbr:fieldKind "list_enum" ;
+    cbr:fieldOrder 9 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__covers_party_scope a cbr:TemplateField ;
+    rdfs:label "covers_party_scope" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "PartyScope" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 10 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__dispute_method a cbr:TemplateField ;
+    rdfs:label "dispute_method" ;
+    skos:definition "How a DISPUTE-RESOLUTION clause resolves disputes: arbitration / litigation (courts) / mediation / expert determination / negotiation." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "DisputeMethod" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 11 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__document_reference a cbr:TemplateField ;
+    rdfs:label "document_reference" ;
+    skos:definition "OPTIONAL. ONLY the clause's own section number or short heading if one is written in the text (e.g. 'Section 8', '8.1 Limitation of Liability'). If there is NO explicit section number or heading, leave this null/empty -- do NOT invent one and NEVER quote the clause body or any sentence of it here." ;
+    cbr:default "none" ;
+    cbr:examples cbr:field_Clause__document_reference_examples ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 0 ;
+    cbr:maxLength 80 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__excepts a cbr:TemplateField ;
+    rdfs:label "excepts" ;
+    skos:definition "Carve-outs / exceptions the clause lists (may be several)." ;
+    cbr:default "list" ;
+    cbr:enumClass "ExceptionModel" ;
+    cbr:fieldKind "list_enum" ;
+    cbr:fieldOrder 12 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__force_majeure_event a cbr:TemplateField ;
+    rdfs:label "force_majeure_event" ;
+    skos:definition "Events a FORCE-MAJEURE clause lists as excusing performance (may be several): act of god, war, pandemic, government action, labor dispute, supply failure, natural disaster." ;
+    cbr:default "list" ;
+    cbr:enumClass "ForceMajeureEvent" ;
+    cbr:fieldKind "list_enum" ;
+    cbr:fieldOrder 7 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__governed_by a cbr:TemplateField ;
+    rdfs:label "governed_by" ;
+    skos:definition "The governing-law jurisdiction, if the clause states one." ;
+    cbr:default "model_none" ;
+    cbr:edgeLabel "GOVERNED_BY" ;
+    cbr:fieldKind "model_ref" ;
+    cbr:fieldOrder 34 ;
+    cbr:modelRef "Jurisdiction" ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_assignment_consent a cbr:TemplateField ;
+    rdfs:label "has_assignment_consent" ;
+    skos:definition "How an anti-assignment clause treats consent (required / notice-only / free)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "AssignmentConsent" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 13 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_asymmetry a cbr:TemplateField ;
+    rdfs:label "has_asymmetry" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "Asymmetry" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 14 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_claim_scope a cbr:TemplateField ;
+    rdfs:label "has_claim_scope" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "ClaimScope" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 15 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_coc_consent a cbr:TemplateField ;
+    rdfs:label "has_coc_consent" ;
+    skos:definition "How a change-of-control clause treats consent (required / notice-only / unrestricted)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "CocConsent" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 16 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_escrow_release_trigger a cbr:TemplateField ;
+    rdfs:label "has_escrow_release_trigger" ;
+    skos:definition "What triggers a source-code escrow release (bankruptcy / breach / discontinuance)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "EscrowReleaseTrigger" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 17 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_exclusivity_type a cbr:TemplateField ;
+    rdfs:label "has_exclusivity_type" ;
+    skos:definition "The exclusivity a licensing/distribution clause grants (exclusive / sole / non-exclusive)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "ExclusivityType" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 18 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_favorability a cbr:TemplateField ;
+    rdfs:label "has_favorability" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "Favorability" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 19 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_ip_ownership a cbr:TemplateField ;
+    rdfs:label "has_ip_ownership" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "IpOwnership" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 20 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_mfn_scope a cbr:TemplateField ;
+    rdfs:label "has_mfn_scope" ;
+    skos:definition "What a most-favored-nation clause covers (price / terms / both)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "MfnScope" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 21 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_mutuality a cbr:TemplateField ;
+    rdfs:label "has_mutuality" ;
+    skos:definition "Whether the clause's obligation runs both ways (mutual) or one way (unilateral)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "Mutuality" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 22 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_renewal a cbr:TemplateField ;
+    rdfs:label "has_renewal" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "RenewalMechanism" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 23 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_restriction_scope a cbr:TemplateField ;
+    rdfs:label "has_restriction_scope" ;
+    skos:definition "What a non-compete restricts: geographic area, activity, or both." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "RestrictionScope" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 24 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_right_of_first_type a cbr:TemplateField ;
+    rdfs:label "has_right_of_first_type" ;
+    skos:definition "The first-refusal/offer/negotiation right the clause grants (ROFR / ROFO / ROFN)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "RightOfFirstType" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 25 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_termination_right a cbr:TemplateField ;
+    rdfs:label "has_termination_right" ;
+    skos:definition "Who may terminate for convenience (either party / one party)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "TerminationRight" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 26 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__has_warranty_scope a cbr:TemplateField ;
+    rdfs:label "has_warranty_scope" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "WarrantyScope" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 27 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__ld_trigger a cbr:TemplateField ;
+    rdfs:label "ld_trigger" ;
+    skos:definition "What triggers liquidated damages, e.g. 'late delivery', 'early termination'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 28 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__prohibits_damage a cbr:TemplateField ;
+    rdfs:label "prohibits_damage" ;
+    skos:definition "Damage types the clause waives/excludes (may be several)." ;
+    cbr:default "list" ;
+    cbr:enumClass "DamageType" ;
+    cbr:fieldKind "list_enum" ;
+    cbr:fieldOrder 29 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__prohibits_solicit a cbr:TemplateField ;
+    rdfs:label "prohibits_solicit" ;
+    skos:definition "Whom the clause forbids soliciting (employees / customers)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "NonsolicitTarget" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 30 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__requires_duty a cbr:TemplateField ;
+    rdfs:label "requires_duty" ;
+    skos:definition "A procedural duty the clause imposes (duty to defend / control of defense)." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "ProceduralDuty" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 31 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Clause__royalty_basis a cbr:TemplateField ;
+    rdfs:label "royalty_basis" ;
+    skos:definition "How a ROYALTY is calculated: percentage of net sales / percentage of gross sales / per unit / fixed / tiered." ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "RoyaltyBasis" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 8 ;
+    cbr:onModel "Clause" .
+
+cbr:field_Jurisdiction__jurisdiction_name a cbr:TemplateField ;
+    rdfs:label "jurisdiction_name" ;
+    skos:definition "The jurisdiction NAME ONLY (a few words, not a sentence), e.g. 'New York', 'England and Wales', 'Delaware'." ;
+    cbr:default "required" ;
+    cbr:examples cbr:field_Jurisdiction__jurisdiction_name_examples ;
+    cbr:fieldKind "str" ;
+    cbr:fieldOrder 41 ;
+    cbr:maxLength 100 ;
+    cbr:onModel "Jurisdiction" .
+
+cbr:field_Jurisdiction__law_multiplicity a cbr:TemplateField ;
+    rdfs:label "law_multiplicity" ;
+    cbr:default "enum:Other" ;
+    cbr:enumClass "LawMultiplicity" ;
+    cbr:fieldKind "scalar_enum" ;
+    cbr:fieldOrder 42 ;
+    cbr:onModel "Jurisdiction" .
+
+cbr:field_TemporalConstraint__temporal_duration a cbr:TemplateField ;
+    rdfs:label "temporal_duration" ;
+    skos:definition "The duration ONLY (a short value), e.g. '12_months', '30_days', 'unbounded'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 38 ;
+    cbr:maxLength 60 ;
+    cbr:onModel "TemporalConstraint" .
+
+cbr:field_TemporalConstraint__temporal_kind a cbr:TemplateField ;
+    rdfs:label "temporal_kind" ;
+    skos:definition "What is bounded: 'term' (temporal_bound) or 'notice_period'." ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 39 ;
+    cbr:maxLength 40 ;
+    cbr:onModel "TemporalConstraint" .
+
+cbr:field_TemporalConstraint__temporal_operator a cbr:TemplateField ;
+    rdfs:label "temporal_operator" ;
+    cbr:default "none" ;
+    cbr:fieldKind "optional_str" ;
+    cbr:fieldOrder 40 ;
+    cbr:maxLength 40 ;
+    cbr:onModel "TemporalConstraint" .
+
+cbr:field_Clause__document_reference_examples rdf:first "Section 8" ;
+    rdf:rest ( "8.1 Limitation of Liability" "Governing Law" ) .
+
+cbr:field_Jurisdiction__jurisdiction_name_examples rdf:first "New York" ;
+    rdf:rest ( "England and Wales" "Delaware" ) .
+

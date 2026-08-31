@@ -116,3 +116,31 @@ def _dim_class():
 def _cbr(frag: str):
     from rdflib import URIRef
     return URIRef(_CBR + frag)
+
+
+def load_template_fields(path: Path | str = _TTL_PATH):
+    """ADR-0066 P1b-1: the extraction template's fields as captured in the ttl, as `TemplateFieldSpec`s in the
+    same order the template declares them (`cbr:fieldOrder`). Round-trips `bootstrap_template_capture` -- the drift
+    test asserts this equals a fresh introspection of `clause_template.py`."""
+    from rag_wright.ontology.template_introspect import TemplateFieldSpec
+
+    g = Graph()
+    g.parse(str(path), format="turtle")
+    specs: list = []
+    for node in g.subjects(RDF.type, _cbr("TemplateField")):
+        order = g.value(node, _cbr("fieldOrder"))
+        ml = g.value(node, _cbr("maxLength"))
+        specs.append((int(order), TemplateFieldSpec(
+            model=str(g.value(node, _cbr("onModel"))),
+            name=str(g.value(node, RDFS.label)),
+            kind=str(g.value(node, _cbr("fieldKind"))),
+            default_token=str(g.value(node, _cbr("default"))),
+            definition=str(g.value(node, SKOS.definition) or ""),
+            enum_class=(str(v) if (v := g.value(node, _cbr("enumClass"))) is not None else None),
+            model_ref=(str(v) if (v := g.value(node, _cbr("modelRef"))) is not None else None),
+            edge_label=(str(v) if (v := g.value(node, _cbr("edgeLabel"))) is not None else None),
+            max_length=(int(ml) if ml is not None else None),
+            examples=(tuple(str(e) for e in Collection(g, exlist))
+                      if (exlist := g.value(node, _cbr("examples"))) is not None else ()),
+        )))
+    return [spec for _, spec in sorted(specs, key=lambda t: t[0])]
