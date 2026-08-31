@@ -29,7 +29,20 @@ from typing import Any, List, Optional, Type
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing_extensions import Self
 
+from rag_wright.ontology._generated_template_meta import DESCRIPTIONS, EXAMPLES
+
 logger = logging.getLogger(__name__)
+
+
+def _d(key: str) -> str:
+    """ADR-0066 P1b-2 (Rule 3): the field's LOOK-FOR description, GENERATED from the ttl (empty string if the ttl
+    has no definition for it -- the 10 TODO gaps, filled later in P1b-3). Edit the ttl, not this file."""
+    return DESCRIPTIONS.get(key, "")
+
+
+def _ex(key: str) -> list[str]:
+    """ADR-0066 P1b-2 (Rule 3): the field's examples, GENERATED from the ttl."""
+    return list(EXAMPLES.get(key, ()))
 
 
 # -----------------------------------------------------------------------------
@@ -322,20 +335,19 @@ class CapConstraint(BaseModel):
 
     cap_basis: CapBasis = Field(
         CapBasis.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("CapConstraint.cap_basis"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     cap_operator: Optional[str] = Field(
         None,
         max_length=40,
-        description="The comparison operator ONLY (a few words), e.g. 'lteq' (at most), 'eq' (fixed).",
+        description=_d("CapConstraint.cap_operator"),
     )
 
     cap_quantum: Optional[str] = Field(
         None,
         max_length=80,
-        description="The cap amount ONLY (a short value, not a sentence), e.g. '12_months', '1x_fees', "
-        "'$1,000,000'.",
+        description=_d("CapConstraint.cap_quantum"),
     )
 
     @field_validator("cap_basis", mode="before")
@@ -357,19 +369,19 @@ class TemporalConstraint(BaseModel):
     temporal_duration: Optional[str] = Field(
         None,
         max_length=60,
-        description="The duration ONLY (a short value), e.g. '12_months', '30_days', 'unbounded'.",
+        description=_d("TemporalConstraint.temporal_duration"),
     )
 
     temporal_kind: Optional[str] = Field(
         None,
         max_length=40,
-        description="What is bounded: 'term' (temporal_bound) or 'notice_period'.",
+        description=_d("TemporalConstraint.temporal_kind"),
     )
 
     temporal_operator: Optional[str] = Field(
         None,
         max_length=40,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("TemporalConstraint.temporal_operator"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     def __str__(self) -> str:
@@ -388,14 +400,13 @@ class Jurisdiction(BaseModel):
     jurisdiction_name: str = Field(
         ...,
         max_length=100,
-        description="The jurisdiction NAME ONLY (a few words, not a sentence), e.g. 'New York', "
-        "'England and Wales', 'Delaware'.",
-        examples=["New York", "England and Wales", "Delaware"],
+        description=_d("Jurisdiction.jurisdiction_name"),
+        examples=_ex("Jurisdiction.jurisdiction_name"),
     )
 
     law_multiplicity: LawMultiplicity = Field(
         LawMultiplicity.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Jurisdiction.law_multiplicity"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     @field_validator("law_multiplicity", mode="before")
@@ -503,24 +514,16 @@ class Clause(BaseModel):
         None,
         max_length=80,
         description=(
-            "OPTIONAL. ONLY the clause's own section number or short heading if one is written in the "
-            "text (e.g. 'Section 8', '8.1 Limitation of Liability'). If there is NO explicit section "
-            "number or heading, leave this null/empty -- do NOT invent one and NEVER quote the clause "
-            "body or any sentence of it here."
+            _d("Clause.document_reference")
         ),
-        examples=[
-            "Section 8",
-            "8.1 Limitation of Liability",
-            "Governing Law",
-        ],
+        examples=_ex("Clause.document_reference"),
     )
 
     audit_frequency: Optional[str] = Field(
         None,
         max_length=60,
         description=(
-            "How often an audit-rights clause permits audits, a short value ONLY, e.g. 'annual', "
-            "'quarterly', 'once per year'."
+            _d("Clause.audit_frequency")
         ),
     )
 
@@ -528,16 +531,14 @@ class Clause(BaseModel):
         None,
         max_length=80,
         description=(
-            "The clause function/type LABEL ONLY (a few words), e.g. 'Cap on Liability', "
-            "'Governing Law', 'Non-Solicit of Employees'."
+            _d("Clause.clause_type")
         ),
     )
 
     collateral_type: List[CollateralType] = Field(
         default_factory=list,
         description=(
-            "The collateral / assets a SECURITY-INTEREST clause attaches to (may be several), e.g. "
-            "inventory, equipment, accounts receivable, all assets."
+            _d("Clause.collateral_type")
         ),
     )
 
@@ -545,186 +546,178 @@ class Clause(BaseModel):
         None,
         max_length=80,
         description=(
-            "The minimum-commitment / volume amount ONLY (a short value), e.g. '$1,000,000', "
-            "'100 units/year'."
+            _d("Clause.commitment_quantum")
         ),
     )
 
     condition_type: ConditionType = Field(
         ConditionType.OTHER,
         description=(
-            "The kind of condition a CONDITION-PRECEDENT clause requires: regulatory approval / financing / "
-            "third-party consent / due diligence / board approval / no material adverse change / court "
-            "approval / closing condition."
+            _d("Clause.condition_type")
         ),
     )
 
     confidentiality_exception: List[ConfidentialityException] = Field(
         default_factory=list,
         description=(
-            "Permitted disclosures / exceptions to a CONFIDENTIALITY obligation (may be several): required by "
-            "law, publicly available, independently developed, prior possession, received from a third party."
+            _d("Clause.confidentiality_exception")
         ),
     )
 
     force_majeure_event: List[ForceMajeureEvent] = Field(
         default_factory=list,
         description=(
-            "Events a FORCE-MAJEURE clause lists as excusing performance (may be several): act of god, war, "
-            "pandemic, government action, labor dispute, supply failure, natural disaster."
+            _d("Clause.force_majeure_event")
         ),
     )
 
     royalty_basis: RoyaltyBasis = Field(
         RoyaltyBasis.OTHER,
         description=(
-            "How a ROYALTY is calculated: percentage of net sales / percentage of gross sales / per unit / "
-            "fixed / tiered."
+            _d("Clause.royalty_basis")
         ),
     )
 
     covers: List[Subject] = Field(
         default_factory=list,
-        description="Subjects the clause covers (ODRL target; may be several).",
+        description=_d("Clause.covers"),
     )
 
     covers_party_scope: PartyScope = Field(
         PartyScope.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.covers_party_scope"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     dispute_method: DisputeMethod = Field(
         DisputeMethod.OTHER,
         description=(
-            "How a DISPUTE-RESOLUTION clause resolves disputes: arbitration / litigation (courts) / "
-            "mediation / expert determination / negotiation."
+            _d("Clause.dispute_method")
         ),
     )
 
     excepts: List[ExceptionModel] = Field(
         default_factory=list,
-        description="Carve-outs / exceptions the clause lists (may be several).",
+        description=_d("Clause.excepts"),
     )
 
     has_assignment_consent: AssignmentConsent = Field(
         AssignmentConsent.OTHER,
-        description="How an anti-assignment clause treats consent (required / notice-only / free).",
+        description=_d("Clause.has_assignment_consent"),
     )
 
     has_asymmetry: Asymmetry = Field(
         Asymmetry.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.has_asymmetry"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     has_claim_scope: ClaimScope = Field(
         ClaimScope.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.has_claim_scope"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     has_coc_consent: CocConsent = Field(
         CocConsent.OTHER,
         description=(
-            "How a change-of-control clause treats consent (required / notice-only / unrestricted)."
+            _d("Clause.has_coc_consent")
         ),
     )
 
     has_escrow_release_trigger: EscrowReleaseTrigger = Field(
         EscrowReleaseTrigger.OTHER,
         description=(
-            "What triggers a source-code escrow release (bankruptcy / breach / discontinuance)."
+            _d("Clause.has_escrow_release_trigger")
         ),
     )
 
     has_exclusivity_type: ExclusivityType = Field(
         ExclusivityType.OTHER,
         description=(
-            "The exclusivity a licensing/distribution clause grants (exclusive / sole / "
-            "non-exclusive)."
+            _d("Clause.has_exclusivity_type")
         ),
     )
 
     has_favorability: Favorability = Field(
         Favorability.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.has_favorability"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     has_ip_ownership: IpOwnership = Field(
         IpOwnership.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.has_ip_ownership"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     has_mfn_scope: MfnScope = Field(
         MfnScope.OTHER,
-        description="What a most-favored-nation clause covers (price / terms / both).",
+        description=_d("Clause.has_mfn_scope"),
     )
 
     has_mutuality: Mutuality = Field(
         Mutuality.OTHER,
         description=(
-            "Whether the clause's obligation runs both ways (mutual) or one way (unilateral)."
+            _d("Clause.has_mutuality")
         ),
     )
 
     has_renewal: RenewalMechanism = Field(
         RenewalMechanism.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.has_renewal"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     has_restriction_scope: RestrictionScope = Field(
         RestrictionScope.OTHER,
-        description="What a non-compete restricts: geographic area, activity, or both.",
+        description=_d("Clause.has_restriction_scope"),
     )
 
     has_right_of_first_type: RightOfFirstType = Field(
         RightOfFirstType.OTHER,
         description=(
-            "The first-refusal/offer/negotiation right the clause grants (ROFR / ROFO / ROFN)."
+            _d("Clause.has_right_of_first_type")
         ),
     )
 
     has_termination_right: TerminationRight = Field(
         TerminationRight.OTHER,
-        description="Who may terminate for convenience (either party / one party).",
+        description=_d("Clause.has_termination_right"),
     )
 
     has_warranty_scope: WarrantyScope = Field(
         WarrantyScope.OTHER,
-        description="",  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
+        description=_d("Clause.has_warranty_scope"),  # TODO(docling-graph): add a 1-3 sentence LOOK-FOR description
     )
 
     ld_trigger: Optional[str] = Field(
         None,
-        description="What triggers liquidated damages, e.g. 'late delivery', 'early termination'.",
+        description=_d("Clause.ld_trigger"),
     )
 
     prohibits_damage: List[DamageType] = Field(
         default_factory=list,
-        description="Damage types the clause waives/excludes (may be several).",
+        description=_d("Clause.prohibits_damage"),
     )
 
     prohibits_solicit: NonsolicitTarget = Field(
         NonsolicitTarget.OTHER,
-        description="Whom the clause forbids soliciting (employees / customers).",
+        description=_d("Clause.prohibits_solicit"),
     )
 
     requires_duty: ProceduralDuty = Field(
         ProceduralDuty.OTHER,
-        description="A procedural duty the clause imposes (duty to defend / control of defense).",
+        description=_d("Clause.requires_duty"),
     )
 
     bounded_by: Optional[TemporalConstraint] = edge(
         label="BOUNDED_BY",
-        description="A temporal bound (term or notice period), if any.",
+        description=_d("Clause.bounded_by"),
     )
 
     caps: Optional[CapConstraint] = edge(
         label="HAS_CAPS",
-        description="The liability cap, if any.",
+        description=_d("Clause.caps"),
     )
 
     governed_by: Optional[Jurisdiction] = edge(
         label="GOVERNED_BY",
-        description="The governing-law jurisdiction, if the clause states one.",
+        description=_d("Clause.governed_by"),
     )
 
     @field_validator("covers", mode="before")

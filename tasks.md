@@ -48,6 +48,16 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > the 10 empty descriptions + split terse mechanics into the extraction Skill -- a MEASURED IMPROVEMENT, each with
 > its OWN live A/B, done ONLY AFTER P1b-2 parity is proven so we never conflate faithful migration with quality
 > change.**
+> **P1b-2 DONE (2026-09-01, Option B/Rule 3): the extraction template's KNOWLEDGE is generated from the ttl.**
+> codegen.render_template_meta_module -> _generated_template_meta.py (33 descriptions + 2 example-lists, from the
+> ttl capture); clause_template.py rewired (AST-span surgery) so every field's description/examples consume
+> _d()/_ex() from the generated meta; ALL mechanism stays clean hand-code (29 enums, ~25 normalizer validators, 3
+> _deduplicate_* model-validators, 4 __str__, configs -- nothing byte-generated). test_generated_template_meta_in_sync.py
+> = CI drift-diff (negative-proven). Suite 1386. LIVE A/B: NewClause.model_json_schema()==OldClause (byte-identical
+> prompt, all 43 fields) + real granite extraction identical old-vs-new on both clauses. Contract-template
+> substrate now fully ttl-authoritative. **NEXT = P1b-3** (STANDING measured-improvement: fill the 10 empty
+> descriptions + move terse mechanics to the extraction Skill, each with its own A/B) **THEN P2** (load SHACL from
+> the ttl at runtime via pyshacl; delete Python FUNCTION_APPLICABLE_DIMS/_shapes_graph).
 >
 > **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
 > A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran

@@ -11,12 +11,19 @@ Usage: uv run python scripts/generate_contract_python.py
 
 from __future__ import annotations
 
-from rag_wright.ontology.codegen import VOCAB_MODULE_PATH, render_vocab_module
+from rag_wright.ontology.codegen import (
+    TEMPLATE_META_MODULE_PATH,
+    VOCAB_MODULE_PATH,
+    render_template_meta_module,
+    render_vocab_module,
+)
 
 
 def main() -> None:
     VOCAB_MODULE_PATH.write_text(render_vocab_module(), encoding="utf-8")
     print(f"wrote {VOCAB_MODULE_PATH}")
+    TEMPLATE_META_MODULE_PATH.write_text(render_template_meta_module(), encoding="utf-8")
+    print(f"wrote {TEMPLATE_META_MODULE_PATH}")
 
 
 if __name__ == "__main__":
