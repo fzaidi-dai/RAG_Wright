@@ -408,8 +408,15 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > over retrieved evidence. 4 deontic cases (obligation=doc-scoped-once actor-gated; prohibition=per-assertion;
 > permission=excluded/exception-link; ambiguous=recall-first). "Document-scoped" = question once, NOT whole-doc-in-
 > prompt (actor gate + vector retrieval -> 1 bounded LLM call). Subject scope via dimension-agnostic Constraint
-> producer (NOT hardcoded actor field). FTC tables -> curated overrides. TASKS Phase 1 DEON-1 (deontic routing) /
-> -2 (judge split) / -3 (obligation-once retrieved) / -4 (live gate) ; Phase 2 DEON-5 (subject scope producer,
+> producer (NOT hardcoded actor field). FTC tables -> curated overrides. TASKS Phase 1 **DEON-1 DONE (2026-08-31): deontic_route (4-way from deontic_type; FTC override; ambiguous-
+> confidence recall-first) + rule_scope_of deontic-derived; judge SPLIT via document_fact_fn seam (obligation
+> judged ONCE over doc fact, prohibition/ambiguous per-assertion, permission EXCLUDED; generic path, ad stays per-
+> assertion till DEON-8); DEONTIC FRAMING on generic judge (obligation absence=violation, decide definitively).
+> Tests +2 + updated scope tests + _row/_req deontic params. Suite 1358. LIVE (0012 repro): disclosure obligation
+> judged ONCE -> VIOLATION (definitive, was 3x "unclear"); 7 findings vs 9. Merged design-DEON-1+2 (routing+split)
+> into this task to avoid a regressive intermediate.** /
+> -2 (bounded obligation retrieval: top-N passages + token cap, not whole-doc at contract length) / -3/-4 (live
+> gate) ; Phase 2 DEON-5 (subject scope producer,
 > ask-first) / -6 (constraint routing) / -7 (actor gate) / -8 (ad-path parity) / -9 (permission-as-defense) / -10
 > (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. BUILD AFTER REVIEW.
 >

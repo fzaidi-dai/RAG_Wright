@@ -31,9 +31,10 @@ def _claim(text="clinically proven to work", ctype=ClaimType.HEALTH, disc=None) 
                  assertion_text=text, disclosures_present=disc or [])
 
 
-def _req(section="255.5", scope=("endorsement",), text="A material connection must be disclosed.") -> Requirement:
+def _req(section="255.5", scope=("endorsement",), text="A material connection must be disclosed.",
+         deontic=DeonticType.OBLIGATION) -> Requirement:
     return Requirement(requirement_id=Requirement.make_id("FTC 16 CFR 255", section, text),
-                       source="FTC 16 CFR 255", citation=f"§ {section}", deontic_type=DeonticType.OBLIGATION,
+                       source="FTC 16 CFR 255", citation=f"§ {section}", deontic_type=deontic,
                        actor="advertiser",
                        applicability_scope=[Constraint(dimension="claim_type", value=v) for v in scope],
                        requirement_text=text)
@@ -144,10 +145,11 @@ from rag_wright.subgraphs.compliance_check import build_select_fn, rule_scope_of
 
 
 def test_rule_scope_context_for_disclosure_else_content():
-    # §255.5 (material connections / disclosure) applies regardless of claim content -> CONTEXT (always-include);
-    # §255.1 (objective claims need substantiation) is content-specific -> CONTENT (narrow by similarity)
-    assert rule_scope_of(_req(section="255.5")) is RuleScope.CONTEXT
-    assert rule_scope_of(_req(section="255.1")) is RuleScope.CONTENT
+    # DEON-1: an obligation (or the curated §255.5 override) -> CONTEXT (always-include); a prohibition ->
+    # CONTENT (narrow by similarity). Deontic-driven now, not FTC-section-driven.
+    assert rule_scope_of(_req(section="255.5")) is RuleScope.CONTEXT                       # 255.5 override -> CONTEXT
+    assert rule_scope_of(_req(section="1", deontic=DeonticType.OBLIGATION)) is RuleScope.CONTEXT   # obligation
+    assert rule_scope_of(_req(section="1", deontic=DeonticType.PROHIBITION)) is RuleScope.CONTENT  # prohibition
 
 
 class _FakeEmbedder:
@@ -165,9 +167,11 @@ class _FakeEmbedder:
 
 def test_select_keeps_context_and_top_k_content_dropping_irrelevant():
     claim = _claim(text="reduce your risk of a heart attack", ctype=ClaimType.HEALTH)
-    health = _req(section="255.1", scope=(), text="Health claims need competent and reliable scientific evidence.")
-    kids = _req(section="255.1", scope=(), text="Endorsements to children warrant special care.")
-    disclosure = _req(section="255.5", scope=(), text="A material connection must be disclosed.")
+    health = _req(section="255.1", scope=(), text="Health claims need competent and reliable scientific evidence.",
+                  deontic=DeonticType.PROHIBITION)
+    kids = _req(section="255.1", scope=(), text="Endorsements to children warrant special care.",
+                deontic=DeonticType.PROHIBITION)
+    disclosure = _req(section="255.5", scope=(), text="A material connection must be disclosed.")  # CONTEXT (override)
     emb = _FakeEmbedder({"heart attack": [1, 0, 0], "scientific evidence": [1, 0, 0],
                          "children": [0, 1, 0], "material connection": [0, 0, 1]})
     select = build_select_fn(emb, [health, kids, disclosure], k=1)
@@ -323,10 +327,10 @@ def test_build_select_fn_constraint_scope_mode_routes_by_generic_matching():
 import pytest  # noqa: E402
 
 
-def _row(source: str, citation: str, text: str) -> dict:
+def _row(source: str, citation: str, text: str, deontic: str = "prohibition", confidence: str = "EXTRACTED") -> dict:
     return {"requirement_id": f"{source}:{citation}", "source": source, "citation": citation,
-            "deontic_type": "obligation", "actor": "party", "requirement_text": text,
-            "evidence_standard": None, "severity": None, "applicability_json": "[]", "confidence": "EXTRACTED"}
+            "deontic_type": deontic, "actor": "party", "requirement_text": text,
+            "evidence_standard": None, "severity": None, "applicability_json": "[]", "confidence": confidence}
 
 
 class _MultiPolicyStore:
@@ -394,6 +398,53 @@ def _doc_of(*items):
     from types import SimpleNamespace
 
     return SimpleNamespace(texts=[SimpleNamespace(text=t, label=lbl, level=None) for lbl, t in items])
+
+
+def _req_obj(deontic, citation="§ 1", confidence="EXTRACTED"):
+    from rag_wright.contracts.compliance import DeonticType, Requirement
+    from rag_wright.contracts.provenance import ConfidenceTag
+    return Requirement(requirement_id=f"r:{citation}:{deontic}", source="p", citation=citation,
+                       deontic_type=DeonticType(deontic), actor="party", requirement_text="a rule here",
+                       confidence=ConfidenceTag(confidence))
+
+
+def test_deontic_route_from_type_confidence_and_override():
+    # DEON-1: the route comes from the deontic TYPE (any policy), with a curated FTC override and an
+    # ambiguous-confidence recall-first case -- NOT from matching FTC section numbers.
+    from rag_wright.subgraphs.compliance_check import DeonticRoute, deontic_route
+
+    assert deontic_route(_req_obj("obligation")) is DeonticRoute.OBLIGATION
+    assert deontic_route(_req_obj("prohibition")) is DeonticRoute.PROHIBITION
+    assert deontic_route(_req_obj("permission")) is DeonticRoute.PERMISSION
+    # off-vocab deontic is coerced to OBLIGATION but flagged AMBIGUOUS -> recall-first route, NOT trusted obligation
+    assert deontic_route(_req_obj("obligation", confidence="AMBIGUOUS")) is DeonticRoute.AMBIGUOUS
+    # curated FTC override still pins scope regardless of the extracted deontic type
+    assert deontic_route(_req_obj("prohibition", citation="§ 255.5")) is DeonticRoute.OBLIGATION
+
+
+async def test_deontic_split_obligation_once_prohibition_per_assertion_permission_excluded():
+    # DEON-1 (the 0012 fix): a mixed-deontic customer policy (§1/§2/§3) over a 2-assertion doc.
+    # obligation -> judged ONCE (document fact); prohibition -> per-assertion (x2); permission -> EXCLUDED.
+    # Total 3 findings, NOT 2 assertions x 3 rules = 6.
+    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+
+    store = _MultiPolicyStore([
+        _row("p", "§ 1", "The endorser must disclose any material connection.", deontic="obligation"),
+        _row("p", "§ 2", "An advertisement must not claim a product cures a disease.", deontic="prohibition"),
+        _row("p", "§ 3", "An advertiser may use a customer testimonial.", deontic="permission"),
+    ])
+    doc = _text_doc("The supplement cures arthritis fast in adults. Doctor Miller recommends it very warmly.")
+    cj, orig = _inject_generic_violation_judge()
+    try:
+        report = await run_subject_compliance_verdict(
+            "ad.pdf", store=store, judge_model_id="stub", embedder=_Emb1(),
+            doc=doc, aextract_fn=_stub_sentence_extractor(), sources=["p"])
+    finally:
+        cj.build_ageneric_judge_fn = orig
+    by_req = [f.requirement_id for f in report.findings]
+    assert by_req.count("p:§ 1") == 1        # obligation judged ONCE over the document (not per sentence)
+    assert by_req.count("p:§ 2") == 2        # prohibition judged per-assertion (two sentences)
+    assert "p:§ 3" not in by_req             # permission EXCLUDED from violation-judging
 
 
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():

@@ -25,7 +25,14 @@ from typing import Awaitable, Callable, Optional
 
 from pydantic import BaseModel
 
-from rag_wright.contracts.compliance import CheckableFact, Claim, ComplianceFinding, Requirement, Verdict
+from rag_wright.contracts.compliance import (
+    CheckableFact,
+    Claim,
+    ComplianceFinding,
+    DeonticType,
+    Requirement,
+    Verdict,
+)
 from rag_wright.models.seam import build_structured
 from rag_wright.util.concurrent import map_concurrent
 
@@ -92,6 +99,21 @@ def _base_tail(fact: CheckableFact, requirement: Requirement) -> str:
         requirement_text=requirement.requirement_text, assertion=fact.assertion_text)
 
 
+# DEON-1 (issue 0012): the neuro-symbolic deontic framing -- the KG's deontic_type tells the judge HOW to reason.
+# An OBLIGATION is breached by ABSENCE: the subject text above is the document's relevant content (DEON judges an
+# obligation ONCE over the document, not per sentence), so the judge must DECIDE yes/no, not hedge to "unclear"
+# just because the required element is missing -- absence IS the violation.
+_OBLIGATION_FRAMING = (
+    "\n\nDEONTIC FRAMING -- this requirement is an OBLIGATION (it must be SATISFIED): the subject text above is the "
+    "document's relevant content, checked as a whole. Decide definitively: if the required element (e.g. the "
+    "disclosure/action) IS present, COMPLIANT; if it is ABSENT from this text, that is a VIOLATION -- a missing "
+    "required element is itself the breach. Do NOT answer needs_review merely because the element is absent.")
+
+
+def _deontic_framing(requirement: Requirement) -> str:
+    return _OBLIGATION_FRAMING if requirement.deontic_type is DeonticType.OBLIGATION else ""
+
+
 def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured) -> JudgeFn:
     """COMP-VERDICT-GENERIC: the DOMAIN-AGNOSTIC judge -- rules a `(subject_fact, requirement)` pair on TEXT alone
     using the GENERIC judgment method (no advertising doctrine; reasons about "the subject" in any domain), so it
@@ -100,7 +122,8 @@ def build_generic_judge_fn(model_id: str, *, structured_factory=build_structured
     method = generic_judgment_method()
 
     def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
-        return structured_factory(model_id, JudgeVerdict).invoke(method + _base_tail(fact, requirement))
+        return structured_factory(model_id, JudgeVerdict).invoke(
+            method + _base_tail(fact, requirement) + _deontic_framing(requirement))
 
     return judge
 
@@ -111,7 +134,8 @@ def build_ageneric_judge_fn(model_id: str, *, structured_factory=build_structure
     method = generic_judgment_method()
 
     async def judge(fact: CheckableFact, requirement: Requirement) -> Optional[JudgeVerdict]:
-        return await structured_factory(model_id, JudgeVerdict).ainvoke(method + _base_tail(fact, requirement))
+        return await structured_factory(model_id, JudgeVerdict).ainvoke(
+            method + _base_tail(fact, requirement) + _deontic_framing(requirement))
 
     return judge
 
