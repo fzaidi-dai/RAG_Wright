@@ -415,8 +415,11 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > Tests +2 + updated scope tests + _row/_req deontic params. Suite 1358. LIVE (0012 repro): disclosure obligation
 > judged ONCE -> VIOLATION (definitive, was 3x "unclear"); 7 findings vs 9. Merged design-DEON-1+2 (routing+split)
 > into this task to avoid a regressive intermediate.** /
-> -2 (bounded obligation retrieval: top-N passages + token cap, not whole-doc at contract length) / -3/-4 (live
-> gate) ; Phase 2 DEON-5 (subject scope producer,
+> **-2 DONE (2026-08-31): build_obligation_pairs_fn -- per-obligation top-N (5) evidence retrieval up to a char
+> budget (4000), claims embedded once; seam document_fact_fn -> obligation_pairs_fn. Tests +2. Suite 1360. LIVE:
+> 18-sentence/983-char doc -> obligation judged over 350 chars bounded evidence (buried connection sentence
+> retrieved by BGE) -> violation. PHASE 1 (DEON-1+2) COMPLETE: obligations judged once, definitively, over bounded
+> evidence -- scalable to document length.** ; Phase 2 DEON-5 (subject scope producer,
 > ask-first) / -6 (constraint routing) / -7 (actor gate) / -8 (ad-path parity) / -9 (permission-as-defense) / -10
 > (live gate) / -ADR. BOTH PHASES NOW, no postponing. Each TDD + live gate. BUILD AFTER REVIEW.
 >

@@ -155,6 +155,51 @@ def rule_scope_of(requirement: Requirement) -> RuleScope:
     return RuleScope.CONTEXT if deontic_route(requirement) is DeonticRoute.OBLIGATION else RuleScope.CONTENT
 
 
+# DEON-2: how much of the subject the obligation judge sees -- the top-N most-relevant passages up to a char
+# budget, NOT the whole document (an obligation is judged once over BOUNDED retrieved evidence, not per-sentence
+# and not by dumping a contract-length document into one prompt).
+OBLIGATION_TOP_N = 5
+OBLIGATION_CHAR_BUDGET = 4000
+
+
+def _within_budget(claims: list, *, top_n: int, char_budget: int) -> list:
+    """Take up to `top_n` claims (already ranked) but stop once the cumulative assertion text exceeds
+    `char_budget` -- the bounded evidence window for one obligation judgment. Always keeps at least the first."""
+    out: list = []
+    used = 0
+    for c in claims[:top_n]:
+        text = c.assertion_text or ""
+        if out and used + len(text) > char_budget:
+            break
+        out.append(c)
+        used += len(text)
+    return out
+
+
+def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
+                              char_budget: int = OBLIGATION_CHAR_BUDGET) -> Any:
+    """DEON-2: the obligation evidence retriever. For each obligation, embed it and RANK the subject assertions,
+    take the top-N most-relevant up to a char budget, and build one bounded evidence `CheckableFact` -> one
+    `(evidence_fact, obligation)` pair. Symbolic/vector narrowing (KG deontic route + embeddings) selects the
+    small evidence set; the LLM then judges once over it (breach = absence). Claims are embedded ONCE."""
+    def obligation_pairs(obligations: list, claims: list, source_doc: str) -> list:
+        if not (obligations and claims):
+            return []
+        claim_vecs = [(c, embedder.encode_dense(c.assertion_text)) for c in claims]  # embed the subject once
+        pairs: list = []
+        for ob in obligations:
+            ob_vec = embedder.encode_dense(ob.requirement_text)
+            ranked = [c for c, _ in sorted(claim_vecs, key=lambda cv: _cosine(ob_vec, cv[1]), reverse=True)]
+            evidence = _within_budget(ranked, top_n=top_n, char_budget=char_budget)
+            text = "\n\n".join(c.assertion_text for c in evidence) or "(empty subject)"
+            fact = CheckableFact(fact_id=CheckableFact.make_id(source_doc, ob.requirement_id, text),
+                                 source_doc=source_doc, assertion_text=text)
+            pairs.append((fact, ob))
+        return pairs
+
+    return obligation_pairs
+
+
 SelectFn = Callable[[Claim, list], list]  # (claim, requirements) -> the narrowed requirements to judge
 
 
@@ -235,16 +280,17 @@ def _enrich(claim: Claim, ad_disclosures: set[str]) -> Claim:
 
 def build_compliance_check(
     *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: AJudgeFn,
-    select_fn: SelectFn | None = None, document_fact_fn: Any = None, retry_policy: Any = DEFAULT_RETRY
+    select_fn: SelectFn | None = None, obligation_pairs_fn: Any = None, retry_policy: Any = DEFAULT_RETRY
 ):
     """Compile the compliance-check subgraph. All seams are injected for hermetic testing. `select_fn` (CC-8b) is
     the per-claim requirement narrower; when None, every APPLICABLE requirement is judged (the broad default).
 
-    DEON-1 (issue 0012): when `document_fact_fn` (`(claims, source_doc) -> fact`) is provided, the requirements are
-    split by `deontic_route`: PROHIBITION/AMBIGUOUS rules are judged PER-ASSERTION (narrowed by `select_fn`),
-    OBLIGATION rules are judged ONCE over the document fact (breach = absence, unanswerable per-sentence), and
-    PERMISSION rules are excluded from violation-judging. When None (the ad path, until DEON-8), the prior
-    per-assertion pairing is kept. Query-side: each node degrades to empty on failure (never crashes)."""
+    DEON-1/DEON-2 (issue 0012): when `obligation_pairs_fn` (`(obligations, claims, source) -> [(evidence_fact,
+    obligation)]`) is provided, the requirements are split by `deontic_route`: PROHIBITION/AMBIGUOUS rules are
+    judged PER-ASSERTION (narrowed by `select_fn`), OBLIGATION rules are judged ONCE each over a BOUNDED retrieved
+    evidence bundle (breach = absence, unanswerable per-sentence), and PERMISSION rules are excluded from
+    violation-judging. When None (the ad path, until DEON-8), the prior per-assertion pairing is kept. Query-side:
+    each node degrades to empty on failure (never crashes)."""
 
     async def extract_claims(state: CheckState) -> CheckState:
         with business_span("compliance_check.extract_claims"):
@@ -265,14 +311,15 @@ def build_compliance_check(
                 requirements = requirements_fn()
             except Exception:  # noqa: BLE001 - degrade-to-empty
                 return {"pairs": []}
-        if document_fact_fn is None:  # ad path (until DEON-8): the prior per-assertion pairing
+        if obligation_pairs_fn is None:  # ad path (until DEON-8): the prior per-assertion pairing
             if select_fn is not None:  # CC-8b: semantic narrowing (top-k content + always-include context + dedup)
                 pairs = [(_enrich(claim, ad), req) for claim in claims for req in select_fn(claim, requirements)]
             else:  # broad default: every applicable requirement
                 pairs = [(_enrich(claim, ad), req)
                          for claim in claims for req in requirements if applies_to(req, claim)]
             return {"pairs": pairs}
-        # DEON-1: deontic split -- prohibitions per-assertion, obligations judged ONCE, permissions excluded.
+        # DEON-1/2: deontic split -- prohibitions per-assertion, obligations judged ONCE over bounded retrieved
+        # evidence, permissions excluded.
         prohibitions = [r for r in requirements
                         if deontic_route(r) in (DeonticRoute.PROHIBITION, DeonticRoute.AMBIGUOUS)]
         obligations = [r for r in requirements if deontic_route(r) is DeonticRoute.OBLIGATION]
@@ -280,9 +327,8 @@ def build_compliance_check(
         for claim in claims:  # prohibitions/ambiguous: per-assertion, where the subject asserts something related
             selected = select_fn(claim, prohibitions) if select_fn is not None else prohibitions
             pairs.extend((_enrich(claim, ad), req) for req in selected)
-        if obligations and claims:  # obligations: ONE judgment over the whole document (breach = absence)
-            doc_fact = document_fact_fn(claims, state["source_doc"])
-            pairs.extend((doc_fact, req) for req in obligations)
+        if obligations and claims:  # obligations: one bounded (evidence, obligation) pair each
+            pairs.extend(obligation_pairs_fn(obligations, claims, state["source_doc"]))
         return {"pairs": pairs}
 
     async def judge(state: CheckState) -> CheckState:
@@ -487,20 +533,12 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
     async def _claims_fn(text: str, source: str) -> list:
         return facts_fn(text, source)  # precomputed semantic facts, adapted to the async claims seam
 
-    def _document_fact(claims: list, source: str) -> CheckableFact:
-        # DEON-1: the document-level fact an obligation is judged ONCE against (breach = absence). Its text is the
-        # whole subject (DEON-2 will bound this to retrieved passages); an obligation's citation is document-level
-        # (there is no offending span for an absence).
-        text = "\n\n".join(c.assertion_text for c in claims) or "(empty subject)"
-        return CheckableFact(fact_id=CheckableFact.make_id(source, len(claims), text), source_doc=source,
-                             assertion_text=text)
-
     return build_compliance_check(
         claims_fn=_claims_fn,
         requirements_fn=lambda: requirements,
         judge_fn=build_ageneric_judge_fn(judge_model_id),
         select_fn=select_fn,
-        document_fact_fn=_document_fact,
+        obligation_pairs_fn=build_obligation_pairs_fn(embedder),  # DEON-2: bounded per-obligation evidence
     )
 
 

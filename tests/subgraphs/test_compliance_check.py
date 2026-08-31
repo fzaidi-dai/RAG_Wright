@@ -400,11 +400,11 @@ def _doc_of(*items):
     return SimpleNamespace(texts=[SimpleNamespace(text=t, label=lbl, level=None) for lbl, t in items])
 
 
-def _req_obj(deontic, citation="§ 1", confidence="EXTRACTED"):
+def _req_obj(deontic, citation="§ 1", confidence="EXTRACTED", text="a rule here"):
     from rag_wright.contracts.compliance import DeonticType, Requirement
     from rag_wright.contracts.provenance import ConfidenceTag
     return Requirement(requirement_id=f"r:{citation}:{deontic}", source="p", citation=citation,
-                       deontic_type=DeonticType(deontic), actor="party", requirement_text="a rule here",
+                       deontic_type=DeonticType(deontic), actor="party", requirement_text=text,
                        confidence=ConfidenceTag(confidence))
 
 
@@ -445,6 +445,42 @@ async def test_deontic_split_obligation_once_prohibition_per_assertion_permissio
     assert by_req.count("p:§ 1") == 1        # obligation judged ONCE over the document (not per sentence)
     assert by_req.count("p:§ 2") == 2        # prohibition judged per-assertion (two sentences)
     assert "p:§ 3" not in by_req             # permission EXCLUDED from violation-judging
+
+
+def test_obligation_pairs_are_bounded_and_relevance_ranked():
+    # DEON-2: an obligation is judged over the TOP-N most-relevant passages up to a char budget -- NOT the whole
+    # document. A discriminating embedder ranks the connection sentence first; the bound caps the evidence.
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+
+    emb = _FakeEmbedder({"material connection": [0, 0, 1], "disclose": [0, 0, 1],  # obligation + the relevant claim
+                         "cures": [1, 0, 0], "price": [0, 1, 0]})
+    claims = [CheckableFact(fact_id=f"f{i}", source_doc="d", assertion_text=t) for i, t in enumerate([
+        "The product cures arthritis fast.",                       # off-topic
+        "The price was ninety-nine, now forty-nine.",              # off-topic
+        "Dr. Miller has a material connection but did not disclose it.",  # THE relevant passage
+        "Another cures claim here about the product.",             # off-topic
+        "One more price mention in the ad copy.",                  # off-topic
+        "A sixth sentence about cures and more cures.",            # off-topic (beyond top-N=5 window)
+    ])]
+    ob = _req_obj("obligation", citation="§ D", text="An endorser must disclose any material connection.")
+    pairs = build_obligation_pairs_fn(emb, top_n=3, char_budget=10_000)([ob], claims, "d")
+    assert len(pairs) == 1                                          # ONE judgment for the obligation
+    evidence_fact, req = pairs[0]
+    assert req is ob
+    assert "material connection but did not disclose" in evidence_fact.assertion_text  # the relevant passage is in
+    assert evidence_fact.assertion_text.count("\n\n") <= 2          # bounded to top_n=3 passages, not all 6
+
+
+def test_obligation_evidence_respects_the_char_budget():
+    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+
+    claims = [CheckableFact(fact_id=f"f{i}", source_doc="d", assertion_text="x" * 100) for i in range(10)]
+    ob = _req_obj("obligation", citation="§ D")
+    pairs = build_obligation_pairs_fn(_Emb1(), top_n=8, char_budget=250)([ob], claims, "d")  # ~2-3 fit in 250
+    evidence = pairs[0][0].assertion_text
+    assert len(evidence) <= 300                                     # capped by the char budget, not all 10
 
 
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
