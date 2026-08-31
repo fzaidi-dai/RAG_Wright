@@ -200,6 +200,21 @@ def load_contract_ontology(path: Path | str = _TTL_PATH) -> ContractOntologyView
         value_rollup=value_rollup)
 
 
+@lru_cache(maxsize=4)
+def load_typed_edges(path: str = str(_TTL_PATH)) -> tuple[dict[str, str], dict[str, str]]:
+    """ADR-0067 P5a: the KG typed-edge map from contract_bridge.ttl. Returns `(dim_edge, edge_iri)`:
+    `{dimension value -> KG edge type}` (from `cbr:kgEdge`) and `{edge type -> predicate IRI}` (from
+    `cbr:predicateIri` on each `cbr:KgEdgeType`). The property-graph edge types are ontology-authoritative;
+    `store/arcadedb.py` builds `_TYPED_DIMENSION_EDGE` / `_edge_predicate_iri` from this. Cached per path."""
+    g = Graph()
+    g.parse(str(path), format="turtle")
+    edge_iri = {str(g.value(e, RDFS.label)): str(g.value(e, _cbr("predicateIri")))
+                for e in g.subjects(RDF.type, _cbr("KgEdgeType"))}
+    dim_edge = {str(g.value(dim, RDFS.label)): str(g.value(edge, RDFS.label))
+                for dim, edge in g.subject_objects(_cbr("kgEdge"))}
+    return dim_edge, edge_iri
+
+
 def _dim_class():
     from rdflib import URIRef
     return URIRef(_DIMENSION_CLASS)

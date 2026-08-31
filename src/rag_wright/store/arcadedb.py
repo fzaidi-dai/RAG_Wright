@@ -31,6 +31,7 @@ from rag_wright.contracts.property import (
     PropertyDimension,
 )
 from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.ontology.loader import load_typed_edges  # ADR-0067 P5a: typed-edge map from the ontology
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import GraphEdge, GraphNode
 
@@ -51,61 +52,20 @@ PROPERTY_EDGE_TYPE = "HasProperty"  # legacy flat edge (ADR-0025/0026); supersed
 # shared PropertyValue node (deduped by value_key) is UNCHANGED -- identity preserved, so the upgrade is
 # additive on nodes and rebuilt on edges. Every typed edge still carries the assertion provenance (FR-S.4)
 # plus a predicate IRI (ODRL for the deontic edges, our bridge IRI otherwise).
+# ADR-0067 P5a: the typed-edge map (dimension -> KG edge type) + the predicate IRIs are AUTHORITATIVE in
+# contract_bridge.ttl (cbr:kgEdge / cbr:KgEdgeType); loaded here, not a Python literal. Edit the ttl to retarget.
+_DIM_EDGE_STR, _EDGE_PREDICATE_IRI = load_typed_edges()
 _TYPED_DIMENSION_EDGE: dict[PropertyDimension, str] = {
-    PropertyDimension.MUTUALITY: "HAS_MUTUALITY",
-    PropertyDimension.FAVORABILITY: "HAS_FAVORABILITY",
-    PropertyDimension.PARTY_ASYMMETRY: "HAS_ASYMMETRY",
-    PropertyDimension.WARRANTY_SCOPE: "HAS_WARRANTY_SCOPE",
-    PropertyDimension.CLAIM_SCOPE: "HAS_CLAIM_SCOPE",
-    PropertyDimension.IP_OWNERSHIP: "HAS_IP_OWNERSHIP",
-    PropertyDimension.RENEWAL_MECHANISM: "HAS_RENEWAL",
-    PropertyDimension.CARVE_OUT: "EXCEPTS",
-    PropertyDimension.COVERED_SUBJECT: "COVERS",
-    PropertyDimension.COVERED_PARTIES: "COVERS",
-    PropertyDimension.DAMAGE_TYPE: "PROHIBITS",
-    PropertyDimension.NONSOLICIT_TARGET: "PROHIBITS",
-    PropertyDimension.PROCEDURAL: "REQUIRES",
-    PropertyDimension.CAP_BASIS: "CAPS",
-    PropertyDimension.CAP_QUANTUM: "CAPS",
-    PropertyDimension.JURISDICTION: "GOVERNED_BY",
-    PropertyDimension.LAW_MULTIPLICITY: "GOVERNED_BY",
-    PropertyDimension.TEMPORAL_BOUND: "BOUNDED_BY",
-    PropertyDimension.NOTICE_PERIOD: "BOUNDED_BY",
-    # tier 3 -- CUAD-family extensions (KG-4). Deontic -> GRANTS/PROHIBITS; the rest -> HAS_*.
-    PropertyDimension.EXCLUSIVITY_TYPE: "GRANTS",
-    PropertyDimension.RIGHT_OF_FIRST_TYPE: "GRANTS",
-    PropertyDimension.RESTRICTION_SCOPE: "PROHIBITS",
-    PropertyDimension.COC_CONSENT: "HAS_COC_CONSENT",
-    PropertyDimension.ASSIGNMENT_CONSENT: "HAS_ASSIGNMENT_CONSENT",
-    PropertyDimension.ESCROW_RELEASE_TRIGGER: "HAS_ESCROW_TRIGGER",
-    PropertyDimension.MFN_SCOPE: "HAS_MFN_SCOPE",
-    PropertyDimension.TERMINATION_RIGHT: "HAS_TERMINATION_RIGHT",
-    PropertyDimension.AUDIT_FREQUENCY: "HAS_AUDIT_FREQUENCY",
-    PropertyDimension.COMMITMENT_QUANTUM: "HAS_COMMITMENT_QUANTUM",
-    PropertyDimension.LD_TRIGGER: "HAS_LD_TRIGGER",
-    # ADR-0049 (2): taxonomy-gap dimensions. dispute_method -> descriptive HAS_*; collateral -> semantic SECURES.
-    PropertyDimension.DISPUTE_METHOD: "HAS_DISPUTE_METHOD",
-    PropertyDimension.COLLATERAL_TYPE: "SECURES",
-    # ADR-0049 (2) batch 2: new descriptive edges for FM/royalty; confidentiality exceptions reuse EXCEPTS
-    # (they ARE carve-outs to the duty) and conditions reuse REQUIRES (a condition is an obligation).
-    PropertyDimension.FORCE_MAJEURE_EVENT: "HAS_FORCE_MAJEURE_EVENT",
-    PropertyDimension.ROYALTY_BASIS: "HAS_ROYALTY_BASIS",
-    PropertyDimension.CONFIDENTIALITY_EXCEPTION: "EXCEPTS",
-    PropertyDimension.CONDITION_TYPE: "REQUIRES",
+    PropertyDimension(dim): edge for dim, edge in _DIM_EDGE_STR.items()
 }
-# distinct edge types, insertion-ordered (for DDL + counts)
-TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(dict.fromkeys(_TYPED_DIMENSION_EDGE.values()))
-_ODRL_NS = "http://www.w3.org/ns/odrl/2/"
-_CBR_NS = "https://ragwright.local/ontology/contract-bridge#"
-_DEONTIC_ODRL = {"PROHIBITS": "prohibition", "REQUIRES": "obligation", "GRANTS": "permission"}
+# distinct edge types (deterministic order; used as a set / for counts + DDL, never order-dependent)
+TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(sorted(set(_TYPED_DIMENSION_EDGE.values())))
 
 
 def _edge_predicate_iri(edge_type: str) -> str:
-    """The predicate IRI stamped on a typed edge: ODRL for the deontic edges (the W3C rights/duties spine),
-    our bridge IRI otherwise (ADR-0033 grounding)."""
-    if edge_type in _DEONTIC_ODRL:
-        return _ODRL_NS + _DEONTIC_ODRL[edge_type]
-    return _CBR_NS + edge_type
+    """The predicate IRI stamped on a typed edge (ODRL for the deontic edges, the bridge IRI otherwise) --
+    from contract_bridge.ttl (ADR-0067 P5a)."""
+    return _EDGE_PREDICATE_IRI[edge_type]
 
 # Candidates fetched per leg before fusion. RRF reorders within this pool, so it is set well above a
 # typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then

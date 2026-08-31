@@ -2436,3 +2436,189 @@ cbr:field_Clause__document_reference_examples rdf:first "Section 8" ;
 cbr:field_Jurisdiction__jurisdiction_name_examples rdf:first "New York" ;
     rdf:rest ( "England and Wales" "Delaware" ) .
 
+# =============================================================================
+# ADR-0067 P5a -- the KG typed-edge map (the property GRAPH storage schema), keyed by dimension.
+# cbr:KgEdgeType (predicate IRI: ODRL for deontic edges, cbr: otherwise) ; cbr:kgEdge per dimension.
+# Loaded by store/arcadedb.py; the property-graph edge types are now ontology-authoritative.
+# =============================================================================
+
+cbr:dim_assignment_consent cbr:kgEdge cbr:HAS_ASSIGNMENT_CONSENT .
+
+cbr:dim_audit_frequency cbr:kgEdge cbr:HAS_AUDIT_FREQUENCY .
+
+cbr:dim_cap_basis cbr:kgEdge cbr:CAPS .
+
+cbr:dim_cap_quantum cbr:kgEdge cbr:CAPS .
+
+cbr:dim_carve_out cbr:kgEdge cbr:EXCEPTS .
+
+cbr:dim_claim_scope cbr:kgEdge cbr:HAS_CLAIM_SCOPE .
+
+cbr:dim_coc_consent cbr:kgEdge cbr:HAS_COC_CONSENT .
+
+cbr:dim_collateral_type cbr:kgEdge cbr:SECURES .
+
+cbr:dim_commitment_quantum cbr:kgEdge cbr:HAS_COMMITMENT_QUANTUM .
+
+cbr:dim_condition_type cbr:kgEdge cbr:REQUIRES .
+
+cbr:dim_confidentiality_exception cbr:kgEdge cbr:EXCEPTS .
+
+cbr:dim_covered_parties cbr:kgEdge cbr:COVERS .
+
+cbr:dim_covered_subject cbr:kgEdge cbr:COVERS .
+
+cbr:dim_damage_type cbr:kgEdge cbr:PROHIBITS .
+
+cbr:dim_dispute_method cbr:kgEdge cbr:HAS_DISPUTE_METHOD .
+
+cbr:dim_escrow_release_trigger cbr:kgEdge cbr:HAS_ESCROW_TRIGGER .
+
+cbr:dim_exclusivity_type cbr:kgEdge cbr:GRANTS .
+
+cbr:dim_favorability cbr:kgEdge cbr:HAS_FAVORABILITY .
+
+cbr:dim_force_majeure_event cbr:kgEdge cbr:HAS_FORCE_MAJEURE_EVENT .
+
+cbr:dim_ip_ownership cbr:kgEdge cbr:HAS_IP_OWNERSHIP .
+
+cbr:dim_jurisdiction cbr:kgEdge cbr:GOVERNED_BY .
+
+cbr:dim_law_multiplicity cbr:kgEdge cbr:GOVERNED_BY .
+
+cbr:dim_ld_trigger cbr:kgEdge cbr:HAS_LD_TRIGGER .
+
+cbr:dim_mfn_scope cbr:kgEdge cbr:HAS_MFN_SCOPE .
+
+cbr:dim_mutuality cbr:kgEdge cbr:HAS_MUTUALITY .
+
+cbr:dim_nonsolicit_target cbr:kgEdge cbr:PROHIBITS .
+
+cbr:dim_notice_period cbr:kgEdge cbr:BOUNDED_BY .
+
+cbr:dim_party_asymmetry cbr:kgEdge cbr:HAS_ASYMMETRY .
+
+cbr:dim_procedural cbr:kgEdge cbr:REQUIRES .
+
+cbr:dim_renewal_mechanism cbr:kgEdge cbr:HAS_RENEWAL .
+
+cbr:dim_restriction_scope cbr:kgEdge cbr:PROHIBITS .
+
+cbr:dim_right_of_first_type cbr:kgEdge cbr:GRANTS .
+
+cbr:dim_royalty_basis cbr:kgEdge cbr:HAS_ROYALTY_BASIS .
+
+cbr:dim_temporal_bound cbr:kgEdge cbr:BOUNDED_BY .
+
+cbr:dim_termination_right cbr:kgEdge cbr:HAS_TERMINATION_RIGHT .
+
+cbr:dim_warranty_scope cbr:kgEdge cbr:HAS_WARRANTY_SCOPE .
+
+cbr:HAS_ASSIGNMENT_CONSENT a cbr:KgEdgeType ;
+    rdfs:label "HAS_ASSIGNMENT_CONSENT" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_ASSIGNMENT_CONSENT" .
+
+cbr:HAS_ASYMMETRY a cbr:KgEdgeType ;
+    rdfs:label "HAS_ASYMMETRY" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_ASYMMETRY" .
+
+cbr:HAS_AUDIT_FREQUENCY a cbr:KgEdgeType ;
+    rdfs:label "HAS_AUDIT_FREQUENCY" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_AUDIT_FREQUENCY" .
+
+cbr:HAS_CLAIM_SCOPE a cbr:KgEdgeType ;
+    rdfs:label "HAS_CLAIM_SCOPE" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_CLAIM_SCOPE" .
+
+cbr:HAS_COC_CONSENT a cbr:KgEdgeType ;
+    rdfs:label "HAS_COC_CONSENT" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_COC_CONSENT" .
+
+cbr:HAS_COMMITMENT_QUANTUM a cbr:KgEdgeType ;
+    rdfs:label "HAS_COMMITMENT_QUANTUM" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_COMMITMENT_QUANTUM" .
+
+cbr:HAS_DISPUTE_METHOD a cbr:KgEdgeType ;
+    rdfs:label "HAS_DISPUTE_METHOD" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_DISPUTE_METHOD" .
+
+cbr:HAS_ESCROW_TRIGGER a cbr:KgEdgeType ;
+    rdfs:label "HAS_ESCROW_TRIGGER" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_ESCROW_TRIGGER" .
+
+cbr:HAS_FAVORABILITY a cbr:KgEdgeType ;
+    rdfs:label "HAS_FAVORABILITY" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_FAVORABILITY" .
+
+cbr:HAS_FORCE_MAJEURE_EVENT a cbr:KgEdgeType ;
+    rdfs:label "HAS_FORCE_MAJEURE_EVENT" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_FORCE_MAJEURE_EVENT" .
+
+cbr:HAS_IP_OWNERSHIP a cbr:KgEdgeType ;
+    rdfs:label "HAS_IP_OWNERSHIP" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_IP_OWNERSHIP" .
+
+cbr:HAS_LD_TRIGGER a cbr:KgEdgeType ;
+    rdfs:label "HAS_LD_TRIGGER" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_LD_TRIGGER" .
+
+cbr:HAS_MFN_SCOPE a cbr:KgEdgeType ;
+    rdfs:label "HAS_MFN_SCOPE" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_MFN_SCOPE" .
+
+cbr:HAS_MUTUALITY a cbr:KgEdgeType ;
+    rdfs:label "HAS_MUTUALITY" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_MUTUALITY" .
+
+cbr:HAS_RENEWAL a cbr:KgEdgeType ;
+    rdfs:label "HAS_RENEWAL" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_RENEWAL" .
+
+cbr:HAS_ROYALTY_BASIS a cbr:KgEdgeType ;
+    rdfs:label "HAS_ROYALTY_BASIS" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_ROYALTY_BASIS" .
+
+cbr:HAS_TERMINATION_RIGHT a cbr:KgEdgeType ;
+    rdfs:label "HAS_TERMINATION_RIGHT" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_TERMINATION_RIGHT" .
+
+cbr:HAS_WARRANTY_SCOPE a cbr:KgEdgeType ;
+    rdfs:label "HAS_WARRANTY_SCOPE" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#HAS_WARRANTY_SCOPE" .
+
+cbr:SECURES a cbr:KgEdgeType ;
+    rdfs:label "SECURES" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#SECURES" .
+
+cbr:BOUNDED_BY a cbr:KgEdgeType ;
+    rdfs:label "BOUNDED_BY" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#BOUNDED_BY" .
+
+cbr:CAPS a cbr:KgEdgeType ;
+    rdfs:label "CAPS" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#CAPS" .
+
+cbr:COVERS a cbr:KgEdgeType ;
+    rdfs:label "COVERS" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#COVERS" .
+
+cbr:EXCEPTS a cbr:KgEdgeType ;
+    rdfs:label "EXCEPTS" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#EXCEPTS" .
+
+cbr:GOVERNED_BY a cbr:KgEdgeType ;
+    rdfs:label "GOVERNED_BY" ;
+    cbr:predicateIri "https://ragwright.local/ontology/contract-bridge#GOVERNED_BY" .
+
+cbr:GRANTS a cbr:KgEdgeType ;
+    rdfs:label "GRANTS" ;
+    cbr:predicateIri "http://www.w3.org/ns/odrl/2/permission" .
+
+cbr:REQUIRES a cbr:KgEdgeType ;
+    rdfs:label "REQUIRES" ;
+    cbr:predicateIri "http://www.w3.org/ns/odrl/2/obligation" .
+
+cbr:PROHIBITS a cbr:KgEdgeType ;
+    rdfs:label "PROHIBITS" ;
+    cbr:predicateIri "http://www.w3.org/ns/odrl/2/prohibition" .
+
