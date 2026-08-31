@@ -40,6 +40,25 @@ cmp:prohibition cmp:cue "must not", "shall not", "may not", "will not", "prohibi
 cmp:permission  cmp:cue "may", "permitted", "allowed", "entitled", "at its discretion", "reserves the right" .
 
 # =============================================================================
+# ADR-0066 P4a: Actor ROLE synonyms -- a canonical role (skos:prefLabel) + its surface variants (skos:altLabel).
+# The query-side actor gate (canonical_actor) normalizes a rule's bound actor + a subject's role to the canonical
+# form before matching, so 'manufacturer' aligns with 'advertiser'. Generic role KNOWLEDGE -> the ontology (a
+# new customer domain extends this pack, not the code). Not owl:oneOf: an open, extensible SKOS role scheme.
+# =============================================================================
+cmp:ActorRole a owl:Class ; skos:prefLabel "Actor role" ;
+    rdfs:comment "A canonical party role a rule can bind or a subject can carry; skos:altLabel lists its synonyms." .
+cmp:advertiser a cmp:ActorRole ; skos:prefLabel "advertiser" ;
+    skos:altLabel "manufacturer", "marketer", "brand", "company", "business", "sponsor" .
+cmp:endorser a cmp:ActorRole ; skos:prefLabel "endorser" ;
+    skos:altLabel "influencer", "spokesperson", "ambassador", "reviewer" .
+cmp:expert a cmp:ActorRole ; skos:prefLabel "expert" ;
+    skos:altLabel "physician", "doctor", "specialist", "professional" .
+cmp:consumer a cmp:ActorRole ; skos:prefLabel "consumer" ;
+    skos:altLabel "buyer", "customer", "user" .
+cmp:seller a cmp:ActorRole ; skos:prefLabel "seller" ;
+    skos:altLabel "merchant", "retailer", "vendor" .
+
+# =============================================================================
 # Requirement — a single regulatory rule (the rulebook side). requirement_id = <source_reg>:<section>:<hash>.
 # =============================================================================
 cmp:Requirement a owl:Class ; skos:prefLabel "Requirement" ;

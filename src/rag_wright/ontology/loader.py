@@ -54,6 +54,25 @@ def load_deontic_cues(path: str = str(_COMPLIANCE_TTL_PATH)) -> frozenset[str]:
 
 
 @lru_cache(maxsize=4)
+def load_actor_synonyms(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
+    """ADR-0066 P4a: the actor-role synonyms from compliance_bridge.ttl -- `{synonym -> canonical role}` built from
+    each `cmp:ActorRole`'s `skos:altLabel` (synonym) -> `skos:prefLabel` (canonical). The query-side actor gate
+    (`canonical_actor`) normalizes with this. Cached per path."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    out: dict[str, str] = {}
+    for role in g.subjects(RDF.type, URIRef(_CMP + "ActorRole")):
+        pref = str(g.value(role, SKOS.prefLabel) or "").strip().lower()
+        if not pref:
+            continue
+        for alt in g.objects(role, SKOS.altLabel):
+            out[str(alt).strip().lower()] = pref
+    return out
+
+
+@lru_cache(maxsize=4)
 def load_shapes_graph(path: str = str(_TTL_PATH)) -> Graph:
     """ADR-0066 P2: the ttl parsed as an rdflib Graph -- its `sh:NodeShape`s ARE the SHACL shapes handed to pyshacl
     at runtime, so the symbolic layer reads the symbolic artifact directly (no Python-built shapes). pyshacl uses

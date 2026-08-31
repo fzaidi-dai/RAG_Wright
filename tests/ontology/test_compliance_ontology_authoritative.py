@@ -9,7 +9,7 @@ the enforcement.
 from __future__ import annotations
 
 from rag_wright.contracts.compliance import ClaimType, DeonticType, RuleScope, Severity, Verdict
-from rag_wright.ontology.loader import load_compliance_vocab
+from rag_wright.ontology.loader import load_actor_synonyms, load_compliance_vocab
 
 _VOCAB = load_compliance_vocab()
 
@@ -24,3 +24,15 @@ def test_every_python_enum_matches_the_ttl() -> None:
 
 def test_the_ttl_declares_exactly_the_five_closed_vocabs() -> None:
     assert set(_VOCAB) == {"DeonticType", "ClaimType", "Severity", "RuleScope", "Verdict"}
+
+
+def test_actor_synonyms_are_authoritative_in_the_ttl() -> None:
+    # ADR-0066 P4a: the query-side actor-role synonyms are loaded from compliance_bridge.ttl (skos:altLabel),
+    # not a Python literal -- a ttl edit that breaks a mapping is caught here.
+    syn = load_actor_synonyms()
+    assert syn["manufacturer"] == "advertiser"
+    assert syn["influencer"] == "endorser"
+    assert syn["physician"] == "expert"
+    assert syn["customer"] == "consumer"
+    assert syn["vendor"] == "seller"
+    assert len(syn) == 20  # the full role pack (5 roles x their synonyms)

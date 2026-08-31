@@ -41,6 +41,7 @@ from rag_wright.contracts.compliance import (
     Verdict,
 )
 from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.ontology.loader import load_actor_synonyms  # ADR-0066 P4a: actor synonyms from the ontology
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
 
 _ALL_CLAIM_TYPES = {c.value for c in ClaimType}
@@ -99,14 +100,9 @@ _ROLE_GENERIC = frozenset({"", "party", "anyone", "any", "all", "everyone", "sub
 # employer~manufacturer 0.68 > advertiser~manufacturer 0.63, so a similarity threshold cannot separate them).
 # An unknown role is KEPT as-is (both sides normalize identically, so an exotic domain still matches on its own
 # term); this is role knowledge, NOT an FTC/corpus hardcode.
-_ACTOR_SYNONYMS = {
-    "manufacturer": "advertiser", "marketer": "advertiser", "brand": "advertiser", "company": "advertiser",
-    "business": "advertiser", "sponsor": "advertiser",
-    "influencer": "endorser", "spokesperson": "endorser", "ambassador": "endorser", "reviewer": "endorser",
-    "physician": "expert", "doctor": "expert", "specialist": "expert", "professional": "expert",
-    "buyer": "consumer", "customer": "consumer", "user": "consumer",
-    "merchant": "seller", "retailer": "seller", "vendor": "seller",
-}
+# ADR-0066 P4a: AUTHORITATIVE in compliance_bridge.ttl (cmp:ActorRole skos:altLabel) -- loaded, not a Python
+# literal. To add a role synonym, edit the ttl (a new customer domain extends the role pack, not this code).
+_ACTOR_SYNONYMS: dict[str, str] = load_actor_synonyms()
 
 
 def canonical_actor(raw: str) -> str:
