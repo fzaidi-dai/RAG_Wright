@@ -130,13 +130,17 @@ Each task: TDD (contract → failing test → implement) + a LIVE gate.
 - **DEON-ADR:** ADR extending ADR-0040 — deontic type + actor as the primary applicability gates; FTC tables as
   curated overrides; the obligation-vs-prohibition judge-unit split.
 
-## Open decisions to confirm at review
+## Settled decisions (product owner, 2026-08-31 — "agree with all")
 
-1. **Subject scope carriage (DEON-5):** a document-level `SubjectScope` (actor-set + constraint-set) vs optional
-   `actor`/`scope` on `CheckableFact`. Recommendation: aggregate document-level scope + keep per-assertion actor
-   for obligation passage-scoping. Ask-first (contract).
-2. **Obligation retrieval budget (DEON-3/7):** top-N passages + a token cap; over-budget ⇒ bounded map-reduce
-   screen (chunk-level candidate screen, escalate only candidates). Pick N + cap empirically.
-3. **Ambiguous-deontic default:** per-assertion + flag (recall-first) — confirm this over "judge both ways".
-4. **Permission-as-defense (DEON-9):** exclude-only (Phase 1) is the floor; full exception-linking is Phase 2 —
-   confirm it belongs in this arc (not postponed), given carve-outs are a common policy shape.
+1. **Subject scope carriage (DEON-5):** a **document-level `SubjectScope`** (the actor-set + constraint-set found
+   in the document), plus per-assertion actor for obligation passage-scoping. Reuses the generic `Constraint`
+   matcher; keeps `CheckableFact` bare. Ask-first (contract) confirmed at DEON-5.
+2. **Obligation retrieval budget (DEON-3/7):** retrieve the **top ~5 most-relevant passages up to a token cap**;
+   a document over the cap does a bounded two-step (cheap chunk screen → judge only the candidates). Symbolic
+   gate + vector retrieval narrow; the LLM sees a small bundle. Tune N/cap against real documents.
+3. **Ambiguous-deontic default:** route as a **prohibition (per-assertion) AND flag it** — recall-first, never
+   silently skip an uncertain rule, surface the uncertainty.
+4. **Permission-as-defense (DEON-9):** do the **full version in this arc (Phase 2)** — link a permission/exception
+   to the rule it modifies and pass it to that rule's judge as context, so a legitimate carve-out does not cause
+   a false violation. Not postponed (carve-outs are a common policy shape). The exclude-from-violation floor
+   still lands first (Phase 1).
