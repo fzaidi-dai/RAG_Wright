@@ -6,15 +6,14 @@ from rag_wright.contracts.function import FUNCTION_LABEL_SET
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.spans.symbolic_validation import (
-    FUNCTION_APPLICABLE_DIMS,
-    PERMISSIVE_FUNCTIONS,
-    flagged_dimensions,
-    symbolic_validate,
-)
+from rag_wright.ontology.loader import load_contract_ontology
+from rag_wright.spans.symbolic_validation import flagged_dimensions, symbolic_validate
 
 _D = PropertyDimension
 _PROV = Provenance.of(ChunkId.of("doc", 0, "clause body"))
+# ADR-0066 P2: the applicability map now lives in the ttl (the source of truth); read it via the loader.
+_APPLICABLE = load_contract_ontology().function_applicable_dims  # {function: {dim value}}
+_MULTIVALUED = load_contract_ontology().multivalued              # {dim value}
 
 
 def _record(function: str, *assertions: tuple) -> ClausePropertyRecord:
@@ -26,43 +25,35 @@ def _record(function: str, *assertions: tuple) -> ClausePropertyRecord:
 
 
 def test_the_map_covers_exactly_the_function_taxonomy():
-    # no key is a typo outside the taxonomy, and no label is a SILENT permissive gap: every FUNCTION label is
-    # either modeled (FUNCTION_APPLICABLE_DIMS) or EXPLICITLY permissive (PERMISSIVE_FUNCTIONS, ADR-0048 step 2).
-    assert set(FUNCTION_APPLICABLE_DIMS) <= FUNCTION_LABEL_SET
-    assert PERMISSIVE_FUNCTIONS <= FUNCTION_LABEL_SET
-    assert set(FUNCTION_APPLICABLE_DIMS) | PERMISSIVE_FUNCTIONS == FUNCTION_LABEL_SET
-    assert not (set(FUNCTION_APPLICABLE_DIMS) & PERMISSIVE_FUNCTIONS)  # modeled XOR permissive, never both
+    # ADR-0066 P2: the applicability map (in the ttl) covers EXACTLY the FUNCTION taxonomy -- no typo key outside
+    # it, no missing label (every one of the 52 labels is modeled; there are no permissive gaps).
+    assert set(_APPLICABLE) == FUNCTION_LABEL_SET
 
 
-def test_the_8_taxonomy_gap_types_are_now_modeled_with_existing_dims():
-    # ADR-0049 (1): the 8 new clause types graduate from PERMISSIVE_FUNCTIONS into the applicability map, each
-    # with its existing-dimension applicability (domain-knowledge; (2) adds the type-specific dims later).
+def test_the_8_taxonomy_gap_types_are_modeled_with_existing_dims():
+    # ADR-0049 (1): the 8 taxonomy-gap clause types are modeled (not permissive), each with its existing-dimension
+    # applicability -- now asserted against the ttl.
     from rag_wright.contracts.function import TaxonomyGapFunction
 
     for f in TaxonomyGapFunction:
-        assert f.value in FUNCTION_APPLICABLE_DIMS, f"{f.value} must be modeled, not permissive"
-    assert PERMISSIVE_FUNCTIONS == frozenset()  # every one of the 52 labels is now modeled
-    # spot-check the ONT-1 existing-dim choices are present (subset -- ONT-2 later adds each type's facet dim)
-    assert {_D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TERMINATION_RIGHT} <= \
-        FUNCTION_APPLICABLE_DIMS["Force Majeure"]
-    assert {_D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND} <= FUNCTION_APPLICABLE_DIMS["Confidentiality"]
+        assert f.value in _APPLICABLE, f"{f.value} must be modeled"
+    assert {_D.NOTICE_PERIOD.value, _D.TEMPORAL_BOUND.value, _D.MUTUALITY.value, _D.PARTY_ASYMMETRY.value,
+            _D.TERMINATION_RIGHT.value} <= _APPLICABLE["Force Majeure"]
+    assert {_D.MUTUALITY.value, _D.PARTY_ASYMMETRY.value, _D.TEMPORAL_BOUND.value} <= _APPLICABLE["Confidentiality"]
 
 
 def test_ont2_new_dimensions_added_to_their_types():
-    # ADR-0049 (2): each taxonomy-gap type's defining facet dimension is in its applicability set
-    from rag_wright.spans.symbolic_validation import MULTI_VALUED_DIMENSIONS
-
-    assert _D.DISPUTE_METHOD in FUNCTION_APPLICABLE_DIMS["Dispute Resolution"]
-    assert _D.COLLATERAL_TYPE in FUNCTION_APPLICABLE_DIMS["Security Interest"]
-    assert _D.FORCE_MAJEURE_EVENT in FUNCTION_APPLICABLE_DIMS["Force Majeure"]
-    assert _D.ROYALTY_BASIS in FUNCTION_APPLICABLE_DIMS["Royalties"]
-    assert _D.CONFIDENTIALITY_EXCEPTION in FUNCTION_APPLICABLE_DIMS["Confidentiality"]
-    assert _D.CONDITION_TYPE in FUNCTION_APPLICABLE_DIMS["Condition Precedent"]
-    # lists vs scalars
+    # ADR-0049 (2): each taxonomy-gap type's defining facet dimension is in its applicability set (from the ttl)
+    assert _D.DISPUTE_METHOD.value in _APPLICABLE["Dispute Resolution"]
+    assert _D.COLLATERAL_TYPE.value in _APPLICABLE["Security Interest"]
+    assert _D.FORCE_MAJEURE_EVENT.value in _APPLICABLE["Force Majeure"]
+    assert _D.ROYALTY_BASIS.value in _APPLICABLE["Royalties"]
+    assert _D.CONFIDENTIALITY_EXCEPTION.value in _APPLICABLE["Confidentiality"]
+    assert _D.CONDITION_TYPE.value in _APPLICABLE["Condition Precedent"]
     for d in (_D.COLLATERAL_TYPE, _D.FORCE_MAJEURE_EVENT, _D.CONFIDENTIALITY_EXCEPTION):
-        assert d in MULTI_VALUED_DIMENSIONS
+        assert d.value in _MULTIVALUED
     for d in (_D.DISPUTE_METHOD, _D.ROYALTY_BASIS, _D.CONDITION_TYPE):
-        assert d not in MULTI_VALUED_DIMENSIONS
+        assert d.value not in _MULTIVALUED
 
 
 def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():

@@ -13,12 +13,11 @@ from __future__ import annotations
 from rag_wright.contracts.property import CLOSED_VOCAB
 from rag_wright.contracts.value_match import VALUE_ROLLUP
 from rag_wright.ontology.loader import load_contract_ontology
-from rag_wright.spans.symbolic_validation import (
-    FUNCTION_APPLICABLE_DIMS,
-    MULTI_VALUED_DIMENSIONS,
-    PERMISSION_POLARITY_VALUES,
-    RESTRICTIVE_FUNCTIONS,
-)
+
+# ADR-0066 P2 note: the applicability / cardinality / deontic-polarity constants were DELETED from
+# symbolic_validation.py -- those now live ONLY in the ttl and are exercised (ttl-sourced) by
+# tests/spans/test_symbolic_validation.py. What remains here are the two drift-checks whose Python target still
+# exists: CLOSED_VOCAB (generated from the ttl, P1a) and VALUE_ROLLUP (still Python-authored, until a later phase).
 
 _VIEW = load_contract_ontology()
 
@@ -26,22 +25,6 @@ _VIEW = load_contract_ontology()
 def test_closed_vocab_matches_property_contract() -> None:
     py = {dim.value: set(vocab) for dim, vocab in CLOSED_VOCAB.items()}
     assert _VIEW.closed_vocab == py
-
-
-def test_cardinality_matches_multi_valued_dimensions() -> None:
-    py = {dim.value for dim in MULTI_VALUED_DIMENSIONS}
-    assert _VIEW.multivalued == py
-
-
-def test_function_applicable_dims_match_the_shacl_shapes() -> None:
-    py = {fn: {d.value for d in dims} for fn, dims in FUNCTION_APPLICABLE_DIMS.items()}
-    assert _VIEW.function_applicable_dims == py
-
-
-def test_deontic_polarity_and_restrictive_functions_match() -> None:
-    py_polarity = {dim.value: set(vals) for dim, vals in PERMISSION_POLARITY_VALUES.items()}
-    assert _VIEW.permission_polarity == py_polarity
-    assert _VIEW.restrictive_functions == set(RESTRICTIVE_FUNCTIONS)
 
 
 def test_value_rollup_matches() -> None:

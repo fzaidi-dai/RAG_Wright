@@ -58,6 +58,16 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > substrate now fully ttl-authoritative. **NEXT = P1b-3** (STANDING measured-improvement: fill the 10 empty
 > descriptions + move terse mechanics to the extraction Skill, each with its own A/B) **THEN P2** (load SHACL from
 > the ttl at runtime via pyshacl; delete Python FUNCTION_APPLICABLE_DIMS/_shapes_graph).
+> **P2 DONE (2026-09-01): the SHACL constraints load FROM the ttl at runtime.** loader.load_shapes_graph() (ttl
+> parsed as a cached Graph) -> pyshacl reads the persisted sh:NodeShapes; symbolic_validation._shapes_graph() now
+> returns it; DELETED ~130 lines of Python domain knowledge (FUNCTION_APPLICABLE_DIMS / MULTI_VALUED_DIMENSIONS /
+> PERMISSION_POLARITY_VALUES / RESTRICTIVE_FUNCTIONS / PERMISSIVE_FUNCTIONS); flagged_dimensions guard simplified
+> (pyshacl handles unmodeled funcs). test_symbolic_validation's 3 structural tests + the P0 test's obsolete ones
+> repointed to the loader (ttl-sourced); retired bootstrap_contract_ontology_augmentation.py deleted. Suite 1383.
+> LIVE A/B: old Python-shapes == new ttl-shapes byte-identical on real + synthetic records. **Contract ontology
+> substrate now FULLY ttl-authoritative (vocab P1a + template knowledge P1b + constraints P2).** NEXT options:
+> P1b-3 (standing measured-improvement: fill 10 empty descriptions + terse-to-Skill) / P3 (requirement side +
+> INGEST-NS Gaps 1&2) / P4 (migrate DEON query rules to ontology) / P5 (domain-pack retargeting, own ADR).
 >
 > **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
 > A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran

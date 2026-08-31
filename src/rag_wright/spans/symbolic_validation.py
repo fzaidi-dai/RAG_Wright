@@ -42,155 +42,17 @@ of. All three checks reuse one record->RDF->pyshacl harness.
 
 from __future__ import annotations
 
-from functools import lru_cache
-
 from rdflib import Graph, Literal, Namespace, URIRef
-from rdflib.collection import Collection
 from rdflib.namespace import RDF, SH
 
 from rag_wright.contracts.property import (
-    CLOSED_VOCAB,
     ClausePropertyRecord,
     PropertyAssertion,
     PropertyDimension,
 )
 from rag_wright.contracts.provenance import ConfidenceTag
 
-_D = PropertyDimension
 _CBR = Namespace("https://ragwright.local/ontology/contract-bridge#")
-
-# The function -> applicable-dimensions map (the ADR-0040 ontology addition). Each key is a member of the
-# retrieval FUNCTION taxonomy (contracts/function.FUNCTION_LABELS); each value is the set of dimensions a
-# clause of that function may legitimately carry. Metadata / structural functions carry NO property
-# dimensions (an empty set -> any asserted dimension is a type error). Tier-1 cross-cutting dims
-# (mutuality/favorability/party_asymmetry/carve_out/covered_*) are listed only where they genuinely recur,
-# kept deliberately permissive on the liability/indemnity/warranty family to avoid false flags. DOMAIN
-# CONTENT -- reviewed at the JUDGE-ONTOLOGY-1 gate; expand conservatively.
-FUNCTION_APPLICABLE_DIMS: dict[str, frozenset[PropertyDimension]] = {
-    # metadata / structural -- no property dimensions
-    "Document Name": frozenset(),
-    "Parties": frozenset(),
-    "Agreement Date": frozenset(),
-    "Effective Date": frozenset(),
-    "Expiration Date": frozenset(),
-    # term / renewal / termination
-    "Renewal Term": frozenset({_D.RENEWAL_MECHANISM, _D.TEMPORAL_BOUND, _D.NOTICE_PERIOD}),
-    "Notice Period To Terminate Renewal": frozenset({_D.NOTICE_PERIOD, _D.RENEWAL_MECHANISM}),
-    "Termination For Convenience": frozenset({_D.TERMINATION_RIGHT, _D.NOTICE_PERIOD, _D.PARTY_ASYMMETRY}),
-    "Post-Termination Services": frozenset({_D.TEMPORAL_BOUND, _D.COVERED_PARTIES}),
-    # governing law
-    "Governing Law": frozenset({_D.JURISDICTION, _D.LAW_MULTIPLICITY}),
-    # commercial restrictions
-    "Most Favored Nation": frozenset({_D.MFN_SCOPE, _D.PARTY_ASYMMETRY}),
-    "Non-Compete": frozenset(
-        {_D.RESTRICTION_SCOPE, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY, _D.COVERED_PARTIES}
-    ),
-    "Exclusivity": frozenset({_D.EXCLUSIVITY_TYPE, _D.RESTRICTION_SCOPE, _D.PARTY_ASYMMETRY}),
-    "No-Solicit Of Customers": frozenset({_D.NONSOLICIT_TARGET, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "No-Solicit Of Employees": frozenset({_D.NONSOLICIT_TARGET, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Competitive Restriction Exception": frozenset({_D.CARVE_OUT, _D.RESTRICTION_SCOPE}),
-    "Non-Disparagement": frozenset({_D.MUTUALITY, _D.PARTY_ASYMMETRY}),
-    "Price Restrictions": frozenset({_D.MFN_SCOPE, _D.RESTRICTION_SCOPE}),
-    "Rofr/Rofo/Rofn": frozenset({_D.RIGHT_OF_FIRST_TYPE, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Change Of Control": frozenset({_D.COC_CONSENT, _D.PARTY_ASYMMETRY}),
-    "Anti-Assignment": frozenset({_D.ASSIGNMENT_CONSENT, _D.PARTY_ASYMMETRY}),
-    "Revenue/Profit Sharing": frozenset({_D.COMMITMENT_QUANTUM, _D.MUTUALITY}),
-    "Minimum Commitment": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND}),
-    "Volume Restriction": frozenset({_D.COMMITMENT_QUANTUM, _D.RESTRICTION_SCOPE}),
-    # IP / licensing
-    "IP Ownership Assignment": frozenset({_D.IP_OWNERSHIP, _D.COVERED_SUBJECT}),
-    "Joint IP Ownership": frozenset({_D.IP_OWNERSHIP}),
-    "License Grant": frozenset(
-        {_D.EXCLUSIVITY_TYPE, _D.IP_OWNERSHIP, _D.COVERED_PARTIES, _D.RESTRICTION_SCOPE}
-    ),
-    "Non-Transferable License": frozenset(
-        {_D.ASSIGNMENT_CONSENT, _D.EXCLUSIVITY_TYPE, _D.RESTRICTION_SCOPE}
-    ),
-    "Affiliate License-Licensor": frozenset({_D.COVERED_PARTIES, _D.EXCLUSIVITY_TYPE}),
-    "Affiliate License-Licensee": frozenset({_D.COVERED_PARTIES, _D.EXCLUSIVITY_TYPE}),
-    "Unlimited/All-You-Can-Eat-License": frozenset({_D.EXCLUSIVITY_TYPE, _D.COMMITMENT_QUANTUM}),
-    "Irrevocable Or Perpetual License": frozenset({_D.TEMPORAL_BOUND, _D.EXCLUSIVITY_TYPE}),
-    "Source Code Escrow": frozenset({_D.ESCROW_RELEASE_TRIGGER}),
-    # audit / insurance
-    "Audit Rights": frozenset({_D.AUDIT_FREQUENCY, _D.NOTICE_PERIOD, _D.TEMPORAL_BOUND}),
-    "Insurance": frozenset({_D.CAP_QUANTUM, _D.COVERED_SUBJECT, _D.TEMPORAL_BOUND}),
-    # liability / warranty / damages (the tier-1-heavy core family)
-    "Uncapped Liability": frozenset(
-        {_D.CAP_BASIS, _D.CARVE_OUT, _D.MUTUALITY, _D.FAVORABILITY, _D.PARTY_ASYMMETRY,
-         _D.COVERED_SUBJECT, _D.DAMAGE_TYPE, _D.CLAIM_SCOPE}
-    ),
-    "Cap On Liability": frozenset(
-        {_D.CAP_BASIS, _D.CAP_QUANTUM, _D.CARVE_OUT, _D.MUTUALITY, _D.FAVORABILITY,
-         _D.PARTY_ASYMMETRY, _D.DAMAGE_TYPE, _D.CLAIM_SCOPE}
-    ),
-    "Liquidated Damages": frozenset({_D.LD_TRIGGER, _D.CAP_QUANTUM, _D.DAMAGE_TYPE}),
-    "Warranty Duration": frozenset({_D.WARRANTY_SCOPE, _D.TEMPORAL_BOUND}),
-    "Warranty Disclaimer": frozenset({_D.WARRANTY_SCOPE, _D.PARTY_ASYMMETRY}),
-    "Covenant Not To Sue": frozenset(
-        {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.COVERED_PARTIES, _D.TEMPORAL_BOUND,
-         _D.PARTY_ASYMMETRY, _D.CLAIM_SCOPE, _D.PROCEDURAL}
-    ),
-    # FOLIO-extension functions (the natural homes for the indemnity-family dims: procedural, claim_scope,
-    # damage_type, warranty_scope)
-    "Indemnification": frozenset(
-        {_D.CLAIM_SCOPE, _D.PROCEDURAL, _D.COVERED_SUBJECT, _D.COVERED_PARTIES, _D.CARVE_OUT,
-         _D.PARTY_ASYMMETRY, _D.MUTUALITY}
-    ),
-    "Indirect/Consequential Damages Waiver": frozenset(
-        {_D.DAMAGE_TYPE, _D.CAP_BASIS, _D.MUTUALITY, _D.PARTY_ASYMMETRY}
-    ),
-    "Third Party Beneficiary": frozenset({_D.COVERED_PARTIES, _D.PARTY_ASYMMETRY}),
-    # ADR-0049 (1): the 8 taxonomy-gap functions, modeled with their EXISTING-dimension applicability from legal
-    # domain knowledge (what each clause type carries for ANY customer, not fitted to CUAD). These sets are
-    # PARTIAL by design -- the type-specific facet each one needs (e.g. dispute_method, royalty basis, force-
-    # majeure events, confidentiality permitted-disclosures) has no existing dimension and is added as a NEW
-    # dimension in step (2). Cross-cutting dims (party_asymmetry/temporal_bound/mutuality) included where they
-    # genuinely recur, per the "expand conservatively" rule.
-    # ADR-0049 (2): each type-specific facet dimension added to its type's applicability.
-    "Confidentiality": frozenset(
-        {_D.CONFIDENTIALITY_EXCEPTION, _D.MUTUALITY, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
-    "Payment Terms": frozenset({_D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Royalties": frozenset({_D.ROYALTY_BASIS, _D.COMMITMENT_QUANTUM, _D.TEMPORAL_BOUND}),
-    "Dispute Resolution": frozenset({_D.DISPUTE_METHOD, _D.JURISDICTION, _D.PARTY_ASYMMETRY, _D.TEMPORAL_BOUND}),
-    "Record Retention": frozenset({_D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Security Interest": frozenset({_D.COLLATERAL_TYPE, _D.COMMITMENT_QUANTUM, _D.PARTY_ASYMMETRY}),
-    "Condition Precedent": frozenset({_D.CONDITION_TYPE, _D.TEMPORAL_BOUND, _D.PARTY_ASYMMETRY}),
-    "Force Majeure": frozenset(
-        {_D.FORCE_MAJEURE_EVENT, _D.NOTICE_PERIOD, _D.TEMPORAL_BOUND, _D.MUTUALITY, _D.PARTY_ASYMMETRY,
-         _D.TERMINATION_RIGHT}),
-}
-
-# ADR-0049 (1): the 8 taxonomy-gap functions are now MODELED above (existing-dimension applicability), so nothing
-# is permissive -- every one of the 52 labels is validated. The mechanism is kept (empty) so a future new clause
-# type can be declared explicitly permissive rather than silently missing, per the coverage test. Their
-# type-specific dimensions are added in ADR-0049 step (2).
-PERMISSIVE_FUNCTIONS: frozenset[str] = frozenset()
-
-
-# The multi-valued dimensions (`clause_kg_extractor._LIST_ENUM_DIMS`): a clause may carry several. Every
-# other dimension is SCALAR (at most one value) -> `sh:maxCount 1`. Kept in code, referencing enum members,
-# for the same no-ttl-drift reason as FUNCTION_APPLICABLE_DIMS.
-MULTI_VALUED_DIMENSIONS: frozenset[PropertyDimension] = frozenset(
-    # ADR-0049 (2): collateral / force-majeure events / confidentiality exceptions are all lists on a clause.
-    {_D.CARVE_OUT, _D.COVERED_SUBJECT, _D.DAMAGE_TYPE, _D.COLLATERAL_TYPE, _D.FORCE_MAJEURE_EVENT,
-     _D.CONFIDENTIALITY_EXCEPTION}
-)
-
-# Deontic consistency (JUDGE-ONTOLOGY-3, ODRL). The consent-regime VALUES that assert NO restriction
-# (permission polarity) -- `free`/`unrestricted` are the "may freely" endpoints of their vocabularies
-# (contract_bridge.ttl: cbr:free a cbr:AssignmentConsent ; cbr:unrestricted a cbr:CocConsent).
-PERMISSION_POLARITY_VALUES: dict[PropertyDimension, frozenset[str]] = {
-    _D.ASSIGNMENT_CONSENT: frozenset({"free"}),
-    _D.COC_CONSENT: frozenset({"unrestricted"}),
-}
-# Functions whose defining purpose is to RESTRICT the thing their consent dimension governs. A
-# permission-polarity value on such a function is a deontic inversion (the observed
-# `assignment_consent=free` on a "shall not assign" clause) -- the clause's rule type is DERIVED from its
-# function (reliable, non-circular), not parsed from the text. Realized as `sh:in` (allowed = vocab minus
-# the permission-polarity values) on the scoped property shape.
-RESTRICTIVE_FUNCTIONS: frozenset[str] = frozenset(
-    {"Anti-Assignment", "Non-Transferable License", "Change Of Control"}
-)
 
 
 def _function_class(function: str) -> URIRef:
@@ -203,31 +65,13 @@ def _dim_property(dimension: PropertyDimension) -> URIRef:
     return _CBR[f"dim_{dimension.value}"]
 
 
-@lru_cache(maxsize=1)
 def _shapes_graph() -> Graph:
-    """Compile `FUNCTION_APPLICABLE_DIMS` to a SHACL shapes graph -- one `sh:closed` NodeShape per function,
-    listing its applicable dimension paths (any other dimension predicate is a violation). Built once."""
-    g = Graph()
-    for function, dims in FUNCTION_APPLICABLE_DIMS.items():
-        shape = _CBR[f"Shape_{function.replace(' ', '_')}"]
-        g.add((shape, RDF.type, SH.NodeShape))
-        g.add((shape, SH.targetClass, _function_class(function)))
-        g.add((shape, SH.closed, Literal(True)))
-        # rdf:type is a structural predicate on the clause node -> never itself a violation
-        ignored = Collection(g, URIRef(str(shape) + "_ignored"), [RDF.type])
-        g.add((shape, SH.ignoredProperties, ignored.uri))
-        for dim in dims:
-            prop = URIRef(f"{shape}_prop_{dim.value}")
-            g.add((shape, SH.property, prop))
-            g.add((prop, SH.path, _dim_property(dim)))
-            if dim not in MULTI_VALUED_DIMENSIONS:  # scalar dim -> at most one value (JUDGE-ONTOLOGY-2)
-                g.add((prop, SH.maxCount, Literal(1)))
-            if function in RESTRICTIVE_FUNCTIONS and dim in PERMISSION_POLARITY_VALUES:
-                # deontic (JUDGE-ONTOLOGY-3): a restrictive function forbids the permission-polarity values
-                allowed = sorted(CLOSED_VOCAB[dim] - PERMISSION_POLARITY_VALUES[dim])
-                lst = Collection(g, URIRef(f"{prop}_allowed"), [Literal(v) for v in allowed])
-                g.add((prop, SH["in"], lst.uri))
-    return g
+    """ADR-0066 P2: the SHACL shapes come FROM contract_bridge.ttl (the source of truth) -- pyshacl reads the
+    persisted sh:NodeShapes directly; no Python-built shapes. The ttl non-SHACL triples are ignored by pyshacl.
+    """
+    from rag_wright.ontology.loader import load_shapes_graph
+
+    return load_shapes_graph()
 
 
 def _record_to_rdf(record: ClausePropertyRecord) -> Graph:
@@ -246,7 +90,7 @@ def flagged_dimensions(record: ClausePropertyRecord) -> set[PropertyDimension]:
     a scalar dimension asserted with more than one value (`sh:maxCount 1`), or a permission-polarity value on
     a restrictive function (`sh:in`, deontic). Every violation reports `sh:resultPath` = the dimension
     predicate, so all fold into one flagged set. Empty if the function is unmodeled (permissive) or valid."""
-    if record.function not in FUNCTION_APPLICABLE_DIMS or not record.assertions:
+    if not record.assertions:
         return set()
     from pyshacl import validate
 

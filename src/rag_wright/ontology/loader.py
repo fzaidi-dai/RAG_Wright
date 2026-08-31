@@ -13,6 +13,7 @@ robust to IRI encoding -- it reads `rdfs:label`, never decodes an IRI.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 from rdflib import Graph
@@ -20,6 +21,16 @@ from rdflib.collection import Collection
 from rdflib.namespace import OWL, RDF, RDFS, SH, SKOS
 
 _TTL_PATH = Path(__file__).with_name("contract_bridge.ttl")
+
+
+@lru_cache(maxsize=4)
+def load_shapes_graph(path: str = str(_TTL_PATH)) -> Graph:
+    """ADR-0066 P2: the ttl parsed as an rdflib Graph -- its `sh:NodeShape`s ARE the SHACL shapes handed to pyshacl
+    at runtime, so the symbolic layer reads the symbolic artifact directly (no Python-built shapes). pyshacl uses
+    the shapes and ignores the ttl's non-SHACL triples. Cached per path."""
+    g = Graph()
+    g.parse(path, format="turtle")
+    return g
 _CBR = "https://ragwright.local/ontology/contract-bridge#"
 _DIMENSION_CLASS = _CBR + "PropertyDimension"
 
