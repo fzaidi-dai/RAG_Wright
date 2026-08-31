@@ -3,6 +3,23 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **RESUME / NEXT UP (2026-08-31 NEWEST): ONTOLOGY = SINGLE SOURCE OF TRUTH (ADR-0066, ACCEPTED).** After the DEON
+> arc (issue 0012, DONE — query side now deontic/actor/ontology-GATED) an ingestion-side neuro-symbolic review
+> (docs/design/ingestion-neuro-symbolic-gaps.md) found the engine is neuro-symbolic in MECHANISM (ADR-0040 cascade
+> runs on contract clauses) but the KNOWLEDGE is Python-authoritative and the `.ttl` is DECORATIVE engine-wide
+> (never parsed at runtime, INCLUDING the DEON query side). Product-owner mandate: the ontology `.ttl` MUST be the
+> single runtime source of truth; Python-authoritative = the hodge-podge risk, rejected. **ADR-0066** establishes
+> two STANDING rules (now in CLAUDE.md): (1) ontology = domain KNOWLEDGE (vocab/schema/SHACL constraints/synonyms),
+> code = MECHANISM only; (2) solve staleness by enforced synchronization (generate-from-ttl + CI-diff + a YAML
+> prompt-overlay), NEVER by demoting the source to code. **Phased, each gated:** P0 consolidate the ttl to ONE
+> complete authoritative source (currently 8 owl:oneOf vs 25 CLOSED_VOCAB + ZERO SHACL; retire spec.yaml) → P1
+> generate enums/CLOSED_VOCAB/edge-map FROM ttl + CI-diff + separate the prompt-engineering into a YAML overlay
+> keyed by Class.field → P2 load SHACL from the ttl at runtime (pyshacl; delete Python FUNCTION_APPLICABLE_DIMS) →
+> P3 requirement side = the deferred INGEST-NS Gaps 1&2 (dimension-general applicability + symbolic gate, built ON
+> the substrate) → P4 migrate DEON query-side rules (SECTION_RULE_SCOPE, _ACTOR_SYNONYMS) to the ontology → P5
+> (separate later ADR) domain-pack retargeting (KG schema + edge-types + EDGAR-CIK entity resolution). Supersedes
+> ADR-0037/0040's "Python authoritative to avoid ttl drift." **NEXT = ADR-0066 Phase 0.** See [[ontology-single-source-of-truth]].
+>
 > **RESUME / TOP PRIORITY (2026-08-18): ASYNC ENGINE MIGRATION (ADR-0057), the real fix for engine issue 0003.**
 > A sync pipeline + a per-socket-op timeout is not a wall-clock bound: a slow-drip / SSE-keep-alive response ran
 > 591s against a 60s timeout, and a 399s call SUCCEEDED with no exception/retry/log (nothing keys off an
