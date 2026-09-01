@@ -7,7 +7,18 @@ Usage: uv run python scripts/migrate_entity_cik_to_canonical_id.py <db> [<db> ..
 
 from __future__ import annotations
 
+import os
 import sys
+from pathlib import Path
+
+# load .env so the script is runnable standalone (ARCADEDB_HOST etc.)
+_env = Path(__file__).resolve().parents[1] / ".env"
+if _env.exists():
+    for _line in _env.read_text().splitlines():
+        _line = _line.strip()
+        if _line and not _line.startswith("#") and "=" in _line:
+            _k, _v = _line.split("=", 1)
+            os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 from rag_wright.store.arcadedb import ENTITY_TYPE, ArcadeDBStore
 
