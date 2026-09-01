@@ -2642,3 +2642,18 @@ cbr:ContractNode a cbr:KgVertexType ; cbr:vertexName "Contract" ;
 cbr:HasPropertyEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "HasProperty" .
 cbr:PartyToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "PartyTo" .
 cbr:IsExceptionToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "IsExceptionTo" .
+
+# =============================================================================
+# ADR-0066 P1b-3: fill the 10 previously-empty field descriptions (the LOOK-FOR meaning + enum options). Measured
+# improvement -- authored AFTER P1b-2 parity, each attaches skos:definition to its P1b-1 cbr:field_ node.
+# =============================================================================
+cbr:field_Clause__covers_party_scope skos:definition "Which affiliated parties the clause extends to: affiliates (either side) / licensor_affiliates / licensee_affiliates." .
+cbr:field_Clause__has_asymmetry skos:definition "Whether the clause's terms apply the same to both parties (symmetric) or differently per party (different_per_party)." .
+cbr:field_Clause__has_claim_scope skos:definition "The scope of claims covered: first_party (the parties' own claims) / third_party (third-party claims) / broad_based (both / any)." .
+cbr:field_Clause__has_favorability skos:definition "Which side the clause favors: buyer_favorable (the buyer / customer) or seller_favorable (the seller / vendor)." .
+cbr:field_Clause__has_ip_ownership skos:definition "How intellectual-property ownership is treated: assigned (transferred) / joint (shared) / retained (kept by the originating party)." .
+cbr:field_Clause__has_renewal skos:definition "How the term renews: auto (automatic renewal) or requires_notice (renews only on notice / an affirmative election)." .
+cbr:field_Clause__has_warranty_scope skos:definition "The warranty scope the clause sets: implied / express / as_is (warranties disclaimed) / non_reliance." .
+cbr:field_CapConstraint__cap_basis skos:definition "The basis of the liability cap: fixed_fee (a fixed amount) / multiple_of_fees (a multiple of fees paid) / other." .
+cbr:field_TemporalConstraint__temporal_operator skos:definition "The temporal comparison operator ONLY (a few words), e.g. 'lteq' (within / at most), 'gteq' (at least), 'eq' (exactly)." .
+cbr:field_Jurisdiction__law_multiplicity skos:definition "Whether one law governs (single) or multiple laws govern (multiple)." .
