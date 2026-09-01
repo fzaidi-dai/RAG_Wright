@@ -44,18 +44,30 @@ cmp:permission  cmp:cue "may", "permitted", "allowed", "entitled", "at its discr
 # The query-side actor gate (canonical_actor) normalizes a rule's bound actor + a subject's role to the canonical
 # form before matching, so 'manufacturer' aligns with 'advertiser'. Generic role KNOWLEDGE -> the ontology (a
 # new customer domain extends this pack, not the code). Not owl:oneOf: an open, extensible SKOS role scheme.
+#
+# ADR-0068 (engine issue 0013): each role also declares a cmp:roleDomain -- the DISJOINTNESS knowledge the actor
+# gate reasons over. The gate is RECALL-FIRST: two specific roles are treated as COMPATIBLE (a pair worth judging)
+# unless the ontology makes them DISJOINT, and two roles are disjoint ONLY when both declare a roleDomain and the
+# domains DIFFER. All the advertising-ecosystem roles share domain "advertising", so an advertiser rule pairs with
+# a seller/endorser/consumer assertion (a seller advertising IS the advertiser) -- the fix for the silent drop
+# where two independent extractions picked different-but-overlapping role words. A role with NO roleDomain (an
+# unmodelled/exotic term) is compatible with everything (recall-first). Cross-DOMAIN narrowing (e.g. a labor
+# 'employer' rule not judged against an advertising assertion) is a customer domain pack declaring its own roles
+# under a different roleDomain -- never an engine edit.
 # =============================================================================
 cmp:ActorRole a owl:Class ; skos:prefLabel "Actor role" ;
     rdfs:comment "A canonical party role a rule can bind or a subject can carry; skos:altLabel lists its synonyms." .
-cmp:advertiser a cmp:ActorRole ; skos:prefLabel "advertiser" ;
+cmp:roleDomain a owl:DatatypeProperty ; skos:prefLabel "role domain" ;
+    rdfs:comment "The domain a canonical actor role belongs to (ADR-0068). Two roles are DISJOINT iff both declare a roleDomain and the domains differ; the actor gate excludes only disjoint role pairs (recall-first)." .
+cmp:advertiser a cmp:ActorRole ; skos:prefLabel "advertiser" ; cmp:roleDomain "advertising" ;
     skos:altLabel "manufacturer", "marketer", "brand", "company", "business", "sponsor" .
-cmp:endorser a cmp:ActorRole ; skos:prefLabel "endorser" ;
+cmp:endorser a cmp:ActorRole ; skos:prefLabel "endorser" ; cmp:roleDomain "advertising" ;
     skos:altLabel "influencer", "spokesperson", "ambassador", "reviewer" .
-cmp:expert a cmp:ActorRole ; skos:prefLabel "expert" ;
+cmp:expert a cmp:ActorRole ; skos:prefLabel "expert" ; cmp:roleDomain "advertising" ;
     skos:altLabel "physician", "doctor", "specialist", "professional" .
-cmp:consumer a cmp:ActorRole ; skos:prefLabel "consumer" ;
+cmp:consumer a cmp:ActorRole ; skos:prefLabel "consumer" ; cmp:roleDomain "advertising" ;
     skos:altLabel "buyer", "customer", "user" .
-cmp:seller a cmp:ActorRole ; skos:prefLabel "seller" ;
+cmp:seller a cmp:ActorRole ; skos:prefLabel "seller" ; cmp:roleDomain "advertising" ;
     skos:altLabel "merchant", "retailer", "vendor" .
 
 # =============================================================================

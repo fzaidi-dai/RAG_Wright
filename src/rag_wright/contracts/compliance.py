@@ -249,6 +249,11 @@ class ComplianceReport(BaseModel):
     # verdict on a scanned subject is never SILENTLY based on half-read text. Empty = fully readable. The product
     # surfaces this as "pages X-Y unreadable; results for those pages are incomplete".
     ocr_unreadable_pages: list[int] = []
+    # ADR-0068 (engine issue 0013): (assertion, rule) pairs the symbolic ACTOR gate SKIPPED before any judge call
+    # -- so the gate is never a SILENT recall loss. Each: {requirement_id, citation, actor, subject_actors, scope
+    # ("assertion"|"document"), claim_id}. Empty is the norm (the recall-first gate skips only ontology-disjoint
+    # roles); a non-empty list lets a consumer state honest coverage ("checked N rules; K pairs gated by role").
+    gated_pairs: list[dict] = []
 
     @property
     def verdict(self) -> Verdict:

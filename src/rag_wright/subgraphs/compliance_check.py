@@ -43,6 +43,7 @@ from rag_wright.contracts.compliance import (
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.ontology.loader import (  # ADR-0066 P4: query-side knowledge from the ontology + FTC domain pack
     load_actor_synonyms,
+    load_role_domains,
     load_section_overrides,
 )
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
@@ -97,6 +98,11 @@ _ROLE_GENERIC = frozenset({"", "party", "anyone", "any", "all", "everyone", "sub
 # literal. To add a role synonym, edit the ttl (a new customer domain extends the role pack, not this code).
 _ACTOR_SYNONYMS: dict[str, str] = load_actor_synonyms()
 
+# ADR-0068 (engine issue 0013): the DISJOINTNESS knowledge for the recall-first actor gate -- `{canonical role ->
+# domain}` from the ontology (cmp:roleDomain). AUTHORITATIVE in compliance_bridge.ttl; a customer domain adds its
+# roles' domains in its own pack. Two roles are disjoint iff BOTH are here with DIFFERENT domains.
+_ROLE_DOMAINS: dict[str, str] = load_role_domains()
+
 
 def canonical_actor(raw: str) -> str:
     """DEON-6/7: normalize an actor ROLE to its canonical form -- collapse a known synonym (manufacturer ->
@@ -111,20 +117,37 @@ def _actor_set(scope: list) -> set:
     return {canonical_actor(c.value) for c in (scope or []) if c.dimension == "actor" and c.value}
 
 
+def roles_disjoint(a: str, b: str) -> bool:
+    """ADR-0068: are two CANONICAL actor roles ontology-DISJOINT? True ONLY when both carry a `cmp:roleDomain` and
+    the domains DIFFER (e.g. an advertising role vs a labor role). An unmodelled role (no domain), or two roles in
+    the same domain, are NOT disjoint -- the recall-first default is compatible."""
+    da, db = _ROLE_DOMAINS.get(a), _ROLE_DOMAINS.get(b)
+    return da is not None and db is not None and da != db
+
+
+def roles_compatible(a: str, b: str) -> bool:
+    """ADR-0068: two CANONICAL actor roles are COMPATIBLE (a pair worth judging) unless the ontology makes them
+    disjoint -- recall-first. A generic/absent role on either side is always compatible. Replaces exact role
+    equality: two different-but-overlapping roles (advertiser vs seller) now match, so a real violation is never
+    silently dropped because two independent extractions chose different words for the same party."""
+    return not a or not b or a in _ROLE_GENERIC or b in _ROLE_GENERIC or not roles_disjoint(a, b)
+
+
 def actor_matches(rule_actor: str, subject_actors: set) -> bool:
-    """DEON-6/7: does the requirement's actor ROLE appear among the subject's (already-canonical) actors? Exact
-    match on the CANONICAL role vocabulary (both sides normalized by `canonical_actor`). RECALL-FIRST: a
-    generic/absent rule actor, or a subject with no actor info, never gates (True)."""
+    """DEON-6/7 + ADR-0068: is the requirement's actor ROLE COMPATIBLE with the subject's (already-canonical)
+    actors? RECALL-FIRST on two axes: (1) a generic/absent rule actor or a subject with no actor info never gates
+    (True); (2) a specific rule actor matches unless it is ontology-DISJOINT from EVERY subject actor -- so an
+    unmodelled or merely-different-but-overlapping role is judged, not dropped (issue 0013)."""
     ra = canonical_actor(rule_actor)
     if not ra or ra in _ROLE_GENERIC or not subject_actors:
         return True  # recall-first: nothing to gate on
-    return ra in subject_actors
+    return any(roles_compatible(ra, sa) for sa in subject_actors)
 
 
 def _actor_compatible(a: str, b: str) -> bool:
-    """DEON-9: two CANONICAL actor roles are compatible if equal, or either is generic/absent (recall-first) --
-    the symbolic gate for which permissions can defend which O/F rule."""
-    return not a or not b or a in _ROLE_GENERIC or b in _ROLE_GENERIC or a == b
+    """DEON-9 + ADR-0068: the symbolic gate for which permissions can defend which O/F rule -- two CANONICAL actor
+    roles are compatible unless ontology-disjoint (recall-first), same predicate as the actor gate."""
+    return roles_compatible(a, b)
 
 
 def constraint_applies(requirement_scope: list, subject_scope: list) -> bool:
@@ -376,6 +399,33 @@ def build_select_fn(
     return select
 
 
+def _actor_gated_pairs(claims: list, prohibitions: list, obligations: list, constraint_scope_fn: Any) -> list[dict]:
+    """ADR-0068 (issue 0013): the (assertion|document, rule) pairs the symbolic ACTOR gate SKIPPED before any judge
+    call -- recomputed from the SAME module gate (`actor_matches`) the router applies, so the report can state
+    honest coverage and a gated pair is never silent. OBLIGATIONS: a rule whose bound actor is ontology-disjoint
+    from every document actor (DEON-7, document scope). PROHIBITIONS: per assertion, a rule that PASSES the
+    constraint router but is actor-disjoint from the assertion's actors (DEON-6) -- computed only when constraint
+    routing is active (the ad path narrows prohibitions by claim_type, not the actor gate, so it reports none).
+    Empty unless a disjoint role actually blocked a pair (the recall-first norm)."""
+    gated: list[dict] = []
+    doc_actors = _actor_set(subject_scope(claims)) if claims else set()
+    for ob in obligations:
+        if not actor_matches(ob.actor, doc_actors):
+            gated.append({"requirement_id": ob.requirement_id, "citation": ob.citation,
+                          "actor": canonical_actor(ob.actor), "subject_actors": sorted(doc_actors),
+                          "scope": "document", "claim_id": None})
+    if constraint_scope_fn is not None:
+        for claim in claims:
+            subj = constraint_scope_fn(claim)
+            actors = _actor_set(subj)
+            for p in prohibitions:
+                if constraint_applies(p.applicability_scope, subj) and not actor_matches(p.actor, actors):
+                    gated.append({"requirement_id": p.requirement_id, "citation": p.citation,
+                                  "actor": canonical_actor(p.actor), "subject_actors": sorted(actors),
+                                  "scope": "assertion", "claim_id": getattr(claim, "fact_id", None)})
+    return gated
+
+
 # ASYNC-C1 (ADR-0057): claims_fn is async (its extraction model call gets a true wall-clock deadline).
 ClaimsFn = Callable[[str, str], Awaitable[list]]  # (subject_text, source_doc) -> list[Claim]
 RequirementsFn = Callable[[], list]  # () -> list[Requirement]
@@ -387,6 +437,7 @@ class CheckState(TypedDict, total=False):
     claims: list
     ad_disclosures: list
     pairs: list
+    gated: list  # ADR-0068 (issue 0013): (assertion|document, rule) pairs the actor gate skipped -> the report
     findings: list
     report: ComplianceReport
 
@@ -403,7 +454,7 @@ def _enrich(claim: Claim, ad_disclosures: set[str]) -> Claim:
 def build_compliance_check(
     *, claims_fn: ClaimsFn, requirements_fn: RequirementsFn, judge_fn: AJudgeFn,
     select_fn: SelectFn | None = None, obligation_pairs_fn: Any = None, defense_linker: Any = None,
-    retry_policy: Any = DEFAULT_RETRY
+    constraint_scope_fn: Any = None, retry_policy: Any = DEFAULT_RETRY
 ):
     """Compile the compliance-check subgraph. All seams are injected for hermetic testing. `select_fn` (CC-8b) is
     the per-claim requirement narrower; when None, every APPLICABLE requirement is judged (the broad default).
@@ -458,7 +509,10 @@ def build_compliance_check(
             pairs.extend((_enrich(claim, ad), req) for req in selected)
         if obligations and claims:  # obligations: one bounded (evidence, obligation) pair each
             pairs.extend(obligation_pairs_fn(obligations, claims, state["source_doc"]))
-        return {"pairs": pairs}
+        # ADR-0068 (issue 0013): surface what the ACTOR gate skipped, so a symbolic drop is never a silent recall
+        # loss (empty is the recall-first norm; a disjoint role that blocked a pair shows up here).
+        gated = _actor_gated_pairs(claims, prohibitions, obligations, constraint_scope_fn)
+        return {"pairs": pairs, "gated": gated}
 
     async def judge(state: CheckState) -> CheckState:
         pairs = state.get("pairs", [])
@@ -485,7 +539,8 @@ def build_compliance_check(
                 row["verdict"] = f.verdict
         gap_matrix = [{**r, "verdict": r["verdict"].value} for r in by_req.values()]
         report = ComplianceReport(
-            source_doc=state["source_doc"], findings=findings, summary=summary, gap_matrix=gap_matrix)
+            source_doc=state["source_doc"], findings=findings, summary=summary, gap_matrix=gap_matrix,
+            gated_pairs=state.get("gated", []))  # ADR-0068: honest coverage -- the actor gate is never silent
         return {"report": report}
 
     g = StateGraph(CheckState)
@@ -669,8 +724,9 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
     # DEON-6: prohibitions narrow by the dimension-agnostic constraint router -- a claim's inferred scope (its
     # actor, DEON-5) matched against each requirement's effective scope. Recall-first: a claim with no scope, or a
     # requirement with a generic actor, is not excluded.
+    constraint_scope_fn = lambda claim: getattr(claim, "scope", None) or []  # noqa: E731 (a claim's inferred scope)
     select_fn = build_select_fn(embedder, requirements, k=k, filter_applicability=False,
-                                constraint_scope_fn=lambda claim: getattr(claim, "scope", None) or [])
+                                constraint_scope_fn=constraint_scope_fn)
 
     async def _claims_fn(text: str, source: str) -> list:
         return facts_fn(text, source)  # precomputed semantic facts, adapted to the async claims seam
@@ -682,6 +738,7 @@ def production_generic_compliance_check(store: Any, *, judge_model_id: str, embe
         select_fn=select_fn,
         obligation_pairs_fn=build_obligation_pairs_fn(embedder),  # DEON-2: bounded per-obligation evidence
         defense_linker=build_defense_linker(embedder, requirements),  # DEON-9: permission carve-outs as defenses
+        constraint_scope_fn=constraint_scope_fn,  # ADR-0068: report the actor-gated prohibition pairs (issue 0013)
     )
 
 

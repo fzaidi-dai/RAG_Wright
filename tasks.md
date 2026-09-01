@@ -3,7 +3,21 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-08-31 NEWEST): ONTOLOGY = SINGLE SOURCE OF TRUTH (ADR-0066, ACCEPTED).** After the DEON
+> **RESUME / NEXT UP (2026-09-01 NEWEST): ENGINE ISSUE 0013 DONE — the compliance actor gate is RECALL-FIRST
+> (ADR-0068).** RuleWright found the ADR-0065 actor gate silently DROPPED a real violation when the two independent
+> extractions picked different-but-overlapping role words (rule `advertiser` vs assertion `seller`): the pricing
+> violation was never judged, with no trace in coverage. Fix (all three of RuleWright's asks): (1) `actor_matches`
+> is now COMPATIBLE-unless-DISJOINT — a specific rule actor matches unless ontology-disjoint from every subject
+> actor, recall-first (`roles_compatible`, shared with the DEON-9 defense linker); (2) disjointness is ONTOLOGY
+> knowledge — each `cmp:ActorRole` declares `cmp:roleDomain` (all advertising roles share `"advertising"` → mutually
+> compatible; two roles disjoint iff both declare a domain and they differ; unmodelled role → compatible), loaded
+> by `load_role_domains`, a customer pack adds cross-domain roles; (3) the gate is NEVER silent —
+> `ComplianceReport.gated_pairs` reports every `(assertion|document, rule)` pair the actor gate skipped. Suite 1394
+> pass. LIVE-verified on the issue's exact case (real ArcadeDB KG + BGE + OpenRouter judge): §3(advertiser) now
+> pairs with the `seller` pricing assertion → judge returns `violation`; correctly `compliant` on the cure/
+> endorsement assertions; `gated_pairs` empty. See docs/adr/0068-*.md, [[deon-arc-query-side-gates]].
+>
+> **RESUME / NEXT UP (2026-08-31): ONTOLOGY = SINGLE SOURCE OF TRUTH (ADR-0066, ACCEPTED).** After the DEON
 > arc (issue 0012, DONE — query side now deontic/actor/ontology-GATED) an ingestion-side neuro-symbolic review
 > (docs/design/ingestion-neuro-symbolic-gaps.md) found the engine is neuro-symbolic in MECHANISM (ADR-0040 cascade
 > runs on contract clauses) but the KNOWLEDGE is Python-authoritative and the `.ttl` is DECORATIVE engine-wide

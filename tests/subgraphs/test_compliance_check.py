@@ -472,64 +472,148 @@ async def test_deontic_split_obligation_once_prohibition_per_assertion_permissio
     assert "p:§ 3" not in by_req             # permission EXCLUDED from violation-judging
 
 
-def test_actor_matches_canonical_exact_and_recall_first():
-    # DEON-6/7: exact match on the CANONICAL role vocabulary; a known synonym normalizes (manufacturer ->
-    # advertiser); distinct roles do NOT match; a generic/absent rule actor or a subject with no actor never gates.
-    from rag_wright.subgraphs.compliance_check import actor_matches, canonical_actor
+def test_actor_matches_recall_first_and_ontology_disjoint(monkeypatch):
+    # ADR-0068 (issue 0013): the actor gate is RECALL-FIRST -- two roles match UNLESS the ontology makes them
+    # DISJOINT (a different cmp:roleDomain). A synonym still normalizes; a generic/absent role never gates; two
+    # different-but-overlapping ADVERTISING roles (advertiser vs seller/endorser) NOW match (the silent-drop fix);
+    # an UNMODELLED role is compatible; only a CROSS-DOMAIN role (a labor 'employer' vs an ad role) is excluded.
+    import rag_wright.subgraphs.compliance_check as cc
+    from rag_wright.subgraphs.compliance_check import actor_matches, canonical_actor, roles_disjoint
 
     assert canonical_actor("Manufacturer") == "advertiser"                     # synonym -> canonical
     assert canonical_actor("distributor") == "distributor"                     # unknown role kept as-is
     assert actor_matches("endorser", {"endorser"})                             # exact
-    assert actor_matches("advertiser", {"advertiser"})                         # subject already canonical (from manufacturer)
-    assert not actor_matches("advertiser", {"endorser"})                       # distinct roles -> no match
-    assert not actor_matches("employer", {"advertiser", "endorser"})           # employer absent -> no match
+    assert actor_matches("advertiser", {"seller"})                             # ISSUE 0013: overlapping ad roles MATCH
+    assert actor_matches("advertiser", {"endorser"})                           # same domain -> compatible (recall-first)
+    assert actor_matches("employer", {"advertiser"})                           # employer UNMODELLED -> compatible
     assert actor_matches("party", {"endorser"})                                # generic rule actor -> recall-first
     assert actor_matches("endorser", set())                                    # subject has no actor -> recall-first
+    assert not roles_disjoint("advertiser", "seller")                          # same domain -> not disjoint
+
+    # cross-domain narrowing becomes REAL once a customer pack declares a role's domain (e.g. labor)
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
+    assert roles_disjoint("employer", "advertiser")                            # different domains -> disjoint
+    assert not actor_matches("employer", {"advertiser", "endorser"})           # labor rule excluded from an ad subject
+    assert actor_matches("advertiser", {"seller"})                             # advertising roles still compatible
 
 
-def test_prohibition_narrows_by_canonical_actor():
-    # DEON-6: a prohibition binding an endorser is DROPPED for a distinct-actor claim, KEPT for an endorser claim
-    # and a SYNONYM (manufacturer->advertiser vs an advertiser rule), and KEPT for an actor-less claim (recall-first).
+def test_prohibition_recall_first_actor_gate(monkeypatch):
+    # ADR-0068 (issue 0013): the per-assertion prohibition actor gate is recall-first. Two OVERLAPPING advertising
+    # roles (an advertiser pricing rule vs a SELLER assertion) are NO LONGER dropped -- the exact silent-recall
+    # hole 0013 reported. A CROSS-DOMAIN rule (a labor 'employer' rule) IS still excluded from an ad assertion.
+    import rag_wright.subgraphs.compliance_check as cc
     from rag_wright.contracts.compliance import CheckableFact, Constraint
     from rag_wright.subgraphs.compliance_check import build_select_fn
 
-    endorser_rule = _req_obj("prohibition", citation="§ E",
-                             text="An endorser must not fail to disclose a connection.").model_copy(
-        update={"actor": "endorser"})
     advertiser_rule = _req_obj("prohibition", citation="§ A",
-                               text="An advertiser must not claim a cure.").model_copy(update={"actor": "advertiser"})
-    emb = _FakeEmbedder({"disclose": [0, 1, 0], "cure": [1, 0, 0]})  # distinct rule vectors (avoid dedup collapse)
-    select = build_select_fn(emb, [endorser_rule, advertiser_rule], k=8,
+                               text="An advertiser must not describe a price as a discount.").model_copy(
+        update={"actor": "advertiser"})
+    employer_rule = _req_obj("prohibition", citation="§ L",
+                             text="An employer must not misclassify a worker.").model_copy(
+        update={"actor": "employer"})
+    emb = _FakeEmbedder({"discount": [0, 1, 0], "worker": [1, 0, 0]})  # distinct rule vectors (avoid dedup collapse)
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
+    select = build_select_fn(emb, [advertiser_rule, employer_rule], k=8,
                              constraint_scope_fn=lambda c: getattr(c, "scope", None) or [])
 
     def _fact(actor):
-        return CheckableFact(fact_id="f", source_doc="d", assertion_text="x",
+        return CheckableFact(fact_id="f", source_doc="d", assertion_text="Was $99, now only $49 this week.",
                              scope=[Constraint(dimension="actor", value=actor)] if actor else [])
 
-    picked = select(_fact("endorser"), [endorser_rule, advertiser_rule])
-    assert endorser_rule in picked and advertiser_rule not in picked           # endorser claim -> only endorser rule
-    picked = select(_fact("manufacturer"), [endorser_rule, advertiser_rule])   # manufacturer -> advertiser (synonym)
-    assert advertiser_rule in picked and endorser_rule not in picked           # -> only the advertiser rule (no regression)
-    picked = select(_fact(None), [endorser_rule, advertiser_rule])
-    assert endorser_rule in picked and advertiser_rule in picked               # no actor scope -> recall-first, both
+    picked = select(_fact("seller"), [advertiser_rule, employer_rule])
+    assert advertiser_rule in picked                                           # ISSUE 0013: seller <-> advertiser, KEPT
+    assert employer_rule not in picked                                         # cross-domain labor rule excluded
+    picked = select(_fact(None), [advertiser_rule, employer_rule])
+    assert advertiser_rule in picked and employer_rule in picked               # no actor scope -> recall-first, both
 
 
-def test_obligation_actor_gate_skips_absent_actor():
-    # DEON-7: an obligation whose bound actor is ABSENT from the document actor-set is SKIPPED entirely (zero
-    # judge calls); present (incl. via a synonym) -> a pair is built. Recall-first.
+def test_obligation_actor_gate_skips_only_cross_domain(monkeypatch):
+    # ADR-0068 (issue 0013): the DEON-7 obligation actor gate is recall-first. An obligation whose actor OVERLAPS a
+    # document actor (endorser vs an advertiser/seller doc, same domain) is now JUDGED, not skipped; only a
+    # CROSS-DOMAIN obligation (a labor 'employer' duty) is skipped for an advertising document.
+    import rag_wright.subgraphs.compliance_check as cc
     from rag_wright.contracts.compliance import CheckableFact, Constraint
     from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
 
-    ob = _req_obj("obligation", citation="§ D",
-                  text="An endorser must disclose a connection.").model_copy(update={"actor": "endorser"})
     make = build_obligation_pairs_fn(_Emb1())
-
     advertiser_doc = [CheckableFact(fact_id="f", source_doc="d", assertion_text="advertiser",
                                     scope=[Constraint(dimension="actor", value="manufacturer")])]  # -> advertiser
-    assert make([ob], advertiser_doc, "d") == []                               # no endorser in the doc -> SKIP
-    endorser_doc = [CheckableFact(fact_id="f", source_doc="d", assertion_text="endorser",
-                                  scope=[Constraint(dimension="actor", value="influencer")])]  # influencer->endorser
-    assert len(make([ob], endorser_doc, "d")) == 1                             # endorser present (synonym) -> judged
+
+    endorser_ob = _req_obj("obligation", citation="§ D",
+                           text="An endorser must disclose a connection.").model_copy(update={"actor": "endorser"})
+    assert len(make([endorser_ob], advertiser_doc, "d")) == 1                   # ISSUE 0013: same domain -> JUDGED
+
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
+    employer_ob = _req_obj("obligation", citation="§ L",
+                           text="An employer must post a notice.").model_copy(update={"actor": "employer"})
+    assert make([employer_ob], advertiser_doc, "d") == []                       # cross-domain labor duty -> SKIP
+
+
+def test_actor_gated_pairs_reports_disjoint_drops(monkeypatch):
+    # ADR-0068 (issue 0013): the ACTOR gate is never silent -- `_actor_gated_pairs` reports every (assertion|
+    # document, rule) pair it skipped, with its citation + scope + the disjoint actor. Empty is the recall-first
+    # norm (an advertising rule vs an advertising subject gates nothing).
+    import rag_wright.subgraphs.compliance_check as cc
+    from rag_wright.contracts.compliance import CheckableFact, Constraint
+    from rag_wright.subgraphs.compliance_check import _actor_gated_pairs
+
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
+    employer_ob = _req_obj("obligation", citation="§ L", text="An employer must post a notice.").model_copy(
+        update={"actor": "employer"})
+    employer_pro = _req_obj("prohibition", citation="§ P", text="An employer must not retaliate.").model_copy(
+        update={"actor": "employer"})
+    seller_claim = CheckableFact(fact_id="c0", source_doc="d", assertion_text="Was $99, now $49.",
+                                 scope=[Constraint(dimension="actor", value="seller")])
+    scope_fn = lambda c: getattr(c, "scope", None) or []  # noqa: E731
+
+    gated = _actor_gated_pairs([seller_claim], [employer_pro], [employer_ob], scope_fn)
+    scopes = {(g["citation"], g["scope"]) for g in gated}
+    assert ("§ L", "document") in scopes                                       # cross-domain obligation, doc-scope skip
+    assert ("§ P", "assertion") in scopes                                      # cross-domain prohibition, per-assertion
+    assert all(g["actor"] == "employer" for g in gated)
+    assert {"requirement_id", "citation", "actor", "subject_actors", "scope", "claim_id"} <= set(gated[0])
+
+    advertiser_pro = _req_obj("prohibition", citation="§ A", text="An advertiser must not misstate.").model_copy(
+        update={"actor": "advertiser"})
+    assert _actor_gated_pairs([seller_claim], [advertiser_pro], [], scope_fn) == []  # recall-first norm: nothing gated
+
+
+async def test_report_surfaces_actor_gated_pairs(monkeypatch):
+    # ADR-0068 (issue 0013): the gated pairs reach ComplianceReport.gated_pairs through the graph -- a cross-domain
+    # labor obligation dropped for an advertising subject is REPORTED (honest coverage), while the overlapping
+    # advertiser-vs-seller pricing rule is JUDGED, not gated.
+    import rag_wright.subgraphs.compliance_check as cc
+    from rag_wright.contracts.compliance import CheckableFact, Constraint
+    from rag_wright.subgraphs.compliance_check import (
+        build_compliance_check, build_obligation_pairs_fn, build_select_fn)
+
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
+    employer_ob = _req_obj("obligation", citation="§ L", text="An employer must post a notice.").model_copy(
+        update={"actor": "employer"})
+    advertiser_pro = _req_obj("prohibition", citation="§ A",
+                              text="An advertiser must not misstate a price.").model_copy(
+        update={"actor": "advertiser"})
+    reqs = [employer_ob, advertiser_pro]
+    claims = [CheckableFact(fact_id="c0", source_doc="d", assertion_text="Was $99, now $49.",
+                            scope=[Constraint(dimension="actor", value="seller")])]
+
+    async def _claims_fn(_text, _source):
+        return claims
+
+    async def _judge(_fact, _requirement):
+        return JudgeVerdict(verdict="compliant", rationale="ok", confidence=0.9)
+
+    emb = _Emb1()
+    scope_fn = lambda c: getattr(c, "scope", None) or []  # noqa: E731
+    graph = build_compliance_check(
+        claims_fn=_claims_fn, requirements_fn=lambda: reqs, judge_fn=_judge,
+        select_fn=build_select_fn(emb, reqs, filter_applicability=False, constraint_scope_fn=scope_fn),
+        obligation_pairs_fn=build_obligation_pairs_fn(emb), constraint_scope_fn=scope_fn)
+    out = await graph.ainvoke({"subject_text": "Was $99, now $49.", "source_doc": "d"})
+    report = out["report"]
+    cites = {(g["citation"], g["scope"]) for g in report.gated_pairs}
+    assert ("§ L", "document") in cites                                        # cross-domain labor duty -> reported
+    assert not any(g["citation"] == "§ A" for g in report.gated_pairs)         # advertiser vs seller -> judged, not gated
 
 
 def test_subject_scope_aggregates_and_dedups_actor_constraints():
@@ -697,9 +781,11 @@ async def test_ad_path_splits_obligations_once_with_an_embedder():
 # --- DEON-9 (issue 0012): PERMISSION-AS-DEFENSE -- a carve-out linked to its O/F rule, passed to that judge -----
 
 
-def test_defense_linker_links_same_source_actor_compatible_permission():
-    # DEON-9: within a policy SOURCE, a same-actor PERMISSION is linked as a defense to an O/F rule; an
-    # actor-incompatible permission and a different-source permission are NOT; a permission itself gets none.
+def test_defense_linker_links_same_source_actor_compatible_permission(monkeypatch):
+    # DEON-9 + ADR-0068: within a policy SOURCE, an actor-COMPATIBLE PERMISSION is linked as a defense to an O/F
+    # rule -- recall-first, so a same-DOMAIN role (an endorser permission vs an advertiser rule) now qualifies; only
+    # a CROSS-DOMAIN permission (a labor role) and a different-source permission are NOT; a permission gets none.
+    import rag_wright.subgraphs.compliance_check as cc
     from rag_wright.subgraphs.compliance_check import build_defense_linker
 
     proh = _req_obj("prohibition", citation="§ 1",
@@ -707,16 +793,20 @@ def test_defense_linker_links_same_source_actor_compatible_permission():
     perm_ok = _req_obj("permission", citation="§ 2",
                        text="An advertiser may make a health claim if a study is cited.").model_copy(
         update={"actor": "advertiser"})
-    perm_actor_mismatch = _req_obj("permission", citation="§ 3",
-                                   text="An endorser may share an opinion.").model_copy(update={"actor": "endorser"})
+    perm_same_domain = _req_obj("permission", citation="§ 3",
+                                text="An endorser may share an opinion.").model_copy(update={"actor": "endorser"})
+    perm_cross_domain = _req_obj("permission", citation="§ 5",
+                                 text="An employer may set a schedule.").model_copy(update={"actor": "employer"})
     perm_other_source = Requirement(requirement_id="q:§ 4", source="q", citation="§ 4",
                                     deontic_type=DeonticType.PERMISSION, actor="advertiser",
                                     requirement_text="Anything goes here.")
-    linker = build_defense_linker(_Emb1(), [proh, perm_ok, perm_actor_mismatch, perm_other_source])
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
+    linker = build_defense_linker(_Emb1(), [proh, perm_ok, perm_same_domain, perm_cross_domain, perm_other_source])
 
     ids = {p.requirement_id for p in linker(proh)}
     assert perm_ok.requirement_id in ids                         # same source + actor-compatible -> linked
-    assert perm_actor_mismatch.requirement_id not in ids         # endorser vs advertiser -> not compatible
+    assert perm_same_domain.requirement_id in ids                # ADR-0068: endorser shares the advertising domain -> linked
+    assert perm_cross_domain.requirement_id not in ids           # cross-domain labor role -> not compatible
     assert perm_other_source.requirement_id not in ids           # different policy source -> not linked
     assert linker(perm_ok) == []                                 # a permission itself gets no defenses
 
@@ -781,16 +871,19 @@ async def test_permission_defense_is_linked_and_reaches_the_judge():
 # --- DEON-10 (issue 0012): the PHASE-2 combined gate -- routing + actor gate + carve-out + cost, together --------
 
 
-async def test_deon_phase2_combined_routing_gating_and_cost():
-    # DEON-10: ONE customer policy (obligation/obligation/prohibition/permission) over a 3-sentence document.
+async def test_deon_phase2_combined_routing_gating_and_cost(monkeypatch):
+    # DEON-10 + ADR-0068: ONE customer policy (obligation/obligation/prohibition/permission) over a 3-sentence doc.
     #   §1 obligation(endorser) -- endorser PRESENT -> judged ONCE (1 call)
-    #   §2 obligation(employer) -- employer ABSENT   -> SKIPPED entirely (0 calls, the actor gate)
-    #   §3 prohibition(advertiser) -- per-assertion, actor-gated (dropped on the endorser sentence) + carries §4
+    #   §2 obligation(employer, a LABOR/cross-domain role) -> SKIPPED (recall-first actor gate) + REPORTED gated
+    #   §3 prohibition(advertiser) -- per-assertion; recall-first -> judged on ALL 3 sentences (advertiser is
+    #      compatible with the same-domain endorser sentence AND the two actor-less sentences) + carries §4
     #   §4 permission(advertiser) -- EXCLUDED from judging, linked as a defense to §3
-    # Total judge calls = 3 (the RELEVANT pairs), NOT assertions x rules = 3 x 4 = 12.
+    # Total judge calls = 4 (the RELEVANT pairs), NOT assertions x rules = 3 x 4 = 12.
     import rag_wright.capabilities.compliance_judgment as cj
+    import rag_wright.subgraphs.compliance_check as cc
     from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
 
+    monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})  # employer -> cross-domain
     calls: list = []
 
     async def _judge(fact, req):
@@ -818,15 +911,17 @@ async def test_deon_phase2_combined_routing_gating_and_cost():
 
     ids = [rid for rid, _ in calls]
     assert ids.count("policy:§ 1") == 1                 # obligation judged ONCE (endorser present)
-    assert "policy:§ 2" not in ids                       # employer obligation SKIPPED (actor absent) -> ZERO calls
-    assert ids.count("policy:§ 3") == 2                   # prohibition per-assertion, actor-gated (2 non-endorser)
+    assert "policy:§ 2" not in ids                       # cross-domain employer obligation SKIPPED -> ZERO calls
+    assert ids.count("policy:§ 3") == 3                   # prohibition per-assertion, recall-first (all 3 sentences)
     assert "policy:§ 4" not in ids                        # permission EXCLUDED from violation-judging
-    assert len(calls) == 3                                # cost = RELEVANT pairs (3), NOT assertions x rules (12)
+    assert len(calls) == 4                                # cost = RELEVANT pairs (4), NOT assertions x rules (12)
     # the prohibition carries the permission carve-out as a defense (DEON-9)
     s3_defenses = next(d for rid, d in calls if rid == "policy:§ 3")
     assert any("§ 4" in x for x in s3_defenses)
     # the report is well-formed (findings for the pairs actually judged)
     assert {r["requirement_id"] for r in report.gap_matrix} == {"policy:§ 1", "policy:§ 3"}
+    # ADR-0068: the SKIPPED cross-domain obligation is REPORTED (never a silent recall loss)
+    assert any(g["citation"] == "§ 2" and g["scope"] == "document" for g in report.gated_pairs)
 
 
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():

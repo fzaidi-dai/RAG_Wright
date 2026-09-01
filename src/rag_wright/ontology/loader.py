@@ -72,6 +72,26 @@ def load_actor_synonyms(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]
     return out
 
 
+@lru_cache(maxsize=4)
+def load_role_domains(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
+    """ADR-0068 (engine issue 0013): the DISJOINTNESS knowledge for the actor gate -- `{canonical role -> domain}`
+    built from each `cmp:ActorRole`'s `skos:prefLabel` (canonical) -> `cmp:roleDomain`. Two roles are disjoint iff
+    both appear here with DIFFERENT domains; the recall-first gate excludes only disjoint pairs (a role absent
+    here, or two roles in the same domain, are compatible). A customer domain declares its roles' roleDomain in
+    its own pack to get cross-domain narrowing. Cached per path."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    out: dict[str, str] = {}
+    for role in g.subjects(RDF.type, URIRef(_CMP + "ActorRole")):
+        pref = str(g.value(role, SKOS.prefLabel) or "").strip().lower()
+        domain = str(g.value(role, URIRef(_CMP + "roleDomain")) or "").strip().lower()
+        if pref and domain:
+            out[pref] = domain
+    return out
+
+
 _FTC_PACK_PATH = Path(__file__).parent / "packs" / "ftc_16cfr255.ttl"
 
 
