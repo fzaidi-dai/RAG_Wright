@@ -19,8 +19,8 @@ from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
 
 @dataclass(frozen=True)
 class GraphNode:
-    """A graph entity node to write (T25). `node_key` is the vertex identity (a canonical CIK when
-    linked, an `UNLINKED:<key>` surrogate otherwise); `entity_id` is the CIK, or empty when unlinked."""
+    """A graph entity node to write (T25). `node_key` is the vertex identity (the resolver's canonical id when
+    linked, an `UNLINKED:<key>` surrogate otherwise); `entity_id` is the canonical id, or empty when unlinked."""
 
     node_key: str
     entity_id: str

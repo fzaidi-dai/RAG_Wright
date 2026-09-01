@@ -1,7 +1,7 @@
-"""Entity resolution (FR-C.7, T24): link canonical mention clusters to the EDGAR CIK registry.
+"""Entity resolution (FR-C.7, T24): link canonical mention clusters to a canonical-id registry (closed-world).
 
 The closed-world linking stage after canonicalization (T23b). It resolves each `MentionCluster` to its
-canonical `entity_id` (an EDGAR CIK) against the T8 registry, and resolves the relationship endpoints
+canonical `entity_id` (the registry's canonical id) against the injected registry, and resolves the relationship endpoints
 (the `RelationshipFact` `source_ref`/`target_ref` refs) as the SAME stream, so an entity that appears
 both as a standalone mention and as a relationship endpoint lands on one node, not two (FR-C.7, ADR-0004).
 
@@ -33,12 +33,12 @@ from rag_wright.ontology.registry import EntityRegistry
 
 class ResolvedEntity(BaseModel):
     """A mention cluster linked (or not) to a canonical registry id. `entity_id is None` = unlinked
-    (closed-world: not in EDGAR — expected for private entities, T10 — never fabricated)."""
+    (closed-world: not in the registry — expected for private/unknown entities — never fabricated)."""
 
     key: str
     representative: str
     entity_type: EntityType
-    entity_id: Optional[str]  # canonical CIK value, or None (unlinked)
+    entity_id: Optional[str]  # the registry's canonical id, or None (unlinked)
     confidence: ConfidenceTag
     chunk_ids: list[str]
 
@@ -64,7 +64,7 @@ class ResolutionResult(BaseModel):
 
 
 def _resolve_cluster(cluster: MentionCluster, registry: EntityRegistry) -> Optional[str]:
-    """Resolve a cluster to a CIK: the first of its surface forms the registry knows (closed-world)."""
+    """Resolve a cluster to a canonical id: the first of its surface forms the registry knows (closed-world)."""
     for surface in (cluster.representative, *cluster.variants):
         entity_id = registry.resolve(surface)
         if entity_id is not None:
@@ -78,9 +78,9 @@ def resolve_entities(
     *,
     registry: EntityRegistry,
 ) -> ResolutionResult:
-    """Link clusters to CIKs and resolve relationship endpoints as one stream (self-loops dropped).
+    """Link clusters to canonical ids and resolve relationship endpoints as one stream (self-loops dropped).
 
-    Each cluster resolves to a CIK (or None). A relationship ref resolves by matching a cluster key
+    Each cluster resolves to a canonical id (or None). A relationship ref resolves by matching a cluster key
     first — so a ref that is the same entity as a standalone mention takes that cluster's id (the
     two-channel dedup, ADR-0004) — falling back to a direct registry lookup only for a ref with no
     cluster. A relationship whose two refs resolve to the same non-None id is dropped (self-loop).
@@ -130,7 +130,7 @@ def fragmentation_rate(result: ResolutionResult, gold_by_key: dict[str, str]) ->
     """Residual fragmentation after resolution (risk 5), measured against gold entity labels: the
     fraction of true entities that end as more than one node. Resolution reduces fragmentation when the
     registry links surface variants T23b's exact-key clustering left separate (e.g. an acronym alias) to
-    the same CIK. A cluster is a node by its `entity_id` if linked, else by its own key (unlinked)."""
+    the same canonical id. A cluster is a node by its `entity_id` if linked, else by its own key (unlinked)."""
     nodes_per_entity: dict[str, set[str]] = defaultdict(set)
     for entity in result.entities:
         gold = gold_by_key.get(entity.key)
@@ -149,5 +149,5 @@ def register_entity_resolution(registry: CapabilityRegistry) -> None:
         "entity_resolution",
         contract=ResolutionResult,
         kind="function",
-        display_name="Entity resolution (closed-world to EDGAR CIK)",
+        display_name="Entity resolution (closed-world to a canonical-id registry)",
     )

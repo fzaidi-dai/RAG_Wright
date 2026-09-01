@@ -232,9 +232,9 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {CHUNK_TYPE}.sparse_weights ARRAY_OF_FLOATS")
         if ENTITY_TYPE not in types:
             self._command(f"CREATE VERTEX TYPE {ENTITY_TYPE}")
-            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.entity_id STRING")  # node key (CIK or surrogate)
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.entity_id STRING")  # node key (canonical id or surrogate)
             self._command(f"CREATE PROPERTY {ENTITY_TYPE}.chunk_id STRING")
-            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.cik STRING")  # canonical CIK, or '' if unlinked
+            self._command(f"CREATE PROPERTY {ENTITY_TYPE}.canonical_id STRING")  # ADR-0067 P5c: the resolver's canonical id, or '' if unlinked
             self._command(f"CREATE PROPERTY {ENTITY_TYPE}.name STRING")
             self._command(f"CREATE PROPERTY {ENTITY_TYPE}.entity_type STRING")
             self._command(f"CREATE PROPERTY {ENTITY_TYPE}.confidence STRING")
@@ -628,7 +628,7 @@ class ArcadeDBStore:
             statements.append(
                 f"UPDATE {ENTITY_TYPE} SET"
                 f" entity_id = {_sql_str(node.node_key)},"
-                f" cik = {_sql_str(node.entity_id)},"
+                f" canonical_id = {_sql_str(node.entity_id)},"  # ADR-0067 P5c: the resolver's canonical id
                 f" name = {_sql_str(node.name)},"
                 f" entity_type = {_sql_str(node.entity_type)},"
                 f" confidence = {_sql_str(node.confidence)},"

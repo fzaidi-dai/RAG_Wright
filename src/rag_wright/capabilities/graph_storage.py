@@ -34,8 +34,8 @@ class GraphWriteResult:
 
 
 def _node_key(entity_id: Optional[str], surface_key: str) -> str:
-    """The vertex identity: the canonical CIK when linked, else an `UNLINKED:<key>` surrogate (so a CIK
-    lookup matches only linked entities, and an unlinked ref lands on the same node as its cluster)."""
+    """The vertex identity: the resolver's canonical id when linked, else an `UNLINKED:<key>` surrogate (so a
+    canonical-id lookup matches only linked entities, and an unlinked ref lands on the same node as its cluster)."""
     return entity_id if entity_id else f"UNLINKED:{surface_key}"
 
 
