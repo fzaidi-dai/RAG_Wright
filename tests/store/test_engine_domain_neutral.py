@@ -17,6 +17,7 @@ _ENGINE_MODULES = (
     "store/seam.py",
     "capabilities/graph_storage.py",
     "capabilities/entity_resolution.py",
+    "ontology/registry.py",  # ADR-0067 generic registry: SEC-free (the EDGAR builder is in corpus/edgar.py)
 )
 _SEC = re.compile(r"\b(cik|edgar)\b", re.IGNORECASE)
 

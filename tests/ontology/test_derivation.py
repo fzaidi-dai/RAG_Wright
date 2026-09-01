@@ -15,6 +15,7 @@ from rag_wright.ontology.derive import (
     clause_category_columns,
     reconcile_clause_categories,
 )
+from rag_wright.corpus.edgar import build_edgar_registry
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 
 
@@ -75,7 +76,7 @@ _TICKERS = [
 
 
 def _registry():
-    return EntityRegistry.from_company_tickers(
+    return build_edgar_registry(
         _TICKERS, aliases_by_cik={"0000320193": ["Apple Computer, Inc."]}
     )
 
@@ -114,6 +115,6 @@ def test_registry_get_by_canonical_id():
 
 def test_registry_skips_invalid_cik_rows_without_fabricating():
     rows = _TICKERS + [{"cik_str": "not-a-cik", "ticker": "BAD", "title": "Broken Row Inc."}]
-    reg = EntityRegistry.from_company_tickers(rows)
+    reg = build_edgar_registry(rows)
     assert len(reg) == 3  # the broken row is skipped, not invented
     assert reg.resolve("Broken Row Inc.") is None

@@ -207,3 +207,25 @@ def propose_matches(
             )
         )
     return MatchCoverage(resolved=resolved, unresolved=unresolved)
+
+
+def build_edgar_registry(rows, *, aliases_by_cik=None):
+    """ADR-0067: the SEC/EDGAR registry BUILDER (moved off the generic EntityRegistry). Build an EntityRegistry
+    from `company_tickers.json` rows, keyed by a normalized CIK `EntityId`, with `normalize_name` as the surface
+    normalizer. A row whose CIK is invalid is skipped (recorded in `skipped_ids`), never fabricated. The engine's
+    EntityRegistry stays domain-neutral; this SEC builder + normalize_cik live in the SEC layer (the plug-in)."""
+    from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
+
+    aliases_by_cik = aliases_by_cik or {}
+    registry = EntityRegistry(normalize=normalize_name)
+    for row in rows:
+        raw_cik = row["cik_str"]
+        try:
+            entity_id = normalize_cik(raw_cik)
+        except ValueError:
+            registry.skipped_ids.append(str(raw_cik))
+            continue
+        registry.add(RegistryRecord(
+            entity_id=entity_id, canonical_name=row["title"], ticker=row.get("ticker"),
+            aliases=aliases_by_cik.get(entity_id.value, [])))
+    return registry
