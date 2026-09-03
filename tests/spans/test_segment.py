@@ -7,7 +7,13 @@ structure is split (enumeration, sentences) while abbreviations and section refe
 
 from __future__ import annotations
 
-from rag_wright.spans.segment import DEFAULT_MIN_CHARS, OperativeSpan, _table_block_ranges, segment_clause
+from rag_wright.spans.segment import (
+    DEFAULT_MIN_CHARS,
+    OperativeSpan,
+    _table_block_ranges,
+    is_extractable_span,
+    segment_clause,
+)
 
 _MESSY = (
     "12. LIMITATION OF LIABILITY AND WARRANTIES.\n"
@@ -167,3 +173,25 @@ def test_non_table_pipe_line_does_not_trigger_a_block():
     body = "The formula a | b applies. Losses are capped at the fees paid in the prior twelve months."
     assert _table_block_ranges(body) == []
     _reconstructs(body)  # still tiles
+
+
+# --- EXTRACT-GUARD-1: is_extractable_span (furniture is not a clause) --------------------------
+
+
+def test_furniture_spans_are_not_extractable():
+    # the exact NEONSYSTEMS furniture that hard-failed docling-graph extraction -- none is a clause.
+    for furniture in ("9", "22", "By: /s/ Joe Backer", "Name: ", "Title:", "SKUNWARE, INC.",
+                      "EXHIBIT C", "FORM OF SUBLICENSE", "AMENDMENT OF DEFINITIONS.",
+                      "66069:53214:DALLAS:277267.9", "  ", "1.11"):
+        assert is_extractable_span(furniture) is False, furniture
+
+
+def test_real_clauses_are_extractable_recall_first():
+    for clause in (
+        "Net 30 days.",                                                    # short but real prose
+        "The Customer shall pay the fees set out in the schedule below.",
+        '1.11 "Annual Royalty Advance Requirement" shall mean $1,000,000.',
+        "NOW, THEREFORE, for and consideration of the mutual covenants of the parties set forth herein",
+        "THE PRODUCTS ARE PROVIDED AS-IS WITHOUT WARRANTY OF ANY KIND.",   # long ALL-CAPS disclaimer -> real
+    ):
+        assert is_extractable_span(clause) is True, clause

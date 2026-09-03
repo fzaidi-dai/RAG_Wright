@@ -79,6 +79,36 @@ def _table_block_ranges(body: str) -> list[tuple[int, int]]:
     return ranges
 
 
+_MIN_CLAUSE_ALPHA = 6  # fewer alphabetic chars than this = a page number / "By:" / "9" -- not a clause
+_MIN_ALLCAPS_WORDS = 6  # a short ALL-CAPS span is a label/heading ("EXHIBIT C"); a long one may be a real clause
+_WORD_RE = re.compile(r"[A-Za-z]{2,}")
+# A signature / execution-block label line -- universal, domain-neutral contract furniture ("By: /s/ ...",
+# "Name:", "Title:", "Attest:", "Its:", "Date:"). The trailing ':' makes it a LABEL, not a provision that merely
+# starts with the word (e.g. "By signing below, the parties agree ..." does not match).
+_FURNITURE_LINE = re.compile(r"^\s*(?:by|name|title|attest|witness|its|date|signature)\s*:", re.IGNORECASE)
+
+
+def is_extractable_span(text: str) -> bool:
+    """EXTRACT-GUARD-1: whether a span is a CLAUSE worth attempting typed-property extraction on. RECALL-FIRST:
+    returns True for anything carrying lowercase prose (a real provision has function words -- 'the', 'shall',
+    'of'); only DECLINES clear document FURNITURE that bears no clause properties and only burns a docling-graph
+    call + retries -- a page number ('9'), a docket reference, a short bare ALL-CAPS heading ('EXHIBIT C',
+    'FORM OF SUBLICENSE', 'AMENDMENT OF DEFINITIONS.'), or a signature/execution-block label line ('By: /s/ ...',
+    'Name:', 'Title:').
+
+    A skipped span is NOT a content loss: it stays in the SPAN INDEX for retrieval (indexing is independent of
+    clause extraction); the guard only declines to mint a clause-KG node from furniture. A long ALL-CAPS provision
+    (a capitalised disclaimer, `>= _MIN_ALLCAPS_WORDS` words) is still extracted."""
+    t = text.strip()
+    if sum(c.isalpha() for c in t) < _MIN_CLAUSE_ALPHA:  # near-empty: page numbers, "By:", pure digits/punct
+        return False
+    if _FURNITURE_LINE.match(t):  # a signature/execution-block label line, not a provision
+        return False
+    if not any(c.islower() for c in t):  # ALL-CAPS: a label/heading unless it is a long (capitalised) clause
+        return len(_WORD_RE.findall(t)) >= _MIN_ALLCAPS_WORDS
+    return True  # has lowercase prose -> treat as a real clause (recall-first)
+
+
 def _is_bare_heading(text: str) -> bool:
     """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
     sentence terminator. It must fold INTO its body, never stand alone: a standalone heading gets classified as

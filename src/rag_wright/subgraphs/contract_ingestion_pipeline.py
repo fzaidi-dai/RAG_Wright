@@ -617,8 +617,9 @@ def aproduction_document_ingest(
     from rag_wright.contracts.property import ClausePropertyRecord
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.ontology.clause_template import Clause
+    from rag_wright.capabilities.dg_extraction import ExtractionFailed
     from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
-    from rag_wright.spans.segment import to_span_record
+    from rag_wright.spans.segment import is_extractable_span, to_span_record
 
     parse_dir = Path(cache_dir) / "parsed"
     chunk_dir = Path(cache_dir) / "chunks"
@@ -665,10 +666,14 @@ def aproduction_document_ingest(
         return await _asegment_and_classify(chunks, classify_fn)
 
     async def clauses_fn(doc: SourceDocument, segments: list) -> dict:
+        # EXTRACT-GUARD-1: only typed spans that are actually CLAUSES reach extraction. A furniture span (page
+        # number, signature/execution label, bare ALL-CAPS heading) carries no clause properties, so extracting it
+        # only hard-fails docling-graph ("No valid JSON") + burns retries and mislabels the doc PARTIAL. It stays
+        # in the SPAN INDEX for retrieval (index_spans is a separate branch), so this is not a content loss.
         jobs = [
             (index, op, canonical_function(function), scores)
             for index, (op, function, _cds, scores) in enumerate(segments)
-            if canonical_function(function) is not None
+            if canonical_function(function) is not None and is_extractable_span(op.text)
         ]
         if not jobs:
             return {"clause_records": [], "clause_failures": []}
@@ -685,12 +690,15 @@ def aproduction_document_ingest(
             else:
                 record = None
                 reason = ""
-                for _attempt in range(_CLAUSE_EXTRACT_ATTEMPTS):  # retry the transient (rare LLM-JSON garble)
+                for _attempt in range(_CLAUSE_EXTRACT_ATTEMPTS):
                     try:
                         record = await clause_extractor.aextract(
                             chunk_id=clause_cid, function=function, text=op.text, span_id=op.span_id)
                         break
-                    except Exception as exc:  # noqa: BLE001 - retry; a PERSISTENT failure is recorded below
+                    except ExtractionFailed as exc:  # EXTRACT-GUARD-1: DETERMINISTIC (no valid JSON) -> retrying
+                        reason = str(exc)                # re-fails on the same input; record once, don't burn 3x
+                        break
+                    except Exception as exc:  # noqa: BLE001 - a TRANSIENT (timeout/network) -> retry
                         reason = str(exc)
                 if record is None:  # persistent failure -> record it (PARTIAL), do NOT cache, do NOT silently drop
                     failures.append({"span_id": op.span_id, "function": function, "reason": reason[:200]})

@@ -21,11 +21,17 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   per-line items into whole-clause paragraphs (two-sided break: prev ends a sentence AND next starts one;
 >   de-hyphenation; headings/tables = hard boundaries). LIVE-verified: NEONSYSTEMS segments 219→87, granite
 >   extraction 24 failures→0 (56/56); BIOAMBER not over-merged (0 mega-clauses, median 134 chars).
-> - **EXTRACT-GUARD-1 (todo, DEMOTED to robustness backstop)**: DEFRAG-1 alone took NEONSYSTEMS to 0 failures, so
->   this is no longer clearing the wall — a furniture span on another contract could still hard-fail extraction, so
->   the guard stays as cheap no-silent-loss insurance: skip clause extraction for furniture/no-provision spans
->   (still indexed for retrieval), and DON'T retry a deterministic empty extraction (no false "clause failure",
->   no 3× retry burn). Preserve no-silent-loss for SUBSTANTIVE spans that genuinely fail.
+> - **EXTRACT-GUARD-1 (DONE, ADR-0072)**: recall-first `is_extractable_span` guard (skip furniture: page numbers,
+>   ALL-CAPS labels, By/Name/Title signature lines; keep anything with lowercase prose) filters typed spans before
+>   extraction (still indexed for retrieval); `clauses_fn` records a deterministic `ExtractionFailed` ONCE (no 3×
+>   retry). E2E-verified: NEONSYSTEMS ~11min→100s, PARTIAL→INGESTED clean, 24+ failures→0, 45 clauses/96 spans.
+>   RuleWright wider sample confirmed JSON failures 56→0.
+> - **PARSE-2 (todo, NEW — surfaced by RuleWright's wider sample)**: a LARGE born-digital doc (doc3 = 63pp/168KB)
+>   hits the 600s parse deadline → FAILED, because the fast tier still runs `do_ocr=True` (EasyOCR) on born-digital
+>   pages. Fix = complete text-layer-first: a FULLY born-digital doc parses with `do_ocr=False` (no OCR, skip the
+>   scan-quality gate + VLM entirely). Measured: doc3 parse 600s(deadline)→23.3s with do_ocr=False, full text kept.
+> - **PARTIAL-CAUSE-1 (todo, NEW)**: docs 2 & 4 still come back `partial` with a NON-JSON extraction-stage cause
+>   (3 extraction failures across the sample, different from the fixed "No valid JSON"). Reproduce + diagnose.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
 >   party / claim / requirement) off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`
 >   nested-schema extension). Model-neutral robustness (graceful degrade + no JSON burden + reasoning-model
