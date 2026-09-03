@@ -35,6 +35,7 @@ from pydantic import BaseModel, Field
 from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.corpus.document_parser import _HEADING_LABELS  # the single docling heading-label authority (ADR-0058)
+from rag_wright.corpus.document_parser import content_items  # issue 0014: reading-order body (text+tables+pictures)
 from rag_wright.models.tag_structured import build_tag_structured
 from rag_wright.spans.segment import _is_bare_heading  # the single bare-heading text authority (0006-B)
 from rag_wright.contracts.identifiers import ChunkId
@@ -132,6 +133,25 @@ _DISCOVERY_INSTRUCTIONS = (
     "boundaries as objects {{\"start_index\": i, \"end_index\": j}} (inclusive, contiguous, covering every "
     "item from 0 to the last)."
 )
+
+
+class _ContentView:
+    """issue 0014: a parsed document viewed as its READING-ORDER chunkable content (text items + tables +
+    figures), so the chunker and segmenter index tables and figures -- not only `document.texts`, which excludes
+    them. `.texts` is the ONLY surface the chunking machinery reads off a document (`_document_items`, the
+    discoverers, `_join_span`, `_validate_partition`), so exposing the reading-order content items here routes all
+    of them through tables/figures with no other change, and `_SubDocument` slices of it stay consistent."""
+
+    __slots__ = ("texts",)
+
+    def __init__(self, document) -> None:
+        self.texts = content_items(document)
+
+
+def _as_content_view(document) -> _ContentView:
+    """Wrap a loaded docling document as its reading-order content view, unless it already is one (idempotent, so
+    the transient `chunk_texts` seam and the ingest path can both wrap without double-wrapping)."""
+    return document if isinstance(document, _ContentView) else _ContentView(document)
 
 
 def _document_items(document) -> list[dict]:
@@ -710,7 +730,7 @@ def _chunk_prepare(parsed: ParsedDocument, cache_dir: Path, discoverer: Optional
     manifest_path = cache_dir / f"{parsed.source_doc_id}.{parsed.content_hash[:16]}.chunks.json"
     if manifest_path.exists():  # content-hash gate
         return ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8")), manifest_path, None, None
-    document = load_document(parsed)
+    document = _as_content_view(load_document(parsed))  # issue 0014: chunk the reading-order body (incl. tables)
     disc = discoverer if discoverer is not None else SeamBoundaryDiscoverer(token_cap=token_cap)
     return None, manifest_path, document, disc
 
@@ -736,6 +756,7 @@ def chunk_texts(document: Any, *, discoverer: Optional[BoundaryDiscoverer] = Non
     per-section model refinement, run concurrently, seeing one section at a time -- so cost never scales with
     document length (no size bottleneck), NO subject-specific large-doc code. RLM (`SeamBoundaryDiscoverer`) is a
     FUTURE escalation, as on the ingestion side, not wired here."""
+    document = _as_content_view(document)  # issue 0014: segment the reading-order body (incl. tables)
     disc = discoverer if discoverer is not None else StructuralModelFallbackDiscoverer(model_id)
     spans = disc.discover(document)
     return _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))
@@ -745,6 +766,7 @@ async def achunk_texts(document: Any, *, discoverer: Optional[BoundaryDiscoverer
                        token_cap: int = DEFAULT_TOKEN_CAP, model_id: str | None = None) -> list[str]:
     """ASYNC twin of `chunk_texts` (SEG-2/SEG-5): awaits the discoverer's async boundary call, so it runs on the
     subject verdict's event loop. Same reuse, same default = the production ingestion `StructuralModelFallbackDiscoverer`."""
+    document = _as_content_view(document)  # issue 0014: segment the reading-order body (incl. tables)
     disc = discoverer if discoverer is not None else StructuralModelFallbackDiscoverer(model_id)
     spans = await disc.adiscover(document)
     return _chunk_texts(document, spans, token_cap, respect_structure=getattr(disc, "respects_structure", False))

@@ -48,6 +48,36 @@ _TERM = re.compile(r"[.;:]\s+(?=[A-Z\"'(])")
 # 0006-B: a leading enumeration marker to strip before deciding if a span is a bare HEADING ('9.', '(a)', '12.1').
 _LEADING_ENUM = re.compile(r"^\s*(?:\(?[\dA-Za-z]{1,4}\s*[.)]|\d+(?:\.\d+){0,3}\.?|§+)\s+")
 
+# issue 0014: a markdown TABLE row (a line whose first non-space character is a pipe). A run of >=2 such lines is
+# a table block, kept as ONE atomic operative span -- the rows are meaningless without the header row, so a fee
+# schedule / payment table must retrieve as a unit (header + all rows), never split by the paragraph/sentence cutter.
+_TABLE_LINE = re.compile(r"^[ \t]*\|")
+_MIN_TABLE_LINES = 2
+
+
+def _table_block_ranges(body: str) -> list[tuple[int, int]]:
+    """issue 0014: the char ranges of contiguous markdown table blocks (>= `_MIN_TABLE_LINES` consecutive
+    pipe-led lines). Each range is atomic: `segment_clause` cuts at its edges and never inside it, so the whole
+    table is one operative span. Byte offsets tile the body (a range ends at the start of the first non-table
+    line, i.e. after the last row's newline)."""
+    ranges: list[tuple[int, int]] = []
+    run_start: int | None = None
+    run_lines = 0
+    pos = 0
+    for line in body.splitlines(keepends=True):
+        if _TABLE_LINE.match(line):
+            if run_start is None:
+                run_start, run_lines = pos, 0
+            run_lines += 1
+        else:
+            if run_start is not None and run_lines >= _MIN_TABLE_LINES:
+                ranges.append((run_start, pos))
+            run_start, run_lines = None, 0
+        pos += len(line)
+    if run_start is not None and run_lines >= _MIN_TABLE_LINES:
+        ranges.append((run_start, pos))
+    return ranges
+
 
 def _is_bare_heading(text: str) -> bool:
     """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
@@ -76,14 +106,29 @@ class OperativeSpan(BaseModel):
 
 
 def _boundaries(body: str) -> list[int]:
-    """Deterministic cut offsets that partition `body` into operative spans (includes 0 and len(body))."""
+    """Deterministic cut offsets that partition `body` into operative spans (includes 0 and len(body)).
+
+    A markdown table block (issue 0014) is atomic: cuts are forced at its edges and every candidate cut INSIDE
+    it is suppressed, so the whole table stays one span (header + rows)."""
+    blocks = _table_block_ranges(body)
+
+    def _inside(c: int) -> bool:  # strictly inside a table block -> not a valid cut
+        return any(bs < c < be for bs, be in blocks)
+
     cuts: set[int] = {0, len(body)}
+    for bs, be in blocks:  # a table block's edges are always boundaries
+        cuts.add(bs)
+        cuts.add(be)
     for m in re.finditer(r"\n+", body):  # paragraph breaks
-        cuts.add(m.end())
+        if not _inside(m.end()):
+            cuts.add(m.end())
     for m in _ENUM.finditer(body):  # split BEFORE an enumeration marker opening a provision
-        cuts.add(m.start(1))
+        if not _inside(m.start(1)):
+            cuts.add(m.start(1))
     for m in _TERM.finditer(body):  # split AFTER a genuine sentence/list terminator
         p = m.start()  # index of the '.' ';' or ':'
+        if _inside(m.end()):
+            continue
         if body[p] == ".":
             prev = body[p - 1] if p > 0 else ""
             if prev.isdigit():  # decimal / section reference (12.1) -- not a terminator

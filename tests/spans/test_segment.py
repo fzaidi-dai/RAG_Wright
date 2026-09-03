@@ -7,7 +7,7 @@ structure is split (enumeration, sentences) while abbreviations and section refe
 
 from __future__ import annotations
 
-from rag_wright.spans.segment import DEFAULT_MIN_CHARS, OperativeSpan, segment_clause
+from rag_wright.spans.segment import DEFAULT_MIN_CHARS, OperativeSpan, _table_block_ranges, segment_clause
 
 _MESSY = (
     "12. LIMITATION OF LIABILITY AND WARRANTIES.\n"
@@ -120,3 +120,50 @@ def test_segmentation_is_deterministic():
     a = [(s.start, s.end, s.text) for s in segment_clause("c:0:h", _MESSY)]
     b = [(s.start, s.end, s.text) for s in segment_clause("c:0:h", _MESSY)]
     assert a == b
+
+
+# --- issue 0014: a markdown table is ONE atomic operative span --------------------------------
+
+_FEE_TABLE = (
+    "1. Fees\n\nThe Customer shall pay the fees set out in the schedule below, annually in advance.\n\n"
+    "| Service tier | Annual fee (GBP) | Included seats | Support response |\n"
+    "|---|---|---|---|\n"
+    "| Starter | 6,000 | 10 | 2 business days |\n"
+    "| Professional | 18,000 | 50 | 1 business day |\n"
+    "| Enterprise | 48,000 | 250 | 4 hours |"
+)
+
+
+def test_table_block_ranges_finds_the_contiguous_pipe_run():
+    ranges = _table_block_ranges(_FEE_TABLE)
+    assert len(ranges) == 1
+    s, e = ranges[0]
+    block = _FEE_TABLE[s:e]
+    assert block.lstrip().startswith("| Service tier")  # header row
+    assert block.rstrip().endswith("4 hours |")          # last data row
+
+
+def test_markdown_table_is_one_atomic_span_with_header_and_all_rows():
+    # issue 0014: the fee table must retrieve as a UNIT -- the header row (column semantics) stays with every
+    # data row, so "48,000" is knowable as the Enterprise Annual fee. A row split across spans loses that.
+    spans = _reconstructs(_FEE_TABLE)  # also asserts byte-faithful tiling
+    table_spans = [s for s in spans if "48,000" in s.text]
+    assert len(table_spans) == 1                                   # ONE atomic table span, not row-per-span
+    t = table_spans[0].text
+    assert "Annual fee (GBP)" in t                                 # header preserved
+    assert all(tier in t for tier in ("Starter", "Professional", "Enterprise"))  # every row present
+
+
+def test_table_rows_are_not_split_by_paragraph_or_sentence_cutter():
+    spans = _reconstructs(_FEE_TABLE)
+    # no span is a lone table ROW (a '|'-led fragment missing the header)
+    for s in spans:
+        if s.text.lstrip().startswith("|"):
+            assert "Service tier" in s.text  # any pipe span is the whole table (carries the header)
+
+
+def test_non_table_pipe_line_does_not_trigger_a_block():
+    # a single stray '|' line in prose is not a table (needs >= 2 consecutive rows) -> normal segmentation
+    body = "The formula a | b applies. Losses are capped at the fees paid in the prior twelve months."
+    assert _table_block_ranges(body) == []
+    _reconstructs(body)  # still tiles

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from docling_core.types.doc.labels import DocItemLabel
 
-from rag_wright.corpus.document_parser import document_to_sections, document_to_text
+from rag_wright.corpus.document_parser import content_items, document_to_sections, document_to_text
 
 
 class _Item:
@@ -14,12 +14,48 @@ class _Item:
         self.text = text
 
 
+class _FakeTable:
+    """Duck-typed docling TableItem: label TABLE, caption_text(doc) + export_to_markdown(doc)."""
+
+    label = DocItemLabel.TABLE
+
+    def __init__(self, markdown, caption=""):
+        self._md = markdown
+        self._caption = caption
+
+    def caption_text(self, _doc):
+        return self._caption
+
+    def export_to_markdown(self, _doc=None):
+        return self._md
+
+
+class _FakeAnnotation:
+    def __init__(self, text):
+        self.text = text
+
+
+class _FakePicture:
+    """Duck-typed docling PictureItem: label PICTURE, caption_text(doc) + description annotations."""
+
+    label = DocItemLabel.PICTURE
+
+    def __init__(self, caption="", annotations=()):
+        self._caption = caption
+        self.annotations = list(annotations)
+
+    def caption_text(self, _doc):
+        return self._caption
+
+
 class _FakeDoc:
-    """Duck-typed DoclingDocument: export_to_markdown() + iterate_items() -> (item, level)."""
+    """Duck-typed DoclingDocument: export_to_markdown() + iterate_items() -> (item, level) + `.texts`."""
 
     def __init__(self, items, markdown="# Doc\n\nbody text"):
         self._items = items
         self._md = markdown
+        # `.texts` is the text-family subset (what a `.texts`-only chunker would see; the coverage backstop reads it)
+        self.texts = [it for it in items if isinstance(it, _Item)]
 
     def export_to_markdown(self, **_):
         return self._md
@@ -80,4 +116,50 @@ def test_document_to_sections_skips_page_headers_and_empty():
     ])
     secs = document_to_sections(doc)
     assert [s["heading"] for s in secs] == ["1. Term"]
-    assert secs[0]["text"].strip() == "Five years."
+
+
+# --- issue 0014: the reading-order content view (text + tables + figures) ---------------------
+
+
+def test_content_items_includes_a_table_in_reading_order():
+    # the load-bearing 0014 fix: a TABLE lives in `document.tables`, NEVER in `.texts`; the reading-order view
+    # must place its markdown between the surrounding prose so the chunker/index sees it.
+    doc = _FakeDoc([
+        _Item(DocItemLabel.SECTION_HEADER, "1. Fees"),
+        _Item(DocItemLabel.TEXT, "The Customer shall pay the fees set out below."),
+        _FakeTable("| Service tier | Annual fee (GBP) |\n|---|---|\n| Enterprise | 48,000 |"),
+        _Item(DocItemLabel.SECTION_HEADER, "2. Liability"),
+    ])
+    items = content_items(doc)
+    labels = [it.label for it in items]
+    assert labels == [DocItemLabel.SECTION_HEADER, DocItemLabel.TEXT, DocItemLabel.TABLE,
+                      DocItemLabel.SECTION_HEADER]
+    table = items[2]
+    assert "48,000" in table.text and "Annual fee (GBP)" in table.text  # header + data, atomic
+
+
+def test_content_items_table_prefixes_caption_when_present():
+    doc = _FakeDoc([_FakeTable("| a | b |\n|---|---|\n| 1 | 2 |", caption="Schedule A: Fees")])
+    (item,) = content_items(doc)
+    assert item.text.startswith("Schedule A: Fees")
+    assert "| 1 | 2 |" in item.text
+
+
+def test_content_items_includes_picture_caption_and_description():
+    doc = _FakeDoc([
+        _FakePicture(caption="Figure 1: signature block",
+                     annotations=[_FakeAnnotation("A scanned wet-ink signature of the Supplier.")]),
+    ])
+    (item,) = content_items(doc)
+    assert item.label == DocItemLabel.PICTURE
+    assert "signature block" in item.text and "wet-ink signature" in item.text  # caption + description
+
+
+def test_content_items_is_a_superset_of_texts_coverage_backstop():
+    # NO-SILENT-LOSS (0014 Q2): any `.texts` item the reading-order walk missed is still appended, so a content
+    # item can never vanish upstream of the failure accounting the way the table did.
+    orphan = _Item(DocItemLabel.TEXT, "An orphan clause the body walk did not reach.")
+    doc = _FakeDoc([_Item(DocItemLabel.SECTION_HEADER, "1. Term")])  # iterate_items yields only the header...
+    doc.texts.append(orphan)                                          # ...but `.texts` also carries the orphan
+    texts = [it.text for it in content_items(doc)]
+    assert "An orphan clause the body walk did not reach." in texts

@@ -99,6 +99,26 @@ def _parsed(tmp_path: Path, doc: DoclingDocument, content: bytes = b"%PDF one") 
     return parse(src, cache_dir=tmp_path / "parsed", parser=_StubParser(doc))
 
 
+def _table_section_doc() -> DoclingDocument:
+    """issue 0014: a Fees section whose fee figures live ONLY in a table (docling puts it in `document.tables`,
+    never in `.texts`)."""
+    from docling_core.types.doc.document import TableCell, TableData
+
+    doc = DoclingDocument(name="table_stub")
+    doc.add_text(label="section_header", text="1. Fees")
+    doc.add_text(label="text", text="The Customer shall pay the fees set out in the schedule below. " * 6)
+    grid = [["Service tier", "Annual fee (GBP)"], ["Starter", "6,000"], ["Enterprise", "48,000"]]
+    cells = [
+        TableCell(text=txt, row_span=1, col_span=1, start_row_offset_idx=r, end_row_offset_idx=r + 1,
+                  start_col_offset_idx=c, end_col_offset_idx=c + 1, column_header=(r == 0))
+        for r, row in enumerate(grid) for c, txt in enumerate(row)
+    ]
+    doc.add_table(data=TableData(num_rows=3, num_cols=2, table_cells=cells))
+    doc.add_text(label="section_header", text="2. Limitation of Liability")
+    doc.add_text(label="text", text="The Supplier's total aggregate liability shall not exceed the fees paid. " * 6)
+    return doc
+
+
 # a discoverer that returns the two section spans of `_two_section_doc` (items [0,1] and [2,3])
 def _section_discoverer() -> _StubDiscoverer:
     return _StubDiscoverer([(0, 1), (2, 3)])
@@ -376,6 +396,21 @@ def test_chunk_end_to_end_preserves_structural_sections_0006a(tmp_path):
                      discoverer=StructuralBoundaryDiscoverer(), cache_dir=tmp_path / "chunks")
 
     assert len(manifest.chunks) == 6  # NOT folded into 1 by the prose floor (0006-A)
+
+
+def test_chunk_includes_a_table_whose_figures_are_only_in_document_tables_0014(tmp_path):
+    # issue 0014 regression: the fee figure (48,000) lives ONLY in `document.tables` -- a `.texts`-only chunker
+    # drops it silently (never chunked, never indexed, never retrievable, no failure). The reading-order content
+    # view must fold the table into its section's chunk.
+    parsed = _parsed(tmp_path, _table_section_doc())
+
+    manifest = chunk(parsed, summarizer=_StubSummarizer(),
+                     discoverer=StructuralBoundaryDiscoverer(), cache_dir=tmp_path / "chunks")
+
+    assert any("48,000" in c.text for c in manifest.chunks)                       # the table reached a chunk
+    fee_chunk = next(c for c in manifest.chunks if "48,000" in c.text)
+    assert "Annual fee (GBP)" in fee_chunk.text and "the schedule below" in fee_chunk.text  # in its Fees section
+    assert any("aggregate liability" in c.text for c in manifest.chunks)          # prose still chunked (no regress)
 
 
 def test_validate_rejects_near_empty_chunk_but_allows_a_lone_short_chunk():

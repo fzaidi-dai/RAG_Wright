@@ -14,8 +14,9 @@ page furniture, not a section boundary)."""
 from __future__ import annotations
 
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from docling_core.types.doc.labels import DocItemLabel
 
@@ -69,6 +70,80 @@ async def aparse_document_bytes(name: str, data: bytes, *, parser: Any = None,
 def document_to_text(doc: Any) -> str:
     """A parsed document -> one text blob (docling markdown export) -- the contract side's `parse_bytes` output."""
     return doc.export_to_markdown()
+
+
+@dataclass(frozen=True)
+class ContentItem:
+    """issue 0014: one chunkable unit of a parsed document's READING-ORDER body. Duck-typed to a docling text
+    item (`.label`, `.level`, `.text`) so the chunker/segmenter consume it unchanged. The reading-order body is a
+    SUPERSET of `document.texts`: a docling TABLE lives in `document.tables` and a figure in `document.pictures`,
+    NEVER in `.texts`, so a `document.texts`-only chunker silently drops them (never chunked, never indexed, never
+    retrievable, and no failure recorded -- the exact 0014 loss). This projection is the single authority for
+    'the document's chunkable content, in reading order'."""
+
+    label: Any
+    level: Optional[int]
+    text: str
+
+
+def _table_content_text(item: Any, doc: Any) -> str:
+    """A TABLE item -> its atomic markdown (issue 0014), caption prefixed when docling captured one. The markdown
+    keeps the header row with the data rows, so the fee/payment schedule retrieves as a unit."""
+    caption = (item.caption_text(doc) or "").strip()
+    body = (item.export_to_markdown(doc) or "").strip()
+    return f"{caption}\n\n{body}".strip() if caption else body
+
+
+def _picture_content_text(item: Any, doc: Any) -> str:
+    """A PICTURE item -> its extractable text (issue 0014): the caption plus any description annotation
+    (a VLM/description the tiered OCR attached). Empty when the figure carries no text -- nothing to index."""
+    parts: list[str] = []
+    caption = (item.caption_text(doc) or "").strip()
+    if caption:
+        parts.append(caption)
+    for annotation in getattr(item, "annotations", None) or []:
+        text = (getattr(annotation, "text", "") or "").strip()  # DescriptionAnnotation (figure description)
+        if text:
+            parts.append(text)
+    return "\n\n".join(parts)
+
+
+def content_items(doc: Any) -> list[ContentItem]:
+    """A parsed document -> its READING-ORDER chunkable content items (issue 0014). Walks `iterate_items` over the
+    BODY and FURNITURE layers (so everything in `document.texts`, incl. page furniture, is covered), mapping each
+    item to a `ContentItem`: a TABLE -> its atomic markdown, a PICTURE -> caption + description text, any other
+    item -> its `.text`. A table/picture with no extractable text yields an empty-text item (the chunker strips it
+    exactly as it strips an empty text item today) -- present in reading order, never silently missing.
+
+    NO-SILENT-LOSS GUARANTEE (0014, the issue's Q2): any `document.texts` item the reading-order walk did not
+    visit is appended, so the projection is a strict SUPERSET of `.texts` -- a content item can never vanish
+    upstream of the failure accounting the way a table did before this fix."""
+    from docling_core.types.doc.document import ContentLayer
+
+    def _text_item(node: Any) -> ContentItem:
+        return ContentItem(label=getattr(node, "label", None), level=getattr(node, "level", None),
+                           text=getattr(node, "text", "") or "")
+
+    if not hasattr(doc, "iterate_items"):  # a plain `.texts`-bearing view (a `_SubDocument` slice / test stub):
+        return [_text_item(t) for t in getattr(doc, "texts", None) or []]  # no reading-order body, no tables
+
+    layers = {ContentLayer.BODY, ContentLayer.FURNITURE}
+    items: list[ContentItem] = []
+    seen: set[int] = set()
+    for node, _level in doc.iterate_items(included_content_layers=layers):
+        seen.add(id(node))
+        label = getattr(node, "label", None)
+        if label == DocItemLabel.TABLE and hasattr(node, "export_to_markdown"):
+            text = _table_content_text(node, doc)
+        elif label == DocItemLabel.PICTURE:
+            text = _picture_content_text(node, doc)
+        else:
+            text = getattr(node, "text", "") or ""
+        items.append(ContentItem(label=label, level=getattr(node, "level", None), text=text))
+    for text_item in getattr(doc, "texts", None) or []:  # coverage backstop: never drop a `.texts` item
+        if id(text_item) not in seen:
+            items.append(_text_item(text_item))
+    return items
 
 
 def _section_number(heading: str, index: int) -> str:

@@ -3,7 +3,27 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-09-01 NEWEST): ENGINE ISSUE 0013 DONE — the compliance actor gate is RECALL-FIRST
+> **RESUME / NEXT UP (2026-09-03 NEWEST): ENGINE ISSUE 0014 DONE — tabular (and figure) content is now
+> RETRIEVABLE (ADR-0069).** RuleWright found a born-digital PDF with a fee table ingested with a CLEAN report
+> (`total_failures: 0`) yet no table question could be answered — a SILENT retrieval loss. Root cause (confirmed
+> live): docling puts a table in `document.tables`, a figure in `document.pictures`, NEVER in `document.texts`;
+> `document_to_text` = `export_to_markdown()` *includes* tables (so `.text` had 48,000) but the CHUNKER read only
+> `.texts`, so the table was never chunked/segmented/indexed/retrievable, and the loss was upstream of every
+> failure-recording stage. Fix (ADR-0069): (1) a single reading-order content view (`content_items` in
+> `document_parser.py`) walks `iterate_items` (BODY+FURNITURE) mapping TABLE→atomic markdown, PICTURE→caption+
+> description, else→`.text`; the chunker consumes it via a thin `_ContentView.texts` (one wrap point, every
+> discoverer/`_join_span` unchanged); (2) `segment.py` keeps a contiguous markdown-table block as ONE atomic span
+> (header + all rows), byte-faithful tiling preserved; (3) NO silent loss — the view is a strict SUPERSET of
+> `.texts` (coverage backstop). Suite 1403 pass (+9). LIVE-verified (real ArcadeDB + BGE + OpenRouter answer
+> model) on the fixture: fee table → 5 spans incl. one atomic table span → served evidence pool → "What is the
+> annual fee for the Enterprise tier?" answers "48,000 GBP" with a citation; liability control unregressed.
+> Retrieval is fixed; the GENERAL/granite answer substrate over-abstains even on a direct prose hit (a SEPARATE
+> known generation limit — the smoke proves retrieval deterministically + demonstrates end-to-end with a capable
+> model). `scripts/table_retrieval_smoke.py` + `tests/fixtures/table-bearing-contract.pdf` committed. Markdown
+> row-4 anomaly = a PRODUCT-side non-docling markdown path, not reproducible in the engine (handoff notes the fix).
+> See docs/adr/0069-*.md, docs/handoff/2026-09-03_issue-0014-*.md.
+>
+> **RESUME / NEXT UP (2026-09-01): ENGINE ISSUE 0013 DONE — the compliance actor gate is RECALL-FIRST
 > (ADR-0068).** RuleWright found the ADR-0065 actor gate silently DROPPED a real violation when the two independent
 > extractions picked different-but-overlapping role words (rule `advertiser` vs assertion `seller`): the pricing
 > violation was never judged, with no trace in coverage. Fix (all three of RuleWright's asks): (1) `actor_matches`
