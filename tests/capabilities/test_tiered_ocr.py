@@ -6,7 +6,32 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from rag_wright.capabilities.parsing import TieredOCRParser
+from rag_wright.capabilities.parsing import TieredOCRParser, _text_layer_pages
+
+
+def _minimal_pdf(text: str) -> bytes:
+    """A valid single-page PDF carrying `text` as a real (Helvetica) text layer, with correct xref offsets --
+    so `_text_layer_pages` (pypdfium2, no OCR) reads it back. Lets the threshold be tested without a PDF-gen lib."""
+    esc = text.replace("\\", "\\\\").replace("(", r"\(").replace(")", r"\)")
+    stream = f"BT /F1 12 Tf 72 720 Td ({esc}) Tj ET".encode("latin-1")
+    objs = [
+        b"<</Type/Catalog/Pages 2 0 R>>",
+        b"<</Type/Pages/Kids[3 0 R]/Count 1>>",
+        b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>",
+        b"<</Length %d>>\nstream\n%s\nendstream" % (len(stream), stream),
+        b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, obj in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (i, obj)
+    xref_pos = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    for off in offsets:
+        out += b"%010d 00000 n \n" % off
+    out += b"trailer\n<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref_pos)
+    return bytes(out)
 
 _REAL = ("shall not exceed the total fees paid by the Customer under this Agreement in the twelve months "
          "preceding the claim, and nothing in this clause limits either party for death or personal injury")
@@ -99,6 +124,24 @@ def test_scanned_page_without_text_layer_still_escalates(monkeypatch):
     doc = p.convert(Path("x.pdf"))
     assert doc is vlm.doc and vlm.calls == 1                                # still escalates a true scan
     assert p.report.escalated_pages == [1]
+
+
+def test_text_layer_pages_recognizes_a_sparse_born_digital_page(tmp_path):
+    # PARSE-2 (doc3): a sparse-but-real born-digital page (a schedule / signature page, ~100 chars) MUST count as
+    # born-digital at the default threshold, so it is never VLM-escalated. doc3 pages 52-58 (91-179 chars) fell
+    # below the old 200 threshold, so one gate false-positive triggered a whole-doc VLM escalation -> 600s deadline.
+    sparse = tmp_path / "sparse.pdf"
+    sparse.write_bytes(_minimal_pdf("Schedule A. The parties have executed this Agreement as of the date first "
+                                    "written above by their duly authorized representatives."))
+    assert _text_layer_pages(sparse) == {1}                     # protected at the (low) default threshold
+    assert _text_layer_pages(sparse, min_chars=1000) == set()   # min_chars parameter mechanics
+
+
+def test_text_layer_pages_excludes_a_near_empty_image_page(tmp_path):
+    # a true image-only page extracts ~0 chars -> NOT born-digital -> still routed through OCR/VLM (unchanged).
+    img = tmp_path / "img.pdf"
+    img.write_bytes(_minimal_pdf("9"))
+    assert _text_layer_pages(img) == set()
 
 
 def test_mixed_pdf_escalates_only_the_imageless_page(monkeypatch):

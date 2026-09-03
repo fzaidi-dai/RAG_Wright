@@ -141,9 +141,13 @@ def _default_vlm_parser() -> Parser:
     return VlmOCRParser()
 
 
-_MIN_TEXT_LAYER_CHARS = 200  # a PDF page with >= this many directly-extractable chars is born-digital (its text
-#                              layer is authoritative). Conservative: an image-only scanned page extracts ~0 chars,
-#                              a sparse born-digital signature page still extracts hundreds (NEONSYSTEMS p5 = 1428).
+_MIN_TEXT_LAYER_CHARS = 30  # a PDF page with >= this many directly-extractable chars has a real, authoritative
+#                             text layer (born-digital). Set LOW on purpose (PARSE-2, doc3): a true image-only scan
+#                             page extracts ~0 chars, but a SPARSE born-digital page -- a schedule, an exhibit
+#                             divider, a signature page (doc3 pages 52-58 = 91-179 chars) -- extracts only tens.
+#                             The old 200 threshold mislabeled those sparse-but-real pages as scans, so a single one
+#                             flagged by the OCR gate triggered a WHOLE-DOCUMENT VLM escalation that, on a 63-page
+#                             doc, blew the 600s parse deadline. A real text layer of any size is authoritative.
 
 
 def _text_layer_pages(source: Path, *, min_chars: int = _MIN_TEXT_LAYER_CHARS) -> set[int]:

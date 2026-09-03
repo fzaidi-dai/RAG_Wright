@@ -26,10 +26,14 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   extraction (still indexed for retrieval); `clauses_fn` records a deterministic `ExtractionFailed` ONCE (no 3×
 >   retry). E2E-verified: NEONSYSTEMS ~11min→100s, PARTIAL→INGESTED clean, 24+ failures→0, 45 clauses/96 spans.
 >   RuleWright wider sample confirmed JSON failures 56→0.
-> - **PARSE-2 (todo, NEW — surfaced by RuleWright's wider sample)**: a LARGE born-digital doc (doc3 = 63pp/168KB)
->   hits the 600s parse deadline → FAILED, because the fast tier still runs `do_ocr=True` (EasyOCR) on born-digital
->   pages. Fix = complete text-layer-first: a FULLY born-digital doc parses with `do_ocr=False` (no OCR, skip the
->   scan-quality gate + VLM entirely). Measured: doc3 parse 600s(deadline)→23.3s with do_ocr=False, full text kept.
+> - **PARSE-2 (DONE, ADR-0073)**: the doc3 600s failure was NOT do_ocr (parse is ~20s either way) — it was a
+>   FALSE-POSITIVE whole-doc VLM escalation: doc3 pages 52-58 (91-179 chars) fell below the 200-char born-digital
+>   threshold, so one gate-flagged sparse page escalated the whole 63-page doc → 600s deadline. Fix = lower
+>   `_MIN_TEXT_LAYER_CHARS` 200→30 (a real text layer of any size is authoritative). LIVE e2e: doc3 parse
+>   600s(FAILED)→32.7s, INGESTED clean (230 clauses, 700 spans, 0 failures, 461s).
+> - **PARSE-3 (todo, NEW — residual)**: a LARGE doc with a GENUINE image-only page (0 chars) still triggers a
+>   whole-document VLM escalation for that one page → 600s deadline. Fix = per-page VLM escalation, or a page-count
+>   cap. Doesn't affect doc3 (all born-digital); a real-scan landmine on big docs.
 > - **PARTIAL-CAUSE-1 (todo, NEW)**: docs 2 & 4 still come back `partial` with a NON-JSON extraction-stage cause
 >   (3 extraction failures across the sample, different from the fixed "No valid JSON"). Reproduce + diagnose.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
