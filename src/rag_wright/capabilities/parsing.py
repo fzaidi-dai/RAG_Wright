@@ -103,7 +103,14 @@ class TieredOCRParser:
         # the fast OCR is garbled-but-common-word. The VLM re-check below is text-only (the image stays blurry).
         assessed = assess_document(fast_doc, page_images=_render_gray_pages(source))
         degraded = sorted(pg for pg, a in assessed.items() if a.quality is not ScanQuality.READABLE)
-        if not degraded:  # common case: readable scan -> no VLM cost
+        # PARSE-1: a page with a usable NATIVE text layer (born-digital) is authoritative -- the OCR word-hit gate
+        # false-positives on legitimately sparse born-digital pages (a signature/joinder page: names, titles,
+        # page numbers), which triggered an unnecessary whole-document VLM escalation (~minutes on OpenRouter) on
+        # real contracts. So never OCR-escalate a page whose text layer we can read directly; only genuinely
+        # image-only pages (no text layer) stay in the escalation set.
+        born_digital = _text_layer_pages(source)
+        degraded = [pg for pg in degraded if pg not in born_digital]
+        if not degraded:  # readable scan OR every "degraded" page was actually born-digital -> no VLM cost
             self.report = TieredOCRReport()
             return fast_doc
 
@@ -132,6 +139,30 @@ def _default_vlm_parser() -> Parser:
     from rag_wright.capabilities.vlm_ocr import VlmOCRParser
 
     return VlmOCRParser()
+
+
+_MIN_TEXT_LAYER_CHARS = 200  # a PDF page with >= this many directly-extractable chars is born-digital (its text
+#                              layer is authoritative). Conservative: an image-only scanned page extracts ~0 chars,
+#                              a sparse born-digital signature page still extracts hundreds (NEONSYSTEMS p5 = 1428).
+
+
+def _text_layer_pages(source: Path, *, min_chars: int = _MIN_TEXT_LAYER_CHARS) -> set[int]:
+    """PARSE-1: the 1-based page numbers of `source` that carry a usable NATIVE text layer (born-digital) -- read
+    DIRECTLY from the PDF (pypdfium2, no OCR). A page here is authoritative and must never be OCR-quality-assessed
+    or VLM-escalated. Best-effort: a non-PDF or any read error -> empty set (no override -> the tiered OCR path is
+    unchanged), so a scan / text / office source is never affected."""
+    try:
+        import pypdfium2 as pdfium
+
+        pdf = pdfium.PdfDocument(str(source))
+        pages: set[int] = set()
+        for i in range(len(pdf)):
+            text = pdf[i].get_textpage().get_text_range()
+            if len(text.strip()) >= min_chars:
+                pages.add(i + 1)
+        return pages
+    except Exception:  # noqa: BLE001 - the text-layer probe is an optional authority signal; never fail the parse
+        return set()
 
 
 def _render_gray_pages(source: Path, dpi: int = 200) -> dict:

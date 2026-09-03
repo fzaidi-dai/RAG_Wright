@@ -3,7 +3,32 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-09-03 NEWEST): ENGINE ISSUE 0014 DONE — tabular (and figure) content is now
+> **RESUME / NEXT UP (2026-09-04 NEWEST): BULK-INGESTION WALL (RuleWright, NEONSYSTEMS contract) — 4 tasks.**
+> RuleWright's bulk CUAD ingest hit major clause-extraction failures. First-hand reproduction on
+> `NEONSYSTEMSINC_…DISTRIBUTOR AGREEMENT_Amendment.pdf` (born-digital, 5 pages) established the REAL causes (NOT
+> the model, NOT concurrency): (a) the scan-quality gate FALSE-POSITIVES on a born-digital sparse page (page 5 =
+> signature/joinder, low OCR word-hit) → an unnecessary whole-document Gemma-4 VLM escalation over OpenRouter =
+> the "4-min OCR"; (b) docling emits each PDF LINE as an item, and chunk-building joins items with `\n\n`, so
+> `segment_clause` shatters one sentence into ~4 "clauses" (segments 219→87, degenerate 121→9 after line-unwrap);
+> (c) those tiny fragments/furniture (page numbers, signature blocks) hard-fail docling-graph extraction ("No
+> valid JSON / Pipeline failed at stage: Extraction") and retry 3× → the 6-10 "lost clauses" + wasted minutes.
+> granite got 130/154 REAL clauses; deepseek-v4-pro was WORSE (6/15 fail) — so a stronger model is NOT the lever.
+> Tasks (each its own gated commit):
+> - **PARSE-1 (DONE, ADR-0070)**: TEXT-LAYER-FIRST parsing — a page with a usable native PDF text layer is
+>   authoritative; never OCR-quality-assess or VLM-escalate it (per-page). Kills the false-positive VLM escalation.
+>   LIVE-verified: NEONSYSTEMS 4min→6.7s (0 escalation); real scan (PcquoteCom) still escalates (path intact).
+> - **DEFRAG-1 (todo)**: DE-FRAGMENTATION — reconstruct paragraphs from docling line-items (merge line-wrap
+>   continuations, keep real paragraph/heading breaks), so a clause is not split into per-line fragments.
+> - **EXTRACT-GUARD-1 (todo)**: graceful-degrade/guard — skip clause extraction for furniture/no-provision spans
+>   (still indexed for retrieval), and DON'T retry a deterministic empty extraction (no false "clause failure",
+>   no 3× retry burn). Preserve no-silent-loss for SUBSTANTIVE spans that genuinely fail.
+> - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
+>   party / claim / requirement) off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`
+>   nested-schema extension). Model-neutral robustness (graceful degrade + no JSON burden + reasoning-model
+>   support). NOT required to clear this wall (the evidence says de-fragment + guard suffices), so scheduled AFTER
+>   PARSE-1/DEFRAG-1/EXTRACT-GUARD-1; kept in the ledger so it is not lost.
+>
+> **RESUME / NEXT UP (2026-09-03): ENGINE ISSUE 0014 DONE — tabular (and figure) content is now
 > RETRIEVABLE (ADR-0069).** RuleWright found a born-digital PDF with a fee table ingested with a CLEAN report
 > (`total_failures: 0`) yet no table question could be answered — a SILENT retrieval loss. Root cause (confirmed
 > live): docling puts a table in `document.tables`, a figure in `document.pictures`, NEVER in `document.texts`;
