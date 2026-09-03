@@ -13,6 +13,7 @@ The DoclingDocument API is grounded (framework graph + installed `inspect`): `ex
 page furniture, not a section boundary)."""
 from __future__ import annotations
 
+import re
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -108,6 +109,64 @@ def _picture_content_text(item: Any, doc: Any) -> str:
     return "\n\n".join(parts)
 
 
+_ENDS_SENTENCE = re.compile(r"""[.:;?!]["')\]]*$""")  # a line that completes a sentence (terminal punct + closers)
+
+
+def _ends_sentence(text: str) -> bool:
+    return bool(_ENDS_SENTENCE.search(text.rstrip()))
+
+
+def _starts_new_sentence(text: str) -> bool:
+    """A line that BEGINS a new provision: its first non-space char is a capital, a digit, or an opener
+    (`(`, `[`, quote, `§`, bullet). A lowercase start is a wrapped continuation ('and (ii) ...')."""
+    stripped = text.lstrip()
+    if not stripped:
+        return False
+    c = stripped[0]
+    return c.isupper() or c.isdigit() or c in "([{\"'§•-"
+
+
+def _join_wrapped(prev: str, nxt: str) -> str:
+    """Join a wrapped continuation to its paragraph: de-hyphenate a soft line-break (`Distribu-` + `tor` ->
+    `Distributor`), otherwise a single space."""
+    if prev.endswith("-") and len(prev) >= 2 and prev[-2].isalpha():
+        return prev[:-1] + nxt
+    return f"{prev} {nxt}"
+
+
+def _merge_wrapped_lines(items: list[ContentItem]) -> list[ContentItem]:
+    """DEFRAG-1: reconstruct paragraphs from docling's per-LINE text items. docling emits each PDF text line as its
+    own item; joined with `\\n\\n` and split by `segment_clause`, one clause shatters into per-line fragments that
+    then fail extraction (NEONSYSTEMS: 219 segments / 121 degenerate -> 87 / 9 after this pass). Consecutive
+    `TEXT` items are merged into one paragraph, breaking ONLY when the previous line ends a sentence AND the next
+    starts one (two-sided, so an abbreviation like 'Inc.' followed by a lowercase 'and' does not false-split, and a
+    clean paragraph-per-item document is left untouched). Any NON-text item (heading, table, figure, list item,
+    page furniture) is a hard boundary -- never merged across."""
+    out: list[ContentItem] = []
+    buf: str = ""
+    buf_level: Optional[int] = None
+    for item in items:
+        if item.label != DocItemLabel.TEXT:  # heading / table / picture / list-item / furniture -> hard boundary
+            if buf.strip():
+                out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf))
+            buf, buf_level = "", None
+            out.append(item)
+            continue
+        line = (item.text or "").strip()
+        if not line:
+            continue
+        if not buf:
+            buf, buf_level = line, item.level
+        elif _ends_sentence(buf) and _starts_new_sentence(line):  # a real paragraph break
+            out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf))
+            buf, buf_level = line, item.level
+        else:  # a wrapped continuation of the same clause
+            buf = _join_wrapped(buf, line)
+    if buf.strip():
+        out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf))
+    return out
+
+
 def content_items(doc: Any) -> list[ContentItem]:
     """A parsed document -> its READING-ORDER chunkable content items (issue 0014). Walks `iterate_items` over the
     BODY and FURNITURE layers (so everything in `document.texts`, incl. page furniture, is covered), mapping each
@@ -140,6 +199,7 @@ def content_items(doc: Any) -> list[ContentItem]:
         else:
             text = getattr(node, "text", "") or ""
         items.append(ContentItem(label=label, level=getattr(node, "level", None), text=text))
+    items = _merge_wrapped_lines(items)  # DEFRAG-1: rejoin per-line items into whole-clause paragraphs
     for text_item in getattr(doc, "texts", None) or []:  # coverage backstop: never drop a `.texts` item
         if id(text_item) not in seen:
             items.append(_text_item(text_item))

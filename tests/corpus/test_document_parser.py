@@ -163,3 +163,53 @@ def test_content_items_is_a_superset_of_texts_coverage_backstop():
     doc.texts.append(orphan)                                          # ...but `.texts` also carries the orphan
     texts = [it.text for it in content_items(doc)]
     assert "An orphan clause the body walk did not reach." in texts
+
+
+# --- DEFRAG-1: reconstruct paragraphs from docling's per-line items (no per-line shattering) ---
+
+
+def test_content_items_merges_line_wrapped_sentence_into_one_paragraph():
+    # DEFRAG-1 (NEONSYSTEMS): docling emits each PDF LINE as its own item; one sentence must NOT become 4 items.
+    doc = _FakeDoc([
+        _Item(DocItemLabel.TEXT, 'THIS FIRST AMENDMENT (this "Amendment") is made'),
+        _Item(DocItemLabel.TEXT, "and entered into as of the 1st day of January, 1999, by and between"),
+        _Item(DocItemLabel.TEXT, 'Perseus Therapeutics, Inc., a Delaware corporation ("Licensor"), and'),
+        _Item(DocItemLabel.TEXT, 'NEON Systems, Inc., a Delaware corporation ("Licensee").'),
+    ])
+    items = content_items(doc)
+    assert len(items) == 1                                            # the wrapped lines rejoin into ONE clause
+    t = items[0].text
+    assert "is made and entered into" in t and 'NEON Systems' in t   # continuations joined with a space
+    assert "\n\n" not in t                                            # no residual paragraph break inside a sentence
+
+
+def test_content_items_keeps_real_paragraph_breaks():
+    # two COMPLETE sentences (each ends a sentence, next starts one) stay two items -- clean docs unaffected.
+    doc = _FakeDoc([
+        _Item(DocItemLabel.TEXT, "The Receiving Party shall keep the Confidential Information secret."),
+        _Item(DocItemLabel.TEXT, "This obligation survives termination of the Agreement."),
+    ])
+    assert len(content_items(doc)) == 2
+
+
+def test_content_items_de_hyphenates_a_wrapped_word():
+    doc = _FakeDoc([
+        _Item(DocItemLabel.TEXT, "The Distribu-"),
+        _Item(DocItemLabel.TEXT, "tor Agreement is hereby amended."),
+    ])
+    (item,) = content_items(doc)
+    assert "Distributor Agreement is hereby amended." in item.text    # hyphen dropped, no space inserted
+
+
+def test_content_items_does_not_merge_across_a_heading_or_table():
+    # a heading and a table are hard boundaries -- a wrapped line before one never absorbs across it.
+    doc = _FakeDoc([
+        _Item(DocItemLabel.TEXT, "intro text that wraps"),
+        _Item(DocItemLabel.SECTION_HEADER, "1. Fees"),
+        _Item(DocItemLabel.TEXT, "The Customer shall pay the fees."),
+        _FakeTable("| a | b |\n|---|---|\n| 1 | 2 |"),
+        _Item(DocItemLabel.TEXT, "Next clause wraps here"),
+    ])
+    labels = [it.label for it in content_items(doc)]
+    assert labels == [DocItemLabel.TEXT, DocItemLabel.SECTION_HEADER, DocItemLabel.TEXT,
+                      DocItemLabel.TABLE, DocItemLabel.TEXT]           # boundaries preserved, no cross-merge

@@ -17,9 +17,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **PARSE-1 (DONE, ADR-0070)**: TEXT-LAYER-FIRST parsing — a page with a usable native PDF text layer is
 >   authoritative; never OCR-quality-assess or VLM-escalate it (per-page). Kills the false-positive VLM escalation.
 >   LIVE-verified: NEONSYSTEMS 4min→6.7s (0 escalation); real scan (PcquoteCom) still escalates (path intact).
-> - **DEFRAG-1 (todo)**: DE-FRAGMENTATION — reconstruct paragraphs from docling line-items (merge line-wrap
->   continuations, keep real paragraph/heading breaks), so a clause is not split into per-line fragments.
-> - **EXTRACT-GUARD-1 (todo)**: graceful-degrade/guard — skip clause extraction for furniture/no-provision spans
+> - **DEFRAG-1 (DONE, ADR-0071)**: DE-FRAGMENTATION — `_merge_wrapped_lines` in `content_items` rejoins docling
+>   per-line items into whole-clause paragraphs (two-sided break: prev ends a sentence AND next starts one;
+>   de-hyphenation; headings/tables = hard boundaries). LIVE-verified: NEONSYSTEMS segments 219→87, granite
+>   extraction 24 failures→0 (56/56); BIOAMBER not over-merged (0 mega-clauses, median 134 chars).
+> - **EXTRACT-GUARD-1 (todo, DEMOTED to robustness backstop)**: DEFRAG-1 alone took NEONSYSTEMS to 0 failures, so
+>   this is no longer clearing the wall — a furniture span on another contract could still hard-fail extraction, so
+>   the guard stays as cheap no-silent-loss insurance: skip clause extraction for furniture/no-provision spans
 >   (still indexed for retrieval), and DON'T retry a deterministic empty extraction (no false "clause failure",
 >   no 3× retry burn). Preserve no-silent-loss for SUBSTANTIVE spans that genuinely fail.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
