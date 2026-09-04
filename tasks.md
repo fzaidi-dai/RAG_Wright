@@ -42,6 +42,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   blips into lost clauses. Fix = retry every failure again (revert the no-retry; keep the furniture guard, which
 >   already prevents the furniture retry-storm); retry logic extracted to testable `_aextract_clause_with_retry`.
 >   Docs 2/4 ingest clean; NEONSYSTEMS e2e unchanged (45 clauses/96 spans, 0 failures). Suite 1416 pass.
+> - **doc1-slowdown (INVESTIGATED, not a regression)**: RuleWright saw doc1 (2ThemartCom) at 306s vs old-engine
+>   199.8s. NOT reproducible with all fixes: doc1 ingests clean in ~100s (98/105s across 2 runs, clause count
+>   77/84 — granite non-determinism), FASTER than the old engine. doc1 never VLM-escalates (degraded=[]), so it's
+>   network-bound granite/OpenRouter latency variance, not structural. Handoff: docs/handoff/2026-09-04_bulk-ingestion-wall_rulewright.md.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
 >   party / claim / requirement) off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`
 >   nested-schema extension). Model-neutral robustness (graceful degrade + no JSON burden + reasoning-model
