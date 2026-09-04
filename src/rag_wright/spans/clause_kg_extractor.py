@@ -219,14 +219,17 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     gate (sync/async). ASYNC-B2b wires the async extraction seam (`aextract_clause`) so `aextract` gets the true
     wall-clock deadline.
 
-    TAGPARSE-INGEST-1b: `RAG_INGEST_CLAUSE_EXTRACTOR` selects the Clause-producing step -- `docling` (default, the
-    docling-graph server-side-JSON path) or `tagparse` (function-independent thematic tag-parse groups + aspect
-    gate). BOTH feed the SAME downstream (adapt to ClausePropertyRecord + ADR-0028 grounding + ADR-0040 symbolic
-    gate), so grounding drops any hallucinated group value regardless of extractor. The seam is for the A/B."""
+    TAGPARSE-INGEST-1b: `RAG_INGEST_CLAUSE_EXTRACTOR` selects the Clause-producing step -- `tagparse` (DEFAULT
+    since ADR-0081: function-independent thematic tag-parse groups) or `docling` (the legacy docling-graph
+    server-side-JSON path, kept for rollback). BOTH feed the SAME downstream (adapt to ClausePropertyRecord +
+    ADR-0028 grounding + ADR-0040 symbolic gate). tagparse is the default because docling hard-crashes ~89% of
+    real CUAD clauses (grounded A/B, 45 clauses: docling success 0.11 vs tagparse 1.00). NOTE: tagparse issues one
+    LLM call per thematic GROUP (~8/clause) vs docling's ~1; the aspect gate (RAG_INGEST_CLAUSE_GATE=1) is the
+    cost lever once a reliable gate model exists."""
     from rag_wright.capabilities.dg_extraction import aextract_clause, default_extraction_model, extract_clause
 
     chosen = model or default_extraction_model("clause-extract", "ibm-granite/granite-4.2-8b")
-    if os.getenv("RAG_INGEST_CLAUSE_EXTRACTOR", "docling").strip().lower() == "tagparse":
+    if os.getenv("RAG_INGEST_CLAUSE_EXTRACTOR", "tagparse").strip().lower() == "tagparse":
         from rag_wright.spans.tag_clause_extractor import atag_extract_clause, tag_extract_clause
         model_id = chosen.model
         # Aspect gate OFF by default: granite UNDER-selects aspects (same conservative weakness as its function

@@ -42,9 +42,18 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   **A/B verdict:** tagparse extracts where docling HARD-CRASHES (2/3 clauses), but per-field recall is the MODEL
 >   ceiling — gemma-4 recovered the 3-yr term + full cap (basis+quantum+mutuality) that granite-4.2 missed. So
 >   production recall needs gemma-4 or granite+multi-sample (same cost/quality tradeoff as classification).
->   **OPEN:** (a) both tagparse models missed a verbatim "Delaware" in the governing-law group (docling got it) —
->   debug next; (b) production extraction-model decision pending (gemma quality vs granite cost); (c) tagparse not
->   yet the ingestion default.
+>   **RESOLVED:** the "Delaware" miss was a nested-FLATTEN parse bug (models emit sub-tags as siblings) — fixed
+>   (parse nested sub-model from the FULL text). **BROAD GROUNDED A/B (45 real CUAD clauses, key-field recall on
+>   the gold function's discriminative dim): docling success 0.11 / recall 0.09; tagparse-granite 1.00 / 0.47;
+>   tagparse-gemma 1.00 / 0.56.** docling HARD-CRASHES ~89% of real clauses -> **tagparse is now the DEFAULT**
+>   (`RAG_INGEST_CLAUSE_EXTRACTOR` defaults to tagparse; docling kept for rollback). gemma only +0.09 over granite
+>   -> STAY ON GRANITE (revisit w/ granite+multi-sample). Cost note: tagparse ~8 LLM calls/clause; aspect gate is
+>   the cost lever pending a reliable gate model.
+>   **OPEN (recall frontier ~0.5, both models weak on the SAME functions -> NOT model strength):** (a) check if the
+>   ADR-0028 grounding gate OVER-DROPS open-valued fields (token-overlap on cap_quantum/covered_parties) — cheap,
+>   may be deflating recall; (b) per-function prompt tightening for the weak functions (License Grant, Cap On
+>   Liability, Warranty Disclaimer, Indirect/Consequential) — iterate until most functions covered; the tuned
+>   prompt becomes a future REUSABLE clause-extraction SKILL.
 > - **FUNCTION-AUGMENTS-KG (tracked, separate, downstream): function as a soft multi-label boost for KG/retrieval
 >   search, never a hard filter** (consistent with ADR-0047). Prompt the classifier for top-K + confidence. Not
 >   part of the extraction work.

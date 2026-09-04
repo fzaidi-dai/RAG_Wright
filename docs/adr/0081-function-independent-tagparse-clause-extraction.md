@@ -1,7 +1,7 @@
 # ADR-0081: Function-independent thematic-group clause extraction (tag-parse), behind a seam flag
 
 Date: 2026-09-05
-Status: Accepted (implemented, behind a flag; TAGPARSE-INGEST-1b) — not yet the default; production model choice pending
+Status: Accepted — **tagparse is now the ingestion DEFAULT** (broad A/B below); docling kept for rollback. Production model choice: stay on granite-4.2 for now.
 
 Builds on ADR-0080 (nested tag-parse) and the finding recorded in ADR-0079 + memory
 `function-classification-not-load-bearing`.
@@ -47,3 +47,24 @@ NOT yet the ingestion default.
 - **Known gap**: in the A/B both tagparse models missed a verbatim "Delaware" in the governing-law group
   (docling got it) — a specific group-path anomaly to debug next.
 - No default behavior change (flag defaults to `docling`); full suite green.
+
+## Broad grounded A/B + default flip (follow-up)
+
+45 real CUAD clauses (15 functions × 3), scored on SUCCESS (record, no crash) and KEY-FIELD RECALL (a *grounded*
+assertion on the gold function's *discriminative* dimension):
+
+| config | success | key-field recall | grounded/clause |
+|---|---|---|---|
+| docling / granite | **0.11** | 0.09 | 1.2 |
+| tagparse / granite | **1.00** | 0.47 | 1.6 |
+| tagparse / gemma-4 | **1.00** | 0.56 | 1.6 |
+
+- **docling hard-crashes ~89% of real CUAD clauses** → tagparse is now the DEFAULT (`RAG_INGEST_CLAUSE_EXTRACTOR`
+  defaults to `tagparse`; docling remains for rollback). Cost note: tagparse is ~8 LLM calls/clause vs docling's
+  ~1; the aspect gate is the cost lever pending a reliable gate model.
+- **gemma only +0.09 over granite** → not worth ~10–20× cost; stay on granite-4.2, revisit with granite +
+  multi-sample.
+- **Both models are weak on the SAME functions** (License Grant, Cap On Liability, Warranty Disclaimer,
+  Indirect/Consequential) → the residual (~0.5 recall) is NOT mainly model strength. Next work: check whether the
+  ADR-0028 grounding gate over-drops open-valued fields (token-overlap on cap_quantum/covered_parties), then
+  per-function prompt tightening (a future reusable clause-extraction skill).
