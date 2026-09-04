@@ -59,6 +59,14 @@ def test_tag_instructions_lists_every_field_and_enum_values():
     assert "one value per line" in instr  # list guidance
 
 
+def test_tag_instructions_leaves_the_body_empty_so_hints_are_not_echoed():
+    # the hint must live OUTSIDE the tag body (after `--`), never inside it -- an in-body hint gets echoed as the
+    # value and breaks enum/value parsing.
+    instr = tag_instructions(_Flat)
+    assert "<name></name>" in instr             # empty body for the model to fill
+    assert "(one of:" not in instr and "(text)" not in instr  # no parenthesized in-body placeholder
+
+
 # --- parsing ------------------------------------------------------------------------------------------------
 
 
@@ -256,3 +264,28 @@ def test_build_tag_structured_re_ask_recovers_before_lenient(monkeypatch):
 def test_include_raw_is_rejected():
     with pytest.raises(NotImplementedError):
         build_tag_structured("m", _Flat, include_raw=True)
+
+
+# --- field subset (TAGPARSE-INGEST-1b): tag-parse only a SUBSET of a schema's fields per pass ----------------
+
+
+def test_tag_instructions_restricts_to_field_subset():
+    instr = tag_instructions(_Deep, fields={"title", "bound"})
+    assert "<title>" in instr and "<bound>" in instr
+    assert "<rows>" not in instr and "<tags>" not in instr and "<ref>" not in instr
+
+
+def test_parse_tagged_restricts_to_field_subset():
+    text = "<title>t</title><tags>a,b</tags><ref>x</ref>"
+    out = parse_tagged(text, _Deep, fields={"title"})  # only title parsed; tags/ref ignored this pass
+    assert out.title == "t" and out.tags == [] and out.ref is None
+
+
+def test_build_tag_structured_field_subset_only_emits_and_parses_those(monkeypatch):
+    _stub_build_model(monkeypatch, ["<title>t</title><rows><item><label>x</label></item></rows>"])
+    captured = {}
+    orig = ts.tag_instructions
+    monkeypatch.setattr(ts, "tag_instructions", lambda s, fields=None: captured.setdefault("fields", fields) or orig(s, fields=fields))
+    out = build_tag_structured("m", _Deep, fields={"title"}).invoke("Q")
+    assert out.title == "t" and out.rows == []          # rows not in the subset -> not parsed this pass
+    assert captured["fields"] == {"title"}              # instructions were restricted too

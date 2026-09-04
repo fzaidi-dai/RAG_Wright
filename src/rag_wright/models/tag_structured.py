@@ -69,34 +69,42 @@ def _classify(ann: Any) -> tuple[str, type[BaseModel] | None, str]:
     return "scalar", None, "text"
 
 
-def _field_lines(schema: type[BaseModel]) -> list[str]:
-    """One tag-template block per field of `schema`; recurses into nested models and list[model] items."""
+def _field_lines(schema: type[BaseModel], fields: set[str] | None = None) -> list[str]:
+    """One tag-template block per field of `schema`; recurses into nested models and list[model] items. `fields`
+    (if given) restricts to that subset -- for the per-group ingestion passes (TAGPARSE-INGEST-1b)."""
     out: list[str] = []
     for name, field in schema.model_fields.items():
+        if fields is not None and name not in fields:
+            continue
         kind, sub, hint = _classify(field.annotation)
         desc = (field.description or "").strip()
-        suffix = f" -- {desc}" if desc else ""
+        # Guidance goes AFTER the tags (a trailing `-- ...`), NOT inside them: a hint placed inside the tag body
+        # (e.g. `(one of: a | b)`) gets ECHOED by the model (`<f>(a)</f>`), which then fails value/enum parsing.
+        # The tag body is left EMPTY for the model to fill with ONLY the value.
+        guide = "; ".join(g for g in (hint, desc) if g)
+        tail = f"  -- {guide}" if guide else ""
         if kind == "scalar":
-            out.append(f"<{name}>({hint}){suffix}</{name}>")
+            out.append(f"<{name}></{name}>{tail}")
         elif kind == "list_scalar":
-            out.append(f"<{name}>\n({hint}){suffix}\n</{name}>")
+            out.append(f"<{name}>\n</{name}>{tail}")
         elif kind == "nested":
             inner = "\n".join(_field_lines(sub))  # type: ignore[arg-type]
-            out.append(f"<{name}>{suffix}\n{inner}\n</{name}>")
+            out.append(f"<{name}>{(' -- ' + desc) if desc else ''}\n{inner}\n</{name}>")
         else:  # nested_list
             inner = "\n".join(_field_lines(sub))  # type: ignore[arg-type]
-            out.append(f"<{name}>{suffix} (repeat the <item> block once per entry)\n"
+            out.append(f"<{name}>{(' -- ' + desc) if desc else ''} (repeat the <item> block once per entry)\n"
                        f"<item>\n{inner}\n</item>\n</{name}>")
     return out
 
 
-def tag_instructions(schema: type[BaseModel]) -> str:
+def tag_instructions(schema: type[BaseModel], fields: set[str] | None = None) -> str:
     """The prompt appendix telling the model to emit one XML-tag block per field of `schema` (recursing into
-    nested models and list[model] items)."""
+    nested models and list[model] items). `fields` (if given) restricts to that subset."""
     return "\n".join([
-        "Respond using EXACTLY these XML-style tags, one block per field. Put the RAW value between the "
-        "tags -- no quotes, no JSON, no markdown fences:",
-        *_field_lines(schema),
+        "Respond using EXACTLY these XML-style tags, one block per field. Fill EACH tag body with ONLY the raw "
+        "value -- no quotes, no JSON, no markdown fences, and do NOT copy the guidance. Any text after `--` is "
+        "guidance for you, not part of the value:",
+        *_field_lines(schema, fields),
         "Omit the tag entirely for any field whose value is unknown or not applicable.",
     ])
 
@@ -148,7 +156,8 @@ def _prune_invalid_optionals(schema: type[BaseModel], data: dict[str, Any], err:
     return schema(**data)
 
 
-def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False) -> BaseModel:
+def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False,
+                 fields: set[str] | None = None) -> BaseModel:
     """Parse XML-tagged free text into `schema`. An absent tag is omitted so the field's default/optional applies;
     Pydantic does the final validation. STRICT (default): a missing required field or a malformed/partial nested
     block raises ValidationError (which `build_tag_structured` retries -- the re-ask). LENIENT (the last attempt,
@@ -157,6 +166,8 @@ def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False) -
     failing the whole extraction; a missing REQUIRED field still raises."""
     data: dict[str, Any] = {}
     for name, field in schema.model_fields.items():
+        if fields is not None and name not in fields:
+            continue
         body = _extract(text, name)
         if body is None:
             continue
@@ -178,7 +189,7 @@ class _TagStructuredRunnable:
 
     def __init__(
         self, model_id: str, schema: type[BaseModel], *, temperature: float, max_tokens: int | None, retries: int,
-        label: str | None = None,
+        label: str | None = None, fields: set[str] | None = None,
     ) -> None:
         self._model_id = model_id
         self._schema = schema
@@ -186,11 +197,12 @@ class _TagStructuredRunnable:
         self._max_tokens = max_tokens
         self._retries = retries
         self._label = label  # ADR-0058: stage/call-site name for the deadline warning (threaded to astream_text)
+        self._fields = fields  # TAGPARSE-INGEST-1b: restrict this pass to a field subset (per-group extraction)
 
     def _full_prompt(self, prompt: Any) -> Any:
         # `prompt` is a plain string or a LangChain message sequence (e.g. [SystemMessage, HumanMessage]); append
         # the tag instructions as a trailing human turn either way.
-        instr = tag_instructions(self._schema)
+        instr = tag_instructions(self._schema, fields=self._fields)
         return f"{prompt}\n\n{instr}" if isinstance(prompt, str) else [*prompt, ("human", instr)]
 
     def invoke(self, prompt: Any, config: Any = None) -> BaseModel:  # config accepted for runnable-compat, unused
@@ -204,7 +216,7 @@ class _TagStructuredRunnable:
             text = str(build_model(
                 self._model_id, temperature=self._temperature, max_tokens=self._max_tokens).invoke(full).content)
             try:
-                return parse_tagged(text, self._schema, lenient=(i == attempts - 1))
+                return parse_tagged(text, self._schema, lenient=(i == attempts - 1), fields=self._fields)
             except ValidationError as exc:  # malformed/incomplete -> re-ask, bounded
                 last = exc
         raise last  # type: ignore[misc]
@@ -221,7 +233,7 @@ class _TagStructuredRunnable:
                 self._model_id, full, temperature=self._temperature, max_tokens=self._max_tokens,
                 label=self._label)
             try:
-                return parse_tagged(text, self._schema, lenient=(i == attempts - 1))
+                return parse_tagged(text, self._schema, lenient=(i == attempts - 1), fields=self._fields)
             except ValidationError as exc:
                 last = exc
         raise last  # type: ignore[misc]
@@ -229,14 +241,16 @@ class _TagStructuredRunnable:
 
 def build_tag_structured(
     model_id: str, schema: type[BaseModel], *, include_raw: bool = False, temperature: float = 0.0,
-    max_tokens: int | None = 2048, retries: int = 1, label: str | None = None,
+    max_tokens: int | None = 2048, retries: int = 1, label: str | None = None, fields: set[str] | None = None,
 ) -> _TagStructuredRunnable:
     """Drop-in for `models.seam.build_structured`: returns a runnable whose `.invoke(prompt)` yields a validated
     `schema` instance -- but via CLIENT-SIDE tag parsing (no server guided decoding), so it works on any model/
     provider. `max_tokens` defaults to a generous cap (free-text terminates on its own). `label` (ADR-0058) names
-    the stage/call-site in the deadline warning. `include_raw` is accepted for signature-compat but not
-    supported (no query-side caller uses it)."""
+    the stage/call-site in the deadline warning. `fields` (TAGPARSE-INGEST-1b) restricts emission+parsing to a
+    subset of `schema`'s fields -- for per-group ingestion passes over one big schema. `include_raw` is accepted
+    for signature-compat but not supported (no query-side caller uses it)."""
     if include_raw:
         raise NotImplementedError("tag_structured: include_raw is not supported")
     return _TagStructuredRunnable(
-        model_id, schema, temperature=temperature, max_tokens=max_tokens, retries=retries, label=label)
+        model_id, schema, temperature=temperature, max_tokens=max_tokens, retries=retries, label=label,
+        fields=fields)

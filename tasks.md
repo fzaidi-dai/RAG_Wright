@@ -32,13 +32,19 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   `fn_*.py`; gold = `data/models/cuad_clause_cache.jsonl` + CUAD defs `data/cuad/extracted/CUAD_v1.json`. See
 >   memory `function-classification-not-load-bearing`. DECISION: extraction goes FUNCTION-INDEPENDENT; function
 >   only AUGMENTS KG search (soft/multi-label), never a gate.
-> - **1b (NEXT): function-INDEPENDENT thematic-group clause extraction.** Split the 35-field `Clause` into 7
->   cohesive tag-parse sub-schemas, extract each per clause (no function dependency), merge into `Clause`. Groups:
->   (1) Identity & scope; (2) Liability & damages; (3) Temporal & termination; (4) IP/licensing & exclusivity;
->   (5a) Consents & control; (5b) Restrictions & duties (incl. `governed_by`); (6) Exceptions & carve-outs. Build
->   the straight 7-group version first (validate QUALITY), then add a coarse ~7-way aspect gate to skip irrelevant
->   groups for cost (a far-more-reliable classification than 52-way function). A/B = extraction QUALITY (correct
->   field values vs OTHER/None) vs the current 35-field docling-graph path on the real NDA clauses; adopt the winner.
+> - **1b (IMPLEMENTED behind a flag, ADR-0081; not yet default): function-INDEPENDENT thematic-group clause
+>   extraction.** 8 thematic tag-parse groups over the `Clause` schema (`build_tag_structured(fields=)`), merged;
+>   plugged into `DGClausePropertyExtractor` so the SAME downstream (ADR-0028 grounding + ADR-0040 symbolic gate)
+>   applies. Value-sanity guard (drop leaked reasoning/prompt-echo). Aspect gate built but OFF by default (granite
+>   UNDER-selects -> misses groups); opt-in `RAG_INGEST_CLAUSE_GATE=1`. Selected by `RAG_INGEST_CLAUSE_EXTRACTOR`
+>   (docling default | tagparse). Shared wins: hint-format fix (in-body `(hint)` was echoed -> broke enum parsing;
+>   moved guidance outside the tags) + `fields=` subset support (help every tag-parse caller).
+>   **A/B verdict:** tagparse extracts where docling HARD-CRASHES (2/3 clauses), but per-field recall is the MODEL
+>   ceiling — gemma-4 recovered the 3-yr term + full cap (basis+quantum+mutuality) that granite-4.2 missed. So
+>   production recall needs gemma-4 or granite+multi-sample (same cost/quality tradeoff as classification).
+>   **OPEN:** (a) both tagparse models missed a verbatim "Delaware" in the governing-law group (docling got it) —
+>   debug next; (b) production extraction-model decision pending (gemma quality vs granite cost); (c) tagparse not
+>   yet the ingestion default.
 > - **FUNCTION-AUGMENTS-KG (tracked, separate, downstream): function as a soft multi-label boost for KG/retrieval
 >   search, never a hard filter** (consistent with ADR-0047). Prompt the classifier for top-K + confidence. Not
 >   part of the extraction work.

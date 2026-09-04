@@ -21,6 +21,7 @@ This module holds the two pieces that turn a raw extraction into a gated, contra
 
 from __future__ import annotations
 
+import os
 from enum import Enum
 from typing import Any, Callable, Optional
 
@@ -216,10 +217,27 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     `RAG_SERVING` -> vLLM-Granite in product, OpenRouter-Granite in dev; MS1-3, ADR-0079). Pass a different
     `ExtractionModel` to override, or a `semantic_judge_fn`/`asemantic_judge_fn` to enable the ADR-0040 Layer-3
     gate (sync/async). ASYNC-B2b wires the async extraction seam (`aextract_clause`) so `aextract` gets the true
-    wall-clock deadline."""
+    wall-clock deadline.
+
+    TAGPARSE-INGEST-1b: `RAG_INGEST_CLAUSE_EXTRACTOR` selects the Clause-producing step -- `docling` (default, the
+    docling-graph server-side-JSON path) or `tagparse` (function-independent thematic tag-parse groups + aspect
+    gate). BOTH feed the SAME downstream (adapt to ClausePropertyRecord + ADR-0028 grounding + ADR-0040 symbolic
+    gate), so grounding drops any hallucinated group value regardless of extractor. The seam is for the A/B."""
     from rag_wright.capabilities.dg_extraction import aextract_clause, default_extraction_model, extract_clause
 
     chosen = model or default_extraction_model("clause-extract", "ibm-granite/granite-4.2-8b")
+    if os.getenv("RAG_INGEST_CLAUSE_EXTRACTOR", "docling").strip().lower() == "tagparse":
+        from rag_wright.spans.tag_clause_extractor import atag_extract_clause, tag_extract_clause
+        model_id = chosen.model
+        # Aspect gate OFF by default: granite UNDER-selects aspects (same conservative weakness as its function
+        # classification), so gating drops groups and misses fields. Run all groups + rely on grounding; the gate
+        # is opt-in (RAG_INGEST_CLAUSE_GATE=1) for a stronger gate model / cost experiments.
+        gate = os.getenv("RAG_INGEST_CLAUSE_GATE", "0").strip() == "1"
+        return DGClausePropertyExtractor(
+            lambda text: tag_extract_clause(text, model_id, gate=gate),
+            aextract_fn=lambda text: atag_extract_clause(text, model_id, gate=gate),
+            semantic_judge_fn=semantic_judge_fn, asemantic_judge_fn=asemantic_judge_fn,
+        )
     return DGClausePropertyExtractor(
         lambda text: extract_clause(text, chosen),
         aextract_fn=lambda text: aextract_clause(text, chosen),
