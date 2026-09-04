@@ -112,6 +112,14 @@ def test_parse_nested_single_model():
     assert out.bound is not None and out.bound.label == "x" and out.bound.kind is _Choice.B
 
 
+def test_parse_nested_model_when_the_model_FLATTENS_the_subfields():
+    # models often emit <bound>value</bound> then the sub-fields as SIBLINGS instead of nested -- the parser must
+    # still recover the nested model by scanning the full text (real bug: "Delaware" governing-law miss).
+    text = "<title>t</title><bound>the State of X</bound>\n<label>x</label>\n<kind>beta</kind>"
+    out = parse_tagged(text, _Deep)
+    assert out.bound is not None and out.bound.label == "x" and out.bound.kind is _Choice.B
+
+
 def test_parse_list_of_models():
     text = ("<title>t</title><rows>"
             "<item><label>a</label><kind>alpha</kind></item>"

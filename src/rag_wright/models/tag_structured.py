@@ -114,17 +114,22 @@ def _extract(text: str, name: str) -> str | None:
     return m.group(1) if m else None
 
 
-def _field_value(body: str, field: Any, lenient: bool) -> Any:
+def _field_value(body: str, field: Any, lenient: bool, full_text: str | None = None) -> Any:
     """The Python value for one `<field>` body: scalar/enum/bool/number verbatim; `list[<scalar>]` split
-    one-per-line (commas too); a nested `BaseModel` recursed on the body; a `list[<BaseModel>]` split on its
-    `<item>` blocks and each recursed. In `lenient` mode an unbuildable list ITEM is dropped (kept in strict)."""
+    one-per-line (commas too); a nested `BaseModel` recursed; a `list[<BaseModel>]` split on its `<item>` blocks
+    and each recursed. In `lenient` mode an unbuildable list ITEM is dropped (kept in strict).
+
+    For a nested `BaseModel`, the sub-model is parsed from `full_text` when given, not just the `<field>` body:
+    models often FLATTEN a nested field -- emitting `<governed_by>Delaware</governed_by>` then the sub-fields
+    `<jurisdiction_name>...`/`<law_multiplicity>...` as SIBLINGS rather than nested inside. Sub-field tag names are
+    unique in these contracts, so scanning the full text finds them whether nested or flattened."""
     kind, sub, _ = _classify(field.annotation)
     if kind == "scalar":
         return body.strip()
     if kind == "list_scalar":
         return [x.strip() for x in re.split(r"[\r\n,]+", body.strip()) if x.strip()]
     if kind == "nested":
-        return parse_tagged(body, sub, lenient=lenient)  # type: ignore[arg-type]
+        return parse_tagged(full_text if full_text is not None else body, sub, lenient=lenient)  # type: ignore[arg-type]
     # nested_list
     out = []
     for it in re.findall(r"<item>(.*?)</item>", body, re.DOTALL | re.IGNORECASE):
@@ -172,7 +177,7 @@ def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False,
         if body is None:
             continue
         try:
-            data[name] = _field_value(body, field, lenient)
+            data[name] = _field_value(body, field, lenient, full_text=text)
         except ValidationError:
             if not lenient:  # strict: let the re-ask handle it; lenient: omit this field (default applies)
                 raise
