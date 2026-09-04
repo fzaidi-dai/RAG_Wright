@@ -19,15 +19,29 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > SEQUENTIALLY and concurrently (NOT the model, NOT this session's concurrency work), handled LOSSLESSLY (doc →
 > PARTIAL). Cause = server-side guided decoding (docling-graph forces `response_format` json_object/json_schema +
 > JSON-parses) — the exact fragility client-side tag-parse (ADR-0045) kills query-side. → the fix is TAGPARSE-INGEST-1.
-> **TAGPARSE-INGEST-1 (NEXT, decided: BUILD BOTH plug-in points + A/B end-to-end on real docs).** Move ingestion
-> clause/party extraction off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`), and
-> compare head-to-head against the granite-4.2 baseline. Two plug-in points BOTH implemented behind a seam flag:
-> (A) LIFT-OFF — extract clause/party via our own `build_tag_structured` (plain text in, tagged out; drops the
-> doclang-geo confound); (B) SURGICAL — keep docling-graph, make `_DeadlineBoundedLiteLLMClient` emit tags +
-> tag-parse the reply into the Pydantic. PREREQ engineering: extend `build_tag_structured` for NESTED schemas
-> (Clause has nested-object fields `bounded_by`/`caps`/`governed_by` + `list[BaseModel]` `excepts`; ContractParties
-> has `parties: list[Party]`) — the documented extension point. A/B measures clause_failures / dead-letters / KG
-> completeness on real docs; make the winner the ingestion default.
+> **TAGPARSE-INGEST-1: move ingestion extraction off docling-graph `json_object` onto client-side tag-parse.**
+> - **1a (DONE, ADR-0080): nested tag-parse + degrade.** `build_tag_structured` extended for NESTED schemas
+>   (nested single BaseModel + `list[BaseModel]`, by recursion) so the ingestion contracts (Clause's
+>   `bounded_by`/`caps`/`governed_by` + `excepts` list; ContractParties `parties`) are tag-parseable. Degrade =
+>   re-ask STRICT then omit-to-default on the LAST attempt (non-required field that fails validation -> default;
+>   required-missing still raises). LIVE: ContractParties 5/5 @ granite-4.2; flat query-side unchanged. 25 tests.
+> - **FUNCTION IS NOT LOAD-BEARING (measured 2026-09-05).** Investigated whether clause-function classification is
+>   accurate enough to gate function-scoped extraction. NO: granite-4.2 ~0.37 top-1 / 0.55 gold-in-top-3 (best
+>   config: CUAD-definition glosses + explicit top-3 + self-consistency N=5); gemma-4 ~0.50/0.59; chunk context no
+>   help; self-consistency +0.05 only (SYSTEMATIC errors — ~2.45 distinct candidates/5 samples). Harness = scratch
+>   `fn_*.py`; gold = `data/models/cuad_clause_cache.jsonl` + CUAD defs `data/cuad/extracted/CUAD_v1.json`. See
+>   memory `function-classification-not-load-bearing`. DECISION: extraction goes FUNCTION-INDEPENDENT; function
+>   only AUGMENTS KG search (soft/multi-label), never a gate.
+> - **1b (NEXT): function-INDEPENDENT thematic-group clause extraction.** Split the 35-field `Clause` into 7
+>   cohesive tag-parse sub-schemas, extract each per clause (no function dependency), merge into `Clause`. Groups:
+>   (1) Identity & scope; (2) Liability & damages; (3) Temporal & termination; (4) IP/licensing & exclusivity;
+>   (5a) Consents & control; (5b) Restrictions & duties (incl. `governed_by`); (6) Exceptions & carve-outs. Build
+>   the straight 7-group version first (validate QUALITY), then add a coarse ~7-way aspect gate to skip irrelevant
+>   groups for cost (a far-more-reliable classification than 52-way function). A/B = extraction QUALITY (correct
+>   field values vs OTHER/None) vs the current 35-field docling-graph path on the real NDA clauses; adopt the winner.
+> - **FUNCTION-AUGMENTS-KG (tracked, separate, downstream): function as a soft multi-label boost for KG/retrieval
+>   search, never a hard filter** (consistent with ADR-0047). Prompt the classifier for top-K + confidence. Not
+>   part of the extraction work.
 >
 > **PRIOR ARC — BULK-INGESTION WALL (RuleWright, NEONSYSTEMS contract) — 4 tasks.**
 > RuleWright's bulk CUAD ingest hit major clause-extraction failures. First-hand reproduction on

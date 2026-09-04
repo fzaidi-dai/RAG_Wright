@@ -9,13 +9,15 @@ field body needs no escaping -- unlike a JSON string full of legal quotes/bracke
 `build_tag_structured` is a DROP-IN for `models.seam.build_structured` (same `(model_id, schema)` -> runnable
 with `.invoke(prompt) -> schema instance`), so a caller swaps the mechanism by swapping the factory.
 
-Scope now (ADR-0045): FLAT schemas -- scalars (str/int/float/bool), enum/Literal, `str | None`, and
-`list[<scalar>]`. That covers the query-side schemas (generation, query understanding, highlight field-extract,
-reader judgments) and the flat ingest judges (extraction_semantic_judge -> SemanticVerdict). `list[<BaseModel>]`
-(nested) is NOT covered here: ingestion's PropertyExtraction is the documented EXTENSION POINT for a later task;
-and the ingest clause-function classifier (nested `list[SpanFunctions]` / `list[RawScore]`) uses its OWN bespoke
-free-text tags + client-side parse in `spans/clause_function_classifier.py`, not this generic parser (issue
-0005). So "function classifier" is deliberately NOT in the flat-covered list above -- its schema is nested.
+Scope (ADR-0045 + TAGPARSE-INGEST-1a): FLAT schemas -- scalars (str/int/float/bool), enum/Literal, `str | None`,
+`list[<scalar>]` -- AND NESTED schemas: a single nested `BaseModel` field and `list[<BaseModel>]`, emitted and
+parsed by recursion (nested `<field><sub>..</sub></field>`; list items as repeated `<item>..</item>` blocks).
+That covers the query-side schemas (generation, query understanding, highlight field-extract, reader judgments),
+the flat ingest judges (extraction_semantic_judge -> SemanticVerdict), AND the ingestion extraction contracts
+(Clause with its nested bounded_by/caps/governed_by + the `excepts` list; ContractParties with `parties`), which
+TAGPARSE-INGEST-1 routes off docling-graph's server-side json_object onto this path. The ingest clause-function
+classifier (nested `list[SpanFunctions]` / `list[RawScore]`) still uses its OWN bespoke free-text tags + client-
+side parse in `spans/clause_function_classifier.py`, not this generic parser (issue 0005), and is unchanged.
 """
 
 from __future__ import annotations
@@ -40,40 +42,63 @@ def _unwrap_optional(ann: Any) -> Any:
     return ann
 
 
-def _field_kind(ann: Any) -> tuple[bool, str]:
-    """(is_list, human_hint) for a field annotation. Raises for `list[BaseModel]` (nested -- not yet supported)."""
+def _classify(ann: Any) -> tuple[str, type[BaseModel] | None, str]:
+    """Classify a field annotation into `(kind, submodel, hint)`:
+      - 'scalar'      : a single scalar/enum/Literal/bool/number value  (submodel None)
+      - 'list_scalar' : `list[<scalar/enum>]`                           (submodel None)
+      - 'nested'      : a single nested `BaseModel`                     (submodel = that model)
+      - 'nested_list' : `list[<BaseModel>]`                            (submodel = the item model)
+    Nested kinds (TAGPARSE-INGEST-1a) let the ingestion contracts (Clause's bounded_by/caps/governed_by + the
+    `excepts` list, ContractParties' `parties` list) round-trip through tags; the emitter/parser recurse."""
     ann = _unwrap_optional(ann)
     if get_origin(ann) is list:
         item = (get_args(ann) or (str,))[0]
         if isinstance(item, type) and issubclass(item, BaseModel):
-            raise NotImplementedError(
-                "tag_structured: list[BaseModel] (nested) is a later extension point (ingestion PropertyExtraction)")
-        return True, "one value per line"
+            return "nested_list", item, ""
+        return "list_scalar", None, "one value per line"
+    if isinstance(ann, type) and issubclass(ann, BaseModel):
+        return "nested", ann, ""
     if isinstance(ann, type) and issubclass(ann, Enum):
-        return False, "one of: " + " | ".join(str(e.value) for e in ann)
+        return "scalar", None, "one of: " + " | ".join(str(e.value) for e in ann)
     if get_origin(ann) is typing.Literal:
-        return False, "one of: " + " | ".join(str(v) for v in get_args(ann))
+        return "scalar", None, "one of: " + " | ".join(str(v) for v in get_args(ann))
     if ann is bool:
-        return False, "true or false"
+        return "scalar", None, "true or false"
     if ann in (int, float):
-        return False, "a number"
-    return False, "text"
+        return "scalar", None, "a number"
+    return "scalar", None, "text"
+
+
+def _field_lines(schema: type[BaseModel]) -> list[str]:
+    """One tag-template block per field of `schema`; recurses into nested models and list[model] items."""
+    out: list[str] = []
+    for name, field in schema.model_fields.items():
+        kind, sub, hint = _classify(field.annotation)
+        desc = (field.description or "").strip()
+        suffix = f" -- {desc}" if desc else ""
+        if kind == "scalar":
+            out.append(f"<{name}>({hint}){suffix}</{name}>")
+        elif kind == "list_scalar":
+            out.append(f"<{name}>\n({hint}){suffix}\n</{name}>")
+        elif kind == "nested":
+            inner = "\n".join(_field_lines(sub))  # type: ignore[arg-type]
+            out.append(f"<{name}>{suffix}\n{inner}\n</{name}>")
+        else:  # nested_list
+            inner = "\n".join(_field_lines(sub))  # type: ignore[arg-type]
+            out.append(f"<{name}>{suffix} (repeat the <item> block once per entry)\n"
+                       f"<item>\n{inner}\n</item>\n</{name}>")
+    return out
 
 
 def tag_instructions(schema: type[BaseModel]) -> str:
-    """The prompt appendix telling the model to emit one XML-tag block per field of `schema`."""
-    lines = ["Respond using EXACTLY these XML-style tags, one block per field. Put the RAW value between the "
-             "tags -- no quotes, no JSON, no markdown fences:"]
-    for name, field in schema.model_fields.items():
-        is_list, hint = _field_kind(field.annotation)
-        desc = (field.description or "").strip()
-        suffix = f" -- {desc}" if desc else ""
-        if is_list:
-            lines.append(f"<{name}>\n({hint}){suffix}\n</{name}>")
-        else:
-            lines.append(f"<{name}>({hint}){suffix}</{name}>")
-    lines.append("Omit the tag entirely for any field whose value is unknown or not applicable.")
-    return "\n".join(lines)
+    """The prompt appendix telling the model to emit one XML-tag block per field of `schema` (recursing into
+    nested models and list[model] items)."""
+    return "\n".join([
+        "Respond using EXACTLY these XML-style tags, one block per field. Put the RAW value between the "
+        "tags -- no quotes, no JSON, no markdown fences:",
+        *_field_lines(schema),
+        "Omit the tag entirely for any field whose value is unknown or not applicable.",
+    ])
 
 
 def _extract(text: str, name: str) -> str | None:
@@ -81,22 +106,71 @@ def _extract(text: str, name: str) -> str | None:
     return m.group(1) if m else None
 
 
-def parse_tagged(text: str, schema: type[BaseModel]) -> BaseModel:
-    """Parse XML-tagged free text into `schema`. Each `<field>` body is coerced by Pydantic (scalars, enums,
-    bools, numbers); a `list[...]` field is split one-item-per-line (commas too). An absent tag is omitted so the
-    field's default/optional applies. Pydantic does the final validation -- a missing required field raises
-    ValidationError (which `build_tag_structured` retries)."""
+def _field_value(body: str, field: Any, lenient: bool) -> Any:
+    """The Python value for one `<field>` body: scalar/enum/bool/number verbatim; `list[<scalar>]` split
+    one-per-line (commas too); a nested `BaseModel` recursed on the body; a `list[<BaseModel>]` split on its
+    `<item>` blocks and each recursed. In `lenient` mode an unbuildable list ITEM is dropped (kept in strict)."""
+    kind, sub, _ = _classify(field.annotation)
+    if kind == "scalar":
+        return body.strip()
+    if kind == "list_scalar":
+        return [x.strip() for x in re.split(r"[\r\n,]+", body.strip()) if x.strip()]
+    if kind == "nested":
+        return parse_tagged(body, sub, lenient=lenient)  # type: ignore[arg-type]
+    # nested_list
+    out = []
+    for it in re.findall(r"<item>(.*?)</item>", body, re.DOTALL | re.IGNORECASE):
+        try:
+            out.append(parse_tagged(it, sub, lenient=lenient))  # type: ignore[arg-type]
+        except ValidationError:
+            if not lenient:
+                raise
+    return out
+
+
+def _prune_invalid_optionals(schema: type[BaseModel], data: dict[str, Any], err: ValidationError) -> BaseModel:
+    """Drop each NON-required top field the ValidationError blames (a partial nested block, a constraint-violating
+    scalar) so it falls back to its default, then rebuild ONCE. A required field cannot be omitted, so if the
+    error is (also) on a required field the rebuild re-raises -- the caller's graceful-degrade contract then owns
+    it. Only used on the last, lenient attempt."""
+    pruned = False
+    for e in err.errors():
+        loc = e.get("loc") or ()
+        if not loc:
+            continue
+        top = loc[0]
+        f = schema.model_fields.get(top)  # type: ignore[arg-type]
+        if f is not None and not f.is_required() and top in data:
+            del data[top]
+            pruned = True
+    if not pruned:
+        raise err  # nothing omittable (the failure is on required data) -> genuine, propagate
+    return schema(**data)
+
+
+def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False) -> BaseModel:
+    """Parse XML-tagged free text into `schema`. An absent tag is omitted so the field's default/optional applies;
+    Pydantic does the final validation. STRICT (default): a missing required field or a malformed/partial nested
+    block raises ValidationError (which `build_tag_structured` retries -- the re-ask). LENIENT (the last attempt,
+    TAGPARSE-INGEST-1a): omit-to-default -- a NON-required field whose value fails to validate (an unbuildable
+    nested block, a constraint-violating scalar, an invalid list item) is dropped to its default rather than
+    failing the whole extraction; a missing REQUIRED field still raises."""
     data: dict[str, Any] = {}
     for name, field in schema.model_fields.items():
         body = _extract(text, name)
         if body is None:
             continue
-        is_list, _ = _field_kind(field.annotation)
-        if is_list:
-            data[name] = [x.strip() for x in re.split(r"[\r\n,]+", body.strip()) if x.strip()]
-        else:
-            data[name] = body.strip()
-    return schema(**data)
+        try:
+            data[name] = _field_value(body, field, lenient)
+        except ValidationError:
+            if not lenient:  # strict: let the re-ask handle it; lenient: omit this field (default applies)
+                raise
+    try:
+        return schema(**data)
+    except ValidationError as exc:
+        if not lenient:
+            raise
+        return _prune_invalid_optionals(schema, data, exc)
 
 
 class _TagStructuredRunnable:
@@ -120,14 +194,17 @@ class _TagStructuredRunnable:
         return f"{prompt}\n\n{instr}" if isinstance(prompt, str) else [*prompt, ("human", instr)]
 
     def invoke(self, prompt: Any, config: Any = None) -> BaseModel:  # config accepted for runnable-compat, unused
-        # Drop-in for build_structured.
+        # Drop-in for build_structured. The re-ask is STRICT (so a malformed/partial answer is re-asked); the
+        # FINAL attempt is LENIENT (omit-to-default) so a persistently-partial nested block degrades rather than
+        # failing the whole extraction (TAGPARSE-INGEST-1a).
         full = self._full_prompt(prompt)
+        attempts = self._retries + 1
         last: Exception | None = None
-        for _ in range(self._retries + 1):
+        for i in range(attempts):
             text = str(build_model(
                 self._model_id, temperature=self._temperature, max_tokens=self._max_tokens).invoke(full).content)
             try:
-                return parse_tagged(text, self._schema)
+                return parse_tagged(text, self._schema, lenient=(i == attempts - 1))
             except ValidationError as exc:  # malformed/incomplete -> re-ask, bounded
                 last = exc
         raise last  # type: ignore[misc]
@@ -137,13 +214,14 @@ class _TagStructuredRunnable:
         # detection + true wall-clock deadline via astream_text), then parse the light tags client-side, with the
         # same bounded re-ask on a ValidationError.
         full = self._full_prompt(prompt)
+        attempts = self._retries + 1
         last: Exception | None = None
-        for _ in range(self._retries + 1):
+        for i in range(attempts):
             text = await astream_text(
                 self._model_id, full, temperature=self._temperature, max_tokens=self._max_tokens,
                 label=self._label)
             try:
-                return parse_tagged(text, self._schema)
+                return parse_tagged(text, self._schema, lenient=(i == attempts - 1))
             except ValidationError as exc:
                 last = exc
         raise last  # type: ignore[misc]
