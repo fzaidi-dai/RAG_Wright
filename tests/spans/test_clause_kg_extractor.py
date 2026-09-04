@@ -1,7 +1,7 @@
 """KG-2 (FR-C.6, ADR-0033/0028): the Clause -> ClausePropertyRecord adapter + the grounding gate.
 
 Hermetic tests drive the pure mapping and the gate with hand-built `Clause` instances (no model call).
-The live smoke (`-m model`) runs real granite-4.1-8b on a real clause.
+The live smoke (`-m model`) runs real granite-4.2-8b on a real clause.
 """
 
 from __future__ import annotations
@@ -173,7 +173,7 @@ def test_none_extraction_yields_empty_valid_record() -> None:
 
 @pytest.mark.model
 def test_live_granite_extracts_a_cap_clause() -> None:
-    """Live smoke: real granite-4.1-8b on a mutual liability cap -> plausible typed properties."""
+    """Live smoke: real granite-4.2-8b on a mutual liability cap -> plausible typed properties."""
     from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
 
     text = (

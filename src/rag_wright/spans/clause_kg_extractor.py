@@ -212,14 +212,14 @@ class DGClausePropertyExtractor:
 
 def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None,
                              asemantic_judge_fn: Any = None) -> DGClausePropertyExtractor:
-    """The live default: granite-4.1-8b via the SELECTED serving backend (`default_extraction_model` reads
-    `RAG_SERVING` -> vLLM-Granite in product, OpenRouter-Granite in dev; MS1-3). Pass a different
+    """The live default: granite-4.2-8b via the SELECTED serving backend (`default_extraction_model` reads
+    `RAG_SERVING` -> vLLM-Granite in product, OpenRouter-Granite in dev; MS1-3, ADR-0079). Pass a different
     `ExtractionModel` to override, or a `semantic_judge_fn`/`asemantic_judge_fn` to enable the ADR-0040 Layer-3
     gate (sync/async). ASYNC-B2b wires the async extraction seam (`aextract_clause`) so `aextract` gets the true
     wall-clock deadline."""
     from rag_wright.capabilities.dg_extraction import aextract_clause, default_extraction_model, extract_clause
 
-    chosen = model or default_extraction_model("granite-4.1-8b", "ibm-granite/granite-4.1-8b")
+    chosen = model or default_extraction_model("clause-extract", "ibm-granite/granite-4.2-8b")
     return DGClausePropertyExtractor(
         lambda text: extract_clause(text, chosen),
         aextract_fn=lambda text: aextract_clause(text, chosen),

@@ -3,7 +3,33 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **RESUME / NEXT UP (2026-09-04 NEWEST): BULK-INGESTION WALL (RuleWright, NEONSYSTEMS contract) — 4 tasks.**
+> **RESUME / NEXT UP (2026-09-04 NEWEST): MODEL DEFAULT SWITCHED + TAGPARSE-INGEST-1 IS NEXT.**
+> **MODEL-DEFAULT-1 (DONE, ADR-0079)**: the product default `ibm-granite/granite-4.1-8b` was DE-LISTED on
+> OpenRouter (404). Evaluated replacements first-hand, live, on the real ingestion path: `~deepseek/deepseek-v4-flash-latest`
+> (pre-approved "if it works") is FLAKY on the docling-graph extraction path (a clean clause retried 5× failed
+> 2/5–5/5 by provider; provider-roulette under the `~…-latest`+`sort:latency` alias; 31/48 clause failures on a
+> real NDA) → NOT viable. `ibm-granite/granite-4.2-8b` (in-family successor) is reliable (5/5 isolated; on a REAL
+> executed NDA: NO dead-letter, wrote KG `{clauses,entities:2,edges:1,spans:7}`) → ADOPTED. Encoded in the profile
+> (never node code): `extra_body={"provider":{"sort":"latency"},"reasoning":{"enabled":false}}` (granite-4.2 is a
+> reasoning model → empty content on forced-structured unless disabled; reasoning-ON is WORSE — dead-letter, 0
+> clauses, 177s vs 25s). docling-graph litellm path mirrors it in `_call_api` (env `OPENROUTER_PROVIDER_ORDER`
+> pin / `OPENROUTER_SORT` default latency / `RAG_EXTRACT_REASONING` A/B toggle). Suite 1428 pass.
+> **KEY FINDING (scoped, not fixed here):** the docling-graph path STILL returns "empty or all-null JSON" on a
+> real fraction of clauses (~5/7 even on real clauses; worse on template/placeholder fixtures), on BOTH models,
+> SEQUENTIALLY and concurrently (NOT the model, NOT this session's concurrency work), handled LOSSLESSLY (doc →
+> PARTIAL). Cause = server-side guided decoding (docling-graph forces `response_format` json_object/json_schema +
+> JSON-parses) — the exact fragility client-side tag-parse (ADR-0045) kills query-side. → the fix is TAGPARSE-INGEST-1.
+> **TAGPARSE-INGEST-1 (NEXT, decided: BUILD BOTH plug-in points + A/B end-to-end on real docs).** Move ingestion
+> clause/party extraction off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`), and
+> compare head-to-head against the granite-4.2 baseline. Two plug-in points BOTH implemented behind a seam flag:
+> (A) LIFT-OFF — extract clause/party via our own `build_tag_structured` (plain text in, tagged out; drops the
+> doclang-geo confound); (B) SURGICAL — keep docling-graph, make `_DeadlineBoundedLiteLLMClient` emit tags +
+> tag-parse the reply into the Pydantic. PREREQ engineering: extend `build_tag_structured` for NESTED schemas
+> (Clause has nested-object fields `bounded_by`/`caps`/`governed_by` + `list[BaseModel]` `excepts`; ContractParties
+> has `parties: list[Party]`) — the documented extension point. A/B measures clause_failures / dead-letters / KG
+> completeness on real docs; make the winner the ingestion default.
+>
+> **PRIOR ARC — BULK-INGESTION WALL (RuleWright, NEONSYSTEMS contract) — 4 tasks.**
 > RuleWright's bulk CUAD ingest hit major clause-extraction failures. First-hand reproduction on
 > `NEONSYSTEMSINC_…DISTRIBUTOR AGREEMENT_Amendment.pdf` (born-digital, 5 pages) established the REAL causes (NOT
 > the model, NOT concurrency): (a) the scan-quality gate FALSE-POSITIVES on a born-digital sparse page (page 5 =

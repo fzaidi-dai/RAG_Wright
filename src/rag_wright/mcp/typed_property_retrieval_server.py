@@ -103,7 +103,7 @@ def production_retrieval_fn(*, k: int = 8) -> RetrievalFn:
     store = ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
     leg = production_typed_property_retrieval(
         store=store, embedder=query_embedder(),
-        extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.1-8b"), k=k)
+        extract_model=default_extraction_model("query-constraints", "ibm-granite/granite-4.2-8b"), k=k)
 
     async def _retrieve(query: str) -> TypedPropertyRetrieval:
         out = await leg.ainvoke({"query": query})

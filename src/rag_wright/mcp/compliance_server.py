@@ -170,7 +170,7 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
     from rag_wright.subgraphs.compliance_check import run_compliance_check
 
     store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
-    extract_model = default_extraction_model("claim-extract", "ibm-granite/granite-4.1-8b")
+    extract_model = default_extraction_model("claim-extract", "ibm-granite/granite-4.2-8b")
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     embedder = query_embedder()
 

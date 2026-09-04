@@ -81,15 +81,17 @@ def test_unknown_model_gets_safe_default_profile():
 # --- role resolution (priority lives in config, not capability code) ---------------------------
 
 
-def test_every_role_defaults_to_single_granite():
-    # MS1-2 (ADR-0039): the product substrate is a single self-hosted Granite for EVERY role (OKF included --
-    # it is not in the ingestion/query pipeline). Gemma/DeepSeek dropped from the default (still registered).
-    # EXCEPTION (0009-VLM): VISION_OCR needs a VISION model, which the text-only Granite-8B product LLM is not --
-    # it defaults to a vision model (Gemma-4), self-hostable so the data-sovereign posture holds.
+def test_every_role_defaults_to_single_product_llm():
+    # MS1-2 (ADR-0039): the product substrate is a SINGLE product LLM for EVERY role (OKF included -- it is not in
+    # the ingestion/query pipeline). Granite-4.1 was de-listed on OpenRouter (404); the product default moved to
+    # `ibm-granite/granite-4.2-8b` (granite-4.1-8b's successor) with reasoning-off + `provider:{sort:latency}`
+    # routing (ADR-0079). Gemma/DeepSeek-Pro stay dropped-but-registered for dev override.
+    # EXCEPTION (0009-VLM): VISION_OCR needs a VISION model, which the text-only product LLM is not -- it defaults
+    # to a vision model (Gemma-4), self-hostable so the data-sovereign posture holds.
     for role in ModelRole:
         if role is ModelRole.VISION_OCR:
             continue
-        assert "granite" in profiles.model_for(role).lower()
+        assert profiles.model_for(role) == profiles._PRODUCT_LLM
 
 
 def test_vision_ocr_defaults_to_a_vision_model_not_granite():
@@ -106,9 +108,9 @@ def test_role_is_env_overridable(monkeypatch):
 def test_function_classify_role_moves_only_the_classifier(monkeypatch):
     # issue 0005: the classifier can run on a different model than GENERAL without moving the other stages.
     monkeypatch.setenv("RAG_MODEL_FUNCTION_CLASSIFY", "google/gemma-4-31b-it")
-    assert profiles.model_for(ModelRole.FUNCTION_CLASSIFY) == "google/gemma-4-31b-it"  # classifier -> Gemma
-    assert "granite" in profiles.model_for(ModelRole.GENERAL).lower()                   # GENERAL unchanged
-    assert "granite" in profiles.model_for(ModelRole.STRUCTURED_REASONING).lower()      # extraction unchanged
+    assert profiles.model_for(ModelRole.FUNCTION_CLASSIFY) == "google/gemma-4-31b-it"      # classifier -> Gemma
+    assert profiles.model_for(ModelRole.GENERAL) == profiles._PRODUCT_LLM                   # GENERAL unchanged
+    assert profiles.model_for(ModelRole.STRUCTURED_REASONING) == profiles._PRODUCT_LLM      # extraction unchanged
 
 
 def test_all_roles_override_points_every_role_at_one_model(monkeypatch):
@@ -125,18 +127,21 @@ def test_role_specific_override_wins_over_all_roles_override(monkeypatch):
 
 
 def test_dropped_foundation_models_stay_registered_for_dev_override(monkeypatch):
-    # the product default is Granite, but a dev run can still select a foundation model and get its REAL
-    # profile (not the safe fallback) -- the profiles are dropped from the default, not deregistered.
+    # the product default is the deepseek-flash product LLM, but a dev run can still select a foundation model and
+    # get its REAL profile (not the safe fallback) -- the profiles are dropped from the default, not deregistered.
     for model_id in (
-        profiles.DEFAULT_STRUCTURED_REASONING,  # deepseek
+        profiles.DEFAULT_STRUCTURED_REASONING,  # deepseek-pro
         profiles.DEFAULT_GENERAL,  # gemma
         profiles.DEFAULT_STRUCTURED_REASONING_SECONDARY,  # qwen
     ):
         assert profiles.profile_for(model_id).model_id == model_id
-    # and the product default itself is a registered profile (json_schema), not the fallback
-    granite = profiles.model_for(ModelRole.STRUCTURED_REASONING)
-    assert profiles.profile_for(granite).model_id == granite
-    assert profiles.profile_for(granite).structured_method == "json_schema"
+    # and the product default itself is a registered profile (its own real profile), not the fallback
+    product = profiles.model_for(ModelRole.STRUCTURED_REASONING)
+    assert product == profiles._PRODUCT_LLM
+    assert profiles.profile_for(product).model_id == product
+    # the deepseek-flash product profile carries latency routing + reasoning-disable (ADR-0079)
+    assert profiles.profile_for(product).extra_body == {
+        "provider": {"sort": "latency"}, "reasoning": {"enabled": False}}
 
 
 # --- the seam is the only path to with_structured_output, and extra_body is structured-only ----

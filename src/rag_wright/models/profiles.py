@@ -82,7 +82,7 @@ DEFAULT_OKF_ENRICHMENT = "google/gemma-4-26b-a4b-it"
 # constants above are kept as those foundation-model profile keys + documented dev-override values. (OKF
 # signpost enrichment -- the one-time ADR-0023 Gemma exception -- is NOT wired into the ingestion/query
 # pipeline (only `okf/enrich.py`), so it too defaults to Granite; ADR-0023's Gemma choice is now vestigial.)
-_PRODUCT_LLM = "ibm-granite/granite-4.1-8b"
+_PRODUCT_LLM = "ibm-granite/granite-4.2-8b"
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", _PRODUCT_LLM),
@@ -133,13 +133,22 @@ PROFILES: dict[str, ModelProfile] = {
     # Gemma 4 26b-a4b takes the forced tool call cleanly (default function_calling, no extra_body);
     # 0 structured-output errors across the 20-clause bench (ADR-0023).
     DEFAULT_OKF_ENRICHMENT: ModelProfile(model_id=DEFAULT_OKF_ENRICHMENT),
-    # IBM Granite 4.1-8b silently returns an EMPTY/degenerate structured result under `function_calling`
-    # (the KG-5e query->function classifier got `[]` for even "England Governing Law"); `json_schema` fixes
-    # it cleanly (correct labels on every probe). Method-only override -- free-text and the docling-graph
-    # (json_object) extraction path are untouched. Empirical, dated: KG-5e / ADR-0034.
-    "ibm-granite/granite-4.1-8b": ModelProfile(
-        model_id="ibm-granite/granite-4.1-8b",
-        structured_method="json_schema",
+    # The ADOPTED default (2026-09-04): DeepSeek V4 Flash via OpenRouter's auto-updating `~...-latest` alias.
+    # It does reasoning + structured output together (function_calling, no thinking-disable needed) and returns
+    # content directly. The `~...-latest` alias otherwise routes to a SLOW/flaky provider (measured 6.9s vs 1.0s),
+    # so pin `provider.sort=latency` -- OpenRouter routes to the lowest-latency provider (applied to every seam
+    # call; the docling-graph extraction path injects the same routing separately in `dg_extraction`). Replaces the
+    # de-listed `ibm-granite/granite-4.1-8b` (OpenRouter 404: no endpoints); granite-4.2-8b needed reasoning
+    # disabled to avoid empty content, so DeepSeek Flash is the lower-friction default.
+    # Product default (ADR-0079). Granite-4.1-8b was de-listed on OpenRouter (404); granite-4.2-8b is its direct
+    # successor and the replacement default -- same family, same reasoning-off handling, and RELIABLE on the
+    # docling-graph extraction path (measured 5/5 clean clause extractions vs deepseek-v4-flash's flaky ~2/5,
+    # which produced "no models" a large fraction of the time regardless of provider). `reasoning:{enabled:false}`
+    # is LOAD-BEARING: granite-4.2 is a reasoning model and returns empty `content` on a forced structured call
+    # unless reasoning is disabled. `provider:{sort:latency}` picks the fastest of its (few) providers.
+    "ibm-granite/granite-4.2-8b": ModelProfile(
+        model_id="ibm-granite/granite-4.2-8b",
+        extra_body={"provider": {"sort": "latency"}, "reasoning": {"enabled": False}},
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not

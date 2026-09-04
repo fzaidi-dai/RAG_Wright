@@ -252,7 +252,7 @@ def vllm_model(label: str, model: str) -> ExtractionModel:
 
 
 def default_extraction_model(
-    label: str = "clause-extract", model: str = "ibm-granite/granite-4.1-8b"
+    label: str = "clause-extract", model: str = "ibm-granite/granite-4.2-8b"
 ) -> ExtractionModel:
     """The clause/party extraction model for the SELECTED serving backend (MS1-3, ADR-0039). The docling-graph
     extraction is a SEPARATE model surface from the seam, so it reads the same `RAG_SERVING` switch here:
@@ -312,6 +312,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
     effective = resolve_effective_model_config(model.provider, model.model, overrides=overrides)
     llm_client = _deadline_bounded_client_class()(model_config=effective)
     llm_client._stage_label = stage_label  # ADR-0058/issue 0005: name the stage in the deadline timeout message
+    llm_client._base_url = getattr(model, "base_url", "") or ""  # for OpenRouter provider routing (sort=latency)
     return PipelineConfig(
         source=source_path, template=template, backend="llm", inference=model.inference,
         extraction_contract=extraction_contract, processing_mode="many-to-one",
@@ -343,6 +344,20 @@ def _deadline_bounded_client_class() -> type:
             import litellm
 
             request = self._build_request(messages, **params)
+            # For an OpenRouter extraction call: (1) route the provider -- pin an explicit provider order
+            # (env OPENROUTER_PROVIDER_ORDER, comma-separated, no fallbacks) for determinism, else prefer the
+            # lowest-latency provider (env OPENROUTER_SORT, default 'latency'); (2) DISABLE reasoning. The product
+            # default granite-4.2-8b is a reasoning model: on a forced structured call it returns empty `content`
+            # unless reasoning is disabled (ADR-0079). The seam applies both via the model profile; the
+            # docling-graph path uses litellm, so it is added here. Skipped for a non-OpenRouter (vLLM / local) base.
+            if "openrouter" in (getattr(self, "_base_url", "") or "").lower():
+                _order = os.getenv("OPENROUTER_PROVIDER_ORDER", "").strip()
+                _prov = ({"order": [p.strip() for p in _order.split(",") if p.strip()], "allow_fallbacks": False}
+                         if _order else {"sort": os.getenv("OPENROUTER_SORT", "latency")})
+                _reason_on = os.getenv("RAG_EXTRACT_REASONING", "0") == "1"  # A/B toggle (default OFF)
+                request["extra_body"] = {**(request.get("extra_body") or {}),
+                                         "provider": _prov,
+                                         "reasoning": {"enabled": _reason_on}}
 
             async def _go() -> Any:
                 async with asyncio.timeout(seam._MODEL_DEADLINE_S):

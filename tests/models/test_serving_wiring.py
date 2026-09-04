@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.capabilities.dg_extraction import default_extraction_model
+from rag_wright.models import profiles
 from rag_wright.capabilities.rlm_chunking import SingleCallBoundaryDiscoverer
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.provenance import ConfidenceTag
@@ -27,7 +28,7 @@ def _clean_env(monkeypatch):
 # --- (extract) the docling-graph extraction model is serving-aware, like the seam ---
 
 def test_default_extraction_model_is_openrouter_by_default():
-    m = default_extraction_model("clause-extract", "ibm-granite/granite-4.1-8b")
+    m = default_extraction_model("clause-extract", profiles._PRODUCT_LLM)
     assert m.provider == "openrouter" and "openrouter" in m.base_url
 
 
@@ -35,14 +36,14 @@ def test_default_extraction_model_routes_to_vllm(monkeypatch):
     monkeypatch.setenv("RAG_SERVING", "vllm")
     monkeypatch.setenv("VLLM_BASE_URL", "https://app.modal.run/v1")
     monkeypatch.setenv("VLLM_API_KEY", "vk")
-    m = default_extraction_model("clause-extract", "ibm-granite/granite-4.1-8b")
+    m = default_extraction_model("clause-extract", profiles._PRODUCT_LLM)
     assert m.provider == "hosted_vllm" and m.base_url == "https://app.modal.run/v1" and m.api_key == "vk"
 
 
-# --- (chunk) the boundary discoverer defaults to granite via the GENERAL role ---
+# --- (chunk) the boundary discoverer defaults to the product LLM via the GENERAL role ---
 
-def test_single_call_chunker_defaults_to_granite():
-    assert "granite" in SingleCallBoundaryDiscoverer()._model_id.lower()
+def test_single_call_chunker_defaults_to_product_llm():
+    assert SingleCallBoundaryDiscoverer()._model_id == profiles._PRODUCT_LLM
 
 
 # --- (judge) the extractor applies the injected semantic judge after the deterministic gates ---
