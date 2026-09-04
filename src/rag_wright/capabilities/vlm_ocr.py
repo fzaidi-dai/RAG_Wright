@@ -72,6 +72,12 @@ class VlmOCRParser:
         conv = self._converter or build_vlm_ocr_converter()
         return conv.convert(str(source)).document
 
+    def parse_range(self, source, page_range):
+        """PARSE-3: VLM-parse only pages `page_range` (1-based, inclusive), so the tiered path escalates just the
+        degraded pages instead of the whole document."""
+        conv = self._converter or build_vlm_ocr_converter()
+        return conv.convert(str(source), page_range=page_range).document
+
 
 def register_vlm_ocr(registry) -> None:
     """0009-VLM: register `vlm_ocr` (function; document bytes -> transcribed text via a remote VLM)."""

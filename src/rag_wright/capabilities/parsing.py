@@ -71,6 +71,11 @@ class DoclingParser:
     def convert(self, source: Path) -> DoclingDocument:
         return self._converter.convert(source).document
 
+    def parse_range(self, source: Path, page_range: tuple[int, int]) -> DoclingDocument:
+        """PARSE-3: parse only pages `page_range` (1-based, inclusive) -- lets the tiered path fast-parse the
+        born-digital pages and VLM only the degraded ones, then concatenate, instead of VLM-ing the whole doc."""
+        return self._converter.convert(source, page_range=page_range).document
+
 
 class TieredOCRReport(BaseModel):
     """0009-WIRE: which pages the tiered parser escalated to the VLM, and which remained unreadable even after
@@ -98,7 +103,8 @@ class TieredOCRParser:
     def convert(self, source: Path) -> DoclingDocument:
         from rag_wright.capabilities.scan_quality import ScanQuality, assess_document
 
-        fast_doc = (self._fast or DoclingParser()).convert(source)
+        fast = self._fast or DoclingParser()
+        fast_doc = fast.convert(source)
         # 0009-GATE-CAL: fold in IMAGE metrics (blur/faintness) -- the strong signal a text-only gate misses when
         # the fast OCR is garbled-but-common-word. The VLM re-check below is text-only (the image stays blurry).
         assessed = assess_document(fast_doc, page_images=_render_gray_pages(source))
@@ -120,7 +126,10 @@ class TieredOCRParser:
             _log_unreadable(source, degraded, "no VLM configured (set OPENROUTER_API_KEY)")
             return fast_doc
         try:
-            vlm_doc = vlm.convert(source)
+            # PARSE-3: escalate ONLY the degraded pages to the VLM (per-page), then concatenate with the
+            # fast-parsed good pages -- never the whole document. A large born-digital doc with one genuine
+            # image-only page used to VLM all 60+ pages (~30 min) and blow the 600s parse deadline.
+            vlm_doc = _escalate_degraded_pages(source, fast, vlm, degraded)
         except Exception as exc:  # noqa: BLE001 - a VLM failure must not sink the parse; flag PARTIAL, keep fast doc
             self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=degraded)
             _log_unreadable(source, degraded, f"VLM escalation failed: {exc!r}")
@@ -139,6 +148,49 @@ def _default_vlm_parser() -> Parser:
     from rag_wright.capabilities.vlm_ocr import VlmOCRParser
 
     return VlmOCRParser()
+
+
+def _page_count(source: Path) -> int:
+    """Total page count of a PDF (pypdfium2, no parse). 0 for a non-PDF or any read error -> the caller falls
+    back to whole-document escalation."""
+    try:
+        import pypdfium2 as pdfium
+
+        return len(pdfium.PdfDocument(str(source)))
+    except Exception:  # noqa: BLE001 - best-effort; unknown page count -> whole-doc fallback
+        return 0
+
+
+def _escalation_runs(n_pages: int, degraded: set[int]) -> list[tuple[int, int, bool]]:
+    """PARSE-3: partition pages 1..n_pages into CONTIGUOUS runs, each tagged `is_vlm` (a degraded page -> VLM,
+    else fast). So a 63-page doc with page 31 degraded yields [(1,30,False),(31,31,True),(32,63,False)] -- the VLM
+    touches only page 31. Returns `[(start, end, is_vlm)]`, 1-based inclusive, covering every page in order."""
+    runs: list[tuple[int, int, bool]] = []
+    start = 1
+    while start <= n_pages:
+        is_vlm = start in degraded
+        end = start
+        while end + 1 <= n_pages and ((end + 1) in degraded) == is_vlm:
+            end += 1
+        runs.append((start, end, is_vlm))
+        start = end + 1
+    return runs
+
+
+def _escalate_degraded_pages(source: Path, fast: Parser, vlm: Parser, degraded: list[int]) -> DoclingDocument:
+    """PARSE-3: build the escalated document by parsing each contiguous page-run with the right parser (fast for
+    born-digital pages, VLM for the degraded ones) and concatenating -- so VLM cost scales with the number of
+    DEGRADED pages, not the document length. Falls back to a whole-document VLM parse when the page count is
+    unknown or a parser has no `parse_range` (e.g. a non-PDF, or an injected stub) -- preserving the prior
+    behavior for those cases."""
+    n_pages = _page_count(source)
+    if not n_pages or not hasattr(fast, "parse_range") or not hasattr(vlm, "parse_range"):
+        return vlm.convert(source)  # fallback: whole-document VLM (unknown page count / no page-range support)
+    runs = _escalation_runs(n_pages, set(degraded))
+    subdocs = [
+        (vlm if is_vlm else fast).parse_range(source, (start, end)) for start, end, is_vlm in runs
+    ]
+    return subdocs[0] if len(subdocs) == 1 else DoclingDocument.concatenate(subdocs)
 
 
 _MIN_TEXT_LAYER_CHARS = 30  # a PDF page with >= this many directly-extractable chars has a real, authoritative

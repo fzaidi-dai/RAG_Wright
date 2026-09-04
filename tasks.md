@@ -31,9 +31,11 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   threshold, so one gate-flagged sparse page escalated the whole 63-page doc → 600s deadline. Fix = lower
 >   `_MIN_TEXT_LAYER_CHARS` 200→30 (a real text layer of any size is authoritative). LIVE e2e: doc3 parse
 >   600s(FAILED)→32.7s, INGESTED clean (230 clauses, 700 spans, 0 failures, 461s).
-> - **PARSE-3 (todo, NEW — residual)**: a LARGE doc with a GENUINE image-only page (0 chars) still triggers a
->   whole-document VLM escalation for that one page → 600s deadline. Fix = per-page VLM escalation, or a page-count
->   cap. Doesn't affect doc3 (all born-digital); a real-scan landmine on big docs.
+> - **PARSE-3 (DONE, ADR-0075)**: PER-PAGE VLM escalation — `TieredOCRParser` VLM-escalates ONLY the degraded
+>   pages (page-range parse via `parse_range` on both parsers + `DoclingDocument.concatenate`), not the whole doc,
+>   so VLM cost scales with #image-pages, never document length; falls back to whole-doc when page count unknown /
+>   no parse_range. LIVE: a mixed 6-page doc (page 4 image-only) → escalated ONLY page 4, 14.4s, merged 95 texts.
+>   Closes the last parsing landmine. Suite 1419 pass.
 > - **PARTIAL-CAUSE-1 (DONE, ADR-0074 — corrects ADR-0072)**: the docs 2/4 partials were a REGRESSION I introduced
 >   in EXTRACT-GUARD-1: docling's `ExtractionFailed` is raised on ANY logged error incl. TRANSIENT blips (empty
 >   content/gleaning/rate-limit/timeout), and the `except ExtractionFailed: break` (no retry) turned recoverable

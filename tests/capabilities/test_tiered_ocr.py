@@ -6,7 +6,44 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
-from rag_wright.capabilities.parsing import TieredOCRParser, _text_layer_pages
+from rag_wright.capabilities.parsing import (
+    TieredOCRParser,
+    _escalate_degraded_pages,
+    _escalation_runs,
+    _text_layer_pages,
+)
+
+
+def _real_doc(pages: dict[int, str]):
+    """A real DoclingDocument with one text item per page (page provenance set), so `concatenate` and
+    `assess_document` operate on it -- used to test PARSE-3 per-page escalation hermetically."""
+    from docling_core.types.doc.base import BoundingBox, CoordOrigin
+    from docling_core.types.doc.document import DoclingDocument, ProvenanceItem
+    from docling_core.types.doc.labels import DocItemLabel
+
+    doc = DoclingDocument(name="stub")
+    for page_no, text in sorted(pages.items()):
+        prov = ProvenanceItem(page_no=page_no, charspan=(0, len(text)),
+                              bbox=BoundingBox(l=0, t=0, r=10, b=10, coord_origin=CoordOrigin.TOPLEFT))
+        doc.add_text(label=DocItemLabel.TEXT, text=text, prov=prov)
+    return doc
+
+
+class _RangeParser:
+    """A `Parser` with `parse_range`: serves a real DoclingDocument for the requested pages from a page->text map,
+    recording the ranges it was asked for (to prove the VLM touched ONLY the degraded pages)."""
+
+    def __init__(self, page_text: dict[int, str]) -> None:
+        self.page_text = page_text
+        self.ranges: list[tuple[int, int]] = []
+
+    def convert(self, source):
+        return _real_doc(self.page_text)
+
+    def parse_range(self, source, page_range):
+        self.ranges.append(page_range)
+        s, e = page_range
+        return _real_doc({p: self.page_text[p] for p in range(s, e + 1) if p in self.page_text})
 
 
 def _minimal_pdf(text: str) -> bytes:
@@ -165,3 +202,40 @@ def test_graceful_degrade_when_vlm_errors():
     p = TieredOCRParser(fast=fast, vlm=_BoomVlm())
     doc = p.convert(Path("x.pdf"))
     assert doc is fast.doc and p.report.unreadable_pages == [1]  # VLM failed -> PARTIAL, no crash
+
+
+# --- PARSE-3: per-page VLM escalation (VLM only the degraded pages, not the whole doc) ----------
+
+def test_escalation_runs_isolates_degraded_pages_into_their_own_runs():
+    # PARSE-3: a 63-page doc with page 31 degraded -> VLM touches ONLY page 31; good pages stay fast.
+    assert _escalation_runs(63, {31}) == [(1, 30, False), (31, 31, True), (32, 63, False)]
+    assert _escalation_runs(5, {1, 2}) == [(1, 2, True), (3, 5, False)]
+    assert _escalation_runs(3, set()) == [(1, 3, False)]
+    assert _escalation_runs(3, {1, 2, 3}) == [(1, 3, True)]           # fully-degraded -> one whole-doc VLM run
+    assert _escalation_runs(5, {2, 4}) == [(1, 1, False), (2, 2, True), (3, 3, False), (4, 4, True), (5, 5, False)]
+
+
+def test_escalate_degraded_pages_vlm_only_the_image_page(monkeypatch):
+    # a 5-page born-digital doc with ONE genuine image page (3): the VLM must touch only page 3, the fast parser
+    # the good runs, and the merged doc must carry all 5 pages in order with page 3's VLM text.
+    import rag_wright.capabilities.parsing as parsing
+    monkeypatch.setattr(parsing, "_page_count", lambda source: 5)
+    fast = _RangeParser({1: "good clause one shall apply", 2: "good clause two shall apply",
+                         4: "good clause four shall apply", 5: "good clause five shall apply"})
+    vlm = _RangeParser({3: "the VLM recovered readable text for the scanned page three"})
+    merged = _escalate_degraded_pages(Path("x.pdf"), fast, vlm, [3])
+    assert vlm.ranges == [(3, 3)]                                     # VLM escalated ONLY the image page
+    assert fast.ranges == [(1, 2), (4, 5)]                            # fast parsed the good runs
+    pages = sorted(p.page_no for t in merged.texts for p in t.prov)
+    assert pages == [1, 2, 3, 4, 5]                                   # every page present, in order
+    assert any("VLM recovered" in t.text for t in merged.texts)      # page 3 came from the VLM
+
+
+def test_escalate_degraded_pages_falls_back_to_whole_doc_without_page_range(monkeypatch):
+    # a parser lacking parse_range (or an unknown page count) -> whole-document VLM (prior behavior preserved).
+    import rag_wright.capabilities.parsing as parsing
+    monkeypatch.setattr(parsing, "_page_count", lambda source: 0)   # unknown page count
+    fast = _FakeParser(_Doc([_item(_GARBAGE, 1)]))
+    vlm = _FakeParser(_Doc([_item(_REAL, 1)]))                       # no parse_range -> fallback
+    doc = _escalate_degraded_pages(Path("x.pdf"), fast, vlm, [1])
+    assert doc is vlm.doc and vlm.calls == 1                         # whole-doc convert fallback
