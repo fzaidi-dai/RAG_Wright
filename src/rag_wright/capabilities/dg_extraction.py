@@ -19,9 +19,11 @@ import asyncio
 import logging
 import os
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import dataclass
-from functools import lru_cache
+from functools import lru_cache, partial
 from pathlib import Path
 from typing import Any
 
@@ -401,12 +403,37 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
     return ctx.extracted_models[0] if ctx.extracted_models else None
 
 
+_EXTRACTION_EXECUTOR: ThreadPoolExecutor | None = None
+_EXTRACTION_EXECUTOR_LOCK = threading.Lock()
+
+
+def extraction_executor() -> ThreadPoolExecutor:
+    """EXEC-1: the DEDICATED thread pool for the (network-bound) docling-graph extraction offload
+    (clause / party / claim / requirement all funnel through `aextract_parties`). Sized by `RAG_EXTRACT_WORKERS`
+    (default 32), so extraction concurrency is bounded by OUR semaphores (`CLAUSE_CONCURRENCY`, the cross-doc
+    `max_concurrency`) + the deployment -- NOT asyncio's default `min(32, cpu+4)` executor, which is CPU-derived,
+    machine-dependent, and would conflate extraction with the genuine CPU work (parse / embed / resolve / DB
+    writes) that stays on the default pool. Lazy singleton, reused for the process lifetime."""
+    global _EXTRACTION_EXECUTOR
+    if _EXTRACTION_EXECUTOR is None:
+        with _EXTRACTION_EXECUTOR_LOCK:
+            if _EXTRACTION_EXECUTOR is None:
+                workers = max(1, int(os.environ.get("RAG_EXTRACT_WORKERS", "32")))
+                _EXTRACTION_EXECUTOR = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="rag-extract")
+    return _EXTRACTION_EXECUTOR
+
+
 async def aextract_parties(text: str, model: ExtractionModel, **kwargs: Any) -> Any | None:
     """ASYNC-A4 (ADR-0057): `extract_parties` off the event loop. `run_pipeline` is synchronous (docling-graph
-    has no async variant), so it runs via `asyncio.to_thread` -- keeping the loop non-blocking -- while the
-    injected deadline-bounded client makes the docling-graph LLM socket truly cancellable at `_MODEL_DEADLINE_S`
-    inside that worker thread. Same contract as `extract_parties`."""
-    return await asyncio.to_thread(lambda: extract_parties(text, model, **kwargs))
+    has no async variant), so it runs in a worker thread -- keeping the loop non-blocking -- while the injected
+    deadline-bounded client makes the docling-graph LLM socket truly cancellable at `_MODEL_DEADLINE_S` inside
+    that worker thread. Same contract as `extract_parties`.
+
+    EXEC-1: it runs on the DEDICATED extraction executor (`extraction_executor()`), NOT the default `to_thread`
+    pool -- this is network-bound work, so its concurrency should be bounded by our semaphores + the deployment,
+    not the CPU-derived default that also serves parse/embed/resolve/writes."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(extraction_executor(), partial(extract_parties, text, model, **kwargs))
 
 
 # --- KG-2: per-clause typed property extraction (the same seam, the KG-1 clause template) ---

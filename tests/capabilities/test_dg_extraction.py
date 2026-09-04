@@ -112,3 +112,52 @@ def test_extract_parties_returns_none_on_a_genuine_clean_empty(monkeypatch):
     monkeypatch.setattr("docling_graph.run_pipeline", lambda config, mode="api": _Ctx(), raising=False)
     assert dg.extract_parties("text", _model_stub()) is None
 
+
+
+# --- EXEC-1: extraction runs on a dedicated, env-sized executor (not the CPU-derived to_thread default) ---
+
+def test_extraction_executor_is_a_singleton_sized_by_env(monkeypatch):
+    import rag_wright.capabilities.dg_extraction as dg
+
+    monkeypatch.setenv("RAG_EXTRACT_WORKERS", "20")
+    monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)  # reset the lazy singleton so the env is read
+    ex1 = dg.extraction_executor()
+    ex2 = dg.extraction_executor()
+    try:
+        assert ex1 is ex2                       # singleton (reused for the process lifetime)
+        assert ex1._max_workers == 20           # sized by RAG_EXTRACT_WORKERS, not min(32, cpu+4)
+    finally:
+        ex1.shutdown(wait=False)
+        monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)
+
+
+async def test_aextract_parties_runs_beyond_the_default_cpu_pool_ceiling(monkeypatch):
+    # EXEC-1: 24 concurrent extractions must all run at once (the dedicated 24-worker pool), which is impossible
+    # on asyncio's default min(32, cpu+4) executor. Proves extraction concurrency is our knob, not a CPU default.
+    import threading
+    import time
+
+    import rag_wright.capabilities.dg_extraction as dg
+
+    monkeypatch.setenv("RAG_EXTRACT_WORKERS", "24")
+    monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)
+    state = {"n": 0, "max": 0}
+    lock = threading.Lock()
+
+    def _probe(text, model, **kw):  # stand-in for extract_parties -> the docling-graph offload
+        with lock:
+            state["n"] += 1
+            state["max"] = max(state["max"], state["n"])
+        time.sleep(0.05)
+        with lock:
+            state["n"] -= 1
+        return None
+
+    monkeypatch.setattr(dg, "extract_parties", _probe)
+    try:
+        import asyncio
+        await asyncio.gather(*(dg.aextract_parties("t", object()) for _ in range(24)))
+        assert state["max"] == 24  # all 24 extractions ran concurrently -> beyond the ~16 CPU-derived default
+    finally:
+        dg.extraction_executor().shutdown(wait=False)
+        monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)

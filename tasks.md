@@ -70,12 +70,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   is never held across another acquire). Preserves per-chunk context, sub-batching, and output order. Rejected:
 >   whole-doc/cross-chunk batching (redesigns the context model) and pipelining classify into extraction (bigger
 >   graph change).
-> - **EXEC-1 (todo — explicit, env-tunable ingest thread pool; TWO-executor design)**: separate a large env-tunable
->   NETWORK executor (docling-graph extraction, via `run_in_executor`) from the default `cpu+4` CPU executor
->   (parse/embed/resolve/writes), so network concurrency is bounded by OUR semaphores + the deployment, not an
->   accidental `min(32,cpu+4)` default. Provider (OpenRouter/Modal/local) is a tunable variable, secondary — fix
->   OUR side first. Validate by ACHIEVED PARALLELISM (our side), not provider throughput. Refinement/further:
->   run extraction as true async on the loop (docling-graph inner call is already `litellm.acompletion`). `asyncio.to_thread` currently uses the loop's
+> - **EXEC-1 (DONE, ADR-0078)**: docling-graph extraction (all funnels through `aextract_parties`) now runs on a
+>   DEDICATED env-sized executor (`extraction_executor()`, `RAG_EXTRACT_WORKERS` default 32, via `run_in_executor`),
+>   separated from the default `cpu+4` pool that keeps serving parse/embed/resolve/writes. Extraction concurrency
+>   is now OUR knob (semaphores + deployment), not the accidental machine-derived default. Verified: 24 concurrent
+>   extractions through the real path (hermetic); LIVE 1.29× (16→32 workers, doc1 87 clauses) — the rest is
+>   provider-damped (OpenRouter at 32-way), the separately-tunable variable. Suite 1428 pass. Further: run
+>   extraction as true async on the loop (docling-graph inner call is already `litellm.acompletion`). `asyncio.to_thread` currently uses the loop's
 >   DEFAULT executor (`min(32, cpu+4)` = 16 here, 12 on the 8-core GCP box) — an ACCIDENTAL, machine-dependent,
 >   CPU-count-derived ceiling that we never chose. It caps the mostly-NETWORK-bound docling-graph extraction
 >   (clause/party/claim/requirement, which spend their time waiting on OpenRouter) at ~core count and makes it
