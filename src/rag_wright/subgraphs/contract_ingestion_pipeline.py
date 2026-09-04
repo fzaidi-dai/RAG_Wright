@@ -567,10 +567,20 @@ def _parties_extraction(names: list, doc: SourceDocument) -> list:
 
 
 
-async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any = None) -> list:
+async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any = None,
+                                 max_concurrency: int | None = None) -> list:
     """ASYNC-B2e (ADR-0057): the async twin of `_segment_and_classify` -- classify each chunk's spans via the
     async classifier (`aclassify_spans`, true wall-clock deadline). Segmentation (`segment_clause`) is CPU/regex,
-    kept sync."""
+    kept sync.
+
+    CLASSIFY-CONCURRENCY-1: chunks are classified CONCURRENTLY (`asyncio.gather`), not one-after-another -- the
+    earlier `for ch: await ...` serialized M chunks into M network round-trips for no reason (nothing depends on
+    chunk order). ONE shared semaphore, threaded into every `aclassify_spans`, bounds the TOTAL in-flight
+    sub-batch LLM calls across all chunks to a single deliberate knob (`CLASSIFY_CONCURRENCY`, default 8) -- it is
+    acquired only at the leaf call, so the outer gather cannot deadlock. `gather` preserves order, so the flattened
+    output is identical to the sequential version, only faster."""
+    import os
+
     from rag_wright.contracts.function import NO_FUNCTION, primary_function
 
     seg = segment
@@ -578,12 +588,17 @@ async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any
         from rag_wright.spans.segment import segment_clause
 
         seg = segment_clause
+    # segment (CPU/regex, sync) -> per-chunk operative spans, dropping empty chunks
+    per_chunk = [(ch, ops) for ch in chunks
+                 if (ops := [op for op in seg(ch.chunk_id, ch.text) if op.text.strip()])]
+    if not per_chunk:
+        return []
+    n = max_concurrency if max_concurrency is not None else int(os.environ.get("CLASSIFY_CONCURRENCY", "8"))
+    sem = asyncio.Semaphore(n)  # ONE shared bound on total in-flight classify calls (leaf-acquired -> no deadlock)
+    scores_by_chunk = await asyncio.gather(
+        *(classify_fn.aclassify_spans(ch.text, [op.text for op in ops], sem=sem) for ch, ops in per_chunk))
     out: list = []
-    for ch in chunks:
-        ops = [op for op in seg(ch.chunk_id, ch.text) if op.text.strip()]
-        if not ops:
-            continue
-        scores_per_span = await classify_fn.aclassify_spans(ch.text, [op.text for op in ops])
+    for (ch, ops), scores_per_span in zip(per_chunk, scores_by_chunk):  # gather preserves order -> stable output
         for op, scores in zip(ops, scores_per_span):
             out.append((op, primary_function(scores) or NO_FUNCTION, ch.doc_start, scores))
     return out

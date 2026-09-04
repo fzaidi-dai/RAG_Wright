@@ -60,6 +60,35 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   `ExtractionFailed` crashed the check; now wrapped in a bounded retry (persistent re-raises, no silent drop).
 >   LIVE-verified (real granite claim extraction + judge): ad→claims→§255.1 violation. Low-risk residual (no
 >   tiny/empty-input guard) left as noted — compliance extracts at section/chunk granularity, not per-tiny-span.
+> - **CLASSIFY-CONCURRENCY-1 (DONE, ADR-0077)**: parallelize function classification across chunks — `_asegment_and_classify`
+>   classified chunks SEQUENTIALLY (`for ch in chunks: await aclassify_spans(...)`) — M chunks = M serial LLM
+>   round-trips (an async-port oversight; nothing depends on chunk order). It runs on the ASYNC SEAM (astream_text
+>   on the loop), so this is INDEPENDENT of EXEC-1's thread pool. Fix (Solution A): `asyncio.gather` across chunks
+>   with ONE SHARED sub-batch semaphore threaded through the classifier (`aclassify_spans(..., sem=)`) — acquired
+>   only at the leaf LLM call, so the outer chunk gather is unbounded (cheap coroutines) and total in-flight
+>   classify calls = one deliberate knob (`CLASSIFY_CONCURRENCY`, default 8); NO nested-semaphore deadlock (the sem
+>   is never held across another acquire). Preserves per-chunk context, sub-batching, and output order. Rejected:
+>   whole-doc/cross-chunk batching (redesigns the context model) and pipelining classify into extraction (bigger
+>   graph change).
+> - **EXEC-1 (todo — explicit, env-tunable ingest thread pool; TWO-executor design)**: separate a large env-tunable
+>   NETWORK executor (docling-graph extraction, via `run_in_executor`) from the default `cpu+4` CPU executor
+>   (parse/embed/resolve/writes), so network concurrency is bounded by OUR semaphores + the deployment, not an
+>   accidental `min(32,cpu+4)` default. Provider (OpenRouter/Modal/local) is a tunable variable, secondary — fix
+>   OUR side first. Validate by ACHIEVED PARALLELISM (our side), not provider throughput. Refinement/further:
+>   run extraction as true async on the loop (docling-graph inner call is already `litellm.acompletion`). `asyncio.to_thread` currently uses the loop's
+>   DEFAULT executor (`min(32, cpu+4)` = 16 here, 12 on the 8-core GCP box) — an ACCIDENTAL, machine-dependent,
+>   CPU-count-derived ceiling that we never chose. It caps the mostly-NETWORK-bound docling-graph extraction
+>   (clause/party/claim/requirement, which spend their time waiting on OpenRouter) at ~core count and makes it
+>   contend with the genuine CPU work (parse/embed/resolve/DB-writes) in one undersized pool. So the logical
+>   `CLAUSE_CONCURRENCY=8 × max_concurrency=8 = 64` collapses to ~16, non-reproducibly per box, unrelated to the
+>   provider's real limit. FIX (v1, pragmatic): install ONE explicit `ThreadPoolExecutor` at the ingest entry
+>   (`set_default_executor` in the async ingest driver), sized by env (`RAG_INGEST_THREADPOOL`, default ~32 — decoupled
+>   from cpu_count), so extraction concurrency is bounded by the L0/L2 semaphores + the provider, not an accidental
+>   default. ACCEPTANCE: to_thread extraction runs at the configured width (not cpu+4); env-tunable; sane default;
+>   no regression; LIVE-measure that a multi-doc concurrent ingest throughput rises (up to the OpenRouter ceiling).
+>   RISK: `set_default_executor` affects ALL to_thread on that loop (incl. CPU work) — acceptable in a dedicated
+>   ingest process; a later refinement is TWO executors (large network pool via `run_in_executor` for extraction +
+>   cpu+4 default for CPU work). NOTE: BGE embed is lock-serialized (issue 0016) regardless of pool size.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
 >   party / claim / requirement) off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`
 >   nested-schema extension). Model-neutral robustness (graceful degrade + no JSON burden + reasoning-model

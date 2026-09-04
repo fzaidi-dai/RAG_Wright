@@ -225,15 +225,21 @@ class LlmBatchClauseClassifier:
                 results = list(ex.map(_call, subs))
         return _merge_subbatches(results, span_texts)
 
-    async def _aclassify_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
+    async def _aclassify_raw(self, chunk_text: str, span_texts: list[str],
+                             *, sem: asyncio.Semaphore | None = None) -> list[list[RawScore]]:
         """ASYNC-B1 (ADR-0057): the async twin of `_classify_raw`. Sub-batches run concurrently via
         `asyncio.gather` bounded by a `Semaphore` (native form of the sync thread pool); each `.ainvoke` carries
         the true wall-clock deadline. A failed sub-batch -- including a `ModelCallTimeout` (an Exception, so it is
-        caught here) -- leaves its spans empty: the degrade path stays reachable and the node never raises."""
+        caught here) -- leaves its spans empty: the degrade path stays reachable and the node never raises.
+
+        CLASSIFY-CONCURRENCY-1: a caller classifying MANY chunks concurrently passes ONE shared `sem`, so the total
+        in-flight sub-batch calls across all chunks are bounded by a single deliberate knob (else each chunk got
+        its own `_SUBBATCH_CONCURRENCY` budget). The sem is acquired only at the leaf `.ainvoke` -- never held
+        across another acquire -- so nesting the chunk gather over it cannot deadlock."""
         if not span_texts:
             return []
         subs = _subs(span_texts)
-        sem = asyncio.Semaphore(_SUBBATCH_CONCURRENCY)
+        sem = sem if sem is not None else asyncio.Semaphore(_SUBBATCH_CONCURRENCY)
 
         async def _acall(item):
             start, sub = item
@@ -250,8 +256,9 @@ class LlmBatchClauseClassifier:
     def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:
         return [_to_scores(raws) for raws in self._classify_raw(chunk_text, span_texts)]
 
-    async def aclassify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:
-        return [_to_scores(raws) for raws in await self._aclassify_raw(chunk_text, span_texts)]
+    async def aclassify_spans(self, chunk_text: str, span_texts: list[str],
+                              *, sem: asyncio.Semaphore | None = None) -> list[list[FunctionScore]]:
+        return [_to_scores(raws) for raws in await self._aclassify_raw(chunk_text, span_texts, sem=sem)]
 
     def classify_spans_raw(self, chunk_text: str, span_texts: list[str]) -> list[list[RawScore]]:
         """Debug: the RAW per-span scores (pre-floor), to see what the confidence floor drops."""
