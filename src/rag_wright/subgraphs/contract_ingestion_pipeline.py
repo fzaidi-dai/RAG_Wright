@@ -589,6 +589,24 @@ async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any
     return out
 
 
+async def _aextract_clause_with_retry(
+    extractor: Any, *, chunk_id: Any, function: str, text: str, span_id: str, attempts: int
+) -> tuple[Any, str]:
+    """Extract one clause with bounded retries. PARTIAL-CAUSE-1: docling-graph's `ExtractionFailed` is raised on
+    ANY logged docling error -- not only a deterministic "No valid JSON", but also TRANSIENT blips (an LLM empty
+    response, a gleaning failure, a rate-limit, a timeout). So EVERY failure is retried (the transient is what the
+    retry recovers); an earlier EXTRACT-GUARD-1 attempt to skip retrying `ExtractionFailed` turned recoverable
+    blips into lost clauses. The furniture that used to hard-fail deterministically is filtered UPSTREAM by
+    `is_extractable_span`, so this loop no longer retry-storms on non-clauses. Returns `(record, "")` on success or
+    `(None, reason)` on persistent failure."""
+    reason = ""
+    for _attempt in range(attempts):
+        try:
+            record = await extractor.aextract(chunk_id=chunk_id, function=function, text=text, span_id=span_id)
+            return record, ""
+        except Exception as exc:  # noqa: BLE001 - retry any failure (ExtractionFailed captures transients too)
+            reason = str(exc)
+    return None, reason
 
 
 def aproduction_document_ingest(
@@ -617,7 +635,6 @@ def aproduction_document_ingest(
     from rag_wright.contracts.property import ClausePropertyRecord
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.ontology.clause_template import Clause
-    from rag_wright.capabilities.dg_extraction import ExtractionFailed
     from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
     from rag_wright.spans.segment import is_extractable_span, to_span_record
 
@@ -688,18 +705,9 @@ def aproduction_document_ingest(
             if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no granite re-call
                 record = ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
             else:
-                record = None
-                reason = ""
-                for _attempt in range(_CLAUSE_EXTRACT_ATTEMPTS):
-                    try:
-                        record = await clause_extractor.aextract(
-                            chunk_id=clause_cid, function=function, text=op.text, span_id=op.span_id)
-                        break
-                    except ExtractionFailed as exc:  # EXTRACT-GUARD-1: DETERMINISTIC (no valid JSON) -> retrying
-                        reason = str(exc)                # re-fails on the same input; record once, don't burn 3x
-                        break
-                    except Exception as exc:  # noqa: BLE001 - a TRANSIENT (timeout/network) -> retry
-                        reason = str(exc)
+                record, reason = await _aextract_clause_with_retry(
+                    clause_extractor, chunk_id=clause_cid, function=function, text=op.text,
+                    span_id=op.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS)
                 if record is None:  # persistent failure -> record it (PARTIAL), do NOT cache, do NOT silently drop
                     failures.append({"span_id": op.span_id, "function": function, "reason": reason[:200]})
                     return None

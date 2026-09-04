@@ -59,3 +59,40 @@ async def test_aproduction_extract_fn_awaits_aextract_parties(monkeypatch):
     monkeypatch.setattr(dg, "aextract_parties", fake_aextract)
     afn = aproduction_extract_fn()
     assert await afn("acme") == "parties:acme"
+
+
+# --- PARTIAL-CAUSE-1: a TRANSIENT ExtractionFailed is retried and recovers (not lost) -----------
+
+from rag_wright.capabilities.dg_extraction import ExtractionFailed  # noqa: E402
+from rag_wright.subgraphs.contract_ingestion_pipeline import _aextract_clause_with_retry  # noqa: E402
+
+
+class _FlakyExtractor:
+    """`aextract` raises ExtractionFailed the first `fail_times` calls (a TRANSIENT docling blip -- empty LLM
+    content), then succeeds. docling-graph raises ExtractionFailed on ANY logged error, so a transient must be
+    retried, not recorded as a lost clause (PARTIAL-CAUSE-1)."""
+
+    def __init__(self, fail_times: int, record: str = "OK") -> None:
+        self.fail_times = fail_times
+        self.calls = 0
+        self.record = record
+
+    async def aextract(self, *, chunk_id, function, text, span_id):  # noqa: ANN001, ARG002
+        self.calls += 1
+        if self.calls <= self.fail_times:
+            raise ExtractionFailed("clause", "LiteLLM returned empty content")  # a transient blip, not furniture
+        return self.record
+
+
+async def test_clause_extract_retries_a_transient_extraction_failed_and_recovers():
+    ex = _FlakyExtractor(fail_times=2)  # two transient blips, then success on the third attempt
+    record, reason = await _aextract_clause_with_retry(
+        ex, chunk_id="c:0:h", function="Payment Terms", text="Net 30 days.", span_id="s", attempts=3)
+    assert record == "OK" and reason == "" and ex.calls == 3  # recovered -- NOT turned into a lost clause
+
+
+async def test_clause_extract_reports_a_persistent_failure_after_exhausting_retries():
+    ex = _FlakyExtractor(fail_times=99)  # never succeeds
+    record, reason = await _aextract_clause_with_retry(
+        ex, chunk_id="c:0:h", function="Payment Terms", text="Net 30 days.", span_id="s", attempts=3)
+    assert record is None and "empty content" in reason and ex.calls == 3  # no-silent-loss: recorded as a failure

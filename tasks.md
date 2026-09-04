@@ -34,8 +34,12 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > - **PARSE-3 (todo, NEW — residual)**: a LARGE doc with a GENUINE image-only page (0 chars) still triggers a
 >   whole-document VLM escalation for that one page → 600s deadline. Fix = per-page VLM escalation, or a page-count
 >   cap. Doesn't affect doc3 (all born-digital); a real-scan landmine on big docs.
-> - **PARTIAL-CAUSE-1 (todo, NEW)**: docs 2 & 4 still come back `partial` with a NON-JSON extraction-stage cause
->   (3 extraction failures across the sample, different from the fixed "No valid JSON"). Reproduce + diagnose.
+> - **PARTIAL-CAUSE-1 (DONE, ADR-0074 — corrects ADR-0072)**: the docs 2/4 partials were a REGRESSION I introduced
+>   in EXTRACT-GUARD-1: docling's `ExtractionFailed` is raised on ANY logged error incl. TRANSIENT blips (empty
+>   content/gleaning/rate-limit/timeout), and the `except ExtractionFailed: break` (no retry) turned recoverable
+>   blips into lost clauses. Fix = retry every failure again (revert the no-retry; keep the furniture guard, which
+>   already prevents the furniture retry-storm); retry logic extracted to testable `_aextract_clause_with_retry`.
+>   Docs 2/4 ingest clean; NEONSYSTEMS e2e unchanged (45 clauses/96 spans, 0 failures). Suite 1416 pass.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
 >   party / claim / requirement) off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`
 >   nested-schema extension). Model-neutral robustness (graceful degrade + no JSON burden + reasoning-model
