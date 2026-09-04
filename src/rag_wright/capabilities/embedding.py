@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import math
+import threading
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, field_validator
@@ -85,21 +86,36 @@ def _resolve_device(device: str | None) -> str:
 
 
 class BGEM3Embedder:
-    """The real embedder: BGE-M3 via `FlagEmbedding.BGEM3FlagModel` (model loaded lazily)."""
+    """The real embedder: BGE-M3 via `FlagEmbedding.BGEM3FlagModel` (model loaded lazily).
+
+    THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model IN PLACE on every `encode`
+    (`self.model.float()` / `.to(device)` / `.eval()`), and those C++ conversions release the GIL, so two threads
+    driving one shared model swap the same parameter-tensor storage under each other and SEGFAULT the interpreter
+    (not a catchable exception). The engine SHARES one `Embedder` across concurrent-document ingestion
+    (`run_job(max_concurrency=...)` -> per-document `encode_batch`) and across `embed_chunks`' per-chunk thread
+    fan-out. So every model call is serialized by an instance lock. The lock guards ONLY `self._model.encode`
+    (the numpy results are per-call, thread-local); the serialized section is the CPU/GPU encode, which is a small
+    slice of ingest time -- the concurrency worth overlapping is the network-bound extraction, not the encode."""
 
     def __init__(self, model_name: str = "BAAI/bge-m3", *, use_fp16: bool = False,
-                 device: str | None = None, batch_size: int = 64) -> None:
-        from FlagEmbedding import BGEM3FlagModel
-
+                 device: str | None = None, batch_size: int = 64, model: object | None = None) -> None:
         self._batch_size = batch_size  # cross-item independent, so batching never changes a vector, only speed
-        self._model = BGEM3FlagModel(model_name, use_fp16=use_fp16, devices=_resolve_device(device))
+        self._lock = threading.Lock()  # issue 0016: serialize the in-place-mutating BGE-M3 encode across threads
+        if model is not None:  # injected (hermetic tests) -- avoids loading the real model
+            self._model = model
+        else:
+            from FlagEmbedding import BGEM3FlagModel
+
+            self._model = BGEM3FlagModel(model_name, use_fp16=use_fp16, devices=_resolve_device(device))
 
     def encode_dense(self, text: str) -> list[float]:
-        out = self._model.encode([text], return_dense=True, return_sparse=False)
+        with self._lock:  # issue 0016
+            out = self._model.encode([text], return_dense=True, return_sparse=False)
         return out["dense_vecs"][0].tolist()
 
     def encode_sparse(self, text: str) -> dict[int, float]:
-        out = self._model.encode([text], return_dense=False, return_sparse=True)
+        with self._lock:  # issue 0016
+            out = self._model.encode([text], return_dense=False, return_sparse=True)
         # lexical_weights is a Dict[str, float] keyed by string token ids; convert to int keys (T3).
         return {int(k): float(v) for k, v in out["lexical_weights"][0].items()}
 
@@ -108,7 +124,8 @@ class BGEM3Embedder:
         same per-text format as `encode_dense`/`encode_sparse`, amortizing the model overhead."""
         if not texts:
             return [], []
-        out = self._model.encode(texts, return_dense=True, return_sparse=True, batch_size=self._batch_size)
+        with self._lock:  # issue 0016: serialize the shared-model encode across concurrent-document threads
+            out = self._model.encode(texts, return_dense=True, return_sparse=True, batch_size=self._batch_size)
         dense = [v.tolist() for v in out["dense_vecs"]]
         sparse = [{int(k): float(v) for k, v in lw.items()} for lw in out["lexical_weights"]]
         return dense, sparse

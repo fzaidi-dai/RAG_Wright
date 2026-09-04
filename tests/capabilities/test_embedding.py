@@ -138,3 +138,48 @@ def test_real_bge_m3_produces_dense_and_sparse():
     assert len(embedding.dense_vector) == BGE_M3_DENSE_DIM
     assert embedding.sparse_vector  # non-empty native sparse weights
     assert all(isinstance(k, int) and v >= 0 for k, v in embedding.sparse_vector.items())
+
+
+# --- engine issue 0016: the shared BGE-M3 model must be serialized across threads (no segfault race) ---
+
+class _ConcurrencyProbeModel:
+    """A fake BGE-M3 model that FLAGS any concurrent entry into `encode` -- standing in for the real model whose
+    in-place `.to()`/`.float()` conversions segfault when two threads race them. If the embedder's lock works,
+    `max_in_flight` stays 1; without it, threads overlap and it exceeds 1."""
+
+    def __init__(self) -> None:
+        self._counter_lock = threading.Lock()
+        self.in_flight = 0
+        self.max_in_flight = 0
+
+    def encode(self, texts, **_kw):
+        import numpy as np
+
+        from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
+        with self._counter_lock:
+            self.in_flight += 1
+            self.max_in_flight = max(self.max_in_flight, self.in_flight)
+        time.sleep(0.003)  # widen the race window so an unguarded model would overlap
+        with self._counter_lock:
+            self.in_flight -= 1
+        n = len(texts)
+        return {"dense_vecs": [np.zeros(BGE_M3_DENSE_DIM) for _ in range(n)],
+                "lexical_weights": [{"1": 0.5} for _ in range(n)]}
+
+
+def test_bge_m3_encode_is_serialized_across_threads():
+    # issue 0016: driving one shared embedder from many threads (as run_job / embed_chunks do) must NOT let two
+    # `encode` calls overlap -- the instance lock serializes them (an unguarded model would segfault the process).
+    import concurrent.futures
+
+    from rag_wright.capabilities.embedding import BGEM3Embedder
+
+    probe = _ConcurrencyProbeModel()
+    emb = BGEM3Embedder(model=probe)  # injected fake -> no real model load
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        futures = [ex.submit(emb.encode_batch, ["a", "b"]) for _ in range(40)]
+        futures += [ex.submit(emb.encode_dense, "q") for _ in range(20)]
+        futures += [ex.submit(emb.encode_sparse, "q") for _ in range(20)]
+        for f in futures:
+            f.result()
+    assert probe.max_in_flight == 1  # the lock held: model access never overlapped across the 80 concurrent calls

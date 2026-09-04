@@ -139,3 +139,33 @@ def test_live_bge_reranker_ranks_relevant_above_irrelevant():
 
     assert result.candidates[0].chunk_id == "c_relevant"  # the cross-encoder puts the on-topic first
     assert result.candidates[0].score > result.candidates[1].score
+
+
+# --- engine issue 0016: the shared reranker model must be serialized across threads too ---
+
+def test_bge_reranker_compute_score_is_serialized_across_threads():
+    import concurrent.futures
+    import threading
+    import time
+
+    class _Probe:
+        def __init__(self):
+            self._l = threading.Lock()
+            self.n = 0
+            self.max_in_flight = 0
+
+        def compute_score(self, pairs):
+            with self._l:
+                self.n += 1
+                self.max_in_flight = max(self.max_in_flight, self.n)
+            time.sleep(0.003)
+            with self._l:
+                self.n -= 1
+            return [0.5 for _ in pairs]
+
+    probe = _Probe()
+    rr = BGEReranker(model=probe)  # injected fake -> no real model load
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
+        for f in [ex.submit(rr.score, "q", ["p1", "p2"]) for _ in range(40)]:
+            f.result()
+    assert probe.max_in_flight == 1  # issue 0016: the instance lock serialized compute_score across threads

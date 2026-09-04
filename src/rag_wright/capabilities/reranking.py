@@ -63,17 +63,29 @@ class RerankResult(BaseModel):
 
 
 class BGEReranker:
-    """The real reranker: `FlagEmbedding.FlagAutoReranker` (model loaded lazily)."""
+    """The real reranker: `FlagEmbedding.FlagAutoReranker` (model loaded lazily).
 
-    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, *, use_fp16: bool = False) -> None:
-        from FlagEmbedding import FlagAutoReranker
+    THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model in place on every call (the same in-place
+    `.to()`/`.eval()` conversions that segfault the shared BGE-M3 embedder under thread concurrency), so a shared
+    reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller."""
 
-        self._model = FlagAutoReranker.from_finetuned(model_name, use_fp16=use_fp16)
+    def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, *, use_fp16: bool = False,
+                 model: object | None = None) -> None:
+        import threading
+
+        self._lock = threading.Lock()  # issue 0016: serialize the in-place-mutating compute_score across threads
+        if model is not None:  # injected (hermetic tests)
+            self._model = model
+        else:
+            from FlagEmbedding import FlagAutoReranker
+
+            self._model = FlagAutoReranker.from_finetuned(model_name, use_fp16=use_fp16)
 
     def score(self, query: str, passages: list[str]) -> list[float]:
         if not passages:
             return []
-        scores = self._model.compute_score([(query, passage) for passage in passages])
+        with self._lock:  # issue 0016
+            scores = self._model.compute_score([(query, passage) for passage in passages])
         # compute_score returns a scalar for a single pair; normalize to a list of floats.
         if not isinstance(scores, (list, tuple)):
             scores = [scores]

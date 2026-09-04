@@ -46,6 +46,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   199.8s. NOT reproducible with all fixes: doc1 ingests clean in ~100s (98/105s across 2 runs, clause count
 >   77/84 — granite non-determinism), FASTER than the old engine. doc1 never VLM-escalates (degraded=[]), so it's
 >   network-bound granite/OpenRouter latency variance, not structural. Handoff: docs/handoff/2026-09-04_bulk-ingestion-wall_rulewright.md.
+> - **ENGINE ISSUE 0016 (DONE, ADR-0076)**: the shared BGE-M3 embedder (+ reranker) was NOT thread-safe —
+>   FlagEmbedding mutates the model in-place on every encode (`.float()`/`.to()`/`.eval()`, GIL-releasing), so two
+>   threads on one shared model SEGFAULT the process. Exposed by `run_job(max_concurrency=8)` (per-doc encode_batch)
+>   AND `embed_chunks` (4-thread fan-out). Fix = per-instance `threading.Lock` around each `self._model.encode` /
+>   `compute_score`; injectable `model=` for tests. LIVE-verified: 80 concurrent encode_batch on real BGE-M3, no
+>   segfault, bit-stable vectors (hermetic test max_in_flight==1, verified catches missing lock →8). Unblocks NFR-4
+>   (document concurrency). Suite 1423 pass. Handoff: docs/handoff/2026-09-04_issue-0016-*.md.
 > - **COMPLIANCE-PARITY-AUDIT (DONE)**: audited the compliance extraction paths vs the 4 contract-ingestion
 >   protections. Already covered: tiered parser PARSE-1/2/3 (both paths), DEFRAG (subject→achunk_texts→content_items),
 >   per-section transient retry (requirement_extraction subgraph). ONE real gap FIXED (ADR-0074 parity): the AD path
