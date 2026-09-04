@@ -651,6 +651,9 @@ def production_compliance_check(
     )
 
 
+_CLAIM_EXTRACT_ATTEMPTS = 3  # bounded retries for a per-chunk ad claim extraction (recover a transient docling blip)
+
+
 async def _aextract_ad_claims(chunks: list[str], source_doc: str, extract_model: Any,
                               *, aclaim_fn: Any = None, max_concurrency: int = 4) -> list:
     """SEG-7b: the advertising claim extractor over the SAME semantic CHUNKS as the generic path -- extract typed
@@ -669,7 +672,18 @@ async def _aextract_ad_claims(chunks: list[str], source_doc: str, extract_model:
         if not text:
             return []
         async with sem:
-            return await fn(text, model=extract_model, source_doc=source_doc)
+            # PARTIAL-CAUSE-1 (compliance parity): the ad path extracts claims OUTSIDE the retry graph, so wrap
+            # the per-chunk call in a bounded retry. docling-graph's `ExtractionFailed` is raised on ANY logged
+            # error incl. TRANSIENT blips (empty content / gleaning / rate-limit / timeout), so retrying is what
+            # recovers them (the same fix as the contract clause extractor). A PERSISTENT failure re-raises --
+            # surfaced loudly, a chunk's claims are never silently dropped.
+            last_exc: Optional[BaseException] = None
+            for _attempt in range(_CLAIM_EXTRACT_ATTEMPTS):
+                try:
+                    return await fn(text, model=extract_model, source_doc=source_doc)
+                except Exception as exc:  # noqa: BLE001 - transient docling/LLM error -> retry; persistent -> raise
+                    last_exc = exc
+            raise last_exc  # type: ignore[misc]  # persistent failure after retries (never None here)
 
     per_chunk = await asyncio.gather(*(_one(c) for c in chunks))
     claims = [c for group in per_chunk for c in group]

@@ -46,6 +46,13 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   199.8s. NOT reproducible with all fixes: doc1 ingests clean in ~100s (98/105s across 2 runs, clause count
 >   77/84 — granite non-determinism), FASTER than the old engine. doc1 never VLM-escalates (degraded=[]), so it's
 >   network-bound granite/OpenRouter latency variance, not structural. Handoff: docs/handoff/2026-09-04_bulk-ingestion-wall_rulewright.md.
+> - **COMPLIANCE-PARITY-AUDIT (DONE)**: audited the compliance extraction paths vs the 4 contract-ingestion
+>   protections. Already covered: tiered parser PARSE-1/2/3 (both paths), DEFRAG (subject→achunk_texts→content_items),
+>   per-section transient retry (requirement_extraction subgraph). ONE real gap FIXED (ADR-0074 parity): the AD path
+>   (`run_compliance_check`/`_aextract_ad_claims`) extracted claims OUTSIDE the retry graph → a transient docling
+>   `ExtractionFailed` crashed the check; now wrapped in a bounded retry (persistent re-raises, no silent drop).
+>   LIVE-verified (real granite claim extraction + judge): ad→claims→§255.1 violation. Low-risk residual (no
+>   tiny/empty-input guard) left as noted — compliance extracts at section/chunk granularity, not per-tiny-span.
 > - **TAGPARSE-INGEST-1 (todo, backlog — the CLAUDE.md "later task")**: move ingestion extraction (clause /
 >   party / claim / requirement) off docling-graph `json_object` onto client-side tag-parse (`build_tag_structured`
 >   nested-schema extension). Model-neutral robustness (graceful degrade + no JSON burden + reasoning-model

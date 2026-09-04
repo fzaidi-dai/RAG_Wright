@@ -1313,6 +1313,40 @@ async def test_aextract_ad_claims_extracts_per_chunk_typed_tail_preserved():
     assert all(c.claim_type is ClaimType.HEALTH for c in claims)                  # typed-Claim tail preserved
 
 
+async def test_aextract_ad_claims_retries_a_transient_extraction_failure():
+    # PARTIAL-CAUSE-1 parity: the ad path extracts claims OUTSIDE the retry graph. A TRANSIENT docling blip
+    # (ExtractionFailed on empty content / rate-limit) must be retried and recover, not crash the check.
+    from rag_wright.capabilities.dg_extraction import ExtractionFailed
+    from rag_wright.contracts.compliance import Claim, ClaimType
+    from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
+
+    calls = {"n": 0}
+
+    async def flaky_aclaim(text, *, model, source_doc, **kw):
+        calls["n"] += 1
+        if calls["n"] <= 2:                                                        # two transient blips...
+            raise ExtractionFailed("claim", "LiteLLM returned empty content")
+        return [Claim(fact_id=Claim.make_id(source_doc, 0, text), source_doc=source_doc,
+                      assertion_text=text.strip(), claim_type=ClaimType.HEALTH)]   # ...then success
+
+    claims = await _aextract_ad_claims(["Our product cures arthritis."], "ad.pdf", object(), aclaim_fn=flaky_aclaim)
+    assert len(claims) == 1 and calls["n"] == 3                                    # recovered on the 3rd attempt
+
+
+async def test_aextract_ad_claims_reraises_a_persistent_failure():
+    # a PERSISTENT failure surfaces loudly after retries -- a chunk's claims are never silently dropped.
+    import pytest
+
+    from rag_wright.capabilities.dg_extraction import ExtractionFailed
+    from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
+
+    async def always_fails(text, *, model, source_doc, **kw):
+        raise ExtractionFailed("claim", "persistent extraction error")
+
+    with pytest.raises(ExtractionFailed):
+        await _aextract_ad_claims(["Our product cures arthritis."], "ad.pdf", object(), aclaim_fn=always_fails)
+
+
 async def test_ad_path_upload_cites_section_locators(monkeypatch):
     # SEG-7b: run_compliance_check runs the SEMANTIC front-end (parse -> chunk -> per-chunk Claim extraction ->
     # attach locators -> judge). An uploaded ad's typed claims cite their "§ {section}" locator.
