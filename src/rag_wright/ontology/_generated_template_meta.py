@@ -36,7 +36,7 @@ DESCRIPTIONS: dict[str, str] = {
     'Clause.has_restriction_scope': 'What a non-compete restricts: geographic area, activity, or both.',
     'Clause.has_right_of_first_type': 'The first-refusal/offer/negotiation right the clause grants (ROFR / ROFO / ROFN).',
     'Clause.has_termination_right': 'Who may terminate for convenience (either party / one party).',
-    'Clause.has_warranty_scope': 'The warranty scope the clause sets: implied / express / as_is (warranties disclaimed) / non_reliance.',
+    'Clause.has_warranty_scope': "Which warranties the clause disclaims or limits: 'implied' if it disclaims IMPLIED warranties (look for 'implied', 'merchantability', 'fitness for a particular purpose', 'in lieu of all other warranties/conditions') / 'express' if it excludes or limits EXPRESS warranties (look for 'no express warranty', 'except for the express warranties', 'express provisions ... in place of') / 'as_is' if goods or services are provided 'as is' or 'with all faults' / 'non_reliance' for a non-reliance disclaimer. A disclaimer that mentions merchantability or fitness for purpose is 'implied' (not 'as_is').",
     'Clause.ld_trigger': "What triggers liquidated damages, e.g. 'late delivery', 'early termination'.",
     'Clause.prohibits_damage': 'Damage types the clause waives/excludes (may be several).',
     'Clause.prohibits_solicit': 'Whom the clause forbids soliciting (employees / customers).',
