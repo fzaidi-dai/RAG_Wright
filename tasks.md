@@ -72,10 +72,20 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   **MULTI-SAMPLE UNION (opt-in tool, a63ef45):** for granite's list under-enumeration -- `RAG_INGEST_CLAUSE_SAMPLES`
 >     (default 1) runs each group N times + UNIONs list fields. Helps VARIABLE misses; NOT consistent misses (those
 >     need a gleaning pass / stronger model). OFF by default.
->   **OPEN:** (a) production model = granite-4.2 (gemma +~0.1-0.16 disc-recall but 10-20x cost; revisit w/
->   granite+multi-sample or a stronger model for consistent-miss lists). (b) cost: tagparse ~8 calls/clause; aspect
->   gate pending a reliable gate model. (c) consistent-miss lever = targeted per-list "any others?" gleaning pass.
->   (d) MUCH accumulated LOCALLY + UNPUSHED (0e240fc..a63ef45) -- review/push when ready.
+>   **CROSS-MODEL UNION (a865266, DEFAULT-ON):** measured that gemma is NOT strictly better at lists than granite
+>     -- they under-enumerate DIFFERENT items (complementary), so their UNION beats either alone and fixes the
+>     CONSISTENT misses multi-sample can't. `RAG_INGEST_LIST_MODEL` (DEFAULT gemma; `off` to disable): for
+>     LIST-bearing groups ONLY (~4 of 8: identity_scope/liability_damages/restrictions_duties/exceptions) also run
+>     gemma + union its list values with granite's; non-list groups stay granite-only (gemma cost scoped there).
+>     LIVE: recovered 'consequential' granite alone dropped ([1] 1/2->2/2), no regression ([0] 5/5). Routing
+>     unit-tested (gemma only for list groups).
+>   **PRODUCTION CONFIG NOW (defaults):** RAG_INGEST_CLAUSE_EXTRACTOR=tagparse, RAG_INGEST_LIST_MODEL=gemma
+>     (cross-model list union ON), RAG_INGEST_CLAUSE_SAMPLES=1. Main extraction model = granite-4.2. End-to-end
+>     real-NDA ingest through the full default pipeline: INGESTED clean, no dead-letter, 7 clauses/2 entities/1
+>     edge/7 spans, 0 failures, 10s.
+>   **OPEN:** (a) cost: tagparse ~8 granite calls + gemma on ~4 list groups per clause; aspect gate pending a
+>   reliable gate model. (b) diagnose more functions for genuine definition gaps (Governing Law, No-Solicit,
+>   Renewal), diagnosis-first. (c) MUCH accumulated LOCALLY + UNPUSHED (0e240fc..HEAD) -- review/push when ready.
 > - **FUNCTION-AUGMENTS-KG (tracked, separate, downstream): function as a soft multi-label boost for KG/retrieval
 >   search, never a hard filter** (consistent with ADR-0047). Prompt the classifier for top-K + confidence. Not
 >   part of the extraction work.

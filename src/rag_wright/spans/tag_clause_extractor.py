@@ -21,6 +21,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from rag_wright.models.profiles import DEFAULT_GENERAL
 from rag_wright.models.tag_structured import _classify, build_tag_structured
 from rag_wright.ontology.clause_template import Clause
 
@@ -173,13 +174,15 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
     `samples` (env `RAG_INGEST_CLAUSE_SAMPLES`, default 1) runs each group N times and UNIONs the LIST-valued
     fields across samples -- the inference-time fix for granite's list under-enumeration.
 
-    `list_model` (env `RAG_INGEST_LIST_MODEL`, default none) enables a CROSS-MODEL union: for LIST-bearing groups
-    ONLY, also run a second (stronger) model and union its list values with the main model's. granite and gemma
-    under-enumerate DIFFERENT items, so their union is more complete than either alone; scoping the second model
-    to list-bearing groups keeps its cost off the ~half of groups that have no list field. Scalars prefer the main
-    model (its results are unioned first, so 'first informative' wins the main model's value)."""
+    `list_model` (env `RAG_INGEST_LIST_MODEL`, DEFAULT gemma) enables a CROSS-MODEL union: for LIST-bearing groups
+    ONLY, also run a second (stronger, complementary) model and union its list values with the main model's.
+    granite and gemma under-enumerate DIFFERENT items, so their union is more complete than either alone (it fixes
+    the CONSISTENT misses same-model multi-sample can't); scoping the second model to list-bearing groups keeps its
+    cost off the ~half of groups with no list field. Scalars prefer the main model (its results are unioned first).
+    ON by default; disable with `RAG_INGEST_LIST_MODEL=off`."""
     n = samples if samples is not None else max(1, int(os.environ.get("RAG_INGEST_CLAUSE_SAMPLES", "1")))
-    lm = list_model if list_model is not None else (os.environ.get("RAG_INGEST_LIST_MODEL", "").strip() or None)
+    _env_lm = os.environ.get("RAG_INGEST_LIST_MODEL", DEFAULT_GENERAL).strip()
+    lm = list_model if list_model is not None else (None if _env_lm.lower() in ("", "none", "off") else _env_lm)
     stemp = temperature if n == 1 else max(temperature, 0.5)  # diversity across samples for the union to help
     active = await aselect_aspects(text, model_id, temperature=temperature) if gate else set(CLAUSE_GROUPS)
 
