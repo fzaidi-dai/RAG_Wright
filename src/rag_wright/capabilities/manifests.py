@@ -246,7 +246,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         display_name="Graph extraction (GP-1B docling-graph party/relational)",
         description=(
             "Extract ontology-conforming graph facts from a parsed chunk with the GP-1B docling-graph "
-            "extractor (granite-4.1-8b): the signing parties as ORGANIZATION mentions plus the structural "
+            "extractor (granite-4.2-8b): the signing parties as ORGANIZATION mentions plus the structural "
             "CONTRACTS_WITH edges between them, EXTRACTED. This is the entity/relational extractor that "
             "populated the relational (Leg C) graph at real recall 0.991; the earlier spaCy-NER + "
             "contract-LLM + escalation hybrid is retired (ADR-0035). Every fact carries chunk_id provenance "

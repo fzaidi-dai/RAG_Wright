@@ -23,7 +23,7 @@ def test_business_span_is_a_safe_noop():
 
 
 def test_raw_llm_span_and_record_tokens_are_safe_noops():
-    with obs.raw_llm_span("dg_extraction.granite", model="ibm-granite/granite-4.1-8b") as span:
+    with obs.raw_llm_span("dg_extraction.granite", model="ibm-granite/granite-4.2-8b") as span:
         assert span is None
         obs.record_tokens(span, input_tokens=100, output_tokens=50, total_tokens=150)  # no-op on None
 

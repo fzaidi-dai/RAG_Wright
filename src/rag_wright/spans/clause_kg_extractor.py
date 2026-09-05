@@ -1,6 +1,6 @@
 """KG-2 (FR-C.6, ADR-0033/0028): per-clause typed property extraction into the unified contract KG.
 
-The extraction MODEL is granite-4.1-8b (the Leg-C winner, GP-1B; no A/B -- DeepSeek is a KG-6 below-par
+The extraction MODEL is granite-4.2-8b (the Leg-C winner, GP-1B; no A/B -- DeepSeek is a KG-6 below-par
 contingency only). The MECHANISM is the GP-1B recipe (`kg-extraction-recipe` Skill): docling-graph +
 `ontology.clause_template.Clause` (the KG-1 bridge template) via the `capabilities.dg_extraction` seam.
 
@@ -16,7 +16,7 @@ This module holds the two pieces that turn a raw extraction into a gated, contra
 2. `DGClausePropertyExtractor` -- composes an (injectable) Clause-extraction fn with the adapter and the
    deterministic grounding-judge gate (`property_grounding.reground`, ADR-0028): an EXTRACTED value on a
    lexically-anchored dimension whose cue is absent from the text is downgraded to AMBIGUOUS. The extraction
-   fn is injected so the mapping + gate are testable with no model call; the live default is granite-4.1-8b.
+   fn is injected so the mapping + gate are testable with no model call; the live default is granite-4.2-8b.
 """
 
 from __future__ import annotations
@@ -159,7 +159,7 @@ ClauseExtractFn = Callable[[str], Any]
 
 
 class DGClausePropertyExtractor:
-    """Extract a clause's typed properties end to end: run the Clause extraction (granite-4.1-8b via
+    """Extract a clause's typed properties end to end: run the Clause extraction (granite-4.2-8b via
     docling-graph, injected), adapt to `ClausePropertyRecord`, then apply the deterministic
     grounding-judge gate (ADR-0028). Matches the `PropertyExtractor` call shape (T57b) so it drops into
     the ingestion driver. A None extraction yields an empty (but valid) record for that clause."""
@@ -212,7 +212,8 @@ class DGClausePropertyExtractor:
 
 
 def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None,
-                             asemantic_judge_fn: Any = None) -> DGClausePropertyExtractor:
+                             asemantic_judge_fn: Any = None, list_model: str | None = None,
+                             samples: int | None = None) -> DGClausePropertyExtractor:
     """The live default: granite-4.2-8b via the SELECTED serving backend (`default_extraction_model` reads
     `RAG_SERVING` -> vLLM-Granite in product, OpenRouter-Granite in dev; MS1-3, ADR-0079). Pass a different
     `ExtractionModel` to override, or a `semantic_judge_fn`/`asemantic_judge_fn` to enable the ADR-0040 Layer-3
@@ -225,7 +226,11 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     ADR-0028 grounding + ADR-0040 symbolic gate). tagparse is the default because docling hard-crashes ~89% of
     real CUAD clauses (grounded A/B, 45 clauses: docling success 0.11 vs tagparse 1.00). NOTE: tagparse issues one
     LLM call per thematic GROUP (~8/clause) vs docling's ~1; the aspect gate (RAG_INGEST_CLAUSE_GATE=1) is the
-    cost lever once a reliable gate model exists."""
+    cost lever once a reliable gate model exists.
+
+    `list_model` (ARGUMENT; else env `RAG_INGEST_LIST_MODEL`; else the profile general model) is the SECOND model
+    for the cross-model list union on list-bearing groups -- exposed here (like `model`) so the caller configures
+    it explicitly; pass `"off"` to disable. `samples` (else env) sets same-model multi-sample union."""
     from rag_wright.capabilities.dg_extraction import aextract_clause, default_extraction_model, extract_clause
 
     chosen = model or default_extraction_model("clause-extract", "ibm-granite/granite-4.2-8b")
@@ -237,8 +242,9 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
         # is opt-in (RAG_INGEST_CLAUSE_GATE=1) for a stronger gate model / cost experiments.
         gate = os.getenv("RAG_INGEST_CLAUSE_GATE", "0").strip() == "1"
         return DGClausePropertyExtractor(
-            lambda text: tag_extract_clause(text, model_id, gate=gate),
-            aextract_fn=lambda text: atag_extract_clause(text, model_id, gate=gate),
+            lambda text: tag_extract_clause(text, model_id, gate=gate, list_model=list_model, samples=samples),
+            aextract_fn=lambda text: atag_extract_clause(text, model_id, gate=gate, list_model=list_model,
+                                                         samples=samples),
             semantic_judge_fn=semantic_judge_fn, asemantic_judge_fn=asemantic_judge_fn,
         )
     return DGClausePropertyExtractor(

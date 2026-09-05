@@ -47,6 +47,20 @@ async def test_cross_model_union_runs_the_list_model_only_on_list_bearing_groups
     assert list_group_fieldsets < all_fieldsets                            # (there ARE non-list groups gemma skips)
 
 
+@pytest.mark.asyncio
+async def test_list_model_off_argument_disables_cross_model(monkeypatch):
+    calls = []
+
+    class _R:
+        async def ainvoke(self, prompt):
+            return Clause()
+
+    monkeypatch.setattr(tce, "build_tag_structured",
+                        lambda model, schema, *, fields=None, **kw: (calls.append(model) or _R()))
+    await atag_extract_clause("txt", "granite", gate=False, list_model="off")
+    assert set(calls) == {"granite"}  # 'off' argument disables the second model entirely
+
+
 def test_combine_group_dedups_repeated_list_items():
     s1 = Clause(prohibits_damage=["indirect", "consequential"])
     s2 = Clause(prohibits_damage=["consequential", "punitive"])

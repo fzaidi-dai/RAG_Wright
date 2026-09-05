@@ -81,18 +81,18 @@ def test_case_insensitive_serving(monkeypatch):
 
 def test_build_model_uses_openrouter_base_url_by_default():
     # ChatOpenAI construction is offline; verify the client points at OpenRouter
-    assert build_model("ibm-granite/granite-4.1-8b").openai_api_base == "https://openrouter.ai/api/v1"
+    assert build_model("ibm-granite/granite-4.2-8b").openai_api_base == "https://openrouter.ai/api/v1"
 
 
 def test_build_model_routes_to_vllm_when_selected(monkeypatch):
     monkeypatch.setenv("RAG_SERVING", "vllm")
     monkeypatch.setenv("VLLM_BASE_URL", "https://app.modal.run/v1")
-    assert build_model("ibm-granite/granite-4.1-8b").openai_api_base == "https://app.modal.run/v1"
+    assert build_model("ibm-granite/granite-4.2-8b").openai_api_base == "https://app.modal.run/v1"
 
 
 def test_build_model_defaults_to_temperature_zero_and_honors_override():
-    assert build_model("ibm-granite/granite-4.1-8b").temperature == 0.0
-    assert build_model("ibm-granite/granite-4.1-8b", temperature=0.7).temperature == 0.7  # best-of-N sampling
+    assert build_model("ibm-granite/granite-4.2-8b").temperature == 0.0
+    assert build_model("ibm-granite/granite-4.2-8b", temperature=0.7).temperature == 0.7  # best-of-N sampling
 
 
 def test_build_structured_forwards_temperature(monkeypatch):
@@ -113,7 +113,7 @@ def test_build_structured_forwards_temperature(monkeypatch):
         return _StubRunnable()
 
     monkeypatch.setattr(seam, "build_model", _fake_build_model)
-    seam.build_structured("ibm-granite/granite-4.1-8b", object)
+    seam.build_structured("ibm-granite/granite-4.2-8b", object)
     assert seen["temperature"] == 0.0  # default unchanged
-    seam.build_structured("ibm-granite/granite-4.1-8b", object, temperature=0.7)
+    seam.build_structured("ibm-granite/granite-4.2-8b", object, temperature=0.7)
     assert seen["temperature"] == 0.7

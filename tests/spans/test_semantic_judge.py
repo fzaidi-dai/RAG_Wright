@@ -112,11 +112,11 @@ def test_build_semantic_judge_fn_invokes_the_injected_structured_factory():
         captured["label"] = kw.get("label")
         return _FakeRunnable()
 
-    judge = build_semantic_judge_fn("ibm-granite/granite-4.1-8b", structured_factory=_factory)
+    judge = build_semantic_judge_fn("ibm-granite/granite-4.2-8b", structured_factory=_factory)
     verdict = judge(_D.MUTUALITY, "mutual", "only Licensee shall indemnify")
     assert verdict == SemanticVerdict(supported=False, reason="one-sided")
     assert captured["label"] == "semantic_judge.judge"  # issue 0005: the judge names its stage
-    assert captured["model_id"] == "ibm-granite/granite-4.1-8b"
+    assert captured["model_id"] == "ibm-granite/granite-4.2-8b"
     assert captured["schema"] is SemanticVerdict
     assert "mutual" in captured["prompt"] and "only Licensee shall indemnify" in captured["prompt"]
     # the prompt is the authored SKILL method + the per-call tail (not a hardcoded string)

@@ -208,7 +208,7 @@ def build_structured(
 def _call_desc(model_id: str, label: str | None) -> str:
     """The model-call description used in the deadline/retry warnings + the timeout message. ADR-0058 side-fix
     (issue 0004): include the STAGE/call-site (`label`) when the caller supplies it, so a timeout names WHICH
-    stage was cancelled (e.g. `granite-4.1-8b for semantic_chunking.discover`), not just the model."""
+    stage was cancelled (e.g. `granite-4.2-8b for semantic_chunking.discover`), not just the model."""
     return f"{model_id} for {label}" if label else model_id
 
 

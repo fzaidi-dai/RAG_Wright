@@ -14,7 +14,7 @@ import rag_wright.capabilities.dg_extraction as dg
 from rag_wright.capabilities.dg_extraction import ExtractionModel, build_pipeline_config
 from rag_wright.models import seam
 
-_MODEL = ExtractionModel("granite", "openrouter", "ibm-granite/granite-4.1-8b", "https://openrouter.ai/api/v1")
+_MODEL = ExtractionModel("granite", "openrouter", "ibm-granite/granite-4.2-8b", "https://openrouter.ai/api/v1")
 
 
 def _client(tmp_path):

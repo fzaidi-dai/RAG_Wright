@@ -181,8 +181,10 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
     cost off the ~half of groups with no list field. Scalars prefer the main model (its results are unioned first).
     ON by default; disable with `RAG_INGEST_LIST_MODEL=off`."""
     n = samples if samples is not None else max(1, int(os.environ.get("RAG_INGEST_CLAUSE_SAMPLES", "1")))
-    _env_lm = os.environ.get("RAG_INGEST_LIST_MODEL", DEFAULT_GENERAL).strip()
-    lm = list_model if list_model is not None else (None if _env_lm.lower() in ("", "none", "off") else _env_lm)
+    # cross-model list model: explicit ARGUMENT wins, else env, else the profile's general model (gemma). Any of
+    # them may be "off"/"none"/"" to disable -- so the default-on model is configurable, never a buried hardcode.
+    _raw = list_model if list_model is not None else os.environ.get("RAG_INGEST_LIST_MODEL", DEFAULT_GENERAL)
+    lm = None if not _raw or str(_raw).strip().lower() in ("none", "off") else str(_raw).strip()
     stemp = temperature if n == 1 else max(temperature, 0.5)  # diversity across samples for the union to help
     active = await aselect_aspects(text, model_id, temperature=temperature) if gate else set(CLAUSE_GROUPS)
 

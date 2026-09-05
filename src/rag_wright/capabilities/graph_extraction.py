@@ -2,7 +2,7 @@
 
 Re-backed per ADR-0035. The capability's job is unchanged -- a chunk -> ontology-conforming graph facts
 (`ExtractionResult`) anchored to `chunk_id` with a confidence tag (FR-S.4), behind the T5 `Extractor` seam --
-but the *implementation* is now the **GP-1B docling-graph extractor** (granite-4.1-8b), the entity/relational
+but the *implementation* is now the **GP-1B docling-graph extractor** (granite-4.2-8b), the entity/relational
 extractor that populated Leg C at real recall 0.991. The earlier T23-27 hybrid stack (spaCy NER +
 Pydantic-contract extraction + LLM escalation) is retired: Leg B (clause facts / inter-corpus recall) is served
 by the typed Clause KG (typed_clause_extraction), and Leg C (party-to-party relational) by GP-1B, so the hybrid
@@ -34,7 +34,7 @@ from rag_wright.contracts.ontology import EntityType, RelationshipFact, Relation
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 
 DEFAULT_EXTRACT_CONCURRENCY = 4  # in-flight chunk extractions (backpressure); GPU/network-bound
-# The adopted graph-extraction model (GP-1B): granite-4.1-8b via OpenRouter; config-driven (SPEC §17).
+# The adopted graph-extraction model (GP-1B): granite-4.2-8b via OpenRouter; config-driven (SPEC §17).
 DEFAULT_GRAPH_EXTRACT_MODEL = os.getenv("RAG_GRAPH_EXTRACT_MODEL", "ibm-granite/granite-4.2-8b")
 
 # extract_fn: contract/chunk text -> a `ContractParties` (docling-graph output) or None when nothing extracted.
@@ -66,7 +66,7 @@ def parties_to_extraction(chunk_id: ChunkId, parties: list[str]) -> ExtractionRe
 
 
 class DoclingGraphExtractor:
-    """GP-1B: docling-graph party extraction (granite-4.1-8b) -- the adopted graph extractor (ADR-0035).
+    """GP-1B: docling-graph party extraction (granite-4.2-8b) -- the adopted graph extractor (ADR-0035).
 
     Extracts the signing parties from the chunk text via the injected `extract_fn` (docling-graph
     `extract_parties`), then emits ORGANIZATION mentions + structural `CONTRACTS_WITH` facts between them. A
