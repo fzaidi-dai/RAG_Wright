@@ -7,7 +7,13 @@ import pytest
 
 from rag_wright.models import tag_structured as ts
 from rag_wright.ontology.clause_template import Clause, Mutuality
-from rag_wright.spans.tag_clause_extractor import CLAUSE_GROUPS, _combine_group, atag_extract_clause
+from rag_wright.spans.tag_clause_extractor import (
+    CLAUSE_GROUPS,
+    _combine_group,
+    _group_has_list,
+    atag_extract_clause,
+)
+import rag_wright.spans.tag_clause_extractor as tce
 
 
 def test_combine_group_unions_list_fields_and_prefers_informative_scalars():
@@ -18,6 +24,27 @@ def test_combine_group_unions_list_fields_and_prefers_informative_scalars():
     out = _combine_group([s1, s2], CLAUSE_GROUPS["liability_damages"])
     assert {str(getattr(d, "value", d)) for d in out["prohibits_damage"]} == {"indirect", "consequential"}
     assert str(getattr(out["has_claim_scope"], "value", out["has_claim_scope"])) == "first_party"
+
+
+@pytest.mark.asyncio
+async def test_cross_model_union_runs_the_list_model_only_on_list_bearing_groups(monkeypatch):
+    calls = []
+
+    class _R:
+        async def ainvoke(self, prompt):
+            return Clause()
+
+    def fake_build(model, schema, *, fields=None, **kw):
+        calls.append((model, frozenset(fields or ())))
+        return _R()
+
+    monkeypatch.setattr(tce, "build_tag_structured", fake_build)
+    await atag_extract_clause("txt", "granite", gate=False, list_model="gemma")
+    list_group_fieldsets = {frozenset(f) for f in CLAUSE_GROUPS.values() if _group_has_list(f)}
+    all_fieldsets = {frozenset(f) for f in CLAUSE_GROUPS.values()}
+    assert {fs for m, fs in calls if m == "gemma"} == list_group_fieldsets  # gemma: list-bearing groups only
+    assert {fs for m, fs in calls if m == "granite"} == all_fieldsets       # granite: every group
+    assert list_group_fieldsets < all_fieldsets                            # (there ARE non-list groups gemma skips)
 
 
 def test_combine_group_dedups_repeated_list_items():

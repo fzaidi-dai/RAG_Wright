@@ -156,25 +156,37 @@ def _combine_group(samples: list[Clause | None], fields: tuple[str, ...]) -> dic
     return out
 
 
+def _group_has_list(fields: tuple[str, ...]) -> bool:
+    """True if the group has any LIST-valued field (list_scalar / nested_list) -- the fields where under-
+    enumeration bites, and the only ones a cross-model union is worth paying a second model for."""
+    return any(_classify(Clause.model_fields[f].annotation)[0] in ("list_scalar", "nested_list") for f in fields)
+
+
 async def atag_extract_clause(text: str, model_id: str, *, document_reference: str = "",
-                              temperature: float = 0.0, gate: bool = True, samples: int | None = None) -> Clause:
+                              temperature: float = 0.0, gate: bool = True, samples: int | None = None,
+                              list_model: str | None = None) -> Clause:
     """Extract a clause's typed properties as ONE `Clause`, function-independently: thematic tag-parse passes over
     the `Clause` schema, merged. When `gate` is set (default), a coarse recall-biased aspect gate first prunes
     clearly-irrelevant groups; a skipped group defaults. Each pass degrades on its own (build_tag_structured
     re-asks then omits-to-default); a failing pass leaves its group at defaults (never fails the whole clause).
 
     `samples` (env `RAG_INGEST_CLAUSE_SAMPLES`, default 1) runs each group N times and UNIONs the LIST-valued
-    fields across samples -- the inference-time fix for granite's list under-enumeration (a single pass emits a
-    partial list; different samples emit different subsets; the union recovers the set). Scalars take the first
-    informative value. N>1 samples at temperature >=0.5 for diversity; N=1 is the single-shot path."""
+    fields across samples -- the inference-time fix for granite's list under-enumeration.
+
+    `list_model` (env `RAG_INGEST_LIST_MODEL`, default none) enables a CROSS-MODEL union: for LIST-bearing groups
+    ONLY, also run a second (stronger) model and union its list values with the main model's. granite and gemma
+    under-enumerate DIFFERENT items, so their union is more complete than either alone; scoping the second model
+    to list-bearing groups keeps its cost off the ~half of groups that have no list field. Scalars prefer the main
+    model (its results are unioned first, so 'first informative' wins the main model's value)."""
     n = samples if samples is not None else max(1, int(os.environ.get("RAG_INGEST_CLAUSE_SAMPLES", "1")))
+    lm = list_model if list_model is not None else (os.environ.get("RAG_INGEST_LIST_MODEL", "").strip() or None)
     stemp = temperature if n == 1 else max(temperature, 0.5)  # diversity across samples for the union to help
     active = await aselect_aspects(text, model_id, temperature=temperature) if gate else set(CLAUSE_GROUPS)
 
-    async def _pass(fields: tuple[str, ...]) -> Clause | None:
+    async def _pass(fields: tuple[str, ...], model: str) -> Clause | None:
         try:
             return await build_tag_structured(
-                model_id, Clause, fields=set(fields), temperature=stemp, label="clause-group",
+                model, Clause, fields=set(fields), temperature=stemp, label="clause-group",
             ).ainvoke(_GROUP_PROMPT.format(text=text))
         except Exception:  # noqa: BLE001 - a persistently-failing pass degrades to defaults, not a hard error
             return None
@@ -182,8 +194,11 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
     async def _group(group: str, fields: tuple[str, ...]) -> dict[str, Any]:
         if group not in active:
             return {}
-        runs = await asyncio.gather(*[_pass(fields) for _ in range(n)])
-        return _combine_group(list(runs), fields)
+        models = [model_id]  # main model first so its scalar values win 'first informative'
+        if lm and lm != model_id and _group_has_list(fields):
+            models.append(lm)  # cross-model union, LIST-bearing groups only (cost-scoped)
+        runs = [r for m in models for r in await asyncio.gather(*[_pass(fields, m) for _ in range(n)])]
+        return _combine_group(runs, fields)
 
     dicts = await asyncio.gather(*[_group(g, f) for g, f in CLAUSE_GROUPS.items()])
     merged: dict[str, Any] = {}
@@ -194,7 +209,9 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
 
 
 def tag_extract_clause(text: str, model_id: str, *, document_reference: str = "",
-                       temperature: float = 0.0, gate: bool = True, samples: int | None = None) -> Clause:
+                       temperature: float = 0.0, gate: bool = True, samples: int | None = None,
+                       list_model: str | None = None) -> Clause:
     """Sync wrapper over `atag_extract_clause` (parity with the docling-graph `extract_clause`)."""
     return asyncio.run(atag_extract_clause(
-        text, model_id, document_reference=document_reference, temperature=temperature, gate=gate, samples=samples))
+        text, model_id, document_reference=document_reference, temperature=temperature, gate=gate,
+        samples=samples, list_model=list_model))
