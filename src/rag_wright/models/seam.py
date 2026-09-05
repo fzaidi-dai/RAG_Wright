@@ -266,19 +266,36 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     idle-drip detection, the total `asyncio.timeout` deadline for the whole call, and the bounded transient
     retries -- accumulating the streamed chunks into the full text (the same value
     `build_model(...).invoke(prompt).content` produced). `prompt` is a string or a message list."""
+    import time as _time
+
+    from rag_wright.models import tracing
+
     overrides: dict[str, Any] = {
         "max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S, "stream_chunk_timeout": _STREAM_CHUNK_TIMEOUT_S}
     if max_tokens is not None:
         overrides["max_tokens"] = max_tokens
+    traced = tracing.tracing_on()
+    if traced:
+        overrides["stream_usage"] = True  # LC/OpenRouter emit usage_metadata on the final chunk (issue 0017)
     client = build_model(model_id, temperature=temperature, **overrides)
+    usage: dict[str, Any] = {}
 
     async def _consume() -> str:
         parts: list[str] = []
         async for chunk in client.astream(prompt):
             parts.append(str(chunk.content))
+            um = getattr(chunk, "usage_metadata", None)
+            if um:
+                usage.update(um)
         return "".join(parts)
 
-    return await _bounded_deadline(_consume, model_id, label)
+    t0 = _time.monotonic()
+    result = await _bounded_deadline(_consume, model_id, label)
+    if traced:
+        u = {"input": usage.get("input_tokens", 0), "output": usage.get("output_tokens", 0)} if usage else None
+        tracing.record_generation(model=model_id, input=prompt, output=result, usage=u,
+                                  latency_ms=(_time.monotonic() - t0) * 1000.0, label=label, stage="astream_text")
+    return result
 
 
 def _with_bounded_retry(runnable: Runnable, model_id: str) -> Runnable:
