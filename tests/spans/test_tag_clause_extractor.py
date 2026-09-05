@@ -7,7 +7,25 @@ import pytest
 
 from rag_wright.models import tag_structured as ts
 from rag_wright.ontology.clause_template import Clause, Mutuality
-from rag_wright.spans.tag_clause_extractor import CLAUSE_GROUPS, atag_extract_clause
+from rag_wright.spans.tag_clause_extractor import CLAUSE_GROUPS, _combine_group, atag_extract_clause
+
+
+def test_combine_group_unions_list_fields_and_prefers_informative_scalars():
+    # granite under-enumerates lists: each sample emits a partial subset. _combine_group UNIONs the list field
+    # across samples (recovering the full set) and picks the informative scalar over an OTHER escape.
+    s1 = Clause(prohibits_damage=["indirect"], has_claim_scope="other")
+    s2 = Clause(prohibits_damage=["consequential"], has_claim_scope="first_party")
+    out = _combine_group([s1, s2], CLAUSE_GROUPS["liability_damages"])
+    assert {str(getattr(d, "value", d)) for d in out["prohibits_damage"]} == {"indirect", "consequential"}
+    assert str(getattr(out["has_claim_scope"], "value", out["has_claim_scope"])) == "first_party"
+
+
+def test_combine_group_dedups_repeated_list_items():
+    s1 = Clause(prohibits_damage=["indirect", "consequential"])
+    s2 = Clause(prohibits_damage=["consequential", "punitive"])
+    out = _combine_group([s1, s2], CLAUSE_GROUPS["liability_damages"])
+    vals = [str(getattr(d, "value", d)) for d in out["prohibits_damage"]]
+    assert vals == ["indirect", "consequential", "punitive"]  # order-preserving union, no dup
 
 
 def test_clause_groups_cover_every_property_field_exactly_once():

@@ -16,11 +16,12 @@ in exactly one group (a coverage test enforces this).
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any
 
 from pydantic import BaseModel
 
-from rag_wright.models.tag_structured import build_tag_structured
+from rag_wright.models.tag_structured import _classify, build_tag_structured
 from rag_wright.ontology.clause_template import Clause
 
 # The 7 thematic groups (5a consents/control + 5b restrictions/duties per the design). document_reference is the
@@ -104,47 +105,96 @@ def _sane(value: Any) -> Any:
     return value
 
 
-def _merge_group_results(results: list[Clause | None], doc_ref: str) -> Clause:
-    """Combine the per-group pass results into one `Clause`: take each group's OWN fields from its pass (a failed
-    pass -> that group defaults), sanitize string values (drop leaked prose), then construct `Clause` once so its
-    validators normalize everything."""
-    merged: dict[str, Any] = {}
-    for (group, fields), res in zip(CLAUSE_GROUPS.items(), results):
-        if res is None:
-            continue
-        for f in fields:
-            v = _sane(getattr(res, f))
-            if v is not None:
-                merged[f] = v
-    merged["document_reference"] = doc_ref or None
-    return Clause(**merged)
+def _uninformative(v: Any) -> bool:
+    """A scalar value carrying no information: None/empty, or an enum OTHER escape (dropped downstream anyway)."""
+    if v is None:
+        return True
+    s = str(getattr(v, "value", v)).strip()
+    return s == "" or s in ("Other", "OTHER") or "Unknown" in s
+
+
+def _item_key(item: Any) -> Any:
+    """A hashable identity for a list item so the union can dedup: an enum by its value, a sub-model by its dump."""
+    if hasattr(item, "model_dump"):
+        return tuple(sorted((k, str(v)) for k, v in item.model_dump().items()))
+    return getattr(item, "value", item)
+
+
+def _union_lists(lists: list[Any]) -> list[Any]:
+    """Order-preserving UNION of a list-valued field across samples -- the fix for granite's list under-enumeration
+    (each sample may emit a different subset; the union recovers the full set)."""
+    out: list[Any] = []
+    seen: set[Any] = set()
+    for lst in lists:
+        for item in (lst or []):
+            k = _item_key(item)
+            if k not in seen:
+                seen.add(k)
+                out.append(item)
+    return out
+
+
+def _combine_group(samples: list[Clause | None], fields: tuple[str, ...]) -> dict[str, Any]:
+    """Combine a group's N sampled passes into one field dict: LIST-valued fields are UNIONed across samples
+    (list-completeness), scalar/nested fields take the first informative (non-OTHER) sane value. A single sample
+    (N=1) reduces to the prior behavior."""
+    valid = [r for r in samples if r is not None]
+    out: dict[str, Any] = {}
+    for f in fields:
+        kind, _sub, _hint = _classify(Clause.model_fields[f].annotation)
+        vals = [getattr(r, f) for r in valid]
+        if kind in ("list_scalar", "nested_list"):
+            merged = _union_lists(vals)
+            if merged:
+                out[f] = merged
+        else:
+            sane = [_sane(v) for v in vals]
+            pick = next((v for v in sane if v is not None and not _uninformative(v)),
+                        next((v for v in sane if v is not None), None))
+            if pick is not None:
+                out[f] = pick
+    return out
 
 
 async def atag_extract_clause(text: str, model_id: str, *, document_reference: str = "",
-                              temperature: float = 0.0, gate: bool = True) -> Clause:
+                              temperature: float = 0.0, gate: bool = True, samples: int | None = None) -> Clause:
     """Extract a clause's typed properties as ONE `Clause`, function-independently: thematic tag-parse passes over
     the `Clause` schema, merged. When `gate` is set (default), a coarse recall-biased aspect gate first prunes
-    clearly-irrelevant groups (cost + noise); a skipped group defaults. Each pass degrades on its own
-    (build_tag_structured re-asks then omits-to-default); a pass that still fails leaves its group at defaults
-    (never fails the whole clause). `gate=False` runs every group (for the A/B baseline)."""
+    clearly-irrelevant groups; a skipped group defaults. Each pass degrades on its own (build_tag_structured
+    re-asks then omits-to-default); a failing pass leaves its group at defaults (never fails the whole clause).
+
+    `samples` (env `RAG_INGEST_CLAUSE_SAMPLES`, default 1) runs each group N times and UNIONs the LIST-valued
+    fields across samples -- the inference-time fix for granite's list under-enumeration (a single pass emits a
+    partial list; different samples emit different subsets; the union recovers the set). Scalars take the first
+    informative value. N>1 samples at temperature >=0.5 for diversity; N=1 is the single-shot path."""
+    n = samples if samples is not None else max(1, int(os.environ.get("RAG_INGEST_CLAUSE_SAMPLES", "1")))
+    stemp = temperature if n == 1 else max(temperature, 0.5)  # diversity across samples for the union to help
     active = await aselect_aspects(text, model_id, temperature=temperature) if gate else set(CLAUSE_GROUPS)
 
-    async def _pass(group: str, fields: tuple[str, ...]) -> Clause | None:
-        if group not in active:
-            return None
+    async def _pass(fields: tuple[str, ...]) -> Clause | None:
         try:
             return await build_tag_structured(
-                model_id, Clause, fields=set(fields), temperature=temperature, label="clause-group",
+                model_id, Clause, fields=set(fields), temperature=stemp, label="clause-group",
             ).ainvoke(_GROUP_PROMPT.format(text=text))
-        except Exception:  # noqa: BLE001 - a persistently-failing group degrades to defaults, not a hard error
+        except Exception:  # noqa: BLE001 - a persistently-failing pass degrades to defaults, not a hard error
             return None
 
-    results = await asyncio.gather(*[_pass(g, fields) for g, fields in CLAUSE_GROUPS.items()])
-    return _merge_group_results(list(results), document_reference)
+    async def _group(group: str, fields: tuple[str, ...]) -> dict[str, Any]:
+        if group not in active:
+            return {}
+        runs = await asyncio.gather(*[_pass(fields) for _ in range(n)])
+        return _combine_group(list(runs), fields)
+
+    dicts = await asyncio.gather(*[_group(g, f) for g, f in CLAUSE_GROUPS.items()])
+    merged: dict[str, Any] = {}
+    for d in dicts:
+        merged.update(d)
+    merged["document_reference"] = document_reference or None
+    return Clause(**merged)
 
 
 def tag_extract_clause(text: str, model_id: str, *, document_reference: str = "",
-                       temperature: float = 0.0, gate: bool = True) -> Clause:
+                       temperature: float = 0.0, gate: bool = True, samples: int | None = None) -> Clause:
     """Sync wrapper over `atag_extract_clause` (parity with the docling-graph `extract_clause`)."""
     return asyncio.run(atag_extract_clause(
-        text, model_id, document_reference=document_reference, temperature=temperature, gate=gate))
+        text, model_id, document_reference=document_reference, temperature=temperature, gate=gate, samples=samples))
