@@ -17,6 +17,7 @@ dependencies = [
     "langchain-mcp-adapters>=0.3.2",
     "langchain-openai>=1.3.3",
     "langchain-quickjs==0.3.2", # pinned exactly: interpreter runtime is beta (ADR-0015); MIT (quickjs-rs)
+    "langfuse>=4.15.1",
     "langgraph",
     "mcp>=1.28.1",
     "pillow>=12.3.0",
