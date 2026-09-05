@@ -83,6 +83,18 @@ def test_parse_absent_tag_uses_default():
     assert out.name == "only" and out.count == 0 and out.flag is False and out.note is None and out.items == []
 
 
+def test_empty_tag_body_is_treated_as_absent():
+    # models often emit <choice></choice> instead of omitting -> must NOT become "" (which coerces to enum OTHER
+    # / a spurious assertion). An empty scalar tag is treated as absent so the field keeps its default.
+    out = parse_tagged("<name>x</name><choice>  </choice><note></note>", _Flat)
+    assert out.choice is _Choice.A and out.note is None  # empty tags ignored -> defaults, not "" coercions
+
+
+def test_nested_block_with_all_empty_subfields_is_absent():
+    out = parse_tagged("<title>t</title><bound><label></label><kind></kind></bound>", _Deep)
+    assert out.bound is None  # an all-empty nested block -> omitted, not a hollow submodel
+
+
 def test_parse_list_splits_on_newlines_and_commas():
     out = parse_tagged("<name>n</name><items>a, b\nc</items>", _Flat)
     assert out.items == ["a", "b", "c"]

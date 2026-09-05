@@ -129,7 +129,10 @@ def _field_value(body: str, field: Any, lenient: bool, full_text: str | None = N
     if kind == "list_scalar":
         return [x.strip() for x in re.split(r"[\r\n,]+", body.strip()) if x.strip()]
     if kind == "nested":
-        return parse_tagged(full_text if full_text is not None else body, sub, lenient=lenient)  # type: ignore[arg-type]
+        src = full_text if full_text is not None else body
+        if not any((_extract(src, sn) or "").strip() for sn in sub.model_fields):  # type: ignore[union-attr]
+            return None  # no non-empty sub-field anywhere -> the nested block is absent (never a hollow model)
+        return parse_tagged(src, sub, lenient=lenient)  # type: ignore[arg-type]
     # nested_list
     out = []
     for it in re.findall(r"<item>(.*?)</item>", body, re.DOTALL | re.IGNORECASE):
@@ -176,11 +179,18 @@ def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False,
         body = _extract(text, name)
         if body is None:
             continue
+        kind, _sub, _ = _classify(field.annotation)
+        if kind in ("scalar", "list_scalar") and not body.strip():
+            continue  # an empty <tag></tag> means "not provided" -> omit (never coerce "" to an enum OTHER)
         try:
-            data[name] = _field_value(body, field, lenient, full_text=text)
+            val = _field_value(body, field, lenient, full_text=text)
         except ValidationError:
             if not lenient:  # strict: let the re-ask handle it; lenient: omit this field (default applies)
                 raise
+            continue
+        if kind == "nested" and val is None:
+            continue  # all-empty nested block -> absent (not a hollow model)
+        data[name] = val
     try:
         return schema(**data)
     except ValidationError as exc:
