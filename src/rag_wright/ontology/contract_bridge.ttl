@@ -2068,11 +2068,11 @@ cbr:field_CapConstraint__cap_operator a cbr:TemplateField ;
 
 cbr:field_CapConstraint__cap_quantum a cbr:TemplateField ;
     rdfs:label "cap_quantum" ;
-    skos:definition "The cap amount ONLY (a short value, not a sentence), e.g. '12_months', '1x_fees', '$1,000,000'." ;
+    skos:definition "The stated limit on liability. Look for 'shall not exceed', 'limited to', 'capped at', 'in no event ... exceed', 'total/aggregate liability ... shall not exceed'. Copy the limit VERBATIM even if it is a phrase, e.g. '$1,000,000', '12 months of fees', 'the fees paid in the prior 12 months', 'the greater of X or Y'." ;
     cbr:default "none" ;
     cbr:fieldKind "optional_str" ;
     cbr:fieldOrder 37 ;
-    cbr:maxLength 80 ;
+    cbr:maxLength 160 ;
     cbr:onModel "CapConstraint" .
 
 cbr:field_Clause__audit_frequency a cbr:TemplateField ;
@@ -2096,7 +2096,7 @@ cbr:field_Clause__bounded_by a cbr:TemplateField ;
 
 cbr:field_Clause__caps a cbr:TemplateField ;
     rdfs:label "caps" ;
-    skos:definition "The liability cap, if any." ;
+    skos:definition "The liability cap, if the clause limits the AMOUNT of liability (e.g. 'liability shall not exceed', 'limited to the fees paid', 'in no event shall ... exceed', 'total/aggregate liability ... capped at'). Fill its basis and quantum. Leave absent if the clause states no monetary limit (a pure exclusion or waiver of a damage TYPE is not a cap)." ;
     cbr:default "model_none" ;
     cbr:edgeLabel "HAS_CAPS" ;
     cbr:fieldKind "model_ref" ;

@@ -346,7 +346,7 @@ class CapConstraint(BaseModel):
 
     cap_quantum: Optional[str] = Field(
         None,
-        max_length=80,
+        max_length=160,  # ADR-0081 caps tightening: allow phrase-form caps ('the greater of X or Y', 'the fees paid ...')
         description=_d("CapConstraint.cap_quantum"),
     )
 
