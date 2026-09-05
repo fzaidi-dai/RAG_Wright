@@ -56,19 +56,21 @@ def test_ont2_new_dimensions_added_to_their_types():
         assert d.value not in _MULTIVALUED
 
 
-def test_wrong_dimension_on_a_function_is_flagged_but_the_applicable_one_is_not():
-    # the observed error class: nonsolicit_target (valid value, in-vocab) asserted on Anti-Assignment, where
-    # only assignment_consent / party_asymmetry apply. The lexical judge cannot see this; the SHACL gate can.
+def test_nonapplicable_dimension_is_no_longer_flagged_function_not_load_bearing():
+    # ADR-0082: function-applicability is NO LONGER a downgrade gate -- clause-function classification is not
+    # accurate enough to be load-bearing (~0.5 top-1). A dimension not in the function's map is KEPT (function
+    # is a soft KG tag / query-time signal, never an ingest gate). Only the function-INDEPENDENT contradiction
+    # check (sh:maxCount) survives.
     assert flagged_dimensions(
         _record(
             "Anti-Assignment",
             (_D.ASSIGNMENT_CONSENT, "consent_required", ConfidenceTag.EXTRACTED),
             (_D.NONSOLICIT_TARGET, "employees", ConfidenceTag.EXTRACTED),
         )
-    ) == {_D.NONSOLICIT_TARGET}
+    ) == set()
 
 
-def test_symbolic_validate_downgrades_only_the_nonapplicable_assertion():
+def test_symbolic_validate_no_longer_downgrades_a_nonapplicable_assertion():
     rec = symbolic_validate(
         _record(
             "Anti-Assignment",
@@ -76,9 +78,7 @@ def test_symbolic_validate_downgrades_only_the_nonapplicable_assertion():
             (_D.NONSOLICIT_TARGET, "employees", ConfidenceTag.EXTRACTED),
         )
     )
-    by_dim = {a.dimension: a.confidence for a in rec.assertions}
-    assert by_dim[_D.ASSIGNMENT_CONSENT] == ConfidenceTag.EXTRACTED  # applicable -> untouched
-    assert by_dim[_D.NONSOLICIT_TARGET] == ConfidenceTag.AMBIGUOUS  # type error -> downgraded
+    assert [a.confidence for a in rec.assertions] == [ConfidenceTag.EXTRACTED] * 2  # both kept (ADR-0082)
 
 
 def test_a_fully_applicable_record_is_returned_unchanged():
@@ -92,40 +92,42 @@ def test_a_fully_applicable_record_is_returned_unchanged():
     assert [a.confidence for a in out.assertions] == [ConfidenceTag.EXTRACTED] * 3
 
 
-def test_metadata_function_rejects_any_property_dimension():
-    # Document Name carries NO property dimensions -> any asserted dimension is a type error
+def test_metadata_function_no_longer_rejects_property_dimensions():
+    # ADR-0082: function-applicability off -> a dimension on a metadata function is not downgraded on that basis.
     assert flagged_dimensions(
         _record("Document Name", (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED))
-    ) == {_D.MUTUALITY}
+    ) == set()
 
 
-def test_downgrade_is_confidence_independent_but_leaves_ambiguous_alone():
-    # an INFERRED type error is still downgraded; an already-AMBIGUOUS one stays AMBIGUOUS (no double-work)
+def test_contradiction_downgrade_is_confidence_independent_but_leaves_ambiguous_alone():
+    # the SURVIVING (function-independent) check: a scalar dim asserted with conflicting values. The downgrade is
+    # confidence-independent (an INFERRED conflicting value is still downgraded); an already-AMBIGUOUS one stays.
+    rec = symbolic_validate(
+        _record(
+            "Cap On Liability",
+            (_D.CAP_BASIS, "fixed_fee", ConfidenceTag.INFERRED),  # conflicting scalar, INFERRED
+            (_D.CAP_BASIS, "multiple_of_fees", ConfidenceTag.AMBIGUOUS),  # conflicting scalar, already AMBIGUOUS
+            (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED),  # single -> untouched
+        )
+    )
+    by_val = {a.value: a.confidence for a in rec.assertions}
+    assert by_val["fixed_fee"] == ConfidenceTag.AMBIGUOUS
+    assert by_val["multiple_of_fees"] == ConfidenceTag.AMBIGUOUS
+    assert by_val["mutual"] == ConfidenceTag.EXTRACTED
+
+
+def test_nonapplicable_multivalued_dimension_is_no_longer_downgraded():
+    # ADR-0082: carve_out on Governing Law (not applicable) is KEPT (function not load-bearing); carve_out is
+    # multivalued, so two values is not a contradiction either -> everything stays EXTRACTED.
     rec = symbolic_validate(
         _record(
             "Governing Law",
-            (_D.NONSOLICIT_TARGET, "employees", ConfidenceTag.INFERRED),  # wrong dim, INFERRED
-            (_D.MFN_SCOPE, "price", ConfidenceTag.AMBIGUOUS),  # wrong dim, already AMBIGUOUS
-            (_D.JURISDICTION, "new_york", ConfidenceTag.EXTRACTED),  # applicable
+            (_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED),
+            (_D.CARVE_OUT, "confidentiality", ConfidenceTag.EXTRACTED),
+            (_D.JURISDICTION, "england", ConfidenceTag.EXTRACTED),
         )
     )
-    by_dim = {a.dimension: a.confidence for a in rec.assertions}
-    assert by_dim[_D.NONSOLICIT_TARGET] == ConfidenceTag.AMBIGUOUS
-    assert by_dim[_D.MFN_SCOPE] == ConfidenceTag.AMBIGUOUS
-    assert by_dim[_D.JURISDICTION] == ConfidenceTag.EXTRACTED
-
-
-def test_all_assertions_of_a_nonapplicable_multivalued_dimension_are_downgraded():
-    rec = symbolic_validate(
-        _record(
-            "Governing Law",
-            (_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED),  # wrong dim, value 1
-            (_D.CARVE_OUT, "confidentiality", ConfidenceTag.EXTRACTED),  # wrong dim, value 2
-            (_D.JURISDICTION, "england", ConfidenceTag.EXTRACTED),  # applicable
-        )
-    )
-    downgraded = {a.value for a in rec.assertions if a.confidence == ConfidenceTag.AMBIGUOUS}
-    assert downgraded == {"fraud", "confidentiality"}
+    assert all(a.confidence == ConfidenceTag.EXTRACTED for a in rec.assertions)
 
 
 def test_unmodeled_function_is_permissive():
@@ -169,28 +171,27 @@ def test_multivalued_dimension_with_several_values_is_not_a_cardinality_violatio
     assert [a.confidence for a in symbolic_validate(rec).assertions] == [ConfidenceTag.EXTRACTED] * 3
 
 
-def test_permission_polarity_value_on_a_restrictive_function_is_a_deontic_inversion():
-    # JUDGE-ONTOLOGY-3: the observed error -- assignment_consent=free (a "may freely assign" value) on an
-    # Anti-Assignment clause (whose purpose is to RESTRICT assignment) is a deontic contradiction.
+def test_deontic_polarity_is_no_longer_flagged_function_dependent():
+    # ADR-0082: the deontic-inversion check (a permission value on a RESTRICTIVE function) is function-dependent,
+    # so it is dropped with the other function-keyed checks -- assignment_consent=free on Anti-Assignment is KEPT.
     rec = _record(
         "Anti-Assignment",
         (_D.ASSIGNMENT_CONSENT, "free", ConfidenceTag.EXTRACTED),
-        (_D.PARTY_ASYMMETRY, "symmetric", ConfidenceTag.EXTRACTED),  # applicable, valid -> untouched
+        (_D.PARTY_ASYMMETRY, "symmetric", ConfidenceTag.EXTRACTED),
     )
-    assert flagged_dimensions(rec) == {_D.ASSIGNMENT_CONSENT}
-    by_dim = {a.dimension: a.confidence for a in symbolic_validate(rec).assertions}
-    assert by_dim[_D.ASSIGNMENT_CONSENT] == ConfidenceTag.AMBIGUOUS
-    assert by_dim[_D.PARTY_ASYMMETRY] == ConfidenceTag.EXTRACTED
+    assert flagged_dimensions(rec) == set()
+    assert all(a.confidence == ConfidenceTag.EXTRACTED for a in symbolic_validate(rec).assertions)
 
 
-def test_restriction_polarity_consent_value_on_a_restrictive_function_passes():
-    # consent_required IS consistent with Anti-Assignment (it restricts) -> not flagged
+def test_a_consistent_restrictive_value_still_passes():
+    # consent_required on Anti-Assignment was never flagged; still isn't.
     rec = _record("Anti-Assignment", (_D.ASSIGNMENT_CONSENT, "consent_required", ConfidenceTag.EXTRACTED))
     assert flagged_dimensions(rec) == set()
     assert symbolic_validate(rec) is rec
 
 
-def test_coc_unrestricted_on_change_of_control_is_a_deontic_inversion():
+def test_coc_deontic_inversion_is_no_longer_flagged():
+    # ADR-0082: coc_consent=unrestricted on Change Of Control (a deontic inversion) is function-dependent -> kept.
     rec = _record("Change Of Control", (_D.COC_CONSENT, "unrestricted", ConfidenceTag.EXTRACTED))
-    assert flagged_dimensions(rec) == {_D.COC_CONSENT}
-    assert symbolic_validate(rec).assertions[0].confidence == ConfidenceTag.AMBIGUOUS
+    assert flagged_dimensions(rec) == set()
+    assert symbolic_validate(rec) is rec

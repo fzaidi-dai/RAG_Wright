@@ -49,11 +49,18 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   (`RAG_INGEST_CLAUSE_EXTRACTOR` defaults to tagparse; docling kept for rollback). gemma only +0.09 over granite
 >   -> STAY ON GRANITE (revisit w/ granite+multi-sample). Cost note: tagparse ~8 LLM calls/clause; aspect gate is
 >   the cost lever pending a reliable gate model.
->   **OPEN (recall frontier ~0.5, both models weak on the SAME functions -> NOT model strength):** (a) check if the
->   ADR-0028 grounding gate OVER-DROPS open-valued fields (token-overlap on cap_quantum/covered_parties) — cheap,
->   may be deflating recall; (b) per-function prompt tightening for the weak functions (License Grant, Cap On
->   Liability, Warranty Disclaimer, Indirect/Consequential) — iterate until most functions covered; the tuned
->   prompt becomes a future REUSABLE clause-extraction SKILL.
+>   **RECALL INVESTIGATION (DONE):** the ~0.5 was deflated by (i) the metric counting only EXTRACTED (grounding
+>   KEEPS ungrounded as AMBIGUOUS, not drops) and (ii) the ADR-0040 SYMBOLIC gate downgrading CORRECT cross-cutting
+>   dims (mutuality/favorability) on a narrow/unreliable FUNCTION map. NOT the lexical gate (those dims are in
+>   CLOSED_VOCAB). **FIX (ADR-0082): the symbolic gate is now FUNCTION-INDEPENDENT** — keeps only the contradiction
+>   check (sh:maxCount), drops function-applicability (sh:closed) + deontic (sh:in). Function is non-load-bearing
+>   everywhere in ingestion now; a soft KG tag / query-time signal only. Re-score (45 CUAD clauses, disc-dim
+>   recall): docling 0.13 / tagparse-granite 0.40 (STRICT) 0.49 (KEPT) / tagparse-gemma 0.56 / 0.60. Disc-dim
+>   recall unchanged by the fix (those dims were applicable); the fix's win is on cross-cutting dims.
+>   **OPEN:** (a) per-function PROMPT TIGHTENING for the weak functions (License Grant, Cap On Liability, Warranty
+>   Disclaimer, Indirect/Consequential) — iterate to lift the disc-dim recall frontier; the tuned prompt becomes a
+>   future REUSABLE clause-extraction SKILL. (b) production model = granite-4.2 (gemma +0.16 disc-recall but 10-20x
+>   cost; revisit w/ granite+multi-sample). (c) cost: tagparse ~8 calls/clause; aspect gate pending a reliable gate.
 > - **FUNCTION-AUGMENTS-KG (tracked, separate, downstream): function as a soft multi-label boost for KG/retrieval
 >   search, never a hard filter** (consistent with ADR-0047). Prompt the classifier for top-K + confidence. Not
 >   part of the extraction work.

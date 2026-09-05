@@ -86,10 +86,13 @@ def _record_to_rdf(record: ClausePropertyRecord) -> Graph:
 
 
 def flagged_dimensions(record: ClausePropertyRecord) -> set[PropertyDimension]:
-    """The dimensions on the record that violate a SHACL shape: NOT applicable to the function (`sh:closed`),
-    a scalar dimension asserted with more than one value (`sh:maxCount 1`), or a permission-polarity value on
-    a restrictive function (`sh:in`, deontic). Every violation reports `sh:resultPath` = the dimension
-    predicate, so all fold into one flagged set. Empty if the function is unmodeled (permissive) or valid."""
+    """The dimensions to downgrade: ONLY the FUNCTION-INDEPENDENT contradiction check -- a scalar dimension
+    asserted with more than one value (`sh:maxCount 1`). The FUNCTION-DEPENDENT checks are DELIBERATELY IGNORED
+    (ADR-0082): clause-function classification is not accurate enough to be load-bearing (~0.5 top-1; memory
+    `function-classification-not-load-bearing`), so `sh:closed` (dimension-not-applicable-to-function) and `sh:in`
+    (deontic polarity on a restrictive function) would downgrade CORRECT cross-cutting extractions based on an
+    unreliable (and often narrow) function map. Function is a KG tag / query-time soft signal, never an ingest
+    gate. Empty if the record conforms or the function is unmodeled."""
     if not record.assertions:
         return set()
     from pyshacl import validate
@@ -101,10 +104,13 @@ def flagged_dimensions(record: ClausePropertyRecord) -> set[PropertyDimension]:
         return set()
     flagged: set[PropertyDimension] = set()
     _prefix = str(_CBR) + "dim_"
-    for path in results_graph.objects(None, SH.resultPath):
-        p = str(path)
-        if p.startswith(_prefix):
-            flagged.add(PropertyDimension(p[len(_prefix):]))
+    for result in results_graph.subjects(RDF.type, SH.ValidationResult):
+        # keep ONLY the contradiction (maxCount) violations; drop function-dependent closed/in violations
+        if results_graph.value(result, SH.sourceConstraintComponent) != SH.MaxCountConstraintComponent:
+            continue
+        path = results_graph.value(result, SH.resultPath)
+        if path is not None and str(path).startswith(_prefix):
+            flagged.add(PropertyDimension(str(path)[len(_prefix):]))
     return flagged
 
 
