@@ -57,10 +57,25 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 >   everywhere in ingestion now; a soft KG tag / query-time signal only. Re-score (45 CUAD clauses, disc-dim
 >   recall): docling 0.13 / tagparse-granite 0.40 (STRICT) 0.49 (KEPT) / tagparse-gemma 0.56 / 0.60. Disc-dim
 >   recall unchanged by the fix (those dims were applicable); the fix's win is on cross-cutting dims.
->   **OPEN:** (a) per-function PROMPT TIGHTENING for the weak functions (License Grant, Cap On Liability, Warranty
->   Disclaimer, Indirect/Consequential) — iterate to lift the disc-dim recall frontier; the tuned prompt becomes a
->   future REUSABLE clause-extraction SKILL. (b) production model = granite-4.2 (gemma +0.16 disc-recall but 10-20x
->   cost; revisit w/ granite+multi-sample). (c) cost: tagparse ~8 calls/clause; aspect gate pending a reliable gate.
+>   **PER-FUNCTION TIGHTENING ARC (done, DIAGNOSIS-DRIVEN not metric-driven):** the noisy disc-dim metric (cache
+>   chunk-spans) mislabels which functions need help; the real wins come from raw-vs-grounded diagnosis finding a
+>   genuine DEFINITION GAP. Tighten via the ttl skos:definition (ADR-0066), regenerate meta (sync-enforced).
+>   - **Cap On Liability (WIN, 1b58758):** old cap_quantum def said "short value only" + maxLength 80 -> rejected
+>     phrase-form caps. Enriched def (cues + phrase examples) + maxLength 160. granite 1/8 -> 3/8 (= gemma).
+>   - **Warranty Disclaimer (WIN, c0cbf15):** def listed enum values w/o mapping disclaimer phrasing -> model said
+>     OTHER/wrong-as_is. Enriched def (merchantability/fitness -> implied, etc.). granite 1/8 -> 3/8.
+>   - **License Grant (NO GAP):** extraction sound; low score = wrong disc-dim (covered_parties is niche;
+>     exclusivity_type is the real feature) + span noise + a covered_parties false-positive already caught by
+>     grounding. Not a tightening target.
+>   - **Indirect/Consequential (NO DEF GAP):** extraction good on real clauses; residual = granite LIST
+>     under-enumeration + variance + span noise. ttl tightening didn't help (reverted).
+>   **MULTI-SAMPLE UNION (opt-in tool, a63ef45):** for granite's list under-enumeration -- `RAG_INGEST_CLAUSE_SAMPLES`
+>     (default 1) runs each group N times + UNIONs list fields. Helps VARIABLE misses; NOT consistent misses (those
+>     need a gleaning pass / stronger model). OFF by default.
+>   **OPEN:** (a) production model = granite-4.2 (gemma +~0.1-0.16 disc-recall but 10-20x cost; revisit w/
+>   granite+multi-sample or a stronger model for consistent-miss lists). (b) cost: tagparse ~8 calls/clause; aspect
+>   gate pending a reliable gate model. (c) consistent-miss lever = targeted per-list "any others?" gleaning pass.
+>   (d) MUCH accumulated LOCALLY + UNPUSHED (0e240fc..a63ef45) -- review/push when ready.
 > - **FUNCTION-AUGMENTS-KG (tracked, separate, downstream): function as a soft multi-label boost for KG/retrieval
 >   search, never a hard filter** (consistent with ADR-0047). Prompt the classifier for top-K + confidence. Not
 >   part of the extraction work.
