@@ -350,19 +350,24 @@ def _deadline_bounded_client_class() -> type:
             # default granite-4.2-8b is a reasoning model: on a forced structured call it returns empty `content`
             # unless reasoning is disabled (ADR-0079). The seam applies both via the model profile; the
             # docling-graph path uses litellm, so it is added here. Skipped for a non-OpenRouter (vLLM / local) base.
+            from rag_wright.models import tracing
+            traced = tracing.tracing_on()
             if "openrouter" in (getattr(self, "_base_url", "") or "").lower():
                 _order = os.getenv("OPENROUTER_PROVIDER_ORDER", "").strip()
                 _prov = ({"order": [p.strip() for p in _order.split(",") if p.strip()], "allow_fallbacks": False}
                          if _order else {"sort": os.getenv("OPENROUTER_SORT", "latency")})
                 _reason_on = os.getenv("RAG_EXTRACT_REASONING", "0") == "1"  # A/B toggle (default OFF)
-                request["extra_body"] = {**(request.get("extra_body") or {}),
-                                         "provider": _prov,
-                                         "reasoning": {"enabled": _reason_on}}
+                _eb = {**(request.get("extra_body") or {}), "provider": _prov, "reasoning": {"enabled": _reason_on}}
+                if traced:
+                    _eb["usage"] = {"include": True}  # ask OpenRouter to return the actual per-call cost (issue 0017)
+                request["extra_body"] = _eb
 
             async def _go() -> Any:
                 async with asyncio.timeout(seam._MODEL_DEADLINE_S):
                     return await litellm.acompletion(**request)
 
+            import time as _time
+            _t0 = _time.monotonic()
             try:
                 response = asyncio.run(_go())
             except TimeoutError as exc:
@@ -379,8 +384,21 @@ def _deadline_bounded_client_class() -> type:
             content = choices[0].get("message", {}).get("content")
             if not content:
                 raise ClientError("LiteLLM returned empty content", details={"model": self.model})
+            _usage_obj = response.get("usage")
+            if traced:
+                # docling-graph party/clause extraction -- the litellm path (invisible to astream_text). Emit the
+                # generation with token usage AND OpenRouter's ACTUAL cost (usage.cost / litellm response_cost).
+                u = {"input": getattr(_usage_obj, "prompt_tokens", 0) or 0,
+                     "output": getattr(_usage_obj, "completion_tokens", 0) or 0} if _usage_obj else None
+                cost = getattr(_usage_obj, "cost", None) if _usage_obj else None
+                if cost is None:
+                    cost = (getattr(response, "_hidden_params", {}) or {}).get("response_cost")
+                tracing.record_generation(
+                    model=self.model, input=messages, output=str(content), usage=u, cost=cost,
+                    latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                    label=getattr(self, "_stage_label", None) or "docling-graph-extract", stage="litellm")
             metadata = {"finish_reason": choices[0].get("finish_reason"),
-                        "model": response.get("model", self.model), "usage": response.get("usage")}
+                        "model": response.get("model", self.model), "usage": _usage_obj}
             return str(content), metadata
 
     return _DeadlineBoundedLiteLLMClient

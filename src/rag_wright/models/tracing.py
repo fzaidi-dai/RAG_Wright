@@ -60,13 +60,16 @@ def _get_client() -> Any:
 
 
 def record_generation(*, model: str, input: Any = None, output: Any = None,
-                      usage: Optional[dict[str, int]] = None, latency_ms: Optional[float] = None,
-                      label: Optional[str] = None, role: Optional[str] = None, stage: Optional[str] = None,
+                      usage: Optional[dict[str, int]] = None, cost: Optional[float] = None,
+                      latency_ms: Optional[float] = None, label: Optional[str] = None,
+                      role: Optional[str] = None, stage: Optional[str] = None,
                       metadata: Optional[dict[str, Any]] = None) -> None:
     """Emit ONE Langfuse generation for a COMPLETED model call. No-op unless tracing is on + configured.
-    `input`/`output` are captured only at `verbose`; `usage` = {"input": n, "output": n} token counts; `latency_ms`
-    and label/role/stage go into metadata (queryable). Grouping to a document/job comes from the ambient
-    `traced_run` (langfuse `propagate_attributes`), so this call carries no correlation id itself."""
+    `input`/`output` are captured only at `verbose`; `usage` = {"input": n, "output": n} token counts; `cost` is
+    the provider's ACTUAL total cost in USD (a pass-through of OpenRouter's reported cost, NOT an engine price
+    table) -- emitted as `cost_details` so Langfuse shows currency without a price row; where the SDK does not
+    surface cost (LangChain streaming), `cost` is None and Langfuse prices from its own model table. `latency_ms`
+    and label/role/stage go into metadata. Document/job grouping comes from the ambient `traced_run`."""
     lf = _get_client()
     if lf is None:
         return
@@ -78,7 +81,8 @@ def record_generation(*, model: str, input: Any = None, output: Any = None,
             name=label or stage or "llm", as_type="generation",
             input=input if verbose else None, model=model, metadata=md or None,
         )
-        gen.update(output=output if verbose else None, usage_details=usage or None)
+        gen.update(output=output if verbose else None, usage_details=usage or None,
+                   cost_details=({"total": cost} if cost is not None else None))
         gen.end()
     except Exception:  # noqa: BLE001 - never let tracing break a model call
         pass

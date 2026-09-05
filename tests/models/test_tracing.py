@@ -75,6 +75,22 @@ def test_record_generation_emits_a_generation_when_verbose(monkeypatch):
     assert c["update"]["output"] == "the answer" and c["ended"] is True
 
 
+def test_real_cost_is_emitted_as_cost_details(monkeypatch):
+    fake = _FakeLF()
+    monkeypatch.setenv("RAG_TRACE_LEVEL", "generations"); _creds(monkeypatch)
+    monkeypatch.setattr(tracing, "_get_client", lambda: fake)
+    tracing.record_generation(model="m", usage={"input": 10, "output": 2}, cost=3.52e-06, label="party")
+    assert fake.calls[0]["update"]["cost_details"] == {"total": 3.52e-06}  # OpenRouter pass-through cost
+
+
+def test_no_cost_omits_cost_details(monkeypatch):
+    fake = _FakeLF()
+    monkeypatch.setenv("RAG_TRACE_LEVEL", "generations"); _creds(monkeypatch)
+    monkeypatch.setattr(tracing, "_get_client", lambda: fake)
+    tracing.record_generation(model="m", usage={"input": 10, "output": 2}, cost=None)
+    assert fake.calls[0]["update"]["cost_details"] is None  # no cost -> Langfuse prices from its own table
+
+
 def test_generations_level_omits_prompt_and_output(monkeypatch):
     fake = _FakeLF()
     monkeypatch.setenv("RAG_TRACE_LEVEL", "generations"); _creds(monkeypatch)
