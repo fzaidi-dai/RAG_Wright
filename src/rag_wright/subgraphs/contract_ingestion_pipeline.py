@@ -309,12 +309,18 @@ async def arun_corpus_ingestion(
     adapter: CorpusAdapter, ingest_graph: Any, *, link_fn: LinkFn = lambda: 0,
     progress: Callable[[str], None] = _print_progress,
     is_done: Callable[[SourceDocument], bool] = lambda _doc: False,
+    job_id: str | None = None,
 ) -> IngestionReport:
     """ASYNC-B2e (ADR-0057): the async twin of `run_corpus_ingestion`. Maps each document through the ASYNC
     per-document `ingest_graph` via `ainvoke` -- so the model calls carry the true wall-clock deadline and the
     per-document parallel branches run concurrently on the loop. Same X/N progress, resume-skip, dead-letter, and
     partial semantics as the sync driver (documents are processed sequentially; intra-document parallelism comes
-    from the graph)."""
+    from the graph).
+
+    Observability (issue 0017): each document's ingest runs inside `traced_run`, so EVERY generation it emits is
+    stamped with the correlation id -- `document_id = source_doc_id` and the caller's `job_id` -- making cost per
+    document (or per job) a single Langfuse query. A no-op unless RAG_TRACE_LEVEL is on + Langfuse configured."""
+    from rag_wright.models.tracing import traced_run
     documents = list(adapter.documents())
     total = len(documents)
     progress(f"[ingest] starting: {total} documents")
@@ -337,7 +343,8 @@ async def arun_corpus_ingestion(
                                   "reason": "parse_failed", "error": str(exc)[:200]})
             progress(f"[ingest] {i}/{total} {item.source_doc_id} DEAD-LETTER (parse: {str(exc)[:80]})")
             continue
-        out = await ingest_graph.ainvoke({"document": document})
+        with traced_run(document_id=document.source_doc_id, job_id=job_id, name="ingest_document"):
+            out = await ingest_graph.ainvoke({"document": document})
         if out.get("dead_letter"):
             dead_lettered.append(out["dead_letter"])
             progress(f"[ingest] {i}/{total} {document.source_doc_id} DEAD-LETTER "
