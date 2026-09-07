@@ -150,6 +150,20 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="ibm-granite/granite-4.2-8b",
         extra_body={"provider": {"sort": "latency"}, "reasoning": {"enabled": False}},
     ),
+    # Qwen 3.8 27b: UNLIKE qwen3.7-plus, it ACCEPTS a forced `tool_choice` object/required WHILE reasoning is ON
+    # (measured 2026-09-08), so we keep its deep reasoning on the single-shot forced-structured path (the compliance
+    # judge) -- that reasoning is the point of picking Qwen. `structured_extra_body={"reasoning":{"enabled":True}}`
+    # EXPLICITLY forces reasoning on the forced structured call: leaving it UNSET falls to the provider default,
+    # which for a forced tool call does little/no reasoning (measured ~5s + shallow vs ~32s deep) -- the opposite of
+    # the intended "reasoning-on, accept the latency" choice. Measured trade-offs on the judge: reasoning-ON ~32s
+    # (deep, chosen), reasoning-OFF ~5s (shallow), two-step tag-parse ~42s (reasons but slower -- kept in reserve
+    # for the flakiness wall, ADR-0045). `provider:{sort:throughput}` dodges the cheapest-provider throttle
+    # (ADR-0027). The free-text query paths (answer generation, query understanding) never see these flags.
+    "qwen/qwen3.8-27b": ModelProfile(
+        model_id="qwen/qwen3.8-27b",
+        structured_extra_body={"reasoning": {"enabled": True}},
+        extra_body={"provider": {"sort": "throughput"}},
+    ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not
     # adopted). Empirical, KG-6 / ADR-0034.
