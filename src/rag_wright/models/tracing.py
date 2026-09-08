@@ -67,9 +67,12 @@ def record_generation(*, model: str, input: Any = None, output: Any = None,
     """Emit ONE Langfuse generation for a COMPLETED model call. No-op unless tracing is on + configured.
     `input`/`output` are captured only at `verbose`; `usage` = {"input": n, "output": n} token counts; `cost` is
     the provider's ACTUAL total cost in USD (a pass-through of OpenRouter's reported cost, NOT an engine price
-    table) -- emitted as `cost_details` so Langfuse shows currency without a price row; where the SDK does not
-    surface cost (LangChain streaming), `cost` is None and Langfuse prices from its own model table. `latency_ms`
-    and label/role/stage go into metadata. Document/job grouping comes from the ambient `traced_run`."""
+    table) -- emitted as `cost_details` so Langfuse shows currency without a price row. BOTH emission paths now
+    pass real cost: the litellm path reads `response.usage.cost`, and the `astream_text` path recovers it from the
+    raw streaming chunk via `_CostCapturingChatOpenAI` (issue 0021 -- LangChain's streaming normalization drops
+    `cost`, but OpenRouter returns it on the final chunk's `usage`). `cost` is None only when the backend does not
+    surface it (e.g. self-hosted vLLM), and Langfuse then prices from its own model table. `latency_ms` and
+    label/role/stage go into metadata. Document/job grouping comes from the ambient `traced_run`."""
     lf = _get_client()
     if lf is None:
         return

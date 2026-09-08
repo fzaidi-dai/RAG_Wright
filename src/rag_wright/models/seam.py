@@ -24,6 +24,7 @@ from typing import Any
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_openai import ChatOpenAI
 from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+from pydantic import PrivateAttr
 
 from rag_wright.models.profiles import profile_for
 
@@ -144,11 +145,32 @@ def _provider_pin() -> dict[str, Any]:
     return {"provider": {"order": providers, "allow_fallbacks": allow}}  # ordered preference, fallbacks per env
 
 
-def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
+class _CostCapturingChatOpenAI(ChatOpenAI):
+    """ISSUE-0021: OpenRouter returns the ACTUAL per-call `cost` on the final streaming chunk's `usage`, but
+    LangChain's streaming normalization (`_create_usage_metadata`) whitelists token counts and DROPS `cost` --
+    unlike `ainvoke`, which preserves the raw `token_usage` in `response_metadata`. Tap the raw chunk in the
+    (overridable) per-chunk converter to capture the real cost -- a pass-through, exactly like the litellm path --
+    WITHOUT touching any of the streaming / idle-drip / deadline / retry machinery. `_cost_holder` is per-instance,
+    so each `build_model(...)` call gets a fresh capture."""
+
+    _cost_holder: dict[str, Any] = PrivateAttr(default_factory=dict)
+
+    def _convert_chunk_to_generation_chunk(self, chunk: dict, default_chunk_class: type,
+                                           base_generation_info: dict | None) -> Any:
+        usage = chunk.get("usage") or {}
+        if usage.get("cost") is not None:
+            self._cost_holder["cost"] = usage.get("cost")
+        return super()._convert_chunk_to_generation_chunk(chunk, default_chunk_class, base_generation_info)
+
+
+def build_model(model_id: str, *, temperature: float = 0.0, _client_cls: type[ChatOpenAI] | None = None,
+                **overrides: Any) -> ChatOpenAI:
     """Construct the base client for `model_id`, carrying the profile's base `extra_body` (request-level
     provider routing, e.g. OpenRouter throughput sort -- a config-driven provider flag, ADR-0027).
 
     Model-level retry/timeout (framework connection resilience) are set here; a caller may override either.
+    `_client_cls` lets a caller substitute a thin ChatOpenAI subclass (e.g. astream_text's cost-capturing client,
+    issue 0021); it defaults to the plain client so every other caller is unchanged.
     """
     params: dict[str, Any] = {"max_retries": _MAX_RETRIES, "timeout": _TIMEOUT_S}
     profile = profile_for(model_id)
@@ -159,7 +181,8 @@ def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) ->
     if extra_body:
         params["extra_body"] = extra_body
     params.update(overrides)  # caller overrides win
-    return ChatOpenAI(
+    cls = _client_cls or ChatOpenAI  # resolve at call time so a monkeypatched `seam.ChatOpenAI` (tests) is honored
+    return cls(
         model=model_id,
         temperature=temperature,
         **_serving_config(),  # OpenRouter (default) or vLLM-Granite, selected by RAG_SERVING (MS1-1)
@@ -286,7 +309,9 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     traced = tracing.tracing_on()
     if traced:
         overrides["stream_usage"] = True  # LC/OpenRouter emit usage_metadata on the final chunk (issue 0017)
-    client = build_model(model_id, temperature=temperature, **overrides)
+    # ISSUE-0021: use the cost-capturing client so OpenRouter's ACTUAL per-call cost (which LangChain's streaming
+    # normalization drops) is recovered from the raw final chunk -- no more $0.00/UNPRICED for an unpriced model.
+    client = build_model(model_id, temperature=temperature, _client_cls=_CostCapturingChatOpenAI, **overrides)
     usage: dict[str, Any] = {}
 
     async def _consume() -> str:
@@ -302,7 +327,11 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     result = await _bounded_deadline(_consume, model_id, label)
     if traced:
         u = {"input": usage.get("input_tokens", 0), "output": usage.get("output_tokens", 0)} if usage else None
-        tracing.record_generation(model=model_id, input=prompt, output=result, usage=u,
+        # cost is the provider's ACTUAL total (pass-through, like the litellm path); None if the backend/model did
+        # not surface it (e.g. vLLM), so Langfuse then prices from its table. getattr-guarded so a substituted
+        # client (tests / a non-cost-capturing class) degrades to no cost rather than raising.
+        cost = getattr(client, "_cost_holder", {}).get("cost")
+        tracing.record_generation(model=model_id, input=prompt, output=result, usage=u, cost=cost,
                                   latency_ms=(_time.monotonic() - t0) * 1000.0, label=label, stage="astream_text")
     return result
 
