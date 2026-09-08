@@ -277,7 +277,8 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
                           max_retries: int = _DEFAULT_MAX_RETRIES,
                           temperature: float | None = None,
                           structured_output: bool = False,
-                          extraction_contract: str = "direct", stage_label: str | None = None) -> Any:
+                          extraction_contract: str = "direct", stage_label: str | None = None,
+                          gleaning: bool = True) -> Any:
     """The docling-graph `PipelineConfig` for a model choice, with the reliability fixes baked in
     (structured_output=False + max_tokens cap + a sane per-call `timeout_s`/`max_retries`, NOT docling-graph's
     300s default). Kept import-light so hermetic tests need no LLM.
@@ -286,7 +287,13 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
     live in the 8k preamble). LONG documents (regulations) must pass "auto"/"dense": on a doc that dwarfs the
     output budget, "direct" SILENTLY self-rations (measured: FTC §255.5 -> 6 rules direct vs 31 dense), whereas
     "dense" is skeleton-then-fill over chunks and auto-retries truncation by splitting. See
-    [[docling-graph-extraction-contract]]."""
+    [[docling-graph-extraction-contract]].
+
+    `gleaning` (issue 0019): docling-graph's `gleaning_enabled` defaults to True, adding a SECOND full-document
+    LLM call after the extraction -- "extract any ADDITIONAL information not already extracted" -- a completeness
+    pass. It is right where there is more to find (ingestion of a full clause) but pure waste on the QUERY leg,
+    where a short question has nothing to glean (measured: the second call returned empty and doubled query cost +
+    latency). Default True preserves ingestion behavior; the query-leg constraint extraction passes gleaning=False."""
     from docling_graph import PipelineConfig
     from docling_graph.llm_clients.config import (
         ConnectionOverrides,
@@ -323,6 +330,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
         provider_override=model.provider, model_override=model.model,
         llm_overrides=overrides,
         llm_client=llm_client,
+        gleaning_enabled=gleaning,  # issue 0019: off on the query leg (nothing to glean from a short question)
     )
 
 
@@ -411,7 +419,8 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
                     timeout_s: int = _DEFAULT_TIMEOUT_S,
                     temperature: float | None = None,
                     structured_output: bool = False,
-                    extraction_contract: str = "direct", stage: str = "party") -> Any | None:
+                    extraction_contract: str = "direct", stage: str = "party",
+                    gleaning: bool = True) -> Any | None:
     """Extract from `text` with `model` via docling-graph (API mode). Writes the preamble to a temp .md
     (docling-graph needs a path, not a raw string), runs `run_pipeline`, returns the first extracted model or
     None. `extraction_contract` defaults to "direct" (contracts); pass "auto"/"dense" for long docs
@@ -430,7 +439,8 @@ def extract_parties(text: str, model: ExtractionModel, *, template: type = Contr
                                                  timeout_s=timeout_s, temperature=temperature,
                                                  structured_output=structured_output,
                                                  extraction_contract=extraction_contract,
-                                                 stage_label=f"dg_extraction.{stage}"),  # issue 0005
+                                                 stage_label=f"dg_extraction.{stage}",  # issue 0005
+                                                 gleaning=gleaning),
                            mode="api")
     if errors:  # docling logged an error then swallowed it -> a failure, NOT a clean-empty result -> raise
         raise ExtractionFailed(stage, errors[-1][:300])
@@ -491,25 +501,30 @@ _CLAUSE_TEXT_CHARS = 12000  # one operative span is short; a generous cap that n
 
 
 def extract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAUSE_MAX_TOKENS,
-                   temperature: float | None = None, structured_output: bool = False) -> Any | None:
+                   temperature: float | None = None, structured_output: bool = False,
+                   gleaning: bool = True) -> Any | None:
     """Extract one clause's typed properties from span `text` with `model`, using the KG-1 bridge template
     (`ontology.clause_template.Clause`). Same docling-graph API-mode seam + reliability fixes as
     `extract_parties`; returns the extracted `Clause` (typed properties) or None. The Clause -> our
-    `ClausePropertyRecord` contract mapping + the grounding-judge gate live in `spans.clause_kg_extractor`."""
+    `ClausePropertyRecord` contract mapping + the grounding-judge gate live in `spans.clause_kg_extractor`.
+    `gleaning` (issue 0019): pass False on the QUERY leg (constraint extraction from a short question), where the
+    completeness pass has nothing to find; leave True for ingestion of a full clause."""
     from rag_wright.ontology.clause_template import Clause
 
     return extract_parties(
         text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS,
-        temperature=temperature, structured_output=structured_output, stage="clause",
+        temperature=temperature, structured_output=structured_output, stage="clause", gleaning=gleaning,
     )
 
 
 async def aextract_clause(text: str, model: ExtractionModel, *, max_tokens: int = _CLAUSE_MAX_TOKENS,
-                          temperature: float | None = None, structured_output: bool = False) -> Any | None:
+                          temperature: float | None = None, structured_output: bool = False,
+                          gleaning: bool = True) -> Any | None:
     """ASYNC-A4 (ADR-0057): `extract_clause` off the event loop (via `asyncio.to_thread`), the injected
-    deadline-bounded client truly cancelling the docling-graph LLM socket at the deadline. Same contract."""
+    deadline-bounded client truly cancelling the docling-graph LLM socket at the deadline. Same contract.
+    `gleaning` (issue 0019): False on the query leg -- no second completeness call for a short question."""
     from rag_wright.ontology.clause_template import Clause
 
     return await aextract_parties(
         text, model, template=Clause, max_tokens=max_tokens, preamble_chars=_CLAUSE_TEXT_CHARS,
-        temperature=temperature, structured_output=structured_output, stage="clause")
+        temperature=temperature, structured_output=structured_output, stage="clause", gleaning=gleaning)

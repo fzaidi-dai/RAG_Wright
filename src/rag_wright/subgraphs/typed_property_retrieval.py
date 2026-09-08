@@ -125,7 +125,9 @@ def production_typed_property_retrieval(
     from rag_wright.spans.clause_kg_extractor import clause_to_record
 
     async def constraints_fn(query: str) -> set:
-        clause = await aextract_clause(query, extract_model)
+        # issue 0019: gleaning=False -- a user query is short and has nothing to "glean" in a second pass; the
+        # completeness call returned empty and doubled query cost + latency. Ingestion keeps gleaning (default True).
+        clause = await aextract_clause(query, extract_model, gleaning=False)
         if clause is None:
             return set()
         # a QUERY has no clause function -> the NO_FUNCTION sentinel (only the extracted properties are used).

@@ -67,6 +67,18 @@ def _model_stub():
     return ExtractionModel(label="x", provider="openrouter", model="x", base_url="http://x", api_key=None)
 
 
+# --- issue 0019: gleaning is configurable; the query leg turns it OFF (no 2nd completeness call) ---
+
+
+def test_build_pipeline_config_gleaning_defaults_on_and_can_be_disabled():
+    from rag_wright.capabilities.dg_extraction import build_pipeline_config
+
+    on = build_pipeline_config("/tmp/x.md", _model_stub())                    # default: ingestion behavior
+    off = build_pipeline_config("/tmp/x.md", _model_stub(), gleaning=False)   # query leg
+    assert on.gleaning_enabled is True    # docling-graph's completeness pass stays on for ingestion
+    assert off.gleaning_enabled is False  # a short query has nothing to glean -> no second LLM call
+
+
 def test_capture_collects_docling_error_records_from_children():
     # a child logger's ERROR (like the LLM client's "Invalid JSON response") propagates up and is captured
     with capture_docling_errors() as errs:
