@@ -16,6 +16,7 @@ GraphConverter reads (`edge_label`, `graph_reference`, `reference_closed_catalog
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import logging
 import os
 import tempfile
@@ -464,9 +465,17 @@ async def aextract_parties(text: str, model: ExtractionModel, **kwargs: Any) -> 
 
     EXEC-1: it runs on the DEDICATED extraction executor (`extraction_executor()`), NOT the default `to_thread`
     pool -- this is network-bound work, so its concurrency should be bounded by our semaphores + the deployment,
-    not the CPU-derived default that also serves parse/embed/resolve/writes."""
+    not the CPU-derived default that also serves parse/embed/resolve/writes.
+
+    ISSUE-0018: a ThreadPoolExecutor worker starts with an EMPTY context, so the OTel ambient context that
+    `traced_run` sets (langfuse correlation, stored in contextvars) would NOT reach the docling-graph LLM call --
+    its generation would land in a root trace with `sessionId: null`. Capture the CURRENT context at submit time
+    (`copy_context()`, per-call so concurrent extractions each carry their own session) and run the worker inside
+    it (`ctx.run`), so every generation the extraction emits stays attributed to its document/query."""
     loop = asyncio.get_running_loop()
-    return await loop.run_in_executor(extraction_executor(), partial(extract_parties, text, model, **kwargs))
+    ctx = contextvars.copy_context()
+    call = partial(extract_parties, text, model, **kwargs)
+    return await loop.run_in_executor(extraction_executor(), lambda: ctx.run(call))
 
 
 # --- KG-2: per-clause typed property extraction (the same seam, the KG-1 clause template) ---

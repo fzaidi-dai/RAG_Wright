@@ -68,3 +68,27 @@ async def test_aextract_parties_runs_off_the_event_loop(monkeypatch):
     out = await dg.aextract_parties("hello", _MODEL, template=object)
     assert out == "RESULT" and seen["text"] == "hello"
     assert seen["thread"] != threading.current_thread().name  # ran off the loop thread (asyncio.to_thread)
+
+
+async def test_aextract_parties_preserves_context_across_the_executor_hop(monkeypatch):
+    # Engine issue 0018: `traced_run` sets langfuse's correlation via OTel ambient context (contextvars). The
+    # extraction offload hops to a WORKER THREAD (run_in_executor), which starts with an EMPTY context unless we
+    # carry it across -- so the party/clause generations landed as root traces (sessionId: null), uncorrelated.
+    # This proves the fix: a contextvar set before the call is visible INSIDE the worker thread (the real one that
+    # matters is OTel's, but any ContextVar exercises the same copy_context() carry).
+    import contextvars
+
+    probe: contextvars.ContextVar[str] = contextvars.ContextVar("probe_0018", default="MISSING")
+    seen: dict = {}
+
+    def fake_extract(text, model, **kw):
+        seen["probe"] = probe.get()  # read on the WORKER thread
+        return None
+
+    monkeypatch.setattr(dg, "extract_parties", fake_extract)
+    token = probe.set("CORRELATED")
+    try:
+        await dg.aextract_parties("hello", _MODEL, template=object)
+    finally:
+        probe.reset(token)
+    assert seen["probe"] == "CORRELATED"  # the ambient context crossed the run_in_executor boundary
