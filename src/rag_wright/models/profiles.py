@@ -41,6 +41,13 @@ class ModelProfile(BaseModel):
     client_side_structured: bool = False
     # Applied by the seam only to the forced structured call, never to the base client.
     structured_extra_body: Optional[dict[str, Any]] = Field(default=None)
+    # The free-text counterpart to `structured_extra_body`: applied by the seam to the FREE-TEXT generation path
+    # (`astream_text` / the client-side tag-parse path), never to a forced structured call. A reasoning model must
+    # have its reasoning EXPLICITLY set on this path too -- leaving it unset falls to the provider default, which
+    # for qwen3.8 on the streaming path is inconsistent (intermittently returns reasoning-only / empty content).
+    # `structured_extra_body` does not reach here (it binds only to `with_structured_output`), so this is a separate
+    # slot; it also lets the free-text extraction use a DIFFERENT reasoning setting than the forced-structured judge.
+    text_extra_body: Optional[dict[str, Any]] = Field(default=None)
     # Applied by the seam to the BASE client (every call to this model). Carries request-level provider
     # routing (e.g. OpenRouter `{"provider": {"sort": "throughput"}}`) -- a provider flag, so it lives in
     # config + a dated ADR, never in node/agent code (ADR-0027). Grounded: `extra_body` is a real
@@ -156,12 +163,17 @@ PROFILES: dict[str, ModelProfile] = {
     # EXPLICITLY forces reasoning on the forced structured call: leaving it UNSET falls to the provider default,
     # which for a forced tool call does little/no reasoning (measured ~5s + shallow vs ~32s deep) -- the opposite of
     # the intended "reasoning-on, accept the latency" choice. Measured trade-offs on the judge: reasoning-ON ~32s
-    # (deep, chosen), reasoning-OFF ~5s (shallow), two-step tag-parse ~42s (reasons but slower -- kept in reserve
-    # for the flakiness wall, ADR-0045). `provider:{sort:throughput}` dodges the cheapest-provider throttle
-    # (ADR-0027). The free-text query paths (answer generation, query understanding) never see these flags.
+    # (deep, chosen), reasoning-OFF ~5s (shallow).
+    # `text_extra_body={"reasoning":{"enabled":False}}` (issue 0020): the FREE-TEXT/tag-parse path (query constraint
+    # extraction) needs reasoning set EXPLICITLY too -- unset, qwen3.8 on the streaming path intermittently returns
+    # empty content (~1/3 of runs, measured), dropping the query's constraints. OFF (not ON) because constraint
+    # extraction is mechanical: OFF is deterministic + cheaper and drops the redundant raw-phrase `cap_quantum` that
+    # reasoning-ON adds. So the judge reasons deeply while query extraction does not -- two settings, two slots.
+    # `provider:{sort:throughput}` dodges the cheapest-provider throttle (ADR-0027).
     "qwen/qwen3.8-27b": ModelProfile(
         model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}},
+        text_extra_body={"reasoning": {"enabled": False}},
         extra_body={"provider": {"sort": "throughput"}},
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on

@@ -152,7 +152,10 @@ def build_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) ->
     """
     params: dict[str, Any] = {"max_retries": _MAX_RETRIES, "timeout": _TIMEOUT_S}
     profile = profile_for(model_id)
-    extra_body = {**(profile.extra_body or {}), **_provider_pin()}  # env pin merges over/into profile routing
+    caller_extra = overrides.pop("extra_body", None)  # a per-call extra_body (e.g. astream_text's text_extra_body)
+    # MERGE order: profile base routing < env provider pin < caller extra_body -- so a caller adds/overrides a key
+    # (e.g. reasoning) WITHOUT dropping the profile's provider routing (a plain params.update would clobber it all).
+    extra_body = {**(profile.extra_body or {}), **_provider_pin(), **(caller_extra or {})}
     if extra_body:
         params["extra_body"] = extra_body
     params.update(overrides)  # caller overrides win
@@ -274,6 +277,12 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
         "max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S, "stream_chunk_timeout": _STREAM_CHUNK_TIMEOUT_S}
     if max_tokens is not None:
         overrides["max_tokens"] = max_tokens
+    # The FREE-TEXT reasoning control (profile.text_extra_body): applied to this streaming path only, never to a
+    # forced structured call. For a reasoning model this must be EXPLICIT -- unset, qwen3.8 streaming intermittently
+    # returns empty content (issue 0020). build_model merges it OVER the profile's base extra_body (provider routing).
+    text_eb = profile_for(model_id).text_extra_body
+    if text_eb:
+        overrides["extra_body"] = text_eb
     traced = tracing.tracing_on()
     if traced:
         overrides["stream_usage"] = True  # LC/OpenRouter emit usage_metadata on the final chunk (issue 0017)

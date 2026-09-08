@@ -113,27 +113,54 @@ def build_typed_property_retrieval(
     return g.compile()
 
 
+# issue 0020: query-side structured output is CLIENT-SIDE tag-parse (ADR-0045, the query-side standing rule), NOT
+# the document-shaped docling-graph Clause template. That template sends ~6k tokens of INGESTION schema (40% of it
+# phrase-cue descriptions a query does not need) to parse an ~88-char question, for ~26 tokens of output, and makes
+# TWO calls (the gleaning pass, issue 0019). Tag-parse over the SAME Clause contract is ~62% fewer tokens and ONE
+# call, and is the engine's own query-side path. A-lean (a description-free query variant) is the planned follow-up.
+_QUERY_CONSTRAINT_PROMPT = (
+    "Identify the typed clause properties this QUERY is asking about, and their values. Fill ONLY the tags whose "
+    "property the query actually mentions; omit every other tag.\n\nQUERY: {query}")
+
+
+async def aquery_constraints(query: str, model_id: str, *, structured_factory=None) -> set[tuple[str, str]]:
+    """Extract a query's typed `(dimension, value)` constraints via client-side tag-parse over the `Clause`
+    contract (issue 0020, ADR-0045). Same `Clause -> clause_to_record` mapping as the ingestion path, so the
+    constraints are identical in shape; a QUERY carries no clause function (the `NO_FUNCTION` sentinel -- only the
+    extracted properties are used). A persistent parse failure degrades to NO constraints (never a hard error), so
+    retrieval proceeds over the whole-index pool with no boost. `structured_factory` is injected for hermetic tests
+    (defaults to `build_tag_structured`)."""
+    from rag_wright.contracts.function import NO_FUNCTION
+    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.ontology.clause_template import Clause
+    from rag_wright.spans.clause_kg_extractor import clause_to_record
+
+    if structured_factory is None:
+        from rag_wright.models.tag_structured import build_tag_structured
+        structured_factory = build_tag_structured
+    try:
+        clause = await structured_factory(model_id, Clause, label="query-constraints").ainvoke(
+            _QUERY_CONSTRAINT_PROMPT.format(query=query))
+    except Exception:  # noqa: BLE001 - a persistent client-side parse failure -> no constraints, not a crash
+        return set()
+    if clause is None:
+        return set()
+    rec = clause_to_record(clause, chunk_id=ChunkId.of("q", 0, query), function=NO_FUNCTION)
+    return {(a.dimension.value, a.value) for a in rec.assertions}
+
+
 def production_typed_property_retrieval(
     *, store: Any, embedder: Any, extract_model: Any, k: int = 8, pool_k: int = 30,
 ):
-    """Wire the real Leg B: granite constraint-extraction + the `property_boosted_retrieval` capability over the
-    store + encoders (local or the A100 adapters). ADR-0047: no function classifier -- the pool is whole-index."""
-    from rag_wright.capabilities.dg_extraction import aextract_clause
+    """Wire the real Leg B: query constraint-extraction (tag-parse, issue 0020) + the `property_boosted_retrieval`
+    capability over the store + encoders (local or the A100 adapters). ADR-0047: no function classifier -- the pool
+    is whole-index. `extract_model` may be an `ExtractionModel` (its `.model` slug is used) or a plain model id."""
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
-    from rag_wright.contracts.function import NO_FUNCTION
-    from rag_wright.contracts.identifiers import ChunkId
-    from rag_wright.spans.clause_kg_extractor import clause_to_record
+
+    model_id = getattr(extract_model, "model", extract_model)  # ExtractionModel.model, or a bare id
 
     async def constraints_fn(query: str) -> set:
-        # issue 0019: gleaning=False -- a user query is short and has nothing to "glean" in a second pass; the
-        # completeness call returned empty and doubled query cost + latency. Ingestion keeps gleaning (default True).
-        clause = await aextract_clause(query, extract_model, gleaning=False)
-        if clause is None:
-            return set()
-        # a QUERY has no clause function -> the NO_FUNCTION sentinel (only the extracted properties are used).
-        # Was a hardcoded "Cap On Liability" hack to pass ClausePropertyRecord validation -- mislabeled every query.
-        rec = clause_to_record(clause, chunk_id=ChunkId.of("q", 0, query), function=NO_FUNCTION)
-        return {(a.dimension.value, a.value) for a in rec.assertions}
+        return await aquery_constraints(query, model_id)
 
     def retrieve_fn(query: str, constraints: set) -> list:
         # ADR-0047: functions=() -> property_boosted_retrieval runs over the WHOLE-INDEX BGE pool (no gate).

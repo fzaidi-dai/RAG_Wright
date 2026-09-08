@@ -132,6 +132,15 @@ def test_parse_nested_model_when_the_model_FLATTENS_the_subfields():
     assert out.bound is not None and out.bound.label == "x" and out.bound.kind is _Choice.B
 
 
+def test_parse_nested_model_when_the_wrapper_tag_is_ENTIRELY_ABSENT():
+    # issue 0020: a stronger flatten -- the model emits the sub-fields as siblings with NO <bound> wrapper AT ALL
+    # (the real temporal_bound miss: <temporal_duration>/<temporal_kind> emitted flat, no <bounded_by>). The parser
+    # must still recover the nested model from its (unique) sub-field names, or the whole nested value is dropped.
+    text = "<title>t</title>\n<label>x</label>\n<kind>beta</kind>"  # NO <bound> ... </bound> anywhere
+    out = parse_tagged(text, _Deep)
+    assert out.bound is not None and out.bound.label == "x" and out.bound.kind is _Choice.B
+
+
 def test_parse_list_of_models():
     text = ("<title>t</title><rows>"
             "<item><label>a</label><kind>alpha</kind></item>"

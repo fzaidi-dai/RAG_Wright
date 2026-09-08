@@ -176,10 +176,24 @@ def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False,
     for name, field in schema.model_fields.items():
         if fields is not None and name not in fields:
             continue
+        kind, _sub, _ = _classify(field.annotation)
         body = _extract(text, name)
         if body is None:
+            # ISSUE-0020: a nested single model may be FULLY FLATTENED -- the model emits its sub-fields as siblings
+            # with NO <name> wrapper at all (the temporal_bound miss: <temporal_duration>/<temporal_kind> flat, no
+            # <bounded_by>). Unlike the wrapper-present flatten (handled in `_field_value` via full_text), that case
+            # is invisible here because `_extract(text, name)` is None. Recover it from the full text by the sub-
+            # model's (unique) sub-field names; every other absent tag is genuinely absent -> omit.
+            if kind == "nested" and any((_extract(text, sn) or "").strip() for sn in _sub.model_fields):  # type: ignore[union-attr]
+                try:
+                    val = parse_tagged(text, _sub, lenient=lenient)  # type: ignore[arg-type]
+                except ValidationError:
+                    if not lenient:
+                        raise
+                    val = None
+                if val is not None:
+                    data[name] = val
             continue
-        kind, _sub, _ = _classify(field.annotation)
         if kind in ("scalar", "list_scalar") and not body.strip():
             continue  # an empty <tag></tag> means "not provided" -> omit (never coerce "" to an enum OTHER)
         try:

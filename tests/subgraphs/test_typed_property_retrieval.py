@@ -10,6 +10,7 @@ from langgraph.types import RetryPolicy
 from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
 from rag_wright.subgraphs.typed_property_retrieval import (
     TypedPropertyRetrieval,
+    aquery_constraints,
     build_typed_property_retrieval,
 )
 
@@ -75,3 +76,42 @@ async def test_retrieve_failure_degrades_to_empty_results_never_crashes():
     seams, _, _ = _seams(constraints={("assignment_consent", "free")}, results=[_span("s3")], fail_retrieve=99)
     out = await _run(seams)
     assert out.results == []  # empty, but a valid result -- no crash
+
+
+# --- issue 0020: query constraint extraction via client-side tag-parse (ADR-0045), same Clause -> (dim,value) ---
+
+
+def _tagparse_stub(clause):
+    """A build_tag_structured stand-in: ignores model/schema, returns a runnable whose .ainvoke yields `clause`
+    (or raises if `clause` is an Exception) -- so aquery_constraints is tested with no LLM/network."""
+
+    class _R:
+        async def ainvoke(self, _prompt):
+            if isinstance(clause, Exception):
+                raise clause
+            return clause
+
+    return lambda _m, _s, **_kw: _R()
+
+
+async def test_aquery_constraints_maps_a_tagparsed_clause_to_dim_value_pairs():
+    from rag_wright.ontology.clause_template import CapBasis, CapConstraint, Clause
+
+    clause = Clause(caps=CapConstraint(cap_basis=CapBasis.MULTIPLE_OF_FEES))
+    cons = await aquery_constraints("cap at a multiple of fees", "qwen/qwen3.8-27b",
+                                    structured_factory=_tagparse_stub(clause))
+    assert cons == {("cap_basis", "multiple_of_fees")}  # same (dim,value) mapping as the ingestion path
+
+
+async def test_aquery_constraints_degrades_to_empty_on_parse_failure():
+    # a persistent tag-parse failure -> no constraints (retrieval still runs over the whole-index pool), never a crash
+    cons = await aquery_constraints("x", "qwen/qwen3.8-27b",
+                                    structured_factory=_tagparse_stub(RuntimeError("parse blip")))
+    assert cons == set()
+
+
+async def test_aquery_constraints_empty_clause_yields_no_constraints():
+    from rag_wright.ontology.clause_template import Clause
+
+    cons = await aquery_constraints("hello", "qwen/qwen3.8-27b", structured_factory=_tagparse_stub(Clause()))
+    assert cons == set()  # a query mentioning no property -> empty (all fields defaulted/absent)

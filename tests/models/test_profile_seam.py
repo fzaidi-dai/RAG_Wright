@@ -192,6 +192,16 @@ def test_base_extra_body_binds_to_the_base_client(monkeypatch):
     assert client.ctor_kwargs["extra_body"] == {"provider": {"sort": "throughput"}}  # on the base client
 
 
+def test_build_model_merges_caller_extra_body_over_profile_base(monkeypatch):
+    # issue 0020: a per-call extra_body (e.g. astream_text's text_extra_body reasoning control) MERGES over the
+    # profile's base routing -- it must add/override a key WITHOUT dropping the provider routing.
+    profile = ModelProfile(model_id="vendor/routed", extra_body={"provider": {"sort": "throughput"}})
+    monkeypatch.setitem(profiles.PROFILES, "vendor/routed", profile)
+    client = seam.build_model("vendor/routed", extra_body={"reasoning": {"enabled": False}})
+    assert client.ctor_kwargs["extra_body"] == {
+        "provider": {"sort": "throughput"}, "reasoning": {"enabled": False}}  # merged, not clobbered
+
+
 def test_deepseek_v4_pro_profile_routes_by_throughput():
     # the extraction default (DeepSeek V4 Pro) prefers the fastest provider, not the cheapest (ADR-0027)
     p = profiles.profile_for(profiles.DEFAULT_STRUCTURED_REASONING)
