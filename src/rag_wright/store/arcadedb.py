@@ -766,19 +766,17 @@ class ArcadeDBStore:
         return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
 
     def known_document_ids(self) -> set[str]:
-        """Issue 0031: the DISTINCT source-document ids the two scopable surfaces can see -- the UNION of
-        `Span.contract_id` (what span retrieval scopes on) and `Relationship.source_doc_id` (what a graph
-        traversal scopes on). Powers unknown-document validation (a `documents` scope naming an id absent from
-        BOTH surfaces raises, mirroring issue 0007's `requirement_sources`) WITHOUT loading any span/edge rows.
-        A type absent on a fresh DB contributes nothing."""
-        types = self.type_names()
-        out: set[str] = set()
-        if SPAN_TYPE in types:
-            out |= {r["d"] for r in self._query(f"SELECT DISTINCT(contract_id) AS d FROM {SPAN_TYPE}") if r.get("d")}
-        if REL_EDGE_TYPE in types:
-            out |= {r["d"] for r in self._query(
-                f"SELECT DISTINCT(source_doc_id) AS d FROM {REL_EDGE_TYPE}") if r.get("d")}
-        return out
+        """Issue 0031: the DISTINCT ids of every INGESTED document -- the `Contract` nodes (CU-B3), the
+        per-document registry written once per ingested source document. This is the validation set for a
+        `documents` scope: a scope naming a document that was never ingested raises (mirrors issue 0007's
+        `requirement_sources`), but a document that WAS ingested yet indexed nothing (unreadable / empty ->
+        no spans, no edges) is a KNOWN document and PASSES -- it simply contributes nothing to the sweep,
+        which the product reports through its coverage line rather than having one bad document raise and
+        break the whole matter's sweep. (Deliberately the ingested-document set, not the narrower union of
+        documents that produced spans or edges.) The Contract type may not exist yet on a fresh DB -> empty."""
+        if CONTRACT_TYPE not in self.type_names():
+            return set()
+        return {r["contract_id"] for r in self.all_contracts() if r.get("contract_id")}
 
     def entities_by_name(self, name: str) -> list[dict]:
         """Resolve a party NAME to its graph entities (issue 0030 / ADR-0093): the first step before

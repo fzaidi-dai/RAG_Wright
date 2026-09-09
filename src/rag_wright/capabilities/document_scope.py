@@ -14,15 +14,22 @@ from typing import Any, Optional
 
 
 class UnknownDocumentError(ValueError):
-    """A `documents` scope named a document id that is present in NEITHER the span index nor the graph edges
-    of the store (issue 0031). Mirrors compliance's `UnknownComplianceSourceError` (issue 0007): naming a
-    document that does not exist is a caller error, surfaced explicitly rather than silently returning empty.
-    Carries `.unknown` and `.present`."""
+    """A `documents` scope named a document id that was never ingested into the store (issue 0031). Mirrors
+    compliance's `UnknownComplianceSourceError` (issue 0007): naming a document that does not exist is a
+    caller error, surfaced explicitly rather than silently returning empty. Carries `.unknown` (the offending
+    ids) and `.present` (the FULL known-document set) as structured attributes; the message names every
+    unknown id but samples `.present`, which can run to thousands of documents in a real store."""
+
+    _PRESENT_SAMPLE = 20
 
     def __init__(self, unknown: list[str], present: list[str]) -> None:
         self.unknown = unknown
-        self.present = present
-        super().__init__(f"unknown document id(s): {unknown}; present in store: {present}")
+        self.present = present  # full set, for programmatic inspection
+        if len(present) > self._PRESENT_SAMPLE:
+            shown = f"{present[:self._PRESENT_SAMPLE]} ... (+{len(present) - self._PRESENT_SAMPLE} more)"
+        else:
+            shown = str(present)
+        super().__init__(f"unknown document id(s): {unknown}; present in store: {shown}")
 
 
 def validate_documents(store: Any, documents: Optional[list[str]]) -> None:

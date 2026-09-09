@@ -130,20 +130,21 @@ def test_add_affiliation_edges_stamps_source_doc_id():
 
 # --- known_document_ids ---------------------------------------------------------------------------------------
 
-def test_known_document_ids_unions_spans_and_edges():
+def test_known_document_ids_is_the_ingested_contract_set():
+    # issue 0031 (revised): validate against EVERY INGESTED document (Contract nodes), so an ingested-but-empty
+    # doc (indexed no spans/edges) is still KNOWN and passes -- one unreadable doc must not break a matter's sweep
     def rows(sql: str):
-        if "FROM Span" in sql:
-            return [{"d": "docA"}, {"d": "docB"}, {"d": None}]
-        if "FROM Relationship" in sql:
-            return [{"d": "docB"}, {"d": "docC"}]
+        if "FROM Contract" in sql:
+            return [{"contract_id": "docA"}, {"contract_id": "docB"}, {"contract_id": None},
+                    {"contract_id": "docEmpty"}]  # docEmpty ingested but produced no spans/edges
         return []
 
     store, _ = _capturing_store(rows)
-    store.type_names = lambda: {"Span", "Relationship"}
-    assert store.known_document_ids() == {"docA", "docB", "docC"}  # union, None dropped
+    store.type_names = lambda: {"Contract"}
+    assert store.known_document_ids() == {"docA", "docB", "docEmpty"}  # None dropped; empty doc still known
 
 
-def test_known_document_ids_missing_types_empty():
+def test_known_document_ids_missing_contract_type_empty():
     store, _ = _capturing_store()
     store.type_names = lambda: set()
     assert store.known_document_ids() == set()

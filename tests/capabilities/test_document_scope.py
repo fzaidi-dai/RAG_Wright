@@ -24,6 +24,18 @@ def test_validate_documents_raises_on_unknown():
     with pytest.raises(UnknownDocumentError) as ei:
         validate_documents(_Store({"docA"}), ["docA", "ghost"])
     assert ei.value.unknown == ["ghost"] and "docA" in ei.value.present
+    assert "ghost" in str(ei.value)  # the message NAMES the offending id
+
+
+def test_error_names_unknowns_and_samples_a_large_present_set():
+    # .present carries the FULL set; the message samples it (a real store can hold thousands of documents)
+    known = {f"doc{i}" for i in range(500)}
+    with pytest.raises(UnknownDocumentError) as ei:
+        validate_documents(_Store(known), ["ghost1", "ghost2"])
+    assert set(ei.value.unknown) == {"ghost1", "ghost2"}
+    assert len(ei.value.present) == 500  # full set retained for programmatic use
+    msg = str(ei.value)
+    assert "ghost1" in msg and "ghost2" in msg and "more)" in msg  # unknowns named, present sampled
 
 
 def test_validate_documents_none_and_empty_pass():
