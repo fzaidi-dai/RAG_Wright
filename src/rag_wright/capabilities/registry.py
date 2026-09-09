@@ -96,6 +96,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "typed_constraint_match_rank",  # function: KG-5a graded constraint match (recall-safe, subsumption)
         "dense_rank_tiebreak",  # function: cosine order for meaningful tie-breaking (KG-6/V4)
         "property_boosted_retrieval",  # function: BGE pool + span-clause join + typed rerank (SPAN-CLAUSE-RERANK)
+        "span_relevance_judgment",  # agent_skill: per-span relevance VERDICT (span x condition -> relevant/not/uncertain); issue 0023, SKILL-SPLIT
         # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
         "party_clause_linking",  # function: PARTY_TO edges (Entity -> Contract) by normalized-name join
         "clause_exception_linking",  # function: IsExceptionTo edges (Uncapped -> Cap carve-out) by proximity (ADR-0044)

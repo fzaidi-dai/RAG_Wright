@@ -32,7 +32,8 @@ from typing import Any, Awaitable, Callable
 from fastmcp import FastMCP
 
 from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
-from rag_wright.subgraphs.typed_property_retrieval import TypedPropertyRetrieval
+from rag_wright.capabilities.span_relevance_judgment import RelevanceVerdict
+from rag_wright.subgraphs.typed_property_retrieval import JudgedSpan, TypedPropertyRetrieval
 
 # retrieval_fn: (query) -> TypedPropertyRetrieval. Injected so the server is testable without infra.
 # ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async typed_property_retrieval subgraph.
@@ -76,8 +77,10 @@ def build_typed_property_retrieval_mcp(
                 property value, e.g. "cap on liability at a multiple of fees").
 
         Returns:
-            {query, results[]} where each result is a ranked cited span:
-            {span_id, text, function, match_score, matched[], rank}. Empty results when nothing matches.
+            {query, results[]} where each result is a ranked cited span WITH its relevance verdict (issue 0023):
+            {span: {span_id, text, function, match_score, matched[], rank}, relevance: {verdict, rationale,
+            confidence} | null}. `verdict` is relevant | not_relevant | uncertain; `relevance` is null only when no
+            relevance judge is wired. Empty results when nothing matches.
         """
         return _retrieval_to_dict(await retrieval_fn(query))
 
@@ -121,14 +124,18 @@ def demo_retrieval_fn() -> RetrievalFn:
 
     async def _retrieve(query: str) -> TypedPropertyRetrieval:
         results = [
-            RankedSpan(
-                span_id="AcmeMSA:12:deadbeef01",
-                text="Seller's aggregate liability shall not exceed two times (2x) the fees paid.",
-                function="Cap On Liability", match_score=0.94, matched=[("cap_multiple", "2x")], rank=1),
-            RankedSpan(
-                span_id="BetaSaaS:7:cafe0042",
-                text="In no event shall liability exceed the total fees paid in the prior 12 months.",
-                function="Cap On Liability", match_score=0.71, matched=[("cap_basis", "fees paid")], rank=2),
+            JudgedSpan(
+                span=RankedSpan(
+                    span_id="AcmeMSA:12:deadbeef01",
+                    text="Seller's aggregate liability shall not exceed two times (2x) the fees paid.",
+                    function="Cap On Liability", match_score=0.94, matched=[("cap_multiple", "2x")], rank=1),
+                relevance=RelevanceVerdict(verdict="relevant", rationale="an express liability cap", confidence=0.95)),
+            JudgedSpan(
+                span=RankedSpan(
+                    span_id="BetaSaaS:7:cafe0042",
+                    text="In no event shall liability exceed the total fees paid in the prior 12 months.",
+                    function="Cap On Liability", match_score=0.71, matched=[("cap_basis", "fees paid")], rank=2),
+                relevance=RelevanceVerdict(verdict="relevant", rationale="a fees-paid liability cap", confidence=0.9)),
         ]
         return TypedPropertyRetrieval(query=query, results=results)
 

@@ -5,7 +5,8 @@ not an imperative script.
 A thin composite that wires the registered front-door capability + the registered retrieval capability.
 Flow: `extract_constraints` (LLM: query -> typed (dim,value) constraints) -> `retrieve` (runs
 `property_boosted_retrieval` over the WHOLE-INDEX BGE pool -> edge.span_id join -> typed_constraint_match_rank ->
-cited spans) -> `assemble`. START -> extract_constraints -> retrieve -> assemble -> END.
+cited spans) -> `judge_relevance` (issue 0023: a per-span relevance VERDICT against the condition, so `not_found`
+is reachable) -> `assemble`. START -> extract_constraints -> retrieve -> judge_relevance -> assemble -> END.
 
 ADR-0047: the precomputed clause-function pre-filter was RETIRED (graded-recall showed ON~=OFF, ceiling 0.969,
 and the gate is how a mislabel corrupts retrieval). The `classify_functions` node is gone; retrieval is over the
@@ -25,25 +26,44 @@ from langgraph.runtime import Runtime
 from pydantic import BaseModel
 
 from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
+from rag_wright.capabilities.span_relevance_judgment import Condition, RelevanceVerdict, finalize_verdict
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
 # ASYNC-C1 (ADR-0057): constraints_fn is async (its model call gets a true wall-clock deadline via aextract_clause).
 ConstraintsFn = Callable[[str], Awaitable[set]]  # query -> typed (dimension, value) constraints
 RetrieveFn = Callable[[str, set], list]  # (query, constraints) -> [RankedSpan]  (ADR-0047: whole-index pool)
+# issue 0023: (spans, condition) -> a RAW RelevanceVerdict per span, order-preserved (1:1). Injected + optional.
+RelevanceJudgeFn = Callable[[list[RankedSpan], Condition], Awaitable[list[RelevanceVerdict]]]
+
+
+class JudgedSpan(BaseModel):
+    """A retrieved span composed with its relevance verdict (issue 0023) -- the subgraph's composition of a
+    retrieval fact (`span`) and a judgement fact (`relevance`), mirroring how the compliance subgraph composes a
+    claim + requirement + verdict into a `ComplianceFinding` rather than growing a field on the input contract.
+    `relevance` is None ONLY when no judge was wired (the whole stage off) -- a distinct state from the `uncertain`
+    VERDICT (the judge ran and could not decide). Within a judged sweep every span carries a real verdict."""
+
+    span: RankedSpan
+    relevance: RelevanceVerdict | None = None
 
 
 class TypedPropertyRetrieval(BaseModel):
-    """The `typed_property_retrieval` output: the query and its property-boosted, cited spans (FR-Q.6)."""
+    """The `typed_property_retrieval` output: the query and its property-boosted, cited, RELEVANCE-JUDGED spans
+    (FR-Q.6, issue 0023). Each result carries the retrieved span and its per-span relevance verdict, so the caller
+    can group matched / possible / not_found without choosing a similarity threshold."""
 
     query: str
-    results: list[RankedSpan]
+    results: list[JudgedSpan]
 
 
 class _State(TypedDict, total=False):
     query: str
+    clause_type: str          # issue 0023: the condition's clause type (the primary relevance test)
+    value_condition: str      # issue 0023: the condition's narrower test (often absent/shared in a sweep)
     constraints: set
-    results: list
+    results: list             # [RankedSpan] from retrieve
+    judged: list              # [JudgedSpan] from judge_relevance
     retrieval: TypedPropertyRetrieval
 
 
@@ -79,11 +99,14 @@ def build_typed_property_retrieval(
     constraints_fn: ConstraintsFn,
     retrieve_fn: RetrieveFn,
     *,
+    relevance_judge: RelevanceJudgeFn | None = None,
     retry_policy: Any = DEFAULT_RETRY,
 ):
-    """Compile the `typed_property_retrieval` subgraph. The two IO seams are injected for hermetic testing;
+    """Compile the `typed_property_retrieval` subgraph. The IO seams are injected for hermetic testing;
     `retry_policy` is each IO node's policy (overridable for fast tests). ADR-0047: no function pre-filter --
-    `retrieve` runs over the whole-index pool with the property boost."""
+    `retrieve` runs over the whole-index pool with the property boost. `relevance_judge` (issue 0023) is optional:
+    when wired (and a `clause_type` is in the input) every retrieved span is judged relevant/not_relevant/uncertain
+    against the condition, so `not_found` is reachable; when None, spans pass through unjudged (`relevance=None`)."""
     max_attempts = int(getattr(retry_policy, "max_attempts", 3))
 
     async def extract_constraints(state: _State, runtime: Runtime) -> _State:
@@ -99,16 +122,36 @@ def build_typed_property_retrieval(
             lambda: {"results": retrieve_fn(state["query"], state.get("constraints", set()))},
             {"results": []}, runtime, max_attempts)
 
+    async def judge_relevance(state: _State, runtime: Runtime) -> _State:
+        results: list[RankedSpan] = state.get("results", [])
+        clause_type = state.get("clause_type")
+        if relevance_judge is None or not clause_type or not results:
+            # no judge wired (or no condition / nothing retrieved) -> pass through UNJUDGED (relevance None)
+            return {"judged": [JudgedSpan(span=r) for r in results]}
+        condition = Condition(clause_type=clause_type, value_condition=state.get("value_condition"),
+                              question=state.get("query"))
+
+        async def _work() -> dict:
+            raw = await relevance_judge(results, condition)
+            return {"judged": [JudgedSpan(span=r, relevance=finalize_verdict(v)) for r, v in zip(results, raw)]}
+
+        # degrade: a wired judge that fails all attempts still gives every span a verdict (conservative uncertain),
+        # never None -- so "judged-but-uncertain" is never confused with "not judged".
+        empty = {"judged": [JudgedSpan(span=r, relevance=finalize_verdict(None)) for r in results]}
+        return await _adegrading_io("typed_property_retrieval.judge_relevance", _work, empty, runtime, max_attempts)
+
     def assemble(state: _State) -> _State:
-        return {"retrieval": TypedPropertyRetrieval(query=state["query"], results=state.get("results", []))}
+        return {"retrieval": TypedPropertyRetrieval(query=state["query"], results=state.get("judged", []))}
 
     g = StateGraph(_State)
     g.add_node("extract_constraints", extract_constraints, retry_policy=retry_policy)
     g.add_node("retrieve", retrieve, retry_policy=retry_policy)
+    g.add_node("judge_relevance", judge_relevance, retry_policy=retry_policy)
     g.add_node("assemble", assemble)
     g.add_edge(START, "extract_constraints")
     g.add_edge("extract_constraints", "retrieve")
-    g.add_edge("retrieve", "assemble")
+    g.add_edge("retrieve", "judge_relevance")
+    g.add_edge("judge_relevance", "assemble")
     g.add_edge("assemble", END)
     return g.compile()
 
@@ -151,10 +194,16 @@ async def aquery_constraints(query: str, model_id: str, *, structured_factory=No
 
 def production_typed_property_retrieval(
     *, store: Any, embedder: Any, extract_model: Any, k: int = 8, pool_k: int = 30,
+    judge_model_id: Any = None,
 ):
     """Wire the real Leg B: query constraint-extraction (tag-parse, issue 0020) + the `property_boosted_retrieval`
     capability over the store + encoders (local or the A100 adapters). ADR-0047: no function classifier -- the pool
-    is whole-index. `extract_model` may be an `ExtractionModel` (its `.model` slug is used) or a plain model id."""
+    is whole-index. `extract_model` may be an `ExtractionModel` (its `.model` slug is used) or a plain model id.
+
+    `judge_model_id` (issue 0023): when given, wire the per-span relevance judge -- every returned span is judged
+    relevant/not_relevant/uncertain against the condition (the graph input's `clause_type` + `value_condition`), so
+    the product can reach `not_found` without a threshold. Omit it and spans pass through unjudged (`relevance`
+    None), unchanged behaviour. The judge runs the returned `k` spans CONCURRENTLY; `k` is the caller's cost lever."""
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
 
     model_id = getattr(extract_model, "model", extract_model)  # ExtractionModel.model, or a bare id
@@ -167,7 +216,17 @@ def production_typed_property_retrieval(
         return property_boosted_retrieval(
             query, store=store, embedder=embedder, functions=(), constraints=constraints, k=k, pool_k=pool_k)
 
-    return build_typed_property_retrieval(constraints_fn, retrieve_fn)
+    relevance_judge: RelevanceJudgeFn | None = None
+    if judge_model_id is not None:
+        from rag_wright.capabilities.span_relevance_judgment import ajudge_spans, build_arelevance_judge_fn
+        jid = getattr(judge_model_id, "model", judge_model_id)  # accept an ExtractionModel or a bare id
+        _ajudge = build_arelevance_judge_fn(jid)
+
+        async def relevance_judge(spans: list[RankedSpan], condition: Condition) -> list[RelevanceVerdict]:
+            # judge exactly the returned spans, concurrently; matched[] passed as CONTEXT (evidence, not verdict)
+            return await ajudge_spans([(s.text, s.matched) for s in spans], condition, ajudge_fn=_ajudge)
+
+    return build_typed_property_retrieval(constraints_fn, retrieve_fn, relevance_judge=relevance_judge)
 
 
 def register_typed_property_retrieval(registry) -> None:

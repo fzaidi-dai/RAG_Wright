@@ -8,20 +8,13 @@ from rag_wright.capabilities.property_boosted_retrieval import RankedSpan, prope
 class _FakeStore:
     """A tiny in-memory stand-in: a BGE-ordered pool per function + the span->props / span->text joins."""
 
-    def __init__(self, pool, props, texts, scores=None):
+    def __init__(self, pool, props, texts):
         self._pool = pool  # {function: [span_id, ...] in BGE order}
         self._props = props  # {span_id: {(dim, value)}}
         self._texts = texts  # {span_id: text}
-        self._scores = scores or {}  # {span_id: fused RRF score} (issue 0023); omitted -> no `score` key
 
     def span_hybrid_search(self, dense, sparse, *, k, function=None):
-        hits = []
-        for s in self._pool.get(function, [])[:k]:
-            h = {"span_id": s, "function": function}
-            if s in self._scores:
-                h["score"] = self._scores[s]
-            hits.append(h)
-        return hits
+        return [{"span_id": s, "function": function} for s in self._pool.get(function, [])[:k]]
 
     def span_properties(self, span_ids):
         return {s: set(self._props.get(s, set())) for s in span_ids}
@@ -56,30 +49,6 @@ def test_constraint_matching_spans_are_boosted_above_bge_order():
     assert out[0] == RankedSpan(span_id="s3", text="three", function="Anti-Assignment",
                                 match_score=1.0, matched=[("assignment_consent", "free")], rank=1)
     assert out[1].match_score == 0.0 and out[1].matched == []
-
-
-def test_retrieval_score_is_carried_for_the_relevance_floor():
-    # issue 0023: the fused RRF relevance that ordered the pool is carried on RankedSpan so a caller can apply its
-    # OWN floor (matched/possible/not_found). match_score (constraint count) and retrieval_score are independent.
-    store = _FakeStore(
-        pool={None: ["s1", "s2"]},
-        props={"s1": {("cap_basis", "multiple_of_fees")}, "s2": set()},
-        texts={"s1": "one", "s2": "two"},
-        scores={"s1": 0.031, "s2": 0.016},
-    )
-    out = property_boosted_retrieval(
-        "cap", store=store, embedder=_FakeEmbedder(),
-        functions=[], constraints={("cap_basis", "multiple_of_fees")}, k=2)
-    by_id = {r.span_id: r for r in out}
-    assert by_id["s1"].retrieval_score == 0.031 and by_id["s1"].match_score == 1.0  # matched AND its fused score
-    assert by_id["s2"].retrieval_score == 0.016 and by_id["s2"].match_score == 0.0  # possible: retrieved, 0 match
-
-
-def test_retrieval_score_is_none_when_the_store_omits_it():
-    # a backend that surfaces no fused score -> retrieval_score None (Langfuse-style graceful absence), not a crash
-    store = _FakeStore(pool={None: ["a"]}, props={"a": set()}, texts={"a": "A"})  # no scores
-    out = property_boosted_retrieval("q", store=store, embedder=_FakeEmbedder(), functions=[], constraints=set(), k=1)
-    assert out[0].retrieval_score is None
 
 
 def test_bge_order_is_the_tiebreak_within_equal_match():

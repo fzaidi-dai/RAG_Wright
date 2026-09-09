@@ -527,11 +527,8 @@ class ArcadeDBStore:
             "{ fusion: 'RRF' }))"
         )
         where = f" WHERE function = {_sql_str(function)}" if function else ""
-        # `score` is the RRF fused relevance the fusion computed (higher = better) -- projected so the caller can
-        # carry it as a relevance signal (issue 0023: a floor for matched/possible/not_found). `vector.fuse`
-        # exposes `score` on the fused record (grounded live: neighbors expose `distance`, fuse auto-flips to `score`).
         return self._query(
-            f"SELECT span_id, parent_chunk_id, parent_okf_path, function, score FROM ({fused}){where} LIMIT {k}"
+            f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({fused}){where} LIMIT {k}"
         )
 
     def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:

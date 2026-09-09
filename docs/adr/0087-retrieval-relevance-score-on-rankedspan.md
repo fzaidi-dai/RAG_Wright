@@ -1,6 +1,6 @@
 # ADR-0087: carry the fused retrieval score on RankedSpan (a relevance floor signal)
 
-**Status:** accepted · **Date:** 2026-09-09 · **Issue:** engine 0023 (RuleWright) · **Builds on:** ADR-0033 (property-boosted retrieval), ADR-0047 (whole-index pool), ADR-0008 (ArcadeDB vector functions grounded via vendor docs)
+**Status:** SUPERSEDED by ADR-0088 (2026-09-09). The `retrieval_score` this ADR added was reverted: RuleWright's retest showed the RRF score with a single contributing retriever is `1/(60+position)` — a relabeling of the row number, not a relevance signal (a correct rank-1 hit scored identically to a nonsense query). No *score* (RRF, cosine, or cross-encoder) removes the corpus-specific threshold knob. ADR-0088 replaces it with a per-span relevance **verdict**. · **Date:** 2026-09-09 · **Issue:** engine 0023 (RuleWright) · **Builds on:** ADR-0033 (property-boosted retrieval), ADR-0047 (whole-index pool), ADR-0008 (ArcadeDB vector functions grounded via vendor docs)
 
 ## Context
 
