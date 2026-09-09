@@ -16,6 +16,7 @@ from rag_wright.capabilities.answer_generator import (
     EvidenceItem,
     GeneratedAnswer,
     _evidence_block,
+    _scrub_prose,
     generate_answer,
     generate_answer_best_of_n,
     generate_answer_reasoned,
@@ -97,6 +98,24 @@ def test_prose_scrubbed_of_ids_and_annotations():
     assert "[" not in result.answer and "]" not in result.answer  # no annotation groups survive
     assert "shall not exceed the fees paid" in result.answer      # the real clause quote is kept
     assert "  " not in result.answer and " ." not in result.answer  # prose stays tidy after removal
+
+
+def test_scrub_repairs_punctuation_orphaned_by_a_removed_citation_list():
+    # issue 0022: removing the markers of a citation LIST leaves the separating comma orphaned before the terminal
+    # punctuation (",." / a trailing ","). Repair it, alongside the empty-paren / space-before-punct passes.
+    ev = [EvidenceItem(chunk_id="docA:0:aaa#1", text="x"), EvidenceItem(chunk_id="docB:0:bbb#1", text="y")]
+    assert _scrub_prose(
+        "Liability is capped at 12 months of fees [docA:0:aaa#1], [docB:0:bbb#1]. Other evidence agrees.", ev
+    ) == "Liability is capped at 12 months of fees. Other evidence agrees."
+    assert _scrub_prose("Both agree [docA:0:aaa#1] , [docB:0:bbb#1] .", ev) == "Both agree."
+    # a run of 3+ citations, and a trailing citation list at end-of-string
+    ev3 = ev + [EvidenceItem(chunk_id="docC:0:ccc#1", text="z")]
+    assert _scrub_prose("Capped [docA:0:aaa#1], [docB:0:bbb#1], [docC:0:ccc#1].", ev3) == "Capped."
+    assert _scrub_prose("The cap is 12 months [docA:0:aaa#1], [docB:0:bbb#1]", ev) == "The cap is 12 months"
+    # a non-comma clause separator is NOT citation-list residue and must survive untouched
+    assert _scrub_prose(
+        "Capped at 12 months [docA:0:aaa#1]; the term is annual [docB:0:bbb#1].", ev
+    ) == "Capped at 12 months; the term is annual."
 
 
 def test_scrub_preserves_legitimate_bracketed_quote_text():

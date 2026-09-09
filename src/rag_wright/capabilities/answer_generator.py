@@ -305,6 +305,11 @@ def _scrub_prose(text: str, evidence: list[EvidenceItem]) -> str:
     out = re.sub(r"\(\s*\)", "", out)             # empty parens left by a removed token
     out = re.sub(r"[ \t]{2,}", " ", out)          # collapse runs of spaces
     out = re.sub(r"[ \t]+([,.;:)])", r"\1", out)  # no space before punctuation
+    # issue 0022: removing the markers of a citation LIST orphans the separator that joined them (",." / ",;" /
+    # a run like ",," / a trailing ","). Drop separator(s) that now sit immediately before terminal punctuation or
+    # at newline/end. A separator followed by real content (a clause-separating "; the term ...") is untouched.
+    out = re.sub(r"(?:[ \t]*[,;])+([ \t]*[.;:)])", r"\1", out)   # separator(s) before terminal punctuation -> drop
+    out = re.sub(r"(?:[ \t]*[,;])+(?=[ \t]*(?:\n|$))", "", out)  # trailing separator(s) at newline / end -> drop
     out = re.sub(r"\n[ \t]+", "\n", out)
     return out.strip()
 
