@@ -29,6 +29,51 @@ async def test_aper_contract_graph_extracts_once_then_caches(tmp_path):
     assert len(first) == len(second) == 1
 
 
+async def test_aper_contract_graph_appends_affiliations_and_caches_them_separately(tmp_path):
+    # issue 0027: when the affiliation fn is wired, AFFILIATE_OF facts are appended alongside CONTRACTS_WITH,
+    # cached in a SEPARATE dir, and not re-extracted on re-ingest.
+    from rag_wright.contracts.ontology import RelationshipType
+
+    party_dir = tmp_path / "graph_parties"
+    affil_dir = tmp_path / "graph_affiliations"
+    calls = {"party": 0, "affil": 0}
+
+    async def _aparties(_text):
+        calls["party"] += 1
+        return ["Acme Holdings Ltd", "Northwind Trading Ltd"]
+
+    async def _aaffil(_text):
+        calls["affil"] += 1
+        return [("Acme Holdings Ltd", "Acme Corp")]
+
+    doc = SourceDocument(source_doc_id="C3", text="... an affiliate of Acme Corp ...")
+    first = await aper_contract_graph_extraction(
+        doc, party_dir=party_dir, anames_fn=_aparties, affil_dir=affil_dir, aaffiliations_fn=_aaffil)
+    second = await aper_contract_graph_extraction(
+        doc, party_dir=party_dir, anames_fn=_aparties, affil_dir=affil_dir, aaffiliations_fn=_aaffil)
+    assert calls == {"party": 1, "affil": 1}                       # each extracted once, then cached
+    facts = [f for er in first for f in er.relationship_facts]
+    kinds = {f.relationship_type for f in facts}
+    assert RelationshipType.CONTRACTS_WITH in kinds and RelationshipType.AFFILIATE_OF in kinds
+    affil = next(f for f in facts if f.relationship_type is RelationshipType.AFFILIATE_OF)
+    assert affil.source_ref == "Acme Holdings Ltd" and affil.target_ref == "Acme Corp"
+    assert (affil_dir / "C3.json").exists()                        # separate cache written
+    assert len(first) == len(second)
+
+
+async def test_aper_contract_graph_without_affiliations_is_unchanged(tmp_path):
+    # issue 0027: affiliation params omitted -> parties only, exactly as before (backward compatible)
+    party_dir = tmp_path / "graph_parties"
+
+    async def _aparties(_text):
+        return ["Acme Co."]
+
+    out = await aper_contract_graph_extraction(
+        SourceDocument(source_doc_id="C4", text="body"), party_dir=party_dir, anames_fn=_aparties)
+    facts = [f for er in out for f in er.relationship_facts]
+    assert all(f.relationship_type.value == "Contracts With" for f in facts)  # no AFFILIATE_OF when not wired
+
+
 async def test_aper_contract_graph_reuses_a_seeded_cache(tmp_path):
     party_dir = tmp_path / "graph_parties"
     party_dir.mkdir()

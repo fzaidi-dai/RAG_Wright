@@ -122,6 +122,63 @@ def test_parties_to_extraction_shared_fact_shape():
     assert len(er.relationship_facts) == 1
 
 
+# --- issue 0027: corporate AFFILIATION extraction (AFFILIATE_OF) ---------------------------------
+
+
+def test_affiliations_to_extraction_emits_both_org_mentions_and_an_affiliate_of_edge():
+    from rag_wright.capabilities.graph_extraction import affiliations_to_extraction
+    from rag_wright.contracts.ontology import RelationshipType
+
+    er = affiliations_to_extraction(_CID, [("Acme Holdings Ltd", "Acme Corp"), ("", "X"), ("Y", "Y")])
+    # both orgs become ORGANIZATION mentions (endpoints must resolve to nodes); empty + self pairs dropped
+    assert {m.text for m in er.entity_mentions} == {"Acme Holdings Ltd", "Acme Corp"}
+    assert len(er.relationship_facts) == 1
+    fact = er.relationship_facts[0]
+    assert fact.relationship_type is RelationshipType.AFFILIATE_OF
+    assert fact.source_ref == "Acme Holdings Ltd" and fact.target_ref == "Acme Corp"  # NOT merged; edge added
+
+
+async def test_aextract_affiliations_pre_filter_skips_the_llm_when_no_cue():
+    from rag_wright.capabilities import graph_extraction as gx
+
+    called = {"n": 0}
+
+    def _boom(*a, **k):  # the LLM path must not be reached when there is no affiliation cue word
+        called["n"] += 1
+        raise AssertionError("build_tag_structured called despite no affiliation cue")
+
+    # no cue in the text -> returns [] without importing/calling the model path
+    out = await gx.aextract_affiliations("Northwind Trading Ltd and Beta Inc enter this agreement.")
+    assert out == [] and called["n"] == 0
+
+
+async def test_aextract_affiliations_parses_pairs_on_a_cue_hit(monkeypatch):
+    from rag_wright.capabilities import graph_extraction as gx
+    from rag_wright.models import tag_structured
+
+    class _R:
+        async def ainvoke(self, _prompt):
+            return gx.Affiliations(affiliations=[
+                gx.Affiliation(organization="Acme Holdings Ltd", affiliate_of="Acme Corp"),
+                gx.Affiliation(organization="", affiliate_of="skip")])  # empty side dropped
+
+    monkeypatch.setattr(tag_structured, "build_tag_structured", lambda *a, **k: _R())
+    out = await gx.aextract_affiliations("Acme Holdings Ltd, an affiliate of Acme Corp, agrees ...")
+    assert out == [("Acme Holdings Ltd", "Acme Corp")]
+
+
+async def test_aextract_affiliations_degrades_to_empty_on_parse_failure(monkeypatch):
+    from rag_wright.capabilities import graph_extraction as gx
+    from rag_wright.models import tag_structured
+
+    class _R:
+        async def ainvoke(self, _prompt):
+            raise RuntimeError("parse blip")
+
+    monkeypatch.setattr(tag_structured, "build_tag_structured", lambda *a, **k: _R())
+    assert await gx.aextract_affiliations("wholly-owned subsidiary of Foo") == []  # cue present, LLM fails -> []
+
+
 def test_registers_under_fr_c_6():
     registry = CapabilityRegistry()
     register_graph_extraction(registry)

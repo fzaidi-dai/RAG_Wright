@@ -530,16 +530,60 @@ def per_contract_graph_extraction(doc: SourceDocument, *, party_dir: Any, names_
 
 
 async def aper_contract_graph_extraction(
-    doc: SourceDocument, *, party_dir: Any, anames_fn: Callable[[str], Any]) -> list:
-    """ASYNC-B2c (ADR-0057): the async twin of `per_contract_graph_extraction`. The only model call (party
-    names) runs on the async seam via `anames_fn` (true wall-clock deadline); the cache and
-    `parties_to_extraction` are sync. Same cache semantics and result."""
+    doc: SourceDocument, *, party_dir: Any, anames_fn: Callable[[str], Any],
+    affil_dir: Any = None, aaffiliations_fn: Optional[Callable[[str], Any]] = None) -> list:
+    """ASYNC-B2c (ADR-0057): the async twin of `per_contract_graph_extraction`. The party-names model call runs on
+    the async seam via `anames_fn` (true wall-clock deadline); the cache and `parties_to_extraction` are sync.
+
+    issue 0027: when `aaffiliations_fn` + `affil_dir` are wired, ALSO extract corporate affiliations from the same
+    preamble (its own model call, separately cached, lexically pre-filtered), appending `AFFILIATE_OF` facts. Off
+    (params None) -> parties only, unchanged."""
     cache_file = _party_cache_file(party_dir, doc)
     names = _cached_party_names(cache_file)
     if names is None:
         names = await anames_fn(doc.text)
         _write_party_cache(cache_file, names)
-    return _parties_extraction(names, doc)
+    results = _parties_extraction(names, doc)
+    if aaffiliations_fn is not None and affil_dir is not None:
+        results = results + await _aaffiliations_extraction(doc, affil_dir, aaffiliations_fn)
+    return results
+
+
+async def _aaffiliations_extraction(doc: SourceDocument, affil_dir: Any, aaffiliations_fn: Callable[[str], Any]) -> list:
+    """issue 0027: extract (or reuse cached) corporate-affiliation pairs for a contract, and rebuild the
+    `AFFILIATE_OF` ExtractionResult. Separate cache from parties (own file), so re-ingest never re-extracts."""
+    cache_file = _affil_cache_file(affil_dir, doc)
+    affiliations = _cached_json(cache_file)
+    if affiliations is None:
+        affiliations = list(await aaffiliations_fn(doc.text))
+        _write_json(cache_file, affiliations)
+    if not affiliations:
+        return []
+    from rag_wright.capabilities.graph_extraction import affiliations_to_extraction
+    from rag_wright.contracts.identifiers import ChunkId
+
+    return [affiliations_to_extraction(ChunkId.of(doc.source_doc_id, 0, doc.text), affiliations)]
+
+
+def _affil_cache_file(affil_dir: Any, doc: SourceDocument) -> Any:
+    from pathlib import Path
+
+    return Path(affil_dir) / f"{doc.source_doc_id}.json"
+
+
+def _cached_json(cache_file: Any) -> Optional[list]:
+    """The cached value (any JSON list) for a contract, or None when there is no cache entry (distinct from a
+    cached EMPTY result `[]`). Shared by the party and affiliation caches."""
+    import json
+
+    return json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.exists() else None
+
+
+def _write_json(cache_file: Any, value: list) -> None:
+    import json
+
+    cache_file.parent.mkdir(parents=True, exist_ok=True)
+    cache_file.write_text(json.dumps(value), encoding="utf-8")
 
 
 def _party_cache_file(party_dir: Any, doc: SourceDocument) -> Any:
@@ -664,7 +708,8 @@ def aproduction_document_ingest(
     chunk_dir = Path(cache_dir) / "chunks"
     clause_cache_dir = Path(cache_dir) / "clause_extract"
     party_dir = Path(cache_dir) / "graph_parties"
-    for directory in (parse_dir, chunk_dir, clause_cache_dir, party_dir):
+    affil_dir = Path(cache_dir) / "graph_affiliations"  # issue 0027: separate from the party cache
+    for directory in (parse_dir, chunk_dir, clause_cache_dir, party_dir, affil_dir):
         directory.mkdir(parents=True, exist_ok=True)
     if party_seed_path is not None:
         seed_party_cache(party_dir, party_seed_path)
@@ -695,6 +740,15 @@ def aproduction_document_ingest(
     async def _aparty_names(text: str) -> list:
         parties = await aextract_parties_fn(text)
         return [p.name for p in parties.parties] if parties is not None else []
+
+    # issue 0027: corporate-affiliation extraction (AFFILIATE_OF). Default ON -- the lexical pre-filter keeps it a
+    # no-op for contracts that state no affiliation; RAG_INGEST_AFFILIATIONS=0 disables it entirely.
+    _affiliations_on = os.getenv("RAG_INGEST_AFFILIATIONS", "1") != "0"
+
+    async def _aaffiliations(text: str) -> list:
+        from rag_wright.capabilities.graph_extraction import aextract_affiliations
+
+        return await aextract_affiliations(text)
 
     async def chunk_fn(doc: SourceDocument) -> list:
         parsed = _parsed_for(doc, parse_dir)  # CHUNK-7: real docling parse if provided, else a text-only parse
@@ -765,7 +819,10 @@ def aproduction_document_ingest(
         return await asyncio.to_thread(_write_all)
 
     async def graph_fn(doc: SourceDocument, chunks: list) -> list:  # noqa: ARG001 - GP-1B is per-CONTRACT
-        return await aper_contract_graph_extraction(doc, party_dir=party_dir, anames_fn=_aparty_names)
+        return await aper_contract_graph_extraction(
+            doc, party_dir=party_dir, anames_fn=_aparty_names,
+            affil_dir=(affil_dir if _affiliations_on else None),
+            aaffiliations_fn=(_aaffiliations if _affiliations_on else None))
 
     async def resolve_fn(extraction_results: list) -> Any:
         return await asyncio.to_thread(

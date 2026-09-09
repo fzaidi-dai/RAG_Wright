@@ -654,6 +654,37 @@ class ArcadeDBStore:
         if statements:
             self._db.execute_transaction(statements)
 
+    def add_affiliation_edges(self, nodes: list[GraphNode], edges: list[GraphEdge]) -> int:
+        """issue 0027 BACKFILL (edge-only): add `AFFILIATE_OF` edges to an ALREADY-INGESTED KG without re-writing
+        it. Creates an entity node ONLY IF ABSENT (never overwrites an existing node's name/id -- unlike
+        `write_graph`'s UPSERT, so a party node keeps its resolved identity), and creates each edge ONLY IF ABSENT.
+        Idempotent -- re-running adds nothing. Returns the number of edges created. Used by
+        `scripts/backfill_affiliations.py`; the live ingest path uses `write_graph` unchanged."""
+        for node in nodes:
+            if self._query(f"SELECT entity_id FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(node.node_key)} LIMIT 1"):
+                continue  # keep the existing node exactly as it is
+            self._command(
+                f"INSERT INTO {ENTITY_TYPE} SET entity_id = {_sql_str(node.node_key)},"
+                f" canonical_id = {_sql_str(node.entity_id)}, name = {_sql_str(node.name)},"
+                f" entity_type = {_sql_str(node.entity_type)}, confidence = {_sql_str(node.confidence)},"
+                f" chunk_id = {_sql_str(node.chunk_id)}")
+        added = 0
+        for edge in edges:
+            exists = self._query(
+                f"SELECT count(*) AS c FROM {REL_EDGE_TYPE}"
+                f" WHERE relationship_type = {_sql_str(edge.relationship_type)}"
+                f" AND out.entity_id = {_sql_str(edge.source_key)} AND in.entity_id = {_sql_str(edge.target_key)}")
+            if exists and (exists[0].get("c") or 0) > 0:
+                continue
+            self._command(
+                f"CREATE EDGE {REL_EDGE_TYPE}"
+                f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
+                f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
+                f" SET relationship_type = {_sql_str(edge.relationship_type)},"
+                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)}")
+            added += 1
+        return added
+
     def all_contracts(self) -> list[dict]:
         """KG-7: every contract id (the set a PARTY_TO edge's Entity provenance must land in)."""
         return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")

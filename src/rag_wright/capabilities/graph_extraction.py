@@ -20,7 +20,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from typing import Any, Callable
+
+from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import (
@@ -63,6 +66,89 @@ def parties_to_extraction(chunk_id: ChunkId, parties: list[str]) -> ExtractionRe
         for j in range(i + 1, len(names))
     ]
     return ExtractionResult(chunk_id=chunk_id, entity_mentions=mentions, relationship_facts=relationships)
+
+
+# --- issue 0027: corporate AFFILIATION extraction (AFFILIATE_OF) ---------------------------------
+# The ontology declares `RelationshipType.AFFILIATE_OF` and both `write_graph` and `graph_query` handle it, but
+# nothing ever PRODUCED the edge, so corporate affiliation was unanswerable. Affiliation is stated in the text
+# ("Acme Holdings Ltd, an affiliate of Acme Corp"), so -- unlike the structural `CONTRACTS_WITH` -- it needs a
+# text-reading extraction. This runs once per contract on the preamble (like party extraction), gated by a lexical
+# pre-filter so contracts that state no affiliation cost no LLM call. Entities are NOT merged (an affiliate is a
+# separate legal entity); only the edge between the two org nodes is added.
+
+_AFFIL_PREAMBLE_CHARS = 8000  # affiliations, like parties, are named in the preamble; bound the LLM input
+
+# Lexical pre-filter: no affiliation cue in the text -> no LLM call. A miss is a false-negative (missed
+# affiliation); a spurious hit just costs a call that returns nothing. Prompt-engineering overlay (ADR-0066: the
+# relationship TYPE is ontology-declared; these cue words are mechanism, not the closed vocabulary).
+_AFFILIATION_CUE_RE = re.compile(
+    r"\b(affiliate|affiliated|subsidiar|parent\s+compan|wholly[\s-]?owned|under\s+common\s+control|"
+    r"a\s+division\s+of|owned\s+by)\b", re.IGNORECASE)
+
+_AFFILIATION_PROMPT = (
+    "From this contract text, extract statements of CORPORATE AFFILIATION -- where one organization is stated to "
+    "be an affiliate, subsidiary, parent, division of, or under common control with ANOTHER organization. For each, "
+    "give the organization and the organization it is affiliated with. Do NOT treat two organizations merely "
+    "signing the same contract as an affiliation. If none is stated, return no items.\n\nTEXT:\n{text}")
+
+
+class Affiliation(BaseModel):
+    """One corporate-affiliation statement (issue 0027): `organization` is stated to be an affiliate/subsidiary/
+    parent of / under common control with `affiliate_of`. Both are ORGANIZATION surface forms."""
+
+    organization: str = ""
+    affiliate_of: str = ""
+
+
+class Affiliations(BaseModel):
+    """The tag-parse output of the affiliation extraction: zero or more `Affiliation` pairs."""
+
+    affiliations: list[Affiliation] = []
+
+
+def affiliations_to_extraction(chunk_id: ChunkId, affiliations: list) -> ExtractionResult:
+    """Corporate-affiliation pairs -> ORGANIZATION mentions for BOTH orgs (so both endpoints resolve to nodes) +
+    an `AFFILIATE_OF` fact between them, EXTRACTED (issue 0027). Entities are NOT merged; only the edge is added.
+    Each `affiliations` item is a 2-tuple/list `(organization, affiliate_of)`. Strips/dedups; a pair with an empty
+    or self-referential side is dropped."""
+    provenance = Provenance.of(chunk_id)
+    mentions: list[EntityMention] = []
+    facts: list[RelationshipFact] = []
+    seen: set[str] = set()
+    for pair in affiliations:
+        org = (pair[0] or "").strip()
+        affil_of = (pair[1] or "").strip()
+        if not org or not affil_of or org.lower() == affil_of.lower():
+            continue
+        for name in (org, affil_of):
+            if name.lower() not in seen:
+                seen.add(name.lower())
+                mentions.append(EntityMention(
+                    text=name, entity_type=EntityType.ORGANIZATION, confidence=ConfidenceTag.EXTRACTED))
+        facts.append(RelationshipFact(
+            provenance=provenance, confidence=ConfidenceTag.EXTRACTED,
+            source_ref=org, relationship_type=RelationshipType.AFFILIATE_OF, target_ref=affil_of))
+    return ExtractionResult(chunk_id=chunk_id, entity_mentions=mentions, relationship_facts=facts)
+
+
+async def aextract_affiliations(text: str, *, model_id: str = DEFAULT_GRAPH_EXTRACT_MODEL) -> list[tuple[str, str]]:
+    """Extract corporate-affiliation pairs from `text` (issue 0027). LEXICAL PRE-FILTER first: no affiliation cue
+    word -> no LLM call (near-zero added ingestion cost, since most contracts state none). On a cue hit, a lean
+    client-side tag-parse extraction over the preamble (ADR-0045). Degrades to no affiliations on any parse
+    failure (never raised)."""
+    if not _AFFILIATION_CUE_RE.search(text or ""):
+        return []
+    from rag_wright.models.tag_structured import build_tag_structured
+
+    try:
+        out = await build_tag_structured(model_id, Affiliations, label="affiliations").ainvoke(
+            _AFFILIATION_PROMPT.format(text=text[:_AFFIL_PREAMBLE_CHARS]))
+    except Exception:  # noqa: BLE001 - a persistent client-side parse failure -> no affiliations, not a crash
+        return []
+    if out is None:
+        return []
+    return [(a.organization, a.affiliate_of) for a in out.affiliations
+            if (a.organization or "").strip() and (a.affiliate_of or "").strip()]
 
 
 class DoclingGraphExtractor:
