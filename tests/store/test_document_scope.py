@@ -101,6 +101,17 @@ def test_write_graph_stamps_source_doc_id_on_relationship_edge():
     assert len(rel) == 1 and "source_doc_id = 'docA'" in rel[0]  # derived from the provenance chunk_id
 
 
+def test_edge_chunk_id_and_source_doc_id_are_a_consistent_pair():
+    # issue 0031 ask #2: chunk_id + source_doc_id are written from ONE source, so they can never drift
+    # (a drifted pair is an invisible cross-matter leak). A tricky doc prefix (dots/dashes) stays consistent.
+    from rag_wright.store.arcadedb import _doc_id_of, _edge_provenance_assignments
+
+    frag = _edge_provenance_assignments("weird.doc-1:2:abcdef")
+    assert "chunk_id = 'weird.doc-1:2:abcdef'" in frag
+    assert f"source_doc_id = '{_doc_id_of('weird.doc-1:2:abcdef')}'" in frag  # derived, not independent
+    assert "source_doc_id = 'weird.doc-1'" in frag
+
+
 def test_add_affiliation_edges_stamps_source_doc_id():
     commands: list[str] = []
     store = object.__new__(ArcadeDBStore)

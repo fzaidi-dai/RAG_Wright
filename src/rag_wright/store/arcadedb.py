@@ -138,6 +138,16 @@ def _doc_id_of(chunk_id: str) -> str:
     return (chunk_id or "").split(":", 1)[0]
 
 
+def _edge_provenance_assignments(chunk_id: str) -> str:
+    """The `SET` fragment writing an edge's provenance `chunk_id` and its DERIVED `source_doc_id` as ONE
+    matched pair from a SINGLE source (issue 0031 ask #2). `source_doc_id` is a denormalization of `chunk_id`
+    for index-backed scoping; keeping the derivation in this one place is what makes the two impossible to
+    drift. A drifted pair (a `source_doc_id` disagreeing with its `chunk_id`) is an INVISIBLE cross-matter
+    leak -- the scoping filter would silently admit an out-of-scope edge -- so every edge writer MUST emit the
+    pair through here, never assign the two fields independently."""
+    return f"chunk_id = {_sql_str(chunk_id)}, source_doc_id = {_sql_str(_doc_id_of(chunk_id))}"
+
+
 def _sql_literal(value: MetadataValue) -> str:
     """A SQL literal for a filterable metadata scalar (bool checked before int: `bool` subclasses `int`)."""
     if isinstance(value, bool):
@@ -695,8 +705,7 @@ class ArcadeDBStore:
                 f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
                 f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
                 f" SET relationship_type = {_sql_str(edge.relationship_type)},"
-                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)},"
-                f" source_doc_id = {_sql_str(_doc_id_of(edge.chunk_id))}"  # issue 0031: workspace-scope key
+                f" confidence = {_sql_str(edge.confidence)}, {_edge_provenance_assignments(edge.chunk_id)}"
             )
         if statements:
             self._db.execute_transaction(statements)
@@ -748,8 +757,7 @@ class ArcadeDBStore:
                 f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
                 f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
                 f" SET relationship_type = {_sql_str(edge.relationship_type)},"
-                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)},"
-                f" source_doc_id = {_sql_str(_doc_id_of(edge.chunk_id))}")  # issue 0031: workspace-scope key
+                f" confidence = {_sql_str(edge.confidence)}, {_edge_provenance_assignments(edge.chunk_id)}")
             added += 1
         return added
 
