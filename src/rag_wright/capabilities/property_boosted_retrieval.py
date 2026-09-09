@@ -21,7 +21,12 @@ from rag_wright.capabilities.retrieval_core import typed_constraint_match_rank
 
 class RankedSpan(BaseModel):
     """One property-boosted, cited retrieval result (FR-Q.6): the span citation + text, its function, the
-    constraint-match score, the query constraints it satisfied, and its 1-based rank."""
+    constraint-match score, the query constraints it satisfied, and its 1-based rank.
+
+    `retrieval_score` (issue 0023) is the BGE RRF fused relevance that ORDERED the pool (higher = better), carried
+    alongside `match_score` (a COUNT of satisfied typed constraints) so a caller can apply its OWN relevance floor
+    -- e.g. grade a sweep into matched / possible / not_found. The engine does NOT pick the threshold. It is None
+    only when the backend did not surface a fused score."""
 
     span_id: str
     text: str
@@ -29,6 +34,7 @@ class RankedSpan(BaseModel):
     match_score: float
     matched: list[tuple[str, str]]
     rank: int
+    retrieval_score: float | None = None
 
 
 def property_boosted_retrieval(
@@ -48,6 +54,7 @@ def property_boosted_retrieval(
     dense, sparse = embedder.encode_dense(query), embedder.encode_sparse(query)
     ordered: list[str] = []
     function_of: dict[str, str] = {}
+    retrieval_score_of: dict[str, float | None] = {}  # issue 0023: the fused relevance that ordered the pool
     seen: set[str] = set()
     for f in (list(functions) or [None]):  # None -> no function filter (whole-index pool)
         for h in store.span_hybrid_search(dense, sparse, k=pool_k, function=f):
@@ -56,6 +63,7 @@ def property_boosted_retrieval(
                 seen.add(sid)
                 ordered.append(sid)
                 function_of[sid] = h.get("function", "") or (f or "")
+                retrieval_score_of[sid] = h.get("score")  # keep the highest-ranked leg's fused score for the span
     if not ordered:
         return []
     props = store.span_properties(ordered)
@@ -67,6 +75,7 @@ def property_boosted_retrieval(
         RankedSpan(
             span_id=sid, text=texts.get(sid, ""), function=function_of.get(sid, ""),
             match_score=score_of.get(sid, 0.0), matched=sorted(constraints & props.get(sid, set())), rank=i,
+            retrieval_score=retrieval_score_of.get(sid),
         )
         for i, sid in enumerate(top_ids, 1)
     ]
