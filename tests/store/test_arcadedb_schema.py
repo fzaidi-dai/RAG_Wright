@@ -83,6 +83,18 @@ class _InMemoryStore:
         return {"entities": len(getattr(self, "_nodes", {})),
                 "relationships": len(getattr(self, "_edges", []))}
 
+    def entities_by_name(self, name: str) -> list:  # issue 0030: name -> entity seam surface
+        from rag_wright.corpus.canonicalize import normalize_entity_name
+
+        target = normalize_entity_name(name)
+        if not target:
+            return []
+        return [
+            {"entity_id": n.node_key, "name": n.name, "entity_type": n.entity_type}
+            for n in getattr(self, "_nodes", {}).values()
+            if normalize_entity_name(n.name or "") == target
+        ]
+
     # query-side (T26): a minimal in-memory one/two-hop traversal over the stored edges
     def graph_neighbors(self, entity_id, *, relationship_type, max_hops):
         nodes, edges = getattr(self, "_nodes", {}), getattr(self, "_edges", [])

@@ -104,6 +104,16 @@ class Store(Protocol):
     def graph_counts(self) -> dict[str, int]:
         """Counts for introspection/tests: `{'entities': n, 'relationships': m}`."""
 
+    def entities_by_name(self, name: str) -> list[dict]:
+        """Resolve a party NAME to its graph entities (issue 0030): the first step before
+        `graph_neighbors`/`graph_query`, which take a `start_entity_id` (an exact node key) and cannot be
+        reached from a name otherwise. Returns `[{entity_id, name, entity_type}]` for every stored entity
+        whose name normalizes to the same clustering key as `name`, via the SAME `normalize_entity_name`
+        the ingestion side uses to merge 'Acme Corp' / 'Acme Corporation' / 'ACME, Inc.' into one entity.
+        Normalization is the engine's rule and is applied HERE, so a caller never re-implements it (a raw
+        or an already-normalized name both work; the normalization is idempotent). `entity_id` is exactly
+        the node key `graph_neighbors`/`graph_query` take as `start_entity_id`. Empty list on no match."""
+
     # --- graph-query (T26): relationship traversal. Semantic, not SQL: returns store-agnostic path
     # rows (target + the entity_ids/chunk_ids/confidences along the path) so the capability can shape
     # the cited evidence. Confidence is SURFACED on every path, not filtered on (FR-C.5/FR-Q.3).

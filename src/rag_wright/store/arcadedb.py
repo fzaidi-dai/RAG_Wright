@@ -31,6 +31,7 @@ from rag_wright.contracts.property import (
     PropertyDimension,
 )
 from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.corpus.canonicalize import normalize_entity_name  # issue 0030: name -> entity clustering key
 from rag_wright.ontology.loader import (  # ADR-0067: KG schema from the ontology
     load_kg_schema,  # P5b: domain vertex/edge types
     load_typed_edges,  # P5a: typed-edge map
@@ -728,8 +729,28 @@ class ArcadeDBStore:
         """Every contract id in the store (e.g. for a corpus-wide backfill pass)."""
         return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
 
-    # (issue 0028 / ADR-0091: `all_entities` was the KG-7 PartyTo-link reader; removed with the retired
-    #  capability -- it had no other caller.)
+    def entities_by_name(self, name: str) -> list[dict]:
+        """Resolve a party NAME to its graph entities (issue 0030 / ADR-0093): the first step before
+        `graph_neighbors`/`graph_query`, which take an exact `start_entity_id` and cannot be reached from a
+        name otherwise. Returns `[{entity_id, name, entity_type}]` for every stored entity whose name
+        normalizes to the same clustering key as `name`, via the SAME `normalize_entity_name` the ingestion
+        side uses to cluster ('Acme Corp' / 'Acme Corporation' / 'ACME, Inc.' -> one key). A name may resolve
+        to SEVERAL nodes (a resolved node plus a not-yet-merged unlinked ref) -- all are returned, each usable
+        as a `start_entity_id`. Normalization is the engine's rule and is applied HERE (a raw or an already-
+        normalized name both work; the normalization is idempotent). Empty list on no match / a non-entity name.
+
+        (issue 0030 replaces the retired `all_entities`, which was removed with the KG-7 PartyTo capability but
+        was the only name->entity route; this puts the capability on the Store seam and owns the normalization
+        rather than forcing every caller to re-implement it against an engine internal.)"""
+        target = normalize_entity_name(name)
+        if not target:  # empty / whitespace / non-entity: no lookup key
+            return []
+        rows = self._query(f"SELECT entity_id, name, entity_type FROM {ENTITY_TYPE}")
+        return [
+            {"entity_id": r["entity_id"], "name": r["name"], "entity_type": r["entity_type"]}
+            for r in rows
+            if normalize_entity_name(r.get("name") or "") == target
+        ]
 
     # --- ADR-0044: the IS_EXCEPTION_TO derived carve-out relationship (exception clause -> Cap clause) ------
 
