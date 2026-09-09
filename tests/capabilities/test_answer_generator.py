@@ -100,6 +100,17 @@ def test_prose_scrubbed_of_ids_and_annotations():
     assert "  " not in result.answer and " ." not in result.answer  # prose stays tidy after removal
 
 
+def test_scrub_removes_the_partial_marker_from_prose():
+    # issue 0026: <partial/> is read to set answer_kind but was never stripped -- all scrub patterns were bracketed
+    # ([...]), so the angle-bracket marker reached the reader. Strip it, and tidy the space/punctuation it leaves.
+    ev = [EvidenceItem(chunk_id="docA:0:aaa#1", text="x")]
+    assert _scrub_prose("The indemnity is capped <partial/> at the fees paid.", ev) == \
+        "The indemnity is capped at the fees paid."          # mid-sentence marker gone, no double space
+    assert _scrub_prose("There is an indemnity <partial/>.", ev) == "There is an indemnity."  # no ' .'
+    assert _scrub_prose("There is an indemnity.\n<partial/>", ev) == "There is an indemnity."  # trailing marker
+    assert "<partial" not in _scrub_prose("Capped <PARTIAL /> per the clause.", ev)  # case/space tolerant
+
+
 def test_scrub_repairs_punctuation_orphaned_by_a_removed_citation_list():
     # issue 0022: removing the markers of a citation LIST leaves the separating comma orphaned before the terminal
     # punctuation (",." / a trailing ","). Repair it, alongside the empty-paren / space-before-punct passes.

@@ -287,6 +287,11 @@ _PROSE_ANNOTATION_RES = [
     # engine issue 0002: a literal schema FIELD NAME written where a citation would go (not an id) -- engine
     # vocabulary, never legitimate in a contract answer.
     re.compile(r"\[(?:chunk_id|clause_id|source_doc_id|span_id|answer_kind)\]", re.IGNORECASE),
+    # engine issue 0026: the ONE non-bracketed marker. `<partial/>` is read (parse_tagged_answer) to set
+    # answer_kind, then must be stripped from the prose. The bracket-shape assumption above is exactly what let it
+    # reach the reader, so it lives here explicitly. Placed before the whitespace/punctuation passes so an inline
+    # marker's orphaned space/comma (issue 0022) is tidied after removal.
+    _PARTIAL_RE,
 ]
 
 
