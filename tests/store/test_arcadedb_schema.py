@@ -96,7 +96,7 @@ class _InMemoryStore:
         ]
 
     # query-side (T26): a minimal in-memory one/two-hop traversal over the stored edges
-    def graph_neighbors(self, entity_id, *, relationship_type, max_hops):
+    def graph_neighbors(self, entity_id, *, relationship_type, max_hops, documents=None):
         nodes, edges = getattr(self, "_nodes", {}), getattr(self, "_edges", [])
         rels = [e for e in edges if e.relationship_type == relationship_type]
 

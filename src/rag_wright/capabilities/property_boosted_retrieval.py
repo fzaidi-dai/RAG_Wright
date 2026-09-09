@@ -42,17 +42,21 @@ def property_boosted_retrieval(
     constraints: Iterable[tuple[str, str]],
     k: int = 8,
     pool_k: int = 30,
+    documents: list[str] | None = None,
 ) -> list[RankedSpan]:
     """Retrieve the top-`k` cited spans for `query`, property-boosted by the typed constraints. Pool =
     `span_hybrid_search` (BGE RRF) over each routed function (deduped, BGE order preserved); rerank =
-    constraint-match primary + BGE tiebreak via the stable `typed_constraint_match_rank`."""
+    constraint-match primary + BGE tiebreak via the stable `typed_constraint_match_rank`.
+
+    Issue 0031: `documents` scopes the pool to a workspace's source documents IN THE STORE (`contract_id IN
+    [...]`), so out-of-scope spans are never pooled or reranked. `None` = whole index; `[]` = no results."""
     constraints = set(constraints)
     dense, sparse = embedder.encode_dense(query), embedder.encode_sparse(query)
     ordered: list[str] = []
     function_of: dict[str, str] = {}
     seen: set[str] = set()
     for f in (list(functions) or [None]):  # None -> no function filter (whole-index pool)
-        for h in store.span_hybrid_search(dense, sparse, k=pool_k, function=f):
+        for h in store.span_hybrid_search(dense, sparse, k=pool_k, function=f, documents=documents):
             sid = h["span_id"]
             if sid not in seen:
                 seen.add(sid)

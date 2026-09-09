@@ -75,6 +75,8 @@ def _edge_predicate_iri(edge_type: str) -> str:
 # typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then
 # cut to `k`. Tuned at GATE-2 against the golden set if recall calls for it.
 DEFAULT_CANDIDATE_POOL = 100
+SCOPED_CANDIDATE_POOL = 1000  # issue 0031: a larger KNN pool when a `documents` scope filters AFTER the vector
+#   legs, so a small workspace does not under-fill k (the vector functions do not pre-filter; ADR-0008)
 
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
 CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
@@ -127,6 +129,13 @@ def _float_array(values: Iterable[float]) -> str:
 
 def _str_array(values: Iterable[str]) -> str:
     return "[" + ",".join(_sql_str(v) for v in values) + "]"
+
+
+def _doc_id_of(chunk_id: str) -> str:
+    """The source-document id embedded in a chunk/span/clause id (issue 0031). The id scheme is
+    `<source_doc_id>:<index>:<hash>` and `source_doc_id` is delimiter-safe (no ':', enforced by `ChunkId`),
+    so the document id is exactly the prefix before the first ':'. Empty in -> empty out."""
+    return (chunk_id or "").split(":", 1)[0]
 
 
 def _sql_literal(value: MetadataValue) -> str:
@@ -242,6 +251,9 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {ENTITY_TYPE}.confidence STRING")
         if REL_EDGE_TYPE not in types:
             self._command(f"CREATE EDGE TYPE {REL_EDGE_TYPE}")
+            # issue 0031: the source-document id (derived from the edge's provenance chunk_id) so a graph
+            # traversal can be scoped to a workspace's documents (`WHERE source_doc_id IN [...]`).
+            self._command(f"CREATE PROPERTY {REL_EDGE_TYPE}.source_doc_id STRING")
         if MENTIONS_EDGE_TYPE not in types:
             self._command(f"CREATE EDGE TYPE {MENTIONS_EDGE_TYPE}")
         if SPAN_TYPE not in types:  # FR-R (ADR-0025): operative-span hybrid index
@@ -513,11 +525,20 @@ class ArcadeDBStore:
         *,
         k: int,
         function: str | None = None,
+        documents: list[str] | None = None,
     ) -> list[dict]:
         """RRF-fused dense+sparse search over the `Span` index, optionally restricted to one `function` tag
-        (the function-classifier's routing filter, FR-R). Mirrors `hybrid_search`; returns span_id + the
-        parent pointer so the caller can follow the span back to its clause for the rerank stage."""
-        leg_k = max(k, DEFAULT_CANDIDATE_POOL)
+        (the function-classifier's routing filter, FR-R) and/or a `documents` set (issue 0031: a workspace
+        scope -- `Span.contract_id IN [...]`, the source-document id). Mirrors `hybrid_search`; returns span_id
+        + the parent pointer so the caller can follow the span back to its clause for the rerank stage.
+
+        Issue 0031: when `documents` is given, the vector legs pull a LARGER pool (`SCOPED_CANDIDATE_POOL`)
+        before the `contract_id IN [...]` cut, because the KNN ranks across the whole index and only then is
+        scoped -- a small workspace could otherwise under-fill `k` from the default pool. `documents=[]` is a
+        valid scope-to-nothing -> no query (`[]`)."""
+        if documents is not None and not documents:
+            return []  # scope-to-nothing: never issue an invalid `IN []`
+        leg_k = max(k, SCOPED_CANDIDATE_POOL if documents else DEFAULT_CANDIDATE_POOL)
         token_ids = sorted(sparse_query)
         sparse_indices = "[" + ",".join(str(i) for i in token_ids) + "]"
         sparse_weights = _float_array(sparse_query[i] for i in token_ids)
@@ -528,7 +549,12 @@ class ArcadeDBStore:
             f"`vector.sparseNeighbors`('{_SPAN_SPARSE_INDEX}', {sparse_indices}, {sparse_weights}, {leg_k}), "
             "{ fusion: 'RRF' }))"
         )
-        where = f" WHERE function = {_sql_str(function)}" if function else ""
+        clauses = []
+        if function:
+            clauses.append(f"function = {_sql_str(function)}")
+        if documents:
+            clauses.append(f"contract_id IN {_str_array(documents)}")
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         return self._query(
             f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({fused}){where} LIMIT {k}"
         )
@@ -669,7 +695,8 @@ class ArcadeDBStore:
                 f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
                 f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
                 f" SET relationship_type = {_sql_str(edge.relationship_type)},"
-                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)}"
+                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)},"
+                f" source_doc_id = {_sql_str(_doc_id_of(edge.chunk_id))}"  # issue 0031: workspace-scope key
             )
         if statements:
             self._db.execute_transaction(statements)
@@ -721,13 +748,29 @@ class ArcadeDBStore:
                 f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
                 f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.target_key)})"
                 f" SET relationship_type = {_sql_str(edge.relationship_type)},"
-                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)}")
+                f" confidence = {_sql_str(edge.confidence)}, chunk_id = {_sql_str(edge.chunk_id)},"
+                f" source_doc_id = {_sql_str(_doc_id_of(edge.chunk_id))}")  # issue 0031: workspace-scope key
             added += 1
         return added
 
     def all_contracts(self) -> list[dict]:
         """Every contract id in the store (e.g. for a corpus-wide backfill pass)."""
         return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
+
+    def known_document_ids(self) -> set[str]:
+        """Issue 0031: the DISTINCT source-document ids the two scopable surfaces can see -- the UNION of
+        `Span.contract_id` (what span retrieval scopes on) and `Relationship.source_doc_id` (what a graph
+        traversal scopes on). Powers unknown-document validation (a `documents` scope naming an id absent from
+        BOTH surfaces raises, mirroring issue 0007's `requirement_sources`) WITHOUT loading any span/edge rows.
+        A type absent on a fresh DB contributes nothing."""
+        types = self.type_names()
+        out: set[str] = set()
+        if SPAN_TYPE in types:
+            out |= {r["d"] for r in self._query(f"SELECT DISTINCT(contract_id) AS d FROM {SPAN_TYPE}") if r.get("d")}
+        if REL_EDGE_TYPE in types:
+            out |= {r["d"] for r in self._query(
+                f"SELECT DISTINCT(source_doc_id) AS d FROM {REL_EDGE_TYPE}") if r.get("d")}
+        return out
 
     def entities_by_name(self, name: str) -> list[dict]:
         """Resolve a party NAME to its graph entities (issue 0030 / ADR-0093): the first step before
@@ -814,19 +857,29 @@ class ArcadeDBStore:
         }
 
     def graph_neighbors(
-        self, entity_id: str, *, relationship_type: str, max_hops: int
+        self, entity_id: str, *, relationship_type: str, max_hops: int, documents: list[str] | None = None
     ) -> list[dict]:
         """Traverse via ArcadeDB `MATCH` over `Relationship` edges (grounded live, T26): `bothE` binds
         each edge (so its `chunk_id`/`confidence` are cited) and `bothV` the reached entity. One-hop and
         two-hop are separate MATCH queries; `$matched` de-dups the two-hop return to the start. Braces
-        are concatenated in (they clash with f-string interpolation)."""
+        are concatenated in (they clash with f-string interpolation).
+
+        Issue 0031: `documents` scopes the traversal to a workspace's source documents -- EVERY edge on the
+        path must have `source_doc_id IN [...]` (applied to e1 AND e2, so a two-hop path cannot route THROUGH
+        an out-of-scope contract to reach an in-scope target). `None` = the whole graph; `[]` = scope-to-
+        nothing (no query)."""
+        if documents is not None and not documents:
+            return []  # scope-to-nothing: never issue an invalid `IN []`
         eid = _sql_str(entity_id)
         rel = _sql_str(relationship_type)
+        # each edge's where-clause: relationship_type, plus (0031) the document scope on the edge itself
+        doc_scope = f" and source_doc_id IN {_str_array(documents)}" if documents else ""
+        edge_where = "(relationship_type = " + rel + doc_scope + ")"
         paths: list[dict] = []
 
         one_hop = (
             "MATCH {type: " + ENTITY_TYPE + ", as: a, where: (entity_id = " + eid + ")}"
-            ".bothE('" + REL_EDGE_TYPE + "'){as: e, where: (relationship_type = " + rel + ")}"
+            ".bothE('" + REL_EDGE_TYPE + "'){as: e, where: " + edge_where + "}"
             ".bothV(){as: b, where: (entity_id <> " + eid + ")}"
             " RETURN b.entity_id AS target_id, b.name AS target_name,"
             " e.chunk_id AS c1, e.confidence AS cf1"
@@ -841,9 +894,9 @@ class ArcadeDBStore:
         if max_hops >= 2:
             two_hop = (
                 "MATCH {type: " + ENTITY_TYPE + ", as: a, where: (entity_id = " + eid + ")}"
-                ".bothE('" + REL_EDGE_TYPE + "'){as: e1, where: (relationship_type = " + rel + ")}"
+                ".bothE('" + REL_EDGE_TYPE + "'){as: e1, where: " + edge_where + "}"
                 ".bothV(){as: b, where: (entity_id <> " + eid + ")}"
-                ".bothE('" + REL_EDGE_TYPE + "'){as: e2, where: (relationship_type = " + rel + ")}"
+                ".bothE('" + REL_EDGE_TYPE + "'){as: e2, where: " + edge_where + "}"
                 ".bothV(){as: cc, where: (entity_id <> " + eid
                 + " and entity_id <> $matched.b.entity_id)}"
                 " RETURN b.entity_id AS mid_id, e1.chunk_id AS e1c, e1.confidence AS e1cf,"

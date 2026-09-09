@@ -119,8 +119,10 @@ class Store(Protocol):
     # the cited evidence. Confidence is SURFACED on every path, not filtered on (FR-C.5/FR-Q.3).
 
     def graph_neighbors(
-        self, entity_id: str, *, relationship_type: str, max_hops: int
+        self, entity_id: str, *, relationship_type: str, max_hops: int, documents: Optional[list[str]] = None
     ) -> list[dict]:
         """Traverse `relationship_type` edges from the start entity up to `max_hops`, returning one row
         per reached entity+path: `target_id`, `target_name`, `path_entity_ids`, `path_chunk_ids`,
-        `path_confidences`, `hops`. Every edge is surfaced regardless of confidence (T26 does not gate)."""
+        `path_confidences`, `hops`. Every edge is surfaced regardless of confidence (T26 does not gate).
+        `documents` (issue 0031): scope the traversal to those source documents -- EVERY edge on a path must
+        belong to one of them; `None` = the whole graph, `[]` = scope-to-nothing (no rows)."""

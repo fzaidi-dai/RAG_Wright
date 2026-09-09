@@ -13,7 +13,7 @@ class _FakeStore:
         self._props = props  # {span_id: {(dim, value)}}
         self._texts = texts  # {span_id: text}
 
-    def span_hybrid_search(self, dense, sparse, *, k, function=None):
+    def span_hybrid_search(self, dense, sparse, *, k, function=None, documents=None):
         return [{"span_id": s, "function": function} for s in self._pool.get(function, [])[:k]]
 
     def span_properties(self, span_ids):

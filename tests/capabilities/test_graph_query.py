@@ -20,7 +20,7 @@ class _FakeStore:
         self._rows = rows
         self.calls: list[dict] = []
 
-    def graph_neighbors(self, entity_id, *, relationship_type, max_hops):
+    def graph_neighbors(self, entity_id, *, relationship_type, max_hops, documents=None):
         self.calls.append({"entity_id": entity_id, "relationship_type": relationship_type,
                            "max_hops": max_hops})
         return self._rows

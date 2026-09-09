@@ -19,7 +19,7 @@ registered FUNCTION capability; this subgraph composes it.
 
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, TypedDict
+from typing import Any, Awaitable, Callable, Optional, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -194,7 +194,7 @@ async def aquery_constraints(query: str, model_id: str, *, structured_factory=No
 
 def production_typed_property_retrieval(
     *, store: Any, embedder: Any, extract_model: Any, k: int = 8, pool_k: int = 30,
-    judge_model_id: Any = None,
+    judge_model_id: Any = None, documents: Optional[list[str]] = None,
 ):
     """Wire the real Leg B: query constraint-extraction (tag-parse, issue 0020) + the `property_boosted_retrieval`
     capability over the store + encoders (local or the A100 adapters). ADR-0047: no function classifier -- the pool
@@ -203,9 +203,15 @@ def production_typed_property_retrieval(
     `judge_model_id` (issue 0023): when given, wire the per-span relevance judge -- every returned span is judged
     relevant/not_relevant/uncertain against the condition (the graph input's `clause_type` + `value_condition`), so
     the product can reach `not_found` without a threshold. Omit it and spans pass through unjudged (`relevance`
-    None), unchanged behaviour. The judge runs the returned `k` spans CONCURRENTLY; `k` is the caller's cost lever."""
+    None), unchanged behaviour. The judge runs the returned `k` spans CONCURRENTLY; `k` is the caller's cost lever.
+
+    `documents` (issue 0031): scope the sweep to a workspace's source documents, applied IN THE STORE so
+    out-of-scope spans are never pooled, reranked, or judged. `None` = the whole corpus; an unknown id RAISES
+    (`UnknownDocumentError`) rather than silently matching nothing; `[]` = scope-to-nothing (no results)."""
+    from rag_wright.capabilities.document_scope import validate_documents
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
 
+    validate_documents(store, documents)  # reject an unknown document BEFORE any retrieval spends (issue 0031)
     model_id = getattr(extract_model, "model", extract_model)  # ExtractionModel.model, or a bare id
 
     async def constraints_fn(query: str) -> set:
@@ -214,7 +220,8 @@ def production_typed_property_retrieval(
     def retrieve_fn(query: str, constraints: set) -> list:
         # ADR-0047: functions=() -> property_boosted_retrieval runs over the WHOLE-INDEX BGE pool (no gate).
         return property_boosted_retrieval(
-            query, store=store, embedder=embedder, functions=(), constraints=constraints, k=k, pool_k=pool_k)
+            query, store=store, embedder=embedder, functions=(), constraints=constraints, k=k, pool_k=pool_k,
+            documents=documents)
 
     relevance_judge: RelevanceJudgeFn | None = None
     if judge_model_id is not None:

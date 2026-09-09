@@ -1,0 +1,23 @@
+# ADR-0094: a workspace `documents` scope on corpus retrieval and graph traversal (store-side)
+
+**Status:** accepted · **Date:** 2026-09-10 · **Issue:** engine 0031 (RuleWright) · **Mirrors:** ADR/issue 0007 (compliance `sources`) · **Related:** ADR-0047 (whole-index Leg B pool), FR-S.2 (id scheme), ADR-0008 (unwrapped ArcadeDB vector functions)
+
+## Context
+
+Every corpus-wide query ran against the whole database with no way to narrow it to a subset of documents. RuleWright's tenancy model has two levels: a *customer* is separated structurally (its own database — fine), and a *workspace* (a matter) scopes a subset of that customer's documents — a boundary the product enforces in code. It can enforce it for anything that names a document (`contract_by_id`, `spans_by_contract`), but **not for a sweep**: `typed_property_retrieval` and `graph_query` name no documents and search all of it. Filtering afterward is unacceptable — the out-of-scope content was still pooled, embedded against, and (since issue 0023) judged by an LLM per span, and dropping rows silently degrades `k` (a thin corpus becomes indistinguishable from a heavy filter). This is the exact argument issue 0007 settled for compliance `sources`, which scopes **in the database** so out-of-scope requirements are never loaded.
+
+## Decision
+
+Add a `documents: list[str] | None` scope, applied IN THE STORE, to both corpus surfaces, mirroring `sources`.
+
+- **Span retrieval (no migration):** `Span` already carries `contract_id` (the source-document id, CU-B2). `store.span_hybrid_search(..., documents=)` adds `contract_id IN [...]` to the fused-result WHERE; it threads up through `property_boosted_retrieval(documents=)` to `production_typed_property_retrieval(documents=)`. Because the vector functions rank across the whole index and cannot pre-filter (ADR-0008), a scoped search pulls a **larger KNN pool** (`SCOPED_CANDIDATE_POOL = 1000`) before the cut, so a small workspace does not under-fill `k`.
+- **Graph traversal (new edge label + backfill):** the `Relationship` edge gains a `source_doc_id` property, written at graph-write time as the prefix of its provenance `chunk_id` (the id scheme is `<source_doc_id>:<idx>:<hash>` and `source_doc_id` is delimiter-safe, so the prefix is exact — `_doc_id_of`). `graph_neighbors(..., documents=)` adds `source_doc_id IN [...]` to **every** edge's MATCH `where` (both hops of a 2-hop path), so a path cannot route *through* an out-of-scope contract to reach an in-scope target — post-filtering the final target would be semantically wrong here. `graph_query(documents=)` threads it. `add_affiliation_edges` stamps the label too. A **backfill script** (`scripts/backfill_edge_source_doc_id.py`) stamps `source_doc_id` on edges of already-ingested KGs, idempotently (`WHERE source_doc_id IS NULL`).
+- **Unknown id raises (not silent-empty):** `validate_documents(store, documents)` checks against `store.known_document_ids()` — the UNION of distinct `Span.contract_id` and `Relationship.source_doc_id` — and raises `UnknownDocumentError` before any retrieval spends (mirrors 0007's `_validate_sources`). `None` = whole store (not validated); `[]` = a valid scope-to-nothing → no query, empty result.
+
+## Consequences
+
+- **AC-1.2 is meetable:** a sweep, a workspace question, and counterparty exposure (PR-17, a graph traversal) can all be scoped to a matter's documents, and the coverage denominator is honest. Live-verified on a scratch DB: span search scoped to `docA` returns only `docA` spans; a traversal from a party scoped to `docB` returns empty when the party's edge is in `docA` (proving per-edge pruning); an unknown id raises; and the backfill restores scoping on an edge whose `source_doc_id` was cleared.
+- **No re-ingest for span scoping** (the column existed). **Graph scoping needs the one-time backfill** for existing KGs; fresh ingests carry the label automatically.
+- **The document id is the product's own id** — the content-hash `source_doc_id` that prefixes every `chunk_id`/`span_id`/`clause_id`, so no translation on either side.
+- **Known limitation (span leg):** the vector KNN still ranks over the whole index and is filtered after, so an extreme case (a workspace whose in-scope spans all rank beyond `SCOPED_CANDIDATE_POOL` globally) could under-fill `k`. A true pre-filter needs ArcadeDB vector-index metadata filtering (ADR-0008 territory, not available today); the enlarged pool is the pragmatic mitigation and is a lever if a large workspace ever misses. The graph leg has no such caveat — its filter is exact.
+- **Not wired to the MCP tools** — the scope is on the in-process production entrypoints the product composes; an MCP surface can add it later if needed.

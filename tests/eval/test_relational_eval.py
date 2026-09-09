@@ -16,7 +16,7 @@ class _StubStore:
     def __init__(self, rows_by_call: dict):
         self._rows = rows_by_call
 
-    def graph_neighbors(self, entity_id, *, relationship_type, max_hops):
+    def graph_neighbors(self, entity_id, *, relationship_type, max_hops, documents=None):
         return self._rows.get((entity_id, max_hops), [])
 
 

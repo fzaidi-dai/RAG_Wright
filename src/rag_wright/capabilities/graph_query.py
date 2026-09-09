@@ -9,8 +9,11 @@ confidence — being confidence-aware, abstaining — is the answer generator's 
 
 from __future__ import annotations
 
+from typing import Optional
+
 from pydantic import BaseModel
 
+from rag_wright.capabilities.document_scope import validate_documents
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.ontology import RelationshipType
 from rag_wright.store.seam import Store
@@ -41,14 +44,20 @@ def graph_query(
     store: Store,
     relationship_type: RelationshipType = RelationshipType.CONTRACTS_WITH,
     max_hops: int = 1,
+    documents: Optional[list[str]] = None,
 ) -> GraphAnswer:
     """Traverse `relationship_type` from `start_entity_id` up to `max_hops` and return cited evidence.
 
     Every edge on every path is surfaced with its `chunk_id` and confidence tag; no edge is dropped or
     re-weighted by confidence here (that is the generator's job, FR-Q.6). The evidence is unranked.
+
+    `documents` (issue 0031): scope the traversal to a workspace's source documents -- EVERY edge on a path
+    must belong to one of them (so a multi-hop path cannot route through an out-of-scope contract). `None` =
+    the whole graph; an unknown id RAISES (`UnknownDocumentError`); `[]` = scope-to-nothing (no evidence).
     """
+    validate_documents(store, documents)  # reject an unknown document BEFORE the traversal (issue 0031)
     rows = store.graph_neighbors(
-        start_entity_id, relationship_type=relationship_type.value, max_hops=max_hops
+        start_entity_id, relationship_type=relationship_type.value, max_hops=max_hops, documents=documents
     )
     evidence = [
         GraphEvidence(
