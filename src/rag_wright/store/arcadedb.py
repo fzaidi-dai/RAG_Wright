@@ -623,7 +623,15 @@ class ArcadeDBStore:
     def write_graph(self, nodes: list[GraphNode], edges: list[GraphEdge]) -> None:
         """Upsert entity nodes and create relationship edges in ONE transaction (FR-S.1). Each entity
         is connected to its source chunk by a `Mentions` edge (for chunks that exist), so a chunk and
-        its extracted entities land together. Uses `execute_transaction` so a failure rolls back whole."""
+        its extracted entities land together. Uses `execute_transaction` so a failure rolls back whole.
+
+        Idempotent (issue 0029 / ADR-0092): re-ingesting the same document CONVERGES instead of appending.
+        Nodes stay UPSERT (already idempotent). A `Mentions` edge is created only if absent on (chunk,
+        entity); a `Relationship` edge only if absent on (source, target, relationship_type, chunk_id) --
+        so a genuinely distinct edge from a different contract (a different provenance `chunk_id`) still
+        writes, while a re-ingest of the same document adds nothing. Existence is checked with read-only
+        pre-queries BEFORE the transaction; correctness no longer depends on a caller's `already_ingested`
+        guard (which stays a useful whole-pipeline short-circuit)."""
         statements: list[str] = []
         for node in nodes:  # nodes first, so edge endpoints exist within the transaction
             statements.append(
@@ -637,14 +645,24 @@ class ArcadeDBStore:
                 f" UPSERT WHERE entity_id = {_sql_str(node.node_key)}"
             )
         existing_chunks = self._existing_chunks({node.chunk_id for node in nodes})
+        seen_mentions: set[tuple[str, str]] = set()  # de-dupe within this batch too (full convergence)
         for node in nodes:
-            if node.chunk_id in existing_chunks:  # connect chunk -> entity (provenance edge)
-                statements.append(
+            key = (node.chunk_id, node.node_key)
+            if node.chunk_id in existing_chunks and key not in seen_mentions \
+                    and not self._mentions_edge_exists(node.chunk_id, node.node_key):
+                seen_mentions.add(key)
+                statements.append(  # connect chunk -> entity (provenance edge)
                     f"CREATE EDGE {MENTIONS_EDGE_TYPE}"
                     f" FROM (SELECT FROM {CHUNK_TYPE} WHERE chunk_id = {_sql_str(node.chunk_id)})"
                     f" TO (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(node.node_key)})"
                 )
+        seen_edges: set[tuple[str, str, str, str]] = set()
         for edge in edges:
+            key = (edge.source_key, edge.target_key, edge.relationship_type, edge.chunk_id)
+            if key in seen_edges or self._relationship_edge_exists(
+                    edge.source_key, edge.target_key, edge.relationship_type, edge.chunk_id):
+                continue
+            seen_edges.add(key)
             statements.append(
                 f"CREATE EDGE {REL_EDGE_TYPE}"
                 f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(edge.source_key)})"
@@ -654,6 +672,26 @@ class ArcadeDBStore:
             )
         if statements:
             self._db.execute_transaction(statements)
+
+    def _mentions_edge_exists(self, chunk_id: str, node_key: str) -> bool:
+        """True iff a `Mentions` edge already connects this chunk to this entity (issue 0029 idempotence).
+        Endpoint properties are reached with `outV()`/`inV()`: a plain `out.<prop>`/`in.<prop>` projection
+        returns NULL on this ArcadeDB (verified live), which would silently defeat the existence check."""
+        rows = self._query(
+            f"SELECT count(*) AS c FROM {MENTIONS_EDGE_TYPE}"
+            f" WHERE outV().chunk_id = {_sql_str(chunk_id)} AND inV().entity_id = {_sql_str(node_key)}")
+        return bool(rows) and (rows[0].get("c") or 0) > 0
+
+    def _relationship_edge_exists(self, source_key: str, target_key: str, rel_type: str, chunk_id: str) -> bool:
+        """True iff a `Relationship` edge already exists on (source, target, relationship_type, chunk_id)
+        -- the full provenance key, so distinct edges from different contracts are not collapsed (0029).
+        `outV()`/`inV()` reach the endpoint entity_ids (a bare `out.entity_id` projects NULL here)."""
+        rows = self._query(
+            f"SELECT count(*) AS c FROM {REL_EDGE_TYPE}"
+            f" WHERE relationship_type = {_sql_str(rel_type)}"
+            f" AND outV().entity_id = {_sql_str(source_key)} AND inV().entity_id = {_sql_str(target_key)}"
+            f" AND chunk_id = {_sql_str(chunk_id)}")
+        return bool(rows) and (rows[0].get("c") or 0) > 0
 
     def add_affiliation_edges(self, nodes: list[GraphNode], edges: list[GraphEdge]) -> int:
         """issue 0027 BACKFILL (edge-only): add `AFFILIATE_OF` edges to an ALREADY-INGESTED KG without re-writing
@@ -671,10 +709,10 @@ class ArcadeDBStore:
                 f" chunk_id = {_sql_str(node.chunk_id)}")
         added = 0
         for edge in edges:
-            exists = self._query(
+            exists = self._query(  # outV()/inV(): a bare out.entity_id projects NULL on this ArcadeDB (issue 0029)
                 f"SELECT count(*) AS c FROM {REL_EDGE_TYPE}"
                 f" WHERE relationship_type = {_sql_str(edge.relationship_type)}"
-                f" AND out.entity_id = {_sql_str(edge.source_key)} AND in.entity_id = {_sql_str(edge.target_key)}")
+                f" AND outV().entity_id = {_sql_str(edge.source_key)} AND inV().entity_id = {_sql_str(edge.target_key)}")
             if exists and (exists[0].get("c") or 0) > 0:
                 continue
             self._command(
