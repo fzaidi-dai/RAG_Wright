@@ -44,7 +44,7 @@ def _prove_cache_reuse(cuad_path: Path, cache_dir: Path, limit: int) -> None:
 async def main() -> None:
     load_dotenv()
     from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
-    from rag_wright.store.arcadedb import PARTY_TO_EDGE_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import ArcadeDBStore
 
     db = os.environ.get("SMOKE_DB", "ragwright_ingest_smoke")
     limit = int(os.environ.get("LIMIT", "2"))
@@ -60,7 +60,6 @@ async def main() -> None:
     print(f"[smoke] REPORT: {report.model_dump()}", flush=True)
     print(f"[smoke] clause KG: {store.clause_kg_counts()}", flush=True)
     print(f"[smoke] entity graph: {store.graph_counts()}", flush=True)
-    n = store._query(f"SELECT count(*) AS n FROM {PARTY_TO_EDGE_TYPE}")[0]["n"]
     print(f"[smoke] PARTY_TO edges connecting the two: {n}", flush=True)
 
     # INGEST-REFACTOR phase 2a: the dense/sparse Span retrieval index -- prove it landed AND that hybrid

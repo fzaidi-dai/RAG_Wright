@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 async def main() -> None:
     load_dotenv()
     from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
-    from rag_wright.store.arcadedb import CONTRACT_TYPE, PARTY_TO_EDGE_TYPE, SPAN_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import CONTRACT_TYPE, SPAN_TYPE, ArcadeDBStore
 
     db = os.environ.get("FULL_DB", "ragwright_cuad_full")
     cache_dir = Path("data/cache/cuad_full")  # persistent: a re-run reuses everything already extracted
@@ -47,7 +47,6 @@ async def main() -> None:
     graph = store.graph_counts()
     spans = store._query(f"SELECT count(*) AS n FROM {SPAN_TYPE}")[0]["n"]
     contracts = store._query(f"SELECT count(*) AS n FROM {CONTRACT_TYPE}")[0]["n"]
-    party_to = store._query(f"SELECT count(*) AS n FROM {PARTY_TO_EDGE_TYPE}")[0]["n"]
     print("[full] COVERAGE:", flush=True)
     print(f"[full]   Contract nodes:   {contracts}", flush=True)
     print(f"[full]   clause KG:        {clause_kg}", flush=True)

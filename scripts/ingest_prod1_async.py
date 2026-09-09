@@ -46,7 +46,6 @@ def main() -> None:
     os.environ.setdefault("OPENROUTER_ALLOW_FALLBACKS", "true")
 
     from rag_wright.capabilities.dg_extraction import build_verified_registry
-    from rag_wright.capabilities.party_clause_linking import party_clause_linking
     from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.async_ingestion import JobStore, submit_ingestion
@@ -69,7 +68,6 @@ def main() -> None:
     job_id = submit_ingestion(
         adapter, ingest_graph, jobs, job_id="prod1-2d", db=db,
         corpus_ref={"kind": "gcs", "bucket": bucket, "prefix": "prod1-corpus/", "include": sorted(include)},
-        link_fn=lambda: len(party_clause_linking(store).links),
         is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None,
         max_concurrency=3)
     log(f"[2d] submit_ingestion RETURNED IMMEDIATELY -> job_id={job_id} (non-blocking). Polling status ...")

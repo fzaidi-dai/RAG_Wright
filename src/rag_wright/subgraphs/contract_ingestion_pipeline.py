@@ -22,7 +22,8 @@ Adding a corpus = writing one adapter (`documents() -> SourceDocument{canonical 
 NEVER re-implementing the flow: `run_corpus_ingestion(XYZAdapter(), pipeline)`, not an `ingest_xyz()`. Parsing
 is the adapter's job (PDF via docling, CUAD from JSON, ...), so the generic pipeline starts from text.
 `run_corpus_ingestion` maps every document through the pipeline (collecting per-document results and
-dead-letters) then runs `party_clause_linking` ONCE at the end (KG-7) to connect the parties to the clauses.
+dead-letters). (The KG-7 `party_clause_linking`/PartyTo post-step was retired -- issue 0028 / ADR-0091 --
+since party->clause is reached via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
 
 Every stage is dependency-injected so the graph is hermetically testable with stubs -- no live LLM/store.
 `production_contract_ingestion_pipeline` wires the real capabilities. The `source_doc_id` on every
@@ -62,12 +63,12 @@ class SourceDocument(BaseModel):
 
 
 class IngestionReport(BaseModel):
-    """The composite's output: how many documents were ingested, which dead-lettered (with reasons), and how
-    many `PARTY_TO` links the final connect step wrote."""
+    """The composite's output: how many documents were ingested and which dead-lettered (with reasons)."""
 
     documents_ingested: int
     dead_lettered: list[dict]
-    party_links: int
+    party_links: int = 0  # DEPRECATED (issue 0028 / ADR-0091): the PartyTo layer was retired; always 0. Kept a
+    #                       release so a consumer reading this field does not break; slated for removal.
     per_document: list[dict]
     # PROD-3 lossless invariant (ADR-0050): documents written but INCOMPLETE (>=1 clause extraction failed after
     # retries, OR >=1 span-index write failed -- 0006-C). Surfaced here so a partial is KNOWN at job completion,
@@ -100,7 +101,9 @@ IndexFn = Callable[[SourceDocument, list], int]  # (doc, segments) -> #Span reco
 GraphFn = Callable[[SourceDocument, list], list]  # (doc, chunks) -> ExtractionResults
 ResolveFn = Callable[[list], Any]  # extraction results -> resolution
 WriteFn = Callable[[SourceDocument, list, Any], dict]  # (doc, clause records, resolution) -> counts
-LinkFn = Callable[[], int]  # corpus-level: party_clause_linking -> #PARTY_TO edges
+LinkFn = Callable[[], int]  # corpus-level post-ingest hook -> an int count (default no-op). The KG-7 PartyTo
+#                             provider (`corpus_party_link_fn`) was retired (issue 0028 / ADR-0091); the seam
+#                             stays for signature stability + a future corpus-level pass, default `lambda: 0`.
 
 
 class IngestionState(TypedDict, total=False):
@@ -369,11 +372,9 @@ async def arun_corpus_ingestion(
         else:
             progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
 
-    progress(f"[ingest] {ingested}/{total} present ({skipped} resume-skipped), {len(dead_lettered)} "
-             f"dead-lettered, {len(partial)} partial; linking parties (KG-7)...")
-    party_links = link_fn()
+    party_links = link_fn()  # default no-op (issue 0028: PartyTo retired); a caller may still pass a corpus-level hook
     progress(f"[ingest] done: {ingested}/{total} ingested ({skipped} resume-skipped), "
-             f"{len(dead_lettered)} dead-lettered, {len(partial)} partial, {party_links} PARTY_TO edges")
+             f"{len(dead_lettered)} dead-lettered, {len(partial)} partial")
     return IngestionReport(
         documents_ingested=ingested, dead_lettered=dead_lettered,
         party_links=party_links, per_document=per_document, partial=partial)
@@ -847,24 +848,8 @@ def aproduction_document_ingest(
         chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn)
 
 
-def corpus_party_link_fn(store: Any, mentions_path: Any) -> LinkFn:
-    """Build the corpus-level PARTY_TO link step (KG-7, run ONCE after ingestion) -- CORPUS-GENERIC. Defaults to
-    the TRUE many-to-many derivation (PARTY-TO-MANY-TO-MANY, ADR-0036): loads a per-contract party-mention cache
-    (`{source_doc_id: [party names]}`) so a party links to EVERY contract it signed -- the same path as
-    `scripts/link_party_clause.py MANY=1`. Falls back to the single-provenance KG-7 join only when the cache is
-    absent. Loaded lazily (at link time) so it reflects the cache on disk when the corpus finishes. A corpus
-    driver passes its own `mentions_path`; the flow is corpus-agnostic."""
-    import json
-    from pathlib import Path
-
-    from rag_wright.capabilities.party_clause_linking import party_clause_linking
-
-    def _link() -> int:
-        path = Path(mentions_path)
-        mentions = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
-        return len(party_clause_linking(store, mentions=mentions).links)
-
-    return _link
+# (issue 0028 / ADR-0091: `corpus_party_link_fn` -- the KG-7 PartyTo link provider -- was retired with the
+#  PartyTo edge. `arun_corpus_ingestion(link_fn=...)` keeps its no-op default; there is no PartyTo provider.)
 
 
 def register_contract_ingestion_pipeline(registry) -> None:

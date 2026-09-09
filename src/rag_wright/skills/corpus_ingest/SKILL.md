@@ -6,8 +6,7 @@ description: >
   (contract_ingestion_pipeline) at the corpus through a single thin CorpusAdapter -- never a
   re-implemented ingest_xyz(). Write the adapter (parse + canonical source_doc_id + optional metadata),
   point the entity registry at the corpus's parties, and run run_corpus_ingestion; the pipeline chunks,
-  segments, function-classifies, extracts clauses + the party graph, resolves entities, writes both, and
-  runs the KG-7 link once. Applied over src/rag_wright/subgraphs/contract_ingestion_pipeline.py.
+  segments, function-classifies, extracts clauses + the party graph, resolves entities, and writes both. Applied over src/rag_wright/subgraphs/contract_ingestion_pipeline.py.
 ---
 
 # Ingesting a new corpus into the contract KG
@@ -23,8 +22,9 @@ corpus is one adapter — **never** a re-implemented `ingest_xyz()` that duplica
 The pipeline is fixed and shared. Everything corpus-specific lives behind one seam,
 `CorpusAdapter.documents() -> Iterable[SourceDocument]`. `SourceDocument` is `{source_doc_id, text, metadata}`.
 The pipeline, per document, runs: **chunk (semantic_chunking) → segment → LegalBERT function-classify →
-clause-extract ∥ graph-extract → entity_resolution → write (clause KG + entity graph)**, then
-`party_clause_linking` (KG-7) runs ONCE at the end to connect parties to clauses.
+clause-extract ∥ graph-extract → entity_resolution → write (clause KG + entity graph)**. (The KG-7
+`party_clause_linking`/PartyTo post-step was retired — issue 0028 / ADR-0091 — since party→clause is reached
+via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
 
 ## A new *contract* corpus — 3 steps
 
@@ -47,16 +47,14 @@ Extend the EDGAR verified registry (`build_verified_registry`) for the corpus's 
 
 ```python
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
-    run_corpus_ingestion, production_document_ingest,
+    arun_corpus_ingestion, aproduction_document_ingest,
 )
-from rag_wright.capabilities.party_clause_linking import party_clause_linking
 
 report = await arun_corpus_ingestion(
     YourAdapter(path, limit=N),                 # test on a FEW docs first; never a full re-ingest without intent
-    production_document_ingest(store, cache_dir=..., registry=...),
-    link_fn=lambda: len(party_clause_linking(store).links),
+    aproduction_document_ingest(store, cache_dir=..., registry=...),
 )
-# report: documents_ingested, dead_lettered (per-doc), party_links, per_document
+# report: documents_ingested, dead_lettered (per-doc), per_document
 ```
 
 `run_corpus_ingestion` streams `X/N` progress; a bad document dead-letters and is skipped (one bad doc never
@@ -68,7 +66,7 @@ non-destructive while proving it out.
 1. **Never write an `ingest_xyz()` that re-implements the flow.** A new corpus = one `CorpusAdapter`, then
    `run_corpus_ingestion(adapter, ...)`. If you find yourself copying the pipeline, stop.
 2. **The canonical `source_doc_id` is load-bearing.** Always derive it via `canonical_source_doc_id`; a
-   divergent slug breaks the KG-7 party↔clause join (HYG-1). Every graph must share one id scheme.
+   divergent slug breaks the cross-graph join (HYG-1). Every graph must share one id scheme.
 3. **Extraction is concurrent, per-item tolerant, and cached.** Clause/graph extraction runs under
    `map_concurrent` (granite is ~10s/single call); a truncated/failed span is SKIPPED, not fatal to the
    document; and each successful extraction is cached by clause-id + template-schema-version, so a re-run or a
@@ -85,9 +83,9 @@ fresh `.py` from a new ontology, then hand-maintain it — ADR-0037), a **retrai
 ## What this skill does NOT own (deferred to the pipeline / capabilities)
 - **The pipeline internals** (`build_document_ingest` graph, dead-letter, the extraction seams) — LG-3d.
 - **The extraction capabilities** — semantic_chunking, the function classifier, clause extraction (docling-graph
-  + granite, ADR-0037 template), GP-1B graph_extraction (ADR-0035), entity_resolution, `party_clause_linking`.
+  + granite, ADR-0037 template), GP-1B graph_extraction (ADR-0035), entity_resolution.
 - **The span/embedding retrieval index** — wired into the pipeline as a parallel `index_spans` branch off the
-  shared `segment` node (INGEST-REFACTOR phase 2a); a corpus now gets the typed KG + entity graph + link + the
+  shared `segment` node (INGEST-REFACTOR phase 2a); a corpus now gets the typed KG + entity graph + the
   dense/sparse retrieval index in one pass. Indexing is best-effort (a failed index degrades to 0 spans, never
   dead-letters the document's KG).
 

@@ -535,26 +535,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("retrieval", "ranking", "typed", "citation"),
     ),
-    # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
-    CapabilityManifest(
-        slug="party_clause_linking",
-        kind="function",
-        display_name="Party-clause linking (PARTY_TO edges over the unified contract KG)",
-        description=(
-            "Add the missing Party<->Contract link over the one contract KG, joining the party graph to the "
-            "typed Clause KG WITHOUT re-ingest: a pure pass over the already-populated Contract and Entity "
-            "nodes that matches each contract's parties_json names to Entity nodes by normalized name and "
-            "writes PARTY_TO edges (Entity -> Contract). Many-to-many, so an edge (not an id field); a party "
-            "reaches its clauses via PARTY_TO then the clause_id key-range. Unmatched (private/unlinked) "
-            "parties are counted, not dropped (ADR-0036)."
-        ),
-        representative_queries=(
-            "link the parties of a contract to their Entity nodes",
-            "connect the party graph to the clause KG so a party reaches its clauses",
-            "add PARTY_TO edges between resolved parties and their contracts",
-        ),
-        tags=("graph", "linking", "parties", "unification", "deterministic"),
-    ),
+    # (issue 0028 / ADR-0091: the KG-7 `party_clause_linking` manifest was retired with the PartyTo edge.)
     CapabilityManifest(
         slug="clause_exception_linking",
         kind="function",
@@ -832,8 +813,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "LangGraph subgraph: per document, chunk (semantic_chunking) -> extract clauses "
             "(typed_clause_extraction) and the party/relational graph (graph_extraction) in parallel -> resolve "
             "entities (entity_resolution) -> write (typed clause KG + entity graph), with a per-document "
-            "dead-letter so one bad document never kills the ingest; then party_clause_linking (KG-7) runs once "
-            "to connect parties to clauses. Corpus-agnostic: a CorpusAdapter supplies the documents (parsing + "
+            "dead-letter so one bad document never kills the ingest. Corpus-agnostic: a CorpusAdapter supplies the documents (parsing + "
             "the one canonical source_doc_id + any corpus metadata), so adding a corpus is one adapter, never a "
             "re-implemented ingest_xyz()."
         ),

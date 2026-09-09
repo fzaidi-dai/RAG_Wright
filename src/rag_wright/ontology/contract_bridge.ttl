@@ -6,7 +6,7 @@
 # extraction template via `docling-graph template from-ontology ... --root Clause` (deterministic, zero-LLM).
 #
 # The EXTRACTION template root is Clause: given one clause span (its function is already known from the T56
-# classifier), the LLM emits the clause's typed properties. Structural edges (HAS_CLAUSE / PARTY_TO /
+# classifier), the LLM emits the clause's typed properties. Structural edges (HAS_CLAUSE /
 # CONTRACTS_WITH) are STORE edges written at KG-3, not extracted here — they are declared for documentation
 # but have domain Contract/Party, so a BFS from Clause never pulls them into the template.
 #
@@ -2640,7 +2640,8 @@ cbr:ContractNode a cbr:KgVertexType ; cbr:vertexName "Contract" ;
                    "content_hash:STRING", "page_count:INTEGER" ;
     cbr:uniqueIndexOn "contract_id" .
 cbr:HasPropertyEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "HasProperty" .
-cbr:PartyToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "PartyTo" .
+# (issue 0028 / ADR-0091: PartyToEdgeDecl retired -- the PartyTo edge was written on every ingest and read by
+#  nothing; party->clause is reached via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
 cbr:IsExceptionToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "IsExceptionTo" .
 
 # =============================================================================

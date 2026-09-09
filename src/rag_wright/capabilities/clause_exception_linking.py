@@ -6,8 +6,8 @@ carve-out, e.g. "uncapped for negligence") -- with NO relationship between them.
 liability capped, and under what conditions?" gets two contradictory-looking fragments and the generator
 abstains, instead of "capped at X, EXCEPT uncapped for negligence."
 
-This capability adds the missing link WITHOUT re-ingesting: a pure pass over the already-populated clauses (the
-`party_clause_linking` / KG-7 pattern) that writes `IsExceptionTo` edges. The signal is SYMBOLIC co-occurrence +
+This capability adds the missing link WITHOUT re-ingesting: a pure pass over the already-populated clauses (a derived-relationship
+linking pass over the existing KG) that writes `IsExceptionTo` edges. The signal is SYMBOLIC co-occurrence +
 POSITIONAL PROXIMITY: within a contract, an `Uncapped` clause whose operative span is within `window` characters
 of a `Cap` clause's span (~ the same liability section) is that cap's carve-out. Distant co-occurrence is NOT
 linked (probably an unrelated standalone uncapped clause). The link is **INFERRED** (a reasoned inference, not an
@@ -100,7 +100,7 @@ def derive_exception_links(
 def clause_exception_linking(store: Any, *, window: int = DEFAULT_PROXIMITY_WINDOW) -> ClauseExceptionLinkResult:
     """The registered capability (ADR-0044): read the Cap + Uncapped clause positions, derive the proximity-based
     `IsExceptionTo` links, write them (idempotent, clears the layer first), and return the result. No re-ingest --
-    a derived-relationship pass over the existing KG (the `party_clause_linking` pattern)."""
+    a derived-relationship pass over the existing KG."""
     positions = store.clause_positions([CAP_FUNCTION, EXCEPTION_FUNCTION])
     result = derive_exception_links(positions, window=window)
     store.write_clause_exception_links(result.links)

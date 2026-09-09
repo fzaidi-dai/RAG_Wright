@@ -15,8 +15,8 @@ Every answer is CITED: each clause carries its `clause_id` and each property its
 without a citation (FR-Q.6). The store is duck-typed (the three `*_contract*` / `clauses_with_property`
 readbacks) so this layer is unit-tested with no live ArcadeDB.
 
-Out of scope here (need layers not in the clause KG): party<->clause ROLE questions (the Party/PARTY_TO
-layer, Leg C) and cross-clause REFERENCES (not extracted). Noted for a later pass.
+Out of scope here (need layers not in the clause KG): party<->clause ROLE questions (a per-clause party-role layer, Leg C -- not built; the PartyTo edge was retired,
+issue 0028) and cross-clause REFERENCES (not extracted). Noted for a later pass.
 """
 
 from __future__ import annotations

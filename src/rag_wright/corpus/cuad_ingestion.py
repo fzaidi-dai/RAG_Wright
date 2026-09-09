@@ -16,7 +16,6 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
     SourceDocument,
     aproduction_document_ingest,
     arun_corpus_ingestion,
-    corpus_party_link_fn,
     seed_chunk_cache,
 )
 
@@ -49,8 +48,7 @@ class CuadAdapter:
 
 async def arun_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, limit: int = 0) -> IngestionReport:
     """INGEST-REFACTOR proof: ingest CUAD through the GENERIC pipeline + `CuadAdapter` -- one call, no
-    `ingest_cuad()`. Builds the EDGAR registry, ensures the schema, ingests `limit` documents, and runs
-    party_clause_linking (KG-7) once. Point `store` at a SCRATCH database for a non-destructive smoke.
+    `ingest_cuad()`. Builds the EDGAR registry, ensures the schema, ingests `limit` documents. Point `store` at a SCRATCH database for a non-destructive smoke.
 
     INGEST-REFACTOR (a) cache reuse (the ONLY CUAD-specific wiring): the pipeline reuses GP-1B's party
     extractions (`dg_extracted_parties.json`, ~482) via `party_seed_path`, and prior `chunk()` manifests
@@ -69,9 +67,6 @@ async def arun_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, lim
         party_seed_path="data/cache/dg_extracted_parties.json")
     return await arun_corpus_ingestion(
         CuadAdapter(cuad_path, limit=limit), ingest_graph,
-        # PARTY-TO-MANY-TO-MANY (ADR-0036): default to the mention-cache many-to-many derivation, so a re-ingest
-        # keeps every party linked to every contract it signed instead of silently reverting to the 1-to-1 join.
-        # The link factory is corpus-generic; only the CUAD mention-cache PATH is CUAD-specific.
-        link_fn=corpus_party_link_fn(store, "data/cache/dg_extracted_parties.json"),
+        # (issue 0028 / ADR-0091: the KG-7 PartyTo link step was retired; no link_fn is wired.)
         # RESUME-skip: a present Contract node means the whole document already landed (Contract is written last).
         is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)

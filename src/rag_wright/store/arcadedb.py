@@ -77,7 +77,8 @@ DEFAULT_CANDIDATE_POOL = 100
 
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
 CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
-PARTY_TO_EDGE_TYPE = "PartyTo"  # KG-7 (ADR-0036): Entity(party) -> Contract, the unifying link
+# (issue 0028 / ADR-0091: the `PartyTo` edge was retired -- written on every ingest, read by nothing; party->clause
+#  is reached via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
 IS_EXCEPTION_TO_EDGE_TYPE = "IsExceptionTo"  # ADR-0044: exception clause (Uncapped) -> the Cap clause it excepts
 REQUIREMENT_TYPE = "Requirement"  # CC-5 (compliance §13): a deontic regulatory rule (its own DB, ragwright_compliance)
 
@@ -257,7 +258,7 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_start INTEGER")  # CU-B2: doc-absolute char offset
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_end INTEGER")  # CU-B2: exclusive (citation)
         # ADR-0067 P5b: the DOMAIN vertex types (Clause / PropertyValue / Contract) + structural edges
-        # (HasProperty / PartyTo / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
+        # (HasProperty / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
         # whatever the pack declares, so a new domain ships its own node schema without editing this method.
         vertex_types, structural_edges = load_kg_schema()
         for vt in vertex_types:
@@ -686,26 +687,11 @@ class ArcadeDBStore:
         return added
 
     def all_contracts(self) -> list[dict]:
-        """KG-7: every contract id (the set a PARTY_TO edge's Entity provenance must land in)."""
+        """Every contract id in the store (e.g. for a corpus-wide backfill pass)."""
         return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
 
-    def all_entities(self) -> list[dict]:
-        """KG-7: every party `Entity`'s node key, name, and `chunk_id` (its extraction-provenance contract)."""
-        return self._query(f"SELECT entity_id, name, chunk_id FROM {ENTITY_TYPE}")
-
-    def write_party_contract_links(self, links: list) -> None:
-        """KG-7 (ADR-0036): write the `PARTY_TO` edges (Entity -> Contract). Idempotent: clears the existing
-        PARTY_TO layer first, so re-linking over the populated graph is safe and re-derivable. One transaction."""
-        statements = [f"DELETE FROM {PARTY_TO_EDGE_TYPE} UNSAFE"] if PARTY_TO_EDGE_TYPE in self.type_names() else []
-        for link in links:
-            statements.append(
-                f"CREATE EDGE {PARTY_TO_EDGE_TYPE}"
-                f" FROM (SELECT FROM {ENTITY_TYPE} WHERE entity_id = {_sql_str(link.entity_id)})"
-                f" TO (SELECT FROM {CONTRACT_TYPE} WHERE contract_id = {_sql_str(link.contract_id)})"
-                f" SET party_name = {_sql_str(link.party_name)}"
-            )
-        if statements:
-            self._db.execute_transaction(statements)
+    # (issue 0028 / ADR-0091: `all_entities` was the KG-7 PartyTo-link reader; removed with the retired
+    #  capability -- it had no other caller.)
 
     # --- ADR-0044: the IS_EXCEPTION_TO derived carve-out relationship (exception clause -> Cap clause) ------
 
