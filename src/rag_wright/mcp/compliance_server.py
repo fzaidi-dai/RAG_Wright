@@ -167,7 +167,7 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.compliance_check import run_compliance_check
+    from rag_wright.subgraphs.compliance_check import run_ad_compliance_check
 
     store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
     extract_model = default_extraction_model("claim-extract", "ibm-granite/granite-4.2-8b")
@@ -175,7 +175,7 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
     embedder = query_embedder()
 
     async def _check(ad_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
-        return await run_compliance_check(
+        return await run_ad_compliance_check(
             ad_text, source_doc, store=store, extract_model=extract_model,
             judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
 

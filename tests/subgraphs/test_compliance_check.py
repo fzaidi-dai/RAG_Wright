@@ -1348,7 +1348,7 @@ async def test_aextract_ad_claims_reraises_a_persistent_failure():
 
 
 async def test_ad_path_upload_cites_section_locators(monkeypatch):
-    # SEG-7b: run_compliance_check runs the SEMANTIC front-end (parse -> chunk -> per-chunk Claim extraction ->
+    # SEG-7b: run_ad_compliance_check runs the SEMANTIC front-end (parse -> chunk -> per-chunk Claim extraction ->
     # attach locators -> judge). An uploaded ad's typed claims cite their "§ {section}" locator.
     import rag_wright.subgraphs.compliance_check as cc
     from rag_wright.contracts.compliance import Claim, ClaimType
@@ -1371,7 +1371,7 @@ async def test_ad_path_upload_cites_section_locators(monkeypatch):
                   ("text", "Our product cures arthritis fast in most adults."))
     store = _MultiPolicyStore([_row("p1", "§ 1", "An ad must not claim a cure.")])
     try:
-        report = await cc.run_compliance_check(
+        report = await cc.run_ad_compliance_check(
             source_doc="ad.pdf", name="ad.pdf", data=b"%PDF", store=store, extract_model=object(),
             judge_model_id="stub", embedder=_Emb1(), doc=doc, aclaim_fn=fake_aclaim, sources=["p1"])
     finally:

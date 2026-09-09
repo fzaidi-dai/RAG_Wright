@@ -692,13 +692,14 @@ async def _aextract_ad_claims(chunks: list[str], source_doc: str, extract_model:
     return claims
 
 
-async def run_compliance_check(
+async def run_ad_compliance_check(
     subject_text: Optional[str] = None, source_doc: str = "", *, store: Any, extract_model: Any,
     judge_model_id: str, embedder: Any = None, k: int = 5, sources: Optional[list[str]] = None,
     name: Optional[str] = None, data: Optional[bytes] = None, discoverer: Any = None, aclaim_fn: Any = None,
     doc: Any = None,
 ) -> ComplianceReport:
-    """The ADVERTISING compliance path -> a cited `ComplianceReport`. SEG-7b: accepts EITHER a pasted
+    """The ADVERTISING compliance path (the subgraph behind the `check_ad_compliance` MCP tool; the generic
+    counterpart is `run_generic_compliance_verdict`) -> a cited `ComplianceReport`. SEG-7b: accepts EITHER a pasted
     `subject_text` OR an uploaded ad (`name` + raw `data` bytes), and runs the SAME semantic front-end as the
     generic path -- parse -> semantic chunk -> per-chunk typed-`Claim` extraction -> attach structural locators
     (§/¶/bullet) -> judge. The typed-Claim tail (claim_type / disclosure routing) is UNCHANGED; a scanned ad's
