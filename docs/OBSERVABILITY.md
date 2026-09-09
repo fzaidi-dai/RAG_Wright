@@ -23,22 +23,23 @@ Tracing never breaks a model call: every langfuse touch degrades to a no-op on e
 
 ## What is emitted
 
-**One Langfuse `generation` per completed model call.** Emitted at the two points every call funnels through:
+**One Langfuse `generation` per completed model call.** Emitted at the three points every call funnels through:
 
 | path | covers | `metadata.stage` |
 |---|---|---|
-| `models.seam.astream_text` (LangChain streaming) | tag-parse clause extraction, function classification, the ADR-0040 semantic judge, answer generation, query understanding | `astream_text` |
+| `models.seam.astream_text` (LangChain streaming) | free-text tag-parse clause extraction, function classification, answer generation, query understanding, query constraint extraction | `astream_text` |
+| `models.seam.build_structured` (forced structured output, `.ainvoke`/`.invoke`) | the relevance judge (`span-relevance`), the compliance judge, and every other forced-schema caller (issue 0025) | `build_structured` |
 | docling-graph litellm client (`capabilities.dg_extraction`) | party / clause extraction on the legacy path | `litellm` |
 
 ### Fields (the contract)
 
 | field | meaning |
 |---|---|
-| `name` | the call-site **label** (ADR-0058), e.g. `clause-group`, `semantic_judge.judge`, `clause_function_classifier.classify_spans`, `docling-graph-extract` |
-| `model` | the model id, e.g. `ibm-granite/granite-4.2-8b`, `google/gemma-4-31b-it` |
+| `name` | the call-site **label** (ADR-0058), e.g. `span-relevance`, `query-constraints`, `clause-group`, `docling-graph-extract` |
+| `model` | the model id, e.g. `ibm-granite/granite-4.2-8b`, `qwen/qwen3.8-27b`, `google/gemma-4-31b-it` |
 | `usage_details` | `{"input": <prompt tokens>, "output": <completion tokens>}` |
-| `cost_details` | `{"total": <USD>}` — **only on the `litellm` path** (a pass-through of OpenRouter's *actual* reported cost). `astream_text` calls carry **no** cost (LangChain does not surface it) → Langfuse prices them from its own model table |
-| `metadata` | `label`, `role`, `stage` (`astream_text`\|`litellm`), `latency_ms`, `document_id`, + any caller metadata |
+| `cost_details` | `{"total": <USD>}` — the provider's **actual** reported cost, passed through on **all three paths**: `litellm` via `usage.cost`, `astream_text` via the cost-capturing streaming client (issue 0021), `build_structured` via the raw response's `token_usage.cost` (issue 0025). `cost` is None (→ Langfuse prices from its table) only when the backend does not surface it (e.g. self-hosted vLLM) |
+| `metadata` | `label`, `role`, `stage` (`astream_text`\|`build_structured`\|`litellm`), `latency_ms`, `document_id`, + any caller metadata |
 | `input` / `output` | prompt / completion text — **only at `verbose`** |
 
 ---

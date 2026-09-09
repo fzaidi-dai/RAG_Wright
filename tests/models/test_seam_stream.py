@@ -81,3 +81,43 @@ async def test_astream_text_passes_real_cost_to_record_generation(monkeypatch):
     out = await seam.astream_text("m", "prompt")
     assert out == "ok"
     assert rec["cost"] == 3.5e-06 and rec["stage"] == "astream_text"
+
+
+# --- issue 0025: build_structured records a generation (model + tokens + real cost) on the ainvoke path -----
+
+
+def test_record_structured_generation_reads_tokens_and_cost_from_raw(monkeypatch):
+    from types import SimpleNamespace
+
+    from rag_wright.models import tracing
+
+    raw = SimpleNamespace(
+        usage_metadata={"input_tokens": 378, "output_tokens": 155},
+        response_metadata={"token_usage": {"cost": 0.0006661, "prompt_tokens": 378, "completion_tokens": 155}})
+    result = {"raw": raw, "parsed": SimpleNamespace(verdict="relevant"), "parsing_error": None}
+    rec: dict = {}
+    monkeypatch.setattr(tracing, "record_generation", lambda **kw: rec.update(kw))
+    seam._record_structured_generation(result, "the prompt", "qwen/qwen3.8-27b", "span-relevance", 42.0)
+    assert rec["model"] == "qwen/qwen3.8-27b" and rec["label"] == "span-relevance"
+    assert rec["stage"] == "build_structured"                      # so every structured caller is attributable
+    assert rec["usage"] == {"input": 378, "output": 155}
+    assert rec["cost"] == 0.0006661                                # OpenRouter's ACTUAL cost, not a token estimate
+
+
+def test_record_structured_generation_is_a_noop_on_an_unrecognized_shape(monkeypatch):
+    from rag_wright.models import tracing
+
+    called: list = []
+    monkeypatch.setattr(tracing, "record_generation", lambda **kw: called.append(kw))
+    seam._record_structured_generation("not a dict", "p", "m", None, 1.0)   # not a dict -> skip
+    seam._record_structured_generation({"parsed": 1}, "p", "m", None, 1.0)  # no raw -> skip
+    assert called == []
+
+
+def test_raise_on_parse_error_restores_native_include_raw_false_semantics():
+    err = ValueError("bad json")
+    with pytest.raises(ValueError, match="bad json"):
+        seam._raise_on_parse_error({"raw": object(), "parsed": None, "parsing_error": err})
+    # no error -> pass the dict through unchanged (so the wrapper can read `raw`)
+    assert seam._raise_on_parse_error({"raw": 1, "parsed": "ok", "parsing_error": None})["parsed"] == "ok"
+    assert seam._raise_on_parse_error("passthrough") == "passthrough"

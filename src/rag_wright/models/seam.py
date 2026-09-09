@@ -206,8 +206,17 @@ def build_structured(
     `max_tokens` caps the completion length -- a safety net against a model that runs away to the context
     limit under a schema constraint (observed on self-hosted Gemma-4 with a mis-set chat template).
     """
+    from rag_wright.models import tracing
+
     profile = profile_for(model_id)
-    kwargs: dict[str, Any] = {"method": profile.structured_method, "include_raw": include_raw}
+    # ISSUE-0025: the forced-structured path emitted NO Langfuse generation, so every build_structured caller (the
+    # relevance judge, the compliance judge, ...) was invisible to cost/latency/model-mix reporting. When tracing
+    # is on, force `include_raw=True` so we can read the provider's usage + ACTUAL cost off the raw response (as
+    # `ainvoke` surfaces them, issue 0021) and emit a generation -- returning the caller's shape unchanged. Off,
+    # nothing changes (include_raw stays the caller's value, no wrapping).
+    traced = tracing.tracing_on()
+    effective_include_raw = include_raw or traced
+    kwargs: dict[str, Any] = {"method": profile.structured_method, "include_raw": effective_include_raw}
     # also put the env provider pin on the forced structured call (belt-and-suspenders: the base client carries
     # it too, but with_structured_output's extra_body should not drop it).
     structured_extra = {**(profile.structured_extra_body or {}), **_provider_pin()}
@@ -219,16 +228,62 @@ def build_structured(
     overrides: dict[str, Any] = {"max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S}
     if max_tokens is not None:
         overrides["max_tokens"] = max_tokens
-    inner = build_model(model_id, temperature=temperature, **overrides).with_structured_output(schema, **kwargs)
+    inner: Runnable = build_model(model_id, temperature=temperature, **overrides).with_structured_output(
+        schema, **kwargs)
+    if traced and not include_raw:
+        # we forced include_raw for instrumentation, but the caller wanted the parsed value with the native
+        # raise-on-parse-failure contract -- restore it so the bounded retry sees the SAME error it would have.
+        inner = inner | RunnableLambda(_raise_on_parse_error)
     # Dual-path during the async migration (ADR-0057): `.invoke` keeps the sync bounded retry (ADR-0056) for
     # not-yet-migrated callers; `.ainvoke` is the async bounded retry + TRUE wall-clock deadline. The sync path
     # is removed once all callers are async (Phase D). `RunnableLambda(func, afunc=...)` routes each accordingly.
     sync_runnable = _with_bounded_retry(inner, model_id)
 
-    async def _adeadline(x: Any) -> Any:
-        return await _ainvoke_bounded(inner, x, model_id, label)
+    def _finish(result: Any, prompt: Any, latency_ms: float) -> Any:
+        if not traced:
+            return result  # untraced: unchanged (result is already the caller's shape)
+        _record_structured_generation(result, prompt, model_id, label, latency_ms)
+        # we forced include_raw; hand the caller back the shape it asked for
+        return result if include_raw else (result.get("parsed") if isinstance(result, dict) else result)
 
-    return RunnableLambda(sync_runnable.invoke, afunc=_adeadline)
+    def _sync(x: Any) -> Any:
+        t0 = time.monotonic()
+        return _finish(sync_runnable.invoke(x), x, (time.monotonic() - t0) * 1000.0)
+
+    async def _adeadline(x: Any) -> Any:
+        t0 = time.monotonic()
+        result = await _ainvoke_bounded(inner, x, model_id, label)
+        return _finish(result, x, (time.monotonic() - t0) * 1000.0)
+
+    return RunnableLambda(_sync, afunc=_adeadline)
+
+
+def _raise_on_parse_error(result: Any) -> Any:
+    """When `include_raw=True` was forced for instrumentation but the caller wanted the parsed value, restore the
+    native `include_raw=False` contract: re-raise the exact parse error so the bounded retry retries identically."""
+    if isinstance(result, dict) and result.get("parsing_error") is not None:
+        raise result["parsing_error"]
+    return result
+
+
+def _record_structured_generation(result: Any, prompt: Any, model_id: str, label: str | None,
+                                  latency_ms: float) -> None:
+    """ISSUE-0025: emit one Langfuse generation for a completed forced-structured call, reading tokens + the
+    provider's ACTUAL cost off the raw response (`include_raw=True`). Degrades to a no-op on any shape it does not
+    recognise; `record_generation` itself is gated + exception-safe."""
+    from rag_wright.models import tracing
+
+    raw = result.get("raw") if isinstance(result, dict) else None
+    if raw is None:
+        return
+    um = getattr(raw, "usage_metadata", None) or {}
+    usage = {"input": um.get("input_tokens", 0), "output": um.get("output_tokens", 0)} if um else None
+    token_usage = (getattr(raw, "response_metadata", {}) or {}).get("token_usage") or {}
+    cost = token_usage.get("cost")  # OpenRouter's real per-call cost (issue 0021); None -> Langfuse prices by table
+    parsed = result.get("parsed") if isinstance(result, dict) else None
+    tracing.record_generation(
+        model=model_id, input=prompt, output=parsed, usage=usage, cost=cost, latency_ms=latency_ms,
+        label=label, stage="build_structured")
 
 
 def _call_desc(model_id: str, label: str | None) -> str:

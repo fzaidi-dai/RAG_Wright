@@ -46,7 +46,7 @@ def _stub_factory(verdict: RelevanceVerdict, sink: dict):
             sink["prompt"] = prompt
             return verdict
 
-    return lambda _m, _s: _R()
+    return lambda _m, _s, **_kw: _R()
 
 
 async def test_judge_prompt_carries_condition_span_and_matched_as_context():

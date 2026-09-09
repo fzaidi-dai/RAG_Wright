@@ -117,7 +117,9 @@ def build_arelevance_judge_fn(model_id: str, *, structured_factory=build_structu
     method = relevance_method()
 
     async def judge(span_text: str, matched: list[tuple[str, str]], condition: Condition) -> RelevanceVerdict:
-        return await structured_factory(model_id, RelevanceVerdict).ainvoke(
+        # label names the generation (ADR-0058 / issue 0025) so a reader tells `span-relevance` from
+        # `query-constraints` in the cost report; ignored by the hermetic stub factory.
+        return await structured_factory(model_id, RelevanceVerdict, label="span-relevance").ainvoke(
             method + _tail(span_text, matched, condition))
 
     return judge
