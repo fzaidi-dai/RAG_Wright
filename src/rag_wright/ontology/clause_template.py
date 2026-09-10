@@ -88,11 +88,38 @@ def edge(
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
-def _normalize_enum(enum_cls: Type[Enum], v: Any) -> Any:
+_KEYWORD_MIN_LEN = 5  # issue 0033: a value token must be this long to be matched as a substring (avoid noise)
+
+
+def _match_enum_keyword(enum_cls: Type[Enum], key: str) -> Any:
+    """issue 0033: a keyword fallback for a value-bearing LIST enum -- when the model echoed the clause
+    verbatim ("Except in respect of the Supplier's INDEMNIFICATION obligations...") instead of the canonical
+    token, map on the member VALUE appearing as a substring of the collapsed input. The LONGEST value wins (so
+    a specific value beats a prefix of it), OTHER is never a keyword, and short tokens (< 5 chars) are ignored
+    to avoid spurious hits. Returns the member or None (caller then falls back to OTHER)."""
+    best = None
+    best_len = 0
+    for member in enum_cls:
+        if member.name == "OTHER":
+            continue
+        token = re.sub(r"[^A-Za-z0-9]+", "", str(member.value)).lower()
+        if len(token) >= _KEYWORD_MIN_LEN and token in key and len(token) > best_len:
+            best, best_len = member, len(token)
+    return best
+
+
+def _normalize_enum(enum_cls: Type[Enum], v: Any, *, keyword_fallback: bool = False) -> Any:
     """
     Accept enum instances, value strings, or member names.
     Handles various formats: 'VALUE', 'value', 'Value', 'VALUE_NAME'.
     Falls back to the OTHER member instead of rejecting (never raises).
+
+    issue 0033: with `keyword_fallback=True` (the value-bearing LIST dims -- carve_out / covered_subject /
+    damage_type), an input that is not an exact match but CONTAINS a canonical value token maps to that value
+    before falling back to OTHER. This recovers the document-side case where the extractor quotes the clause
+    (e.g. an indemnification carve-out stated as a full "Except in respect of ..." phrase) instead of emitting
+    the bare token as it does on the short query side. These dims are lexically grounded (ADR-0028), so a
+    spurious keyword hit whose cue is absent from the text is still downgraded by the grounding gate.
     """
     if isinstance(v, enum_cls):
         return v
@@ -104,6 +131,10 @@ def _normalize_enum(enum_cls: Type[Enum], v: Any) -> Any:
             mapping[re.sub(r"[^A-Za-z0-9]+", "", str(member.value)).lower()] = member
         if key in mapping:
             return mapping[key]
+        if keyword_fallback:
+            hit = _match_enum_keyword(enum_cls, key)
+            if hit is not None:
+                return hit
     if "OTHER" in enum_cls.__members__:
         logger.warning("Unmapped enum value %r for %s; falling back to OTHER", v, enum_cls.__name__)
         return enum_cls.OTHER
@@ -723,10 +754,11 @@ class Clause(BaseModel):
     @field_validator("covers", mode="before")
     @classmethod
     def _normalize_covers(cls, v: Any) -> Any:
-        """Map free-text list items onto Subject members (falls back to OTHER)."""
+        """Map free-text list items onto Subject members. issue 0033: keyword fallback (covered_subject dim,
+        grounding-gated) so a quoted subject phrase maps on its canonical token instead of dropping to OTHER."""
         if isinstance(v, list):
-            return [_normalize_enum(Subject, item) for item in v]
-        return _normalize_enum(Subject, v)
+            return [_normalize_enum(Subject, item, keyword_fallback=True) for item in v]
+        return _normalize_enum(Subject, v, keyword_fallback=True)
 
     @field_validator("covers_party_scope", mode="before")
     @classmethod
@@ -737,10 +769,12 @@ class Clause(BaseModel):
     @field_validator("excepts", mode="before")
     @classmethod
     def _normalize_excepts(cls, v: Any) -> Any:
-        """Map free-text list items onto ExceptionModel members (falls back to OTHER)."""
+        """Map free-text list items onto ExceptionModel members. issue 0033: keyword fallback so a carve-out the
+        model quoted verbatim ("Except ... indemnification obligations ...") maps to `indemnification` (carve_out
+        dim) instead of dropping to OTHER; grounding-gated (ADR-0028)."""
         if isinstance(v, list):
-            return [_normalize_enum(ExceptionModel, item) for item in v]
-        return _normalize_enum(ExceptionModel, v)
+            return [_normalize_enum(ExceptionModel, item, keyword_fallback=True) for item in v]
+        return _normalize_enum(ExceptionModel, v, keyword_fallback=True)
 
     @field_validator("has_assignment_consent", mode="before")
     @classmethod
@@ -835,10 +869,11 @@ class Clause(BaseModel):
     @field_validator("prohibits_damage", mode="before")
     @classmethod
     def _normalize_prohibits_damage(cls, v: Any) -> Any:
-        """Map free-text list items onto DamageType members (falls back to OTHER)."""
+        """Map free-text list items onto DamageType members. issue 0033: keyword fallback (damage_type dim,
+        grounding-gated) so a quoted damage phrase maps on its canonical token instead of dropping to OTHER."""
         if isinstance(v, list):
-            return [_normalize_enum(DamageType, item) for item in v]
-        return _normalize_enum(DamageType, v)
+            return [_normalize_enum(DamageType, item, keyword_fallback=True) for item in v]
+        return _normalize_enum(DamageType, v, keyword_fallback=True)
 
     @field_validator("prohibits_solicit", mode="before")
     @classmethod

@@ -128,3 +128,38 @@ def test_clause_instantiates_minimally() -> None:
     """The template is a usable Pydantic model (identity is the only required field)."""
     c = t.Clause(document_reference="8.1 Limitation of Liability")
     assert c.document_reference == "8.1 Limitation of Liability"
+
+
+# --- issue 0033: keyword fallback recovers a carve-out the extractor quoted verbatim -------------------------
+
+def test_excepts_keyword_fallback_maps_verbatim_indemnification_carveout():
+    # the exact document-side failure: the model quoted the clause instead of emitting the bare token
+    phrase = "Except in respect of the Supplier's indemnification obligations under clause 8"
+    clause = t.Clause(excepts=[phrase])
+    assert clause.excepts == [t.ExceptionModel.INDEMNIFICATION]  # -> carve_out=indemnification (was OTHER/dropped)
+
+
+def test_excepts_keyword_fallback_leaves_a_true_non_value_as_other():
+    clause = t.Clause(excepts=["which shall be unlimited"])  # no canonical value token present
+    assert clause.excepts == [t.ExceptionModel.OTHER]
+
+
+def test_damage_type_keyword_fallback_maps_a_quoted_phrase():
+    # damage_type is one of the three grounding-gated list dims that opt in; a quoted phrase maps on its token
+    dmg = t.Clause(prohibits_damage=["consequential damages of any kind"]).prohibits_damage
+    assert dmg == [t.DamageType.CONSEQUENTIAL]
+
+
+def test_normalize_enum_keyword_fallback_is_opt_in_and_longest_wins():
+    # default (scalar dims) stays exact-only: a verbose phrase still normalizes to OTHER, no behavior change
+    assert t._normalize_enum(t.ExceptionModel, "a long unmatched phrase") == t.ExceptionModel.OTHER
+    # opt-in: substring match, longest value wins, short tokens (<5) never spuriously match
+    assert t._normalize_enum(t.ExceptionModel, "gross negligence claims", keyword_fallback=True) == \
+        t.ExceptionModel.GROSS_NEGLIGENCE
+    assert t._normalize_enum(t.ExceptionModel, "no token here", keyword_fallback=True) == t.ExceptionModel.OTHER
+
+
+def test_scalar_enum_unaffected_by_the_change():
+    # a scalar dim validator does NOT opt into the keyword fallback -> exact-only, unchanged
+    assert t.Clause(has_mutuality="mutual obligations").has_mutuality == t.Mutuality.OTHER
+    assert t.Clause(has_mutuality="mutual").has_mutuality == t.Mutuality.MUTUAL
