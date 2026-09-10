@@ -57,7 +57,7 @@ def test_check_fn_is_injectable_no_store_or_llm_needed():
     # a custom stub proves the MCP surface is decoupled from ArcadeDB/models -- the whole point of the wrapper
     seen = {}
 
-    async def stub(ad_text: str, source_doc: str, sources=None) -> ComplianceReport:
+    async def stub(store, ad_text: str, source_doc: str, sources=None) -> ComplianceReport:
         seen["ad"] = ad_text
         return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 4})
 
@@ -70,7 +70,7 @@ def test_generic_check_compliance_tool_is_exposed_and_returns_a_noted_report():
     # COMP-VERDICT-GENERIC: the domain-agnostic tool is added when a generic_check_fn is provided
     from rag_wright.contracts.compliance import ComplianceFinding, ComplianceReport, Verdict
 
-    async def _generic(subject_text, source_doc, sources=None):
+    async def _generic(store, subject_text, source_doc, sources=None):
         return ComplianceReport(
             source_doc=source_doc,
             findings=[ComplianceFinding(
@@ -112,7 +112,7 @@ def test_check_compliance_tool_forwards_sources_and_exposes_the_param():
 
     seen = {}
 
-    async def _generic(subject_text, source_doc, sources=None):
+    async def _generic(store, subject_text, source_doc, sources=None):
         seen["sources"] = sources
         return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 1})
 
@@ -137,7 +137,7 @@ def test_check_ad_compliance_tool_forwards_sources():
 
     seen = {}
 
-    async def stub(ad_text, source_doc, sources=None):
+    async def stub(store, ad_text, source_doc, sources=None):
         seen["sources"] = sources
         return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 1})
 
@@ -151,7 +151,7 @@ def test_sources_defaults_to_none_when_omitted():
 
     seen = {}
 
-    async def stub(ad_text, source_doc, sources=None):
+    async def stub(store, ad_text, source_doc, sources=None):
         seen["sources"] = sources
         return ComplianceReport(source_doc=source_doc, findings=[], summary={"compliant": 1})
 
@@ -167,7 +167,7 @@ def test_check_compliance_document_tool_decodes_base64_and_forwards():
 
     seen = {}
 
-    async def _doc_check(doc_name, data, sources=None):
+    async def _doc_check(store, doc_name, data, sources=None):
         seen.update(doc_name=doc_name, data=data, sources=sources)
         return ComplianceReport(source_doc=doc_name, findings=[], summary={"compliant": 1})
 

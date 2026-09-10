@@ -55,7 +55,7 @@ def test_qa_fn_is_injectable_no_store_or_llm_needed():
     # a custom stub proves the MCP surface is decoupled from ArcadeDB/models -- the whole point of the wrapper
     seen = {}
 
-    async def stub(contract_id: str, question: str) -> GeneratedAnswer:
+    async def stub(store, contract_id: str, question: str) -> GeneratedAnswer:  # issue 0035: store-parametric
         seen["args"] = (contract_id, question)
         return GeneratedAnswer(answer="Capped at 2x fees [C:1:ab].", citations=["C:1:ab"], abstained=False)
 

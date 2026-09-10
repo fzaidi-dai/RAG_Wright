@@ -52,7 +52,7 @@ def test_registers_as_an_ard_mcp_tool():
 def test_qa_fn_is_injectable_no_store_or_llm_needed():
     seen = {}
 
-    async def stub(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
+    async def stub(store, query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:  # 0035: store-param
         seen["args"] = (query, start_entity_id, max_hops)
         return GeneratedAnswer(answer="Acme contracts with Beta (per K) [K:1:ab].",
                                citations=["K:1:ab"], abstained=False)

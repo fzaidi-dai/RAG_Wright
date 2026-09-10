@@ -27,20 +27,22 @@ from typing import Any, Optional, Protocol
 from fastmcp import FastMCP
 
 from rag_wright.contracts.compliance import Claim, ComplianceFinding, ComplianceReport, Verdict
+from rag_wright.mcp.session_store import StoreResolver, resolve_request_store
+from rag_wright.store.seam import Store
 
 
 # The injected checker: (text, source_doc, optional policy `sources` scope) -> ComplianceReport. Injected so the
 # server is testable without infra. ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the
 # async compliance_check subgraph. `sources` (issue 0007): scope the check to named policies (None = whole store).
 class CheckFn(Protocol):
-    async def __call__(self, text: str, source_doc: str,
+    async def __call__(self, store: Optional[Store], text: str, source_doc: str,
                        sources: Optional[list[str]] = None) -> ComplianceReport: ...
 
 
 # The injected DOCUMENT checker (issue 0008): (doc_name, raw bytes, optional policy `sources`) -> report. Parses
 # and segments the uploaded subject document, then checks each section. Injected so the server stays testable.
 class DocumentCheckFn(Protocol):
-    async def __call__(self, doc_name: str, data: bytes,
+    async def __call__(self, store: Optional[Store], doc_name: str, data: bytes,
                        sources: Optional[list[str]] = None) -> ComplianceReport: ...
 
 _TOOL_DESCRIPTION = (
@@ -71,7 +73,8 @@ _GENERIC_TOOL_DESCRIPTION = (
 
 def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-compliance",
                          generic_check_fn: CheckFn | None = None,
-                         document_check_fn: "DocumentCheckFn | None" = None) -> FastMCP:
+                         document_check_fn: "DocumentCheckFn | None" = None,
+                         store_resolver: Optional[StoreResolver] = None, env_store: Any = None) -> FastMCP:
     """Build the FastMCP server exposing the compliance tools. `check_fn` = the advertising `check_ad_compliance`
     (injected: real subgraph in production, a stub in tests). `generic_check_fn` (optional) adds the
     domain-agnostic `check_compliance` tool (COMP-VERDICT-GENERIC). `document_check_fn` (optional, issue 0008)
@@ -100,7 +103,8 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
         Returns:
             A cited compliance report: {verdict, source_doc, summary, findings[], gap_matrix[]}.
         """
-        return _report_to_dict(await check_fn(ad_text, source_doc, sources=sources))
+        store = await resolve_request_store(store_resolver, env_store)  # per-request, out-of-band (issue 0035)
+        return _report_to_dict(await check_fn(store, ad_text, source_doc, sources=sources))
 
     if generic_check_fn is not None:  # COMP-VERDICT-GENERIC: the domain-agnostic verdict tool (any domain)
         @mcp.tool(name="check_compliance", description=_GENERIC_TOOL_DESCRIPTION)
@@ -120,7 +124,8 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
                 A cited compliance report {verdict, source_doc, summary, findings[], gap_matrix[]}, plus a
                 `note` suggesting domain applicability enrichment for more precise claim<->requirement routing.
             """
-            out = _report_to_dict(await generic_check_fn(subject_text, source_doc, sources=sources))
+            store = await resolve_request_store(store_resolver, env_store)  # per-request (issue 0035)
+            out = _report_to_dict(await generic_check_fn(store, subject_text, source_doc, sources=sources))
             out["note"] = ("Generic domain-agnostic verdict (semantic retrieval + LLM judge). For more precise "
                            "claim<->requirement routing in this domain, enrich its applicability dimensions.")
             return out
@@ -145,7 +150,8 @@ def build_compliance_mcp(check_fn: CheckFn, *, name: str = "rag-wright-complianc
             import base64
 
             data = base64.b64decode(data_base64)
-            out = _report_to_dict(await document_check_fn(doc_name, data, sources=sources))
+            store = await resolve_request_store(store_resolver, env_store)  # per-request (issue 0035)
+            out = _report_to_dict(await document_check_fn(store, doc_name, data, sources=sources))
             out["note"] = ("Per-section verdict over the uploaded document (parsed + heading-split). For more "
                            "precise claim<->requirement routing in this domain, enrich its applicability dimensions.")
             return out
@@ -166,16 +172,14 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.compliance_check import run_ad_compliance_check
 
-    store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
-    extract_model = default_extraction_model("claim-extract", "ibm-granite/granite-4.2-8b")
+    extract_model = default_extraction_model("claim-extract", "ibm-granite/granite-4.2-8b")  # tenant-indep.
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     embedder = query_embedder()
 
-    async def _check(ad_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
-        return await run_ad_compliance_check(
+    async def _check(store, ad_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
+        return await run_ad_compliance_check(  # per-request store (issue 0035)
             ad_text, source_doc, store=store, extract_model=extract_model,
             judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
 
@@ -190,15 +194,13 @@ def production_generic_check_fn(*, k: int = 8) -> CheckFn:
     load_dotenv()
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
 
-    store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
-    judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
+    judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)  # tenant-independent
     embedder = query_embedder()
 
-    async def _check(subject_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
-        return await run_generic_compliance_verdict(
+    async def _check(store, subject_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
+        return await run_generic_compliance_verdict(  # per-request store (issue 0035)
             subject_text, source_doc, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k,
             sources=sources)
 
@@ -213,15 +215,13 @@ def production_document_check_fn(*, k: int = 8) -> "DocumentCheckFn":
     load_dotenv()
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
 
-    store = ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
-    judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
+    judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)  # tenant-independent
     embedder = query_embedder()
 
-    async def _check(doc_name: str, data: bytes, sources: Optional[list[str]] = None) -> ComplianceReport:
-        return await run_compliance_document_verdict(
+    async def _check(store, doc_name: str, data: bytes, sources: Optional[list[str]] = None) -> ComplianceReport:
+        return await run_compliance_document_verdict(  # per-request store (issue 0035)
             doc_name, data, store=store, judge_model_id=judge_model_id, embedder=embedder, k=k, sources=sources)
 
     return _check
@@ -239,8 +239,8 @@ def demo_check_fn() -> CheckFn:
         ("guaranteed to reverse aging in 7 days", "'guaranteed' result claim with no substantiation shown"),
     ]
 
-    async def _check(ad_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
-        findings = [  # `sources` accepted for the CheckFn contract; the deterministic demo ignores scoping
+    async def _check(store, ad_text: str, source_doc: str, sources: Optional[list[str]] = None) -> ComplianceReport:
+        findings = [  # store + `sources` accepted for the CheckFn contract; the deterministic demo ignores them
             ComplianceFinding(
                 claim_id=Claim.make_id(source_doc, i, assertion),
                 requirement_id="req-255.2-substantiation", verdict=Verdict.VIOLATION,
@@ -256,6 +256,14 @@ def demo_check_fn() -> CheckFn:
                          "verdict": "violation", "claims_checked": len(findings)}])
 
     return _check
+
+
+def production_env_store() -> Store:
+    """The single-tenant fallback store from `COMPLIANCE_DB` (demo / eval / single-tenant). Built lazily so
+    `RAG_MCP_DEMO` never touches ArcadeDB; a multi-tenant caller passes a `store_resolver` (issue 0035)."""
+    from rag_wright.store.arcadedb import ArcadeDBStore
+
+    return ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
 
 
 def register_compliance_check_mcp(registry) -> None:
@@ -279,10 +287,11 @@ def main() -> None:
     if os.environ.get("RAG_MCP_DEMO") == "1":
         build_compliance_mcp(demo_check_fn()).run(transport="stdio")
         return
-    build_compliance_mcp(
+    build_compliance_mcp(  # single-tenant CLI: env-store fallback (issue 0035; multi-tenant passes a resolver)
         production_check_fn(),
         generic_check_fn=production_generic_check_fn(),
         document_check_fn=production_document_check_fn(),
+        env_store=production_env_store,
     ).run(transport="stdio")
 
 

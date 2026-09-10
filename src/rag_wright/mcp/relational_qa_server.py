@@ -24,7 +24,7 @@ ArcadeDB/LLM). `main()` picks the production answerer (real subgraph, env-wired)
 from __future__ import annotations
 
 import os
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Optional
 
 from fastmcp import FastMCP
 
@@ -32,7 +32,12 @@ from rag_wright.capabilities.answer_generator import GeneratedAnswer
 
 # qa_fn: (query, start_entity_id, max_hops) -> GeneratedAnswer. Injected so the server is testable without infra.
 # ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async relational_qa subgraph.
-RelationalQAFn = Callable[[str, str, int], Awaitable[GeneratedAnswer]]
+from rag_wright.mcp.session_store import StoreResolver, resolve_request_store
+from rag_wright.store.seam import Store
+
+# issue 0035: store-PARAMETRIC -- the runner takes the per-request store (resolved out-of-band), never a
+# model-supplied one. The demo/stub runner ignores it.
+RelationalQAFn = Callable[[Optional[Store], str, str, int], Awaitable[GeneratedAnswer]]
 
 _TOOL_DESCRIPTION = (
     "Answer a relational question about a known entity by traversing the contract entity graph, returning a "
@@ -49,9 +54,16 @@ def _answer_to_dict(answer: GeneratedAnswer) -> dict[str, Any]:
     return answer.model_dump(mode="json")
 
 
-def build_relational_qa_mcp(qa_fn: RelationalQAFn, *, name: str = "rag-wright-relational-qa") -> FastMCP:
+def build_relational_qa_mcp(
+    qa_fn: RelationalQAFn, *, store_resolver: Optional[StoreResolver] = None, env_store: Any = None,
+    name: str = "rag-wright-relational-qa"
+) -> FastMCP:
     """Build the FastMCP server exposing `relational_qa` as one tool. `qa_fn` is injected (real subgraph in
-    production; a stub in tests) so the MCP surface is testable with no ArcadeDB / LLM."""
+    production; a stub in tests) so the MCP surface is testable with no ArcadeDB / LLM.
+
+    issue 0035: the tool takes NO tenant/database/scope argument (`start_entity_id` is an entity key WITHIN
+    the resolved store). `store_resolver` (caller-supplied) binds the store PER SESSION from the out-of-band
+    MCP request context; `env_store` is the single-tenant fallback. The resolved store is passed to `qa_fn`."""
     mcp: FastMCP = FastMCP(
         name=name,
         instructions=(
@@ -73,7 +85,8 @@ def build_relational_qa_mcp(qa_fn: RelationalQAFn, *, name: str = "rag-wright-re
             A cited answer: {answer, citations[], abstained}. `citations` are the SOURCE CONTRACT ids the facts
             came from; `abstained` is true when the graph does not support an answer.
         """
-        return _answer_to_dict(await qa_fn(query, start_entity_id, max_hops))
+        store = await resolve_request_store(store_resolver, env_store)  # per-request, out-of-band (issue 0035)
+        return _answer_to_dict(await qa_fn(store, query, start_entity_id, max_hops))
 
     return mcp
 
@@ -91,14 +104,12 @@ def production_qa_fn(*, answer_model_id: str | None = None) -> RelationalQAFn:
     load_dotenv()
     from rag_wright.capabilities.answer_generator import answer_model_for
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.relational_qa import production_relational_qa
 
-    store = ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
-    answer_model = answer_model_for(answer_model_id or model_for(ModelRole.GENERAL))
-    leg = production_relational_qa(store=store, answer_model=answer_model)
+    answer_model = answer_model_for(answer_model_id or model_for(ModelRole.GENERAL))  # tenant-independent
 
-    async def _qa(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
+    async def _qa(store: Optional[Store], query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
+        leg = production_relational_qa(store=store, answer_model=answer_model)  # per-request store (0035)
         out = await leg.ainvoke({"query": query, "start_entity_id": start_entity_id, "max_hops": max_hops})
         ans = out.get("answer")
         if ans is None:  # defensive: no answer produced -> an honest abstention, never a fabrication
@@ -110,6 +121,14 @@ def production_qa_fn(*, answer_model_id: str | None = None) -> RelationalQAFn:
     return _qa
 
 
+def production_env_store() -> Store:
+    """The single-tenant fallback store from `QA_DB` (demo / eval / single-tenant). Built lazily so
+    `RAG_MCP_DEMO` never touches ArcadeDB; a multi-tenant caller passes a `store_resolver` (issue 0035)."""
+    from rag_wright.store.arcadedb import ArcadeDBStore
+
+    return ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
+
+
 # --- demo answerer: a deterministic, real-shaped cited answer (no ArcadeDB / LLM) for the Deep-Agent prototype -
 
 
@@ -118,7 +137,7 @@ def demo_qa_fn() -> RelationalQAFn:
     Deep-Agent prototype (and the hermetic test) exercise the full MCP path with no ArcadeDB / LLM."""
     _cid = "AcmeBetaMSA:3:beef0002"
 
-    async def _qa(query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
+    async def _qa(store: Optional[Store], query: str, start_entity_id: str, max_hops: int) -> GeneratedAnswer:
         return GeneratedAnswer(
             answer=f"AcmeCorp contracts with BetaLLC (per AcmeBetaMSA) [{_cid}].",
             citations=[_cid], abstained=False)
@@ -142,8 +161,10 @@ def register_relational_qa_mcp(registry) -> None:
 
 def main() -> None:
     """Serve the relational_qa MCP tool over stdio. `RAG_MCP_DEMO=1` uses the no-infra demo answerer."""
-    qa_fn = demo_qa_fn() if os.environ.get("RAG_MCP_DEMO") == "1" else production_qa_fn()
-    build_relational_qa_mcp(qa_fn).run(transport="stdio")
+    if os.environ.get("RAG_MCP_DEMO") == "1":
+        build_relational_qa_mcp(demo_qa_fn()).run(transport="stdio")
+    else:  # single-tenant CLI: env-store fallback (issue 0035; a multi-tenant caller passes a resolver)
+        build_relational_qa_mcp(production_qa_fn(), env_store=production_env_store).run(transport="stdio")
 
 
 if __name__ == "__main__":

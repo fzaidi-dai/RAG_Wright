@@ -24,7 +24,7 @@ demo answerer (`RAG_MCP_DEMO=1`, no infra) and serves over stdio (so a Deep Agen
 from __future__ import annotations
 
 import os
-from typing import Any, Awaitable, Callable
+from typing import Any, Awaitable, Callable, Optional
 
 from fastmcp import FastMCP
 
@@ -32,7 +32,12 @@ from rag_wright.capabilities.answer_generator import GeneratedAnswer
 
 # qa_fn: (contract_id, question) -> GeneratedAnswer. Injected so the server is testable without infra.
 # ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async intra_document_qa subgraph.
-QAFn = Callable[[str, str], Awaitable[GeneratedAnswer]]
+from rag_wright.mcp.session_store import StoreResolver, resolve_request_store
+from rag_wright.store.seam import Store
+
+# issue 0035: store-PARAMETRIC -- the runner takes the per-request store (resolved out-of-band), never a
+# model-supplied one. The demo/stub runner ignores it.
+QAFn = Callable[[Optional[Store], str, str], Awaitable[GeneratedAnswer]]
 
 _TOOL_DESCRIPTION = (
     "Answer a natural-language question about ONE known contract from its clause knowledge graph, returning a "
@@ -48,9 +53,17 @@ def _answer_to_dict(answer: GeneratedAnswer) -> dict[str, Any]:
     return answer.model_dump(mode="json")
 
 
-def build_intra_document_qa_mcp(qa_fn: QAFn, *, name: str = "rag-wright-intra-document-qa") -> FastMCP:
+def build_intra_document_qa_mcp(
+    qa_fn: QAFn, *, store_resolver: Optional[StoreResolver] = None, env_store: Any = None,
+    name: str = "rag-wright-intra-document-qa"
+) -> FastMCP:
     """Build the FastMCP server exposing `intra_document_qa` as one tool. `qa_fn` is injected (real subgraph in
-    production; a stub in tests) so the MCP surface is testable with no ArcadeDB / LLM."""
+    production; a stub in tests) so the MCP surface is testable with no ArcadeDB / LLM.
+
+    issue 0035: the tool takes NO tenant/database/scope argument (`contract_id` is a document key WITHIN the
+    resolved store, not a tenant selector). `store_resolver` (caller-supplied) binds the store PER SESSION from
+    the out-of-band MCP request context; `env_store` is the single-tenant fallback. The resolved store is passed
+    to `qa_fn` -- never a model-supplied value."""
     mcp: FastMCP = FastMCP(
         name=name,
         instructions=(
@@ -71,7 +84,8 @@ def build_intra_document_qa_mcp(qa_fn: QAFn, *, name: str = "rag-wright-intra-do
             A cited answer: {answer, citations[], abstained}. `citations` are chunk_ids present in the evidence;
             `abstained` is true when the contract does not support an answer.
         """
-        return _answer_to_dict(await qa_fn(contract_id, question))
+        store = await resolve_request_store(store_resolver, env_store)  # per-request, out-of-band (issue 0035)
+        return _answer_to_dict(await qa_fn(store, contract_id, question))
 
     return mcp
 
@@ -88,14 +102,12 @@ def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: s
 
     load_dotenv()
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.subgraphs.intra_document_qa import production_intra_document_qa
 
-    store = ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
-    default_model = answer_model_id or function_model_id or model_for(ModelRole.GENERAL)
-    leg = production_intra_document_qa(store=store, answer_model_id=default_model)
+    default_model = answer_model_id or function_model_id or model_for(ModelRole.GENERAL)  # tenant-independent
 
-    async def _qa(contract_id: str, question: str) -> GeneratedAnswer:
+    async def _qa(store: Optional[Store], contract_id: str, question: str) -> GeneratedAnswer:
+        leg = production_intra_document_qa(store=store, answer_model_id=default_model)  # per-request store (0035)
         out = await leg.ainvoke({"contract_id": contract_id, "question": question})
         ans = out.get("answer")
         if ans is None:  # a pipeline dead-letter (e.g. orphan span) -> an honest abstention, never a fabrication
@@ -107,6 +119,14 @@ def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: s
     return _qa
 
 
+def production_env_store() -> Store:
+    """The single-tenant fallback store from `QA_DB` (demo / eval / single-tenant). Built lazily so `RAG_MCP_DEMO`
+    never touches ArcadeDB; a multi-tenant caller passes a `store_resolver` instead (issue 0035)."""
+    from rag_wright.store.arcadedb import ArcadeDBStore
+
+    return ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
+
+
 # --- demo answerer: a deterministic, real-shaped cited answer (no ArcadeDB / LLM) for the Deep-Agent prototype -
 
 
@@ -115,7 +135,7 @@ def demo_qa_fn() -> QAFn:
     prototype (and the hermetic test) exercise the full MCP path with no ArcadeDB / LLM."""
     _cid = "AcmeMSA:12:deadbeef01"
 
-    async def _qa(contract_id: str, question: str) -> GeneratedAnswer:
+    async def _qa(store: Optional[Store], contract_id: str, question: str) -> GeneratedAnswer:  # store ignored
         return GeneratedAnswer(
             answer=f"Seller's aggregate liability is capped at two times (2x) the fees paid in the "
                    f"preceding 12 months [{_cid}].",
@@ -140,8 +160,10 @@ def register_intra_document_qa_mcp(registry) -> None:
 
 def main() -> None:
     """Serve the intra_document_qa MCP tool over stdio. `RAG_MCP_DEMO=1` uses the no-infra demo answerer."""
-    qa_fn = demo_qa_fn() if os.environ.get("RAG_MCP_DEMO") == "1" else production_qa_fn()
-    build_intra_document_qa_mcp(qa_fn).run(transport="stdio")
+    if os.environ.get("RAG_MCP_DEMO") == "1":
+        build_intra_document_qa_mcp(demo_qa_fn()).run(transport="stdio")
+    else:  # single-tenant CLI serving: env-store fallback (issue 0035; a multi-tenant caller passes a resolver)
+        build_intra_document_qa_mcp(production_qa_fn(), env_store=production_env_store).run(transport="stdio")
 
 
 if __name__ == "__main__":

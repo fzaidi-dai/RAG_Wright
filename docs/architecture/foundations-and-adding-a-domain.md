@@ -57,6 +57,13 @@ Every capability is registered and ARD-discoverable (`urn:air:...`). There are s
 So the highest abstraction the engine exposes is a composite subgraph or an MCP tool — not a finished domain
 workflow.
 
+**MCP tools never take a model-supplied tenant.** A tool never accepts a tenant, database, or scope as an
+argument — those are filled by the model, so a tenant argument is a cross-tenant read one token away. The store
+is bound per session by the **caller**, out-of-band (a `store_resolver` on the server factory, resolved from the
+MCP request context), never from a model argument or a per-process env var in a multi-tenant deployment. The
+engine enforces this (a build-failing guard) and provides the binding seam; tenancy itself is product policy.
+(ADR-0099.)
+
 ## 5. Adding a domain — ontology first
 
 Order matters. Most of the effort is steps 1–2, not new capabilities.

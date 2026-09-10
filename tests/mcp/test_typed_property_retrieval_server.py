@@ -59,8 +59,9 @@ def test_registers_as_an_ard_mcp_tool():
 def test_retrieval_fn_is_injectable_no_store_or_encoders_needed():
     seen = {}
 
-    async def stub(query: str) -> TypedPropertyRetrieval:
+    async def stub(store, query: str) -> TypedPropertyRetrieval:  # issue 0035: store-parametric
         seen["query"] = query
+        seen["store"] = store
         from rag_wright.subgraphs.typed_property_retrieval import JudgedSpan
         return TypedPropertyRetrieval(query=query, results=[JudgedSpan(
             span=RankedSpan(
