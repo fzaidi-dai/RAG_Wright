@@ -36,7 +36,10 @@ That is the full set — the only other LLM-ish stage, the chunk summarizer, is 
 
 ## Two things worth calling out
 
-- **The list-field union is a *pair* of models.** For the LIST-bearing dims only (`carve_out` / `covered_subject` / `damage_type`), a second model (`list_model`, gemma by default) is run alongside the primary (`extract_model`, granite) and their list values are unioned — granite and gemma under-enumerate *different* items, so the union recovers more than either alone (this is the mechanism behind the issue-0033 `carve_out` fix, since it's a list dim). **If you override `extract_model` (e.g. to qwen), set `list_model` deliberately** — the union only helps if the two models are complementary; a model unioned with itself buys nothing. `list_model="off"` disables the second model.
+- **The list-field union has two independent knobs — pick by *which kind* of miss you want to recover.** For the LIST-bearing dims only (`carve_out` / `covered_subject` / `damage_type`):
+  - **`list_model`** runs a *second, different* model alongside the primary and unions their list values. Its whole value is **complementarity** — granite and gemma under-enumerate *different* items, so together they recover more (this is the mechanism behind the issue-0033 `carve_out` fix). The engine has an explicit `list_model != extract_model` guard: **setting `list_model` equal to the primary is a safe no-op** (the second call is skipped — no error, no wasted call, but also no gain, because a model can't complement itself). `list_model="off"` disables it.
+  - **`samples=N`** runs the *same* (primary) model N times at a diversity temperature and unions — this recovers the model's *inconsistent* under-enumeration (a different subset each pass). This is the same-model recall lever.
+  - So "Qwen for everything, with maxed list recall" = `extract_model=qwen, samples=2` (or 3), and leave `list_model` off (or default) — pairing Qwen with itself via `list_model` would just be skipped. Use `list_model` only when you have a genuinely *different* complementary model to add.
 - **`chunk_model` almost never fires.** Structural boundaries are deterministic (zero model calls); the chunk model is used only to refine a section that exceeds the token cap. A fully-structured document makes no `chunk_model` call at all.
 
 ## No behavior change by default
