@@ -34,9 +34,10 @@ def _seams(*, constraints, results, fail_constraints=0, fail_retrieve=0):
             raise RuntimeError("constraint blip")
         return set(constraints)
 
-    def retrieve_fn(query, cons):  # ADR-0047: no functions arg -- whole-index pool
+    def retrieve_fn(query, cons, documents=None):  # ADR-0047: no functions arg -- whole-index pool
         calls["retrieve"] += 1
         seen["constraints"] = set(cons)
+        seen["documents"] = documents  # issue 0034: the invoke-time scope threaded through
         if calls["retrieve"] <= fail_retrieve:
             raise RuntimeError("retrieve blip")
         return list(results)
@@ -170,3 +171,74 @@ async def test_aquery_constraints_empty_clause_yields_no_constraints():
 
     cons = await aquery_constraints("hello", "qwen/qwen3.8-27b", structured_factory=_tagparse_stub(Clause()))
     assert cons == set()  # a query mentioning no property -> empty (all fields defaulted/absent)
+
+
+# --- issue 0034: the `documents` scope is per-INVOKE (in the graph input state), not build-time --------------
+
+async def test_invoke_time_documents_threads_to_retrieve():
+    seams, _, seen = _seams(constraints=set(), results=[_span("s1")])
+    await _run(seams, extra_input={"documents": ["docA", "docB"]})
+    assert seen["documents"] == ["docA", "docB"]  # the per-request scope reaches the store-side retrieval
+
+
+async def test_documents_absent_falls_back_to_the_build_time_default():
+    from rag_wright.subgraphs.typed_property_retrieval import _UNSET_DOCUMENTS
+
+    seams, _, seen = _seams(constraints=set(), results=[_span("s1")])
+    await _run(seams)  # no `documents` key in the invoke state
+    assert seen["documents"] is _UNSET_DOCUMENTS  # -> retrieve_fn resolves to its build-time default
+
+
+async def test_empty_documents_threads_as_scope_to_nothing():
+    seams, _, seen = _seams(constraints=set(), results=[_span("s1")])
+    await _run(seams, extra_input={"documents": []})
+    assert seen["documents"] == []  # [] is an explicit scope-to-nothing, distinct from absent
+
+
+async def test_unknown_document_raises_and_is_not_degraded_to_empty():
+    import pytest
+
+    from rag_wright.capabilities.document_scope import UnknownDocumentError
+    from rag_wright.subgraphs.typed_property_retrieval import build_typed_property_retrieval
+
+    async def constraints_fn(query):
+        return set()
+
+    def retrieve_fn(query, cons, documents=None):
+        raise UnknownDocumentError(["ghost"], ["docA"])  # what validate_documents raises at invoke time
+
+    g = build_typed_property_retrieval(constraints_fn, retrieve_fn, retry_policy=_FAST_RETRY)
+    with pytest.raises(UnknownDocumentError):  # propagates -- NOT retried, NOT degraded to empty results
+        await g.ainvoke({"query": "q", "documents": ["ghost"]})
+
+
+async def test_production_retrieve_resolves_invoke_over_default_and_validates(monkeypatch):
+    # production wiring: build-time `documents` is the DEFAULT; the invoke-time value wins; both are validated.
+    import pytest
+
+    from rag_wright.capabilities.document_scope import UnknownDocumentError
+    from rag_wright.subgraphs import typed_property_retrieval as tpr
+
+    seen: dict = {}
+
+    class _Store:
+        def known_document_ids(self):
+            return {"docA", "docB"}  # docC / ghost are unknown
+
+    # property_boosted_retrieval is imported INSIDE the function from its source module -> patch there
+    monkeypatch.setattr("rag_wright.capabilities.property_boosted_retrieval.property_boosted_retrieval",
+                        lambda *a, **k: seen.update(documents=k.get("documents")) or [])
+
+    async def _no_constraints(query, model_id):
+        return set()
+    monkeypatch.setattr(tpr, "aquery_constraints", _no_constraints)
+
+    g = tpr.production_typed_property_retrieval(
+        store=_Store(), embedder=object(), extract_model="m", k=2, pool_k=4, documents=["docA"])  # build default
+
+    await g.ainvoke({"query": "q"})                      # absent -> build default docA
+    assert seen["documents"] == ["docA"]
+    await g.ainvoke({"query": "q", "documents": ["docB"]})  # invoke wins
+    assert seen["documents"] == ["docB"]
+    with pytest.raises(UnknownDocumentError):               # unknown invoke id raises at invoke time
+        await g.ainvoke({"query": "q", "documents": ["ghost"]})

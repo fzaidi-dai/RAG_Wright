@@ -25,14 +25,21 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 from pydantic import BaseModel
 
+from rag_wright.capabilities.document_scope import UnknownDocumentError
 from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
 from rag_wright.capabilities.span_relevance_judgment import Condition, RelevanceVerdict, finalize_verdict
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
+# issue 0034: distinguishes "documents absent from the invoke state" (-> use the build-time default) from an
+# explicit invoke-time value (a list, [] for scope-to-nothing, or None for the whole corpus).
+_UNSET_DOCUMENTS = object()
+
 # ASYNC-C1 (ADR-0057): constraints_fn is async (its model call gets a true wall-clock deadline via aextract_clause).
 ConstraintsFn = Callable[[str], Awaitable[set]]  # query -> typed (dimension, value) constraints
-RetrieveFn = Callable[[str, set], list]  # (query, constraints) -> [RankedSpan]  (ADR-0047: whole-index pool)
+# (query, constraints, documents_override) -> [RankedSpan]. `documents_override` is the invoke-time scope or
+# `_UNSET_DOCUMENTS` (issue 0034: use the build-time default). ADR-0047: whole-index pool, no function filter.
+RetrieveFn = Callable[[str, set, Any], list]
 # issue 0023: (spans, condition) -> a RAW RelevanceVerdict per span, order-preserved (1:1). Injected + optional.
 RelevanceJudgeFn = Callable[[list[RankedSpan], Condition], Awaitable[list[RelevanceVerdict]]]
 
@@ -61,6 +68,7 @@ class _State(TypedDict, total=False):
     query: str
     clause_type: str          # issue 0023: the condition's clause type (the primary relevance test)
     value_condition: str      # issue 0023: the condition's narrower test (often absent/shared in a sweep)
+    documents: Optional[list]  # issue 0034: per-INVOKE workspace scope; absent -> build-time default, [] -> nothing
     constraints: set
     results: list             # [RankedSpan] from retrieve
     judged: list              # [JudgedSpan] from judge_relevance
@@ -74,6 +82,8 @@ def _degrading_io(name: str, work: Callable[[], dict], empty: dict, runtime: Run
     with business_span(name):
         try:
             return work()
+        except UnknownDocumentError:
+            raise  # issue 0034: a bad workspace selection is a HARD error -- never retried or degraded to empty
         except Exception as exc:  # noqa: BLE001 - transient -> retry, or degrade to empty on exhaustion
             if attempt >= max_attempts:
                 return empty
@@ -117,9 +127,11 @@ def build_typed_property_retrieval(
                                     {"constraints": set()}, runtime, max_attempts)
 
     def retrieve(state: _State, runtime: Runtime) -> _State:
+        # issue 0034: a per-INVOKE `documents` scope wins over the build-time default; ABSENT -> the default.
+        documents = state["documents"] if "documents" in state else _UNSET_DOCUMENTS
         return _degrading_io(
             "typed_property_retrieval.retrieve",
-            lambda: {"results": retrieve_fn(state["query"], state.get("constraints", set()))},
+            lambda: {"results": retrieve_fn(state["query"], state.get("constraints", set()), documents)},
             {"results": []}, runtime, max_attempts)
 
     async def judge_relevance(state: _State, runtime: Runtime) -> _State:
@@ -205,23 +217,29 @@ def production_typed_property_retrieval(
     the product can reach `not_found` without a threshold. Omit it and spans pass through unjudged (`relevance`
     None), unchanged behaviour. The judge runs the returned `k` spans CONCURRENTLY; `k` is the caller's cost lever.
 
-    `documents` (issue 0031): scope the sweep to a workspace's source documents, applied IN THE STORE so
-    out-of-scope spans are never pooled, reranked, or judged. `None` = the whole corpus; an unknown id RAISES
-    (`UnknownDocumentError`) rather than silently matching nothing; `[]` = scope-to-nothing (no results)."""
+    `documents` (issue 0031 + 0034): scope the sweep to a workspace's source documents, applied IN THE STORE so
+    out-of-scope spans are never pooled, reranked, or judged. This is the BUILD-TIME DEFAULT; because the
+    compiled graph is a per-customer, process-lifetime object, a per-request workspace scope is passed at INVOKE
+    time instead -- `graph.ainvoke({"query": ..., "documents": [...]})` -- and the invoke-time value WINS over
+    this default (absent from the state -> this default; issue 0034). `None` = the whole corpus; an unknown id
+    RAISES `UnknownDocumentError` (validated at invoke time, past the degrade so it is never silently emptied);
+    `[]` = scope-to-nothing (no results)."""
     from rag_wright.capabilities.document_scope import validate_documents
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
 
-    validate_documents(store, documents)  # reject an unknown document BEFORE any retrieval spends (issue 0031)
     model_id = getattr(extract_model, "model", extract_model)  # ExtractionModel.model, or a bare id
 
     async def constraints_fn(query: str) -> set:
         return await aquery_constraints(query, model_id)
 
-    def retrieve_fn(query: str, constraints: set) -> list:
+    def retrieve_fn(query: str, constraints: set, documents_override: Any = _UNSET_DOCUMENTS) -> list:
+        # issue 0034: the per-INVOKE scope wins; ABSENT (the sentinel) -> the build-time `documents` default.
+        docs = documents if documents_override is _UNSET_DOCUMENTS else documents_override
+        validate_documents(store, docs)  # invoke-time: reject an unknown document BEFORE any retrieval spends
         # ADR-0047: functions=() -> property_boosted_retrieval runs over the WHOLE-INDEX BGE pool (no gate).
         return property_boosted_retrieval(
             query, store=store, embedder=embedder, functions=(), constraints=constraints, k=k, pool_k=pool_k,
-            documents=documents)
+            documents=docs)
 
     relevance_judge: RelevanceJudgeFn | None = None
     if judge_model_id is not None:
