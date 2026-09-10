@@ -10,7 +10,7 @@ All four MCP servers resolved their store from a **process env var** (`QA_DB`, `
 
 Adopt the principle and provide the seam, across all four servers and every server added after them.
 
-**Principle (enforced):** an MCP tool never takes a tenant, database, or scope as a **model-supplied** argument. A build-failing guard test (`assert_no_tenant_arguments`) introspects every server's tool input schemas and fails if any exposes such a parameter (`FORBIDDEN_TENANT_ARGS`). This makes the unsafe shape un-expressible by accident, for four servers and fifteen.
+**Principle (enforced):** an MCP tool never takes a tenant, database, or scope as a **model-supplied** argument. A build-failing guard test introspects every server's tool input schemas and fails if any exposes such a parameter (`assert_no_tenant_arguments` / `FORBIDDEN_TENANT_ARGS`). The guard's server list is **derived, not maintained**: it discovers every `rag_wright.mcp.*_server` module and its `build_*_mcp` builders (`pkgutil.iter_modules`), builds each with stubbed runners, and checks every registered tool. A server added later is covered the moment it exists — *forgetting* the principle is the failure, not the exemption (RuleWright's 0035 follow-up: a hand-maintained enumeration is disarmed by the same omission it exists to catch). This makes the unsafe shape un-expressible by accident, at server #5 as at server #1.
 
 **Seam (`mcp/session_store.py`):**
 - Each `build_*_mcp(...)` factory gains an optional **`store_resolver: Callable[[ctx], Store]`** (sync or async) and an `env_store` fallback.

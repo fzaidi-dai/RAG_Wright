@@ -6,48 +6,63 @@ cheap across four servers, and it holds automatically for every server added aft
 
 from __future__ import annotations
 
-import asyncio
+import importlib
+import inspect
+import pkgutil
 
 import pytest
 
-from rag_wright.mcp import (
-    compliance_server,
-    intra_document_qa_server,
-    relational_qa_server,
-    typed_property_retrieval_server,
-)
+import rag_wright.mcp
 from rag_wright.mcp.session_store import (
     FORBIDDEN_TENANT_ARGS,
     assert_no_tenant_arguments,
     resolve_request_store,
 )
 
+# issue 0035 follow-up: the guard's server list is DERIVED, never hand-maintained. A server that forgets to
+# register with the guard cannot exist -- forgetting is the failure, not the exemption. So the check holds for
+# server #5 that does not exist yet, which is the whole point of adopting a principle now.
 
-def _all_servers():
-    """Every MCP server, built with the no-infra demo/stub runners (so this is hermetic)."""
-    return {
-        "typed_property_retrieval": typed_property_retrieval_server.build_typed_property_retrieval_mcp(
-            typed_property_retrieval_server.demo_retrieval_fn()),
-        "intra_document_qa": intra_document_qa_server.build_intra_document_qa_mcp(
-            intra_document_qa_server.demo_qa_fn()),
-        "relational_qa": relational_qa_server.build_relational_qa_mcp(
-            relational_qa_server.demo_qa_fn()),
-        # compliance: build ALL THREE tools so the guard covers each
-        "compliance": compliance_server.build_compliance_mcp(
-            compliance_server.demo_check_fn(),
-            generic_check_fn=compliance_server.demo_check_fn(),
-            document_check_fn=_demo_document_check_fn()),
-    }
+_BUILDER_CONFIG_PARAMS = frozenset({"store_resolver", "env_store", "name"})  # not injected capability fns
 
 
-async def _demo_document_check_fn(*_a, **_k):  # a trivial DocumentCheckFn so check_compliance_document registers
+async def _stub(*_a, **_k):  # a runner stub for any injected fn -- never CALLED (the guard only reads schemas)
     return None
 
 
-def test_no_mcp_tool_exposes_a_model_supplied_tenant_argument():
-    for name, mcp in _all_servers().items():
-        offenders = assert_no_tenant_arguments(mcp)
-        assert offenders == [], f"{name} server exposes model-supplied tenant arg(s): {offenders}"
+def _discover_servers():
+    """Every `rag_wright.mcp.*_server` module and its `build_*_mcp` builders, discovered -- not listed. Each
+    server MUST expose at least one builder (else the guard could not check it, which is itself a failure)."""
+    found = []
+    for info in pkgutil.iter_modules(rag_wright.mcp.__path__):
+        if not info.name.endswith("_server"):
+            continue
+        module = importlib.import_module(f"rag_wright.mcp.{info.name}")
+        builders = [getattr(module, n) for n in dir(module)
+                    if n.startswith("build_") and n.endswith("_mcp") and inspect.isfunction(getattr(module, n))]
+        assert builders, f"{info.name} exposes no build_*_mcp -- the tenant guard cannot check it"
+        found.append((info.name, builders))
+    return found
+
+
+def _build_with_stubs(builder):
+    """Build a server for introspection: pass a stub for every injected-fn parameter (required AND optional, so
+    optional tools like compliance's generic/document checkers register too), leaving the config params
+    (store_resolver / env_store / name) at their defaults."""
+    kwargs = {p.name: _stub for p in inspect.signature(builder).parameters.values()
+              if p.name not in _BUILDER_CONFIG_PARAMS}
+    return builder(**kwargs)
+
+
+def test_every_discovered_mcp_server_is_free_of_model_supplied_tenant_args():
+    servers = _discover_servers()
+    assert {n for n, _ in servers} >= {  # sanity: discovery actually found the known four (never fewer)
+        "typed_property_retrieval_server", "intra_document_qa_server",
+        "relational_qa_server", "compliance_server"}, servers
+    for module_name, builders in servers:
+        for builder in builders:
+            offenders = assert_no_tenant_arguments(_build_with_stubs(builder))
+            assert offenders == [], f"{module_name}.{builder.__name__} exposes model-supplied tenant arg(s): {offenders}"
 
 
 def test_the_guard_would_catch_a_leak():
