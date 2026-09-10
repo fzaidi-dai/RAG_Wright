@@ -25,9 +25,12 @@ aproduction_document_ingest(
 | Clause-property extraction | `extract_model` |
 | List-field cross-model union (2nd model) | `list_model` (+ `samples`) |
 | Party + affiliation extraction | **`graph_extract_model`** |
-| Function classifier | `classify_fn` (pre-existing) |
 | Semantic judge (Layer-3 gate) | **`judge_model`** |
+| Chunker boundary-refinement (over-cap sections) | **`chunk_model`** |
+| Function classifier | `classify_fn` (pre-existing) |
 
-So the "try qwen-3.8 if granite is below par" lever is now available per run on each ingest model independently, not just through process env. Env vars remain the fallback and the default; **no-arg calls are unchanged**, so nothing you already run is affected.
+**Correction to the earlier note in this pair:** my first version of this table omitted `chunk_model` (the chunker's per-section boundary-refinement model, used only when a section exceeds the token cap — a fully-structured document makes zero chunk-model calls). It is now exposed too, so the table above is the complete set. `chunk_model` accepts a bare id or an `ExtractionModel`; `None` → `model_for(GENERAL)`.
+
+So the "try qwen-3.8 if granite is below par" lever is now available per run on **every** ingest model independently, not just through process env. Env vars remain the fallback and the default; **no-arg calls are unchanged**, so nothing you already run is affected. (The only remaining LLM-ish stage, the chunk summarizer, is disabled on this path — `_NoSummary`, no model.)
 
 Reference: ADR-0097, `subgraphs/contract_ingestion_pipeline.py::aproduction_document_ingest`, `capabilities/graph_extraction.py` (`aproduction_extract_fn`, `aextract_affiliations`), `spans/semantic_judge.py::build_asemantic_judge_fn`, `skills/corpus_ingest/SKILL.md`.

@@ -710,7 +710,7 @@ async def _aextract_clause_with_retry(
 def aproduction_document_ingest(
     store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None, party_seed_path: Any = None,
     classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None,
-    graph_extract_model: Any = None, judge_model: Any = None):
+    graph_extract_model: Any = None, judge_model: Any = None, chunk_model: Any = None):
     """ASYNC-B2e (ADR-0057): the async twin of `production_document_ingest`. Wires the ASYNC stage seams (achunk,
     aclassify_spans, clause_extractor.aextract, aper_contract_graph_extraction) so the ingest model calls run on
     the async seam with the true wall-clock deadline; CPU/store work (embed, resolve, DB writes) runs off the loop
@@ -735,6 +735,9 @@ def aproduction_document_ingest(
         `None` -> the default (granite, `RAG_GRAPH_EXTRACT_MODEL`).
       - `judge_model`: the ingest semantic-judge model (ADR-0040 Layer-3 gate) -- a model-id string or an
         `ExtractionModel`; `None` -> `model_for(STRUCTURED_REASONING)`.
+      - `chunk_model`: the chunker's boundary-refinement model -- structural boundaries are deterministic (zero
+        calls); ONLY an over-cap section triggers a bounded per-section tag-parse call, and this is the model it
+        uses. A model-id string or an `ExtractionModel`; `None` -> `model_for(GENERAL)`.
       Env vars remain the fallback for every knob, so existing callers are unaffected."""
     import asyncio
     import hashlib
@@ -772,7 +775,11 @@ def aproduction_document_ingest(
     # guided-decoding whole-doc call that ran away past the 180s deadline). NOTE: this ingest currently flattens
     # to text (`_parsed_from_text`), so labels are absent here and only the tag-parse fallback fires; preserving
     # docling structure through ingest (a follow-up) unlocks the full zero-model structural win.
-    discoverer = StructuralModelFallbackDiscoverer()
+    # the chunker's boundary-refinement model: structural boundaries are deterministic (zero calls); only an
+    # OVER-CAP section triggers a bounded per-section tag-parse call, and this is the model it uses (issue 0033
+    # follow-up). None -> default (GENERAL role). A bare id or an ExtractionModel (unwrapped to its id).
+    chunk_model_id = getattr(chunk_model, "model", chunk_model)
+    discoverer = StructuralModelFallbackDiscoverer(chunk_model_id)
     summarizer = _NoSummary()
     from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
     # caller-configurable ingest models (else backend/env defaults). A bare id -> an ExtractionModel; for the

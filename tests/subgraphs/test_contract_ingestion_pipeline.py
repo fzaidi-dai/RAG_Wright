@@ -166,16 +166,19 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     monkeypatch.setattr("rag_wright.spans.semantic_judge.build_asemantic_judge_fn",
                         lambda mid: captured.update(judge_id=mid) or (lambda *a, **k: None))
     monkeypatch.setattr("rag_wright.capabilities.graph_extraction.aproduction_extract_fn", _fake_party)
+    monkeypatch.setattr("rag_wright.capabilities.rlm_chunking.StructuralModelFallbackDiscoverer",
+                        lambda model_id=None, **kw: captured.update(chunk_model_id=model_id))
 
     with pytest.raises(_StopHere):
         pipe.aproduction_document_ingest(
             store=object(), cache_dir=str(tmp_path), registry=object(), embedder=object(),
             extract_model="some/model-x", list_model="gemma-y", samples=3,
-            graph_extract_model="party/model-z", judge_model="judge/model-q")
+            graph_extract_model="party/model-z", judge_model="judge/model-q", chunk_model="chunk/model-c")
     assert captured["list_model"] == "gemma-y" and captured["samples"] == 3
     assert getattr(captured["model"], "model", None) == "some/model-x"  # bare id -> ExtractionModel
     assert captured["judge_id"] == "judge/model-q"                      # ingest semantic-judge model
     assert captured["graph_kw"] == {"model_id": "party/model-z"}        # party + affiliation share this
+    assert captured["chunk_model_id"] == "chunk/model-c"                # chunker boundary-refinement model
 
     captured.clear()
     with pytest.raises(_StopHere):
@@ -185,3 +188,4 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     assert captured["model"] is None and captured["list_model"] is None and captured["samples"] is None
     assert captured["graph_kw"] == {}  # party extraction falls back to its own default
     assert captured["judge_id"]  # judge falls back to model_for(STRUCTURED_REASONING), a non-empty id
+    assert captured["chunk_model_id"] is None  # chunker falls back to model_for(GENERAL)

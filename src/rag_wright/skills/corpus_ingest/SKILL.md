@@ -65,8 +65,10 @@ UNION on the LIST-bearing dims only (carve_out / covered_subject / damage_type) 
 under-enumerate different list items, so their union is more complete; `"off"` disables it, default = gemma. If
 you override `extract_model` (e.g. to qwen), set `list_model` deliberately — the union only helps if the two
 models are complementary. `graph_extract_model` sets the party+affiliation extraction model (they share one),
-and `judge_model` the ingest semantic-judge model; both accept a bare id or an `ExtractionModel`, default to
-their backend/env value, so every ingest LLM surface is now a call-site argument.
+`judge_model` the ingest semantic-judge model, and `chunk_model` the chunker's boundary-refinement model (used
+only for over-cap sections). All accept a bare id or an `ExtractionModel` and default to their backend/env value,
+so every ingest LLM surface (clause extract + list union, party/affiliation, judge, chunk boundary, and the
+pre-existing `classify_fn`) is now a call-site argument.
 
 `run_corpus_ingestion` streams `X/N` progress; a bad document dead-letters and is skipped (one bad doc never
 kills the corpus). Write to a SCRATCH database first (`from_env(database=..., reset=True)`) to keep it
