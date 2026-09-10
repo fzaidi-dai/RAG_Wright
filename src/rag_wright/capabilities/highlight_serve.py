@@ -16,6 +16,7 @@ hermetically; the field-extraction LLM calls run concurrently (the standing eval
 from __future__ import annotations
 
 import asyncio
+import json
 
 from pydantic import BaseModel
 
@@ -37,7 +38,19 @@ class _Extracted(BaseModel):
     value: str | None = None
 
 
+def _decode_bbox(raw) -> tuple[float, float, float, float] | None:
+    """issue 0032: the store keeps bbox as a JSON `[l,t,r,b]` string (best-effort); decode to a tuple or None."""
+    if not raw:
+        return None
+    try:
+        vals = json.loads(raw) if isinstance(raw, str) else raw
+        return (float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3])) if vals else None
+    except (ValueError, TypeError, IndexError):
+        return None
+
+
 def _to_span(row: dict, *, confidence: float, extracted_value: str | None = None) -> HighlightSpan:
+    pages = [int(p) for p in (row.get("pages") or [])]  # issue 0032: source page(s) for the citation highlight
     return HighlightSpan(
         span_id=row["span_id"],
         contract_id=row["contract_id"],
@@ -46,6 +59,9 @@ def _to_span(row: dict, *, confidence: float, extracted_value: str | None = None
         text=row["text"],
         doc_start=row.get("doc_start"),
         doc_end=row.get("doc_end"),
+        page=(pages[0] if pages else row.get("page")),  # FIRST page (== pages[0] when known)
+        pages=pages,
+        bbox=_decode_bbox(row.get("bbox")),
         extracted_value=extracted_value,
         confidence=confidence,
     )

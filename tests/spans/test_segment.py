@@ -195,3 +195,30 @@ def test_real_clauses_are_extractable_recall_first():
         "THE PRODUCTS ARE PROVIDED AS-IS WITHOUT WARRANTY OF ANY KIND.",   # long ALL-CAPS disclaimer -> real
     ):
         assert is_extractable_span(clause) is True, clause
+
+
+# --- issue 0032: to_span_record carries page provenance from the OperativeSpan ------------------------------
+
+def test_to_span_record_carries_pages_and_bbox_from_op():
+    from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
+    from rag_wright.spans.segment import to_span_record
+
+    op = OperativeSpan(span_id="docA:0:h#0", parent_chunk_id="docA:0:h", parent_okf_path="", span_index=0,
+                       start=0, end=12, text="A clause .", pages=[7, 8], bbox=(1.0, 2.0, 3.0, 4.0))
+    rec = to_span_record(op, contract_id="docA", chunk_doc_start=100,
+                         dense_vector=[0.0] * BGE_M3_DENSE_DIM, sparse_vector={1: 1.0})
+    assert rec.pages == [7, 8]
+    assert rec.page == 7  # FIRST page mirrors into the singular highlight field
+    assert rec.bbox == (1.0, 2.0, 3.0, 4.0)
+    assert rec.doc_start == 100 and rec.doc_end == 112  # offsets unchanged
+
+
+def test_to_span_record_no_pages_leaves_page_none():
+    from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
+    from rag_wright.spans.segment import to_span_record
+
+    op = OperativeSpan(span_id="docA:0:h#0", parent_chunk_id="docA:0:h", parent_okf_path="", span_index=0,
+                       start=0, end=5, text="clause")
+    rec = to_span_record(op, contract_id="docA", chunk_doc_start=0,
+                         dense_vector=[0.0] * BGE_M3_DENSE_DIM, sparse_vector={1: 1.0})
+    assert rec.pages == [] and rec.page is None and rec.bbox is None  # text-only leg: no provenance

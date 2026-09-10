@@ -133,6 +133,8 @@ class OperativeSpan(BaseModel):
     start: int  # char offset into the parent clause body
     end: int  # exclusive; spans tile the body: body[start:end] concatenated == body
     text: str  # body[start:end] (raw slice; strip at use time)
+    pages: list[int] = []  # issue 0032: the source page(s) this span's canonical range overlaps (set at ingest)
+    bbox: tuple[float, float, float, float] | None = None  # best-effort single-item box (l, t, r, b)
 
 
 def _boundaries(body: str) -> list[int]:
@@ -250,6 +252,9 @@ def to_span_record(
         contract_id=contract_id,
         doc_start=chunk_doc_start + op.start,
         doc_end=chunk_doc_start + op.end,
+        page=(op.pages[0] if op.pages else None),  # issue 0032: FIRST page for the singular highlight field
+        pages=list(op.pages),  # ALL pages the span overlaps (cross-page clause -> a list)
+        bbox=op.bbox,  # best-effort single-item box
     )
 
 

@@ -413,6 +413,37 @@ def _parsed_for(doc: SourceDocument, parse_dir: Any) -> ParsedDocument:
     return _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
 
 
+def _attach_page_provenance(doc: SourceDocument, chunks: list, segments: list, parse_dir: Any) -> list:
+    """issue 0032 (CU-B5): enrich each segment's `OperativeSpan` with its source page(s) + best-effort bbox.
+
+    Builds a page<->char map once from the parsed document's per-item `prov` pages and the canonical text, then
+    looks up each span's canonical range (`chunk_doc_start + op.start/end`). Deterministic, no model call.
+    Best-effort by design: any failure, a parse with no page provenance (the text-only ingest leg), or a chunk
+    with no `doc_start` leaves the span's `pages` empty -- the honest 'no page' fallback, never a broken ingest."""
+    if not segments:
+        return segments
+    try:
+        from rag_wright.capabilities.parsing import load_document
+        from rag_wright.capabilities.rlm_chunking import canonical_document_text
+        from rag_wright.corpus.document_parser import content_items
+        from rag_wright.spans.page_map import build_page_offset_map, pages_for
+
+        page_map = build_page_offset_map(
+            content_items(load_document(_parsed_for(doc, parse_dir))), canonical_document_text(chunks))
+    except Exception:  # noqa: BLE001 - provenance is best-effort; never fail an ingest over a page lookup
+        return segments
+    if not page_map:
+        return segments
+    enriched: list = []
+    for (op, function, chunk_doc_start, scores) in segments:
+        if chunk_doc_start is None:
+            enriched.append((op, function, chunk_doc_start, scores))
+            continue
+        pages, bbox = pages_for(page_map, chunk_doc_start + op.start, chunk_doc_start + op.end)
+        enriched.append((op.model_copy(update={"pages": pages, "bbox": bbox}), function, chunk_doc_start, scores))
+    return enriched
+
+
 def parsed_source_document(
     source_doc_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: Optional[dict] = None
 ) -> SourceDocument:
@@ -756,8 +787,12 @@ def aproduction_document_ingest(
         manifest = await achunk(parsed, summarizer=summarizer, cache_dir=chunk_dir, discoverer=discoverer)
         return list(manifest.chunks)
 
-    async def segment_fn(doc: SourceDocument, chunks: list) -> list:  # noqa: ARG001 - segments are per-chunk
-        return await _asegment_and_classify(chunks, classify_fn)
+    async def segment_fn(doc: SourceDocument, chunks: list) -> list:
+        segments = await _asegment_and_classify(chunks, classify_fn)
+        # issue 0032 (CU-B5): attach source-page provenance to each span. Build a page<->char-offset map over the
+        # canonical text (from the parsed doc's per-item prov pages) and look up each span's [doc_start, doc_end).
+        # Deterministic, no model call; degrades to no pages when the parse carried no provenance (text-only leg).
+        return _attach_page_provenance(doc, chunks, segments, parse_dir)
 
     async def clauses_fn(doc: SourceDocument, segments: list) -> dict:
         # EXTRACT-GUARD-1: only typed spans that are actually CLAUSES reach extraction. A furniture span (page

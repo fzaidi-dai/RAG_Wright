@@ -23,7 +23,8 @@ class HighlightSpan(BaseModel):
     text: str
     doc_start: int | None = None  # document-absolute char offsets (the highlight range)
     doc_end: int | None = None
-    page: int | None = None  # optional PDF-overlay location
+    page: int | None = None  # optional PDF-overlay location (FIRST page; == pages[0] when known)
+    pages: list[int] = []  # issue 0032: ALL source pages this span overlaps (page-level click-through)
     bbox: tuple[float, float, float, float] | None = None
     extracted_value: str | None = None  # for value-type categories: the pinpointed value within the span
     confidence: float = 1.0

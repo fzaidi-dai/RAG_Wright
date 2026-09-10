@@ -9,9 +9,22 @@ from rag_wright.corpus.document_parser import content_items, document_to_section
 
 
 class _Item:
-    def __init__(self, label, text):
+    def __init__(self, label, text, prov=None):
         self.label = label
         self.text = text
+        if prov is not None:
+            self.prov = prov
+
+
+class _Prov:  # issue 0032: duck-typed docling provenance (prov[0].page_no + .bbox.l/t/r/b)
+    def __init__(self, page_no, bbox=None):
+        self.page_no = page_no
+        self.bbox = bbox
+
+
+class _BBox:
+    def __init__(self, l, t, r, b):  # noqa: E741 - mirror docling's l/t/r/b attribute names
+        self.l, self.t, self.r, self.b = l, t, r, b
 
 
 class _FakeTable:
@@ -213,3 +226,33 @@ def test_content_items_does_not_merge_across_a_heading_or_table():
     labels = [it.label for it in content_items(doc)]
     assert labels == [DocItemLabel.TEXT, DocItemLabel.SECTION_HEADER, DocItemLabel.TEXT,
                       DocItemLabel.TABLE, DocItemLabel.TEXT]           # boundaries preserved, no cross-merge
+
+
+# --- issue 0032: page/bbox provenance carried onto ContentItem -----------------------------------------------
+
+def test_content_items_carry_page_and_bbox_from_prov():
+    doc = _FakeDoc([
+        _Item(DocItemLabel.SECTION_HEADER, "1. Term", prov=[_Prov(3, _BBox(1.0, 2.0, 3.0, 4.0))]),
+        _Item(DocItemLabel.TEXT, "The term is five years.", prov=[_Prov(3)]),  # page, no bbox
+    ])
+    items = content_items(doc)
+    header = next(i for i in items if i.text == "1. Term")
+    assert header.page == 3 and header.bbox == (1.0, 2.0, 3.0, 4.0)
+    body = next(i for i in items if "five years" in i.text)
+    assert body.page == 3 and body.bbox is None  # bbox best-effort: omitted when prov has none
+
+
+def test_content_items_without_prov_have_no_page():
+    doc = _FakeDoc([_Item(DocItemLabel.TEXT, "No provenance on this item.")])
+    assert content_items(doc)[0].page is None
+
+
+def test_merged_paragraph_keeps_first_line_page_and_drops_bbox():
+    # DEFRAG-1 merges wrapped lines; the merged paragraph keeps the FIRST line's page, bbox becomes ambiguous
+    doc = _FakeDoc([
+        _Item(DocItemLabel.TEXT, "This clause begins on", prov=[_Prov(7, _BBox(0.0, 0.0, 1.0, 1.0))]),
+        _Item(DocItemLabel.TEXT, "and wraps to the next line.", prov=[_Prov(8, _BBox(0.0, 0.0, 1.0, 1.0))]),
+    ])
+    merged = [i for i in content_items(doc) if i.text.strip()]
+    assert len(merged) == 1  # the two lines merged into one paragraph
+    assert merged[0].page == 7 and merged[0].bbox is None  # first line's page, no single box

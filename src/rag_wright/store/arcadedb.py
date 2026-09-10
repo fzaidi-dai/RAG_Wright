@@ -280,6 +280,8 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.contract_id STRING")  # CU-B2: within-contract filter
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_start INTEGER")  # CU-B2: doc-absolute char offset
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_end INTEGER")  # CU-B2: exclusive (citation)
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.pages ARRAY_OF_INTEGERS")  # issue 0032: source page(s)
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.bbox STRING")  # issue 0032: best-effort [l,t,r,b] JSON
         # ADR-0067 P5b: the DOMAIN vertex types (Clause / PropertyValue / Contract) + structural edges
         # (HasProperty / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
         # whatever the pack declares, so a new domain ships its own node schema without editing this method.
@@ -385,6 +387,8 @@ class ArcadeDBStore:
         sparse_weights = _float_array(record.sparse_vector[i] for i in token_ids)
         doc_start = "null" if record.doc_start is None else int(record.doc_start)
         doc_end = "null" if record.doc_end is None else int(record.doc_end)
+        pages = "[" + ",".join(str(int(p)) for p in record.pages) + "]"  # issue 0032: source page(s)
+        bbox = "null" if record.bbox is None else _sql_str(json.dumps(list(record.bbox)))  # best-effort [l,t,r,b]
         self._command(
             f"UPDATE {SPAN_TYPE} SET"
             f" span_id = {_sql_str(record.span_id)},"
@@ -398,7 +402,9 @@ class ArcadeDBStore:
             f" sparse_weights = {sparse_weights},"
             f" contract_id = {_sql_str(record.contract_id)},"  # CU-B2: citation + within-contract filter
             f" doc_start = {doc_start},"
-            f" doc_end = {doc_end}"
+            f" doc_end = {doc_end},"
+            f" pages = {pages},"  # issue 0032 (CU-B5): source page(s) for the citation highlight
+            f" bbox = {bbox}"
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
         )
 
@@ -512,7 +518,7 @@ class ArcadeDBStore:
             return []
         return self._query(
             f"SELECT span_id, parent_chunk_id, parent_okf_path, span_index, text, function,"
-            f" contract_id, doc_start, doc_end FROM {SPAN_TYPE}"
+            f" contract_id, doc_start, doc_end, pages, bbox FROM {SPAN_TYPE}"  # issue 0032: page citation
             f" WHERE contract_id = {_sql_str(contract_id)} AND function IN {_str_array(functions)}"
             f" ORDER BY doc_start"
         )
@@ -524,7 +530,7 @@ class ArcadeDBStore:
         contract is ~1% of the corpus. Returns citation-ready rows plus `dense`."""
         return self._query(
             f"SELECT span_id, parent_chunk_id, span_index, text, function, contract_id,"
-            f" doc_start, doc_end, dense FROM {SPAN_TYPE}"
+            f" doc_start, doc_end, pages, bbox, dense FROM {SPAN_TYPE}"  # issue 0032: page citation
             f" WHERE contract_id = {_sql_str(contract_id)} ORDER BY doc_start"
         )
 

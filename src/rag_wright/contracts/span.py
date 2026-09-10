@@ -40,8 +40,10 @@ class SpanRecord(BaseModel):
     contract_id: str = ""  # CU-A1: source contract/document id (within-contract typed filter)
     doc_start: int | None = None  # CU-A1: document-absolute char offset (citation); None on the ACORD leg
     doc_end: int | None = None  # CU-A1: exclusive
-    page: int | None = None  # CU-A1: 1-based page for PDF-overlay highlight (optional)
-    bbox: tuple[float, float, float, float] | None = None  # CU-A1: (left, top, right, bottom) on `page`
+    page: int | None = None  # CU-A1: 1-based FIRST page for PDF-overlay highlight (== pages[0] when known)
+    pages: list[int] = []  # issue 0032/CU-B5: ALL 1-based source pages this span overlaps (a clause can cross a
+    #   page boundary); empty when the parse carried no page provenance (e.g. the text-only ingest leg)
+    bbox: tuple[float, float, float, float] | None = None  # CU-A1: (left, top, right, bottom) on `page`, best-effort
 
     @model_validator(mode="after")
     def _check_offsets(self) -> "SpanRecord":
@@ -51,6 +53,8 @@ class SpanRecord(BaseModel):
             raise ValueError(f"doc_end ({self.doc_end}) must be >= doc_start ({self.doc_start})")
         if self.page is not None and self.page < 1:
             raise ValueError("page is 1-based; must be >= 1")
+        if any(p < 1 for p in self.pages):
+            raise ValueError("pages are 1-based; each must be >= 1")
         return self
 
     @field_validator("dense_vector")

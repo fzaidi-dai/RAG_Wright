@@ -80,11 +80,18 @@ class ContentItem:
     SUPERSET of `document.texts`: a docling TABLE lives in `document.tables` and a figure in `document.pictures`,
     NEVER in `.texts`, so a `document.texts`-only chunker silently drops them (never chunked, never indexed, never
     retrievable, and no failure recorded -- the exact 0014 loss). This projection is the single authority for
-    'the document's chunkable content, in reading order'."""
+    'the document's chunkable content, in reading order'.
+
+    issue 0032: each item also carries its parse-time PAGE provenance (`page`, 1-based, from `prov[0].page_no`)
+    and, when the parser produced one, a `bbox` (l, t, r, b on `page`). This is the provenance the CU-B5 page
+    map threads to a span's citation (a scanned-PDF click-through lands on the right page). `bbox` is best-effort
+    -- omitted where `prov` has none, and dropped when lines are merged into a paragraph (ambiguous then)."""
 
     label: Any
     level: Optional[int]
     text: str
+    page: Optional[int] = None  # issue 0032: 1-based source page (prov[0].page_no); None when prov is absent
+    bbox: Optional[tuple[float, float, float, float]] = None  # (l, t, r, b) on `page`; only when prov has one
 
 
 def _table_content_text(item: Any, doc: Any) -> str:
@@ -145,26 +152,45 @@ def _merge_wrapped_lines(items: list[ContentItem]) -> list[ContentItem]:
     out: list[ContentItem] = []
     buf: str = ""
     buf_level: Optional[int] = None
+    buf_page: Optional[int] = None  # issue 0032: the merged paragraph keeps its FIRST line's page (bbox dropped)
     for item in items:
         if item.label != DocItemLabel.TEXT:  # heading / table / picture / list-item / furniture -> hard boundary
             if buf.strip():
-                out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf))
-            buf, buf_level = "", None
+                out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf, page=buf_page))
+            buf, buf_level, buf_page = "", None, None
             out.append(item)
             continue
         line = (item.text or "").strip()
         if not line:
             continue
         if not buf:
-            buf, buf_level = line, item.level
+            buf, buf_level, buf_page = line, item.level, item.page
         elif _ends_sentence(buf) and _starts_new_sentence(line):  # a real paragraph break
-            out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf))
-            buf, buf_level = line, item.level
+            out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf, page=buf_page))
+            buf, buf_level, buf_page = line, item.level, item.page
         else:  # a wrapped continuation of the same clause
             buf = _join_wrapped(buf, line)
     if buf.strip():
-        out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf))
+        out.append(ContentItem(label=DocItemLabel.TEXT, level=buf_level, text=buf, page=buf_page))
     return out
+
+
+def _prov_page_bbox(node: Any) -> tuple[Optional[int], Optional[tuple[float, float, float, float]]]:
+    """issue 0032: a docling item's page (1-based) and best-effort bbox from `prov[0]` (the same provenance
+    `scan_quality._page_texts` reads). Returns `(None, None)` when the item has no provenance (a test stub or a
+    born-item with none). The bbox is `(l, t, r, b)` when the parser produced one, else `None`."""
+    prov = getattr(node, "prov", None) or []
+    if not prov:
+        return None, None
+    page = getattr(prov[0], "page_no", None)
+    box = getattr(prov[0], "bbox", None)
+    bbox = None
+    if box is not None:
+        try:
+            bbox = (float(box.l), float(box.t), float(box.r), float(box.b))
+        except (AttributeError, TypeError, ValueError):
+            bbox = None
+    return (int(page) if page is not None else None), bbox
 
 
 def content_items(doc: Any) -> list[ContentItem]:
@@ -180,8 +206,9 @@ def content_items(doc: Any) -> list[ContentItem]:
     from docling_core.types.doc.document import ContentLayer
 
     def _text_item(node: Any) -> ContentItem:
+        page, bbox = _prov_page_bbox(node)
         return ContentItem(label=getattr(node, "label", None), level=getattr(node, "level", None),
-                           text=getattr(node, "text", "") or "")
+                           text=getattr(node, "text", "") or "", page=page, bbox=bbox)
 
     if not hasattr(doc, "iterate_items"):  # a plain `.texts`-bearing view (a `_SubDocument` slice / test stub):
         return [_text_item(t) for t in getattr(doc, "texts", None) or []]  # no reading-order body, no tables
@@ -198,7 +225,9 @@ def content_items(doc: Any) -> list[ContentItem]:
             text = _picture_content_text(node, doc)
         else:
             text = getattr(node, "text", "") or ""
-        items.append(ContentItem(label=label, level=getattr(node, "level", None), text=text))
+        page, bbox = _prov_page_bbox(node)
+        items.append(ContentItem(label=label, level=getattr(node, "level", None), text=text,
+                                 page=page, bbox=bbox))
     items = _merge_wrapped_lines(items)  # DEFRAG-1: rejoin per-line items into whole-clause paragraphs
     for text_item in getattr(doc, "texts", None) or []:  # coverage backstop: never drop a `.texts` item
         if id(text_item) not in seen:
