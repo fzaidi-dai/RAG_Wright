@@ -709,7 +709,8 @@ async def _aextract_clause_with_retry(
 
 def aproduction_document_ingest(
     store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None, party_seed_path: Any = None,
-    classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None):
+    classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None,
+    graph_extract_model: Any = None, judge_model: Any = None):
     """ASYNC-B2e (ADR-0057): the async twin of `production_document_ingest`. Wires the ASYNC stage seams (achunk,
     aclassify_spans, clause_extractor.aextract, aper_contract_graph_extraction) so the ingest model calls run on
     the async seam with the true wall-clock deadline; CPU/store work (embed, resolve, DB writes) runs off the loop
@@ -728,7 +729,13 @@ def aproduction_document_ingest(
         `extract_model` (e.g. to qwen), set `list_model` deliberately -- the union's value depends on the two
         models being complementary.
       - `samples`: same-model multi-sample count for the list union (`None` -> env `RAG_INGEST_CLAUSE_SAMPLES`,
-        default 1). Env vars remain the fallback for every knob, so existing callers are unaffected."""
+        default 1).
+      - `graph_extract_model`: the model for BOTH party AND affiliation extraction (the GP-1B graph-extract
+        surface -- they share one model). A bare model-id string or an `ExtractionModel` (unwrapped to its id);
+        `None` -> the default (granite, `RAG_GRAPH_EXTRACT_MODEL`).
+      - `judge_model`: the ingest semantic-judge model (ADR-0040 Layer-3 gate) -- a model-id string or an
+        `ExtractionModel`; `None` -> `model_for(STRUCTURED_REASONING)`.
+      Env vars remain the fallback for every knob, so existing callers are unaffected."""
     import asyncio
     import hashlib
     import json
@@ -768,14 +775,19 @@ def aproduction_document_ingest(
     discoverer = StructuralModelFallbackDiscoverer()
     summarizer = _NoSummary()
     from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
-    # caller-configurable ingest extraction models (else backend/env defaults). A bare id -> an ExtractionModel.
+    # caller-configurable ingest models (else backend/env defaults). A bare id -> an ExtractionModel; for the
+    # graph/judge surfaces (which take a model-id string) an ExtractionModel is unwrapped to its `.model` id.
     clause_model = extract_model
     if isinstance(extract_model, str):
         clause_model = default_extraction_model("clause-extract", extract_model)
+    graph_extract_id = getattr(graph_extract_model, "model", graph_extract_model)  # None or a bare model-id
+    judge_id = getattr(judge_model, "model", judge_model) or model_for(ModelRole.STRUCTURED_REASONING)
     clause_extractor = granite_clause_extractor(
         clause_model, list_model=list_model, samples=samples,
-        asemantic_judge_fn=build_asemantic_judge_fn(model_for(ModelRole.STRUCTURED_REASONING)))
-    aextract_parties_fn = aproduction_extract_fn()
+        asemantic_judge_fn=build_asemantic_judge_fn(judge_id))  # ingest semantic-judge model (issue 0033 follow-up)
+    # party AND affiliation extraction share the graph-extract model (GP-1B); one arg drives both
+    aextract_parties_fn = (aproduction_extract_fn(model_id=graph_extract_id) if graph_extract_id
+                           else aproduction_extract_fn())
     if classify_fn is None:
         from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
 
@@ -800,6 +812,8 @@ def aproduction_document_ingest(
     async def _aaffiliations(text: str) -> list:
         from rag_wright.capabilities.graph_extraction import aextract_affiliations
 
+        if graph_extract_id:  # same graph-extract model as party extraction (issue 0033 follow-up)
+            return await aextract_affiliations(text, model_id=graph_extract_id)
         return await aextract_affiliations(text)
 
     async def chunk_fn(doc: SourceDocument) -> list:
