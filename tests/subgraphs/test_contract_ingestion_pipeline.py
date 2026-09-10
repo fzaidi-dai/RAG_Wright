@@ -136,3 +136,40 @@ def test_per_contract_graph_no_parties_yields_no_extraction(tmp_path):
 
 
 
+
+
+# --- issue 0033 follow-up: the ingest extraction models are caller-configurable --------------------------------
+
+def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path):
+    """extract_model / list_model / samples on aproduction_document_ingest thread to granite_clause_extractor
+    (a bare model-id string is wrapped into an ExtractionModel), so a caller no longer needs env vars to change
+    the ingest extraction model or its gemma+granite list-union second model."""
+    import pytest
+
+    from rag_wright.subgraphs import contract_ingestion_pipeline as pipe
+
+    captured: dict = {}
+
+    class _StopHere(Exception):
+        pass
+
+    def _fake_granite(model=None, *, semantic_judge_fn=None, asemantic_judge_fn=None,
+                      list_model=None, samples=None):
+        captured.update(model=model, list_model=list_model, samples=samples)
+        raise _StopHere  # stop before the rest of the (network-y) wiring
+
+    monkeypatch.setattr("rag_wright.spans.clause_kg_extractor.granite_clause_extractor", _fake_granite)
+
+    with pytest.raises(_StopHere):
+        pipe.aproduction_document_ingest(
+            store=object(), cache_dir=str(tmp_path), registry=object(), embedder=object(),
+            extract_model="some/model-x", list_model="gemma-y", samples=3)
+    assert captured["list_model"] == "gemma-y" and captured["samples"] == 3
+    assert getattr(captured["model"], "model", None) == "some/model-x"  # bare id -> ExtractionModel
+
+    captured.clear()
+    with pytest.raises(_StopHere):
+        pipe.aproduction_document_ingest(
+            store=object(), cache_dir=str(tmp_path), registry=object(), embedder=object())
+    # no args -> backend/env defaults preserved (existing callers unaffected)
+    assert captured == {"model": None, "list_model": None, "samples": None}

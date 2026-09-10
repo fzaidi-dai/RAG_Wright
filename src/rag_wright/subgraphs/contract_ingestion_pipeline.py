@@ -709,12 +709,26 @@ async def _aextract_clause_with_retry(
 
 def aproduction_document_ingest(
     store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None, party_seed_path: Any = None,
-    classify_fn: Any = None):
+    classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None):
     """ASYNC-B2e (ADR-0057): the async twin of `production_document_ingest`. Wires the ASYNC stage seams (achunk,
     aclassify_spans, clause_extractor.aextract, aper_contract_graph_extraction) so the ingest model calls run on
     the async seam with the true wall-clock deadline; CPU/store work (embed, resolve, DB writes) runs off the loop
     via `asyncio.to_thread`. Clause extraction is bounded-concurrent via `asyncio.gather` + a `Semaphore`. Returns
-    an ASYNC per-document graph -- drive it with `arun_corpus_ingestion`."""
+    an ASYNC per-document graph -- drive it with `arun_corpus_ingestion`.
+
+    Model configuration (mirrors the query/compliance entrypoints -- a caller no longer has to reach for env
+    vars to change the ingest models):
+      - `extract_model`: the PRIMARY clause-property extraction model -- an `ExtractionModel` OR a bare model-id
+        string (wrapped via `default_extraction_model`). `None` keeps the backend default (granite, per
+        `RAG_SERVING`). This is the model that produces the typed clause properties.
+      - `list_model`: the SECOND model for the cross-model UNION on the LIST-bearing groups only (carve_out /
+        covered_subject / damage_type). granite and gemma under-enumerate DIFFERENT list items, so their union
+        is more complete than either alone; the second model is cost-scoped to list groups. A bare model-id
+        string, `"off"` to disable, or `None` for the default (gemma, `RAG_INGEST_LIST_MODEL`). If you override
+        `extract_model` (e.g. to qwen), set `list_model` deliberately -- the union's value depends on the two
+        models being complementary.
+      - `samples`: same-model multi-sample count for the list union (`None` -> env `RAG_INGEST_CLAUSE_SAMPLES`,
+        default 1). Env vars remain the fallback for every knob, so existing callers are unaffected."""
     import asyncio
     import hashlib
     import json
@@ -733,6 +747,7 @@ def aproduction_document_ingest(
     from rag_wright.contracts.property import ClausePropertyRecord
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.ontology.clause_template import Clause
+    from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
     from rag_wright.spans.segment import is_extractable_span, to_span_record
 
@@ -753,7 +768,12 @@ def aproduction_document_ingest(
     discoverer = StructuralModelFallbackDiscoverer()
     summarizer = _NoSummary()
     from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
+    # caller-configurable ingest extraction models (else backend/env defaults). A bare id -> an ExtractionModel.
+    clause_model = extract_model
+    if isinstance(extract_model, str):
+        clause_model = default_extraction_model("clause-extract", extract_model)
     clause_extractor = granite_clause_extractor(
+        clause_model, list_model=list_model, samples=samples,
         asemantic_judge_fn=build_asemantic_judge_fn(model_for(ModelRole.STRUCTURED_REASONING)))
     aextract_parties_fn = aproduction_extract_fn()
     if classify_fn is None:

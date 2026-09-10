@@ -57,6 +57,15 @@ report = await arun_corpus_ingestion(
 # report: documents_ingested, dead_lettered (per-doc), per_document
 ```
 
+The ingest **extraction models are caller-configurable** (like the query/compliance entrypoints; env vars stay
+the fallback): `aproduction_document_ingest(store, cache_dir=..., registry=..., extract_model=..., list_model=...,
+samples=...)`. `extract_model` is the primary clause-property model (an `ExtractionModel` or a bare model-id
+string; default = the `RAG_SERVING` backend model, granite). `list_model` is the SECOND model for the cross-model
+UNION on the LIST-bearing dims only (carve_out / covered_subject / damage_type) — granite and gemma
+under-enumerate different list items, so their union is more complete; `"off"` disables it, default = gemma. If
+you override `extract_model` (e.g. to qwen), set `list_model` deliberately — the union only helps if the two
+models are complementary.
+
 `run_corpus_ingestion` streams `X/N` progress; a bad document dead-letters and is skipped (one bad doc never
 kills the corpus). Write to a SCRATCH database first (`from_env(database=..., reset=True)`) to keep it
 non-destructive while proving it out.
