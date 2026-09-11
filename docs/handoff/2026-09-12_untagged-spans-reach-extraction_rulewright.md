@@ -19,9 +19,10 @@ Expect your clause counts to rise substantially (your own measurement: ~31 → ~
 ## Cost note (relevant to your one-model-per-customer deployment)
 
 Ingest cost rises: every extractable prose span is now extracted (~7 thematic tag-parse calls each via the ADR-0081 extractor), where before only tagged spans were. The knobs:
-- **`is_extractable_span`** is the span-count governor. If you see furniture-ish prose you'd rather not pay for, tell us the form and we tighten it (deterministically, conservatively).
-- **Span batching** (two spans per group call) is the next lever — in progress now. It halves the calls while preserving per-group focus (so no property loss, unlike the gate). We'll A/B batched-vs-per-span before adopting it and hand you the numbers.
-- Group pruning is off the table (the gate proved it costs recall).
+- **`is_extractable_span`** is the span-count governor, and the *only* recall-preserving cost lever. If you see furniture-ish prose you'd rather not pay for, tell us the form and we tighten it (deterministically, conservatively).
+- **Span batching was built, measured, and dropped.** We A/B'd two-clause-per-call batching vs per-span on Qwen: recall **0.818** (samples=1) / **0.844** (samples=4) — a real ~15-18% property loss (37 fields lost vs 9 gained, concentrated in carve-outs/claim-scope/exclusivity), the *same* regression as the gate. Splitting the model across two clauses under-extracts the hard fields, so we did not adopt it (ADR-0101).
+- Group pruning (the aspect gate) is also off the table — same ~18% loss.
+- Net: the ~7-calls/span cost stays. If cost becomes the binding constraint, the real levers are a stronger/cheaper served model or tightening `is_extractable_span`, not fewer calls per clause.
 
 ## If you want to hold clause counts steady while you validate
 

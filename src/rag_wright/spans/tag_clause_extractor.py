@@ -46,11 +46,12 @@ _GROUP_PROMPT = (
     "value verbatim from the clause.\n\nCLAUSE:\n{text}"
 )
 
-# NOTE (issue 0036): there was a coarse "aspect gate" here that first asked the model which groups a clause touches
-# and skipped the rest, to cut cost. A live A/B on Qwen (the current default) measured it dropping ~18% of the
-# properties full extraction found -- concentrated in `excepts` (carve-outs) -- so it never earned its keep on any
-# model we run. It was removed rather than kept off-by-default: every group always runs, and the deterministic
-# grounding judge (ADR-0028) drops any stray value. Cost is reduced elsewhere (`is_extractable_span`; span batching).
+# NOTE (issue 0036): TWO cost-cutting ideas were tried here and BOTH measured a ~15-18% property-recall loss on
+# Qwen (the current default), concentrated in `excepts` (carve-outs) -- so neither was adopted. (1) A coarse
+# "aspect gate" that pruned groups per clause (removed entirely). (2) Batching two clauses per group call (recall
+# 0.818 at samples=1, 0.844 at samples=4 -- still a real regression, not variance). Splitting the model's attention
+# across clauses, or pruning groups, both under-extract the hard cross-cutting fields. So every group always runs,
+# one clause per call; the only recall-preserving cost lever is `is_extractable_span` (fewer spans reach here).
 
 
 import re as _re

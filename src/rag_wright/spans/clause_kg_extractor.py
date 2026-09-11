@@ -225,8 +225,8 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     server-side-JSON path, kept for rollback). BOTH feed the SAME downstream (adapt to ClausePropertyRecord +
     ADR-0028 grounding + ADR-0040 symbolic gate). tagparse is the default because docling hard-crashes ~89% of
     real CUAD clauses (grounded A/B, 45 clauses: docling success 0.11 vs tagparse 1.00). NOTE: tagparse issues one
-    LLM call per thematic GROUP (~8/clause) vs docling's ~1; cost is reduced via `is_extractable_span` (fewer spans)
-    and span batching, NOT by pruning groups (the aspect gate was removed in issue 0036: a ~18% property-recall loss).
+    LLM call per thematic GROUP (~8/clause) vs docling's ~1; cost is reduced via `is_extractable_span` (fewer spans),
+    NOT by pruning groups or batching clauses -- both were measured in issue 0036 at a ~15-18% property-recall loss.
 
     `list_model` (ARGUMENT; else env `RAG_INGEST_LIST_MODEL`; else the profile general model) is the SECOND model
     for the cross-model list union on list-bearing groups -- exposed here (like `model`) so the caller configures
