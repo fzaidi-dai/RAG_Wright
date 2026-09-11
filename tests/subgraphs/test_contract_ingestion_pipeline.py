@@ -48,6 +48,25 @@ def test_numbered_sections_group_into_one_job_each():
     assert "(i) net of taxes" in jobs[1][4]                          # list item merged into provision 2
 
 
+def test_deep_numbered_list_items_fold_into_their_provision():
+    # issue 0039: a section number is DEPTH-CAPPED at two levels. '10.5.' starts a provision; the deeper
+    # '10.5.1.' / '10.5.1.1.' are list items WITHIN it and fold in (0038's own rule), not their own clauses.
+    from rag_wright.spans.segment import starts_new_provision
+    assert starts_new_provision("10.5. Obligations on Termination. Upon expiry the Supplier shall:") is True
+    assert starts_new_provision("10.5.1. return all Confidential Information within thirty days") is False
+    assert starts_new_provision("10.5.1.1. including all copies and derivatives thereof") is False
+    segments = [
+        (_span("10.5. Obligations on Termination. Upon expiry the Supplier shall:", 0), "General", 0, []),
+        (_span("10.5.1. return all Confidential Information within thirty days", 1), "General", 0, []),
+        (_span("10.5.1.1. including all copies and derivatives thereof", 2), "General", 0, []),
+        (_span("10.6. Survival. The confidentiality obligations survive termination.", 3), "General", 0, []),
+    ]
+    jobs = clause_extraction_jobs(segments)
+    assert len(jobs) == 2                                          # 10.5 (with its nested items folded) + 10.6
+    assert jobs[0][4].count("\n") == 2                             # 10.5 merged its two deeper list items
+    assert jobs[1][4].startswith("10.6.")
+
+
 def test_untagged_provision_still_becomes_a_job():
     # issue 0036 preserved: an untagged (function=NONE) provision is still extracted (function-independent).
     from rag_wright.contracts.function import NO_FUNCTION

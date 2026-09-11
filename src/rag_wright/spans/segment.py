@@ -119,22 +119,31 @@ def is_extractable_span(text: str) -> bool:
     return True  # has lowercase prose -> treat as a real clause (recall-first)
 
 
-# issue 0038: a span that STARTS a new numbered contract section ('2.', '2.1.', '10.5.1.'). The provision unit
-# for clause extraction is the numbered section, so a section-numbered span opens a new provision group. A
-# parenthesised letter/roman list item ('(a)', '(i)') is NOT a section (no leading DIGIT) -> stays in the group.
-_SECTION_START = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2}){0,3}\)?\.\s")
+# issue 0038/0039: a span that STARTS a new numbered contract section -- the provision unit. DEPTH-CAPPED at
+# TWO levels ('2.' or '2.1.'): a top-level or one-level-nested number opens a provision, but a DEEPER number
+# ('10.5.1.', '10.5.1.1.') is a LIST ITEM within its parent provision and must FOLD IN, per 0038's own grouping
+# rule (issue 0039: a naive marker/number regex over-splits at depth 3-4, trading one granularity bug for a
+# smaller one). A parenthesised letter/roman item ('(a)', '(i)') is likewise not a section (no leading digit).
+_SECTION_START = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2})?\)?\.\s")
 
 
 def starts_new_provision(text: str) -> bool:
-    """issue 0038: whether a span BEGINS a new provision, used to group contiguous spans into a provision for
-    clause extraction (retrieval stays per span). Tiered, deterministic: a numbered-section start ('2.1. ...'),
-    else a bare Title-case heading, else a short ALL-CAPS heading. When a document has NONE of these, no intra-
-    chunk boundary fires and the grouping falls back to the chunk (the caller also breaks on a chunk change), so
-    a heading-less contract degrades to chunk-level clauses -- never one clause per sentence, never per document."""
+    """issue 0038/0039: whether a span BEGINS a new provision, used to group contiguous spans into a provision for
+    clause extraction (retrieval stays per span). Tiered, deterministic:
+
+      - a span with a LEADING NUMBER is decided SOLELY by `_SECTION_START` (depth-capped to two levels): '2.' or
+        '2.1.' starts a provision; a deeper '10.5.1.'/'10.5.1.1.' is a list item and FOLDS IN (issue 0039 -- a
+        depth-blind rule over-splits nested list items into their own provisions);
+      - a span with NO leading number starts a provision if it is a bare Title-case heading or a short ALL-CAPS
+        heading (an un-numbered but headed contract).
+
+    When a document has none of these, no intra-chunk boundary fires and grouping falls back to the chunk (the
+    caller also breaks on a chunk change), so a heading-less contract degrades to chunk-level -- never one clause
+    per sentence, never per document."""
     t = text.strip()
-    if _SECTION_START.match(t):
-        return True
-    if _is_bare_heading(t):  # un-numbered but titled ('Confidentiality.', a short Title-case line)
+    if re.match(r"^\(?\d", t):  # a numbered item: ONLY the depth-capped section rule decides (no heading override)
+        return bool(_SECTION_START.match(t))
+    if _is_bare_heading(t):  # un-numbered but titled ('Governing Law', a short Title-case line)
         return True
     if t and not any(c.islower() for c in t) and len(_WORD_RE.findall(t)) < _MIN_ALLCAPS_WORDS:
         return True  # a short ALL-CAPS heading ('CONFIDENTIALITY')
