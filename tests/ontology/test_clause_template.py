@@ -130,24 +130,29 @@ def test_clause_instantiates_minimally() -> None:
     assert c.document_reference == "8.1 Limitation of Liability"
 
 
-# --- issue 0033: keyword fallback recovers a carve-out the extractor quoted verbatim -------------------------
+# --- issue 0037: the open descriptive list-dims (covers/excepts/prohibits_damage) now CAPTURE VERBATIM on the
+# Clause; canonicalization onto the closed vocab moved to the KG boundary (clause_kg_extractor), so an out-of-vocab
+# value is RETAINED, not collapsed to OTHER and discarded (see tests/spans/test_clause_kg_extractor.py). ----------
 
-def test_excepts_keyword_fallback_maps_verbatim_indemnification_carveout():
-    # the exact document-side failure: the model quoted the clause instead of emitting the bare token
+def test_excepts_captures_verbatim_carveout():
+    # the exact document-side failure: the model quoted the clause instead of emitting the bare token -- now kept.
     phrase = "Except in respect of the Supplier's indemnification obligations under clause 8"
-    clause = t.Clause(excepts=[phrase])
-    assert clause.excepts == [t.ExceptionModel.INDEMNIFICATION]  # -> carve_out=indemnification (was OTHER/dropped)
+    assert t.Clause(excepts=[phrase]).excepts == [phrase]  # verbatim retained (boundary maps it to indemnification)
 
 
-def test_excepts_keyword_fallback_leaves_a_true_non_value_as_other():
-    clause = t.Clause(excepts=["which shall be unlimited"])  # no canonical value token present
-    assert clause.excepts == [t.ExceptionModel.OTHER]
+def test_excepts_keeps_a_non_canonical_value_verbatim():
+    assert t.Clause(excepts=["which shall be unlimited"]).excepts == ["which shall be unlimited"]  # not dropped
 
 
-def test_damage_type_keyword_fallback_maps_a_quoted_phrase():
-    # damage_type is one of the three grounding-gated list dims that opt in; a quoted phrase maps on its token
-    dmg = t.Clause(prohibits_damage=["consequential damages of any kind"]).prohibits_damage
-    assert dmg == [t.DamageType.CONSEQUENTIAL]
+def test_prohibits_damage_captures_verbatim():
+    assert t.Clause(prohibits_damage=["consequential damages of any kind"]).prohibits_damage == \
+        ["consequential damages of any kind"]  # verbatim retained (boundary maps it to consequential)
+
+
+def test_open_list_drops_leaked_prose_and_tags():
+    # a leaked chain-of-thought (too long, or containing an XML tag) is not a value -> dropped at capture
+    long_leak = "x" * 200
+    assert t.Clause(covers=[long_leak, "<tag>bad</tag>", "the Software"]).covers == ["the Software"]
 
 
 def test_normalize_enum_keyword_fallback_is_opt_in_and_longest_wins():

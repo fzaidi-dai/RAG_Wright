@@ -73,6 +73,43 @@ def test_list_dimensions_expand_to_multiple_assertions() -> None:
     assert sorted(by[_D.CARVE_OUT]) == ["fraud", "willful_misconduct"]
 
 
+def test_open_list_dims_retain_verbatim_when_out_of_vocab() -> None:
+    # issue 0037: on the OPEN descriptive list-dims (covered_subject / carve_out / damage_type), an out-of-vocab
+    # value is RETAINED VERBATIM, not collapsed to OTHER and discarded. Canonical members still normalize.
+    clause = ct.Clause(
+        document_reference="1",
+        covers=["the Software"],                                    # no Subject vocab member -> verbatim
+        excepts=["confidentiality", "loss of profits"],             # canonical + out-of-vocab
+        prohibits_damage=["consequential", "reputational harm"],    # canonical + genuinely unmapped -> verbatim
+    )
+    by = _by_dim(_record(clause))
+    assert by[_D.COVERED_SUBJECT] == ["the Software"]                       # verbatim retained
+    assert sorted(by[_D.CARVE_OUT]) == ["confidentiality", "loss of profits"]  # nothing dropped
+    assert "consequential" in by[_D.DAMAGE_TYPE] and "reputational harm" in by[_D.DAMAGE_TYPE]
+
+
+def test_open_list_keyword_maps_a_quoted_phrase_at_the_boundary() -> None:
+    # issue 0037: a carve-out the model quoted verbatim maps onto its canonical value at the boundary (keyword
+    # fallback) -- what the old Clause validator did, now done here so the raw phrase is still available to keep.
+    clause = ct.Clause(
+        document_reference="1",
+        excepts=["Except in respect of the Supplier's indemnification obligations under clause 8"],
+        prohibits_damage=["consequential damages of any kind"],
+    )
+    by = _by_dim(_record(clause))
+    assert by[_D.CARVE_OUT] == ["indemnification"]     # keyword-mapped to the canonical member
+    assert by[_D.DAMAGE_TYPE] == ["consequential"]     # keyword-mapped to the canonical member
+
+
+def test_damage_type_synonym_maps_to_canonical() -> None:
+    # issue 0037 (Part 2): a known damage-waiver synonym maps to its canonical DamageType via the ontology
+    # skos:broader map, while an unmapped one is kept verbatim (both retained -- nothing lost).
+    clause = ct.Clause(document_reference="1", prohibits_damage=["loss of profits", "reputational harm"])
+    vals = _by_dim(_record(clause))[_D.DAMAGE_TYPE]
+    assert "consequential" in vals            # 'loss of profits' -> consequential (skos:broader synonym)
+    assert "reputational harm" in vals         # no mapping -> verbatim kept
+
+
 def test_query_constraint_record_uses_the_no_function_sentinel() -> None:
     # A3 bug fix: a QUERY has no clause function, so the query-constraint path builds a ClausePropertyRecord with
     # the NO_FUNCTION sentinel. function="" used to fail ClausePropertyRecord validation -> the query-constraint

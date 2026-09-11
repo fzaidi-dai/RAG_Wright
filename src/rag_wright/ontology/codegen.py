@@ -33,6 +33,14 @@ def render_vocab_module() -> str:
         values = ", ".join(repr(v) for v in sorted(view.closed_vocab[dim]))
         lines.append(f"    {dim!r}: frozenset({{{values}}}),")
     lines.append("}")
+    # issue 0037: ingest value synonyms (skos:broader surface -> canonical member), keyed by dimension then
+    # normalized surface term. Used by clause_kg_extractor to canonicalize an out-of-vocab extracted value.
+    lines.append("")
+    lines.append("VALUE_SYNONYMS: dict[str, dict[str, str]] = {")
+    for dim in sorted(view.value_synonyms):
+        pairs = ", ".join(f"{k!r}: {v!r}" for k, v in sorted(view.value_synonyms[dim].items()))
+        lines.append(f"    {dim!r}: {{{pairs}}},")
+    lines.append("}")
     return "\n".join(lines) + "\n"
 
 

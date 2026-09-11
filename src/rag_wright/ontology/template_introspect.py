@@ -33,7 +33,7 @@ class TemplateFieldSpec:
 
     model: str
     name: str
-    kind: str                       # scalar_enum | list_enum | optional_str | str | model_ref
+    kind: str                       # scalar_enum | list_enum | list_str | optional_str | str | model_ref
     default_token: str              # required | none | list | enum:<value> | model_none
     definition: str = ""            # the field's LOOK-FOR description (verbatim; "" for the TODO gaps)
     enum_class: str | None = None   # the Enum class name (scalar_enum / list_enum)
@@ -71,6 +71,8 @@ def _spec(model_name: str, name: str, f: typing.Any) -> TemplateFieldSpec:
         kind, default_token = "model_ref", "model_none"
     elif is_list and enum_cls is not None:
         kind, default_token = "list_enum", "list"
+    elif is_list:  # issue 0037: List[str] -- an OPEN descriptive list dim (verbatim capture, canonicalized at KG)
+        kind, default_token = "list_str", "list"
     elif enum_cls is not None:
         kind = "scalar_enum"
         default_token = f"enum:{f.default.value}" if isinstance(f.default, enum.Enum) else "required"

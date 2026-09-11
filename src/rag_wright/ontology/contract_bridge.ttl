@@ -287,6 +287,19 @@ cbr:licensee_affiliates skos:broader cbr:affiliates .
 cbr:geographic_and_activity skos:broader cbr:geographic, cbr:activity .
 cbr:price_and_terms skos:broader cbr:price, cbr:terms .
 
+# issue 0037: value SYNONYMS -- a specific surface term (NOT itself a closed-vocab member) that maps onto a
+# canonical member for INGEST canonicalization (surface -> broader). The common consequential-damages long tail
+# real contracts enumerate; any tail term NOT listed here is kept VERBATIM (never dropped to OTHER). The generator
+# emits these as VALUE_SYNONYMS keyed by the BROADER value's dimension; surface = the term's rdfs:label + altLabels.
+# NB: the broader MUST be the actual dimension value node (cbr:val_damage_type_consequential), not a bare alias.
+cbr:syn_loss_of_profits       rdfs:label "loss_of_profits" ;       skos:broader cbr:val_damage_type_consequential ; skos:altLabel "lost profits", "loss of profit" .
+cbr:syn_loss_of_use           rdfs:label "loss_of_use" ;           skos:broader cbr:val_damage_type_consequential .
+cbr:syn_business_interruption rdfs:label "business_interruption" ; skos:broader cbr:val_damage_type_consequential .
+cbr:syn_loss_of_data          rdfs:label "loss_of_data" ;          skos:broader cbr:val_damage_type_consequential .
+cbr:syn_cost_of_cover         rdfs:label "cost_of_cover" ;         skos:broader cbr:val_damage_type_consequential .
+cbr:syn_lost_revenue          rdfs:label "lost_revenue" ;          skos:broader cbr:val_damage_type_consequential ; skos:altLabel "loss of revenue", "lost business revenue" .
+cbr:syn_lost_savings          rdfs:label "lost_savings" ;          skos:broader cbr:val_damage_type_consequential ; skos:altLabel "loss of savings" .
+
 # =============================================================================
 # Structural edges (store-level, KG-3; domain Contract/Party so excluded from the Clause template)
 # =============================================================================
@@ -2153,8 +2166,7 @@ cbr:field_Clause__covers a cbr:TemplateField ;
     rdfs:label "covers" ;
     skos:definition "Subjects the clause covers (ODRL target; may be several)." ;
     cbr:default "list" ;
-    cbr:enumClass "Subject" ;
-    cbr:fieldKind "list_enum" ;
+    cbr:fieldKind "list_str" ;  # issue 0037: OPEN capture -- verbatim, canonicalized onto covered_subject at the KG boundary
     cbr:fieldOrder 9 ;
     cbr:onModel "Clause" .
 
@@ -2189,8 +2201,7 @@ cbr:field_Clause__excepts a cbr:TemplateField ;
     rdfs:label "excepts" ;
     skos:definition "Carve-outs / exceptions the clause lists (may be several)." ;
     cbr:default "list" ;
-    cbr:enumClass "ExceptionModel" ;
-    cbr:fieldKind "list_enum" ;
+    cbr:fieldKind "list_str" ;  # issue 0037: OPEN capture -- verbatim, canonicalized onto carve_out at the KG boundary
     cbr:fieldOrder 12 ;
     cbr:onModel "Clause" .
 
@@ -2354,8 +2365,7 @@ cbr:field_Clause__prohibits_damage a cbr:TemplateField ;
     rdfs:label "prohibits_damage" ;
     skos:definition "Damage types the clause waives/excludes (may be several)." ;
     cbr:default "list" ;
-    cbr:enumClass "DamageType" ;
-    cbr:fieldKind "list_enum" ;
+    cbr:fieldKind "list_str" ;  # issue 0037: OPEN capture -- verbatim, canonicalized onto damage_type at the KG boundary
     cbr:fieldOrder 29 ;
     cbr:onModel "Clause" .
 

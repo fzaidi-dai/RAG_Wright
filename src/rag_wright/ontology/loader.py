@@ -12,6 +12,7 @@ robust to IRI encoding -- it reads `rdfs:label`, never decodes an IRI.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -146,6 +147,10 @@ class ContractOntologyView:
     permission_polarity: dict[str, set[str]] = field(default_factory=dict)
     restrictive_functions: set[str] = field(default_factory=set)
     value_rollup: dict[str, dict[str, set[str]]] = field(default_factory=dict)
+    # issue 0037: ingest synonyms -- {dimension: {normalized surface term: canonical member}}. A skos:broader edge
+    # whose BROADER is a closed-vocab member but whose NARROWER is not (a specific surface term). Used at ingest to
+    # canonicalize an out-of-vocab extracted value onto its canonical member (else the value is kept verbatim).
+    value_synonyms: dict[str, dict[str, str]] = field(default_factory=dict)
 
 
 def _label(g: Graph, node) -> str:
@@ -205,18 +210,33 @@ def load_contract_ontology(path: Path | str = _TTL_PATH) -> ContractOntologyView
 
     # Value rollups: skos:broader between value individuals.
     value_rollup: dict[str, dict[str, set[str]]] = {}
+    # issue 0037: ingest synonyms -- {dim: {normalized surface: canonical member}} from a skos:broader edge whose
+    # BROADER is a closed member but whose NARROWER is not (a specific surface term); surface = narrower local-name
+    # + its skos:altLabels. (A narrower that IS a member is a query-side rollup, handled above.)
+    value_synonyms: dict[str, dict[str, str]] = {}
     for narrower, broader in g.subject_objects(SKOS.broader):
         dim = value_dim_by_node.get(str(narrower))
-        if dim is None:
+        if dim is not None:  # narrower is itself a vocab member -> a query-side value rollup
+            value_rollup.setdefault(dim, {}).setdefault(
+                value_label_by_node.get(str(narrower), ""), set()).add(
+                value_label_by_node.get(str(broader), ""))
             continue
-        value_rollup.setdefault(dim, {}).setdefault(
-            value_label_by_node.get(str(narrower), ""), set()).add(
-            value_label_by_node.get(str(broader), ""))
+        bdim = value_dim_by_node.get(str(broader))  # narrower is a surface synonym -> map to the broader member
+        bval = value_label_by_node.get(str(broader))
+        if not bdim or not bval:
+            continue
+        surfaces = {_label(g, narrower) or str(narrower).rsplit("#", 1)[-1]}
+        surfaces |= {str(a) for a in g.objects(narrower, SKOS.altLabel)}
+        for s in surfaces:
+            key = re.sub(r"[^A-Za-z0-9]+", "", s).lower()
+            if key:
+                value_synonyms.setdefault(bdim, {})[key] = bval
 
     return ContractOntologyView(
         closed_vocab=closed_vocab, multivalued=multivalued,
         function_applicable_dims=function_applicable_dims,
         permission_polarity=permission_polarity, restrictive_functions=restrictive_functions,
+        value_synonyms=value_synonyms,
         value_rollup=value_rollup)
 
 

@@ -141,6 +141,23 @@ def _normalize_enum(enum_cls: Type[Enum], v: Any, *, keyword_fallback: bool = Fa
     return v
 
 
+_OPEN_LIST_MAX_CHARS = 120  # a subject/carve-out/damage value is a short phrase; longer = leaked prose -> dropped
+
+
+def _clean_open_list(v: Any) -> list[str]:
+    """issue 0037: capture the OPEN descriptive list-dims (covered_subject / carve_out / damage_type) VERBATIM
+    rather than collapsing out-of-vocab items to OTHER (which discarded them). Coerce an enum member to its value,
+    strip, drop empties / leaked prose (too long or containing an XML tag). Canonicalization onto the closed vocab
+    happens at the assertion boundary (`clause_kg_extractor`), which keeps the verbatim phrase when nothing matches."""
+    items = v if isinstance(v, list) else [v]
+    out: list[str] = []
+    for item in items:
+        s = (str(item.value) if isinstance(item, Enum) else str(item)).strip()
+        if s and len(s) <= _OPEN_LIST_MAX_CHARS and "<" not in s:
+            out.append(s)
+    return out
+
+
 # -----------------------------------------------------------------------------
 # Enums
 # -----------------------------------------------------------------------------
@@ -609,7 +626,7 @@ class Clause(BaseModel):
         ),
     )
 
-    covers: List[Subject] = Field(
+    covers: List[str] = Field(  # issue 0037: OPEN capture -- verbatim subjects; canonicalized at the KG boundary
         default_factory=list,
         description=_d("Clause.covers"),
     )
@@ -626,7 +643,7 @@ class Clause(BaseModel):
         ),
     )
 
-    excepts: List[ExceptionModel] = Field(
+    excepts: List[str] = Field(  # issue 0037: OPEN capture -- verbatim carve-outs; canonicalized at the KG boundary
         default_factory=list,
         description=_d("Clause.excepts"),
     )
@@ -721,7 +738,7 @@ class Clause(BaseModel):
         description=_d("Clause.ld_trigger"),
     )
 
-    prohibits_damage: List[DamageType] = Field(
+    prohibits_damage: List[str] = Field(  # issue 0037: OPEN capture -- verbatim; canonicalized at the KG boundary
         default_factory=list,
         description=_d("Clause.prohibits_damage"),
     )
@@ -754,11 +771,9 @@ class Clause(BaseModel):
     @field_validator("covers", mode="before")
     @classmethod
     def _normalize_covers(cls, v: Any) -> Any:
-        """Map free-text list items onto Subject members. issue 0033: keyword fallback (covered_subject dim,
-        grounding-gated) so a quoted subject phrase maps on its canonical token instead of dropping to OTHER."""
-        if isinstance(v, list):
-            return [_normalize_enum(Subject, item, keyword_fallback=True) for item in v]
-        return _normalize_enum(Subject, v, keyword_fallback=True)
+        """issue 0037: capture covered subjects VERBATIM (open dim); canonicalized onto `Subject` at the KG boundary,
+        keeping the phrase when no vocab value matches (was: collapse to OTHER -> discarded)."""
+        return _clean_open_list(v)
 
     @field_validator("covers_party_scope", mode="before")
     @classmethod
@@ -769,12 +784,9 @@ class Clause(BaseModel):
     @field_validator("excepts", mode="before")
     @classmethod
     def _normalize_excepts(cls, v: Any) -> Any:
-        """Map free-text list items onto ExceptionModel members. issue 0033: keyword fallback so a carve-out the
-        model quoted verbatim ("Except ... indemnification obligations ...") maps to `indemnification` (carve_out
-        dim) instead of dropping to OTHER; grounding-gated (ADR-0028)."""
-        if isinstance(v, list):
-            return [_normalize_enum(ExceptionModel, item, keyword_fallback=True) for item in v]
-        return _normalize_enum(ExceptionModel, v, keyword_fallback=True)
+        """issue 0037: capture carve-outs VERBATIM (open dim); canonicalized onto `ExceptionModel` at the KG
+        boundary, keeping the phrase when no vocab value matches (was: collapse to OTHER -> discarded)."""
+        return _clean_open_list(v)
 
     @field_validator("has_assignment_consent", mode="before")
     @classmethod
@@ -869,11 +881,9 @@ class Clause(BaseModel):
     @field_validator("prohibits_damage", mode="before")
     @classmethod
     def _normalize_prohibits_damage(cls, v: Any) -> Any:
-        """Map free-text list items onto DamageType members. issue 0033: keyword fallback (damage_type dim,
-        grounding-gated) so a quoted damage phrase maps on its canonical token instead of dropping to OTHER."""
-        if isinstance(v, list):
-            return [_normalize_enum(DamageType, item, keyword_fallback=True) for item in v]
-        return _normalize_enum(DamageType, v, keyword_fallback=True)
+        """issue 0037: capture damage types VERBATIM (open dim); canonicalized onto `DamageType` (+ skos:broader
+        synonyms) at the KG boundary, keeping the phrase when nothing matches (was: collapse to OTHER -> discarded)."""
+        return _clean_open_list(v)
 
     @field_validator("prohibits_solicit", mode="before")
     @classmethod

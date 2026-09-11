@@ -38,3 +38,7 @@ VOCAB: dict[str, frozenset[str]] = {
     'termination_right': frozenset({'either_party', 'one_party'}),
     'warranty_scope': frozenset({'as_is', 'express', 'implied', 'non_reliance'}),
 }
+
+VALUE_SYNONYMS: dict[str, dict[str, str]] = {
+    'damage_type': {'businessinterruption': 'consequential', 'costofcover': 'consequential', 'lossofdata': 'consequential', 'lossofprofit': 'consequential', 'lossofprofits': 'consequential', 'lossofrevenue': 'consequential', 'lossofsavings': 'consequential', 'lossofuse': 'consequential', 'lostbusinessrevenue': 'consequential', 'lostprofits': 'consequential', 'lostrevenue': 'consequential', 'lostsavings': 'consequential'},
+}

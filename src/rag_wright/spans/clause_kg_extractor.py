@@ -22,18 +22,22 @@ This module holds the two pieces that turn a raw extraction into a gated, contra
 from __future__ import annotations
 
 import os
+import re
 from enum import Enum
 from typing import Any, Callable, Optional
 
 from rag_wright.contracts.function import canonical_function
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import (
+    CLOSED_VOCAB,
     FOLIO_CLAUSE_IRI,
     ClausePropertyRecord,
     PropertyAssertion,
     PropertyDimension,
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.ontology._generated_vocab import VALUE_SYNONYMS
+from rag_wright.ontology.clause_template import DamageType, ExceptionModel, Subject, _normalize_enum
 from rag_wright.spans.property_grounding import reground
 from rag_wright.spans.semantic_judge import asemantic_judge, semantic_judge
 from rag_wright.spans.symbolic_validation import symbolic_validate
@@ -74,12 +78,18 @@ _OPEN_STR_DIMS: dict[str, PropertyDimension] = {
 }
 # list enum field on Clause -> the (multi-valued) dimension it asserts
 _LIST_ENUM_DIMS: dict[str, PropertyDimension] = {
-    "covers": _D.COVERED_SUBJECT,
-    "excepts": _D.CARVE_OUT,
-    "prohibits_damage": _D.DAMAGE_TYPE,
     "collateral_type": _D.COLLATERAL_TYPE,  # ADR-0049 (2): Security Interest collateral (multi-valued)
     "force_majeure_event": _D.FORCE_MAJEURE_EVENT,          # ADR-0049 (2): Force Majeure events (multi-valued)
     "confidentiality_exception": _D.CONFIDENTIALITY_EXCEPTION,  # ADR-0049 (2): NDA carve-outs (multi-valued)
+}
+# issue 0037: the OPEN descriptive list-dims -- field -> (dimension, closed-vocab enum). Captured VERBATIM on the
+# Clause; canonicalized here (exact/keyword -> canonical value; else skos:broader synonym -> canonical; else the
+# verbatim phrase is KEPT, never dropped to OTHER). These dims are unbounded in symbolic_validation + lexically
+# grounded (ADR-0028), so a spurious value whose cue is absent from the text is still downgraded by the gate.
+_OPEN_LIST_DIMS: dict[str, tuple[PropertyDimension, type[Enum]]] = {
+    "covers": (_D.COVERED_SUBJECT, Subject),
+    "excepts": (_D.CARVE_OUT, ExceptionModel),
+    "prohibits_damage": (_D.DAMAGE_TYPE, DamageType),
 }
 
 
@@ -100,6 +110,25 @@ def _clean(text: Optional[str]) -> str | None:
     return stripped or None
 
 
+def _norm_key(s: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "", s).lower()
+
+
+def _open_list_value(dim: PropertyDimension, enum_cls: type[Enum], raw: Any) -> str | None:
+    """issue 0037: canonicalize one OPEN-dim item, keeping it VERBATIM when nothing matches (never OTHER-dropped).
+    Order: exact/keyword vocab match -> its canonical value; else an ontology skos:broader synonym -> the canonical
+    value (e.g. 'loss of profits' -> 'consequential' for damage_type); else the cleaned verbatim phrase."""
+    s = _clean(str(raw.value) if isinstance(raw, Enum) else str(raw))
+    if s is None:
+        return None
+    member = _normalize_enum(enum_cls, s, keyword_fallback=True)  # -> a member, or OTHER if no match
+    canon = _canonical_value(member)  # None iff OTHER
+    if canon is not None:
+        return canon
+    syn = VALUE_SYNONYMS.get(dim.value, {}).get(_norm_key(s))  # skos:broader synonym -> canonical
+    return syn if syn is not None else s  # else keep verbatim
+
+
 def clause_to_record(
     clause: Any, *, chunk_id: ChunkId, function: str, span_id: str = ""
 ) -> ClausePropertyRecord:
@@ -110,12 +139,13 @@ def clause_to_record(
     prov = Provenance.of(chunk_id)
     assertions: list[PropertyAssertion] = []
 
-    def add(dimension: PropertyDimension, value: str | None) -> None:
+    def add(dimension: PropertyDimension, value: str | None,
+            confidence: ConfidenceTag = ConfidenceTag.EXTRACTED) -> None:
         if value is None or not str(value).strip():
             return
         assertions.append(
             PropertyAssertion(
-                provenance=prov, confidence=ConfidenceTag.EXTRACTED,
+                provenance=prov, confidence=confidence,
                 dimension=dimension, value=value, span_id=span_id,
             )
         )
@@ -125,6 +155,15 @@ def clause_to_record(
     for field, dim in _LIST_ENUM_DIMS.items():
         for member in getattr(clause, field, None) or []:
             add(dim, _canonical_value(member))
+    for field, (dim, enum_cls) in _OPEN_LIST_DIMS.items():  # issue 0037: verbatim-retaining open descriptive dims
+        vocab = CLOSED_VOCAB.get(dim, frozenset())
+        for raw in getattr(clause, field, None) or []:
+            val = _open_list_value(dim, enum_cls, raw)
+            if val is None:
+                continue
+            # a canonical (in-vocab) value is EXTRACTED; a retained VERBATIM tail value is admissible only as the
+            # AMBIGUOUS "other" escape (PropertyAssertion contract) -- kept + flagged, never dropped (issue 0037).
+            add(dim, val, ConfidenceTag.EXTRACTED if val in vocab else ConfidenceTag.AMBIGUOUS)
     for field, dim in _OPEN_STR_DIMS.items():  # open-valued CUAD dims (direct string fields)
         add(dim, _clean(getattr(clause, field, None)))
 
