@@ -38,7 +38,11 @@ from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 
 DEFAULT_EXTRACT_CONCURRENCY = 4  # in-flight chunk extractions (backpressure); GPU/network-bound
 # The adopted graph-extraction model (GP-1B): granite-4.2-8b via OpenRouter; config-driven (SPEC §17).
-DEFAULT_GRAPH_EXTRACT_MODEL = os.getenv("RAG_GRAPH_EXTRACT_MODEL", "ibm-granite/granite-4.2-8b")
+# Precedence parallels models.profiles.model_for: the role-specific env (RAG_GRAPH_EXTRACT_MODEL) > the
+# all-roles knob (RAG_MODEL_ALL) > the built-in default. The caller's `graph_extract_model` arg wins over all
+# (it is passed explicitly). So `RAG_MODEL_ALL=<id>` now covers party+affiliation extraction too.
+DEFAULT_GRAPH_EXTRACT_MODEL = (
+    os.getenv("RAG_GRAPH_EXTRACT_MODEL") or os.getenv("RAG_MODEL_ALL") or "ibm-granite/granite-4.2-8b")
 
 # extract_fn: contract/chunk text -> a `ContractParties` (docling-graph output) or None when nothing extracted.
 PartyExtractFn = Callable[[str], Any]

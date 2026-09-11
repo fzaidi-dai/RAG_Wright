@@ -22,7 +22,7 @@ RAG_INGEST_CLAUSE_SAMPLES=4            # same-model 4-sample union for list reca
 
 That's the whole set. With `RAG_MODEL_ALL=qwen/qwen3.8-27b`, you **no longer need to pass `extract_model=qwen`** to `aproduction_document_ingest` / the compliance / query entrypoints — the env covers them. (You still *may* pass it per-call to override for a specific stage; it wins.)
 
-The one env that stays separate is `RAG_GRAPH_EXTRACT_MODEL` (party/affiliation) — set it explicitly as above.
+**Update:** `RAG_MODEL_ALL` now also covers **party/affiliation extraction** (it previously didn't — it stayed on granite unless `RAG_GRAPH_EXTRACT_MODEL` was set). Precedence there is now `graph_extract_model` arg > `RAG_GRAPH_EXTRACT_MODEL` > `RAG_MODEL_ALL` > granite — parallel to every other stage. So with just `RAG_MODEL_ALL=qwen…` set, party/affiliation goes to Qwen too. `RAG_GRAPH_EXTRACT_MODEL` remains available as a per-stage override, but is no longer required for "Qwen everywhere."
 
 ## Reminders
 - **`samples=4`** is the right same-model lever now that Qwen is primary: it recovers the *inconsistent* list under-enumeration that a cross-model partner would otherwise catch. Confirmed as the correct choice with `list_model=off`.
