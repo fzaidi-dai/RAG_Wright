@@ -688,26 +688,48 @@ async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any
 
 
 def clause_extraction_jobs(segments: list) -> list:
-    """EXTRACT-GUARD-1 (issue 0036): pick which spans are worth a clause-extraction call, as
-    `[(index, op, function, scores)]` (index = position in `segments`, the clause chunk_id derives from it).
+    """Group ordered `segments` into PROVISIONS and emit one clause-extraction job per provision, as
+    `[(index, anchor_op, function, scores, text)]`: `text` is the provision's merged span text (what the extractor
+    reads), `anchor_op` is its first span (the citation anchor + provenance), `index` is the provision ordinal.
 
-    ONLY `is_extractable_span` gates -- a furniture span (page number, signature/execution label, bare heading)
-    carries no clause properties, so extracting it only burns calls and mislabels the doc PARTIAL. It stays in
-    the SPAN INDEX for retrieval, so declining it is not a content loss.
+    Issue 0038: a `Clause` is a PROVISION, not a sentence. Extracting per span made 98% of spans clauses (a clause
+    per sentence) once issue 0036 removed the function gate -- the gate had been doing accidental provision
+    detection. The provision unit is the numbered section (`spans.segment.starts_new_provision`); retrieval stays
+    per span (`index_fn` is unchanged). A provision boundary is a CHUNK change OR a heading span, so granularity
+    self-adjusts: numbered sections -> provision-level; a heading-less document -> chunk-level (never per sentence,
+    never one clause per document).
 
-    The classifier FUNCTION is NOT a gate. It is a ~0.37-accuracy SOFT tag (ADR-0082: "never an ingest gate";
-    extraction is function-independent -- only the span text reaches the extractor). An earlier guard also required
-    `canonical_function(function) is not None`, which silently dropped every untagged-but-prose span (function=NONE)
-    from the typed layer, making a coin-flip tag set the SIZE of the clause KG (issue 0036). An untagged span is now
-    extracted with `function=NO_FUNCTION`, carried as the soft tag; its typed properties land like any other span's.
+    Within a provision, `is_extractable_span` still drops furniture spans (page numbers, signature/notice labels)
+    from the merged text; a provision that is ALL furniture yields no clause. The FUNCTION stays a soft tag
+    (ADR-0082, issue 0036): the provision's function is the first non-NONE among its spans, else NO_FUNCTION -- an
+    untagged provision is still extracted (function-independent extraction).
     """
-    from rag_wright.spans.segment import is_extractable_span
+    from rag_wright.contracts.function import NO_FUNCTION
+    from rag_wright.spans.segment import is_extractable_span, starts_new_provision
 
-    return [
-        (index, op, function, scores)
-        for index, (op, function, _cds, scores) in enumerate(segments)
-        if is_extractable_span(op.text)
-    ]
+    # 1) group consecutive segments into provisions (boundary = chunk change OR a provision-heading span)
+    groups: list[list] = []
+    for seg in segments:
+        op = seg[0]
+        if groups and op.parent_chunk_id == groups[-1][-1][0].parent_chunk_id and not starts_new_provision(op.text):
+            groups[-1].append(seg)
+        else:
+            groups.append([seg])
+
+    # 2) one job per provision, over its EXTRACTABLE spans only (furniture dropped; all-furniture -> no clause)
+    jobs: list = []
+    index = 0
+    for group in groups:
+        members = [seg for seg in group if is_extractable_span(seg[0].text)]
+        if not members:
+            continue
+        anchor_op = members[0][0]
+        text = "\n".join(seg[0].text.strip() for seg in members)
+        function = next((fn for (_op, fn, _cds, _sc) in members if fn and fn != NO_FUNCTION), NO_FUNCTION)
+        scores = members[0][3]
+        jobs.append((index, anchor_op, function, scores, text))
+        index += 1
+    return jobs
 
 
 async def _aextract_clause_with_retry(
@@ -858,8 +880,9 @@ def aproduction_document_ingest(
         return _attach_page_provenance(doc, chunks, segments, parse_dir)
 
     async def clauses_fn(doc: SourceDocument, segments: list) -> dict:
-        # EXTRACT-GUARD-1 (issue 0036): `is_extractable_span` alone decides what is worth a call; the classifier
-        # function is a soft tag, never a gate (ADR-0082). An untagged prose span is extracted with function=NONE.
+        # issue 0038: a Clause is a PROVISION -- clause_extraction_jobs groups spans into provisions (numbered
+        # section, else chunk) and yields one job per provision (merged text + anchor span). Retrieval stays per
+        # span (index_fn unchanged). The function is a soft tag (ADR-0082), never a gate (issue 0036).
         jobs = clause_extraction_jobs(segments)
         if not jobs:
             return {"clause_records": [], "clause_failures": []}
@@ -867,18 +890,18 @@ def aproduction_document_ingest(
         sem = asyncio.Semaphore(clause_concurrency)
 
         async def _extract(job: Any) -> Any:
-            index, op, function, scores = job
-            clause_cid = ChunkId.of(doc.source_doc_id, index, op.text)
+            index, anchor_op, function, scores, text = job  # text = merged provision; anchor_op = citation anchor
+            clause_cid = ChunkId.of(doc.source_doc_id, index, text)
             cache_file = clause_cache_dir / (hashlib.sha256(
                 f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
             if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no granite re-call
                 record = ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
             else:
                 record, reason = await _aextract_clause_with_retry(
-                    clause_extractor, chunk_id=clause_cid, function=function, text=op.text,
-                    span_id=op.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS)
+                    clause_extractor, chunk_id=clause_cid, function=function, text=text,
+                    span_id=anchor_op.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS)
                 if record is None:  # persistent failure -> record it (PARTIAL), do NOT cache, do NOT silently drop
-                    failures.append({"span_id": op.span_id, "function": function, "reason": reason[:200]})
+                    failures.append({"span_id": anchor_op.span_id, "function": function, "reason": reason[:200]})
                     return None
                 cache_file.write_text(record.model_dump_json(), encoding="utf-8")
             return record.model_copy(update={"functions": scores})

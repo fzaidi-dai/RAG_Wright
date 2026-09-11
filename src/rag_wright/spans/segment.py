@@ -119,6 +119,28 @@ def is_extractable_span(text: str) -> bool:
     return True  # has lowercase prose -> treat as a real clause (recall-first)
 
 
+# issue 0038: a span that STARTS a new numbered contract section ('2.', '2.1.', '10.5.1.'). The provision unit
+# for clause extraction is the numbered section, so a section-numbered span opens a new provision group. A
+# parenthesised letter/roman list item ('(a)', '(i)') is NOT a section (no leading DIGIT) -> stays in the group.
+_SECTION_START = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2}){0,3}\)?\.\s")
+
+
+def starts_new_provision(text: str) -> bool:
+    """issue 0038: whether a span BEGINS a new provision, used to group contiguous spans into a provision for
+    clause extraction (retrieval stays per span). Tiered, deterministic: a numbered-section start ('2.1. ...'),
+    else a bare Title-case heading, else a short ALL-CAPS heading. When a document has NONE of these, no intra-
+    chunk boundary fires and the grouping falls back to the chunk (the caller also breaks on a chunk change), so
+    a heading-less contract degrades to chunk-level clauses -- never one clause per sentence, never per document."""
+    t = text.strip()
+    if _SECTION_START.match(t):
+        return True
+    if _is_bare_heading(t):  # un-numbered but titled ('Confidentiality.', a short Title-case line)
+        return True
+    if t and not any(c.islower() for c in t) and len(_WORD_RE.findall(t)) < _MIN_ALLCAPS_WORDS:
+        return True  # a short ALL-CAPS heading ('CONFIDENTIALITY')
+    return False
+
+
 def _is_bare_heading(text: str) -> bool:
     """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
     sentence terminator. It must fold INTO its body, never stand alone: a standalone heading gets classified as

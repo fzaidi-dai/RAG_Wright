@@ -22,35 +22,71 @@ from rag_wright.subgraphs.contract_ingestion_pipeline import (
 _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
 
 
-def _span(text: str, span_index: int = 0):
+def _span(text: str, span_index: int = 0, chunk: str = "chunk"):
     from rag_wright.spans.segment import OperativeSpan
 
     return OperativeSpan(
-        span_id=f"chunk#{span_index}", parent_chunk_id="chunk", parent_okf_path="p",
+        span_id=f"{chunk}#{span_index}", parent_chunk_id=chunk, parent_okf_path="p",
         span_index=span_index, start=0, end=len(text), text=text)
 
 
-# --- issue 0036: an untagged (function=NONE) but extractable prose span must still reach extraction.
-# The classifier tag is a ~0.37-accuracy SOFT signal (ADR-0082: never an ingest gate); only `is_extractable_span`
-# (furniture) decides what is worth a clause-extraction call. ------------------------------------------------
-def test_untagged_prose_span_still_becomes_a_clause_job():
-    from rag_wright.contracts.function import NO_FUNCTION
-
+# --- issue 0038: a Clause is a PROVISION (numbered section, else chunk), NOT a sentence. clause_extraction_jobs
+# groups contiguous spans into provisions and emits one job per provision: (index, anchor_op, function, scores,
+# merged_text). Retrieval stays per span. ---------------------------------------------------------------------
+def test_numbered_sections_group_into_one_job_each():
     segments = [
-        (_span("The Supplier shall indemnify the Buyer against all losses.", 0), "Indemnification", 0, []),
-        (_span("Neither party shall be liable for indirect or consequential damages.", 1), NO_FUNCTION, 0, []),
-        (_span("By: /s/ Jane Doe", 2), NO_FUNCTION, 0, []),          # signature furniture
-        (_span("9", 3), "Cap On Liability", 0, []),                  # near-empty furniture, even if tagged
+        (_span("2.1. Supply. During the term HOVIONE shall supply the API.", 0), "Supply", 0, []),
+        (_span("The API shall meet the Product Specifications.", 1), "Supply", 0, []),   # continuation -> same provision
+        (_span("2.2. Payment. INTERSECT shall pay within 30 days.", 2), "Payment", 0, []),
+        (_span("(i) net of taxes; (ii) in USD.", 3), "Payment", 0, []),                  # list item -> same provision
     ]
     jobs = clause_extraction_jobs(segments)
-    fns = {op.span_id: fn for _i, op, fn, _s in jobs}
-    # the tagged provision AND the untagged-but-prose provision are both offered to the extractor
-    assert fns["chunk#0"] == "Indemnification"
-    assert fns["chunk#1"] == NO_FUNCTION            # carried as the soft tag, NOT dropped (was the bug)
-    # furniture is still declined regardless of its tag
-    assert "chunk#2" not in fns and "chunk#3" not in fns
-    # the job index is the position in `segments` (the clause chunk_id derives from it)
-    assert [i for i, _op, _fn, _s in jobs] == [0, 1]
+    assert len(jobs) == 2                                             # two provisions, not four sentences
+    idx0, anchor0, fn0, _s0, text0 = jobs[0]
+    assert idx0 == 0 and anchor0.span_id == "chunk#0"                 # anchor = the section heading span
+    assert "2.1. Supply." in text0 and "Product Specifications" in text0  # continuation merged in
+    assert "(i) net of taxes" in jobs[1][4]                          # list item merged into provision 2
+
+
+def test_untagged_provision_still_becomes_a_job():
+    # issue 0036 preserved: an untagged (function=NONE) provision is still extracted (function-independent).
+    from rag_wright.contracts.function import NO_FUNCTION
+
+    segments = [(_span("3.1. Term. Neither party shall be liable for indirect damages.", 0), NO_FUNCTION, 0, [])]
+    jobs = clause_extraction_jobs(segments)
+    assert len(jobs) == 1 and jobs[0][2] == NO_FUNCTION
+
+
+def test_a_chunk_change_is_a_provision_boundary():
+    # two heading-less spans in DIFFERENT chunks -> two provisions (never merged across the chunker's breaks).
+    segments = [
+        (_span("The parties agree to cooperate in good faith.", 0, chunk="cA"), "General", 0, []),
+        (_span("Each party shall bear its own costs.", 0, chunk="cB"), "General", 0, []),
+    ]
+    assert len(clause_extraction_jobs(segments)) == 2
+
+
+def test_heading_less_spans_in_one_chunk_fall_back_to_one_provision():
+    # no numbered/heading markers, same chunk -> ONE provision (chunk-level floor), never one clause per sentence.
+    segments = [
+        (_span("The parties agree to cooperate in good faith.", 0), "General", 0, []),
+        (_span("Each party shall bear its own costs.", 1), "General", 0, []),
+        (_span("This paragraph has no section number at all.", 2), "General", 0, []),
+    ]
+    jobs = clause_extraction_jobs(segments)
+    assert len(jobs) == 1
+    assert jobs[0][4].count("\n") == 2                               # all three sentences merged into one provision
+
+
+def test_furniture_is_dropped_and_an_all_furniture_provision_yields_no_clause():
+    segments = [
+        (_span("5.1. Signatures.", 0), "General", 0, []),
+        (_span("By: /s/ Jane Doe", 1), "General", 0, []),            # signature furniture (dropped from merged text)
+        (_span("9", 0, chunk="cZ"), "General", 0, []),               # a lone page number chunk -> no clause
+    ]
+    jobs = clause_extraction_jobs(segments)
+    assert len(jobs) == 1                                            # only the 5.1 provision (its furniture dropped)
+    assert jobs[0][4] == "5.1. Signatures."                          # the "By:" line is not in the merged text
 
 
 
