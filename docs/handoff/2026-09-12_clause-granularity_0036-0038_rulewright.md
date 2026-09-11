@@ -22,10 +22,23 @@ This one handoff covers **issues 0036 and 0038 together** — they're the same a
 
 **Net vs the original pre-0036 state: more complete AND better-bounded** — untagged provisions are now included (0036), and clauses are whole provisions rather than fragments (0038).
 
+## The 0038 fix, stated plainly (no ambiguity)
+
+**One `Clause` node = one provision.** A provision is a maximal run of consecutive spans, in document order, from one chunk, bounded by the next heading span. Concretely:
+
+- **Grouping.** Walk the ordered spans. Start a new provision at a **chunk change** OR a **heading span**; every following span (continuation sentences, `(i)`/`(a)` list items) folds into the current provision. Furniture spans (`is_extractable_span` == False) are dropped from the merged text; a provision that is all furniture produces **no** clause.
+- **Extraction.** The extractor runs **once per provision**, on the **concatenation of that provision's kept spans** (heading + its sentences + list items), producing one `Clause`. It never sees a lone sentence any more.
+- **`clause_id`** is the content hash of the merged provision text (so the content-hash idempotency gate still holds).
+- **`function`** on the provision clause = the **first non-NONE** classifier label among its spans, else `NONE`. Function remains a soft tag, never a gate — a `NONE` provision is still extracted. (If you scope queries by `clause.function`, note it is now the provision's representative label, not a per-sentence label.)
+- **`span_id`** = the provision's **anchor span** (its heading / first span) — the citation anchor.
+- **Retrieval is untouched:** every original sentence-level span is still embedded and indexed; only the *extraction* unit changed.
+
+That is the whole change. Everything below is consequence.
+
 ## What changed, concretely
 
 1. **Function is never a clause gate** (0036 / ADR-0101). `is_extractable_span` handles furniture only; an untagged provision still becomes a clause (function-independent extraction). We also **removed the aspect gate** (`RAG_INGEST_CLAUSE_GATE`) — an A/B measured it dropping ~18% of properties (carve-outs), so it was dead config.
-2. **A Clause is a provision** (0038 / ADR-0103). `clause_extraction_jobs` groups contiguous spans into provisions and extracts once per provision (merged section text). Boundary = **a chunk change OR a heading span** (`spans.segment.starts_new_provision`: numbered section → standalone Title heading → short ALL-CAPS heading — deterministic, no model). Furniture spans are still dropped from a provision's merged text; an all-furniture provision yields no clause.
+2. **A Clause is a provision** (0038 / ADR-0103) — see "The 0038 fix, stated plainly" above for the exact grouping/extraction/id rules. The heading detector (`spans.segment.starts_new_provision`) is deterministic and model-free: numbered section → standalone Title heading → short ALL-CAPS heading.
 3. **Retrieval is unchanged** — every span is still embedded and indexed (`index_fn` untouched). Only the *extraction unit* got coarser.
 
 ## Property precision recovers
