@@ -29,8 +29,16 @@ Live-verified on a damage-waiver clause: `IN NO EVENT ... INDIRECT, SPECIAL, INC
 
 The synonym map is ontology-driven (ADR-0066): it lives as `skos:broader` triples in `contract_bridge.ttl`, generated into `VALUE_SYNONYMS`. If you see a recurring damage/subject/carve-out surface term you want normalized onto a canonical value (rather than kept verbatim), tell us the term + its canonical target and we add one ttl line + regenerate — no code change.
 
+## Correction: `covered_subject` is CLOSED, not open (issue 0040)
+
+You were right that `covered_subject` at **354 AMBIGUOUS : 1 EXTRACTED** is unshippable, and right about why: I over-generalized in 0037 by making all three dims open. `Subject` is a narrow **conduct** vocabulary (`fraud`, `gross_negligence`, `ip_infringement`, `trademark`, `copyright`, `violation_of_law`) — it answers "what conduct survives the cap," which is meaningless for a forecasting/delivery/notices provision. Since `covers` is asked of every provision (0038 extracts whole provisions; the aspect gate is gone), the model answered with the contract's defined terms and parties (`API`, `HOVIONE`, `Agreement`), and 0037 then *served* that as AMBIGUOUS noise. 0037 revealed it; it didn't create it.
+
+Fixed: **`covered_subject` is now closed again.** An out-of-vocab value maps to `OTHER` and is **dropped** (not retained) — so the 354 noise values vanish and only real conduct matches survive as EXTRACTED. This also self-scopes the dimension (a non-conduct provision yields no `covered_subject`) without an applicability gate or function dependency, and restoring the closed vocab to the prompt nudges the model toward the conduct register. Live spot-check on the INTERSECT contract: `covered_subject` is now **empty** on forecasting/announcement provisions (was `API`/`HOVIONE`/…); a real indemnity clause still yields `fraud`/`gross_negligence` as EXTRACTED.
+
+**`carve_out` (12:186) and `damage_type` (4:8) are unchanged** — those are genuinely open, their tails are real carve-out/damage language, and 0037 stands where it's working. If you want `covered_subject` to capture conduct phrased outside the 6-member vocab, that's a vocabulary-enrichment conversation (ttl `skos` additions), not verbatim retention — tell us the recurring conduct terms and we add them.
+
+Reference: 0037 (ADR-0102) + 0040 (ADR-0102 correction), `ontology/clause_template.py::Clause.covers` (now `List[Subject]`, closed), `spans/clause_kg_extractor.py` (`covers` back in `_LIST_ENUM_DIMS`), `ontology/contract_bridge.ttl` (`covers` fieldKind `list_enum`). Full suite: 1562 passed.
+
 ## Note on model over-extraction
 
-Qwen sometimes puts a damage term into `covers` too; those are now retained as AMBIGUOUS (before: silently dropped). They're flagged and excluded from the precision view. That's an extraction-quality matter (the model mis-categorizing), separate from this fix; flag it if it's noisy for you and we'll look at the prompt.
-
-Reference: commit `b7198cf`, ADR-0102, engine issue `docs/engine-issues/0037-...`, `ontology/clause_template.py` (open fields), `spans/clause_kg_extractor.py::_open_list_value`, `ontology/contract_bridge.ttl` (skos:broader synonyms) → `_generated_vocab.VALUE_SYNONYMS`. Full suite: 1553 passed.
+Qwen sometimes puts a damage term into `covers`; with `covered_subject` now closed those non-conduct values simply drop (they don't reach the typed layer). That's the intended behavior — a mis-categorized value on a closed dimension is noise, not a novel value.

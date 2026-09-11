@@ -626,8 +626,8 @@ class Clause(BaseModel):
         ),
     )
 
-    covers: List[str] = Field(  # issue 0037: OPEN capture -- verbatim subjects; canonicalized at the KG boundary
-        default_factory=list,
+    covers: List[Subject] = Field(  # issue 0040: CLOSED conduct vocab (fraud/gross_negligence/...) -- NOT open;
+        default_factory=list,       # an out-of-vocab value ('API', a party name) is noise, dropped (not retained)
         description=_d("Clause.covers"),
     )
 
@@ -771,9 +771,15 @@ class Clause(BaseModel):
     @field_validator("covers", mode="before")
     @classmethod
     def _normalize_covers(cls, v: Any) -> Any:
-        """issue 0037: capture covered subjects VERBATIM (open dim); canonicalized onto `Subject` at the KG boundary,
-        keeping the phrase when no vocab value matches (was: collapse to OTHER -> discarded)."""
-        return _clean_open_list(v)
+        """issue 0040: `covered_subject` is a CLOSED conduct vocabulary (Subject: fraud / gross_negligence /
+        ip_infringement / ...), NOT an open descriptive dim like carve_out. Map each item onto a Subject member
+        (keyword fallback recovers a quoted conduct phrase); an out-of-vocab value -> OTHER, dropped downstream.
+        Reverts the 0037 verbatim-retention for THIS dim only: retaining 'API'/party-names as AMBIGUOUS filled it
+        with 99.7% noise (354:1) because 'what does this cover?' is asked of every provision. carve_out/damage_type
+        stay open (their tails are real)."""
+        if isinstance(v, list):
+            return [_normalize_enum(Subject, item, keyword_fallback=True) for item in v]
+        return _normalize_enum(Subject, v, keyword_fallback=True)
 
     @field_validator("covers_party_scope", mode="before")
     @classmethod

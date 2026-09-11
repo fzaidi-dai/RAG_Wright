@@ -150,9 +150,10 @@ def test_prohibits_damage_captures_verbatim():
 
 
 def test_open_list_drops_leaked_prose_and_tags():
-    # a leaked chain-of-thought (too long, or containing an XML tag) is not a value -> dropped at capture
+    # on an OPEN dim (excepts/carve_out), a leaked chain-of-thought (too long, or containing an XML tag) is not a
+    # value -> dropped at capture; a real short carve-out phrase is kept verbatim.
     long_leak = "x" * 200
-    assert t.Clause(covers=[long_leak, "<tag>bad</tag>", "the Software"]).covers == ["the Software"]
+    assert t.Clause(excepts=[long_leak, "<tag>bad</tag>", "loss of profits"]).excepts == ["loss of profits"]
 
 
 def test_normalize_enum_keyword_fallback_is_opt_in_and_longest_wins():

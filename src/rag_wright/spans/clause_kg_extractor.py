@@ -37,7 +37,7 @@ from rag_wright.contracts.property import (
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.ontology._generated_vocab import VALUE_SYNONYMS
-from rag_wright.ontology.clause_template import DamageType, ExceptionModel, Subject, _normalize_enum
+from rag_wright.ontology.clause_template import DamageType, ExceptionModel, _normalize_enum
 from rag_wright.spans.property_grounding import reground
 from rag_wright.spans.semantic_judge import asemantic_judge, semantic_judge
 from rag_wright.spans.symbolic_validation import symbolic_validate
@@ -78,6 +78,7 @@ _OPEN_STR_DIMS: dict[str, PropertyDimension] = {
 }
 # list enum field on Clause -> the (multi-valued) dimension it asserts
 _LIST_ENUM_DIMS: dict[str, PropertyDimension] = {
+    "covers": _D.COVERED_SUBJECT,  # issue 0040: CLOSED conduct vocab -> out-of-vocab drops (not verbatim-retained)
     "collateral_type": _D.COLLATERAL_TYPE,  # ADR-0049 (2): Security Interest collateral (multi-valued)
     "force_majeure_event": _D.FORCE_MAJEURE_EVENT,          # ADR-0049 (2): Force Majeure events (multi-valued)
     "confidentiality_exception": _D.CONFIDENTIALITY_EXCEPTION,  # ADR-0049 (2): NDA carve-outs (multi-valued)
@@ -87,7 +88,6 @@ _LIST_ENUM_DIMS: dict[str, PropertyDimension] = {
 # verbatim phrase is KEPT, never dropped to OTHER). These dims are unbounded in symbolic_validation + lexically
 # grounded (ADR-0028), so a spurious value whose cue is absent from the text is still downgraded by the gate.
 _OPEN_LIST_DIMS: dict[str, tuple[PropertyDimension, type[Enum]]] = {
-    "covers": (_D.COVERED_SUBJECT, Subject),
     "excepts": (_D.CARVE_OUT, ExceptionModel),
     "prohibits_damage": (_D.DAMAGE_TYPE, DamageType),
 }

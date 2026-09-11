@@ -74,18 +74,25 @@ def test_list_dimensions_expand_to_multiple_assertions() -> None:
 
 
 def test_open_list_dims_retain_verbatim_when_out_of_vocab() -> None:
-    # issue 0037: on the OPEN descriptive list-dims (covered_subject / carve_out / damage_type), an out-of-vocab
-    # value is RETAINED VERBATIM, not collapsed to OTHER and discarded. Canonical members still normalize.
+    # issue 0037: on the genuinely-OPEN descriptive list-dims (carve_out / damage_type), an out-of-vocab value is
+    # RETAINED VERBATIM, not collapsed to OTHER and discarded. Canonical members still normalize.
     clause = ct.Clause(
         document_reference="1",
-        covers=["the Software"],                                    # no Subject vocab member -> verbatim
         excepts=["confidentiality", "loss of profits"],             # canonical + out-of-vocab
         prohibits_damage=["consequential", "reputational harm"],    # canonical + genuinely unmapped -> verbatim
     )
     by = _by_dim(_record(clause))
-    assert by[_D.COVERED_SUBJECT] == ["the Software"]                       # verbatim retained
     assert sorted(by[_D.CARVE_OUT]) == ["confidentiality", "loss of profits"]  # nothing dropped
     assert "consequential" in by[_D.DAMAGE_TYPE] and "reputational harm" in by[_D.DAMAGE_TYPE]
+
+
+def test_covered_subject_is_closed_out_of_vocab_dropped() -> None:
+    # issue 0040: `covered_subject` (Subject) is a CLOSED conduct vocab, NOT open. A conduct value is kept; an
+    # out-of-vocab value ('API', a party name -- the model answering "what does this cover?") is DROPPED, not
+    # retained as AMBIGUOUS noise. Reverts 0037 for this dim only (carve_out/damage_type stay open above).
+    clause = ct.Clause(document_reference="1", covers=["fraud", "API", "HOVIONE", "gross negligence claims"])
+    by = _by_dim(_record(clause))
+    assert sorted(by.get(_D.COVERED_SUBJECT, [])) == ["fraud", "gross_negligence"]  # conduct kept; noise dropped
 
 
 def test_open_list_keyword_maps_a_quoted_phrase_at_the_boundary() -> None:

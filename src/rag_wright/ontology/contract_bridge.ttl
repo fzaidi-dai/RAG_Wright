@@ -2166,7 +2166,8 @@ cbr:field_Clause__covers a cbr:TemplateField ;
     rdfs:label "covers" ;
     skos:definition "Subjects the clause covers (ODRL target; may be several)." ;
     cbr:default "list" ;
-    cbr:fieldKind "list_str" ;  # issue 0037: OPEN capture -- verbatim, canonicalized onto covered_subject at the KG boundary
+    cbr:enumClass "Subject" ;
+    cbr:fieldKind "list_enum" ;  # issue 0040: CLOSED conduct vocab (reverted from 0037's list_str; out-of-vocab drops)
     cbr:fieldOrder 9 ;
     cbr:onModel "Clause" .
 
