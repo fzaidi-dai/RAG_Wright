@@ -1,8 +1,8 @@
-# RuleWright handoff: clause granularity — the 0036 → 0038 arc (what a Clause is now)
+# RuleWright handoff: clause granularity — the 0036 → 0039 arc (what a Clause is now)
 
-Date: 2026-09-12 · on `origin/main` (commit `779586a`) · ADR-0101 + ADR-0103 · **No API change. Fewer, better-bounded clauses; retrieval unchanged.**
+Date: 2026-09-12 · on `origin/main` (commit `1049e22`) · ADR-0101 + ADR-0103 · **No API change. Fewer, better-bounded clauses; retrieval unchanged.**
 
-This one handoff covers **issues 0036 and 0038 together** — they're the same arc: 0036 removed a bad gate, which exposed a granularity problem, which 0038 fixed. Read this as the current state; it supersedes the interim guidance that clause counts would rise to ~114.
+This one handoff covers **issues 0036, 0038 and 0039 together** — they're one arc: 0036 removed a bad gate, which exposed a granularity problem (0038: a clause became a sentence), whose fix then needed two integration corrections (0039: keep docling's section-number marker, and depth-cap so nested list items fold). Read this as the current state; it supersedes the interim guidance that clause counts would rise to ~114.
 
 ---
 
