@@ -54,6 +54,16 @@ class ModelProfile(BaseModel):
     # `BaseChatOpenAI` field for exactly this purpose.
     extra_body: Optional[dict[str, Any]] = Field(default=None)
 
+    # ADR-0100: the profile also carries HOW to REACH the model, so a model STRING fully describes both the
+    # model and its access -- the engine builds the client from this, and callers only need the string. A string
+    # can pin a backend (mix OpenRouter + self-hosted vLLM/Modal by using different strings), or leave `backend`
+    # None to fall back to the global `RAG_SERVING` default (back-compat).
+    backend: Optional[Literal["openrouter", "vllm", "ollama"]] = None  # None -> RAG_SERVING default
+    # the id the backend actually expects (OpenRouter slug / vLLM `--served-model-name`), often != our string.
+    served_model_id: Optional[str] = None  # default = model_id
+    base_url_env: Optional[str] = None  # env var holding the base_url; default per backend (VLLM_BASE_URL, ...)
+    api_key_env: Optional[str] = None   # env var holding the api key; default per backend (VLLM_API_KEY, ...)
+
 
 class ModelRole(str, Enum):
     """Which model does which job. The mapping to ids lives in config, not in capability code."""
@@ -175,6 +185,23 @@ PROFILES: dict[str, ModelProfile] = {
         structured_extra_body={"reasoning": {"enabled": True}},
         text_extra_body={"reasoning": {"enabled": False}},
         extra_body={"provider": {"sort": "throughput"}},
+    ),
+    # ADR-0100: backend-PINNED strings for the same Qwen3.8-27B -- pick the string, get the backend. `-or` routes
+    # to OpenRouter (slug qwen/qwen3.8-27b, its provider-routing + reasoning-field flags); `-modal` routes to the
+    # self-hosted vLLM server (served-name Qwen/Qwen3.8-27B, reasoning via vLLM's `chat_template_kwargs`, and NO
+    # OpenRouter `provider` routing). The product uses one string; mixing backends per stage is just two strings.
+    "qwen3.8-27b-or": ModelProfile(
+        model_id="qwen3.8-27b-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
+        structured_extra_body={"reasoning": {"enabled": True}},
+        text_extra_body={"reasoning": {"enabled": False}},
+        extra_body={"provider": {"sort": "throughput"}},
+    ),
+    "qwen3.8-27b-modal": ModelProfile(
+        model_id="qwen3.8-27b-modal", backend="vllm", served_model_id="Qwen/Qwen3.8-27B",
+        # vLLM controls Qwen3 reasoning via chat_template_kwargs (enable_thinking), not OpenRouter's reasoning
+        # field; base_url/key come from VLLM_BASE_URL/VLLM_API_KEY (override with base_url_env for a 2nd server).
+        structured_extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+        text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not

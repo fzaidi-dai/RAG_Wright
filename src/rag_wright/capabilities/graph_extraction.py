@@ -174,9 +174,9 @@ class DoclingGraphExtractor:
 def production_extract_fn(*, model_id: str = DEFAULT_GRAPH_EXTRACT_MODEL) -> PartyExtractFn:
     """Bind the real docling-graph party extractor to `(text) -> ContractParties | None` (granite via OpenRouter).
     Lazy import so the module stays import-light and hermetic (tests inject a stub instead)."""
-    from rag_wright.capabilities.dg_extraction import extract_parties, openrouter_model
+    from rag_wright.capabilities.dg_extraction import default_extraction_model, extract_parties
 
-    model = openrouter_model("graph-extract", model_id)
+    model = default_extraction_model("graph-extract", model_id)  # ADR-0100: profile-routed (RAG_SERVING/pin)
     return lambda text: extract_parties(text, model)
 
 
@@ -184,9 +184,9 @@ def aproduction_extract_fn(*, model_id: str = DEFAULT_GRAPH_EXTRACT_MODEL):
     """ASYNC-B2c (ADR-0057): the async twin of `production_extract_fn` -- party extraction on the async
     docling-graph seam (`aextract_parties`, true wall-clock deadline). Returns an async `(text) -> ContractParties
     | None`."""
-    from rag_wright.capabilities.dg_extraction import aextract_parties, openrouter_model
+    from rag_wright.capabilities.dg_extraction import aextract_parties, default_extraction_model
 
-    model = openrouter_model("graph-extract", model_id)
+    model = default_extraction_model("graph-extract", model_id)  # ADR-0100: profile-routed (RAG_SERVING/pin)
 
     async def _afn(text: str):
         return await aextract_parties(text, model)

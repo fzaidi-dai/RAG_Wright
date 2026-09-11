@@ -19,7 +19,8 @@ import os
 import random
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Optional
 
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_openai import ChatOpenAI
@@ -122,6 +123,44 @@ def _serving_config() -> dict[str, Any]:
     raise ValueError(f"RAG_SERVING must be 'openrouter' or 'vllm', got {serving!r}")
 
 
+@dataclass(frozen=True)
+class Connection:
+    """ADR-0100: how to reach a model -- resolved from its profile. `backend` is the routing target; `provider`
+    is the litellm provider name (for the extraction path); `served_model_id` is the id the backend expects."""
+
+    backend: str          # openrouter | vllm | ollama
+    provider: str         # litellm provider: openrouter | hosted_vllm | ollama
+    base_url: str
+    api_key: Optional[str]
+    served_model_id: str
+
+
+def resolve_connection(model_id: str) -> Connection:
+    """ADR-0100: resolve a model STRING to its access (backend + base_url + key + the id the backend expects),
+    from its profile. A profile that PINS a `backend` routes there (so different strings can target OpenRouter
+    vs a self-hosted vLLM/Modal server -- mix at will); an un-pinned profile falls back to the global
+    `RAG_SERVING` default (back-compat). `base_url_env`/`api_key_env` on the profile override the per-backend
+    default env vars, so two distinct vLLM/Modal deployments are just two strings."""
+    profile = profile_for(model_id)
+    backend = profile.backend or serving_backend()  # un-pinned -> RAG_SERVING
+    served = profile.served_model_id or model_id
+    if backend == "openrouter":
+        return Connection(
+            backend, "openrouter",
+            os.getenv(profile.base_url_env or "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            os.environ.get(profile.api_key_env or "OPENROUTER_API_KEY"), served)
+    if backend == "vllm":
+        return Connection(
+            backend, "hosted_vllm",
+            os.environ[profile.base_url_env or "VLLM_BASE_URL"].rstrip("/"),
+            os.getenv(profile.api_key_env or "VLLM_API_KEY", "rw-vllm-dev-key"), served)
+    if backend == "ollama":
+        return Connection(
+            backend, "ollama",
+            os.getenv(profile.base_url_env or "OLLAMA_BASE_URL", "http://localhost:11434"), None, served)
+    raise ValueError(f"unknown backend {backend!r} for model {model_id!r} (openrouter | vllm | ollama)")
+
+
 def _provider_pin() -> dict[str, Any]:
     """OpenRouter provider routing from env (measurement/benchmark only). `OPENROUTER_PROVIDER` is a
     comma-separated provider list; `OPENROUTER_ALLOW_FALLBACKS` (true/false) toggles routing beyond that list.
@@ -182,10 +221,12 @@ def build_model(model_id: str, *, temperature: float = 0.0, _client_cls: type[Ch
         params["extra_body"] = extra_body
     params.update(overrides)  # caller overrides win
     cls = _client_cls or ChatOpenAI  # resolve at call time so a monkeypatched `seam.ChatOpenAI` (tests) is honored
+    conn = resolve_connection(model_id)  # ADR-0100: backend + base_url + key + served id, from the profile
     return cls(
-        model=model_id,
+        model=conn.served_model_id,  # the id the backend expects (== model_id for an un-pinned string)
         temperature=temperature,
-        **_serving_config(),  # OpenRouter (default) or vLLM-Granite, selected by RAG_SERVING (MS1-1)
+        base_url=conn.base_url,
+        api_key=conn.api_key,
         **params,
     )
 

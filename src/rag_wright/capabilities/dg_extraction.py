@@ -264,11 +264,18 @@ def default_extraction_model(label: str = "clause-extract", model: str | None = 
     passed through) always wins; otherwise `RAG_MODEL_ALL` (the point-every-role-at-one-model knob) is honored,
     then the built-in default (`_PRODUCT_EXTRACT_DEFAULT`). So `RAG_MODEL_ALL=<id>` now genuinely covers the two
     extraction surfaces too (clause + claim), not just the `model_for` roles -- and a caller-supplied model
-    argument is unaffected."""
-    from rag_wright.models.seam import serving_backend
+    argument is unaffected.
+
+    ADR-0100: the backend/base_url/served-id come from the model string's PROFILE (`resolve_connection`), so a
+    string can pin OpenRouter or a self-hosted vLLM/Modal server -- mix per stage. An un-pinned string falls back
+    to `RAG_SERVING`, unchanged from before."""
+    from rag_wright.models.seam import resolve_connection
 
     model = model or os.getenv("RAG_MODEL_ALL") or _PRODUCT_EXTRACT_DEFAULT
-    return vllm_model(label, model) if serving_backend() == "vllm" else openrouter_model(label, model)
+    conn = resolve_connection(model)
+    return ExtractionModel(label=label, provider=conn.provider, model=conn.served_model_id,
+                           base_url=conn.base_url, api_key=conn.api_key,
+                           inference="local" if conn.backend == "ollama" else "remote")
 
 
 # INGEST-GRAPH-LATENCY: docling-graph's default per-call timeout is 300s (ReliabilityDefaults.timeout_s), which
