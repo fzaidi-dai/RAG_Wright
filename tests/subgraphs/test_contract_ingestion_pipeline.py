@@ -78,6 +78,24 @@ def test_heading_less_spans_in_one_chunk_fall_back_to_one_provision():
     assert jobs[0][4].count("\n") == 2                               # all three sentences merged into one provision
 
 
+def test_unnumbered_standalone_heading_splits_but_folded_heading_degrades_to_chunk():
+    # graceful degradation, middle tier: an un-numbered STANDALONE heading (no terminal punctuation) starts a
+    # provision; a heading-less run (or a heading folded into its body) stays one chunk-level provision. Either
+    # way the floor holds -- never one clause per sentence.
+    from rag_wright.spans.segment import starts_new_provision
+    assert starts_new_provision("Governing Law") is True          # standalone Title-case heading -> boundary
+    assert starts_new_provision("CONFIDENTIALITY") is True         # standalone ALL-CAPS heading -> boundary
+    assert starts_new_provision("Each party shall keep the other's information confidential.") is False
+    segments = [
+        (_span("Governing Law", 0), "General", 0, []),             # heading span -> its own provision start
+        (_span("This Agreement is governed by the laws of Delaware.", 1), "General", 0, []),
+        (_span("The parties submit to the courts of Delaware.", 2), "General", 0, []),
+    ]
+    jobs = clause_extraction_jobs(segments)
+    assert len(jobs) == 1                                          # heading + its two sentences = ONE provision
+    assert jobs[0][4].startswith("Governing Law")
+
+
 def test_furniture_is_dropped_and_an_all_furniture_provision_yields_no_clause():
     segments = [
         (_span("5.1. Signatures.", 0), "General", 0, []),

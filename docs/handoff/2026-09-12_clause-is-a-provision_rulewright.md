@@ -30,10 +30,10 @@ Removing the 0036 function gate left `is_extractable_span` (a furniture filter) 
 
 Granularity self-adjusts to the document:
 - numbered sections → provision-level (~the section count)
-- un-numbered but headed → provision-level (title/caps headings)
-- **no headings at all → chunk-level** (the chunk boundary always breaks a provision)
+- un-numbered → **chunk-level**, and a *standalone* heading (a Title-case/ALL-CAPS span with no trailing period, e.g. `Governing Law`) splits further where one survives segmentation. A heading folded into its body, or a one-word heading with a period (`Confidentiality.`), stays chunk-level.
+- no headings at all → **chunk-level** (the chunk boundary always breaks a provision)
 
-The floor is per-chunk — **never per-sentence, never one clause per document.** A contract that genuinely has many provisions but *no* numbers and *no* headings would under-segment to chunk-level; that's rare, and the finer paragraph fallback is deferred until a corpus needs it (we didn't build speculative machinery).
+The floor is per-chunk — **never per-sentence, never one clause per document.** Verified across 120 CUAD contracts: the un-numbered ones land at ~chunk-level (e.g. **258 spans / 15 chunks → 23 provisions**; 278/16 → 24; 54 spans/1 chunk → 3) — never per-sentence. A contract with many provisions but *no* numbers and *no* headings under-segments to chunk-level; that's rare, and the finer paragraph fallback is deferred until a corpus needs it (we didn't build speculative machinery).
 
 ## One identity change to be aware of (ADR-0025)
 
