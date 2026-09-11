@@ -49,7 +49,11 @@ Extracting whole provisions gives coherent, **mostly-EXTRACTED** properties (liv
 
 You caught that a clean end-to-end run gave **15 provisions, not 71** (and stayed ~80% AMBIGUOUS). Root cause: **docling puts a numbered provision's number in a `marker` field and strips it from `.text`** (`marker="1.1."`, `text="…"`), and the chunker/segmenter/`starts_new_provision` all read `.text` — so the section numbers were invisible and every provision fell back to the chunk boundary. Your 71 (= the number of section markers) was the right target.
 
-Fixed at the single reading-order view the chunker consumes (`content_items` → `_node_text`): an `enumerated` node with a `marker` is reconstructed as `"<marker> <text>"` (docling's `orig`), so the number is present where the detector looks. Verified end to end (deterministic, no model): a 6-marker enumerated doc → 6 provisions. This is why the 71 you cited and the 71 the cached measurement gave now agree through the production docling path. **Integrator note:** any parse path that supplies section numbers only via `marker`/`enumerated` (not inline in `text`) now works without change; a path that already keeps numbers inline is unaffected (no double-prepend).
+Fixed at the single reading-order view the chunker consumes (`content_items` → `_node_text`): an `enumerated` node with a `marker` is reconstructed as `"<marker> <text>"` (docling's `orig`), so the number is present where the detector looks.
+
+**Confirmed by a clean re-ingest** (fresh docling parse of the INTERSECT PDF, all caches bypassed → `content_items` → segmentation → grouping): **71 provisions**, matching your figure. A robustness detail worth knowing: docling versions distribute the number differently — on the engine's installed docling, 73 of the sub-numbers were already **inline** in `text` and only **7** lived in `marker`; on your docling, all 71 were in `marker` (which is why you got 15 pre-fix). The fix reconstructs the marker-only case while inline detection keeps working, so **both docling versions now converge on 71** — it's version-robust, not tuned to one parse's quirk.
+
+**Integrator note:** any parse path that supplies section numbers only via `marker`/`enumerated` (not inline in `text`) now works without change; a path that already keeps numbers inline is unaffected (no double-prepend). Reproduce deterministically (no model, no cache): fresh `parse()` → `content_items` → `segment_clause` → `clause_extraction_jobs`.
 
 ## Graceful degradation — the "no numbered sections?" case, verified
 
