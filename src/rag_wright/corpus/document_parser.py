@@ -193,6 +193,21 @@ def _prov_page_bbox(node: Any) -> tuple[Optional[int], Optional[tuple[float, flo
     return (int(page) if page is not None else None), bbox
 
 
+def _node_text(node: Any) -> str:
+    """issue 0039: a docling ENUMERATED list item (a numbered contract provision) carries its number in `marker`
+    and STRIPS it from `.text` ('1.1.' + text -> text). The chunker/segmenter/provision-detector read the text,
+    so the section number vanishes and `starts_new_provision` never fires -> every provision falls back to the
+    chunk boundary (issue 0038 grouping degrades to chunk-level). Reconstruct the original by prepending the
+    marker (docling's own `orig`), so the number is present exactly where the detector looks. Only for an
+    `enumerated` node with a marker; a bullet/letter marker is prepended too (it restores the original and does
+    NOT trip the numeric section detector, so those list items still fold into their provision)."""
+    text = getattr(node, "text", "") or ""
+    marker = (getattr(node, "marker", "") or "").strip()
+    if marker and getattr(node, "enumerated", False) and not text.lstrip().startswith(marker):
+        return f"{marker} {text}".strip()
+    return text
+
+
 def content_items(doc: Any) -> list[ContentItem]:
     """A parsed document -> its READING-ORDER chunkable content items (issue 0014). Walks `iterate_items` over the
     BODY and FURNITURE layers (so everything in `document.texts`, incl. page furniture, is covered), mapping each
@@ -208,7 +223,7 @@ def content_items(doc: Any) -> list[ContentItem]:
     def _text_item(node: Any) -> ContentItem:
         page, bbox = _prov_page_bbox(node)
         return ContentItem(label=getattr(node, "label", None), level=getattr(node, "level", None),
-                           text=getattr(node, "text", "") or "", page=page, bbox=bbox)
+                           text=_node_text(node), page=page, bbox=bbox)  # issue 0039: keep the enumerated marker
 
     if not hasattr(doc, "iterate_items"):  # a plain `.texts`-bearing view (a `_SubDocument` slice / test stub):
         return [_text_item(t) for t in getattr(doc, "texts", None) or []]  # no reading-order body, no tables
@@ -224,7 +239,7 @@ def content_items(doc: Any) -> list[ContentItem]:
         elif label == DocItemLabel.PICTURE:
             text = _picture_content_text(node, doc)
         else:
-            text = getattr(node, "text", "") or ""
+            text = _node_text(node)  # issue 0039: an enumerated list item keeps its section-number marker
         page, bbox = _prov_page_bbox(node)
         items.append(ContentItem(label=label, level=getattr(node, "level", None), text=text,
                                  page=page, bbox=bbox))

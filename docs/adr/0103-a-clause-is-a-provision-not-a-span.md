@@ -31,3 +31,9 @@ A provision-clause spans several sentences, and the tag-parse extractor reads th
 - Depends only on deterministic structure (chunk boundaries + heading regex); no model, reproducible.
 
 Full suite: 1557 passed, 44 skipped.
+
+## Follow-up: the detector must read the docling marker (issue 0039)
+
+Integration defect found by RuleWright running 0038 end to end: docling emits a numbered provision as an **enumerated list item** with the number in a `marker` field and STRIPPED from `.text` (`marker="1.1."`, `text="…"`). The chunker/segmenter/`starts_new_provision` all read the text, so on a properly-numbered contract the detector saw almost no section numbers and every provision fell back to the chunk boundary — 15 clauses where the (cached, number-retaining) measurement gave 71, and property precision stayed ~80% AMBIGUOUS (a whole chunk of unrelated provisions is the coarse-side failure of the same "wrong granularity → noise" argument).
+
+Fix (`corpus/document_parser._node_text`, used by `content_items` — the single reading-order view the chunker consumes): for an `enumerated` node with a `marker`, reconstruct `"<marker> <text>"` (docling's own `orig`), so the section number is present exactly where the detector looks. Bullet/letter markers are restored too but don't trip the numeric section detector (they fold into their provision). Verified end to end (deterministic, no model): a 6-marker enumerated doc → 6 provisions; the cached older-schema parses (no `marker`) are unaffected. Full suite: 1560 passed.

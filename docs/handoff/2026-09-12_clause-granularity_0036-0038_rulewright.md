@@ -45,6 +45,12 @@ That is the whole change. Everything below is consequence.
 
 Extracting whole provisions gives coherent, **mostly-EXTRACTED** properties (live: a Liability provision → mutuality/favorability/party_asymmetry/claim_scope EXTRACTED; ~5:2–5:5 EXTRACTED:AMBIGUOUS) — versus the **332:1122 (77% AMBIGUOUS)** you measured when every fragment was a clause. The remaining AMBIGUOUS values are the issue-0037 verbatim retentions (carve-out/subject/damage tail kept, not lost), not fragments.
 
+## Integration fix so the numbers actually reach the detector (issue 0039)
+
+You caught that a clean end-to-end run gave **15 provisions, not 71** (and stayed ~80% AMBIGUOUS). Root cause: **docling puts a numbered provision's number in a `marker` field and strips it from `.text`** (`marker="1.1."`, `text="…"`), and the chunker/segmenter/`starts_new_provision` all read `.text` — so the section numbers were invisible and every provision fell back to the chunk boundary. Your 71 (= the number of section markers) was the right target.
+
+Fixed at the single reading-order view the chunker consumes (`content_items` → `_node_text`): an `enumerated` node with a `marker` is reconstructed as `"<marker> <text>"` (docling's `orig`), so the number is present where the detector looks. Verified end to end (deterministic, no model): a 6-marker enumerated doc → 6 provisions. This is why the 71 you cited and the 71 the cached measurement gave now agree through the production docling path. **Integrator note:** any parse path that supplies section numbers only via `marker`/`enumerated` (not inline in `text`) now works without change; a path that already keeps numbers inline is unaffected (no double-prepend).
+
 ## Graceful degradation — the "no numbered sections?" case, verified
 
 Granularity self-adjusts:
@@ -62,4 +68,4 @@ The floor is per-chunk — **never per-sentence, never one clause per document.*
 ## Reproduce
 The clause-count probe is deterministic (no model): `clause_extraction_jobs(segments)` over a document's segments returns the provisions — you can reproduce the 71 exactly, and the degradation numbers on any contract.
 
-Reference: commits `6b69ab4` (0036) + `edd39ed`/`779586a` (0038), ADR-0101 + ADR-0103, `subgraphs/contract_ingestion_pipeline.py::clause_extraction_jobs`, `spans/segment.py::starts_new_provision` / `is_extractable_span`. Full suite: 1557 passed. (Issue 0037 — carve-out/damage/subject verbatim retention — is a separate handoff.)
+Reference: 0036 (ADR-0101), 0038 + 0039 (ADR-0103); `subgraphs/contract_ingestion_pipeline.py::clause_extraction_jobs`, `spans/segment.py::starts_new_provision` / `is_extractable_span`, `corpus/document_parser.py::_node_text` (the 0039 marker fix). Full suite: 1560 passed. (Issue 0037 — carve-out/damage/subject verbatim retention — is a separate handoff.)

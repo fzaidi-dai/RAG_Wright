@@ -77,6 +77,42 @@ class _FakeDoc:
         return [(it, 0) for it in self._items]
 
 
+class _ListItem:
+    """Duck-typed docling ListItem (issue 0039): an ENUMERATED numbered provision keeps its number in `marker`
+    and STRIPS it from `.text`."""
+
+    def __init__(self, text, marker, enumerated=True):
+        self.label = DocItemLabel.LIST_ITEM
+        self.text = text
+        self.marker = marker
+        self.enumerated = enumerated
+
+
+def test_content_items_reconstructs_the_enumerated_section_marker():
+    # issue 0039: docling puts '1.1.' in `marker`, not `text`; content_items must reconstruct it so the section
+    # number reaches the provision detector (else 0038 grouping degrades to chunk-level).
+    from rag_wright.spans.segment import starts_new_provision
+
+    doc = _FakeDoc([
+        _ListItem("\"API\" shall have the meaning given in the preamble.", marker="1.1."),
+        _ListItem("The price shall be as set out on Exhibit C.", marker="4.1."),
+    ])
+    items = content_items(doc)
+    texts = [it.text for it in items]
+    assert texts[0].startswith("1.1. ") and texts[1].startswith("4.1. ")   # marker restored
+    assert all(starts_new_provision(t) for t in texts)                      # detector now fires on each
+
+
+def test_content_items_does_not_double_prepend_or_touch_plain_text():
+    doc = _FakeDoc([
+        _ListItem("2.1. Supply. HOVIONE shall supply the API.", marker="2.1."),  # marker already in text -> no dup
+        _Item(DocItemLabel.TEXT, "A plain paragraph with no marker."),
+    ])
+    texts = [it.text for it in content_items(doc)]
+    assert texts[0] == "2.1. Supply. HOVIONE shall supply the API."           # not "2.1. 2.1. ..."
+    assert "A plain paragraph with no marker." in texts[1]                    # plain text untouched
+
+
 def test_document_to_text_uses_markdown_export():
     assert document_to_text(_FakeDoc([], markdown="# Title\n\nclause one")) == "# Title\n\nclause one"
 
