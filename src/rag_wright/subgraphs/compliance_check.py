@@ -922,7 +922,7 @@ async def semantic_subject_facts(parsed_doc: Any, *, source_doc: str, model: Any
     if m is None and aextract_fn is None:
         from rag_wright.capabilities.dg_extraction import default_extraction_model
 
-        m = default_extraction_model("subject-assert", "ibm-granite/granite-4.2-8b")
+        m = default_extraction_model("subject-assert")
     chunks = await subject_chunks(parsed_doc, discoverer=discoverer)
     facts = await aextract_subject_facts(chunks, source_doc=source_doc, model=m, aextract_fn=aextract_fn)
     attach_structural_locators(facts, parsed_doc)

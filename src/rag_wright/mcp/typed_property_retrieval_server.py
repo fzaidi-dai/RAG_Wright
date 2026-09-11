@@ -117,7 +117,7 @@ def production_retrieval_fn(*, k: int = 8) -> RetrievalFn:
     from rag_wright.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
     embedder = query_embedder()  # tenant-independent, built once
-    extract_model = default_extraction_model("query-constraints", "ibm-granite/granite-4.2-8b")
+    extract_model = default_extraction_model("query-constraints")
 
     async def _retrieve(store: Optional[Store], query: str) -> TypedPropertyRetrieval:
         leg = production_typed_property_retrieval(store=store, embedder=embedder, extract_model=extract_model, k=k)

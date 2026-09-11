@@ -233,7 +233,7 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     it explicitly; pass `"off"` to disable. `samples` (else env) sets same-model multi-sample union."""
     from rag_wright.capabilities.dg_extraction import aextract_clause, default_extraction_model, extract_clause
 
-    chosen = model or default_extraction_model("clause-extract", "ibm-granite/granite-4.2-8b")
+    chosen = model or default_extraction_model("clause-extract")
     if os.getenv("RAG_INGEST_CLAUSE_EXTRACTOR", "tagparse").strip().lower() == "tagparse":
         from rag_wright.spans.tag_clause_extractor import atag_extract_clause, tag_extract_clause
         model_id = chosen.model

@@ -252,15 +252,22 @@ def vllm_model(label: str, model: str) -> ExtractionModel:
     )
 
 
-def default_extraction_model(
-    label: str = "clause-extract", model: str = "ibm-granite/granite-4.2-8b"
-) -> ExtractionModel:
-    """The clause/party extraction model for the SELECTED serving backend (MS1-3, ADR-0039). The docling-graph
-    extraction is a SEPARATE model surface from the seam, so it reads the same `RAG_SERVING` switch here:
-    vLLM-Granite (product) when `RAG_SERVING=vllm`, else OpenRouter-Granite (dev/default). One env flips all
-    three LLM surfaces (chunk + extract + judge) together."""
+_PRODUCT_EXTRACT_DEFAULT = "ibm-granite/granite-4.2-8b"  # the built-in extraction default (matches _PRODUCT_LLM)
+
+
+def default_extraction_model(label: str = "clause-extract", model: str | None = None) -> ExtractionModel:
+    """The clause/party/claim extraction model for the SELECTED serving backend (MS1-3, ADR-0039). The
+    docling-graph extraction is a SEPARATE model surface from the profile seam, so it reads the same `RAG_SERVING`
+    switch here (vLLM when `RAG_SERVING=vllm`, else OpenRouter). One env flips chunk + extract + judge together.
+
+    DEFAULT resolution (parallels `models.profiles.model_for`): an EXPLICIT `model` (the caller's `extract_model`,
+    passed through) always wins; otherwise `RAG_MODEL_ALL` (the point-every-role-at-one-model knob) is honored,
+    then the built-in default (`_PRODUCT_EXTRACT_DEFAULT`). So `RAG_MODEL_ALL=<id>` now genuinely covers the two
+    extraction surfaces too (clause + claim), not just the `model_for` roles -- and a caller-supplied model
+    argument is unaffected."""
     from rag_wright.models.seam import serving_backend
 
+    model = model or os.getenv("RAG_MODEL_ALL") or _PRODUCT_EXTRACT_DEFAULT
     return vllm_model(label, model) if serving_backend() == "vllm" else openrouter_model(label, model)
 
 

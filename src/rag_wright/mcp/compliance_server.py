@@ -174,7 +174,7 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.subgraphs.compliance_check import run_ad_compliance_check
 
-    extract_model = default_extraction_model("claim-extract", "ibm-granite/granite-4.2-8b")  # tenant-indep.
+    extract_model = default_extraction_model("claim-extract")  # tenant-indep. (RAG_MODEL_ALL-aware default)
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     embedder = query_embedder()
 
