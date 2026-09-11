@@ -1,6 +1,8 @@
-# RuleWright handoff: carve-out / damage / subject values are no longer dropped to OTHER
+# RuleWright handoff: closed-vocab retention — carve-out/damage kept verbatim (0037), covered_subject closed again (0040)
 
-Date: 2026-09-12 · on `origin/main` (commit `b7198cf`) · engine issue 0037, ADR-0102 · **No API change. More values now populate the typed layer.**
+Date: 2026-09-12 · on `origin/main` (commit `1617867`) · engine issues 0037 + 0040, ADR-0102 · **No API change.**
+
+Covers **0037** (carve-out/damage/subject values no longer dropped to OTHER) and its **0040** correction (`covered_subject` is a closed conduct vocab, reverted to dropping out-of-vocab). Read the 0040 section as the current state for `covered_subject`.
 
 ---
 
