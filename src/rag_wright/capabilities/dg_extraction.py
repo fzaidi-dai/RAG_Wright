@@ -252,7 +252,7 @@ def vllm_model(label: str, model: str) -> ExtractionModel:
     )
 
 
-_PRODUCT_EXTRACT_DEFAULT = "ibm-granite/granite-4.2-8b"  # the built-in extraction default (matches _PRODUCT_LLM)
+_PRODUCT_EXTRACT_DEFAULT = "qwen3.8-27b-modal-or"  # the built-in extraction default (matches _PRODUCT_LLM)
 
 
 def default_extraction_model(label: str = "clause-extract", model: str | None = None) -> ExtractionModel:

@@ -139,9 +139,12 @@ def test_dropped_foundation_models_stay_registered_for_dev_override(monkeypatch)
     product = profiles.model_for(ModelRole.STRUCTURED_REASONING)
     assert product == profiles._PRODUCT_LLM
     assert profiles.profile_for(product).model_id == product
-    # the deepseek-flash product profile carries latency routing + reasoning-disable (ADR-0079)
-    assert profiles.profile_for(product).extra_body == {
-        "provider": {"sort": "latency"}, "reasoning": {"enabled": False}}
+    # the qwen3.8-27b-modal-or product default (ADR-0100) carries OpenRouter throughput routing on the base
+    # client, and splits reasoning by call class (on for the structured judge, off for free-text extraction).
+    prof = profiles.profile_for(product)
+    assert prof.extra_body == {"provider": {"sort": "throughput"}}
+    assert prof.structured_extra_body == {"reasoning": {"enabled": True}}
+    assert prof.text_extra_body == {"reasoning": {"enabled": False}}
 
 
 # --- the seam is the only path to with_structured_output, and extra_body is structured-only ----

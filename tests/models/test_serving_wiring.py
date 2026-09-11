@@ -33,10 +33,13 @@ def test_default_extraction_model_is_openrouter_by_default():
 
 
 def test_default_extraction_model_routes_to_vllm(monkeypatch):
+    # Post ADR-0100 the product default (`_PRODUCT_LLM`) is a backend-PINNED string (OpenRouter), so the
+    # RAG_SERVING fallback is exercised by an UN-PINNED string. An un-pinned id (granite) still follows
+    # RAG_SERVING=vllm -> the extraction model routes to the self-hosted server, back-compat with pre-0100.
     monkeypatch.setenv("RAG_SERVING", "vllm")
     monkeypatch.setenv("VLLM_BASE_URL", "https://app.modal.run/v1")
     monkeypatch.setenv("VLLM_API_KEY", "vk")
-    m = default_extraction_model("clause-extract", profiles._PRODUCT_LLM)
+    m = default_extraction_model("clause-extract", "ibm-granite/granite-4.2-8b")
     assert m.provider == "hosted_vllm" and m.base_url == "https://app.modal.run/v1" and m.api_key == "vk"
 
 

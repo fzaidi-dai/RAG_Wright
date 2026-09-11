@@ -99,7 +99,7 @@ DEFAULT_OKF_ENRICHMENT = "google/gemma-4-26b-a4b-it"
 # constants above are kept as those foundation-model profile keys + documented dev-override values. (OKF
 # signpost enrichment -- the one-time ADR-0023 Gemma exception -- is NOT wired into the ingestion/query
 # pipeline (only `okf/enrich.py`), so it too defaults to Granite; ADR-0023's Gemma choice is now vestigial.)
-_PRODUCT_LLM = "ibm-granite/granite-4.2-8b"
+_PRODUCT_LLM = "qwen3.8-27b-modal-or"  # engine-wide default (ADR-0100): Qwen via OpenRouter for now
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.STRUCTURED_REASONING: ("RAG_MODEL_STRUCTURED_REASONING", _PRODUCT_LLM),
@@ -202,6 +202,17 @@ PROFILES: dict[str, ModelProfile] = {
         # field; base_url/key come from VLLM_BASE_URL/VLLM_API_KEY (override with base_url_env for a 2nd server).
         structured_extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    ),
+    # THE ENGINE-WIDE DEFAULT (_PRODUCT_LLM / _PRODUCT_EXTRACT_DEFAULT / graph-extract default all point here).
+    # "-modal-or": the model destined for our Modal/vLLM deployment, but routed via OPENROUTER FOR NOW because the
+    # Modal cold-start/warmup is unsolved (snapshot path fails today). WHEN warmup is solved, flip THIS ONE entry's
+    # `backend` to "vllm" + `served_model_id="Qwen/Qwen3.8-27B"` + the vLLM reasoning flags, and every default
+    # follows -- no other change. Carries the OpenRouter Qwen flags (reasoning on judge / off free-text; throughput).
+    "qwen3.8-27b-modal-or": ModelProfile(
+        model_id="qwen3.8-27b-modal-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
+        structured_extra_body={"reasoning": {"enabled": True}},
+        text_extra_body={"reasoning": {"enabled": False}},
+        extra_body={"provider": {"sort": "throughput"}},
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not

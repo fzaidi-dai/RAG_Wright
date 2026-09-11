@@ -42,7 +42,7 @@ DEFAULT_EXTRACT_CONCURRENCY = 4  # in-flight chunk extractions (backpressure); G
 # all-roles knob (RAG_MODEL_ALL) > the built-in default. The caller's `graph_extract_model` arg wins over all
 # (it is passed explicitly). So `RAG_MODEL_ALL=<id>` now covers party+affiliation extraction too.
 DEFAULT_GRAPH_EXTRACT_MODEL = (
-    os.getenv("RAG_GRAPH_EXTRACT_MODEL") or os.getenv("RAG_MODEL_ALL") or "ibm-granite/granite-4.2-8b")
+    os.getenv("RAG_GRAPH_EXTRACT_MODEL") or os.getenv("RAG_MODEL_ALL") or "qwen3.8-27b-modal-or")
 
 # extract_fn: contract/chunk text -> a `ContractParties` (docling-graph output) or None when nothing extracted.
 PartyExtractFn = Callable[[str], Any]
