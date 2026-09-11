@@ -687,6 +687,29 @@ async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any
     return out
 
 
+def clause_extraction_jobs(segments: list) -> list:
+    """EXTRACT-GUARD-1 (issue 0036): pick which spans are worth a clause-extraction call, as
+    `[(index, op, function, scores)]` (index = position in `segments`, the clause chunk_id derives from it).
+
+    ONLY `is_extractable_span` gates -- a furniture span (page number, signature/execution label, bare heading)
+    carries no clause properties, so extracting it only burns calls and mislabels the doc PARTIAL. It stays in
+    the SPAN INDEX for retrieval, so declining it is not a content loss.
+
+    The classifier FUNCTION is NOT a gate. It is a ~0.37-accuracy SOFT tag (ADR-0082: "never an ingest gate";
+    extraction is function-independent -- only the span text reaches the extractor). An earlier guard also required
+    `canonical_function(function) is not None`, which silently dropped every untagged-but-prose span (function=NONE)
+    from the typed layer, making a coin-flip tag set the SIZE of the clause KG (issue 0036). An untagged span is now
+    extracted with `function=NO_FUNCTION`, carried as the soft tag; its typed properties land like any other span's.
+    """
+    from rag_wright.spans.segment import is_extractable_span
+
+    return [
+        (index, op, function, scores)
+        for index, (op, function, _cds, scores) in enumerate(segments)
+        if is_extractable_span(op.text)
+    ]
+
+
 async def _aextract_clause_with_retry(
     extractor: Any, *, chunk_id: Any, function: str, text: str, span_id: str, attempts: int
 ) -> tuple[Any, str]:
@@ -752,14 +775,13 @@ def aproduction_document_ingest(
     from rag_wright.capabilities.graph_storage import to_graph
     from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, achunk
     from rag_wright.contracts.contract_meta import ContractRecord
-    from rag_wright.contracts.function import canonical_function
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.contracts.property import ClausePropertyRecord
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.ontology.clause_template import Clause
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
-    from rag_wright.spans.segment import is_extractable_span, to_span_record
+    from rag_wright.spans.segment import to_span_record
 
     parse_dir = Path(cache_dir) / "parsed"
     chunk_dir = Path(cache_dir) / "chunks"
@@ -836,15 +858,9 @@ def aproduction_document_ingest(
         return _attach_page_provenance(doc, chunks, segments, parse_dir)
 
     async def clauses_fn(doc: SourceDocument, segments: list) -> dict:
-        # EXTRACT-GUARD-1: only typed spans that are actually CLAUSES reach extraction. A furniture span (page
-        # number, signature/execution label, bare ALL-CAPS heading) carries no clause properties, so extracting it
-        # only hard-fails docling-graph ("No valid JSON") + burns retries and mislabels the doc PARTIAL. It stays
-        # in the SPAN INDEX for retrieval (index_spans is a separate branch), so this is not a content loss.
-        jobs = [
-            (index, op, canonical_function(function), scores)
-            for index, (op, function, _cds, scores) in enumerate(segments)
-            if canonical_function(function) is not None and is_extractable_span(op.text)
-        ]
+        # EXTRACT-GUARD-1 (issue 0036): `is_extractable_span` alone decides what is worth a call; the classifier
+        # function is a soft tag, never a gate (ADR-0082). An untagged prose span is extracted with function=NONE.
+        jobs = clause_extraction_jobs(segments)
         if not jobs:
             return {"clause_records": [], "clause_failures": []}
         failures: list[dict] = []

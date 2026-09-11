@@ -197,6 +197,34 @@ def test_real_clauses_are_extractable_recall_first():
         assert is_extractable_span(clause) is True, clause
 
 
+# issue 0036 (task 2): tighten the furniture filter with more DETERMINISTIC, high-precision non-provision forms --
+# table-of-contents dotted-leader lines and notice-block contact-label lines. Recall-first still holds: each rule
+# targets a form that is furniture in essentially every contract, and the anchoring keeps operative prose out.
+def test_toc_dotted_leader_lines_are_not_extractable():
+    for toc in (
+        "Limitation of Liability ................................ 12",
+        "ARTICLE 5   INDEMNIFICATION.....46",
+        "Section 3.1 Payment Terms . . . . . . . . 7",
+    ):
+        assert is_extractable_span(toc) is False, toc
+
+
+def test_notice_block_contact_labels_are_not_extractable():
+    for contact in ("Attention: General Counsel", "Attn: Legal Department", "Facsimile: (212) 555-0100",
+                    "Fax: (212) 555-0100", "Email: legal@acme.com", "Telephone: +1 415 555 0123"):
+        assert is_extractable_span(contact) is False, contact
+
+
+def test_tightening_does_not_drop_provisions_that_mention_contact_or_dots():
+    # a provision that MENTIONS notices/contact or contains dots is NOT the furniture form -> still extractable.
+    for clause in (
+        "All notices shall be sent to the following address:",             # notice CLAUSE, not the address line
+        "The Supplier shall provide telephone support during business hours.",
+        "Payment is due within 30 days (see Section 3.1).",                # dots in decimals, not a TOC leader
+    ):
+        assert is_extractable_span(clause) is True, clause
+
+
 # --- issue 0032: to_span_record carries page provenance from the OperativeSpan ------------------------------
 
 def test_to_span_record_carries_pages_and_bbox_from_op():

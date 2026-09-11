@@ -19,8 +19,6 @@ import asyncio
 import os
 from typing import Any
 
-from pydantic import BaseModel
-
 from rag_wright.models.profiles import DEFAULT_GENERAL
 from rag_wright.models.tag_structured import _classify, build_tag_structured
 from rag_wright.ontology.clause_template import Clause
@@ -48,47 +46,11 @@ _GROUP_PROMPT = (
     "value verbatim from the clause.\n\nCLAUSE:\n{text}"
 )
 
-# The aspect gate: a coarse "which of these aspects does the clause touch?" pass that prunes clearly-irrelevant
-# groups (cost + noise). RECALL-BIASED (include-if-plausible) so it is NOT a load-bearing exclusion gate -- a
-# false include is cheap (an empty group pass) and the grounding judge drops any stray value; a false exclude is
-# the only harm, so the prompt errs toward inclusion. `identity_scope` is cross-cutting and ALWAYS run.
-_ALWAYS = "identity_scope"
-_ASPECT_DESC: dict[str, str] = {
-    "identity_scope": "the clause's core nature: its type, what/who it covers, mutuality, favorability",
-    "liability_damages": "caps on liability, damages waivers/exclusions, liquidated damages, claim scope",
-    "temporal_termination": "time limits/term/duration, renewal, termination rights, conditions/triggers",
-    "ip_licensing": "IP ownership, license grants, exclusivity, right-of-first, MFN, royalties",
-    "consents_control": "consent/notice for assignment or change-of-control, escrow release triggers",
-    "governing_law_dispute": "governing law / jurisdiction, and how disputes are resolved (litigation, "
-                             "arbitration, mediation)",
-    "restrictions_duties": "procedural duties, restrictions, non-solicit, warranty scope, audit rights, "
-                           "minimum commitments, collateral",
-    "exceptions": "carve-outs / exceptions to obligations (e.g. confidentiality or force-majeure exceptions)",
-}
-
-
-class _AspectGate(BaseModel):
-    aspects: list[str] = []
-
-
-def _aspect_prompt(text: str) -> str:
-    catalog = "\n".join(f"- {k}: {v}" for k, v in _ASPECT_DESC.items() if k != _ALWAYS)
-    return ("Which of these ASPECTS does the following contract clause touch on? List EVERY aspect that plausibly "
-            "applies -- when unsure, INCLUDE it (over-including is fine, missing one is not).\n\n"
-            f"Aspects:\n{catalog}\n\nCLAUSE:\n{text}")
-
-
-async def aselect_aspects(text: str, model_id: str, *, temperature: float = 0.0) -> set[str]:
-    """Coarse recall-biased aspect gate -> the group keys to extract (always incl. `identity_scope`). On any
-    failure, degrade to ALL groups (never silently narrow)."""
-    valid = set(CLAUSE_GROUPS)
-    try:
-        gate = await build_tag_structured(
-            model_id, _AspectGate, temperature=temperature, label="aspect-gate").ainvoke(_aspect_prompt(text))
-        chosen = {a.strip() for a in gate.aspects} & valid
-        return chosen | {_ALWAYS} if chosen else valid  # empty/garbled -> don't narrow
-    except Exception:  # noqa: BLE001 - gate failure must never DROP groups; fall back to extracting all
-        return valid
+# NOTE (issue 0036): there was a coarse "aspect gate" here that first asked the model which groups a clause touches
+# and skipped the rest, to cut cost. A live A/B on Qwen (the current default) measured it dropping ~18% of the
+# properties full extraction found -- concentrated in `excepts` (carve-outs) -- so it never earned its keep on any
+# model we run. It was removed rather than kept off-by-default: every group always runs, and the deterministic
+# grounding judge (ADR-0028) drops any stray value. Cost is reduced elsewhere (`is_extractable_span`; span batching).
 
 
 import re as _re
@@ -164,12 +126,12 @@ def _group_has_list(fields: tuple[str, ...]) -> bool:
 
 
 async def atag_extract_clause(text: str, model_id: str, *, document_reference: str = "",
-                              temperature: float = 0.0, gate: bool = True, samples: int | None = None,
+                              temperature: float = 0.0, samples: int | None = None,
                               list_model: str | None = None) -> Clause:
-    """Extract a clause's typed properties as ONE `Clause`, function-independently: thematic tag-parse passes over
-    the `Clause` schema, merged. When `gate` is set (default), a coarse recall-biased aspect gate first prunes
-    clearly-irrelevant groups; a skipped group defaults. Each pass degrades on its own (build_tag_structured
-    re-asks then omits-to-default); a failing pass leaves its group at defaults (never fails the whole clause).
+    """Extract a clause's typed properties as ONE `Clause`, function-independently: EVERY thematic tag-parse pass
+    over the `Clause` schema, merged. Each pass degrades on its own (build_tag_structured re-asks then
+    omits-to-default); a failing pass leaves its group at defaults (never fails the whole clause). (The former
+    aspect gate that pruned groups was removed in issue 0036 -- it measured a ~18% property-recall loss on Qwen.)
 
     `samples` (env `RAG_INGEST_CLAUSE_SAMPLES`, default 1) runs each group N times and UNIONs the LIST-valued
     fields across samples -- the inference-time fix for granite's list under-enumeration.
@@ -186,7 +148,6 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
     _raw = list_model if list_model is not None else os.environ.get("RAG_INGEST_LIST_MODEL", DEFAULT_GENERAL)
     lm = None if not _raw or str(_raw).strip().lower() in ("none", "off") else str(_raw).strip()
     stemp = temperature if n == 1 else max(temperature, 0.5)  # diversity across samples for the union to help
-    active = await aselect_aspects(text, model_id, temperature=temperature) if gate else set(CLAUSE_GROUPS)
 
     async def _pass(fields: tuple[str, ...], model: str) -> Clause | None:
         try:
@@ -196,16 +157,14 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
         except Exception:  # noqa: BLE001 - a persistently-failing pass degrades to defaults, not a hard error
             return None
 
-    async def _group(group: str, fields: tuple[str, ...]) -> dict[str, Any]:
-        if group not in active:
-            return {}
+    async def _group(fields: tuple[str, ...]) -> dict[str, Any]:
         models = [model_id]  # main model first so its scalar values win 'first informative'
         if lm and lm != model_id and _group_has_list(fields):
             models.append(lm)  # cross-model union, LIST-bearing groups only (cost-scoped)
         runs = [r for m in models for r in await asyncio.gather(*[_pass(fields, m) for _ in range(n)])]
         return _combine_group(runs, fields)
 
-    dicts = await asyncio.gather(*[_group(g, f) for g, f in CLAUSE_GROUPS.items()])
+    dicts = await asyncio.gather(*[_group(f) for f in CLAUSE_GROUPS.values()])
     merged: dict[str, Any] = {}
     for d in dicts:
         merged.update(d)
@@ -214,9 +173,9 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
 
 
 def tag_extract_clause(text: str, model_id: str, *, document_reference: str = "",
-                       temperature: float = 0.0, gate: bool = True, samples: int | None = None,
+                       temperature: float = 0.0, samples: int | None = None,
                        list_model: str | None = None) -> Clause:
     """Sync wrapper over `atag_extract_clause` (parity with the docling-graph `extract_clause`)."""
     return asyncio.run(atag_extract_clause(
-        text, model_id, document_reference=document_reference, temperature=temperature, gate=gate,
+        text, model_id, document_reference=document_reference, temperature=temperature,
         samples=samples, list_model=list_model))

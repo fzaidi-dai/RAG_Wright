@@ -225,8 +225,8 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     server-side-JSON path, kept for rollback). BOTH feed the SAME downstream (adapt to ClausePropertyRecord +
     ADR-0028 grounding + ADR-0040 symbolic gate). tagparse is the default because docling hard-crashes ~89% of
     real CUAD clauses (grounded A/B, 45 clauses: docling success 0.11 vs tagparse 1.00). NOTE: tagparse issues one
-    LLM call per thematic GROUP (~8/clause) vs docling's ~1; the aspect gate (RAG_INGEST_CLAUSE_GATE=1) is the
-    cost lever once a reliable gate model exists.
+    LLM call per thematic GROUP (~8/clause) vs docling's ~1; cost is reduced via `is_extractable_span` (fewer spans)
+    and span batching, NOT by pruning groups (the aspect gate was removed in issue 0036: a ~18% property-recall loss).
 
     `list_model` (ARGUMENT; else env `RAG_INGEST_LIST_MODEL`; else the profile general model) is the SECOND model
     for the cross-model list union on list-bearing groups -- exposed here (like `model`) so the caller configures
@@ -237,14 +237,9 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
     if os.getenv("RAG_INGEST_CLAUSE_EXTRACTOR", "tagparse").strip().lower() == "tagparse":
         from rag_wright.spans.tag_clause_extractor import atag_extract_clause, tag_extract_clause
         model_id = chosen.model
-        # Aspect gate OFF by default: granite UNDER-selects aspects (same conservative weakness as its function
-        # classification), so gating drops groups and misses fields. Run all groups + rely on grounding; the gate
-        # is opt-in (RAG_INGEST_CLAUSE_GATE=1) for a stronger gate model / cost experiments.
-        gate = os.getenv("RAG_INGEST_CLAUSE_GATE", "0").strip() == "1"
         return DGClausePropertyExtractor(
-            lambda text: tag_extract_clause(text, model_id, gate=gate, list_model=list_model, samples=samples),
-            aextract_fn=lambda text: atag_extract_clause(text, model_id, gate=gate, list_model=list_model,
-                                                         samples=samples),
+            lambda text: tag_extract_clause(text, model_id, list_model=list_model, samples=samples),
+            aextract_fn=lambda text: atag_extract_clause(text, model_id, list_model=list_model, samples=samples),
             semantic_judge_fn=semantic_judge_fn, asemantic_judge_fn=asemantic_judge_fn,
         )
     return DGClausePropertyExtractor(

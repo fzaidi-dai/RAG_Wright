@@ -39,7 +39,7 @@ async def test_cross_model_union_runs_the_list_model_only_on_list_bearing_groups
         return _R()
 
     monkeypatch.setattr(tce, "build_tag_structured", fake_build)
-    await atag_extract_clause("txt", "granite", gate=False, list_model="gemma")
+    await atag_extract_clause("txt", "granite", list_model="gemma")
     list_group_fieldsets = {frozenset(f) for f in CLAUSE_GROUPS.values() if _group_has_list(f)}
     all_fieldsets = {frozenset(f) for f in CLAUSE_GROUPS.values()}
     assert {fs for m, fs in calls if m == "gemma"} == list_group_fieldsets  # gemma: list-bearing groups only
@@ -57,7 +57,7 @@ async def test_list_model_off_argument_disables_cross_model(monkeypatch):
 
     monkeypatch.setattr(tce, "build_tag_structured",
                         lambda model, schema, *, fields=None, **kw: (calls.append(model) or _R()))
-    await atag_extract_clause("txt", "granite", gate=False, list_model="off")
+    await atag_extract_clause("txt", "granite", list_model="off")
     assert set(calls) == {"granite"}  # 'off' argument disables the second model entirely
 
 
@@ -109,20 +109,11 @@ async def test_atag_extract_clause_merges_the_group_passes(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_aspect_gate_prunes_unselected_groups(monkeypatch):
-    # the gate selects only liability_damages -> restrictions_duties (governed_by) and temporal (bounded_by) are
-    # SKIPPED, so those fields stay default even though the canned reply carries their tags. identity_scope always runs.
-    _stub_astream(monkeypatch, "<aspects>liability_damages</aspects>\n" + _CANNED)
-    c = await atag_extract_clause("txt", "any/model", gate=True)
-    assert c.caps is not None and c.caps.cap_quantum == "12 months of fees"   # selected group extracted
-    assert c.has_mutuality is Mutuality.MUTUAL                                  # identity_scope always runs
-    assert c.bounded_by is None and c.governed_by is None                       # unselected groups pruned
-
-
-@pytest.mark.asyncio
-async def test_gate_false_runs_every_group(monkeypatch):
-    _stub_astream(monkeypatch, _CANNED)  # no <aspects> tag
-    c = await atag_extract_clause("txt", "any/model", gate=False)
+async def test_every_group_always_runs(monkeypatch):
+    # issue 0036: the aspect gate was removed -> every thematic group always runs (no pruning), so a clause that
+    # touches several themes gets all their fields. (The gate measured a ~18% property-recall loss on Qwen.)
+    _stub_astream(monkeypatch, _CANNED)
+    c = await atag_extract_clause("txt", "any/model")
     assert c.bounded_by is not None and c.governed_by is not None               # nothing pruned
 
 
@@ -132,7 +123,7 @@ async def test_a_partial_group_degrades_but_others_survive(monkeypatch):
     # every other group still extracts.
     bad = _CANNED.replace("<jurisdiction_name>Delaware</jurisdiction_name>\n", "")
     _stub_astream(monkeypatch, bad)
-    c = await atag_extract_clause("txt", "any/model", gate=False)
+    c = await atag_extract_clause("txt", "any/model")
     assert c.governed_by is None                                   # unbuildable optional nested -> omitted
     assert c.has_mutuality is Mutuality.MUTUAL and c.caps is not None  # unaffected groups intact
 
@@ -144,6 +135,6 @@ async def test_value_sanity_guard_drops_leaked_reasoning(monkeypatch):
     leak = ("<clause_type>Cap on Liability</clause_type>\n"
             "<ld_trigger>Now write the tags: <has_claim_scope>first_party</has_claim_scope> etc.</ld_trigger>")
     _stub_astream(monkeypatch, leak)
-    c = await atag_extract_clause("txt", "any/model", gate=False)
+    c = await atag_extract_clause("txt", "any/model")
     assert c.ld_trigger is None            # garbage (contains <tags>) dropped
     assert c.clause_type == "Cap on Liability"  # clean field kept

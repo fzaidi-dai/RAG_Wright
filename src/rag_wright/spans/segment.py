@@ -82,10 +82,18 @@ def _table_block_ranges(body: str) -> list[tuple[int, int]]:
 _MIN_CLAUSE_ALPHA = 6  # fewer alphabetic chars than this = a page number / "By:" / "9" -- not a clause
 _MIN_ALLCAPS_WORDS = 6  # a short ALL-CAPS span is a label/heading ("EXHIBIT C"); a long one may be a real clause
 _WORD_RE = re.compile(r"[A-Za-z]{2,}")
-# A signature / execution-block label line -- universal, domain-neutral contract furniture ("By: /s/ ...",
-# "Name:", "Title:", "Attest:", "Its:", "Date:"). The trailing ':' makes it a LABEL, not a provision that merely
-# starts with the word (e.g. "By signing below, the parties agree ..." does not match).
-_FURNITURE_LINE = re.compile(r"^\s*(?:by|name|title|attest|witness|its|date|signature)\s*:", re.IGNORECASE)
+# A signature / execution-block or notice-block label line -- universal, domain-neutral contract furniture
+# ("By: /s/ ...", "Name:", "Title:", "Attest:", "Its:", "Date:"; and the notice-block contacts "Attention:",
+# "Fax:", "Email:", "Telephone:"). The trailing ':' anchored right after the leading word makes it a LABEL, not a
+# provision that merely mentions the word (e.g. "By signing below, the parties agree ..." and "All notices shall
+# be sent to the following address:" both start with other words, so neither matches). issue 0036 adds the notice
+# contacts; a bare street/city address line has no such label and stays recall-first (kept -> a thin clause).
+_FURNITURE_LINE = re.compile(
+    r"^\s*(?:by|name|title|attest|witness|its|date|signature"
+    r"|attention|attn|facsimile|fax|e-?mail|telephone|tel|phone)\s*:", re.IGNORECASE)
+# A table-of-contents entry: a dotted leader (>=3 dots, optionally spaced) running to a trailing page number.
+# High-precision furniture; a decimal like "Section 3.1" or "(see Section 3.1)." has no long leader-to-page run.
+_TOC_LEADER = re.compile(r"(?:\.\s*){3,}\d+\s*$")
 
 
 def is_extractable_span(text: str) -> bool:
@@ -102,7 +110,9 @@ def is_extractable_span(text: str) -> bool:
     t = text.strip()
     if sum(c.isalpha() for c in t) < _MIN_CLAUSE_ALPHA:  # near-empty: page numbers, "By:", pure digits/punct
         return False
-    if _FURNITURE_LINE.match(t):  # a signature/execution-block label line, not a provision
+    if _FURNITURE_LINE.match(t):  # a signature/execution-block or notice-block contact-label line, not a provision
+        return False
+    if _TOC_LEADER.search(t):  # a table-of-contents dotted-leader-to-page-number line, not a provision
         return False
     if not any(c.islower() for c in t):  # ALL-CAPS: a label/heading unless it is a long (capitalised) clause
         return len(_WORD_RE.findall(t)) >= _MIN_ALLCAPS_WORDS

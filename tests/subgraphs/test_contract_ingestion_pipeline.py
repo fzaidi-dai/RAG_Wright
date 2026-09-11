@@ -13,12 +13,44 @@ from langgraph.types import RetryPolicy
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
+    clause_extraction_jobs,
     per_contract_graph_extraction,
     seed_chunk_cache,
     seed_party_cache,
 )
 
 _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
+
+
+def _span(text: str, span_index: int = 0):
+    from rag_wright.spans.segment import OperativeSpan
+
+    return OperativeSpan(
+        span_id=f"chunk#{span_index}", parent_chunk_id="chunk", parent_okf_path="p",
+        span_index=span_index, start=0, end=len(text), text=text)
+
+
+# --- issue 0036: an untagged (function=NONE) but extractable prose span must still reach extraction.
+# The classifier tag is a ~0.37-accuracy SOFT signal (ADR-0082: never an ingest gate); only `is_extractable_span`
+# (furniture) decides what is worth a clause-extraction call. ------------------------------------------------
+def test_untagged_prose_span_still_becomes_a_clause_job():
+    from rag_wright.contracts.function import NO_FUNCTION
+
+    segments = [
+        (_span("The Supplier shall indemnify the Buyer against all losses.", 0), "Indemnification", 0, []),
+        (_span("Neither party shall be liable for indirect or consequential damages.", 1), NO_FUNCTION, 0, []),
+        (_span("By: /s/ Jane Doe", 2), NO_FUNCTION, 0, []),          # signature furniture
+        (_span("9", 3), "Cap On Liability", 0, []),                  # near-empty furniture, even if tagged
+    ]
+    jobs = clause_extraction_jobs(segments)
+    fns = {op.span_id: fn for _i, op, fn, _s in jobs}
+    # the tagged provision AND the untagged-but-prose provision are both offered to the extractor
+    assert fns["chunk#0"] == "Indemnification"
+    assert fns["chunk#1"] == NO_FUNCTION            # carried as the soft tag, NOT dropped (was the bug)
+    # furniture is still declined regardless of its tag
+    assert "chunk#2" not in fns and "chunk#3" not in fns
+    # the job index is the position in `segments` (the clause chunk_id derives from it)
+    assert [i for i, _op, _fn, _s in jobs] == [0, 1]
 
 
 
