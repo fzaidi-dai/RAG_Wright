@@ -575,6 +575,29 @@ class ArcadeDBStore:
             f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({fused}){where} LIMIT {k}"
         )
 
+    def span_dense_search(
+        self,
+        dense_query: list[float],
+        *,
+        k: int,
+        documents: list[str] | None = None,
+    ) -> list[dict]:
+        """Issue 0041 (dense floor): PURE-DENSE nearest-neighbour search over the `Span` dense index -- the dense
+        leg of `span_hybrid_search` WITHOUT the sparse leg or RRF fusion, so a strong semantic match a short
+        common-token query's sparse leg would crowd out of the fused pool is still recoverable. Returns the same
+        row shape as `span_hybrid_search` (span_id + parent pointers + function), in descending cosine order.
+        `documents` scopes to a workspace exactly as the hybrid search does (`contract_id IN [...]`, with the
+        larger scoped pool before the cut); `documents=[]` is scope-to-nothing."""
+        if documents is not None and not documents:
+            return []
+        leg_k = max(k, SCOPED_CANDIDATE_POOL if documents else DEFAULT_CANDIDATE_POOL)
+        dense = _float_array(dense_query)
+        neighbours = f"SELECT expand(`vector.neighbors`('{_SPAN_DENSE_INDEX}', {dense}, {leg_k}))"
+        where = f" WHERE contract_id IN {_str_array(documents)}" if documents else ""
+        return self._query(
+            f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({neighbours}){where} LIMIT {k}"
+        )
+
     def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:
         """The typed property assertions on each span, joined via the ADR-0025 `span_id` key that the clause
         KG persists on every property edge (`edge.span_id == Span.span_id`; SPAN-CLAUSE-RERANK). This is the
