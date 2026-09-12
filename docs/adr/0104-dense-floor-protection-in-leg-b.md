@@ -24,7 +24,18 @@ RuleWright observed that passing `clause_type` explicitly changed the retrieved 
 
 - A strong dense match can no longer be silently dropped by RRF crowding on a short common-token query — the failure mode that made an answerable question return "not found."
 - Conservative by construction: only the non-matching tail is displaced, and only when a floor span is missing; the working queries are untouched at `dense_floor_n=3`.
-- `dense_floor_n` is the tuning knob, to be set from a corpus measurement (the 5 working queries must not regress). The 7-query before/after runs on the live post-0040 corpus (RuleWright's, or a fresh ingest) since it needs real span vectors; the `vector.neighbors` SQL is already live-validated and the mechanism is hermetically tested.
-- The server-side RRF is left as-is (not reweighted / not moved client-side) — a smaller, lower-risk change than re-architecting the fusion, and it leaves the fusion ordering that works on 5/7 queries intact.
+- `dense_floor_n` is the tuning knob. The server-side RRF is left as-is (not reweighted / not moved client-side) — a smaller, lower-risk change than re-architecting the fusion, and it leaves the fusion ordering that works on 5/7 queries intact.
 
 Full suite: 1565 passed, 44 skipped.
+
+## Verified (RuleWright, engine `8013b40`, post-0040 corpus, 195 spans / 70 clauses)
+
+The exact 7-query probe, `dense_floor_n=3`:
+- **dense #1 reaches the returned set on 7/7** (the payment-terms case: absent-from-top-30 → rank 6 at k=8; the liability cap: rank 11 → rank 8).
+- **the 5 working queries are unchanged** (ranks 1, 4, 2, 2, 2, identical before/after, at both k=8 and k=30).
+- **deterministic**: 4 consecutive runs return the cap span every time at position 8.
+- `dense_floor_n=3` confirmed as the right default on this corpus (the floor engages only where a span would otherwise be cut). Ask #3 closed (a caller's `clause_type` is judge-only, as documented).
+
+## Follow-on: position, not membership (reported, not fixed)
+
+`_select_with_dense_floor` preserves the fused order and only guarantees *membership*, so a floor-reserved span (one the fusion buried) lands at the **end** of the returned `k` — the weakest position for a generator that reads evidence in order. End to end, the answerable question now answers correctly most of the time (2/3 vs 0/3 before), but the residual abstention is the generator sometimes not using an answer span that sits last. Placing a floor span at its *dense* rank would help, but that lets dense override the fused **order** (more than membership) for every query — a retrieval-semantics change RuleWright deliberately reported rather than requested. Left as a decision, not made here: the current contract is "fusion decides order, dense guarantees membership," and the residual is downstream of retrieval (generator reading order).
