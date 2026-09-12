@@ -16,11 +16,11 @@ The **top-`dense_floor_n` pure-dense spans are guaranteed into the returned `k`.
 - `property_boosted_retrieval` unions the top-`dense_floor_n` dense spans into the pool, then reserves slots so each survives the cut to `k` — a non-floor span is skipped only when the remaining slots are needed for a floor span not yet included. **Constraint matches are never displaced** (they sit high in the rerank, reached before slots run low); only the weak, non-matching tail is.
 - **`dense_floor_n` defaults to 3**, conservative: it recovers the buried dense match without disturbing the 5/7 queries that already work (where dense #1 is in top-k, nothing is reserved). `dense_floor_n=0` disables it.
 
-## What we validated, and what we need you to validate
+## Validated (by RuleWright, engine `8013b40`, post-0040 corpus)
 
-- **Live-validated** here: `span_dense_search` runs correctly against a real ArcadeDB span index (correct rows, dense order).
-- **Hermetically tested**: a buried dense span is guaranteed into `k`; a working query is unchanged; a constraint match is never displaced.
-- **Not run here**: the 7-query before/after on the post-0040 corpus — it needs real span vectors, and our only live DB is a pre-0040 build whose schema predates some edge types. **Please run your exact 7-query probe** (the one in the issue) against your post-0040 corpus, `dense_floor_n=3`, and confirm: (a) the dense-#1 span reaches the returned `k` on all 7, and (b) the 5 currently-working queries are unchanged. `dense_floor_n` is the knob — if a working query regresses, lower it; if a failing query needs its 2nd/3rd dense span too, raise it. Send us the table and we'll set the default from it.
+The exact 7-query probe at `dense_floor_n=3` confirmed both conditions: **dense #1 reaches the returned set on 7/7** (payment-terms: absent-from-top-30 → rank 6 at k=8; liability cap: rank 11 → 8), and the **5 working queries are unchanged** at both k=8 and k=30. Retrieval is deterministic (4/4 runs). `dense_floor_n=3` and `k=8` are the confirmed defaults. (Engine-side: `span_dense_search` live-validated against real ArcadeDB; the mechanism is hermetically tested.)
+
+**Do NOT re-order floor-protected spans, and do NOT raise `k`.** A floor-reserved span lands last in `k`, and the first hypothesis was that its end position hurt the generator. RuleWright measured it and rejected that: at k=8 the liability answer rate is 3/3 with the span *last*, at k=30 it sits *earlier* yet the rate *falls* to 1/3 — the dominant factor is the **volume of competing evidence**, not position, and it's question-specific (liability 7/10; "which law"/"what insurance" 4/4 at the same k). So placing floor spans at their dense rank would fix the wrong thing (and change ordering semantics for every query). The residual, question-specific abstention is downstream of retrieval (generation over a large evidence set), not a retrieval change.
 
 ## Ask #3 — why passing `clause_type` changed nothing (it's by design)
 
