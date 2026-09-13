@@ -374,14 +374,16 @@ def _deadline_bounded_client_class() -> type:
             # unless reasoning is disabled (ADR-0079). The seam applies both via the model profile; the
             # docling-graph path uses litellm, so it is added here. Skipped for a non-OpenRouter (vLLM / local) base.
             from rag_wright.models import tracing
+            from rag_wright.models import usage as usage_acct
             traced = tracing.tracing_on()
+            capture = traced or usage_acct.usage_capturing()  # issue 0042: also capture into an active usage scope
             if "openrouter" in (getattr(self, "_base_url", "") or "").lower():
                 _order = os.getenv("OPENROUTER_PROVIDER_ORDER", "").strip()
                 _prov = ({"order": [p.strip() for p in _order.split(",") if p.strip()], "allow_fallbacks": False}
                          if _order else {"sort": os.getenv("OPENROUTER_SORT", "latency")})
                 _reason_on = os.getenv("RAG_EXTRACT_REASONING", "0") == "1"  # A/B toggle (default OFF)
                 _eb = {**(request.get("extra_body") or {}), "provider": _prov, "reasoning": {"enabled": _reason_on}}
-                if traced:
+                if capture:
                     _eb["usage"] = {"include": True}  # ask OpenRouter to return the actual per-call cost (issue 0017)
                 request["extra_body"] = _eb
 
@@ -408,18 +410,24 @@ def _deadline_bounded_client_class() -> type:
             if not content:
                 raise ClientError("LiteLLM returned empty content", details={"model": self.model})
             _usage_obj = response.get("usage")
-            if traced:
-                # docling-graph party/clause extraction -- the litellm path (invisible to astream_text). Emit the
-                # generation with token usage AND OpenRouter's ACTUAL cost (usage.cost / litellm response_cost).
-                u = {"input": getattr(_usage_obj, "prompt_tokens", 0) or 0,
-                     "output": getattr(_usage_obj, "completion_tokens", 0) or 0} if _usage_obj else None
+            if capture:
+                # docling-graph party/clause extraction -- the litellm path (invisible to the seam). Read token
+                # usage AND OpenRouter's ACTUAL cost (usage.cost / litellm response_cost); record into any active
+                # usage scope (issue 0042) and, when tracing, emit the generation (issue 0017).
+                _in = int(getattr(_usage_obj, "prompt_tokens", 0) or 0) if _usage_obj else 0
+                _out = int(getattr(_usage_obj, "completion_tokens", 0) or 0) if _usage_obj else 0
                 cost = getattr(_usage_obj, "cost", None) if _usage_obj else None
                 if cost is None:
                     cost = (getattr(response, "_hidden_params", {}) or {}).get("response_cost")
-                tracing.record_generation(
-                    model=self.model, input=messages, output=str(content), usage=u, cost=cost,
-                    latency_ms=(_time.monotonic() - _t0) * 1000.0,
-                    label=getattr(self, "_stage_label", None) or "docling-graph-extract", stage="litellm")
+                _latency_ms = (_time.monotonic() - _t0) * 1000.0
+                usage_acct.record_usage(self.model, input_tokens=_in, output_tokens=_out, cost=cost,
+                                        latency_ms=_latency_ms)
+                if traced:
+                    tracing.record_generation(
+                        model=self.model, input=messages, output=str(content),
+                        usage=({"input": _in, "output": _out} if _usage_obj else None), cost=cost,
+                        latency_ms=_latency_ms,
+                        label=getattr(self, "_stage_label", None) or "docling-graph-extract", stage="litellm")
             metadata = {"finish_reason": choices[0].get("finish_reason"),
                         "model": response.get("model", self.model), "usage": _usage_obj}
             return str(content), metadata

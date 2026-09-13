@@ -83,35 +83,23 @@ async def test_astream_text_passes_real_cost_to_record_generation(monkeypatch):
     assert rec["cost"] == 3.5e-06 and rec["stage"] == "astream_text"
 
 
-# --- issue 0025: build_structured records a generation (model + tokens + real cost) on the ainvoke path -----
+# --- issue 0025 / 0042: build_structured reads tokens + real cost off the raw response ----------------------
 
 
-def test_record_structured_generation_reads_tokens_and_cost_from_raw(monkeypatch):
+def test_usage_from_raw_reads_tokens_and_cost():
     from types import SimpleNamespace
-
-    from rag_wright.models import tracing
 
     raw = SimpleNamespace(
         usage_metadata={"input_tokens": 378, "output_tokens": 155},
         response_metadata={"token_usage": {"cost": 0.0006661, "prompt_tokens": 378, "completion_tokens": 155}})
-    result = {"raw": raw, "parsed": SimpleNamespace(verdict="relevant"), "parsing_error": None}
-    rec: dict = {}
-    monkeypatch.setattr(tracing, "record_generation", lambda **kw: rec.update(kw))
-    seam._record_structured_generation(result, "the prompt", "qwen/qwen3.8-27b", "span-relevance", 42.0)
-    assert rec["model"] == "qwen/qwen3.8-27b" and rec["label"] == "span-relevance"
-    assert rec["stage"] == "build_structured"                      # so every structured caller is attributable
-    assert rec["usage"] == {"input": 378, "output": 155}
-    assert rec["cost"] == 0.0006661                                # OpenRouter's ACTUAL cost, not a token estimate
+    assert seam._usage_from_raw(raw) == (378, 155, 0.0006661)      # OpenRouter's ACTUAL cost, not a token estimate
 
 
-def test_record_structured_generation_is_a_noop_on_an_unrecognized_shape(monkeypatch):
-    from rag_wright.models import tracing
+def test_usage_from_raw_degrades_on_missing_shapes():
+    from types import SimpleNamespace
 
-    called: list = []
-    monkeypatch.setattr(tracing, "record_generation", lambda **kw: called.append(kw))
-    seam._record_structured_generation("not a dict", "p", "m", None, 1.0)   # not a dict -> skip
-    seam._record_structured_generation({"parsed": 1}, "p", "m", None, 1.0)  # no raw -> skip
-    assert called == []
+    assert seam._usage_from_raw(None) == (0, 0, None)              # no raw -> zeros + unknown cost
+    assert seam._usage_from_raw(SimpleNamespace()) == (0, 0, None)  # no usage_metadata / token_usage -> same
 
 
 def test_raise_on_parse_error_restores_native_include_raw_false_semantics():
@@ -121,3 +109,77 @@ def test_raise_on_parse_error_restores_native_include_raw_false_semantics():
     # no error -> pass the dict through unchanged (so the wrapper can read `raw`)
     assert seam._raise_on_parse_error({"raw": 1, "parsed": "ok", "parsing_error": None})["parsed"] == "ok"
     assert seam._raise_on_parse_error("passthrough") == "passthrough"
+
+
+# --- issue 0042: the seam records usage into an active scope, with tracing OFF (usage is a property of the call) --
+
+class _UsageChunk:
+    def __init__(self, content, usage_metadata=None):
+        self.content = content
+        if usage_metadata is not None:
+            self.usage_metadata = usage_metadata
+
+
+class _UsageStreamingClient:
+    """A streaming fake that emits usage_metadata on its final chunk and carries a cost holder (issue 0021)."""
+
+    def __init__(self, *, input_tokens, output_tokens, cost):
+        self._u = {"input_tokens": input_tokens, "output_tokens": output_tokens}
+        self._cost_holder = {"cost": cost}
+        self.calls = 0
+
+    async def astream(self, prompt=None):  # noqa: ANN201
+        self.calls += 1
+        yield _UsageChunk("answer ")
+        yield _UsageChunk("text", usage_metadata=self._u)  # usage on the final chunk (stream_usage=True)
+
+
+async def test_astream_text_records_tokens_and_cost_into_the_scope_with_tracing_off(monkeypatch):
+    from rag_wright.models import tracing
+    from rag_wright.models.usage import usage_scope
+
+    monkeypatch.setattr(tracing, "tracing_on", lambda: False)  # req#4: no tracing
+    fake = _UsageStreamingClient(input_tokens=120, output_tokens=44, cost=0.0009)
+    monkeypatch.setattr(seam, "build_model", lambda *a, **k: fake)
+    with usage_scope() as u:
+        out = await seam.astream_text("qwen3.8-27b-modal-or", "prompt")
+    assert out == "answer text"
+    assert u.calls == 1 and u.input_tokens == 120 and u.output_tokens == 44   # round trip + tokens counted
+    assert round(u.cost_usd, 4) == 0.0009 and u.by_model["qwen3.8-27b-modal-or"].calls == 1
+
+
+async def test_astream_text_counts_the_call_even_when_the_model_returns_no_usage(monkeypatch):
+    # req#1: the round trip is counted even with no usage_metadata; its cost is unknown, not $0.
+    from rag_wright.models import tracing
+    from rag_wright.models.usage import usage_scope
+
+    monkeypatch.setattr(tracing, "tracing_on", lambda: False)
+    monkeypatch.setattr(seam, "build_model", lambda *a, **k: FakeStreamingClient(chunks=("hi",)))
+    with usage_scope() as u:
+        await seam.astream_text("m", "p")
+    assert u.calls == 1 and u.calls_without_cost == 1 and u.input_tokens == 0
+
+
+def test_build_structured_records_into_the_scope_with_tracing_off(monkeypatch):
+    from types import SimpleNamespace
+
+    from langchain_core.runnables import RunnableLambda
+
+    from rag_wright.models import tracing
+    from rag_wright.models.usage import usage_scope
+
+    monkeypatch.setattr(tracing, "tracing_on", lambda: False)  # req#4: capture without tracing
+    raw = SimpleNamespace(usage_metadata={"input_tokens": 300, "output_tokens": 25},
+                          response_metadata={"token_usage": {"cost": 0.0012}})
+
+    class _FakeModel:
+        def with_structured_output(self, schema, **kw):
+            assert kw.get("include_raw") is True  # the seam always forces include_raw internally (issue 0042)
+            return RunnableLambda(lambda x: {"raw": raw, "parsed": SimpleNamespace(v="ok"), "parsing_error": None})
+
+    monkeypatch.setattr(seam, "build_model", lambda *a, **k: _FakeModel())
+    with usage_scope() as u:
+        parsed = seam.build_structured("qwen3.8-27b-modal-or", object).invoke("prompt")
+    assert parsed.v == "ok"                                    # caller's exact shape (parsed), include_raw stripped
+    assert u.calls == 1 and u.input_tokens == 300 and u.output_tokens == 25
+    assert round(u.cost_usd, 4) == 0.0012 and u.by_model["qwen3.8-27b-modal-or"].latency_ms_total >= 0.0

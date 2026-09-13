@@ -30,6 +30,9 @@ class _FakeStructured:
         self.retry_kwargs = kwargs
         return self
 
+    def __or__(self, other):  # issue 0042: the seam now pipes `| _raise_on_parse_error`; stay inspectable
+        return self
+
 
 class _FakeChatOpenAI:
     # build_structured now returns a bounded-retry wrapper around the structured handle (ADR-0056), not the

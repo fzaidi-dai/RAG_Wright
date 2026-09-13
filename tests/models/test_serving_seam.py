@@ -107,6 +107,8 @@ def test_build_structured_forwards_temperature(monkeypatch):
             return self
         def with_retry(self, **kwargs):
             return self
+        def __or__(self, other):  # issue 0042: the seam pipes `| _raise_on_parse_error`; passthrough for the stub
+            return self
 
     def _fake_build_model(model_id, *, temperature=0.0, **overrides):
         seen["temperature"] = temperature

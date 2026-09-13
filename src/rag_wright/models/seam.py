@@ -248,15 +248,18 @@ def build_structured(
     limit under a schema constraint (observed on self-hosted Gemma-4 with a mis-set chat template).
     """
     from rag_wright.models import tracing
+    from rag_wright.models import usage as usage_acct
 
     profile = profile_for(model_id)
-    # ISSUE-0025: the forced-structured path emitted NO Langfuse generation, so every build_structured caller (the
-    # relevance judge, the compliance judge, ...) was invisible to cost/latency/model-mix reporting. When tracing
-    # is on, force `include_raw=True` so we can read the provider's usage + ACTUAL cost off the raw response (as
-    # `ainvoke` surfaces them, issue 0021) and emit a generation -- returning the caller's shape unchanged. Off,
-    # nothing changes (include_raw stays the caller's value, no wrapping).
+    # ISSUE-0025 / issue 0042: the forced-structured path discards the raw response, so tokens + OpenRouter's
+    # ACTUAL cost (which `ainvoke` surfaces on the raw, issue 0021) would be lost. The runnable is built ONCE and
+    # invoked (concurrently) later, possibly inside a `usage_scope()` entered after build -- so we cannot decide
+    # per-call at build time; we ALWAYS force `include_raw=True` internally and read usage off the raw at finish,
+    # recording it into any active usage scope (issue 0042) and emitting a Langfuse generation when traced
+    # (ISSUE-0025). The caller's exact output shape and the raise-on-parse-failure contract are RESTORED below, so
+    # this is purely a client-side capture (no extra tokens, no extra round trip) with an unchanged external shape.
     traced = tracing.tracing_on()
-    effective_include_raw = include_raw or traced
+    effective_include_raw = True
     kwargs: dict[str, Any] = {"method": profile.structured_method, "include_raw": effective_include_raw}
     # also put the env provider pin on the forced structured call (belt-and-suspenders: the base client carries
     # it too, but with_structured_output's extra_body should not drop it).
@@ -271,7 +274,7 @@ def build_structured(
         overrides["max_tokens"] = max_tokens
     inner: Runnable = build_model(model_id, temperature=temperature, **overrides).with_structured_output(
         schema, **kwargs)
-    if traced and not include_raw:
+    if not include_raw:
         # we forced include_raw for instrumentation, but the caller wanted the parsed value with the native
         # raise-on-parse-failure contract -- restore it so the bounded retry sees the SAME error it would have.
         inner = inner | RunnableLambda(_raise_on_parse_error)
@@ -281,10 +284,17 @@ def build_structured(
     sync_runnable = _with_bounded_retry(inner, model_id)
 
     def _finish(result: Any, prompt: Any, latency_ms: float) -> Any:
-        if not traced:
-            return result  # untraced: unchanged (result is already the caller's shape)
-        _record_structured_generation(result, prompt, model_id, label, latency_ms)
-        # we forced include_raw; hand the caller back the shape it asked for
+        raw = result.get("raw") if isinstance(result, dict) else None
+        inp, out, cost = _usage_from_raw(raw)
+        # issue 0042: record into any active usage scope (no-op if none) -- always, regardless of tracing.
+        usage_acct.record_usage(model_id, input_tokens=inp, output_tokens=out, cost=cost, latency_ms=latency_ms)
+        if traced:  # ISSUE-0025: the Langfuse generation (only when tracing is on)
+            parsed = result.get("parsed") if isinstance(result, dict) else None
+            tracing.record_generation(
+                model=model_id, input=prompt, output=parsed,
+                usage=({"input": inp, "output": out} if (inp or out) else None), cost=cost,
+                latency_ms=latency_ms, label=label, stage="build_structured")
+        # hand the caller back the exact shape it asked for (we forced include_raw internally)
         return result if include_raw else (result.get("parsed") if isinstance(result, dict) else result)
 
     def _sync(x: Any) -> Any:
@@ -307,24 +317,15 @@ def _raise_on_parse_error(result: Any) -> Any:
     return result
 
 
-def _record_structured_generation(result: Any, prompt: Any, model_id: str, label: str | None,
-                                  latency_ms: float) -> None:
-    """ISSUE-0025: emit one Langfuse generation for a completed forced-structured call, reading tokens + the
-    provider's ACTUAL cost off the raw response (`include_raw=True`). Degrades to a no-op on any shape it does not
-    recognise; `record_generation` itself is gated + exception-safe."""
-    from rag_wright.models import tracing
-
-    raw = result.get("raw") if isinstance(result, dict) else None
+def _usage_from_raw(raw: Any) -> tuple[int, int, Any]:
+    """(input_tokens, output_tokens, cost) off a raw structured response (`include_raw=True`); `(0, 0, None)`
+    when absent. `cost` is OpenRouter's ACTUAL per-call cost (issue 0021); `None` = the backend surfaced none
+    (priced from a table by Langfuse; counted as `calls_without_cost` in the usage scope, never as $0)."""
     if raw is None:
-        return
+        return 0, 0, None
     um = getattr(raw, "usage_metadata", None) or {}
-    usage = {"input": um.get("input_tokens", 0), "output": um.get("output_tokens", 0)} if um else None
     token_usage = (getattr(raw, "response_metadata", {}) or {}).get("token_usage") or {}
-    cost = token_usage.get("cost")  # OpenRouter's real per-call cost (issue 0021); None -> Langfuse prices by table
-    parsed = result.get("parsed") if isinstance(result, dict) else None
-    tracing.record_generation(
-        model=model_id, input=prompt, output=parsed, usage=usage, cost=cost, latency_ms=latency_ms,
-        label=label, stage="build_structured")
+    return int(um.get("input_tokens", 0) or 0), int(um.get("output_tokens", 0) or 0), token_usage.get("cost")
 
 
 def _call_desc(model_id: str, label: str | None) -> str:
@@ -391,6 +392,7 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     import time as _time
 
     from rag_wright.models import tracing
+    from rag_wright.models import usage as usage_acct
 
     overrides: dict[str, Any] = {
         "max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S, "stream_chunk_timeout": _STREAM_CHUNK_TIMEOUT_S}
@@ -403,8 +405,12 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     if text_eb:
         overrides["extra_body"] = text_eb
     traced = tracing.tracing_on()
-    if traced:
-        overrides["stream_usage"] = True  # LC/OpenRouter emit usage_metadata on the final chunk (issue 0017)
+    # issue 0042: capture usage when tracing is on OR a usage scope is active (this is a per-call function, so the
+    # scope entered around the invoke is visible here). `stream_usage` makes LC/OpenRouter emit usage_metadata on
+    # the final chunk (issue 0017); the cost-capturing client recovers OpenRouter's real cost the chunk drops.
+    capture = traced or usage_acct.usage_capturing()
+    if capture:
+        overrides["stream_usage"] = True
     # ISSUE-0021: use the cost-capturing client so OpenRouter's ACTUAL per-call cost (which LangChain's streaming
     # normalization drops) is recovered from the raw final chunk -- no more $0.00/UNPRICED for an unpriced model.
     client = build_model(model_id, temperature=temperature, _client_cls=_CostCapturingChatOpenAI, **overrides)
@@ -421,14 +427,18 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
 
     t0 = _time.monotonic()
     result = await _bounded_deadline(_consume, model_id, label)
+    latency_ms = (_time.monotonic() - t0) * 1000.0
+    inp, out = int(usage.get("input_tokens", 0) or 0), int(usage.get("output_tokens", 0) or 0)
+    # cost is the provider's ACTUAL total (pass-through, like the litellm path); None if the backend/model did not
+    # surface it (e.g. vLLM), so it counts as calls_without_cost / Langfuse prices from its table. getattr-guarded
+    # so a substituted client (tests / a non-cost-capturing class) degrades to no cost rather than raising.
+    cost = getattr(client, "_cost_holder", {}).get("cost")
+    # issue 0042: record into any active usage scope (no-op if none), regardless of tracing.
+    usage_acct.record_usage(model_id, input_tokens=inp, output_tokens=out, cost=cost, latency_ms=latency_ms)
     if traced:
-        u = {"input": usage.get("input_tokens", 0), "output": usage.get("output_tokens", 0)} if usage else None
-        # cost is the provider's ACTUAL total (pass-through, like the litellm path); None if the backend/model did
-        # not surface it (e.g. vLLM), so Langfuse then prices from its table. getattr-guarded so a substituted
-        # client (tests / a non-cost-capturing class) degrades to no cost rather than raising.
-        cost = getattr(client, "_cost_holder", {}).get("cost")
+        u = {"input": inp, "output": out} if usage else None
         tracing.record_generation(model=model_id, input=prompt, output=result, usage=u, cost=cost,
-                                  latency_ms=(_time.monotonic() - t0) * 1000.0, label=label, stage="astream_text")
+                                  latency_ms=latency_ms, label=label, stage="astream_text")
     return result
 
 
