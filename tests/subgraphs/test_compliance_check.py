@@ -119,6 +119,27 @@ async def test_ad_level_disclosures_reach_the_judge():
     assert "#ad" in seen["available now"]  # the bare fragment sees the ad-level #ad (the CC-4 residual fix)
 
 
+def test_obligation_bundle_keeps_signals_off_the_citation_and_flags_assembled():
+    # issue 0044: the DEON-8 signal line must NOT land in assertion_text (which becomes the citation); it rides in
+    # `document_signals`, and the top-N bundle is flagged `assembled` so a consumer won't render it as one verbatim.
+    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+
+    class _Emb:
+        def encode_dense(self, t):
+            return [float(len(t or ""))]  # deterministic; ranking is not what this asserts
+
+    claims = [_claim(text="Our supplement is guaranteed to cure arthritis.", disc=["guaranteed"]),
+              _claim(text="Regularly $120, now only $39.", disc=[])]
+    ob = _req(text="The advertiser shall disclose material connections.", deontic=DeonticType.OBLIGATION)
+    pairs = build_obligation_pairs_fn(_Emb())([ob], claims, "ad")
+    assert len(pairs) == 1
+    fact, _ = pairs[0]
+    assert "[DOCUMENT SIGNALS]" not in fact.assertion_text                 # scaffolding is OFF the citation text
+    assert "guaranteed" in fact.document_signals                           # it rides in the judge-only field
+    assert fact.citation_kind == "assembled"                               # top-N bundle, not one verbatim span
+    assert "Our supplement is guaranteed to cure arthritis." in fact.assertion_text  # real document text only
+
+
 async def test_degrades_to_empty_when_extraction_fails():
     async def boom(text, source):
         raise RuntimeError("extractor down")
@@ -731,8 +752,8 @@ async def test_ad_judge_frames_obligations_and_tolerates_a_bundle():
 
 def test_obligation_bundle_carries_ad_disclosures():
     # DEON-8 Part B (Option 1): an obligation judged ONCE must still see a disclosure made ANYWHERE in the ad.
-    # build_obligation_pairs_fn carries the ad-level disclosure union into the evidence bundle TEXT (getattr-
-    # tolerant: a generic CheckableFact has no disclosures -> nothing appended, domain-neutral).
+    # issue 0044: the union now rides in `document_signals` (judge-only), NOT in `assertion_text` -- so the judge
+    # still sees it but it never surfaces as the finding's citation. getattr-tolerant: a generic fact carries none.
     from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
 
     claims = [
@@ -742,8 +763,9 @@ def test_obligation_bundle_carries_ad_disclosures():
     ob = _req_obj("obligation", citation="§ 255.5", text="An endorser must disclose a material connection.")
     pairs = build_obligation_pairs_fn(_Emb1())([ob], claims, "ad")                  # actor 'party' -> recall-first
     assert len(pairs) == 1
-    bundle_text = pairs[0][0].assertion_text
-    assert "#ad" in bundle_text and "paid partnership" in bundle_text              # disclosure union carried forward
+    fact = pairs[0][0]
+    assert "#ad" in fact.document_signals and "paid partnership" in fact.document_signals  # union -> judge-only field
+    assert "[DOCUMENT SIGNALS]" not in fact.assertion_text and fact.citation_kind == "assembled"  # off the citation
 
 
 async def test_ad_path_splits_obligations_once_with_an_embedder():

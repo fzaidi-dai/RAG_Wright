@@ -90,6 +90,34 @@ def test_citations_are_taken_from_the_inputs():
     assert finding.claim_id == claim.fact_id and finding.requirement_id == req.requirement_id
     assert claim.assertion_text in finding.citation_claim
     assert req.citation in finding.citation_requirement  # "§ 255.5"
+    assert finding.citation_claim_kind == "verbatim"     # a plain claim is one span -> verbatim (default)
+
+
+def test_document_signals_reach_the_judge_but_never_the_citation():
+    # issue 0044: DEON-8 scaffolding is judge-only. _base_tail shows it to the judge; the citation stays doc text.
+    from rag_wright.capabilities.compliance_judgment import _base_tail
+
+    fact = CheckableFact(
+        fact_id="ad:0:x", source_doc="ad", assertion_text="Our supplement cures arthritis in two weeks.",
+        document_signals="\n\n[DOCUMENT SIGNALS] disclosures present in the document: guaranteed.",
+        citation_kind="assembled")
+    req = _req()
+    assert "[DOCUMENT SIGNALS]" in _base_tail(fact, req)          # the judge SEES the signals (prompt unchanged)
+
+    finding = assemble_finding(fact, req, None)                   # None ruling -> conservative needs_review
+    assert "[DOCUMENT SIGNALS]" not in finding.citation_claim     # but the citation NEVER contains scaffolding
+    assert "Our supplement cures arthritis in two weeks." in finding.citation_claim
+    assert finding.citation_claim_kind == "assembled"            # flagged so a consumer won't quote it verbatim
+
+
+def test_a_plain_fact_carries_no_signals_and_base_tail_is_unchanged():
+    # the generic path: no document_signals -> _base_tail appends nothing, citation is verbatim.
+    from rag_wright.capabilities.compliance_judgment import _base_tail
+
+    fact = CheckableFact(fact_id="d:0:y", source_doc="d", assertion_text="The firm retains records for six years.")
+    tail = _base_tail(fact, _req())
+    assert "[DOCUMENT SIGNALS]" not in tail and "records for six years" in tail
+    assert assemble_finding(fact, _req(), None).citation_claim_kind == "verbatim"
 
 
 # --- batch: judge many pairs concurrently --------------------------------------------------------

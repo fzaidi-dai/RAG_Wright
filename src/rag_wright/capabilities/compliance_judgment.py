@@ -93,10 +93,14 @@ def generic_judgment_method() -> str:
 
 
 def _base_tail(fact: CheckableFact, requirement: Requirement) -> str:
-    """The domain-agnostic judge appendix: the requirement + the subject assertion. Works for ANY CheckableFact."""
+    """The domain-agnostic judge appendix: the requirement + the subject assertion. Works for ANY CheckableFact.
+    issue 0044: the DEON-8 document signals (disclosure/evidence union) are appended here from `document_signals`
+    -- so the JUDGE still sees them (prompt unchanged), while `assertion_text` (and thus the citation) stays pure
+    document text. `document_signals` is '' for a plain fact, so the generic path is unaffected."""
     return _BASE_PROMPT_TAIL.format(
         deontic=requirement.deontic_type.value, citation=requirement.citation, actor=requirement.actor,
-        requirement_text=requirement.requirement_text, assertion=fact.assertion_text)
+        requirement_text=requirement.requirement_text, assertion=fact.assertion_text) \
+        + (getattr(fact, "document_signals", "") or "")
 
 
 # DEON-1 (issue 0012): the neuro-symbolic deontic framing -- the KG's deontic_type tells the judge HOW to reason.
@@ -224,8 +228,9 @@ def assemble_finding(
         requirement_id=requirement.requirement_id,
         verdict=verdict,
         rationale=rationale,
-        citation_claim=f"{claim.source_doc}{_sec}: {claim.assertion_text}",
+        citation_claim=f"{claim.source_doc}{_sec}: {claim.assertion_text}",  # issue 0044: doc text only, no signals
         citation_requirement=f"{requirement.citation} ({requirement.requirement_id}): {requirement.requirement_text}",
+        citation_claim_kind=getattr(claim, "citation_kind", "verbatim"),  # issue 0044: verbatim vs assembled
         confidence=confidence,
     )
 

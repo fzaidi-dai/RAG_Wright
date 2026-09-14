@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 from enum import Enum
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -131,6 +132,15 @@ class CheckableFact(BaseModel):
     fact_id: str
     source_doc: str
     assertion_text: str  # the checkable statement text (domain-neutral: an "assertion" is any checkable claim/fact)
+    # issue 0044: JUDGE-ONLY structured signals (e.g. DEON-8's ad-level disclosure/evidence union) rendered as
+    # document context FOR THE JUDGE but NOT part of the citation -- so engine scaffolding never surfaces as a
+    # quote from the user's document. The judge appends this; `assemble_finding`'s citation uses `assertion_text`
+    # only. Empty for a plain fact (domain-neutral: the generic path carries none).
+    document_signals: str = ""
+    # issue 0044: whether `assertion_text` is one VERBATIM span from the document, or ASSEMBLED evidence (the
+    # obligation path joins the top-N relevant spans with "\n\n"). Copied onto the finding so a consumer can tell
+    # a verbatim quote from a synthesised excerpt WITHOUT parsing prose, and render/attribute it accordingly.
+    citation_kind: Literal["verbatim", "assembled"] = "verbatim"
     section: str | None = None  # UNIFY-A: the section/heading locator this fact came from (e.g. "4.2"); the
     # finding cites "doc § {section}: {assertion}" when set. Additive/optional: None -> the old "doc: assertion".
     element_kind: str | None = None  # SEG-1: docling structural label of the source element (paragraph /
@@ -218,6 +228,10 @@ class ComplianceFinding(BaseModel):
     rationale: str = ""
     citation_claim: str  # the subject span text (provenance, cited -- FR-Q.6)
     citation_requirement: str  # the reg clause / section (provenance, cited)
+    # issue 0044: is `citation_claim` one VERBATIM span from the document, or ASSEMBLED evidence (the obligation
+    # path cites the top-N relevant spans joined by "\n\n")? A consumer renders assembled evidence differently
+    # instead of quoting it as the user's exact words. Default "verbatim" -> unchanged for every existing path.
+    citation_claim_kind: Literal["verbatim", "assembled"] = "verbatim"
     confidence: float = 0.0
 
     @field_validator("confidence")

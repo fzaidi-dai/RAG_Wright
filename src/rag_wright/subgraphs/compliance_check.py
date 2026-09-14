@@ -290,9 +290,13 @@ def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
             ob_vec = embedder.encode_dense(ob.requirement_text)
             ranked = [c for c, _ in sorted(claim_vecs, key=lambda cv: _cosine(ob_vec, cv[1]), reverse=True)]
             evidence = _within_budget(ranked, top_n=top_n, char_budget=char_budget)
-            text = ("\n\n".join(c.assertion_text for c in evidence) or "(empty subject)") + signal_line
+            # issue 0044: `assertion_text` is document text ONLY (so the citation stays a quote from the user's
+            # doc); the DEON-8 signals ride in `document_signals`, seen by the judge but never cited. The bundle is
+            # the top-N spans joined -> ASSEMBLED evidence, flagged so a consumer never renders it as one verbatim.
+            text = "\n\n".join(c.assertion_text for c in evidence) or "(empty subject)"
             fact = CheckableFact(fact_id=CheckableFact.make_id(source_doc, ob.requirement_id, text),
-                                 source_doc=source_doc, assertion_text=text)
+                                 source_doc=source_doc, assertion_text=text,
+                                 document_signals=signal_line, citation_kind="assembled")
             pairs.append((fact, ob))
         return pairs
 
