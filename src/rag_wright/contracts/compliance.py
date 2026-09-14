@@ -103,6 +103,13 @@ class Requirement(BaseModel):
     evidence_standard: str | None = None
     trigger_condition: str | None = None
     severity: Severity | None = None
+    # issue 0043: page provenance for the POLICY side, in the same shape span provenance uses (issue 0032), so one
+    # product code path serves both sides of a finding. `citation` stays the always-present human-readable
+    # provenance; these are additive. A requirement is bound to a policy SECTION, so `pages` are that section's
+    # source page(s) (from the parse's per-item provenance -- present on scans, where a text search would fail
+    # silently). `bbox` is best-effort (`(l, t, r, b)`) and usually None for a multi-item section; never fabricated.
+    pages: list[int] = []
+    bbox: tuple[float, float, float, float] | None = None
     confidence: ConfidenceTag = ConfidenceTag.EXTRACTED
     defenses: list[str] = []  # DEON-9 (query-time only, never persisted): same-source PERMISSIONS linked as
     # carve-outs/exceptions that may EXCUSE this O/F rule -- passed to the judge as structured context so a

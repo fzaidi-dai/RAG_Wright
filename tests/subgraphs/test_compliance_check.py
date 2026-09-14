@@ -119,6 +119,22 @@ async def test_ad_level_disclosures_reach_the_judge():
     assert "#ad" in seen["available now"]  # the bare fragment sees the ad-level #ad (the CC-4 residual fix)
 
 
+def test_requirement_from_row_round_trips_page_provenance():
+    # issue 0043: a stored Requirement row's pages/bbox come back on the Requirement, so a finding cites the policy
+    # page. bbox is a JSON string in the row (best-effort); absent -> None (never fabricated).
+    from rag_wright.subgraphs.compliance_check import _requirement_from_row
+
+    base = dict(requirement_id="p:10.5:h", source="ClientPolicy", citation="§ 10.5", deontic_type="obligation",
+                actor="advertiser", requirement_text="Retain records six years.", applicability_json="[]",
+                confidence="EXTRACTED")
+    with_pages = _requirement_from_row({**base, "pages": [7, 8], "bbox": "[1.0, 2.0, 3.0, 4.0]"})
+    assert with_pages.pages == [7, 8] and with_pages.bbox == (1.0, 2.0, 3.0, 4.0)
+    scan = _requirement_from_row({**base, "pages": [3], "bbox": None})  # a scan: page known, no rectangle
+    assert scan.pages == [3] and scan.bbox is None
+    legacy = _requirement_from_row(base)  # a pre-0043 row (no pages/bbox columns) -> honestly absent
+    assert legacy.pages == [] and legacy.bbox is None
+
+
 def test_obligation_bundle_keeps_signals_off_the_citation_and_flags_assembled():
     # issue 0044: the DEON-8 signal line must NOT land in assertion_text (which becomes the citation); it rides in
     # `document_signals`, and the top-N bundle is flagged `assembled` so a consumer won't render it as one verbatim.

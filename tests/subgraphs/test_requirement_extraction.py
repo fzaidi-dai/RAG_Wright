@@ -93,6 +93,28 @@ async def test_run_invokes_the_subgraph_for_one_section():
     assert [r.requirement_text for r in reqs] == ["Disclose connections."]
     assert reqs[0].deontic_type is DeonticType.OBLIGATION
     assert reqs[0].citation == "§ 255.5"
+    assert reqs[0].pages == [] and reqs[0].bbox is None  # no page provenance passed -> honestly absent (back-compat)
+
+
+async def test_run_stamps_section_page_provenance_onto_each_requirement():
+    # issue 0043: the section's pages/bbox (from the parse) are stamped on every extracted Requirement, so a
+    # finding can point into the policy. pages/bbox are NOT part of the id (idempotency unaffected).
+    stub = ExtractedRegulationSection(
+        section="10.5", requirements=[
+            ExtractedRequirement(requirement_text="Retain records six years.", deontic_type="obligation"),
+            ExtractedRequirement(requirement_text="Provide access on request.", deontic_type="obligation")])
+
+    async def _stub(text):
+        return stub
+
+    reqs = await run_requirement_extraction(
+        "…records…", model=None, source="ClientPolicy", section="10.5", extract_override=_stub,
+        pages=[7, 8], bbox=(1.0, 2.0, 3.0, 4.0))
+    assert len(reqs) == 2
+    assert all(r.pages == [7, 8] and r.bbox == (1.0, 2.0, 3.0, 4.0) for r in reqs)  # both carry the section's prov
+    # id is content-derived, unchanged by pages
+    from rag_wright.contracts.compliance import Requirement
+    assert reqs[0].requirement_id == Requirement.make_id("ClientPolicy", "10.5", "Retain records six years.")
 
 
 # --- registration: requirement_extraction is a SUBGRAPH ------------------------------------------

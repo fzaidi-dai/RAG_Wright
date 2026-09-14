@@ -258,28 +258,42 @@ def _section_number(heading: str, index: int) -> str:
 
 
 def document_to_sections(doc: Any) -> list[dict]:
-    """A parsed document -> `[{section, heading, text}]` split at its headings -- the compliance side's shape
-    (`RegulationAdapter` ingests exactly this). Body before the first heading is kept as a leading section (heading
-    ""), so nothing is dropped. PAGE_HEADER and whitespace-only items are skipped."""
+    """A parsed document -> `[{section, heading, text, pages, bbox}]` split at its headings -- the compliance side's
+    shape (`RegulationAdapter` ingests exactly this). Body before the first heading is kept as a leading section
+    (heading ""), so nothing is dropped. PAGE_HEADER and whitespace-only items are skipped.
+
+    issue 0043: each section carries `pages` (the source page(s) its items span, from the parse's per-item
+    provenance -- present even on a scan) and a best-effort `bbox`: a single-item section reports that item's box,
+    a multi-item section reports None (a section is not one rectangle, and a fabricated box is worse than none)."""
     sections: list[dict] = []
     heading = ""
     body: list[str] = []
+    pages: set[int] = set()
+    boxes: list[Any] = []  # the (page, bbox) of each item, to pick a single-item section's box
 
     def _flush() -> None:
         text = "\n".join(body).strip()
         if heading or text:  # keep a section if it has a heading OR any body (never emit a fully empty one)
-            sections.append({"section": _section_number(heading, len(sections) + 1), "heading": heading, "text": text})
+            bbox = boxes[0] if len(boxes) == 1 else None  # best-effort: only a single-item section has one box
+            sections.append({"section": _section_number(heading, len(sections) + 1), "heading": heading,
+                             "text": text, "pages": sorted(pages), "bbox": bbox})
 
     for item, _level in doc.iterate_items():
         label = getattr(item, "label", None)
         text = (getattr(item, "text", "") or "").strip()
+        page, box = _prov_page_bbox(item)
         if label in _HEADING_LABELS:
             _flush()  # close the previous section
-            heading = text
-            body = []
+            heading, body, pages, boxes = text, [], set(), []
+            if page is not None:
+                pages.add(page)  # the heading's page belongs to its section
         elif label == DocItemLabel.PAGE_HEADER:
             continue  # running page furniture -> neither a boundary nor body
         elif text:
             body.append(text)
+            if page is not None:
+                pages.add(page)
+            if box is not None:
+                boxes.append(box)
     _flush()  # the final section
     return sections

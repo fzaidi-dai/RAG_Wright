@@ -570,12 +570,15 @@ def _requirement_from_row(row: dict) -> Requirement:
 
     scope = [Constraint(dimension=d, value=v) for d, v in json.loads(row.get("applicability_json") or "[]")]
     sev = row.get("severity") or None
+    _bbox = row.get("bbox")  # issue 0043: best-effort [l,t,r,b] JSON string -> tuple, else None
+    bbox = tuple(json.loads(_bbox)) if _bbox else None
     return Requirement(
         requirement_id=row["requirement_id"], source=row["source"], citation=row["citation"],
         deontic_type=DeonticType(row["deontic_type"]), actor=row["actor"],
         applicability_scope=scope, requirement_text=row["requirement_text"],
         evidence_standard=row.get("evidence_standard") or None,
         severity=Severity(sev) if sev else None,
+        pages=[int(p) for p in (row.get("pages") or [])], bbox=bbox,  # issue 0043: policy page provenance
         confidence=ConfidenceTag(row.get("confidence") or "EXTRACTED"))
 
 

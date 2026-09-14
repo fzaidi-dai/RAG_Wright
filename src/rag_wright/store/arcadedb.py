@@ -447,6 +447,8 @@ class ArcadeDBStore:
         for prop in ("requirement_id", "source", "citation", "deontic_type", "actor", "requirement_text",
                      "evidence_standard", "severity", "applicability_json", "confidence"):
             self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.{prop} STRING")
+        self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.pages ARRAY_OF_INTEGERS")  # issue 0043: policy page(s)
+        self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.bbox STRING")  # issue 0043: best-effort [l,t,r,b] JSON
         self._command(f"CREATE INDEX ON {REQUIREMENT_TYPE} (requirement_id) UNIQUE")
 
     def write_requirements(self, requirements: Iterable[Requirement]) -> int:
@@ -455,6 +457,8 @@ class ArcadeDBStore:
         count = 0
         for req in requirements:
             scope = json.dumps([[c.dimension, c.value] for c in req.applicability_scope])
+            pages = "[" + ",".join(str(int(p)) for p in req.pages) + "]"  # issue 0043: policy page(s)
+            bbox = "null" if req.bbox is None else _sql_str(json.dumps(list(req.bbox)))  # best-effort [l,t,r,b]
             self._command(
                 f"UPDATE {REQUIREMENT_TYPE} SET"
                 f" requirement_id = {_sql_str(req.requirement_id)},"
@@ -466,7 +470,8 @@ class ArcadeDBStore:
                 f" evidence_standard = {_sql_str(req.evidence_standard or '')},"
                 f" severity = {_sql_str(req.severity.value if req.severity else '')},"
                 f" applicability_json = {_sql_str(scope)},"
-                f" confidence = {_sql_str(req.confidence.value)}"
+                f" confidence = {_sql_str(req.confidence.value)},"
+                f" pages = {pages}, bbox = {bbox}"  # issue 0043: policy page provenance
                 f" UPSERT WHERE requirement_id = {_sql_str(req.requirement_id)}"
             )
             count += 1
@@ -482,7 +487,8 @@ class ArcadeDBStore:
         invalid `IN []`)."""
         select = (
             f"SELECT requirement_id, source, citation, deontic_type, actor, requirement_text,"
-            f" evidence_standard, severity, applicability_json, confidence FROM {REQUIREMENT_TYPE}")
+            f" evidence_standard, severity, applicability_json, confidence, pages, bbox"  # issue 0043: page prov
+            f" FROM {REQUIREMENT_TYPE}")
         if sources is None:
             return self._query(select)
         sources = list(sources)

@@ -119,7 +119,11 @@ class DocumentRegulationAdapter:
             yield SourceDocument(
                 source_doc_id=canonical_source_doc_id(f"{self._source}_{citation}"),
                 text=sec["text"],
-                metadata={"section": citation, "source": self._source},
+                # issue 0043: carry the section's page provenance (from document_to_sections) to the extract stage
+                # so each Requirement records its policy page(s). A pre-sectioned corpus (RegulationAdapter) has no
+                # parse -> no pages, honestly absent.
+                metadata={"section": citation, "source": self._source,
+                          "pages": sec.get("pages") or [], "bbox": sec.get("bbox")},
             )
 
 
@@ -187,6 +191,7 @@ def production_compliance_ingestion(store: Any, *, model: Any, extract_override:
         # (-> retry -> dead-letter with reason), never silently writing 0 requirements. Genuine-empty still -> [].
         return await run_requirement_extraction(
             doc.text, model=model, source=doc.metadata["source"], section=doc.metadata["section"],
+            pages=doc.metadata.get("pages") or [], bbox=doc.metadata.get("bbox"),  # issue 0043: policy page(s)
             raise_on_failure=True)
 
     async def _awrite(doc: SourceDocument, reqs: list) -> Any:

@@ -113,6 +113,24 @@ def test_content_items_does_not_double_prepend_or_touch_plain_text():
     assert "A plain paragraph with no marker." in texts[1]                    # plain text untouched
 
 
+def test_document_to_sections_carries_page_provenance():
+    # issue 0043: each section reports its source pages (from item provenance) and a best-effort bbox -- a
+    # single-item section reports that item's box; a multi-item/multi-page section reports None (not a rectangle).
+    doc = _FakeDoc([
+        _Item(DocItemLabel.SECTION_HEADER, "1. Retention", prov=[_Prov(3)]),
+        _Item(DocItemLabel.TEXT, "The firm shall retain records for six years.",
+              prov=[_Prov(3, _BBox(10.0, 20.0, 30.0, 40.0))]),
+        _Item(DocItemLabel.SECTION_HEADER, "2. Governing Law", prov=[_Prov(4)]),
+        _Item(DocItemLabel.TEXT, "Delaware law governs this agreement.", prov=[_Prov(4)]),
+        _Item(DocItemLabel.TEXT, "The courts of Delaware have jurisdiction.", prov=[_Prov(5)]),  # spans 4-5
+    ])
+    secs = {s["heading"]: s for s in document_to_sections(doc)}
+    assert secs["1. Retention"]["pages"] == [3]
+    assert secs["1. Retention"]["bbox"] == (10.0, 20.0, 30.0, 40.0)  # single body item -> its box
+    assert secs["2. Governing Law"]["pages"] == [4, 5]               # a section that crosses a page boundary
+    assert secs["2. Governing Law"]["bbox"] is None                  # multi-item -> no single rectangle
+
+
 def test_document_to_text_uses_markdown_export():
     assert document_to_text(_FakeDoc([], markdown="# Title\n\nclause one")) == "# Title\n\nclause one"
 

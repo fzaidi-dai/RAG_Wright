@@ -46,6 +46,8 @@ class ReqExtractState(TypedDict, total=False):
     text: str
     source: str
     section: str
+    pages: list  # issue 0043: the section's source page(s), stamped onto each extracted Requirement
+    bbox: Any  # issue 0043: best-effort (l, t, r, b) for a single-item section, else None
     extracted: Any
     requirements: list
     dead_letter: Optional[dict]
@@ -75,7 +77,13 @@ def build_requirement_extraction(
         if state.get("dead_letter") or extracted is None:
             return {"requirements": []}
         with business_span("requirement_extraction.adapt"):
-            return {"requirements": adapt_fn(extracted, state["source"], state["section"])}  # adapt is sync/CPU
+            reqs = adapt_fn(extracted, state["source"], state["section"])  # adapt is sync/CPU
+            # issue 0043: stamp the section's page provenance onto each Requirement (pages/bbox are not part of the
+            # requirement_id, so this never affects identity/idempotency). Empty pages when the corpus has no parse.
+            pages, bbox = list(state.get("pages") or []), state.get("bbox")
+            if pages or bbox is not None:
+                reqs = [r.model_copy(update={"pages": pages, "bbox": bbox}) for r in reqs]
+            return {"requirements": reqs}
 
     g = StateGraph(ReqExtractState)
     g.add_node("extract", extract, retry_policy=retry_policy)
@@ -102,7 +110,7 @@ def production_requirement_extraction(
 
 async def run_requirement_extraction(
     text: str, *, model: Any, source: str, section: str, extract_override: Optional[ExtractSectionFn] = None,
-    raise_on_failure: bool = False,
+    pages: Optional[list] = None, bbox: Any = None, raise_on_failure: bool = False,
 ) -> list[Requirement]:
     """Invoke the requirement-extraction subgraph for one § section -> its `Requirement[]`.
 
@@ -111,7 +119,8 @@ async def run_requirement_extraction(
     not a genuine-empty section) RAISES `RequirementExtractionFailed` so the compliance corpus driver dead-letters
     the section instead of silently writing 0 requirements. A genuine-empty section still returns []."""
     graph = production_requirement_extraction(model=model, extract_override=extract_override)
-    result = await graph.ainvoke({"text": text, "source": source, "section": section})
+    result = await graph.ainvoke({"text": text, "source": source, "section": section,
+                                  "pages": pages or [], "bbox": bbox})  # issue 0043: policy page provenance
     if raise_on_failure and result.get("dead_letter"):
         raise RequirementExtractionFailed(section, str(result["dead_letter"].get("error", "extraction failed")))
     return result.get("requirements", [])
