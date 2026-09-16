@@ -83,7 +83,15 @@ _VOLS = {HF_CACHE: hf_vol, VLLM_CACHE: vllm_cache_vol}
 vllm_image = (
     modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
     .pip_install("vllm", "huggingface_hub[hf_transfer]", "openai")
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE})
+    # Propagate the runtime knobs INTO the container: `modal run` does NOT inherit the local shell env, so a
+    # module-level `os.environ.get` used INSIDE a remote function reads the container's env (defaults), not the
+    # caller's. Only `GPU` (in the @app.function decorator, resolved at LOCAL import) honored an override -- so an
+    # override of TP/MAX_LEN/... silently stayed at its default on the container (e.g. GPU=:1 but TP still 2 ->
+    # "World size (2) > available GPUs (1)"). Baking them from the local values here makes every knob propagate.
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE,
+          "MODEL": MODEL, "TP": str(TP), "MAX_LEN": str(MAX_LEN), "GPU_UTIL": GPU_UTIL,
+          "MAX_NUM_SEQS": str(MAX_NUM_SEQS), "N": str(N), "MAX_TOK": str(MAX_TOK),
+          "CSWEEP": os.environ.get("CSWEEP", "1,4,8,16,32,64"), "VLLM_API_KEY": API_KEY})
 )
 
 
