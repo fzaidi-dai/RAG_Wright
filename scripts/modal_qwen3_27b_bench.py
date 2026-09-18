@@ -31,6 +31,7 @@ TP = int(os.environ.get("TP", "2"))                      # tensor_parallel_size 
 MAX_LEN = int(os.environ.get("MAX_LEN", "16384"))        # context per request; KV cache is sized against this
 GPU_UTIL = os.environ.get("GPU_UTIL", "0.90")            # fraction of 2x80GB (weights + KV cache)
 MAX_NUM_SEQS = os.environ.get("MAX_NUM_SEQS", "256")     # vLLM running-sequence cap (concurrency ceiling)
+KV_DTYPE = os.environ.get("KV_CACHE_DTYPE", "auto")      # "auto" (unquantized) | "fp8"/"fp8_e4m3" -> ~2x KV tokens
 N = int(os.environ.get("N", "48"))                       # requests per concurrency level (small -> cheap, meaningful)
 MAX_TOK = int(os.environ.get("MAX_TOK", "256"))          # output tokens/request (a clause-property JSON size)
 CSWEEP = [int(x) for x in os.environ.get("CSWEEP", "1,4,8,16,32,64").split(",")]
@@ -91,6 +92,7 @@ vllm_image = (
     .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE,
           "MODEL": MODEL, "TP": str(TP), "MAX_LEN": str(MAX_LEN), "GPU_UTIL": GPU_UTIL,
           "MAX_NUM_SEQS": str(MAX_NUM_SEQS), "N": str(N), "MAX_TOK": str(MAX_TOK),
+          "KV_CACHE_DTYPE": KV_DTYPE,
           "CSWEEP": os.environ.get("CSWEEP", "1,4,8,16,32,64"), "VLLM_API_KEY": API_KEY})
 )
 
@@ -98,12 +100,15 @@ vllm_image = (
 def _serve_args() -> list:
     """The vLLM serve flags -- IDENTICAL across warm_serve_cache and serve_bench so the torch.compile cache key
     matches and the persisted cache is reused. Compiled (NO --enforce-eager): production keeps compilation ON."""
-    return [
+    args = [
         "vllm", "serve", MODEL, "--host", "127.0.0.1", "--port", "8000", "--served-model-name", MODEL,
         "--tensor-parallel-size", str(TP), "--dtype", "bfloat16", "--max-model-len", str(MAX_LEN),
         "--gpu-memory-utilization", str(GPU_UTIL), "--max-num-seqs", str(MAX_NUM_SEQS), "--api-key", API_KEY,
         "--trust-remote-code",
     ]
+    if KV_DTYPE != "auto":  # FP8 KV cache -> ~2x KV tokens; only appended when set so the bf16-KV compile key is untouched
+        args += ["--kv-cache-dtype", KV_DTYPE]
+    return args
 
 
 def _start_server_and_wait():
@@ -205,6 +210,7 @@ def serve_bench() -> None:
     def _pct(xs, q):
         return sorted(xs)[min(len(xs) - 1, int(len(xs) * q))] if xs else 0.0
 
+    print(f"[qwen] CONFIG: model={MODEL} TP={TP} max_len={MAX_LEN} util={GPU_UTIL} kv_cache={KV_DTYPE}", flush=True)
     print(f"[qwen] SWEEP: N={N}/level, max_tokens={MAX_TOK}, compiled bf16 TP={TP}, thinking off", flush=True)
     for C in CSWEEP:
         t0 = time.time()
