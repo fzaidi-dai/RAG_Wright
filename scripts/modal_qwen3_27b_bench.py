@@ -89,7 +89,10 @@ vllm_image = (
     # caller's. Only `GPU` (in the @app.function decorator, resolved at LOCAL import) honored an override -- so an
     # override of TP/MAX_LEN/... silently stayed at its default on the container (e.g. GPU=:1 but TP still 2 ->
     # "World size (2) > available GPUs (1)"). Baking them from the local values here makes every knob propagate.
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE,
+    # HF_HUB_DISABLE_XET: the Xet backend keeps an open log handle under the HF cache dir, which makes
+    # `hf_vol.commit()` fail on a FRESH download ("open files preventing the operation: xet/logs/...log").
+    # Disable it so downloads use the classic hf_transfer path and the Volume commit succeeds.
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HUB_DISABLE_XET": "1", "HF_HOME": HF_CACHE,
           "MODEL": MODEL, "TP": str(TP), "MAX_LEN": str(MAX_LEN), "GPU_UTIL": GPU_UTIL,
           "MAX_NUM_SEQS": str(MAX_NUM_SEQS), "N": str(N), "MAX_TOK": str(MAX_TOK),
           "KV_CACHE_DTYPE": KV_DTYPE,
