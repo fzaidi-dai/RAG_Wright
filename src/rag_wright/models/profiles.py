@@ -203,6 +203,20 @@ PROFILES: dict[str, ModelProfile] = {
         structured_extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     ),
+    # Quantization ACCURACY EVAL profile (ADR-0110 follow-up): points the JUDGE role at a raw Modal vLLM endpoint
+    # (`scripts/modal_qwen3_vllm_server.py`, served as "qwen3-eval") so bf16-reference vs FP8 configs are the SAME
+    # profile with only VLLM_BASE_URL swapped between deployments. Reasoning ON for the structured judge (matches
+    # the production `-modal-or` judge), off for free-text. base_url/key from VLLM_BASE_URL/VLLM_API_KEY.
+    # Structured via vLLM NATIVE guided decoding (`json_schema`/xgrammar) -- raw vLLM 400s on the default
+    # `function_calling` ("tool_choice=function requires --tool-call-parser"), and open models reject a forced
+    # schema while THINKING, so thinking is OFF on the forced structured call (the self-hosted pattern, matching
+    # the Gemma profiles). Free-text stays thinking-off too. ref vs FP8 use the SAME config -> a clean delta.
+    "qwen3-eval": ModelProfile(
+        model_id="qwen3-eval", backend="vllm", served_model_id="qwen3-eval",
+        structured_method="json_schema",
+        structured_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+        text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    ),
     # THE ENGINE-WIDE DEFAULT (_PRODUCT_LLM / _PRODUCT_EXTRACT_DEFAULT / graph-extract default all point here).
     # "-modal-or": the model destined for our Modal/vLLM deployment, but routed via OPENROUTER FOR NOW because the
     # Modal cold-start/warmup is unsolved (snapshot path fails today). WHEN warmup is solved, flip THIS ONE entry's

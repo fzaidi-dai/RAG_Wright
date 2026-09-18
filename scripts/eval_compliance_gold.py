@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -39,9 +40,13 @@ async def main() -> None:
     gold = json.loads(Path("data/compliance/gold_cases/manifest.json").read_text())["cases"]
     store = ArcadeDBStore.from_env(database="ragwright_compliance")
     print(f"[gold-eval] {len(gold)} cases | {len(store.all_requirements())} requirements | narrowing k=5", flush=True)
+    # Claim extraction is a CONSTANT here (env-overridable) so a run varies ONLY the judge under test; the old
+    # hardcoded "ibm-granite/granite-4.1-8b" now 404s on OpenRouter, so default to the live product extractor.
+    extract_id = os.getenv("EVAL_EXTRACT_MODEL", "qwen3.8-27b-modal-or")
     graph = production_compliance_check(
-        store, extract_model=default_extraction_model("claim-extract", "ibm-granite/granite-4.1-8b"),
+        store, extract_model=default_extraction_model("claim-extract", extract_id),
         judge_model_id=model_for(ModelRole.STRUCTURED_REASONING), embedder=query_embedder(), k=5)
+    print(f"[gold-eval] extract={extract_id} judge={model_for(ModelRole.STRUCTURED_REASONING)}", flush=True)
 
     rows = []
     for i, c in enumerate(gold, 1):
