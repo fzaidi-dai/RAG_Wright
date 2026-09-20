@@ -142,12 +142,21 @@ def test_dropped_foundation_models_stay_registered_for_dev_override(monkeypatch)
     product = profiles.model_for(ModelRole.STRUCTURED_REASONING)
     assert product == profiles._PRODUCT_LLM
     assert profiles.profile_for(product).model_id == product
-    # the qwen3.8-27b-modal-or product default (ADR-0100) carries OpenRouter throughput routing on the base
-    # client, and splits reasoning by call class (on for the structured judge, off for free-text extraction).
+    # the qwen3.8-27b-modal-or product default (ADR-0100) HARD-PINS OpenRouter to DeepInfra's bf16 endpoint on the
+    # base client (no fallbacks -> never a quantized variant), and splits reasoning by call class (on for the
+    # structured judge, off for free-text extraction). Pin dated 2026-09-20.
     prof = profiles.profile_for(product)
-    assert prof.extra_body == {"provider": {"sort": "throughput"}}
+    assert prof.extra_body == {"provider": {"only": ["deepinfra/bf16"], "allow_fallbacks": False}}
     assert prof.structured_extra_body == {"reasoning": {"enabled": True}}
     assert prof.text_extra_body == {"reasoning": {"enabled": False}}
+
+
+def test_all_qwen3_8_27b_openrouter_strings_pin_deepinfra_bf16():
+    """Every OpenRouter string for Qwen3.8-27b hard-pins deepinfra/bf16 (the pin holds whichever string is used)."""
+    from rag_wright.models import profiles
+    pin = {"provider": {"only": ["deepinfra/bf16"], "allow_fallbacks": False}}
+    for mid in ("qwen/qwen3.8-27b", "qwen3.8-27b-or", "qwen3.8-27b-modal-or"):
+        assert profiles.profile_for(mid).extra_body == pin, mid
 
 
 # --- the seam is the only path to with_structured_output, and extra_body is structured-only ----

@@ -179,12 +179,16 @@ PROFILES: dict[str, ModelProfile] = {
     # empty content (~1/3 of runs, measured), dropping the query's constraints. OFF (not ON) because constraint
     # extraction is mechanical: OFF is deterministic + cheaper and drops the redundant raw-phrase `cap_quantum` that
     # reasoning-ON adds. So the judge reasons deeply while query extraction does not -- two settings, two slots.
-    # `provider:{sort:throughput}` dodges the cheapest-provider throttle (ADR-0027).
+    # provider PIN (ADR-0027, dated 2026-09-20): `{"provider":{"only":["deepinfra/bf16"],"allow_fallbacks":false}}`
+    # HARD-pins Qwen3.8-27B to DeepInfra's bf16 endpoint on OpenRouter -- no fallbacks, so OpenRouter can never
+    # route to a quantized (fp8/int) provider variant. Guarantees full-precision weights for consistent behavior
+    # (supersedes the earlier `sort:throughput`). Applies to all three OpenRouter Qwen3.8-27b strings below; the
+    # extraction surface honors the same pin via the profile (dg_extraction), so it holds engine-wide.
     "qwen/qwen3.8-27b": ModelProfile(
         model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}},
         text_extra_body={"reasoning": {"enabled": False}},
-        extra_body={"provider": {"sort": "throughput"}},
+        extra_body={"provider": {"only": ["deepinfra/bf16"], "allow_fallbacks": False}},
     ),
     # ADR-0100: backend-PINNED strings for the same Qwen3.8-27B -- pick the string, get the backend. `-or` routes
     # to OpenRouter (slug qwen/qwen3.8-27b, its provider-routing + reasoning-field flags); `-modal` routes to the
@@ -194,7 +198,7 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="qwen3.8-27b-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}},
         text_extra_body={"reasoning": {"enabled": False}},
-        extra_body={"provider": {"sort": "throughput"}},
+        extra_body={"provider": {"only": ["deepinfra/bf16"], "allow_fallbacks": False}},
     ),
     "qwen3.8-27b-modal": ModelProfile(
         model_id="qwen3.8-27b-modal", backend="vllm", served_model_id="Qwen/Qwen3.8-27B",
@@ -221,12 +225,12 @@ PROFILES: dict[str, ModelProfile] = {
     # "-modal-or": the model destined for our Modal/vLLM deployment, but routed via OPENROUTER FOR NOW because the
     # Modal cold-start/warmup is unsolved (snapshot path fails today). WHEN warmup is solved, flip THIS ONE entry's
     # `backend` to "vllm" + `served_model_id="Qwen/Qwen3.8-27B"` + the vLLM reasoning flags, and every default
-    # follows -- no other change. Carries the OpenRouter Qwen flags (reasoning on judge / off free-text; throughput).
+    # follows -- no other change. Carries the OpenRouter Qwen flags (reasoning on judge / off free-text).
     "qwen3.8-27b-modal-or": ModelProfile(
         model_id="qwen3.8-27b-modal-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}},
         text_extra_body={"reasoning": {"enabled": False}},
-        extra_body={"provider": {"sort": "throughput"}},
+        extra_body={"provider": {"only": ["deepinfra/bf16"], "allow_fallbacks": False}},
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not

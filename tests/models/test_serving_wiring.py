@@ -32,6 +32,16 @@ def test_default_extraction_model_is_openrouter_by_default():
     assert m.provider == "openrouter" and "openrouter" in m.base_url
 
 
+def test_extraction_model_carries_profile_provider_pin():
+    # ADR-0100: the extraction surface honors the model PROFILE's provider routing, so the Qwen3.8-27b
+    # deepinfra/bf16 pin holds engine-wide (not just the seam). An un-pinned model carries no routing.
+    m = default_extraction_model("clause-extract", profiles._PRODUCT_LLM)
+    assert m.provider_routing == {"only": ["deepinfra/bf16"], "allow_fallbacks": False}
+    # an un-pinned model (no `provider` in its profile) carries no routing -> the _call_api sort default applies
+    g = default_extraction_model("clause-extract", "ibm-granite/granite-4.1-8b")
+    assert g.provider_routing is None
+
+
 def test_default_extraction_model_routes_to_vllm(monkeypatch):
     # Post ADR-0100 the product default (`_PRODUCT_LLM`) is a backend-PINNED string (OpenRouter), so the
     # RAG_SERVING fallback is exercised by an UN-PINNED string. An un-pinned id (granite) still follows

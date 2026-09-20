@@ -221,6 +221,10 @@ class ExtractionModel:
     base_url: str
     api_key: str | None = None
     inference: str = "remote"
+    # OpenRouter provider routing from the model's PROFILE (ADR-0100), e.g. a hard pin
+    # {"only": ["deepinfra/bf16"], "allow_fallbacks": False}. Threaded into the litellm extraction call so the
+    # extraction surface honors the same provider pin as the seam. None -> the env/sort default in `_call_api`.
+    provider_routing: dict[str, Any] | None = None
 
 
 def openrouter_model(label: str, model: str) -> ExtractionModel:
@@ -269,13 +273,18 @@ def default_extraction_model(label: str = "clause-extract", model: str | None = 
     ADR-0100: the backend/base_url/served-id come from the model string's PROFILE (`resolve_connection`), so a
     string can pin OpenRouter or a self-hosted vLLM/Modal server -- mix per stage. An un-pinned string falls back
     to `RAG_SERVING`, unchanged from before."""
+    from rag_wright.models.profiles import profile_for
     from rag_wright.models.seam import resolve_connection
 
     model = model or os.getenv("RAG_MODEL_ALL") or _PRODUCT_EXTRACT_DEFAULT
     conn = resolve_connection(model)
+    # ADR-0100: carry the model's PROFILE provider routing (e.g. the deepinfra/bf16 pin) onto the extraction
+    # surface too, so a pin set once in the profile holds engine-wide (seam AND extraction), not just the seam.
+    routing = (profile_for(model).extra_body or {}).get("provider")
     return ExtractionModel(label=label, provider=conn.provider, model=conn.served_model_id,
                            base_url=conn.base_url, api_key=conn.api_key,
-                           inference="local" if conn.backend == "ollama" else "remote")
+                           inference="local" if conn.backend == "ollama" else "remote",
+                           provider_routing=routing)
 
 
 # INGEST-GRAPH-LATENCY: docling-graph's default per-call timeout is 300s (ReliabilityDefaults.timeout_s), which
@@ -335,6 +344,7 @@ def build_pipeline_config(source_path: str, model: ExtractionModel, *, template:
     llm_client = _deadline_bounded_client_class()(model_config=effective)
     llm_client._stage_label = stage_label  # ADR-0058/issue 0005: name the stage in the deadline timeout message
     llm_client._base_url = getattr(model, "base_url", "") or ""  # for OpenRouter provider routing (sort=latency)
+    llm_client._provider_routing = getattr(model, "provider_routing", None)  # profile pin, e.g. deepinfra/bf16
     return PipelineConfig(
         source=source_path, template=template, backend="llm", inference=model.inference,
         extraction_contract=extraction_contract, processing_mode="many-to-one",
@@ -378,9 +388,16 @@ def _deadline_bounded_client_class() -> type:
             traced = tracing.tracing_on()
             capture = traced or usage_acct.usage_capturing()  # issue 0042: also capture into an active usage scope
             if "openrouter" in (getattr(self, "_base_url", "") or "").lower():
+                # provider routing precedence: OPENROUTER_PROVIDER_ORDER env (measurement override) > the model's
+                # PROFILE pin (ADR-0100, e.g. deepinfra/bf16 for Qwen3.8-27b) > the lowest-latency sort default.
                 _order = os.getenv("OPENROUTER_PROVIDER_ORDER", "").strip()
-                _prov = ({"order": [p.strip() for p in _order.split(",") if p.strip()], "allow_fallbacks": False}
-                         if _order else {"sort": os.getenv("OPENROUTER_SORT", "latency")})
+                _profile_prov = getattr(self, "_provider_routing", None)
+                if _order:
+                    _prov = {"order": [p.strip() for p in _order.split(",") if p.strip()], "allow_fallbacks": False}
+                elif _profile_prov:
+                    _prov = _profile_prov
+                else:
+                    _prov = {"sort": os.getenv("OPENROUTER_SORT", "latency")}
                 _reason_on = os.getenv("RAG_EXTRACT_REASONING", "0") == "1"  # A/B toggle (default OFF)
                 _eb = {**(request.get("extra_body") or {}), "provider": _prov, "reasoning": {"enabled": _reason_on}}
                 if capture:
