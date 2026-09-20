@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "arcadedb-python>=0.4.0",
-    "deepagents==0.6.12", # pinned exactly: dynamic sub-agents are beta, floating = silent breakage (ADR-0015)
+    "deepagents>=0.7.15", # floor, not a hard pin: an == bound every downstream consumer (issue 0047, ADR-0015)
     "docling>=2.109.0",
     "docling-core>=2.86.0",
     "docling-graph[templategen]==1.9.1",

@@ -1,5 +1,10 @@
 # ADR-0015: RLM is interpreter + dynamic sub-agents; `grantedSubagents` is populated (self-dispatching)
 
+> **Update 2026-09-20 (ADR-0112):** the `deepagents==0.6.12` pin referenced below is relaxed to a
+> `deepagents>=0.7.15` floor (issue 0047 — an `==` in a library binds every consumer). Q2's premise that a
+> self-referential sub-agent is *not constructible* (eager roster compilation on 0.6.12) sits in the exact
+> area 0.7 reworked and is flagged for re-validation; design B′ (interpreter-driven recursion) holds either way.
+
 Date: 2026-07-15. Status: Accepted. Records the two decisions RAG_Wright owns about the recursive-RLM
 rebuild and how it populates `skill_runtime.granted_subagents` (ADR-0003 mirror). Cross-references
 GraphWright ADR-0023 for the control-level rule (context only — the repos are decoupled; this ADR does
