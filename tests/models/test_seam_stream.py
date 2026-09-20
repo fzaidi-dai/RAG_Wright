@@ -68,19 +68,23 @@ def test_cost_capturing_client_taps_cost_from_the_raw_chunk():
         ChatOpenAI._convert_chunk_to_generation_chunk = orig  # type: ignore[method-assign]
 
 
-async def test_astream_text_passes_real_cost_to_record_generation(monkeypatch):
-    # issue 0021: the captured cost reaches record_generation (not None -> no $0.00/UNPRICED).
+async def test_astream_text_opens_before_and_passes_real_cost_on_finish(monkeypatch):
+    # issue 0021: the captured cost reaches the generation emit (not None -> no $0.00/UNPRICED).
+    # 0048: the generation is OPENED before the call (stage on start) and the cost lands on FINISH (real span).
     from rag_wright.models import tracing
 
     fake = FakeStreamingClient(chunks=("ok",))
     fake._cost_holder = {"cost": 3.5e-06}  # the subclass would populate this from the raw chunk
     monkeypatch.setattr(seam, "build_model", lambda *a, **k: fake)
     monkeypatch.setattr(tracing, "tracing_on", lambda: True)
-    rec: dict = {}
-    monkeypatch.setattr(tracing, "record_generation", lambda **kw: rec.update(kw))
+    started: dict = {}
+    finished: dict = {}
+    monkeypatch.setattr(tracing, "start_generation", lambda **kw: (started.update(kw) or "GEN"))
+    monkeypatch.setattr(tracing, "finish_generation", lambda gen, **kw: finished.update({"gen": gen, **kw}))
     out = await seam.astream_text("m", "prompt")
     assert out == "ok"
-    assert rec["cost"] == 3.5e-06 and rec["stage"] == "astream_text"
+    assert started["stage"] == "astream_text"                 # opened before the call
+    assert finished["gen"] == "GEN" and finished["cost"] == 3.5e-06  # ended after, with the real cost
 
 
 # --- issue 0025 / 0042: build_structured reads tokens + real cost off the raw response ----------------------

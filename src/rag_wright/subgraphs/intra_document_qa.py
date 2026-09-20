@@ -41,6 +41,7 @@ from rag_wright.capabilities.answer_generator import EvidenceItem, GeneratedAnsw
 from rag_wright.capabilities.clause_exception_linking import CAP_FUNCTION
 from rag_wright.capabilities.contract_kg_serve import CitedClause, CitedProperty
 from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.models import tracing  # 0048: emit retrieval as a Langfuse span, split from the generation
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
@@ -186,7 +187,8 @@ def build_intra_document_qa(
         # node_attempt is 1-indexed; a transient blip re-raises so the RetryPolicy retries, EXCEPT on the
         # final attempt where it degrades to NO clauses (the generator abstains -- the query is never lost).
         attempt = runtime.execution_info.node_attempt
-        with business_span("intra_document_qa.serve", contract_id=state["contract_id"]):
+        with business_span("intra_document_qa.serve", contract_id=state["contract_id"]), \
+                tracing.traced_step("intra_document_qa.serve"):  # 0048: retrieval span, separable from generate
             try:
                 clauses = serve_fn(state["contract_id"], state["question"])
             except Exception as exc:  # noqa: BLE001 - transient -> retry, or degrade to empty on exhaustion
@@ -201,7 +203,8 @@ def build_intra_document_qa(
             return {"evidence": []}
         attempt = runtime.execution_info.node_attempt
         contract_id = state["contract_id"]
-        with business_span("intra_document_qa.assemble", clause_count=len(clauses)):
+        with business_span("intra_document_qa.assemble", clause_count=len(clauses)), \
+                tracing.traced_step("intra_document_qa.assemble"):  # 0048: rehydration/retrieval span
             try:
                 texts = clause_text_fn(contract_id, clauses)
             except KeyError as exc:  # an orphan span_id is a pipeline inconsistency: surface, never fabricate

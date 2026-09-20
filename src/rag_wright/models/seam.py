@@ -283,28 +283,34 @@ def build_structured(
     # is removed once all callers are async (Phase D). `RunnableLambda(func, afunc=...)` routes each accordingly.
     sync_runnable = _with_bounded_retry(inner, model_id)
 
-    def _finish(result: Any, prompt: Any, latency_ms: float) -> Any:
+    def _finish(result: Any, latency_ms: float, gen: Any) -> Any:
         raw = result.get("raw") if isinstance(result, dict) else None
         inp, out, cost = _usage_from_raw(raw)
         # issue 0042: record into any active usage scope (no-op if none) -- always, regardless of tracing.
         usage_acct.record_usage(model_id, input_tokens=inp, output_tokens=out, cost=cost, latency_ms=latency_ms)
-        if traced:  # ISSUE-0025: the Langfuse generation (only when tracing is on)
+        if gen is not None:  # ISSUE-0025 / 0048: end the generation opened before the call (real span duration)
             parsed = result.get("parsed") if isinstance(result, dict) else None
-            tracing.record_generation(
-                model=model_id, input=prompt, output=parsed,
-                usage=({"input": inp, "output": out} if (inp or out) else None), cost=cost,
-                latency_ms=latency_ms, label=label, stage="build_structured")
+            gid = _provider_gen_id(raw)  # 0048: OpenRouter generation id for queue-vs-gen attribution
+            tracing.finish_generation(
+                gen, output=parsed, usage=({"input": inp, "output": out} if (inp or out) else None),
+                cost=cost, latency_ms=latency_ms,
+                metadata=({"openrouter_generation_id": gid} if gid else None))
         # hand the caller back the exact shape it asked for (we forced include_raw internally)
         return result if include_raw else (result.get("parsed") if isinstance(result, dict) else result)
 
     def _sync(x: Any) -> Any:
+        # 0048: open the generation BEFORE the call so Langfuse's own latency is the real duration.
+        gen = tracing.start_generation(model=model_id, input=x, label=label, stage="build_structured") \
+            if traced else None
         t0 = time.monotonic()
-        return _finish(sync_runnable.invoke(x), x, (time.monotonic() - t0) * 1000.0)
+        return _finish(sync_runnable.invoke(x), (time.monotonic() - t0) * 1000.0, gen)
 
     async def _adeadline(x: Any) -> Any:
+        gen = tracing.start_generation(model=model_id, input=x, label=label, stage="build_structured") \
+            if traced else None
         t0 = time.monotonic()
         result = await _ainvoke_bounded(inner, x, model_id, label)
-        return _finish(result, x, (time.monotonic() - t0) * 1000.0)
+        return _finish(result, (time.monotonic() - t0) * 1000.0, gen)
 
     return RunnableLambda(_sync, afunc=_adeadline)
 
@@ -326,6 +332,15 @@ def _usage_from_raw(raw: Any) -> tuple[int, int, Any]:
     um = getattr(raw, "usage_metadata", None) or {}
     token_usage = (getattr(raw, "response_metadata", {}) or {}).get("token_usage") or {}
     return int(um.get("input_tokens", 0) or 0), int(um.get("output_tokens", 0) or 0), token_usage.get("cost")
+
+
+def _provider_gen_id(raw: Any) -> Optional[str]:
+    """The provider's generation id off a raw response (LangChain sets it on `.id`; else `response_metadata.id`).
+    On OpenRouter this resolves at `/api/v1/generation?id=` -- recording it lets a slow call be ATTRIBUTED (queue
+    vs generation time) rather than guessed (issue 0048). None on backends that don't surface one (e.g. vLLM)."""
+    if raw is None:
+        return None
+    return getattr(raw, "id", None) or (getattr(raw, "response_metadata", {}) or {}).get("id")
 
 
 def _call_desc(model_id: str, label: str | None) -> str:
@@ -415,16 +430,27 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     # normalization drops) is recovered from the raw final chunk -- no more $0.00/UNPRICED for an unpriced model.
     client = build_model(model_id, temperature=temperature, _client_cls=_CostCapturingChatOpenAI, **overrides)
     usage: dict[str, Any] = {}
+    ttft: list[Any] = []  # 0048: wall-clock of the FIRST content token (time to first token), for the queue/decode split
+    gid: list[str] = []   # 0048: the provider generation id (OpenRouter) off the stream, for call attribution
 
     async def _consume() -> str:
+        import datetime as _dt
         parts: list[str] = []
         async for chunk in client.astream(prompt):
-            parts.append(str(chunk.content))
+            c = str(chunk.content)
+            if c and not ttft:
+                ttft.append(_dt.datetime.now(_dt.timezone.utc))
+            if not gid and getattr(chunk, "id", None):
+                gid.append(chunk.id)
+            parts.append(c)
             um = getattr(chunk, "usage_metadata", None)
             if um:
                 usage.update(um)
         return "".join(parts)
 
+    # 0048: open the generation BEFORE the call so Langfuse's own latency is the real duration (not ~0).
+    gen = tracing.start_generation(model=model_id, input=prompt, label=label, stage="astream_text") \
+        if traced else None
     t0 = _time.monotonic()
     result = await _bounded_deadline(_consume, model_id, label)
     latency_ms = (_time.monotonic() - t0) * 1000.0
@@ -435,10 +461,11 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
     cost = getattr(client, "_cost_holder", {}).get("cost")
     # issue 0042: record into any active usage scope (no-op if none), regardless of tracing.
     usage_acct.record_usage(model_id, input_tokens=inp, output_tokens=out, cost=cost, latency_ms=latency_ms)
-    if traced:
+    if gen is not None:  # 0048: end the generation opened above -> real span duration + time-to-first-token
         u = {"input": inp, "output": out} if usage else None
-        tracing.record_generation(model=model_id, input=prompt, output=result, usage=u, cost=cost,
-                                  latency_ms=latency_ms, label=label, stage="astream_text")
+        tracing.finish_generation(gen, output=result, usage=u, cost=cost, latency_ms=latency_ms,
+                                  completion_start_time=(ttft[0] if ttft else None),
+                                  metadata=({"openrouter_generation_id": gid[0]} if gid else None))
     return result
 
 

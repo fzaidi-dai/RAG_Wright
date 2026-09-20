@@ -59,36 +59,91 @@ def _get_client() -> Any:
     return _client
 
 
+def start_generation(*, model: str, input: Any = None, label: Optional[str] = None,
+                     role: Optional[str] = None, stage: Optional[str] = None,
+                     metadata: Optional[dict[str, Any]] = None) -> Any:
+    """Open a Langfuse generation AT THE CALL START and return the observation (or None when tracing is off).
+    Its `start_time` is the moment this is called, so pairing it with `finish_generation` after the call makes
+    the span's OWN duration the real wall-clock latency. This matters because langfuse v4 has no way to
+    back-date a start: a post-hoc emit (open + immediately end) reports a ~0s duration and the real figure
+    survives only in metadata -- the defect engine issue 0048 hit (Langfuse's latency column read 0 for
+    `astream_text`/`span-relevance`). `input` is captured only at `verbose`; label/role/stage go into metadata.
+    Document/job grouping comes from the ambient `traced_run`."""
+    lf = _get_client()
+    if lf is None:
+        return None
+    verbose = trace_level() == "verbose"
+    md = {"label": label, "role": role, "stage": stage, **(metadata or {})}
+    md = {k: v for k, v in md.items() if v is not None}
+    try:
+        return lf.start_observation(
+            name=label or stage or "llm", as_type="generation",
+            input=input if verbose else None, model=model, metadata=md or None,
+        )
+    except Exception:  # noqa: BLE001 - never let tracing break a model call
+        return None
+
+
+def finish_generation(gen: Any, *, output: Any = None, usage: Optional[dict[str, int]] = None,
+                      cost: Optional[float] = None, latency_ms: Optional[float] = None,
+                      completion_start_time: Any = None,
+                      metadata: Optional[dict[str, Any]] = None) -> None:
+    """Attach a completed call's results to a generation opened by `start_generation` and END it (end_time =
+    now), so the observation's duration is the true latency. No-op when `gen` is None (tracing off). `output`
+    captured only at `verbose`; `usage` = {"input": n, "output": n}; `cost` is the provider's ACTUAL total USD
+    (OpenRouter pass-through, not an engine price table) -> `cost_details` (None when the backend omits it, e.g.
+    self-hosted vLLM, so Langfuse prices from its own table). `completion_start_time` (time to first token) lets
+    Langfuse split queue+prefill from decode -- the attribution engine issue 0048 asked for. `latency_ms` is
+    also kept in metadata (redundant with the now-correct span duration, but exact)."""
+    if gen is None:
+        return
+    verbose = trace_level() == "verbose"
+    late = {"latency_ms": latency_ms, **(metadata or {})}
+    late = {k: v for k, v in late.items() if v is not None}
+    try:
+        gen.update(output=output if verbose else None, usage_details=usage or None,
+                   cost_details=({"total": cost} if cost is not None else None),
+                   completion_start_time=completion_start_time, metadata=late or None)
+        gen.end()
+    except Exception:  # noqa: BLE001 - never let tracing break a model call
+        pass
+
+
 def record_generation(*, model: str, input: Any = None, output: Any = None,
                       usage: Optional[dict[str, int]] = None, cost: Optional[float] = None,
                       latency_ms: Optional[float] = None, label: Optional[str] = None,
                       role: Optional[str] = None, stage: Optional[str] = None,
                       metadata: Optional[dict[str, Any]] = None) -> None:
-    """Emit ONE Langfuse generation for a COMPLETED model call. No-op unless tracing is on + configured.
-    `input`/`output` are captured only at `verbose`; `usage` = {"input": n, "output": n} token counts; `cost` is
-    the provider's ACTUAL total cost in USD (a pass-through of OpenRouter's reported cost, NOT an engine price
-    table) -- emitted as `cost_details` so Langfuse shows currency without a price row. BOTH emission paths now
-    pass real cost: the litellm path reads `response.usage.cost`, and the `astream_text` path recovers it from the
-    raw streaming chunk via `_CostCapturingChatOpenAI` (issue 0021 -- LangChain's streaming normalization drops
-    `cost`, but OpenRouter returns it on the final chunk's `usage`). `cost` is None only when the backend does not
-    surface it (e.g. self-hosted vLLM), and Langfuse then prices from its own model table. `latency_ms` and
-    label/role/stage go into metadata. Document/job grouping comes from the ambient `traced_run`."""
+    """Post-hoc convenience: open + immediately end a generation. The measured span duration is ~0 (the real
+    latency survives only in metadata) -- PREFER `start_generation`/`finish_generation` around the call so
+    Langfuse's own latency is correct (issue 0048). Kept for a caller that genuinely has only post-call data."""
+    gen = start_generation(model=model, input=input, label=label, role=role, stage=stage, metadata=metadata)
+    finish_generation(gen, output=output, usage=usage, cost=cost, latency_ms=latency_ms)
+
+
+@contextmanager
+def traced_step(name: str, *, metadata: Optional[dict[str, Any]] = None) -> Iterator[None]:
+    """Time a NON-generation sub-step (e.g. retrieval: ArcadeDB + embedding + rerank) as its OWN Langfuse span,
+    so its duration is separable from the generation in the same trace -- the retrieval/generation split engine
+    issue 0048 asked for. No-op unless tracing is on. (Distinct from `subgraphs.observability.business_span`,
+    which is an OTel-ambient span that no-ops under a Langfuse-only setup -- this one emits to Langfuse.)"""
     lf = _get_client()
     if lf is None:
+        yield
         return
-    verbose = trace_level() == "verbose"
-    md = {"label": label, "role": role, "stage": stage, "latency_ms": latency_ms, **(metadata or {})}
-    md = {k: v for k, v in md.items() if v is not None}
+    obs = None
     try:
-        gen = lf.start_observation(
-            name=label or stage or "llm", as_type="generation",
-            input=input if verbose else None, model=model, metadata=md or None,
-        )
-        gen.update(output=output if verbose else None, usage_details=usage or None,
-                   cost_details=({"total": cost} if cost is not None else None))
-        gen.end()
-    except Exception:  # noqa: BLE001 - never let tracing break a model call
-        pass
+        obs = lf.start_observation(name=name, as_type="span", metadata=metadata or None)
+    except Exception:  # noqa: BLE001 - never let tracing break the step
+        obs = None
+    try:
+        yield
+    finally:
+        if obs is not None:
+            try:
+                obs.end()
+            except Exception:  # noqa: BLE001
+                pass
 
 
 @contextmanager

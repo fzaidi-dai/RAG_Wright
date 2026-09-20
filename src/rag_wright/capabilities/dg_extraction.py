@@ -409,42 +409,58 @@ def _deadline_bounded_client_class() -> type:
                     return await litellm.acompletion(**request)
 
             import time as _time
+            # 0048: open the generation BEFORE the call so Langfuse's own latency is the real duration (not ~0);
+            # ended on success AND on the error paths below so no span is left dangling.
+            _gen = tracing.start_generation(
+                model=self.model, input=messages,
+                label=getattr(self, "_stage_label", None) or "docling-graph-extract", stage="litellm") \
+                if traced else None
             _t0 = _time.monotonic()
             try:
                 response = asyncio.run(_go())
             except TimeoutError as exc:
+                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                                          metadata={"error": "timeout"})
                 raise seam.ModelCallTimeout(
                     f"docling-graph extraction on {seam._call_desc(self.model, getattr(self, '_stage_label', None))} "
                     f"exceeded the {seam._MODEL_DEADLINE_S}s deadline") from exc
             except Exception as exc:  # noqa: BLE001 - wrap like the base's _call_api (docling-graph ClientError)
+                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                                          metadata={"error": type(exc).__name__})
                 raise ClientError(f"LiteLLM async call failed: {type(exc).__name__}",
                                   details={"model": self.model, "error": str(exc)}, cause=exc) from exc
 
             choices = response.get("choices", [])
             if not choices:
+                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                                          metadata={"error": "no_choices"})
                 raise ClientError("LiteLLM returned no choices", details={"model": self.model})
             content = choices[0].get("message", {}).get("content")
             if not content:
+                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                                          metadata={"error": "empty_content"})
                 raise ClientError("LiteLLM returned empty content", details={"model": self.model})
             _usage_obj = response.get("usage")
+            _latency_ms = (_time.monotonic() - _t0) * 1000.0
             if capture:
                 # docling-graph party/clause extraction -- the litellm path (invisible to the seam). Read token
                 # usage AND OpenRouter's ACTUAL cost (usage.cost / litellm response_cost); record into any active
-                # usage scope (issue 0042) and, when tracing, emit the generation (issue 0017).
+                # usage scope (issue 0042) and, when tracing, end the generation (issue 0017/0048).
                 _in = int(getattr(_usage_obj, "prompt_tokens", 0) or 0) if _usage_obj else 0
                 _out = int(getattr(_usage_obj, "completion_tokens", 0) or 0) if _usage_obj else 0
                 cost = getattr(_usage_obj, "cost", None) if _usage_obj else None
                 if cost is None:
                     cost = (getattr(response, "_hidden_params", {}) or {}).get("response_cost")
-                _latency_ms = (_time.monotonic() - _t0) * 1000.0
                 usage_acct.record_usage(self.model, input_tokens=_in, output_tokens=_out, cost=cost,
                                         latency_ms=_latency_ms)
-                if traced:
-                    tracing.record_generation(
-                        model=self.model, input=messages, output=str(content),
-                        usage=({"input": _in, "output": _out} if _usage_obj else None), cost=cost,
-                        latency_ms=_latency_ms,
-                        label=getattr(self, "_stage_label", None) or "docling-graph-extract", stage="litellm")
+                _gid = response.get("id")  # 0048: OpenRouter generation id for queue-vs-gen attribution
+                tracing.finish_generation(
+                    _gen, output=str(content),
+                    usage=({"input": _in, "output": _out} if _usage_obj else None), cost=cost,
+                    latency_ms=_latency_ms,
+                    metadata=({"openrouter_generation_id": _gid} if _gid else None))
+            else:
+                tracing.finish_generation(_gen, latency_ms=_latency_ms)  # end the span even when not capturing usage
             metadata = {"finish_reason": choices[0].get("finish_reason"),
                         "model": response.get("model", self.model), "usage": _usage_obj}
             return str(content), metadata
