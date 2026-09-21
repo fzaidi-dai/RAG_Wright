@@ -26,6 +26,6 @@ cd /Users/farhan/work/RuleWright
 PYTHONPATH=. RULEWRIGHT_TRACE_LEVEL=generations \
   uv run python evals/run_decomposition.py --arm prompted --live --only a_pair --out /tmp/ap.json
 ```
-That's the run that will confirm the Langfuse latency column is now non-zero for engine spans and show the retrieval/generation split — the definitive check we deferred to the joint repro. We also have four scoping questions out to you (relayed separately) about pointing both `agent-llm` and the engine's calls at a single Modal endpoint for part 2.
+That's the run that will confirm the Langfuse latency column is now non-zero for engine spans and show the retrieval/generation split — the definitive check we deferred to the joint repro. For part 2 (moving the model to a single Modal endpoint), we have four scoping questions for you in `docs/handoff/2026-09-21_0048-part2-modal-scoping-questions_rulewright.md`.
 
 Reference: ADR-0113, `models/tracing.py` (`start_generation`/`finish_generation`/`traced_step`), `models/seam.py` (build_structured + astream_text), `capabilities/dg_extraction.py`, `subgraphs/intra_document_qa.py`, engine issue `docs/engine-issues/0048-...`. Full suite: 1586 passed.
