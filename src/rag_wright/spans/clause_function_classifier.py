@@ -384,3 +384,98 @@ def production_batch_clause_classifier(model_id: str) -> LlmBatchClauseClassifie
     return LlmBatchClauseClassifier(_TagClassifierRunnable(
         model_id, instructions=_BATCH_TAG_INSTRUCTIONS, parse=parse_batch_span_tags,
         label="clause_function_classifier.classify_spans"))
+
+
+# --- T55 / SETFIT-SEG-1: trained SetFit soft-tagger (replaces the LLM classifier for ingestion latency) ----------
+# Behind the SAME ClauseFunctionClassifier seam as LlmBatchClauseClassifier / LegalBertClauseAdapter -- a new
+# IMPLEMENTATION of the already-registered `clause_function_classification` capability, no contract/API change.
+# Function is a SOFT tag (ADR-0047), so emitting multiple tags per span is intended.
+class SetFitClauseAdapter:
+    """In-process ENSEMBLE of trained SetFit models. Each model on disk is a Sentence-Transformer body
+    (`model.safetensors` + configs) + a joblib-pickled sklearn head (`model_head.pkl`), so inference needs only
+    sentence-transformers + scikit-learn + joblib -- NO `setfit` dependency. `classify_spans` encodes every span
+    with each body, AVERAGES the per-class probabilities across the ensemble, and emits the top-k labels above
+    `threshold` as `FunctionScore` soft tags (primary-first). Span-level (ignores `chunk_text`, like
+    `LegalBertClauseAdapter`). Load-don't-retrain from local checkpoints; milliseconds/span, no network hop."""
+
+    def __init__(self, model_dirs, *, top_k: int = 3, threshold: float = 0.0,
+                 hi: float = 0.6, mid: float = 0.3, device: str | None = None, batch_size: int = 32) -> None:
+        # DEFAULT = the finalized operating point: pure avg-prob TOP-3 (threshold 0.0) -> ~3.0 tags/span, the
+        # validated 50/52 classes >0.65 recall. A higher threshold trims tags but drops recall (e.g. 0.10 -> ~2.0
+        # tags, ~47/52); tune via RAG_SETFIT_THRESHOLD / RAG_SETFIT_TOPK only with a re-measured operating point.
+        import json
+        from pathlib import Path
+
+        import joblib
+        import numpy as np
+        from sentence_transformers import SentenceTransformer
+
+        self._np = np
+        self._top_k, self._threshold, self._hi, self._mid, self._batch = top_k, threshold, hi, mid, batch_size
+        self._models: list[tuple] = []
+        for d in model_dirs:
+            d = Path(d)
+            cfg = json.loads((d / "config_setfit.json").read_text())
+            body = SentenceTransformer(str(d), device=device)
+            head = joblib.load(d / "model_head.pkl")
+            self._models.append((body, head, bool(cfg.get("normalize_embeddings", False)),
+                                 [str(c) for c in head.classes_]))
+        if not self._models:
+            raise ValueError("SetFitClauseAdapter needs at least one model dir")
+        self._labels = sorted({lab for *_, cols in self._models for lab in cols})  # union label space (robust)
+        self._lab_idx = {lab: i for i, lab in enumerate(self._labels)}
+
+    def classify(self, clause_text: str) -> list[FunctionScore]:
+        return self.classify_spans("", [clause_text])[0]
+
+    def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:  # noqa: ARG002
+        if not span_texts:
+            return []
+        np = self._np
+        agg = np.zeros((len(span_texts), len(self._labels)))
+        for body, head, norm, cols in self._models:
+            proba = np.asarray(head.predict_proba(
+                body.encode(list(span_texts), normalize_embeddings=norm, batch_size=self._batch)), dtype=float)
+            for j, c in enumerate(cols):
+                idx = self._lab_idx.get(c)
+                if idx is not None:
+                    agg[:, idx] += proba[:, j]
+        agg /= len(self._models)
+        out: list[list[FunctionScore]] = []
+        for row in agg:
+            scores: list[FunctionScore] = []
+            for j in np.argsort(-row)[: self._top_k]:
+                p = float(row[j])
+                if p < self._threshold:
+                    break
+                canon = canonical_function(self._labels[int(j)])
+                if not canon:
+                    continue
+                conf = (FunctionConfidence.HIGH if p >= self._hi
+                        else FunctionConfidence.MEDIUM if p >= self._mid else FunctionConfidence.LOW)
+                scores.append(FunctionScore(function=canon, confidence=conf))
+            out.append(scores)
+        return out
+
+
+def production_setfit_clause_classifier(model_root: str | None = None, **kwargs) -> SetFitClauseAdapter:
+    """Wire the ENSEMBLE SetFit soft-tagger -- the ingestion default (replaces the LLM classifier for latency,
+    T55/SETFIT-SEG-1). Loads the 3 finalized checkpoints (LegalBERT + BGE-large + MPNet) from `model_root`
+    (env RAG_SETFIT_CLAUSE_DIR; default data/models/setfit_clause). In-process, no network hop, no `setfit` dep.
+    Tunables: RAG_SETFIT_TOPK, RAG_SETFIT_THRESHOLD, RAG_SETFIT_DEVICE."""
+    import os
+    from pathlib import Path
+
+    root = Path(model_root or os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_clause"))
+    subdirs = [root / n for n in ("cap128b_legalbert", "cap128b_bge", "cap128b_mpnet")]
+    present = [d for d in subdirs if (d / "model_head.pkl").exists()]
+    if not present:
+        raise FileNotFoundError(
+            f"No SetFit clause checkpoints under {root} (expected cap128b_legalbert/bge/mpnet). "
+            "Download them from the model store, or set RAG_FUNCTION_CLASSIFIER=llm to use the LLM classifier.")
+    return SetFitClauseAdapter(
+        present,
+        top_k=int(os.getenv("RAG_SETFIT_TOPK", str(kwargs.pop("top_k", 3)))),
+        threshold=float(os.getenv("RAG_SETFIT_THRESHOLD", str(kwargs.pop("threshold", 0.0)))),
+        device=os.getenv("RAG_SETFIT_DEVICE") or kwargs.pop("device", None),
+        **kwargs)

@@ -840,12 +840,20 @@ def aproduction_document_ingest(
     aextract_parties_fn = (aproduction_extract_fn(model_id=graph_extract_id) if graph_extract_id
                            else aproduction_extract_fn())
     if classify_fn is None:
-        from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
+        # T55/SETFIT-SEG-1: the clause-function classifier is a SOFT tag (ADR-0047), so its implementation swaps
+        # behind this seam with NO contract/API change. DEFAULT is now the in-process trained SetFit ensemble
+        # soft-tagger (ms/span, no LLM call -- the ingestion-latency lever). RAG_FUNCTION_CLASSIFIER=llm reverts to
+        # the LLM tag-classifier (issue 0005; RAG_MODEL_FUNCTION_CLASSIFY still moves just that model). A passed-in
+        # `classify_fn` overrides everything.
+        _clf_kind = os.getenv("RAG_FUNCTION_CLASSIFIER", "setfit").lower()
+        if _clf_kind == "setfit":
+            from rag_wright.spans.clause_function_classifier import production_setfit_clause_classifier
 
-        # issue 0005: the classifier has its OWN role (FUNCTION_CLASSIFY) -- defaults to the product LLM (granite,
-        # unchanged), but RAG_MODEL_FUNCTION_CLASSIFY moves JUST this stage (e.g. to Gemma-4) without touching the
-        # others. Route (b) tag-parse runs on any model. A `classify_fn` passed in still overrides everything.
-        classify_fn = production_batch_clause_classifier(model_for(ModelRole.FUNCTION_CLASSIFY))
+            classify_fn = production_setfit_clause_classifier()
+        else:
+            from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
+
+            classify_fn = production_batch_clause_classifier(model_for(ModelRole.FUNCTION_CLASSIFY))
     embedder = embedder if embedder is not None else BGEM3Embedder()
     template_version = hashlib.sha256(
         json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]

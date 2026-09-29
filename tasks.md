@@ -4918,6 +4918,41 @@ change (ask-first, load-bearing) and must preserve strict-reject of the genuinel
 their tests. **Note:** decide the shape with us before touching the ontology; do not extend it as a side
 effect of any OKF task.
 
+### Task T55 (SETFIT-SEG-1): SetFit soft-tagger adapter for clause-function classification (segment step)
+
+**Description:** Replace the LLM tag-classifier as the segment-step default with a trained SetFit soft-tagger,
+behind the EXISTING `ClauseFunctionClassifier` Protocol seam (`spans/clause_function_classifier.py`). The per-chunk
+LLM classify call is the dominant, multiplying latency for bulk ingestion (a 500-document corpus becomes unusable);
+the converged SetFit experiment (`~/work/clause-classifier-ab`, PLAN.md) reaches per-class recall >0.65 on 50/52
+clause types at ~3 tags/span in ms/span, beating the LLM classifier on BOTH accuracy and latency. This is a new
+IMPLEMENTATION of an already-registered capability (`clause_function_classification`, CAP-REG-2), for a soft,
+non-load-bearing signal (ADR-0047) — so it is an internal implementation swap selected through the seam, exactly
+like the existing `LegalBertClauseAdapter`. **No capability / API / contract / MCP change.**
+
+**RAC-55:**
+- [ ] `SetFitClauseAdapter` implements `ClauseFunctionClassifier.classify_spans(chunk_text, span_texts) ->
+  list[list[FunctionScore]]` (span-level, ignores `chunk_text` like `LegalBertClauseAdapter`); emits soft tags
+  primary-first, only those above a confidence threshold (multi-tag; never a gate).
+- [ ] Continuous SetFit probabilities are mapped to the existing coarse `FunctionScore.confidence` enum INSIDE the
+  adapter and the soft-tag threshold applied there, so the downstream contract is unchanged.
+- [ ] The classifier is chosen through the classifier-selection seam (config/profile), not hardcoded; the LLM and
+  LegalBERT paths remain selectable.
+- [ ] The model is served for ingestion without a per-span network hop — decide in-task: in-process local load vs
+  the Modal substrate — and loads a PRESERVED checkpoint (no retrain at ingest time).
+- [ ] Live end-to-end ingest on a real contract uses the SetFit adapter and writes function tags; recall + latency
+  vs the LLM classifier recorded on a representative slice (live test at the gate).
+- [ ] Verified NO change to any capability contract, ARD manifest, MCP surface, or query/ingestion API
+  (import-linter + capability registry unchanged).
+
+**Dependencies:** converged SetFit experiment (checkpoints `ckpt:cap128b_*`). **Scope:** M. **Status:** DONE
+(2026-09-29, ADR-0114). **Files:** `src/rag_wright/spans/clause_function_classifier.py` (+ `SetFitClauseAdapter`
++ `production_setfit_clause_classifier`), `subgraphs/contract_ingestion_pipeline.py` (flag branch),
+`tests/spans/test_setfit_clause_adapter.py`, `pyproject.toml`/`uv.lock` (ST 6.1 / transformers 5.8 / hub 1.33).
+**Note:** DONE — SetFit ensemble is the DEFAULT (`RAG_FUNCTION_CLASSIFIER=setfit`); LLM shelved behind `=llm`.
+In-process, no `setfit` dep, 3 tags/span @ 50/52, ~37 ms/span (vs per-chunk LLM network call). No contract/API/MCP
+change. Dep upgrade regression-tested (1586 pass; BGE embeddings byte-identical). Recipe = the **`setfit` skill**.
+The 2 residual classes (license subtypes) tag as parent "License Grant" — acceptable multi-tag (ADR-0047).
+
 ---
 
 ## Requirements coverage map
