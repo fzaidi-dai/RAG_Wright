@@ -72,10 +72,15 @@ Apply in this order; stop when the per-class bar is met.
 3. **SOFT-TAG / TOP-K instead of forcing one label.** For genuinely confusable classes the true label is often the
    2nd or 3rd candidate, not the 1st. Emitting top-k (or all above a threshold) lifts per-class recall over the bar
    where single-label never can. This is the natural frame for tagging/augmenting steps.
-4. **ENSEMBLE the backbones.** Run all, combine their tags. Union-of-top-k maximizes recall (more tags/span);
-   averaging probabilities then taking top-k gives a fixed tag budget. Mind the **recall vs tags-per-span
-   tradeoff**: pick the SMALLEST tag budget that clears the bar. Full coverage at a large tag budget is noisy and
-   usually not worth the last class or two.
+4. **ENSEMBLE the backbones — but only when they're COMPLEMENTARY.** Run all, combine their tags. Union-of-top-k
+   maximizes recall (more tags/span); averaging probabilities then taking top-k gives a fixed tag budget. Mind the
+   **recall vs tags-per-span tradeoff**: pick the SMALLEST tag budget that clears the bar. **Caveat (measured): the
+   ensemble only helps when the backbones fail on DIFFERENT classes** (as in a large many-class soft-tagger). On a
+   SMALL single-label task where one domain-matched backbone simply DOMINATES (the others are weaker, not
+   complementary), averaging regresses toward the weaker consensus and *lowers* the strong model — verified on a
+   3-class distilled property-dimension (LegalBERT 0.84 alone vs 0.80 ensembled). So: **for small single-label
+   classifiers, pick the best single backbone; reserve ensembling for many-class / multi-tag problems** — and
+   always A/B the ensemble against the best single model rather than assuming it wins.
 5. **CALIBRATION** (temperature or Platt scaling, fit on a held-out val set) makes probabilities honest so a
    chosen threshold has predictable precision. **It is monotonic** — it cannot separate a confidently-wrong
    prediction from a confidently-right one. Use it to pick a principled threshold, not to fix separability.
