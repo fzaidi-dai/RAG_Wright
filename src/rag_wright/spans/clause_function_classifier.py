@@ -428,6 +428,15 @@ class SetFitClauseAdapter:
     def classify(self, clause_text: str) -> list[FunctionScore]:
         return self.classify_spans("", [clause_text])[0]
 
+    async def aclassify_spans(self, chunk_text: str, span_texts: list[str],
+                              *, sem: asyncio.Semaphore | None = None) -> list[list[FunctionScore]]:
+        # the ingestion pipeline calls aclassify_spans under a shared concurrency bound. SetFit is CPU-bound and
+        # in-process, so run the sync encode+predict off the event loop in a thread; the sem bounds in-flight work.
+        if sem is None:
+            return await asyncio.to_thread(self.classify_spans, chunk_text, span_texts)
+        async with sem:
+            return await asyncio.to_thread(self.classify_spans, chunk_text, span_texts)
+
     def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:  # noqa: ARG002
         if not span_texts:
             return []

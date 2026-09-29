@@ -47,6 +47,21 @@ def test_empty_and_single_span(clf):
     assert any(t.function == "Governing Law" for t in single)
 
 
+def test_aclassify_spans_is_the_method_the_pipeline_calls(clf):
+    # the ingestion segment step calls aclassify_spans(chunk, spans, sem=...) -- guard against it being missing
+    import asyncio
+
+    async def _run():
+        return await clf.aclassify_spans(
+            "shared chunk context",
+            ["This Agreement shall be governed by the laws of the State of Delaware."],
+            sem=asyncio.Semaphore(2))
+
+    out = asyncio.run(_run())
+    assert len(out) == 1
+    assert "Governing Law" in [t.function for t in out[0]]
+
+
 def test_span_level_ignores_chunk_context(clf):
     # span-level (like LegalBertClauseAdapter): the chunk_text arg must not change per-span results
     span = ["Licensor hereby grants Licensee a perpetual, irrevocable, worldwide license to use the Software."]
