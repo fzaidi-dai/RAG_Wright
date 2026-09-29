@@ -34,7 +34,9 @@ class SpanRecord(BaseModel):
     parent_okf_path: str = ""  # where the parent clause lives in the clause OKF bundle
     span_index: int
     text: str
-    function: str = ""  # the function-classifier tag (T56); "" until classified
+    function: str = ""  # the PRIMARY function-classifier tag (T56); "" until classified. == functions[0] when set.
+    functions: list[str] = []  # T55/ADR-0114: the top-k soft tags primary-first (SetFit ensemble); `function` is
+    #   functions[0]. Realizes the multi-tag soft-tagger so a span is discoverable under several clause types.
     dense_vector: list[float]  # dense over the span; length == BGE_M3_DENSE_DIM
     sparse_vector: dict[int, float]  # sparse over the span: token-id -> non-negative weight
     contract_id: str = ""  # CU-A1: source contract/document id (within-contract typed filter)

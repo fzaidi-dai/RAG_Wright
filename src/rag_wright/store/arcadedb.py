@@ -273,7 +273,8 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.parent_okf_path STRING")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.span_index INTEGER")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.text STRING")
-            self._command(f"CREATE PROPERTY {SPAN_TYPE}.function STRING")  # the function-classifier tag (T56)
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.function STRING")  # the PRIMARY function-classifier tag (T56)
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.functions STRING")  # T55/ADR-0114: top-k soft tags, JSON list
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.dense ARRAY_OF_FLOATS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_indices ARRAY_OF_INTEGERS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_weights ARRAY_OF_FLOATS")
@@ -388,6 +389,7 @@ class ArcadeDBStore:
         doc_start = "null" if record.doc_start is None else int(record.doc_start)
         doc_end = "null" if record.doc_end is None else int(record.doc_end)
         pages = "[" + ",".join(str(int(p)) for p in record.pages) + "]"  # issue 0032: source page(s)
+        functions_json = _sql_str(json.dumps(list(record.functions)))  # T55/ADR-0114: top-k soft tags (primary-first)
         bbox = "null" if record.bbox is None else _sql_str(json.dumps(list(record.bbox)))  # best-effort [l,t,r,b]
         self._command(
             f"UPDATE {SPAN_TYPE} SET"
@@ -404,6 +406,7 @@ class ArcadeDBStore:
             f" doc_start = {doc_start},"
             f" doc_end = {doc_end},"
             f" pages = {pages},"  # issue 0032 (CU-B5): source page(s) for the citation highlight
+            f" functions = {functions_json},"  # T55/ADR-0114: top-k soft tags (JSON list, primary-first)
             f" bbox = {bbox}"
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
         )

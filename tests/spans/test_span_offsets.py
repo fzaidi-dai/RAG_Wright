@@ -10,6 +10,20 @@ def _dense() -> list[float]:
     return [0.0] * BGE_M3_DENSE_DIM
 
 
+def test_to_span_record_carries_topk_functions():
+    # T55/ADR-0114: the top-k soft tags are stored on SpanRecord.functions (primary-first); function == functions[0].
+    ops = segment_clause("c:0:h", "9.1 Governing Law. This Agreement is governed by the laws of Delaware.")
+    top_k = ["Governing Law", "Dispute Resolution", "Third Party Beneficiary"]
+    sr = to_span_record(ops[0], contract_id="C1", chunk_doc_start=0, dense_vector=_dense(),
+                        sparse_vector={1: 0.5}, function="Governing Law", functions=top_k)
+    assert sr.functions == top_k
+    assert sr.function == sr.functions[0]
+    # back-compat: when only the primary is given, functions falls back to [primary]
+    sr2 = to_span_record(ops[0], contract_id="C1", chunk_doc_start=0, dense_vector=_dense(),
+                         sparse_vector={1: 0.5}, function="Governing Law")
+    assert sr2.functions == ["Governing Law"]
+
+
 def test_document_absolute_span_offsets_round_trip():
     chunk_body = ("9.1 No Consequential Damages. Neither party is liable for indirect loss. "
                   "9.2 Cap. Liability is limited to the fees paid.")

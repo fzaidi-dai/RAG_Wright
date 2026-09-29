@@ -930,11 +930,12 @@ def aproduction_document_ingest(
         def _write_all() -> dict:
             count = 0
             failures: list[dict] = []
-            for (op, function, chunk_doc_start, _scores), dense, sparse in zip(segments, dense_vecs, sparse_vecs):
+            for (op, function, chunk_doc_start, scores), dense, sparse in zip(segments, dense_vecs, sparse_vecs):
                 try:
                     store.upsert_span(to_span_record(
                         op, contract_id=doc.source_doc_id, chunk_doc_start=chunk_doc_start,
-                        dense_vector=list(dense), sparse_vector=sparse, function=function))
+                        dense_vector=list(dense), sparse_vector=sparse, function=function,
+                        functions=[s.function for s in scores]))  # T55: top-k soft tags (primary-first)
                     count += 1
                 except Exception as exc:  # noqa: BLE001 - a per-span write must not sink the KG, but is NOT swallowed
                     failures.append({"span_id": op.span_id, "reason": repr(exc)})  # 0006-C: surfaced -> PARTIAL

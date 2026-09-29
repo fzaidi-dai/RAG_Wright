@@ -271,6 +271,7 @@ def to_span_record(
     dense_vector: list[float],
     sparse_vector: dict[int, float],
     function: str = "",
+    functions: list[str] | None = None,
     parent_okf_path: str | None = None,
 ) -> SpanRecord:
     """CU-B2 (ADR-0029): OperativeSpan -> SpanRecord with DOCUMENT-ABSOLUTE offsets.
@@ -288,6 +289,7 @@ def to_span_record(
         span_index=op.span_index,
         text=op.text,
         function=function,
+        functions=list(functions) if functions else ([function] if function else []),
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
         contract_id=contract_id,
