@@ -733,7 +733,8 @@ def clause_extraction_jobs(segments: list) -> list:
 
 
 async def _aextract_clause_with_retry(
-    extractor: Any, *, chunk_id: Any, function: str, text: str, span_id: str, attempts: int
+    extractor: Any, *, chunk_id: Any, function: str, text: str, span_id: str, attempts: int,
+    functions: tuple[str, ...] = ()
 ) -> tuple[Any, str]:
     """Extract one clause with bounded retries. PARTIAL-CAUSE-1: docling-graph's `ExtractionFailed` is raised on
     ANY logged docling error -- not only a deterministic "No valid JSON", but also TRANSIENT blips (an LLM empty
@@ -745,7 +746,8 @@ async def _aextract_clause_with_retry(
     reason = ""
     for _attempt in range(attempts):
         try:
-            record = await extractor.aextract(chunk_id=chunk_id, function=function, text=text, span_id=span_id)
+            record = await extractor.aextract(chunk_id=chunk_id, function=function, text=text, span_id=span_id,
+                                              functions=functions)
             return record, ""
         except Exception as exc:  # noqa: BLE001 - retry any failure (ExtractionFailed captures transients too)
             reason = str(exc)
@@ -802,7 +804,8 @@ def aproduction_document_ingest(
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.ontology.clause_template import Clause
     from rag_wright.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
+    from rag_wright.spans.clause_kg_extractor import classifier_property_extractor
+    from rag_wright.spans.dim_classifier import load_dim_registry
     from rag_wright.spans.segment import to_span_record
 
     parse_dir = Path(cache_dir) / "parsed"
@@ -833,9 +836,13 @@ def aproduction_document_ingest(
         clause_model = default_extraction_model("clause-extract", extract_model)
     graph_extract_id = getattr(graph_extract_model, "model", graph_extract_model)  # None or a bare model-id
     judge_id = getattr(judge_model, "model", judge_model) or model_for(ModelRole.STRUCTURED_REASONING)
-    clause_extractor = granite_clause_extractor(
-        clause_model, list_model=list_model, samples=samples,
-        asemantic_judge_fn=build_asemantic_judge_fn(judge_id))  # ingest semantic-judge model (issue 0033 follow-up)
+    # CLS-D (ADR-0115): Step-3a property extraction is the classifier-first path -- 21 dims via the best-of-both
+    # Laya/SetFit fleet, ONE residual LLM call for the 7 numeric/open dims (`clause_model`). No toggle, no full-LLM
+    # tag-parse fallback for these dims. The ADR-0028/0040/Layer-3 gates apply unchanged (ClassifierPropertyExtractor).
+    clause_extractor = classifier_property_extractor(
+        registry=load_dim_registry(),
+        model_id=getattr(clause_model, "model", clause_model),  # the residual 7-numeric structured call
+        asemantic_judge_fn=build_asemantic_judge_fn(judge_id))
     # party AND affiliation extraction share the graph-extract model (GP-1B); one arg drives both
     aextract_parties_fn = (aproduction_extract_fn(model_id=graph_extract_id) if graph_extract_id
                            else aproduction_extract_fn())
@@ -897,8 +904,15 @@ def aproduction_document_ingest(
         failures: list[dict] = []
         sem = asyncio.Semaphore(clause_concurrency)
 
+        from rag_wright.contracts.function import NO_FUNCTION as _NO_FUNCTION
+
         async def _extract(job: Any) -> Any:
             index, anchor_op, function, scores, text = job  # text = merged provision; anchor_op = citation anchor
+            # CLS-D soft-scoping: the anchor span's TOP-3 real function soft-tags scope the classifier lane (union
+            # of their dims) -- tolerant of the ~0.5 function accuracy, and kills the over-emission a classifier
+            # (which cannot abstain) causes when run unscoped. An untagged span -> () -> no scoping (every dim runs).
+            functions = tuple(dict.fromkeys(
+                s.function for s in (scores or []) if s.function and s.function != _NO_FUNCTION))[:3]
             clause_cid = ChunkId.of(doc.source_doc_id, index, text)
             cache_file = clause_cache_dir / (hashlib.sha256(
                 f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
@@ -907,7 +921,7 @@ def aproduction_document_ingest(
             else:
                 record, reason = await _aextract_clause_with_retry(
                     clause_extractor, chunk_id=clause_cid, function=function, text=text,
-                    span_id=anchor_op.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS)
+                    span_id=anchor_op.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS, functions=functions)
                 if record is None:  # persistent failure -> record it (PARTIAL), do NOT cache, do NOT silently drop
                     failures.append({"span_id": anchor_op.span_id, "function": function, "reason": reason[:200]})
                     return None

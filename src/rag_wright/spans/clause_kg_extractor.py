@@ -304,16 +304,18 @@ class ClassifierPropertyExtractor:
     def _gate(self, record: ClausePropertyRecord, text: str) -> ClausePropertyRecord:
         return symbolic_validate(reground(record, text))  # ADR-0028 lexical, then ADR-0040 symbolic
 
-    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "") -> ClausePropertyRecord:
-        record = self._gate(
-            self._hybrid(chunk_id=chunk_id, function=function, text=text, span_id=span_id), text)
+    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "",
+                 functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
+        record = self._gate(self._hybrid(chunk_id=chunk_id, function=function, text=text, span_id=span_id,
+                                         functions=functions), text)
         if self._semantic_judge_fn is not None:
             record = semantic_judge(record, text, self._semantic_judge_fn)
         return record
 
     async def aextract(self, *, chunk_id: ChunkId, function: str, text: str,
-                       span_id: str = "") -> ClausePropertyRecord:
-        raw = await self._hybrid.aextract(chunk_id=chunk_id, function=function, text=text, span_id=span_id)
+                       span_id: str = "", functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
+        raw = await self._hybrid.aextract(chunk_id=chunk_id, function=function, text=text, span_id=span_id,
+                                          functions=functions)
         record = self._gate(raw, text)
         if self._asemantic_judge_fn is not None:
             record = await asemantic_judge(record, text, self._asemantic_judge_fn)

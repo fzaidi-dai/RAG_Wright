@@ -29,11 +29,11 @@ class _StubHybrid:
         self.calls: list[tuple] = []
         self.acalls: list[tuple] = []
 
-    def __call__(self, *, chunk_id, function, text, span_id=""):
+    def __call__(self, *, chunk_id, function, text, span_id="", functions=()):
         self.calls.append((function, text, span_id))
         return self._record
 
-    async def aextract(self, *, chunk_id, function, text, span_id=""):
+    async def aextract(self, *, chunk_id, function, text, span_id="", functions=()):
         self.acalls.append((function, text, span_id))
         return self._record
 

@@ -14,7 +14,8 @@ Protocol.
 """
 from __future__ import annotations
 
-from typing import Optional, Protocol, runtime_checkable
+from pathlib import Path
+from typing import Any, Optional, Protocol, runtime_checkable
 
 from rag_wright.contracts.property import PropertyDimension
 
@@ -80,14 +81,17 @@ class LayaDimClassifier:
     a single non-autoregressive forward pass. Device auto (CUDA/MPS/CPU) inside laya.load; loaded once."""
 
     def __init__(self, dim: PropertyDimension, model_dir, *, instructions: str, criteria: dict[str, str],
-                 top_k: int = 1, device: Optional[str] = None) -> None:
-        import laya
-
+                 top_k: int = 1, device: Optional[str] = None, agent: Any = None) -> None:
         self.dim = dim
         self._top_k = top_k
         self._q = {dim.value: {"type": "choice", "instructions": instructions, "criteria": criteria}}
-        # laya.load device=None -> CUDA else MPS else CPU; pass an explicit override through if given.
-        self._agent = laya.load(str(model_dir), device=device)
+        # A GROUP checkpoint serves several dims from ONE model: pass a shared pre-loaded `agent` so it is loaded
+        # ONCE (a ModernBERT-large is ~820MB) and every dim in the group queries the same forward-pass backbone.
+        if agent is not None:
+            self._agent = agent
+        else:
+            import laya  # laya.load device=None -> CUDA else MPS else CPU; pass an explicit override if given.
+            self._agent = laya.load(str(model_dir), device=device)
 
     def classify(self, span_text: str) -> list[tuple[str, float]]:
         ans = self._agent.predict(span_text, self._q)["answers"][self.dim.value]
@@ -113,3 +117,42 @@ class DimClassifierRegistry:
     @property
     def dims(self) -> list[PropertyDimension]:
         return list(self._by_dim)
+
+
+# CLS-D: the production 21-dim best-of-both fleet. `dim_fleet.json` (committed config) maps each dim to its
+# framework + local model dir + serving params; model weights live under `data/models/` (gitignored). A LAYA
+# group checkpoint serves several dims -> load each unique model ONCE and share the agent.
+_FLEET_CONFIG = Path(__file__).with_name("dim_fleet.json")
+_MODELS_DIR = Path(__file__).resolve().parents[3] / "data" / "models"
+
+
+def load_dim_registry(config_path=None, *, models_dir=None, device: Optional[str] = None) -> "DimClassifierRegistry":
+    """Load the committed fleet: shared Laya group agents (loaded once) + per-dim SetFit models, behind the
+    device-agnostic seam. Raises FileNotFoundError with the missing path if a checkpoint has not been fetched."""
+    import json
+
+    cfg = json.loads(Path(config_path or _FLEET_CONFIG).read_text())
+    base = Path(models_dir or _MODELS_DIR)
+    laya_agents: dict[str, Any] = {}  # model dir name -> loaded laya agent (shared across its dims)
+    classifiers: dict[PropertyDimension, DimClassifier] = {}
+    for dim_str, spec in cfg.items():
+        dim = PropertyDimension(dim_str)
+        top_k = int(spec.get("top_k", 1))
+        if spec["framework"] == "laya":
+            mdir = base / "laya" / spec["model"]
+            if not mdir.exists():
+                raise FileNotFoundError(f"laya checkpoint not fetched: {mdir}")
+            agent = laya_agents.get(spec["model"])
+            if agent is None:
+                import laya
+                agent = laya.load(str(mdir), device=device)  # device=None -> CUDA/MPS/CPU
+                laya_agents[spec["model"]] = agent
+            q = spec["question"]
+            classifiers[dim] = LayaDimClassifier(dim, mdir, instructions=q["instructions"],
+                                                 criteria=q["criteria"], top_k=top_k, agent=agent)
+        else:
+            mdir = base / "setfit" / spec["model"]
+            if not mdir.exists():
+                raise FileNotFoundError(f"setfit checkpoint not fetched: {mdir}")
+            classifiers[dim] = SetFitDimClassifier(dim, mdir, top_k=top_k, device=device)
+    return DimClassifierRegistry(classifiers)

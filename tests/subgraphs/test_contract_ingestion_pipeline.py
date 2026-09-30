@@ -246,9 +246,11 @@ def test_per_contract_graph_no_parties_yields_no_extraction(tmp_path):
 # --- issue 0033 follow-up: the ingest extraction models are caller-configurable --------------------------------
 
 def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path):
-    """extract_model / list_model / samples / graph_extract_model / judge_model on aproduction_document_ingest
-    thread to the right constructors (a bare model-id string is wrapped into an ExtractionModel for the clause
-    extractor), so a caller no longer needs env vars to change any ingest model."""
+    """extract_model / graph_extract_model / judge_model / chunk_model on aproduction_document_ingest thread to the
+    right constructors, so a caller no longer needs env vars to change any ingest model. Post-CLS-D the clause
+    extractor is the classifier-first `classifier_property_extractor`: `extract_model` threads as the residual
+    numeric-call `model_id` (a bare id via the ExtractionModel's `.model`); `list_model`/`samples` were tag-parse
+    params and no longer apply to it."""
     import pytest
 
     from rag_wright.subgraphs import contract_ingestion_pipeline as pipe
@@ -258,16 +260,17 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     class _StopHere(Exception):
         pass
 
-    def _fake_granite(model=None, *, semantic_judge_fn=None, asemantic_judge_fn=None,
-                      list_model=None, samples=None):
-        captured.update(model=model, list_model=list_model, samples=samples)
+    def _fake_classifier(*, registry=None, model_id=None, semantic_judge_fn=None, asemantic_judge_fn=None):
+        captured.update(model_id=model_id)
         return object()  # dummy extractor; let wiring continue to the party-extraction call
 
     def _fake_party(**kw):
         captured.update(graph_kw=kw)
         raise _StopHere  # party extraction is the last model wiring -> stop before the network-y rest
 
-    monkeypatch.setattr("rag_wright.spans.clause_kg_extractor.granite_clause_extractor", _fake_granite)
+    # the flip: clause extractor is classifier_property_extractor over the loaded fleet -> stub both (no heavy load)
+    monkeypatch.setattr("rag_wright.spans.clause_kg_extractor.classifier_property_extractor", _fake_classifier)
+    monkeypatch.setattr("rag_wright.spans.dim_classifier.load_dim_registry", lambda **kw: object())
     monkeypatch.setattr("rag_wright.spans.semantic_judge.build_asemantic_judge_fn",
                         lambda mid: captured.update(judge_id=mid) or (lambda *a, **k: None))
     monkeypatch.setattr("rag_wright.capabilities.graph_extraction.aproduction_extract_fn", _fake_party)
@@ -277,10 +280,9 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     with pytest.raises(_StopHere):
         pipe.aproduction_document_ingest(
             store=object(), cache_dir=str(tmp_path), registry=object(), embedder=object(),
-            extract_model="some/model-x", list_model="gemma-y", samples=3,
+            extract_model="some/model-x",
             graph_extract_model="party/model-z", judge_model="judge/model-q", chunk_model="chunk/model-c")
-    assert captured["list_model"] == "gemma-y" and captured["samples"] == 3
-    assert getattr(captured["model"], "model", None) == "some/model-x"  # bare id -> ExtractionModel
+    assert captured["model_id"] == "some/model-x"                       # bare id -> ExtractionModel -> residual model_id
     assert captured["judge_id"] == "judge/model-q"                      # ingest semantic-judge model
     assert captured["graph_kw"] == {"model_id": "party/model-z"}        # party + affiliation share this
     assert captured["chunk_model_id"] == "chunk/model-c"                # chunker boundary-refinement model
@@ -290,7 +292,7 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
         pipe.aproduction_document_ingest(
             store=object(), cache_dir=str(tmp_path), registry=object(), embedder=object())
     # no args -> backend/env defaults preserved (existing callers unaffected)
-    assert captured["model"] is None and captured["list_model"] is None and captured["samples"] is None
+    assert captured["model_id"] is None
     assert captured["graph_kw"] == {}  # party extraction falls back to its own default
     assert captured["judge_id"]  # judge falls back to model_for(STRUCTURED_REASONING), a non-empty id
     assert captured["chunk_model_id"] is None  # chunker falls back to model_for(GENERAL)

@@ -1,0 +1,272 @@
+{
+  "assignment_consent": {
+    "floor": 0.88,
+    "framework": "laya",
+    "model": "A_thematic__temporal_consents",
+    "question": {
+      "criteria": {
+        "consent_required": "assignment requires the other party's prior consent / approval before it is effective",
+        "free": "assignment is permitted freely \u2014 no consent and no notice required",
+        "notice_only": "assignment is permitted without consent, but the assigning party must give notice to the other"
+      },
+      "instructions": "May a party assign this agreement, and under what condition?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "cap_basis": {
+    "floor": 0.5,
+    "framework": "setfit",
+    "model": "setfit_all_all-mpnet-base-v2_dim_cap_basis__silver_mpnet",
+    "top_k": 2
+  },
+  "carve_out": {
+    "floor": 0.67,
+    "framework": "setfit",
+    "model": "setfit_all_legal-bert-base-uncased_dim_carve_out__silver_v1",
+    "top_k": 3
+  },
+  "claim_scope": {
+    "floor": 0.923,
+    "framework": "laya",
+    "model": "A_thematic__scope_claims",
+    "question": {
+      "criteria": {
+        "broad_based": "covers claims broadly \u2014 both first-party and third-party, or all claims without limitation",
+        "first_party": "covers claims between the contracting parties themselves (direct / first-party claims)",
+        "third_party": "covers claims brought by third parties (outside the contract) against a party"
+      },
+      "instructions": "What scope of claims does this clause cover?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "coc_consent": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "B_mixed__mix4",
+    "question": {
+      "criteria": {
+        "consent_required": "a change of control requires the other party's consent, or triggers a right to approve or terminate",
+        "notice_only": "a change of control requires only notice to the other party, not consent",
+        "unrestricted": "a change of control is unrestricted \u2014 no consent and no notice required"
+      },
+      "instructions": "On a change of control, what is required of the affected party?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "covered_parties": {
+    "floor": 0.73,
+    "framework": "setfit",
+    "model": "setfit_all_legal-bert-base-uncased_dim_covered_parties__v2",
+    "top_k": 2
+  },
+  "covered_subject": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "A_thematic__scope_claims",
+    "question": {
+      "criteria": {
+        "copyright": "copyright infringement or copyright-related claims",
+        "fraud": "fraud or fraudulent conduct",
+        "gross_negligence": "gross negligence",
+        "ip_infringement": "intellectual-property infringement generally (patent / IP rights, not specifically copyright or trademark)",
+        "trademark": "trademark infringement or trademark-related claims",
+        "violation_of_law": "violation of law or non-compliance with legal requirements"
+      },
+      "instructions": "What subject matter does this indemnity or coverage concern?",
+      "type": "choice"
+    },
+    "top_k": 3
+  },
+  "damage_type": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "A_thematic__scope_claims",
+    "question": {
+      "criteria": {
+        "consequential": "consequential damages \u2014 losses flowing indirectly from the breach (e.g. lost profits, lost business)",
+        "incidental": "incidental damages \u2014 costs incurred incidental to the breach",
+        "indirect": "indirect damages \u2014 not the direct or immediate result of the breach",
+        "punitive": "punitive or exemplary damages \u2014 awarded to punish, beyond compensation",
+        "special": "special damages \u2014 arising from special or particular circumstances"
+      },
+      "instructions": "Which category of damages does this clause address (e.g. exclude or waive)?",
+      "type": "choice"
+    },
+    "top_k": 3
+  },
+  "exclusivity_type": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "A_thematic__ip_restrictions",
+    "question": {
+      "criteria": {
+        "exclusive": "an exclusive right \u2014 granted to the grantee to the exclusion of everyone, including the grantor",
+        "non_exclusive": "a non-exclusive right \u2014 the grantor may grant the same right to others as well",
+        "sole": "a sole right \u2014 granted to the grantee and the grantor keeps rights, but no other third party is granted it"
+      },
+      "instructions": "What kind of license or right does this clause grant?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "favorability": {
+    "floor": 0.667,
+    "framework": "laya",
+    "model": "B_mixed__mix1",
+    "question": {
+      "criteria": {
+        "buyer_favorable": "terms tilt toward the buyer / licensee / customer / receiving party \u2014 limiting their liability or obligations, or expanding their rights/remedies",
+        "seller_favorable": "terms tilt toward the seller / licensor / provider / vendor / disclosing party \u2014 limiting their liability or obligations, or expanding their rights/remedies"
+      },
+      "instructions": "Which side does this clause favor?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "ip_ownership": {
+    "floor": 0.96,
+    "framework": "laya",
+    "model": "B_mixed__mix1",
+    "question": {
+      "criteria": {
+        "assigned": "IP is assigned or transferred to the other party \u2014 ownership moves away from the creator",
+        "joint": "IP is jointly owned by both parties",
+        "retained": "the creating / original party retains ownership of the IP"
+      },
+      "instructions": "Who owns the intellectual property under this clause?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "law_multiplicity": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "A_thematic__temporal_consents",
+    "question": {
+      "criteria": {
+        "multiple": "multiple governing laws / jurisdictions apply (e.g. different laws for different parts, parties, or matters)",
+        "single": "a single governing law / jurisdiction governs the agreement"
+      },
+      "instructions": "Does this governing-law clause name one governing law or several?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "mfn_scope": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "B_mixed__mix3",
+    "question": {
+      "criteria": {
+        "price": "the MFN applies to price only \u2014 the best price given to others must be extended here",
+        "price_and_terms": "the MFN applies to both price and terms",
+        "terms": "the MFN applies to terms or conditions only, not price"
+      },
+      "instructions": "What does this most-favored-nation (MFN) clause cover?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "mutuality": {
+    "floor": 0.67,
+    "framework": "setfit",
+    "model": "setfit_all_legal-bert-base-uncased_dim_mutuality__silver_v1",
+    "top_k": 1
+  },
+  "nonsolicit_target": {
+    "floor": 0.68,
+    "framework": "setfit",
+    "model": "setfit_all_legal-bert-base-uncased_dim_nonsolicit_target__v2",
+    "top_k": 1
+  },
+  "party_asymmetry": {
+    "floor": 0.727,
+    "framework": "laya",
+    "model": "B_mixed__mix3",
+    "question": {
+      "criteria": {
+        "different_per_party": "the obligation or its terms differ by party (one party bears more, or different, terms than the other)",
+        "symmetric": "both parties bear the same obligation, liability, or terms equally / reciprocally"
+      },
+      "instructions": "Does this clause impose the SAME obligations/terms on both parties, or DIFFERENT ones per party?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "procedural": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "B_mixed__mix4",
+    "question": {
+      "criteria": {
+        "control_of_defense": "the clause allocates control of the defense \u2014 who directs the litigation and any settlement",
+        "duty_to_defend": "the indemnifying party has a duty to defend \u2014 it must provide or assume the legal defense of the claim"
+      },
+      "instructions": "What indemnification procedure does this clause specify?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "renewal_mechanism": {
+    "floor": 0.533,
+    "framework": "laya",
+    "model": "C_singleton__renewal_mechanism",
+    "question": {
+      "criteria": {
+        "auto": "the term renews automatically (auto-renewal / evergreen) unless a party gives notice of non-renewal",
+        "requires_notice": "renewal requires an affirmative act \u2014 a party must give notice, or elect, to renew for the term to extend"
+      },
+      "instructions": "How does this agreement's term renew?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "restriction_scope": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "A_thematic__ip_restrictions",
+    "question": {
+      "criteria": {
+        "activity": "restricted by activity or line of business only",
+        "geographic": "restricted by geography or territory only",
+        "geographic_and_activity": "restricted by both geography and activity"
+      },
+      "instructions": "How is this restrictive covenant (e.g. non-compete) scoped?",
+      "type": "choice"
+    },
+    "top_k": 2
+  },
+  "termination_right": {
+    "floor": 0.84,
+    "framework": "laya",
+    "model": "A_thematic__temporal_consents",
+    "question": {
+      "criteria": {
+        "either_party": "both parties have the right to terminate the agreement (mutual / either-side termination right)",
+        "one_party": "only one specified party has the right to terminate (a unilateral termination right; the other party cannot)"
+      },
+      "instructions": "Which party has the right to terminate this agreement?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "warranty_scope": {
+    "floor": 1.0,
+    "framework": "laya",
+    "model": "A_thematic__ip_restrictions",
+    "question": {
+      "criteria": {
+        "as_is": "goods or services are provided 'AS IS', with warranties disclaimed",
+        "express": "provides an express warranty \u2014 an affirmatively stated warranty",
+        "implied": "concerns implied warranties (e.g. merchantability, fitness for purpose) \u2014 extending or disclaiming them",
+        "non_reliance": "a non-reliance provision \u2014 the party did not rely on representations made outside the contract"
+      },
+      "instructions": "What does this warranty clause do?",
+      "type": "choice"
+    },
+    "top_k": 2
+  }
+}

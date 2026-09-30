@@ -60,6 +60,20 @@ def dimensions_for(function: str) -> tuple[PropertyDimension, ...]:
     return FUNCTION_DIMENSIONS.get(function, _DEFAULT_DIMENSIONS)
 
 
+def scoped_dims(functions: tuple[str, ...]) -> Optional[set[PropertyDimension]]:
+    """CLS-D SOFT function-scoping: the UNION of applicable dims over the clause's (top-k) function soft-tags.
+    A classifier cannot say 'not present', so without scoping every dim fires on every span (over-emission on the
+    subjective dims the grounding gate can't prune). Scoping to the top-k functions' dims fixes that while staying
+    tolerant of the ~0.5 function accuracy (the union over top-k catches the right function even when top-1 is
+    wrong). An EMPTY `functions` (a genuinely untagged provision) returns None -> no scoping (run every dim)."""
+    if not functions:
+        return None
+    out: set[PropertyDimension] = set()
+    for f in functions:
+        out.update(dimensions_for(f))
+    return out
+
+
 # CLS-B/C rework (ADR-0066 candidate for ontology migration, like FUNCTION_DIMENSIONS): the FUNCTION-INDEPENDENT
 # Step-3a routing. The classifier lane fills every dim the registry covers. These 7 numeric/open dims are the ONLY
 # ones the LLM extracts -- a classifier cannot emit a number/place/duration -- and that is PERMANENT. The 8
@@ -227,10 +241,14 @@ class HybridPropertyExtractor:
             model_id or model_for(ModelRole.STRUCTURED_REASONING), PropertyExtraction)
         self._retries = retries
 
-    def _classifier_assertions(self, prov: Provenance, text: str, span_id: str) -> list[PropertyAssertion]:
-        """Classifier lane: every covered dim, function-independent, top-k soft tags (accept-weak -> AMBIGUOUS)."""
+    def _classifier_assertions(self, prov: Provenance, text: str, span_id: str,
+                               applicable: Optional[set[PropertyDimension]]) -> list[PropertyAssertion]:
+        """Classifier lane: soft-scoped to the function's applicable dims (`applicable=None` -> every covered dim),
+        top-k soft tags (accept-weak -> AMBIGUOUS)."""
         out: list[PropertyAssertion] = []
         for d in self._registry.dims:
+            if applicable is not None and d not in applicable:
+                continue  # out of the clause function's scope -> don't emit (over-emission fix)
             clf = self._registry.get(d)
             if clf is None:
                 continue
@@ -266,10 +284,11 @@ class HybridPropertyExtractor:
         return ClausePropertyRecord(clause_id=str(chunk_id), function=function,
                                     folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=assertions)
 
-    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "") -> ClausePropertyRecord:
+    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "",
+                 functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
-        assertions = self._classifier_assertions(prov, text, span_id)
+        assertions = self._classifier_assertions(prov, text, span_id, scoped_dims(functions))
         extraction: Optional[PropertyExtraction] = None  # ONE residual call (the 7 numeric dims), always fires
         for _ in range(self._retries):
             try:
@@ -282,11 +301,12 @@ class HybridPropertyExtractor:
         return self._record(chunk_id, function, assertions)
 
     async def aextract(self, *, chunk_id: ChunkId, function: str, text: str,
-                       span_id: str = "") -> ClausePropertyRecord:
-        """ASYNC-B2b (ADR-0057): async twin -- classifiers run in-process (ms), the ONE residual call is awaited."""
+                       span_id: str = "", functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
+        """ASYNC-B2b (ADR-0057): async twin -- classifiers run in-process (ms), the ONE residual call is awaited.
+        `functions` = the clause's top-k function soft-tags for soft-scoping (empty -> every covered dim runs)."""
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
-        assertions = self._classifier_assertions(prov, text, span_id)
+        assertions = self._classifier_assertions(prov, text, span_id, scoped_dims(functions))
         extraction: Optional[PropertyExtraction] = None
         for _ in range(self._retries):
             try:

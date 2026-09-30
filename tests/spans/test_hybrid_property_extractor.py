@@ -23,6 +23,7 @@ from rag_wright.spans.property_extractor import (
     ExtractedProperty,
     HybridPropertyExtractor,
     PropertyExtraction,
+    scoped_dims,
 )
 
 CK = ChunkId(source_doc_id="C1", chunk_index=0, content_hash="0" * 64)
@@ -116,6 +117,29 @@ def test_accept_weak_dims_downgraded_to_ambiguous():
     rec = hx(chunk_id=CK, function="Cap On Liability", text="…", span_id="s5")
     cb = [a for a in rec.assertions if a.dimension == D.CAP_BASIS]
     assert cb and all(a.confidence == ConfidenceTag.AMBIGUOUS for a in cb)  # accept-weak -> AMBIGUOUS, not EXTRACTED
+
+
+def test_soft_function_scoping_limits_the_classifier_lane():
+    # CLS-D: a classifier can't abstain, so unscoped every dim fires. Scoping to the function's dims prevents
+    # over-emission -- an out-of-scope dim (nonsolicit on a cap clause) is NOT emitted; empty functions -> no scoping.
+    reg = DimClassifierRegistry({
+        D.CARVE_OUT: _StubDim(D.CARVE_OUT, [("fraud", 0.9)]),                  # applies to Cap On Liability
+        D.NONSOLICIT_TARGET: _StubDim(D.NONSOLICIT_TARGET, [("employees", 0.99)]),  # does NOT
+        D.IP_OWNERSHIP: _StubDim(D.IP_OWNERSHIP, [("retained", 0.9)]),          # does NOT
+    })
+    hx = HybridPropertyExtractor(reg, runnable=_StubRunnable([]))
+    scoped = hx(chunk_id=CK, function="Cap On Liability", text="…", span_id="s", functions=("Cap On Liability",))
+    dims = {a.dimension for a in scoped.assertions}
+    assert D.CARVE_OUT in dims                              # in-scope -> classified
+    assert D.NONSOLICIT_TARGET not in dims and D.IP_OWNERSHIP not in dims  # out-of-scope -> NOT emitted
+    # union over top-k functions: adding an IP function brings ip_ownership back into scope
+    scoped2 = hx(chunk_id=CK, function="Cap On Liability", text="…",
+                 functions=("Cap On Liability", "IP Ownership Assignment"))
+    assert D.IP_OWNERSHIP in {a.dimension for a in scoped2.assertions}
+    # no functions -> no scoping (function-independent fallback: every covered dim runs)
+    unscoped = hx(chunk_id=CK, function="Cap On Liability", text="…")
+    assert {D.CARVE_OUT, D.NONSOLICIT_TARGET, D.IP_OWNERSHIP} <= {a.dimension for a in unscoped.assertions}
+    assert scoped_dims(()) is None                          # empty -> no scoping sentinel
 
 
 def test_single_residual_llm_call_always_fires_exactly_once():

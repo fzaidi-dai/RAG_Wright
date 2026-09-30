@@ -122,7 +122,7 @@ class _FlakyExtractor:
         self.calls = 0
         self.record = record
 
-    async def aextract(self, *, chunk_id, function, text, span_id):  # noqa: ANN001, ARG002
+    async def aextract(self, *, chunk_id, function, text, span_id, functions=()):  # noqa: ANN001, ARG002
         self.calls += 1
         if self.calls <= self.fail_times:
             raise ExtractionFailed("clause", "LiteLLM returned empty content")  # a transient blip, not furniture

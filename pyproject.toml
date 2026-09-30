@@ -19,6 +19,7 @@ dependencies = [
     "langchain-quickjs==0.3.2", # pinned exactly: interpreter runtime is beta (ADR-0015); MIT (quickjs-rs)
     "langfuse>=4.15.1",
     "langgraph",
+    "laya>=0.3.22",
     "mcp>=1.28.1",
     "pillow>=12.3.0",
     "pydantic>=2.0",
