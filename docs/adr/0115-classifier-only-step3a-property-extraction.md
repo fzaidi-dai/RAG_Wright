@@ -1,7 +1,9 @@
 # ADR-0115: Classifier-only Step-3a property extraction (21-dim best-of-both fleet + one residual numeric LLM call)
 
 ## Status
-Accepted (2026-09-30). Supersedes the CLS-B function-aware `HybridPropertyExtractor` sketch; builds on
+Accepted (2026-09-30). **Refined by ADR-0116**: the classifier lane's "function-independent" framing below was
+softened to SOFT function-scoping after CLS-D found that classifiers (which cannot abstain) over-emit on the
+subjective dims — see ADR-0116. Supersedes the CLS-B function-aware `HybridPropertyExtractor` sketch; builds on
 ADR-0049 (generic-customer lens), ADR-0081/0049 (function-independent extraction), ADR-0030 (adopt-only-if-better),
 ADR-0028 (grounding gate), ADR-0040 (symbolic gate), ADR-0114 (SetFit clause-function classifier).
 
