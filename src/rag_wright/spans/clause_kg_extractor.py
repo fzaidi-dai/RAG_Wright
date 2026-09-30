@@ -286,3 +286,48 @@ def granite_clause_extractor(model: Any = None, *, semantic_judge_fn: Any = None
         aextract_fn=lambda text: aextract_clause(text, chosen),
         semantic_judge_fn=semantic_judge_fn, asemantic_judge_fn=asemantic_judge_fn,
     )
+
+
+class ClassifierPropertyExtractor:
+    """CLS-C (ADR-0115): the classifier-first Step-3a property extractor. Runs the FUNCTION-INDEPENDENT
+    `HybridPropertyExtractor` (classifiers for the 21 covered dims + ONE residual LLM call for the 7 numeric/open
+    dims) and then the SAME record-level gates as `DGClausePropertyExtractor`: ADR-0028 `reground` -> ADR-0040
+    `symbolic_validate` -> optional Layer-3 `semantic_judge` (sync) / `asemantic_judge` (async). This REPLACES the
+    full-LLM tag-parse extraction for these dims -- it is the decided path, not a toggle over an LLM fallback.
+    Same `PropertyExtractor` Protocol (`__call__` + `aextract`), so nothing downstream changes."""
+
+    def __init__(self, hybrid: Any, *, semantic_judge_fn: Any = None, asemantic_judge_fn: Any = None) -> None:
+        self._hybrid = hybrid
+        self._semantic_judge_fn = semantic_judge_fn
+        self._asemantic_judge_fn = asemantic_judge_fn
+
+    def _gate(self, record: ClausePropertyRecord, text: str) -> ClausePropertyRecord:
+        return symbolic_validate(reground(record, text))  # ADR-0028 lexical, then ADR-0040 symbolic
+
+    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "") -> ClausePropertyRecord:
+        record = self._gate(
+            self._hybrid(chunk_id=chunk_id, function=function, text=text, span_id=span_id), text)
+        if self._semantic_judge_fn is not None:
+            record = semantic_judge(record, text, self._semantic_judge_fn)
+        return record
+
+    async def aextract(self, *, chunk_id: ChunkId, function: str, text: str,
+                       span_id: str = "") -> ClausePropertyRecord:
+        raw = await self._hybrid.aextract(chunk_id=chunk_id, function=function, text=text, span_id=span_id)
+        record = self._gate(raw, text)
+        if self._asemantic_judge_fn is not None:
+            record = await asemantic_judge(record, text, self._asemantic_judge_fn)
+        return record
+
+
+def classifier_property_extractor(*, registry: Any, runnable: Any = None, model_id: Optional[str] = None,
+                                  semantic_judge_fn: Any = None,
+                                  asemantic_judge_fn: Any = None) -> ClassifierPropertyExtractor:
+    """Build the CLS-C classifier-first Step-3a extractor over a `DimClassifierRegistry`. `registry` is required
+    here (the production 21-dim fleet loader + the pipeline flip land in CLS-D, once the checkpoints are fetched);
+    `runnable` defaults to the structured seam for the residual numeric call."""
+    from rag_wright.spans.property_extractor import HybridPropertyExtractor
+
+    hybrid = HybridPropertyExtractor(registry, runnable=runnable, model_id=model_id)
+    return ClassifierPropertyExtractor(hybrid, semantic_judge_fn=semantic_judge_fn,
+                                       asemantic_judge_fn=asemantic_judge_fn)

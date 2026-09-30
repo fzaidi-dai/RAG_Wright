@@ -75,6 +75,29 @@ RESIDUAL_LLM_DIMS: tuple[PropertyDimension, ...] = (
 # They flip to EXTRACTED if a better model/more data later clears the bar; they are NEVER routed to the LLM.
 ACCEPT_WEAK_DIMS: frozenset[PropertyDimension] = frozenset({_D.CAP_BASIS, _D.RENEWAL_MECHANISM})
 
+# The residual numeric/open dims are EXTRACTIVE (a number, amount, place, duration) -- not label selection -- so
+# they need a value-verbatim prompt, not the closed-vocab "one of {...}" or "lowercase_snake" phrasing.
+_RESIDUAL_DIM_HINTS: dict[PropertyDimension, str] = {
+    _D.CAP_QUANTUM: "the monetary amount or formula of a liability cap (e.g. '$1,000,000', '12 months of fees')",
+    _D.JURISDICTION: "the governing-law jurisdiction (e.g. 'Delaware', 'England and Wales')",
+    _D.TEMPORAL_BOUND: "the clause's time bound or duration (e.g. '3 years', 'the Term')",
+    _D.NOTICE_PERIOD: "the required notice period (e.g. '60 days', 'ninety (90) days')",
+    _D.AUDIT_FREQUENCY: "how often an audit is permitted (e.g. 'annually', 'twice per year')",
+    _D.COMMITMENT_QUANTUM: "a committed quantity or minimum (e.g. '10,000 units', '$500,000')",
+    _D.LD_TRIGGER: "the event that triggers liquidated damages (a short phrase)",
+}
+
+
+def residual_extraction_prompt(text: str) -> str:
+    """The residual LLM prompt: the 7 numeric/open dims only, extracted VERBATIM (not categorized). One call."""
+    lines = "\n".join(f"- {d.value}: {_RESIDUAL_DIM_HINTS[d]}" for d in RESIDUAL_LLM_DIMS)
+    return (
+        "Extract these NUMERIC/OPEN properties from the contract clause span, ONLY when the span explicitly states "
+        "them; omit any not present (do not guess). Report each value VERBATIM from the text -- a number, amount, "
+        "place, or duration, NOT a category label. Confidence EXTRACTED (stated) or INFERRED (clearly implied).\n\n"
+        f"Properties:\n{lines}\n\nSpan:\n{text[:2000]}"
+    )
+
 
 class ExtractedProperty(BaseModel):
     """One property as the LLM emits it (pre-provenance): a dimension, a value, and a confidence."""
@@ -204,12 +227,9 @@ class HybridPropertyExtractor:
             model_id or model_for(ModelRole.STRUCTURED_REASONING), PropertyExtraction)
         self._retries = retries
 
-    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "") -> ClausePropertyRecord:
-        function = canonical_function(function) or function
-        prov = Provenance.of(chunk_id)
-        assertions: list[PropertyAssertion] = []
-
-        # classifier lane: every covered dim, function-independent, top-k soft tags
+    def _classifier_assertions(self, prov: Provenance, text: str, span_id: str) -> list[PropertyAssertion]:
+        """Classifier lane: every covered dim, function-independent, top-k soft tags (accept-weak -> AMBIGUOUS)."""
+        out: list[PropertyAssertion] = []
         for d in self._registry.dims:
             clf = self._registry.get(d)
             if clf is None:
@@ -220,30 +240,60 @@ class HybridPropertyExtractor:
                 else:
                     conf = ConfidenceTag.EXTRACTED if rank == 0 else ConfidenceTag.INFERRED
                 try:
-                    assertions.append(PropertyAssertion(provenance=prov, confidence=conf, dimension=d,
-                                                        value=value, span_id=span_id))
+                    out.append(PropertyAssertion(provenance=prov, confidence=conf, dimension=d,
+                                                 value=value, span_id=span_id))
                 except ValidationError:
                     continue  # a value outside the dim vocab (shouldn't happen from a trained head) -> drop
+        return out
 
-        # residual LLM lane: ONE call for the 7 numeric/open dims only; always fires (never classifier-covered)
-        prompt = extraction_prompt(function, RESIDUAL_LLM_DIMS, text)
-        extraction: Optional[PropertyExtraction] = None
+    def _residual_assertions(self, prov: Provenance, extraction: Optional[PropertyExtraction],
+                             span_id: str) -> list[PropertyAssertion]:
+        """Keep ONLY the 7 residual dims from the LLM's answer -- never a classifier dim or a starved dim."""
+        out: list[PropertyAssertion] = []
+        residual = set(RESIDUAL_LLM_DIMS)
+        for p in (extraction.properties if extraction else []):
+            if p.dimension not in residual:
+                continue
+            try:
+                out.append(PropertyAssertion(provenance=prov, confidence=p.confidence, dimension=p.dimension,
+                                             value=p.value, span_id=span_id))
+            except ValidationError:
+                continue
+        return out
+
+    def _record(self, chunk_id: ChunkId, function: str,
+                assertions: list[PropertyAssertion]) -> ClausePropertyRecord:
+        return ClausePropertyRecord(clause_id=str(chunk_id), function=function,
+                                    folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=assertions)
+
+    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "") -> ClausePropertyRecord:
+        function = canonical_function(function) or function
+        prov = Provenance.of(chunk_id)
+        assertions = self._classifier_assertions(prov, text, span_id)
+        extraction: Optional[PropertyExtraction] = None  # ONE residual call (the 7 numeric dims), always fires
         for _ in range(self._retries):
             try:
-                extraction = self._runnable.invoke(prompt)
+                extraction = self._runnable.invoke(residual_extraction_prompt(text))
             except Exception:  # noqa: BLE001 - transient provider/parse error; retry
                 continue
             if extraction is not None:
                 break
-        residual = set(RESIDUAL_LLM_DIMS)
-        for p in (extraction.properties if extraction else []):
-            if p.dimension not in residual:
-                continue  # never keep a classifier dim or a starved dim the LLM may have volunteered
-            try:
-                assertions.append(PropertyAssertion(provenance=prov, confidence=p.confidence, dimension=p.dimension,
-                                                    value=p.value, span_id=span_id))
-            except ValidationError:
-                continue
+        assertions += self._residual_assertions(prov, extraction, span_id)
+        return self._record(chunk_id, function, assertions)
 
-        return ClausePropertyRecord(clause_id=str(chunk_id), function=function,
-                                    folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=assertions)
+    async def aextract(self, *, chunk_id: ChunkId, function: str, text: str,
+                       span_id: str = "") -> ClausePropertyRecord:
+        """ASYNC-B2b (ADR-0057): async twin -- classifiers run in-process (ms), the ONE residual call is awaited."""
+        function = canonical_function(function) or function
+        prov = Provenance.of(chunk_id)
+        assertions = self._classifier_assertions(prov, text, span_id)
+        extraction: Optional[PropertyExtraction] = None
+        for _ in range(self._retries):
+            try:
+                extraction = await self._runnable.ainvoke(residual_extraction_prompt(text))
+            except Exception:  # noqa: BLE001 - transient provider/parse error; retry
+                continue
+            if extraction is not None:
+                break
+        assertions += self._residual_assertions(prov, extraction, span_id)
+        return self._record(chunk_id, function, assertions)
