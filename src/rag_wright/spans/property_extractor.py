@@ -166,3 +166,52 @@ class SeamPropertyExtractor:
             chunk_id=chunk_id, function=function, span_id=span_id,
             extraction=extraction or PropertyExtraction(),
         )
+
+
+class HybridPropertyExtractor:
+    """CLS-B (FR-C.6/FR-I.4): the Step-3a extractor that OFFLOADS the classifier-covered dimensions from the LLM.
+    For each applicable dim (`dimensions_for(function)`), a trained `DimClassifier` answers the COVERED ones (top-k:
+    the primary as EXTRACTED, any lower-ranked soft tags as INFERRED) and the LLM is asked for ONLY the UNCOVERED
+    ones — skipped entirely when the clause type is fully covered (the per-span latency win). Same `PropertyExtractor`
+    Protocol, so the ADR-0028 grounding + ADR-0040 symbolic gates downstream apply unchanged. The classifiers honor
+    the device-agnostic serving seam (GPU-if-available-else-CPU); the LLM stays on the model-profile seam."""
+
+    def __init__(self, registry, *, runnable=None, model_id: Optional[str] = None, retries: int = 3) -> None:
+        self._registry = registry
+        self._runnable = runnable or build_structured(
+            model_id or model_for(ModelRole.STRUCTURED_REASONING), PropertyExtraction)
+        self._retries = retries
+
+    def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "") -> ClausePropertyRecord:
+        function = canonical_function(function) or function
+        prov = Provenance.of(chunk_id)
+        assertions: list[PropertyAssertion] = []
+        uncovered: list[PropertyDimension] = []
+        for d in dimensions_for(function):
+            clf = self._registry.get(d)
+            if clf is None:
+                uncovered.append(d)
+                continue
+            for rank, (value, _prob) in enumerate(clf.classify(text)):
+                conf = ConfidenceTag.EXTRACTED if rank == 0 else ConfidenceTag.INFERRED
+                try:
+                    assertions.append(PropertyAssertion(provenance=prov, confidence=conf, dimension=d,
+                                                        value=value, span_id=span_id))
+                except ValidationError:
+                    continue  # a value outside the dim vocab (shouldn't happen from a trained head) -> drop
+        if uncovered:  # ask the LLM for the uncovered dims only; a fully-covered clause type skips the call
+            prompt = extraction_prompt(function, tuple(uncovered), text)
+            extraction: Optional[PropertyExtraction] = None
+            for _ in range(self._retries):
+                try:
+                    extraction = self._runnable.invoke(prompt)
+                except Exception:  # noqa: BLE001 - transient provider/parse error; retry
+                    continue
+                if extraction is not None:
+                    break
+            uncovered_set = set(uncovered)
+            rec = build_record(chunk_id=chunk_id, function=function, span_id=span_id,
+                               extraction=extraction or PropertyExtraction())
+            assertions += [a for a in rec.assertions if a.dimension in uncovered_set]
+        return ClausePropertyRecord(clause_id=str(chunk_id), function=function,
+                                    folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=assertions)
