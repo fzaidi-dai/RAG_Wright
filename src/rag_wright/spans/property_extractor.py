@@ -42,7 +42,7 @@ FUNCTION_DIMENSIONS: dict[str, tuple[PropertyDimension, ...]] = {
     "Indirect/Consequential Damages Waiver": (_D.MUTUALITY, _D.FAVORABILITY, _D.CARVE_OUT, _D.DAMAGE_TYPE),
     "Warranty Disclaimer": (_D.FAVORABILITY, _D.WARRANTY_SCOPE),
     "Indemnification": (_D.MUTUALITY, _D.FAVORABILITY, _D.CLAIM_SCOPE, _D.COVERED_SUBJECT, _D.COVERED_PARTIES, _D.PROCEDURAL),
-    "Governing Law": (_D.JURISDICTION, _D.LAW_MULTIPLICITY),
+    "Governing Law": (_D.JURISDICTION, _D.LAW_MULTIPLICITY, _D.DISPUTE_METHOD),
     "No-Solicit Of Employees": (_D.NONSOLICIT_TARGET, _D.TEMPORAL_BOUND),
     "No-Solicit Of Customers": (_D.NONSOLICIT_TARGET, _D.TEMPORAL_BOUND),
     "Renewal Term": (_D.RENEWAL_MECHANISM, _D.NOTICE_PERIOD),
@@ -52,6 +52,17 @@ FUNCTION_DIMENSIONS: dict[str, tuple[PropertyDimension, ...]] = {
     "License Grant": (_D.COVERED_PARTIES,),
     "Affiliate License-Licensor": (_D.COVERED_PARTIES,),
     "Affiliate License-Licensee": (_D.COVERED_PARTIES,),
+    # CLS-F: the 8 corpus-sourced dims mapped to their functions (canonical 52-label taxonomy names)
+    "Dispute Resolution": (_D.DISPUTE_METHOD,),
+    "Confidentiality": (_D.CONFIDENTIALITY_EXCEPTION,),
+    "Royalties": (_D.ROYALTY_BASIS,),
+    "Security Interest": (_D.COLLATERAL_TYPE,),
+    "Condition Precedent": (_D.CONDITION_TYPE,),
+    "Force Majeure": (_D.FORCE_MAJEURE_EVENT,),
+    "Source Code Escrow": (_D.ESCROW_RELEASE_TRIGGER,),
+    "Rofr": (_D.RIGHT_OF_FIRST_TYPE,),
+    "Rofo": (_D.RIGHT_OF_FIRST_TYPE,),
+    "Rofn": (_D.RIGHT_OF_FIRST_TYPE,),
 }
 _DEFAULT_DIMENSIONS: tuple[PropertyDimension, ...] = (_D.MUTUALITY, _D.FAVORABILITY)
 
@@ -253,6 +264,8 @@ class HybridPropertyExtractor:
             if clf is None:
                 continue
             for rank, (value, _prob) in enumerate(clf.classify(text)):
+                if str(value).lower() == "none":
+                    continue  # ABSTAIN sentinel (ADR-0116): the classifier says "dim not present" -> emit nothing
                 if d in ACCEPT_WEAK_DIMS:
                     conf = ConfidenceTag.AMBIGUOUS
                 else:

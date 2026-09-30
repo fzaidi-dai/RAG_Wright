@@ -56,6 +56,60 @@
     },
     "top_k": 2
   },
+  "collateral_type": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "collateral_type__abstain",
+    "question": {
+      "criteria": {
+        "accounts_receivable": "accounts receivable / receivables are the collateral",
+        "all_assets": "a blanket lien on substantially all assets",
+        "deposit_accounts": "deposit accounts are the collateral",
+        "equipment": "equipment is the collateral",
+        "fixtures": "fixtures are the collateral",
+        "general_intangibles": "general intangibles are the collateral",
+        "inventory": "inventory is the collateral",
+        "ip": "intellectual property is the collateral",
+        "none": "this provision does not state what collateral secures an interest",
+        "real_property": "real property / real estate is the collateral"
+      },
+      "instructions": "What collateral secures the interest in this provision?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "condition_type": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "condition_type__abstain",
+    "question": {
+      "criteria": {
+        "closing_condition": "a condition that must be satisfied before closing (a closing condition)",
+        "none": "this provision does not state a condition-precedent type"
+      },
+      "instructions": "What kind of condition precedent does this provision state?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "confidentiality_exception": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "confidentiality_exception__abstain",
+    "question": {
+      "criteria": {
+        "independently_developed": "information independently developed without use of the disclosure",
+        "none": "this provision does not state a confidentiality exception",
+        "prior_possession": "information already in the recipient's possession before disclosure",
+        "publicly_available": "information that is or becomes publicly available",
+        "required_by_law": "disclosure required by law or a court/government order",
+        "third_party_source": "information rightfully received from a third party"
+      },
+      "instructions": "Which exception to confidentiality does this provision state?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
   "covered_parties": {
     "floor": 0.73,
     "framework": "setfit",
@@ -97,6 +151,37 @@
     },
     "top_k": 3
   },
+  "dispute_method": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "dispute_method__abstain",
+    "question": {
+      "criteria": {
+        "arbitration": "disputes are resolved by binding arbitration",
+        "litigation": "disputes are resolved by litigation in the courts",
+        "none": "this provision does not specify how disputes are resolved"
+      },
+      "instructions": "How are disputes resolved under this provision?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "escrow_release_trigger": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "escrow_release_trigger__abstain",
+    "question": {
+      "criteria": {
+        "bankruptcy": "the depositor's bankruptcy or insolvency triggers release",
+        "breach": "a material breach by the depositor triggers release",
+        "discontinuance": "discontinuance of the product or support triggers release",
+        "none": "this provision does not state an escrow release trigger"
+      },
+      "instructions": "What triggers release from escrow in this provision?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
   "exclusivity_type": {
     "floor": 1.0,
     "framework": "laya",
@@ -122,6 +207,26 @@
         "seller_favorable": "terms tilt toward the seller / licensor / provider / vendor / disclosing party \u2014 limiting their liability or obligations, or expanding their rights/remedies"
       },
       "instructions": "Which side does this clause favor?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "force_majeure_event": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "force_majeure_event__abstain",
+    "question": {
+      "criteria": {
+        "act_of_god": "acts of God",
+        "government_action": "government action, regulation, or acts of a governmental authority",
+        "labor_dispute": "labor disputes or strikes",
+        "natural_disaster": "natural disasters (flood, earthquake, fire, storm)",
+        "none": "this provision does not enumerate a force majeure event",
+        "pandemic": "pandemic, epidemic, or disease outbreak",
+        "supply_failure": "supplier or utility failure",
+        "war": "war, terrorism, or civil unrest"
+      },
+      "instructions": "Which force majeure event does this provision enumerate?",
       "type": "choice"
     },
     "top_k": 1
@@ -238,6 +343,40 @@
       "type": "choice"
     },
     "top_k": 2
+  },
+  "right_of_first_type": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "right_of_first_type__abstain",
+    "question": {
+      "criteria": {
+        "none": "this provision does not state a right-of-first type",
+        "rofn": "a right of first negotiation (ROFN): the right to negotiate first",
+        "rofo": "a right of first offer (ROFO): the right to receive the first offer before others",
+        "rofr": "a right of first refusal (ROFR): the right to match a third party's offer"
+      },
+      "instructions": "Which kind of 'right of first ...' does this provision grant?",
+      "type": "choice"
+    },
+    "top_k": 1
+  },
+  "royalty_basis": {
+    "abstain": true,
+    "framework": "laya",
+    "model": "royalty_basis__abstain",
+    "question": {
+      "criteria": {
+        "fixed": "a fixed royalty amount",
+        "none": "this provision does not state a royalty basis",
+        "pct_gross_sales": "a percentage of gross sales / gross revenue",
+        "pct_net_sales": "a percentage of net sales / net revenue",
+        "per_unit": "a per-unit royalty",
+        "tiered": "a tiered or graduated royalty schedule"
+      },
+      "instructions": "How is the royalty computed in this provision?",
+      "type": "choice"
+    },
+    "top_k": 1
   },
   "termination_right": {
     "floor": 0.84,
