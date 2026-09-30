@@ -43,8 +43,19 @@ vllm_cache_vol = modal.Volume.from_name("rw-vllm-serve-compile-cache", create_if
 
 app = modal.App(APP_NAME)
 vllm_image = (
-    modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
-    .pip_install("vllm", "huggingface_hub[hf_transfer]")
+    # Base off the OFFICIAL prebuilt vLLM image: vllm + torch + xformers + flashinfer already installed as matched
+    # wheels, so a fresh build on a clean account compiles NOTHING (the xformers source-build / resolver failures
+    # only happen when pip/uv try to assemble that stack themselves). Latest/unpinned by design — `:latest` tracks
+    # newest vLLM, which is all we need since we only consume it. add_python omitted (the image ships Python).
+    # The vLLM image ships `python3` but no `python`; Modal's OWN pip bootstrap runs right after FROM (before any
+    # later layer) as `python -m pip …` -> exit 127. setup_dockerfile_commands runs BEFORE that bootstrap, so the
+    # symlink is in place when Modal bootstraps.
+    modal.Image.from_registry(
+        "vllm/vllm-openai:latest",
+        setup_dockerfile_commands=["RUN ln -sf $(command -v python3) /usr/local/bin/python"],
+    )
+    .entrypoint([])  # the image's ENTRYPOINT (the api_server) would hijack Modal's runtime; clear it
+    .pip_install("hf_transfer")  # enable fast HF weight downloads (HF_HUB_ENABLE_HF_TRANSFER below)
     # Bake the runtime knobs into the image env: a deployed function reads the CONTAINER's env, not the deploying
     # shell's, so an override must live here to reach the container (same lesson as the bench script). Xet disabled
     # so a fresh weight download's open log handle can't block a Volume commit.
@@ -57,6 +68,10 @@ vllm_image = (
 
 @app.function(image=vllm_image, gpu=GPU, volumes={HF_CACHE: hf_vol, VLLM_CACHE: vllm_cache_vol},
               timeout=3600, max_containers=1, scaledown_window=600)
+# Without this Modal feeds the container ONE HTTP request at a time (Running:1 + "cancellation signal" floods,
+# /health blocked) — vLLM's continuous batching never gets fed. Let many requests hit the one container; vLLM
+# batches them internally up to --max-num-seqs.
+@modal.concurrent(max_inputs=int(MAX_NUM_SEQS))
 @modal.web_server(port=8000, startup_timeout=1200)
 def serve() -> None:
     """Start vLLM's OpenAI-compatible server for the configured Qwen config. Reuses the persisted weights +

@@ -207,6 +207,15 @@ PROFILES: dict[str, ModelProfile] = {
         structured_extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     ),
+    # Reasoning-OFF variant of `qwen3.8-27b-modal` for BULK closed-vocab classification (e.g. silver mining): the
+    # forced structured pick needs no chain-of-thought, and thinking-on is ~5-10x slower/costlier per call on the
+    # self-hosted A100. Same served name + function_calling (the server's hermes tool-parser handles it); only the
+    # structured call's `enable_thinking` flips to False. Not a default anywhere — opt in via the model string.
+    "qwen3.8-27b-modal-nothink": ModelProfile(
+        model_id="qwen3.8-27b-modal-nothink", backend="vllm", served_model_id="Qwen/Qwen3.8-27B",
+        structured_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+        text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+    ),
     # Quantization ACCURACY EVAL profile (ADR-0110 follow-up): points the JUDGE role at a raw Modal vLLM endpoint
     # (`scripts/modal_qwen3_vllm_server.py`, served as "qwen3-eval") so bf16-reference vs FP8 configs are the SAME
     # profile with only VLLM_BASE_URL swapped between deployments. Reasoning ON for the structured judge (matches

@@ -59,7 +59,10 @@ _TIMEOUT_S = 90.0  # per-request timeout for a plain call (a hang fails at 90s; 
 # is reachable in ~3 min instead of ~36. TRADE-OFF: disabling the SDK loop loses its Retry-After (429) header
 # handling; the tenacity exponential-jitter backoff on `.with_retry` substitutes for it (a documented, accepted
 # substitution -- exponential-jitter backoff spaces out 429/5xx retries in its place).
-_STRUCTURED_TIMEOUT_S = 60.0  # per-request timeout for a structured call (a hang fails here, not at 120s)
+# per-request timeout for a structured call. Default 60s (a hang fails here, not at 120s). Env-overridable because
+# reasoning-ON structured calls under batch load can legitimately run ~50-70s (the server returns 200 OK, but the
+# client would give up at 60s and retry -> a retry pileup); a bulk job can raise this (e.g. 150) to let them finish.
+_STRUCTURED_TIMEOUT_S = float(os.getenv("RAG_STRUCTURED_TIMEOUT_S", "60"))
 _STRUCTURED_RETRY_ATTEMPTS = 3  # the SOLE retry layer for structured calls; worst case ~= 60 x 3 = 180s
 _STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (
     # OpenRouter surfaces a 504 "operation was aborted" as a plain ValueError the status-code retry cannot
