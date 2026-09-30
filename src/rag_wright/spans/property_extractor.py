@@ -60,6 +60,22 @@ def dimensions_for(function: str) -> tuple[PropertyDimension, ...]:
     return FUNCTION_DIMENSIONS.get(function, _DEFAULT_DIMENSIONS)
 
 
+# CLS-B/C rework (ADR-0066 candidate for ontology migration, like FUNCTION_DIMENSIONS): the FUNCTION-INDEPENDENT
+# Step-3a routing. The classifier lane fills every dim the registry covers. These 7 numeric/open dims are the ONLY
+# ones the LLM extracts -- a classifier cannot emit a number/place/duration -- and that is PERMANENT. The 8
+# corpus-starved closed-vocab dims (dispute_method, royalty_basis, condition_type, collateral_type,
+# force_majeure_event, confidentiality_exception, right_of_first_type, escrow_release_trigger) are NOT extracted
+# here until CLS-F sources data, after which they join the CLASSIFIER lane -- never the LLM.
+RESIDUAL_LLM_DIMS: tuple[PropertyDimension, ...] = (
+    _D.CAP_QUANTUM, _D.JURISDICTION, _D.TEMPORAL_BOUND, _D.NOTICE_PERIOD,
+    _D.AUDIT_FREQUENCY, _D.COMMITMENT_QUANTUM, _D.LD_TRIGGER,
+)
+# Classifier dims that do not clear the confidence bar (cap_basis numeric, renewal_mechanism subjective): served
+# locally like the rest, but emitted AMBIGUOUS so the grounding gate + query side treat them as low-confidence.
+# They flip to EXTRACTED if a better model/more data later clears the bar; they are NEVER routed to the LLM.
+ACCEPT_WEAK_DIMS: frozenset[PropertyDimension] = frozenset({_D.CAP_BASIS, _D.RENEWAL_MECHANISM})
+
+
 class ExtractedProperty(BaseModel):
     """One property as the LLM emits it (pre-provenance): a dimension, a value, and a confidence."""
 
@@ -169,12 +185,18 @@ class SeamPropertyExtractor:
 
 
 class HybridPropertyExtractor:
-    """CLS-B (FR-C.6/FR-I.4): the Step-3a extractor that OFFLOADS the classifier-covered dimensions from the LLM.
-    For each applicable dim (`dimensions_for(function)`), a trained `DimClassifier` answers the COVERED ones (top-k:
-    the primary as EXTRACTED, any lower-ranked soft tags as INFERRED) and the LLM is asked for ONLY the UNCOVERED
-    ones — skipped entirely when the clause type is fully covered (the per-span latency win). Same `PropertyExtractor`
-    Protocol, so the ADR-0028 grounding + ADR-0040 symbolic gates downstream apply unchanged. The classifiers honor
-    the device-agnostic serving seam (GPU-if-available-else-CPU); the LLM stays on the model-profile seam."""
+    """CLS-B/C (FR-C.6/FR-I.4): the FUNCTION-INDEPENDENT Step-3a property extractor. This is THE extractor for
+    these dimensions -- not a toggle over an LLM fallback (ADR: the classifier lane is the decided path).
+
+    Two lanes, function-independent (the clause function is a soft tag on the record, never a gate):
+      * CLASSIFIER lane -- every dim the registry covers is answered by its trained `DimClassifier` (top-k soft
+        tags: rank-0 EXTRACTED, lower ranks INFERRED). `ACCEPT_WEAK_DIMS` are emitted AMBIGUOUS (low-confidence).
+      * RESIDUAL LLM lane -- ONE consolidated call for `RESIDUAL_LLM_DIMS` ONLY (the 7 numeric/open dims a
+        classifier cannot emit). The LLM is NEVER asked for a classifier dim, and any starved/other dim it
+        volunteers is filtered out.
+    The 8 corpus-starved dims are not extracted here (they join the classifier lane after CLS-F). Same
+    `PropertyExtractor` Protocol, so the ADR-0028 grounding + ADR-0040 symbolic gates downstream apply unchanged.
+    Classifiers honor the device-agnostic serving seam (GPU-if-available-else-CPU); the LLM stays on the seam."""
 
     def __init__(self, registry, *, runnable=None, model_id: Optional[str] = None, retries: int = 3) -> None:
         self._registry = registry
@@ -186,32 +208,42 @@ class HybridPropertyExtractor:
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
         assertions: list[PropertyAssertion] = []
-        uncovered: list[PropertyDimension] = []
-        for d in dimensions_for(function):
+
+        # classifier lane: every covered dim, function-independent, top-k soft tags
+        for d in self._registry.dims:
             clf = self._registry.get(d)
             if clf is None:
-                uncovered.append(d)
                 continue
             for rank, (value, _prob) in enumerate(clf.classify(text)):
-                conf = ConfidenceTag.EXTRACTED if rank == 0 else ConfidenceTag.INFERRED
+                if d in ACCEPT_WEAK_DIMS:
+                    conf = ConfidenceTag.AMBIGUOUS
+                else:
+                    conf = ConfidenceTag.EXTRACTED if rank == 0 else ConfidenceTag.INFERRED
                 try:
                     assertions.append(PropertyAssertion(provenance=prov, confidence=conf, dimension=d,
                                                         value=value, span_id=span_id))
                 except ValidationError:
                     continue  # a value outside the dim vocab (shouldn't happen from a trained head) -> drop
-        if uncovered:  # ask the LLM for the uncovered dims only; a fully-covered clause type skips the call
-            prompt = extraction_prompt(function, tuple(uncovered), text)
-            extraction: Optional[PropertyExtraction] = None
-            for _ in range(self._retries):
-                try:
-                    extraction = self._runnable.invoke(prompt)
-                except Exception:  # noqa: BLE001 - transient provider/parse error; retry
-                    continue
-                if extraction is not None:
-                    break
-            uncovered_set = set(uncovered)
-            rec = build_record(chunk_id=chunk_id, function=function, span_id=span_id,
-                               extraction=extraction or PropertyExtraction())
-            assertions += [a for a in rec.assertions if a.dimension in uncovered_set]
+
+        # residual LLM lane: ONE call for the 7 numeric/open dims only; always fires (never classifier-covered)
+        prompt = extraction_prompt(function, RESIDUAL_LLM_DIMS, text)
+        extraction: Optional[PropertyExtraction] = None
+        for _ in range(self._retries):
+            try:
+                extraction = self._runnable.invoke(prompt)
+            except Exception:  # noqa: BLE001 - transient provider/parse error; retry
+                continue
+            if extraction is not None:
+                break
+        residual = set(RESIDUAL_LLM_DIMS)
+        for p in (extraction.properties if extraction else []):
+            if p.dimension not in residual:
+                continue  # never keep a classifier dim or a starved dim the LLM may have volunteered
+            try:
+                assertions.append(PropertyAssertion(provenance=prov, confidence=p.confidence, dimension=p.dimension,
+                                                    value=p.value, span_id=span_id))
+            except ValidationError:
+                continue
+
         return ClausePropertyRecord(clause_id=str(chunk_id), function=function,
                                     folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=assertions)

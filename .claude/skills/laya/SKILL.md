@@ -66,6 +66,11 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
   finetune script; launcher BLOCKS on `.get()` per spawn (no spawn-and-return), stamps + verifies a `data_sha`,
   writes a manifest, streams X/N; snapshot keepers server-side to a `/checkpoints/<name>` path (a small copy fn) —
   the laya volume has no built-in snapshot, add one. Never lose a fine-tune.
+- **ACCOUNT CONTAINER CAP = 10 (fzaidi2014).** Spawning more than 10 fine-tunes at once does NOT run them all —
+  Modal queues the rest and runs ~10 at a time (correct, but ~N/10 waves of wall-clock, and a "why only 10 running?"
+  surprise). Size a `groupbake`/dimbatch fan-out to ≤10 in flight (chunk into waves + gather between), or state the
+  wave count honestly. This is a DIFFERENT knob from the vLLM `max_containers=1` + `@modal.concurrent` batching in the
+  qwen-vllm-modal skill — do not conflate. (Ignored the stated cap once, spawned 29 → 3 waves.)
 
 ## Levers that matter (measured, dim-dependent)
 - **Few-shot-in-`state` is a big BUT dim-dependent lever.** Prepend a few labeled exemplars (from TRAIN, per class)

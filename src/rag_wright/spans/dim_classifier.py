@@ -98,7 +98,8 @@ class LayaDimClassifier:
 
 class DimClassifierRegistry:
     """Loads the configured per-dimension classifiers ONCE and serves them by dimension. Missing dims (uncovered)
-    return None so the hybrid extractor (CLS-B) falls back to the LLM for them."""
+    return None; the hybrid extractor (CLS-B/C) extracts ONLY its 7 numeric/open `RESIDUAL_LLM_DIMS` via the LLM,
+    never an uncovered classifier dim (the corpus-starved dims are left unextracted until CLS-F sources data)."""
 
     def __init__(self, classifiers: dict[PropertyDimension, DimClassifier]) -> None:
         self._by_dim = dict(classifiers)

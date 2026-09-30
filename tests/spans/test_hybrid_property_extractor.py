@@ -1,5 +1,15 @@
-"""CLS-B (FR-C.6/FR-I.4): HybridPropertyExtractor — classifiers for covered dims, LLM for ONLY the uncovered dims,
-skipped entirely when the clause type is fully covered. Hermetic (stub classifiers + stub LLM runnable)."""
+"""CLS-B/C rework (FR-C.6/FR-I.4): the FUNCTION-INDEPENDENT hybrid Step-3a property extractor.
+
+The DECIDED design (no toggle, no LLM fallback for classifier dims):
+  * classifiers fill EVERY covered dimension, regardless of the clause's function (function is a soft tag, never
+    a gate) -- top-k soft tags: rank-0 EXTRACTED, lower ranks INFERRED;
+  * ACCEPT-WEAK dims (cap_basis, renewal_mechanism) are emitted AMBIGUOUS (low-confidence, still local);
+  * ONE consolidated residual LLM call fills ONLY the 7 numeric/open dims classification cannot produce
+    (a number/place/duration); it is NEVER asked for a classifier dim;
+  * the 8 corpus-starved closed-vocab dims are NOT extracted here -- they join the CLASSIFIER lane after CLS-F
+    data-sourcing, and never the LLM (even a rogue LLM value for one is filtered out).
+Hermetic: stub classifiers + stub runnable, no model, no network.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +17,13 @@ from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import PropertyDimension as D
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.spans.dim_classifier import DimClassifierRegistry
-from rag_wright.spans.property_extractor import ExtractedProperty, HybridPropertyExtractor, PropertyExtraction
+from rag_wright.spans.property_extractor import (
+    ACCEPT_WEAK_DIMS,
+    RESIDUAL_LLM_DIMS,
+    ExtractedProperty,
+    HybridPropertyExtractor,
+    PropertyExtraction,
+)
 
 CK = ChunkId(source_doc_id="C1", chunk_index=0, content_hash="0" * 64)
 
@@ -22,7 +38,7 @@ class _StubDim:
 
 
 class _StubRunnable:
-    """Records each prompt it is asked and returns a fixed PropertyExtraction (the LLM's uncovered answer)."""
+    """Records each prompt it is asked and returns a fixed PropertyExtraction (the residual LLM's answer)."""
 
     def __init__(self, props):
         self._props = props
@@ -36,33 +52,75 @@ class _StubRunnable:
 def _registry():
     return DimClassifierRegistry({
         D.IP_OWNERSHIP: _StubDim(D.IP_OWNERSHIP, [("assigned", 0.9)]),
-        D.COVERED_PARTIES: _StubDim(D.COVERED_PARTIES, [("affiliates", 0.8), ("licensee_affiliates", 0.5)]),  # top-2
-        D.WARRANTY_SCOPE: _StubDim(D.WARRANTY_SCOPE, [("as_is", 0.9)]),
+        D.FAVORABILITY: _StubDim(D.FAVORABILITY, [("seller_favorable", 0.8)]),
+        D.CARVE_OUT: _StubDim(D.CARVE_OUT, [("fraud", 0.7), ("confidentiality", 0.5)]),  # top-2 soft
+        D.CAP_BASIS: _StubDim(D.CAP_BASIS, [("multiple_of_fees", 0.6)]),                  # accept-weak
     })
 
 
-def test_fully_covered_function_skips_the_llm():
-    # "IP Ownership Assignment" -> {ip_ownership, covered_parties}, both covered -> NO LLM call.
+def test_the_7_residual_dims_are_the_numeric_open_ones():
+    # contract guard: the residual LLM set is exactly the 7 extractive dims, none of them classifier-covered
+    assert set(RESIDUAL_LLM_DIMS) == {
+        D.CAP_QUANTUM, D.JURISDICTION, D.TEMPORAL_BOUND, D.NOTICE_PERIOD,
+        D.AUDIT_FREQUENCY, D.COMMITMENT_QUANTUM, D.LD_TRIGGER,
+    }
+    assert D.CAP_BASIS in ACCEPT_WEAK_DIMS and D.RENEWAL_MECHANISM in ACCEPT_WEAK_DIMS
+
+
+def test_classifiers_fill_covered_dims_regardless_of_function():
+    # a governing-law function must NOT stop ip_ownership/favorability being classified (function never gates)
     run = _StubRunnable([])
     hx = HybridPropertyExtractor(_registry(), runnable=run)
-    rec = hx(chunk_id=CK, function="IP Ownership Assignment", text="… hereby assigns all IP to Company …", span_id="s1")
-    assert run.calls == []                                        # the latency win: no LLM for a fully-covered type
-    assert {a.dimension for a in rec.assertions} == {D.IP_OWNERSHIP, D.COVERED_PARTIES}
-    cp = [a for a in rec.assertions if a.dimension == D.COVERED_PARTIES]
-    assert {a.value for a in cp} == {"affiliates", "licensee_affiliates"}   # top-2 soft tags emitted
-    assert any(a.confidence == ConfidenceTag.EXTRACTED for a in cp)         # primary EXTRACTED
-    assert any(a.confidence == ConfidenceTag.INFERRED for a in cp)          # lower-ranked INFERRED
+    rec = hx(chunk_id=CK, function="Governing Law", text="… assigns all IP; seller-favorable …", span_id="s1")
+    dims = {a.dimension for a in rec.assertions}
+    assert D.IP_OWNERSHIP in dims and D.FAVORABILITY in dims
+    assert rec.function == "Governing Law"  # soft tag carried on the record, not used to scope extraction
 
 
-def test_partial_asks_llm_only_for_uncovered_dims():
-    # "Warranty Disclaimer" -> {favorability (uncovered), warranty_scope (covered)}.
-    run = _StubRunnable([ExtractedProperty(dimension=D.FAVORABILITY, value="seller_favorable",
+def test_residual_llm_asked_only_for_the_7_numeric_dims():
+    run = _StubRunnable([ExtractedProperty(dimension=D.JURISDICTION, value="delaware",
                                            confidence=ConfidenceTag.EXTRACTED)])
     hx = HybridPropertyExtractor(_registry(), runnable=run)
-    rec = hx(chunk_id=CK, function="Warranty Disclaimer", text="… PRODUCT IS SOLD AS IS …", span_id="s2")
-    assert len(run.calls) == 1
+    rec = hx(chunk_id=CK, function="Cap On Liability", text="… governed by Delaware …", span_id="s2")
+    assert len(run.calls) == 1                                   # ONE consolidated residual call
     prompt = run.calls[0].lower()
-    assert "favorability" in prompt and "warranty_scope" not in prompt     # LLM asked ONLY the uncovered dim
-    pairs = {(a.dimension, a.value) for a in rec.assertions}
-    assert (D.WARRANTY_SCOPE, "as_is") in pairs                            # covered -> classifier
-    assert (D.FAVORABILITY, "seller_favorable") in pairs                  # uncovered -> LLM
+    for d in RESIDUAL_LLM_DIMS:
+        assert d.value in prompt                                 # all 7 numerics asked
+    assert "ip_ownership" not in prompt and "favorability" not in prompt  # never a classifier dim
+    assert "dispute_method" not in prompt                        # never a starved dim
+    assert (D.JURISDICTION, "delaware") in {(a.dimension, a.value) for a in rec.assertions}
+
+
+def test_the_8_starved_dims_are_never_extracted():
+    # even a rogue LLM value for a starved dim is filtered out (only the 7 residual dims are kept)
+    run = _StubRunnable([ExtractedProperty(dimension=D.DISPUTE_METHOD, value="arbitration",
+                                           confidence=ConfidenceTag.EXTRACTED)])
+    hx = HybridPropertyExtractor(_registry(), runnable=run)
+    rec = hx(chunk_id=CK, function="Governing Law", text="… disputes by arbitration …", span_id="s3")
+    assert all(a.dimension != D.DISPUTE_METHOD for a in rec.assertions)
+
+
+def test_topk_soft_tags_and_confidence():
+    run = _StubRunnable([])
+    hx = HybridPropertyExtractor(_registry(), runnable=run)
+    rec = hx(chunk_id=CK, function="Cap On Liability", text="…", span_id="s4")
+    co = [a for a in rec.assertions if a.dimension == D.CARVE_OUT]
+    assert {a.value for a in co} == {"fraud", "confidentiality"}
+    assert any(a.confidence == ConfidenceTag.EXTRACTED for a in co)   # rank-0 primary
+    assert any(a.confidence == ConfidenceTag.INFERRED for a in co)    # rank-1 soft tag
+
+
+def test_accept_weak_dims_downgraded_to_ambiguous():
+    run = _StubRunnable([])
+    hx = HybridPropertyExtractor(_registry(), runnable=run)
+    rec = hx(chunk_id=CK, function="Cap On Liability", text="…", span_id="s5")
+    cb = [a for a in rec.assertions if a.dimension == D.CAP_BASIS]
+    assert cb and all(a.confidence == ConfidenceTag.AMBIGUOUS for a in cb)  # accept-weak -> AMBIGUOUS, not EXTRACTED
+
+
+def test_single_residual_llm_call_always_fires_exactly_once():
+    # the 7 residual dims are NEVER classifier-covered, so the one residual call always fires (never skipped)
+    run = _StubRunnable([])
+    hx = HybridPropertyExtractor(_registry(), runnable=run)
+    hx(chunk_id=CK, function="IP Ownership Assignment", text="…", span_id="s6")
+    assert len(run.calls) == 1

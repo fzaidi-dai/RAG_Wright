@@ -166,6 +166,10 @@ Concrete tool gotchas from a real run; following them saves real time.
   add `--detach` as belt-and-suspenders. Stream `X/N` per-task completion from the launcher and step `X/N`+loss to a
   per-run progress log on the volume. A run whose app shows `stopped / 0 tasks` seconds after launch did NOT train —
   confirm via the platform task count and the registry, not by assuming.
+- **Mind the ACCOUNT CONTAINER CAP when sizing the fan-out.** A workspace has a max concurrent-container count (10 on
+  the fzaidi2014 account). Spawning more than that does NOT run them all at once — the excess QUEUES and runs in waves
+  (correct + no double-spend, but ~N/cap× the wall-clock, and only `cap` show as running). Size the wave to ≤ the cap
+  (chunk spawns + gather between waves) or report the wave count honestly. Distinct from any in-container concurrency.
 - **When multiple entrypoints exist, name the one to run** (`script.py::entrypoint`) and use the FULL script path;
   a bare filename or an ambiguous target fails.
 - **Read metrics from the RESULT ARTIFACT (JSON), never by scraping stdout.** Scraping a printed table with
