@@ -144,17 +144,28 @@ Apply in this order; stop when the per-class bar is met.
 - **Retraining from scratch and overwriting the prior good model** — snapshot first, always.
 - **Trusting a raw confidence threshold as a clean router replacement** — confidently-wrong predictions exist, so
   a threshold is a precision/recall knob, not a clean gate.
+- **Spawn-and-return fan-out + filename-based "done" checks** — the launcher returns, the app dies, nothing trains,
+  and a poll on same-named result files fires green on the STALE prior run. You then "measure" a model that was
+  never built. Block on `.get()`, stamp+verify `data_sha`, use a manifest (see Operational notes). Also: more data
+  does NOT fix a *confusable* value (its sibling is embedded too close) — that needs top-k or a better backbone;
+  silver only fixes a value that is *absent/starved from TRAIN* (top-k=0 even at max k because the class isn't in
+  the head). Diagnose which failure you have before spending compute.
 
 ## Operational notes — avoid the friction we already hit (remote training/eval)
 Concrete tool gotchas from a real run; following them saves real time.
 - **Downloading a whole model DIRECTORY from a cloud volume expects the destination PARENT** — the tool recreates
   the source directory name inside it. Passing an explicit new destination path errors `Is a directory` (Errno 21).
   Download into the parent (or file-by-file). (Single files download fine to an explicit path.)
-- **Run long training/eval jobs DETACHED and poll the volume for progress + results.** The flaky part of a long
-  remote run is the client's live-streaming connection, not the job itself — detach it, stream `X/N` progress to a
-  log on the volume, and read the result artifact from the volume. When one launcher fans out multiple tasks,
-  confirm they are alive via the platform's task count — which can briefly read ZERO during provisioning, so don't
-  conclude failure from an immediate zero.
+- **A fan-out launcher MUST BLOCK on every spawned handle (`.get()`), or it silently trains NOTHING.** This is the
+  single most expensive trap and it cost a full session. On Modal (and any ephemeral-app runner), a local entrypoint
+  that calls `.spawn()` for each task and then RETURNS lets the app tear down the instant the entrypoint exits — the
+  spawned jobs are cancelled and NO training happens, with no error. `--detach` alone does NOT save you (Modal's own
+  warning: detached mode "only keeps the LAST triggered function alive"). The fix: collect the handles and
+  `for h in handles: h.get()` so the launcher blocks until all finish — this keeps the app alive AND surfaces any
+  per-task exception instead of losing it. Run the launcher itself under `nohup … &` (so it survives your turns) and
+  add `--detach` as belt-and-suspenders. Stream `X/N` per-task completion from the launcher and step `X/N`+loss to a
+  per-run progress log on the volume. A run whose app shows `stopped / 0 tasks` seconds after launch did NOT train —
+  confirm via the platform task count and the registry, not by assuming.
 - **When multiple entrypoints exist, name the one to run** (`script.py::entrypoint`) and use the FULL script path;
   a bare filename or an ambiguous target fails.
 - **Read metrics from the RESULT ARTIFACT (JSON), never by scraping stdout.** Scraping a printed table with
@@ -163,8 +174,29 @@ Concrete tool gotchas from a real run; following them saves real time.
 - **Never infer a file path or a model's identity from a DISPLAY NAME via a substring check.** A case-sensitivity
   slip (e.g. lowercase `"legal"` not matching a capitalized display name) silently loads the WRONG file and yields
   plausible-but-wrong numbers — *two columns coming out identical is the tell*. Map names to paths explicitly.
-- **Completion detection must check the actual artifact** (does the result file exist / have the expected content),
-  not a fragile line-count grep that can misfire on multi-line or empty output.
+- **Completion detection by FILENAME EXISTENCE is a false-positive trap — verify FRESHNESS, not presence.** If runs
+  write same-named artifacts (`results/<tag>.json`, `models/<tag>`), a PRIOR run's file reads as "done" and you
+  measure the STALE model while the new one never trained. This actually happened: a poll on filename existence
+  fired "results ready" on pre-session files; the reported floors were the old model's. Defenses, all three: (1)
+  **stamp identity INTO every artifact** — `run_id` (timestamp), a `data_sha` fingerprint of the exact TRAIN rows,
+  and the run `label` — and (2) **VERIFY** a read-back result's `data_sha` equals the fingerprint of the data you
+  just uploaded before trusting its metrics; (3) the launcher's block-on-`.get()` return value IS the freshly
+  trained result — prefer it over re-reading files. The tell that you're on a stale model: numbers that match a
+  previous run to the decimal, or `train_examples` that doesn't match your current prep.
+- **A low/zero yield from an LLM-labeling step is an INFRA failure until proven otherwise — never read it as "rare".**
+  Teacher/curation calls fail silently in bulk: out of API credits (HTTP 402), rate limits, provider down. If the
+  loop swallows the exception and counts the item as "no label," a dim where 100% of calls errored writes `0 kept`
+  that looks identical to "this value is genuinely rare." This happened: an entire mining wave ran ~86–100% failed
+  (account out of OpenRouter credits) and the 0-yields were nearly reported as "corpus-exhausted." Defenses: (1) the
+  labeling loop MUST COUNT failures and ABORT (refuse to write, don't overwrite prior data) above a small
+  fail-rate (~15%); (2) when you MONITOR the job, the grep MUST INCLUDE the failure signatures (`402|RateLimit|
+  APIError|Traceback`) — filtering errors out "to reduce noise" is how you miss a total outage and mis-conclude;
+  (3) before trusting any yield, check the success/error counts, exactly as for eval timeouts. Silence is not rarity.
+- **Version every run with a LABEL (+ data_sha), and write a per-run MANIFEST.** A fixed tag (`dim_<x>`) makes
+  silver/baseline/backbone variants OVERWRITE each other, so you can't tell which model produced a metric. Put a
+  `label` in the model path/tag/result; on completion write one `manifest_<label>_<run_id>.json` listing every
+  task's `{tag, run_id, data_sha, train_examples, floor, verified}` and READ METRICS FROM THE MANIFEST, not by
+  globbing result files. This is what lets you prove you are testing the right model.
 
 ## Quick checklist for the next problem
 1. Classification? single vs multi-label? soft-tag or hard? define labels + OTHER.
