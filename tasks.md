@@ -2307,6 +2307,21 @@ loop enforces it.
 | T30 | Prefix + result caching | 4 Build RLM | §13 P3, §16.7 | todo | T28, T29 |
 | T31 | MCP skill surface (governed skills over MCP) | 5 Integrate | FR-S.5 | todo | T6, T22, T26 |
 | T32 | End-to-end scenarios + per-source ablation | 5 Integrate | §12, §15 | todo | T29, T31 |
+| CLS-A | Classifier registry + device-agnostic loaders (SetFit body+joblib head; laya package) behind a `DimClassifier` seam; load-once; GPU-if-available-else-CPU; profile-like config (like the model-profile seam). TDD: each of the 15 keepers loads + scores a fixture span. | 5 Integrate | FR-I.4 | todo | (skills: setfit, laya) |
+| CLS-B | `HybridPropertyExtractor` (implements the `PropertyExtractor` Protocol): covered dims → classifier (top-k soft tags where trained that way), uncovered dims → LLM on the reduced dim-subset; merge into `ClausePropertyRecord`; ADR-0028 grounding judge + ADR-0040 applicability intact. TDD vs `build_record` contract. | 5 Integrate | FR-C.6, FR-I.4 | todo | CLS-A |
+| CLS-C | Wire behind the Step-3a seam via flag `RAG_PROPERTY_EXTRACTOR=hybrid` (default off first); no product API change. | 5 Integrate | FR-I.4 | todo | CLS-B |
+| CLS-D | LIVE end-to-end: ingest a REAL contract through the actual engine (`arun_cuad_ingestion`, not a harness); verify covered-dim KG values match the LLM-only baseline (no regression) + measure ingestion-time delta (skipped LLM calls for fully-covered clause types + shorter calls elsewhere). | 5 Integrate | FR-I.4, live-test-each-gate | todo | CLS-C |
+| CLS-E | ADR (hybrid extractor + the 15-classifier fleet: 13 LegalBERT-SetFit + 1 mpnet-SetFit + 1 laya) + docs + atomic commit. | 5 Integrate | documentation-and-adrs | todo | CLS-D |
+
+**CLS — Classifier integration into Step 3a "Extract Clauses" (device- & location-agnostic serving).** Offload the
+15 production-ready closed-vocab dimensions (floor >0.65) from the per-span LLM extraction onto trained classifiers,
+LLM for the rest. **Serving philosophy (STANDING, from the LLM seam): the classifiers are NO different from the LLM
+— use a GPU if one is available (Modal A100 shared with the LLM, a single T4, or the local Mac's MPS), else CPU; the
+runtime/device is a seam arg + a profile, never pinned.** SetFit (any backbone) and laya both honor this. No pinned
+target: works on OpenRouter-LLM + local/T4 classifiers, or all on one A100, or CPU-only. Two runtimes load behind
+one seam (SetFit body+joblib head for 14; laya package for termination_right). Checkpoints in the setfit-clause
+(`/checkpoints/dim_*`) and laya-clause (`/checkpoints/dim_termination_right_laya_v1`) Modal volumes. See skills
+`setfit` + `laya`; the LLM substrate recipe is skill `qwen-vllm-modal` (ADR-0110).
 
 **FR-K — Embedding-free OKF navigation (experimental, gated). SHELVED 2026-07-23 (ADR-0025):** the recall
 investigation showed the *realizable ranking* recall (~0.38, method-invariant, matching the recorded two-leg

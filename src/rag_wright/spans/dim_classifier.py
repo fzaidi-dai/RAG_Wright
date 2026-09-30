@@ -1,0 +1,114 @@
+"""CLS-A (FR-I.4): per-dimension property CLASSIFIERS behind one seam, for Step-3a "Extract Clauses".
+
+A `DimClassifier` maps a span's text to top-k (value, probability) for ONE closed-vocab PropertyDimension, replacing
+the per-span LLM call for that dimension. Two runtimes implement the seam:
+  - `SetFitDimClassifier` — a SentenceTransformer body + joblib sklearn head on disk (NO `setfit` dep at serve time),
+    the 14 SetFit keepers (13 LegalBERT + 1 all-mpnet).
+  - `LayaDimClassifier` — a fine-tuned Laya (ModernBERT-large RL decision) checkpoint via the `laya` package, the 1
+    keeper (termination_right) SetFit couldn't crack.
+
+STANDING serving philosophy (same as the model-profile seam for the LLM): device is NOT pinned — use a GPU if one is
+available (CUDA, else Apple MPS), else CPU; the caller may override. Load ONCE (these are heavy, esp. Laya ~820MB).
+Nothing upstream changes: the hybrid extractor (CLS-B) composes these with the LLM behind the `PropertyExtractor`
+Protocol.
+"""
+from __future__ import annotations
+
+from typing import Optional, Protocol, runtime_checkable
+
+from rag_wright.contracts.property import PropertyDimension
+
+
+def auto_device(pref: Optional[str] = None) -> str:
+    """GPU-if-available-else-CPU: honor an explicit choice, else CUDA -> MPS -> CPU. Never pin a device in code."""
+    if pref:
+        return pref
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return "cuda"
+        if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
+            return "mps"
+    except Exception:  # noqa: BLE001 - torch import/probe failure -> CPU is the safe floor
+        pass
+    return "cpu"
+
+
+@runtime_checkable
+class DimClassifier(Protocol):
+    """Span text -> ranked (value, probability) for one dimension. `classify` returns top-k, highest first."""
+
+    dim: PropertyDimension
+
+    def classify(self, span_text: str) -> list[tuple[str, float]]: ...
+
+
+class SetFitDimClassifier:
+    """A SetFit keeper served as body+head (no `setfit` dep): `body.encode` -> `head.predict_proba` -> top-k. Honors
+    the body's configured normalization; `head.classes_` columns map to the dimension's values."""
+
+    def __init__(self, dim: PropertyDimension, model_dir, *, top_k: int = 1, device: Optional[str] = None,
+                 batch_size: int = 32) -> None:
+        import json
+        from pathlib import Path
+
+        import joblib
+        from sentence_transformers import SentenceTransformer
+
+        self.dim = dim
+        self._top_k = top_k
+        self._batch = batch_size
+        d = Path(model_dir)
+        self._device = auto_device(device)
+        self._body = SentenceTransformer(str(d), device=self._device)
+        self._head = joblib.load(d / "model_head.pkl")
+        self._labels = [str(c) for c in self._head.classes_]
+        # SetFit stores whether the body normalizes embeddings; mirror it so serve-time matches train-time.
+        cfg = d / "config_setfit.json"
+        self._normalize = bool(json.loads(cfg.read_text()).get("normalize_embeddings", True)) if cfg.exists() else True
+
+    def classify(self, span_text: str) -> list[tuple[str, float]]:
+        import numpy as np
+        emb = self._body.encode([span_text], normalize_embeddings=self._normalize, batch_size=self._batch)
+        proba = np.asarray(self._head.predict_proba(emb), dtype=float)[0]
+        order = np.argsort(-proba)[: self._top_k]
+        return [(self._labels[i], float(proba[i])) for i in order]
+
+
+class LayaDimClassifier:
+    """A fine-tuned Laya checkpoint served via the `laya` package: one `choice` question over the dimension's values,
+    a single non-autoregressive forward pass. Device auto (CUDA/MPS/CPU) inside laya.load; loaded once."""
+
+    def __init__(self, dim: PropertyDimension, model_dir, *, instructions: str, criteria: dict[str, str],
+                 top_k: int = 1, device: Optional[str] = None) -> None:
+        import laya
+
+        self.dim = dim
+        self._top_k = top_k
+        self._q = {dim.value: {"type": "choice", "instructions": instructions, "criteria": criteria}}
+        # laya.load device=None -> CUDA else MPS else CPU; pass an explicit override through if given.
+        self._agent = laya.load(str(model_dir), device=device)
+
+    def classify(self, span_text: str) -> list[tuple[str, float]]:
+        ans = self._agent.predict(span_text, self._q)["answers"][self.dim.value]
+        probs = ans.get("probabilities", {})
+        ranked = sorted(probs.items(), key=lambda kv: -kv[1])[: self._top_k]
+        return [(k, float(v)) for k, v in ranked]
+
+
+class DimClassifierRegistry:
+    """Loads the configured per-dimension classifiers ONCE and serves them by dimension. Missing dims (uncovered)
+    return None so the hybrid extractor (CLS-B) falls back to the LLM for them."""
+
+    def __init__(self, classifiers: dict[PropertyDimension, DimClassifier]) -> None:
+        self._by_dim = dict(classifiers)
+
+    def get(self, dim: PropertyDimension) -> Optional[DimClassifier]:
+        return self._by_dim.get(dim)
+
+    def covers(self, dim: PropertyDimension) -> bool:
+        return dim in self._by_dim
+
+    @property
+    def dims(self) -> list[PropertyDimension]:
+        return list(self._by_dim)
