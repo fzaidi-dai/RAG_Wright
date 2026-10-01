@@ -68,7 +68,7 @@ The three middle steps run **in parallel**. A **content-hash gate** guards every
 
 ## Part 2 — Querying: the four question types we support
 
-There are **four** contract query types (each is a registered capability and an MCP tool):
+There are **four** contract query types (each exposed to the product as a **direct Python function** and, optionally, as an **MCP tool** — see Part 5):
 
 | # | Query type | The question it answers | Example |
 |---|---|---|---|
@@ -117,6 +117,46 @@ Honest benchmark: **ACORD, 57 attorney-graded queries** (relevance grade ≥ 2, 
 | Best possible (reachability ceiling) | — | — | **0.97** |
 
 Reading it plainly: the relevant clause is **almost always somewhere in the index (0.97 ceiling)** — this is a *ranking* problem, not a *findability* problem. The **raw** hybrid pool puts few relevant clauses in the top slots (short legal queries embed weakly), so **the reranker is load-bearing**: with it we reach **~68% in the top 10 and ~90% in the top 20**. (The raw and reranked rows are measured on different universes — full pool vs. judged set — so read them as "the rerank does the heavy lifting," not as one clean before/after.) nDCG@10 ≈ 0.70.
+
+---
+
+## Part 5 — How the layers fit: what the product calls, and where LangGraph sits
+
+*This part answers a structural question: when the product (a separate app, e.g. RuleWright) ingests a contract or asks a question, what does it actually call, and how does that reach the individual capabilities?*
+
+There are **three layers**, and they stack the same way for ingestion and for every query type:
+
+```
+  the product's use case
+        │  (imports a plain Python function, passes its own store + model choices)
+        ▼
+  a pipeline "leg"  =  a compiled LangGraph graph      ← the orchestration + hardening layer
+        │  (.ainvoke runs the graph: nodes, retries, dead-letter, parallel fan-out)
+        ▼
+  a node calls a capability  =  a plain Python function ← the leaf work
+        │
+        ▼
+  the ArcadeDB store seam  /  the LLM seam             ← the database and the model
+```
+
+**Layer 1 — the pipeline legs are real LangGraph graphs.** Ingestion and each of the four query types is an actual LangGraph `StateGraph` that is built, compiled, and then run with `.ainvoke(...)`. This is not just naming: LangGraph is what threads state between steps, runs the three ingestion steps in parallel (the fan-out/fan-in you saw in Part 1), and provides the **per-step retry, graceful-degrade, and dead-letter** behavior (a step that fails is retried, then recorded, never silently dropped). What LangGraph gives us over a plain sequence of calls is exactly that hardening and the parallelism — nothing more; there is no autonomous "agent loop" here, just fixed, auditable graphs.
+
+**Layer 2 — the capabilities are plain functions.** The building blocks (embedding, hybrid search, the reranker, graph traversal, answer generation, the relevance judge, clause extraction, …) are ordinary Python functions/classes with no LangGraph inside them. A graph *node* is a thin wrapper that calls one capability; the capability does the real work against the database or a model. This is why a capability can be reused on its own (the product can, and does, also call some capabilities directly — e.g. `graph_query`, `agenerate_answer` — without a graph).
+
+**Layer 3 — the seams.** Every capability reaches the outside world through two seams: the **ArcadeDB store** (search + graph) and the **model/LLM seam** (structured calls via client-side tag-parsing, per ADR-0045). Swapping the database or the model is a seam change, invisible to the layers above.
+
+### The two surfaces the product can use
+
+The engine offers the *same* pipeline legs through **two different front doors**. These are alternatives, not a chain — the product picks per use case:
+
+| Surface | What it is | When the product uses it |
+|---|---|---|
+| **Direct Python API** *(primary)* | Importable functions — `aproduction_document_ingest` / `arun_corpus_ingestion` (ingestion), `production_intra_document_qa`, `production_typed_property_retrieval`, `production_relational_qa`, the `compliance_check` runners — that take the product's own `store`, `answer_model`, `embedder`, `extract_model`, `model_id`, `top_k`, … They **build + compile the LangGraph and the caller `.ainvoke`s it.** | Its own ingestion and query use cases. The product imports these straight into its engine seam and calls them like any library. This is how the product actually ingests and queries. |
+| **MCP tools** *(optional, secondary)* | Thin FastMCP wrappers (`src/rag_wright/mcp/*`) that expose *some* legs as discoverable tools an agent can call. Same code underneath — the wrapper just calls the same `production_*` function and `.ainvoke`s the same graph. | Only inside an **agentic workflow** that wants to call a leg as a *tool* (tool discovery, cross-agent calls). It is **not** on the product's ingestion/query path. |
+
+So both front doors converge on the *same* compiled LangGraph and the *same* capabilities — the MCP server is simply *another caller* of the direct Python function. Ingestion and normal querying go through the **direct Python API**; MCP is an interop convenience layered on top, not the route the product's use cases take.
+
+*(Boundary note, ADR-0052: the dependency is one-way — the product imports the engine, never the reverse. ARD registration advertises each capability/leg as a discoverable entry for external tooling, but nothing in these pipelines is *resolved* through ARD at runtime; the wiring above is all direct imports.)*
 
 ---
 
