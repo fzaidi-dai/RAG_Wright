@@ -1,5 +1,10 @@
 # plan.md: RAG_Wright build plan
 
+> **Active child spec (2026-10-02):** the engine-platform boundary workstream (engine API layer + capability runtime +
+> de-domaining) is planned in **`docs/specs/engine-platform/SPEC.md`** + **`docs/specs/engine-platform/TASKS.md`**
+> (ADR-0117). Follow that child spec + tasks for the current work; this plan remains the overall capability-build plan.
+
+
 Phase 1 output. Read-only planning against `SPEC.md` v0.1. This plans the **capability half**
 only: each item builds and registers an FR-C / FR-I / FR-Q capability as ordinary tested
 software. The ingestion and query **graphs** are compiled separately from the Orchestration

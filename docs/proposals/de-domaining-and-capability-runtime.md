@@ -1,6 +1,6 @@
 # Proposal (DRAFT — for review): The engine platform — de-domaining the core + a capability runtime + the engine API layer
 
-Status: **DRAFT for discussion** (not yet ADRs). Date: 2026-10-01. On approval this becomes **ADR-0068** (the engine
+Status: **DRAFT for discussion** (not yet ADRs). Date: 2026-10-01. On approval this becomes **ADR-0117** (the engine
 API layer + capability runtime) plus **`tasks.md` rows DD-1..6** (de-domaining, extending ADR-0067), and the seam
 cleanup follows.
 
@@ -109,7 +109,7 @@ store. Verified ADR-0067 landing state:
 
 ---
 
-## Part B — ADR-0068 sketch: the engine API layer + capability runtime
+## Part B — ADR-0117 sketch: the engine API layer + capability runtime
 
 Depends on Part A. The engine publishes a **stable API layer** (the thing the product imports) with these pillars.
 
@@ -203,7 +203,7 @@ transition; the invoker is the sanctioned boundary).
 5. **ARD discovery** — later, not urgent.
 6. **Seam cleanup (C)** + the developer-journey doc as the acceptance test.
 
-On approval: write **ADR-0068**, add **DD-1..6** to `tasks.md` (ADR-0067-continuation), and begin DD-1.
+On approval: write **ADR-0117**, add **DD-1..6** to `tasks.md` (ADR-0067-continuation), and begin DD-1.
 
 ## CLS arc status (done, committed `6d4dfc4`)
 Classifier-first Step-3a (ADR-0115/0116) is live-validated on the full 29-dim fleet

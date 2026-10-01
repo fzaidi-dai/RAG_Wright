@@ -254,7 +254,7 @@ so a new-domain dev would hit friction. The restructuring that makes the above r
 - **Engine API layer (new):** `open_workspace`/opaque handle + `EngineConfig`, the per-kind invokers, `kg_read`/
   id-format accessors, embedding-as-profile (+ pluggable embedder), model-by-alias, formalized usage/progress — this
   is what replaces the leaked store/embedder/model/id-format knowledge now living in the product seam.
-- **Capability runtime (ADR-0068 sketch):** register every capability (incl. a lane-level classifier capability),
+- **Capability runtime (ADR-0117 sketch):** register every capability (incl. a lane-level classifier capability),
   per-kind invokers, generic capability→MCP.
 - **Reference domain pack:** the existing contract + compliance domain becomes the worked *example* pack, proving the
   path (and keeping the engine runnable/demoable).

@@ -2,6 +2,8 @@
 
 The DreamAI recipe for building a spec-driven project with Claude Code, following spec-driven development, test-driven development, contracts-first, and library-grounded coding. Filled for RAG_Wright: the parameters below are set, and the body applies as written. RAG_Wright is the reusable **engine/platform** (open-core candidate) of the Hybrid RAG system; the user-facing **product** is a separate repo that depends on it, and GraphWright (the orchestration compiler) is PARKED (ADR-0052).
 
+> **Current active workstream (2026-10-02):** the engine-platform boundary (engine API layer + capability runtime + de-domaining, ADR-0117) is driven by the child spec + ledger at **`docs/specs/engine-platform/SPEC.md`** and **`docs/specs/engine-platform/TASKS.md`**. Follow that child spec + tasks for current work; the root spec/plan/tasks point to it.
+
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
 
 ---

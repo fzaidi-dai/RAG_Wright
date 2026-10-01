@@ -55,6 +55,13 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
+> **CURRENT ACTIVE WORKSTREAM (2026-10-02): the engine-platform boundary** — engine API layer + capability runtime +
+> de-domaining (ADR-0117, extending ADR-0052/0066/0067). It is specced in its own **child spec + ledger**:
+> **`docs/specs/engine-platform/SPEC.md`** and **`docs/specs/engine-platform/TASKS.md`**. Treat that child spec + tasks
+> as the current plan: read them after the parent spec/tasks, and run the working loop against the child ledger. The
+> root `SPEC.md`/`plan.md`/`tasks.md` remain the overall source of truth; their top banners point here. Detail:
+> `docs/proposals/de-domaining-and-capability-runtime.md` + `docs/proposals/new-domain-developer-journey.md`.
+
 Before doing anything else:
 
 1. Read `RAG_Capability_Spec.md`.

@@ -3,6 +3,11 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **⇒ ACTIVE WORKSTREAM (2026-10-02): the engine-platform boundary** (engine API layer + capability runtime +
+> de-domaining, ADR-0117). Its spec + ledger live in **`docs/specs/engine-platform/SPEC.md`** +
+> **`docs/specs/engine-platform/TASKS.md`** — that child ledger is the current plan; work it there, not here. This
+> root ledger stays the authoritative record for everything else.
+
 > **RESUME / NEXT UP (2026-09-04 NEWEST): MODEL DEFAULT SWITCHED + TAGPARSE-INGEST-1 IS NEXT.**
 > **MODEL-DEFAULT-1 (DONE, ADR-0079)**: the product default `ibm-granite/granite-4.1-8b` was DE-LISTED on
 > OpenRouter (404). Evaluated replacements first-hand, live, on the real ingestion path: `~deepseek/deepseek-v4-flash-latest`
