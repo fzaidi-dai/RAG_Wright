@@ -4,16 +4,20 @@ Child task ledger for `./SPEC.md` (child of the root `SPEC.md`/`tasks.md`). Gove
 continuation. Runs under the main working loop (CLAUDE.md): one task, contract-first TDD + a live A/B or smoke test,
 approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval | done`.
 
-> **RESUME / NEXT UP (2026-10-02):** workstream just created from the two proposal docs + ADR-0117. **Nothing started.**
-> **Next up: DD-1** (lift domain methods off the engine store + the compliance opaque-handle), which carries the
-> RuleWright cross-repo coordination — flag it before any cross-repo change. Order: R1 (DD-1..6) → R2 (EP-API-*) →
-> R3 (EP-RT-*) → R4 (EP-SEAM-*) → R5 (EP-RT-4 resumability). Design detail: `docs/proposals/*`.
+> **RESUME / NEXT UP (2026-10-02):** **DD-1a DONE** (generic `kg_read` + three reads re-expressed, full suite green).
+> **Next up: DD-1b** — generic `kg_write` + the complex clause-KG writes + edge-join reads re-expressed, the domain
+> methods relocated into `ContractKGStore`/`ComplianceStore` extensions, the engine store's contract-contract imports
+> removed, and the domain-neutral guard extended to "no contract-contract import." (The compliance opaque-handle
+> migration is NOT in DD-1b — it depends on EP-API-1's `WorkspaceHandle`, so it lands with the API-layer tasks.)
+> Order: R1 (DD-1a/b, DD-2..6) → R2 (EP-API-*) → R3 (EP-RT-*) → R4 (EP-SEAM-*) → R5 (EP-RT-4 resumability). Design
+> detail: `docs/proposals/*`. (Cross-repo RuleWright changes are handled later via handoffs — not a factor here.)
 
 ## R1 — De-domain the core (extends ADR-0067; prerequisite). Each: TDD + no-behavior-change live A/B.
 
 | id | task | implements | status | files | verify |
 |---|---|---|---|---|---|
-| DD-1 | Lift the ~30 domain methods + contract-contract imports off `ArcadeDBStore` into a capability-layer store extension composing the generic store; keep generic `write_graph`/`graph_neighbors`/`hybrid_search`/`kg_read`/`kg_write` + pack-driven DDL. **Includes the compliance opaque-handle fix** (raw store → `WorkspaceHandle`). **Cross-repo: RuleWright seam calls these — coordinate.** | R1, ADR-0067 P5b | todo | `store/arcadedb.py`, `store/seam.py`, subgraph/capability callers; RuleWright `engine/seam.py` | engine `store/` imports no contract contract; real clause/requirement writes identical graph; both suites green |
+| DD-1a | Add the generic, backend-agnostic typed-node read **`Store.kg_read`** (equality/`IN` filters, `fields`/`distinct`/`order_by`/`limit`, empty-list→`[]`) + impl; re-express `all_requirements`/`contract_by_id`/`spans_by_contract` onto it with SQL-parity. Proves `kg_read` adequate before DD-1b's migration. | R1, ADR-0117 | **done (2026-10-02)** | `store/seam.py`, `store/arcadedb.py`, `tests/store/test_kg_read.py`, `tests/store/test_arcadedb_schema.py` (stub) | 7 contract + 3 parity tests green; full suite 1632 pass, 0 fail |
+| DD-1b | Add generic **`kg_write`** (typed node + edge upsert); re-express the complex clause-KG writes (`write_clause_kg`/`write_property_graph`/`write_requirements`) + edge-join reads (`span_properties`/`clauses_with_property`/`exceptions_of_clause`/`clause_typed_edges`) onto `kg_read`/`kg_write`; relocate the ~25 domain methods into capability-layer **`ContractKGStore`** + **`ComplianceStore`** extensions composing the generic store; switch the engine domain callers; **remove the contract-contract imports from `store/arcadedb.py`**; extend `test_engine_domain_neutral` into a "no contract-contract import" guard. (Compliance opaque-handle migration deferred to the API-layer tasks — needs EP-API-1.) | R1, ADR-0067 P5b, AC-no-leak | todo | `store/arcadedb.py`, `store/seam.py`, new `capabilities/contract_kg_store.py` + `compliance_store.py`, the engine domain callers, `tests/store/*` | engine `store/` imports no contract contract; real clause/requirement writes identical graph; suite green |
 | DD-2 | De-contract the generic infra columns: `Span.contract_id` → `source_doc_id`; `Span.function` → pack-declared span label / generic `span_label`. | R1 | todo | `store/arcadedb.py` DDL + readers/writers | identical live schema + span round-trip |
 | DD-3 | Extract the `EntityResolver` seam (injected `(mention clusters) → canonical ids`); EDGAR-CIK = one impl (SEC pack default); generic default = the exact-normalized surface-form registry. | R1, ADR-0067 P5c | todo | `capabilities/entity_resolution.py`, `store/seam.py`, pipeline resolve/write wiring | SEC corpus resolves identically with CIK resolver injected; non-SEC doc resolves via surface-form default |
 | DD-4 | Genericize the `EntityId` contract: drop the 10-digit-CIK validator; `EntityId` = canonical-id string (FR-S.3 scheme unchanged); CIK format → the SEC resolver. **Ask-first identifier — flagged.** | R1, ADR-0067 P5c, FR-S.3 | todo | `contracts/identifiers.py` + consumers | identifiers round-trip; no fabricated ids |

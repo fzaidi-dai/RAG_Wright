@@ -126,3 +126,20 @@ class Store(Protocol):
         `path_confidences`, `hops`. Every edge is surfaced regardless of confidence (T26 does not gate).
         `documents` (issue 0031): scope the traversal to those source documents -- EVERY edge on a path must
         belong to one of them; `None` = the whole graph, `[]` = scope-to-nothing (no rows)."""
+
+    # --- generic typed-node read (DD-1a, ADR-0117): the backend-agnostic primitive a domain store extension
+    # delegates to, so a domain pack never emits store-native SQL. Semantic, not SQL.
+
+    def kg_read(
+        self,
+        node_type: str,
+        *,
+        where: Optional[dict[str, object]] = None,
+        fields: Optional[list[str]] = None,
+        distinct: Optional[str] = None,
+        order_by: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> list[dict]:
+        """Read typed nodes of `node_type`. `where` maps a field to a scalar (equality) or a list (membership);
+        a list value that is EMPTY means scope-to-nothing and returns `[]` without a query. `distinct` returns the
+        distinct values of one field; `fields=None` returns all fields. Equality/membership clauses are AND-ed."""

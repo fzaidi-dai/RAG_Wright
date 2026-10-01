@@ -131,6 +131,21 @@ def _str_array(values: Iterable[str]) -> str:
     return "[" + ",".join(_sql_str(v) for v in values) + "]"
 
 
+def _kg_sql_value(value: object) -> str:
+    """Serialize a scalar for `kg_read` (DD-1a): bool/int/float native, everything else a quoted string."""
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    return _sql_str(str(value))
+
+
+def _kg_sql_array(values: list) -> str:
+    return "[" + ",".join(_kg_sql_value(v) for v in values) + "]"
+
+
 def _doc_id_of(chunk_id: str) -> str:
     """The source-document id embedded in a chunk/span/clause id (issue 0031). The id scheme is
     `<source_doc_id>:<index>:<hash>` and `source_doc_id` is delimiter-safe (no ':', enforced by `ChunkId`),
@@ -377,6 +392,40 @@ class ArcadeDBStore:
         )
         return rows[0] if rows else None
 
+    # --- generic typed-node read (DD-1a, ADR-0117): the backend-agnostic primitive the domain store
+    # extensions delegate to, so a domain pack never writes ArcadeDB SQL -----------------------------
+
+    def kg_read(
+        self,
+        node_type: str,
+        *,
+        where: Optional[dict[str, object]] = None,
+        fields: Optional[list[str]] = None,
+        distinct: Optional[str] = None,
+        order_by: Optional[str] = None,
+        limit: Optional[int] = None,
+    ) -> list[dict]:
+        """Read typed nodes of `node_type` (see `Store.kg_read`). A list `where` value that is empty is
+        scope-to-nothing -> `[]` without a query (never an invalid `IN []`). Clauses AND-ed in insertion order."""
+        clauses: list[str] = []
+        for field, value in (where or {}).items():
+            if isinstance(value, (list, tuple, set)):
+                vals = list(value)
+                if not vals:
+                    return []
+                clauses.append(f"{field} IN {_kg_sql_array(vals)}")
+            else:
+                clauses.append(f"{field} = {_kg_sql_value(value)}")
+        proj = f"DISTINCT({distinct}) AS {distinct}" if distinct else (", ".join(fields) if fields else "*")
+        sql = f"SELECT {proj} FROM {node_type}"
+        if clauses:
+            sql += " WHERE " + " AND ".join(clauses)
+        if order_by:
+            sql += f" ORDER BY {order_by}"
+        if limit is not None:
+            sql += f" LIMIT {int(limit)}"
+        return self._query(sql)
+
     # --- operative-span write/search (FR-R, ADR-0025) -------------------------------------------
 
     def upsert_span(self, record: SpanRecord) -> None:
@@ -431,11 +480,9 @@ class ArcadeDBStore:
 
     def contract_by_id(self, contract_id: str) -> dict | None:
         """CU-B3: look up a contract's metadata by id (the row, or None if absent)."""
-        rows = self._query(
-            f"SELECT contract_id, name, agreement_type, parties_json, agreement_date, effective_date,"
-            f" source_doc_id, content_hash, page_count FROM {CONTRACT_TYPE}"
-            f" WHERE contract_id = {_sql_str(contract_id)}"
-        )
+        rows = self.kg_read(CONTRACT_TYPE, fields=[
+            "contract_id", "name", "agreement_type", "parties_json", "agreement_date", "effective_date",
+            "source_doc_id", "content_hash", "page_count"], where={"contract_id": contract_id})
         return rows[0] if rows else None
 
     # --- Compliance module (CC-5, §13): the Requirement KG, in its OWN database (ragwright_compliance) ---
@@ -488,16 +535,14 @@ class ArcadeDBStore:
         across many policies/tenants never fetches the ones outside the scope -- scale-ready, not an in-memory
         filter. An empty scope (`sources=[]`) returns `[]` without a query (scope-to-nothing; also avoids an
         invalid `IN []`)."""
-        select = (
-            f"SELECT requirement_id, source, citation, deontic_type, actor, requirement_text,"
-            f" evidence_standard, severity, applicability_json, confidence, pages, bbox"  # issue 0043: page prov
-            f" FROM {REQUIREMENT_TYPE}")
-        if sources is None:
-            return self._query(select)
-        sources = list(sources)
-        if not sources:
-            return []
-        return self._query(f"{select} WHERE source IN {_str_array(sources)}")
+        if sources is not None:
+            sources = list(sources)
+            if not sources:
+                return []  # empty scope -> [] without a query
+        return self.kg_read(REQUIREMENT_TYPE, fields=[
+            "requirement_id", "source", "citation", "deontic_type", "actor", "requirement_text",
+            "evidence_standard", "severity", "applicability_json", "confidence", "pages", "bbox"],
+            where=({"source": sources} if sources is not None else None))
 
     def requirement_sources(self) -> set[str]:
         """Issue 0007: the DISTINCT set of policy `source`s present in the Requirement KG -- powers unknown-source
@@ -525,12 +570,10 @@ class ArcadeDBStore:
         Returns citation-ready rows (span_id, parent pointer, text, function, doc offsets)."""
         if not functions:
             return []
-        return self._query(
-            f"SELECT span_id, parent_chunk_id, parent_okf_path, span_index, text, function,"
-            f" contract_id, doc_start, doc_end, pages, bbox FROM {SPAN_TYPE}"  # issue 0032: page citation
-            f" WHERE contract_id = {_sql_str(contract_id)} AND function IN {_str_array(functions)}"
-            f" ORDER BY doc_start"
-        )
+        return self.kg_read(SPAN_TYPE, fields=[
+            "span_id", "parent_chunk_id", "parent_okf_path", "span_index", "text", "function",
+            "contract_id", "doc_start", "doc_end", "pages", "bbox"],
+            where={"contract_id": contract_id, "function": functions}, order_by="doc_start")
 
     def all_spans_by_contract(self, contract_id: str) -> list[dict]:
         """CU-C2: EVERY span in a contract (all functions incl NONE), with its dense vector, ordered by

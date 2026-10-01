@@ -125,6 +125,13 @@ class _InMemoryStore:
                                       "path_confidences": [e1.confidence, e2.confidence]})
         return paths
 
+    def kg_read(self, node_type, *, where=None, fields=None, distinct=None, order_by=None, limit=None):
+        # DD-1a seam conformance: this in-memory stub holds no typed domain nodes, so the generic read is empty.
+        for value in (where or {}).values():
+            if isinstance(value, (list, tuple, set)) and not list(value):
+                return []
+        return []
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()
