@@ -52,6 +52,37 @@ async def _sub_typed_property_retrieval(h: WorkspaceHandle, inputs: dict) -> Any
     return await graph.ainvoke({"query": inputs["query"]})
 
 
+async def _sub_relational_qa(h: WorkspaceHandle, inputs: dict) -> Any:
+    from rag_wright.capabilities.answer_generator import answer_model_for
+    from rag_wright.subgraphs.relational_qa import production_relational_qa
+
+    graph = production_relational_qa(store=h._store, answer_model=answer_model_for(h.model_id(ModelRole.GENERAL)))
+    return await graph.ainvoke({"query": inputs["query"], "start_entity_id": inputs["start_entity_id"],
+                                "max_hops": inputs.get("max_hops", 1)})
+
+
+async def _sub_intra_document_qa(h: WorkspaceHandle, inputs: dict) -> Any:
+    from rag_wright.capabilities.answer_generator import answer_model_for
+    from rag_wright.subgraphs.intra_document_qa import production_intra_document_qa
+
+    graph = production_intra_document_qa(store=h._store, answer_model=answer_model_for(h.model_id(ModelRole.GENERAL)),
+                                        top_k=inputs.get("top_k", 12))
+    return await graph.ainvoke({"contract_id": inputs["contract_id"], "question": inputs["question"]})
+
+
+async def _sub_contract_ingestion(h: WorkspaceHandle, inputs: dict) -> Any:
+    """Ingest ONE document (a `SourceDocument`, build via `api.source_document`) through the async per-document ingest
+    graph. `inputs`: `document` (required) + `cache_dir` (the parse cache, required to be stable across calls)."""
+    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.spans.dim_classifier import load_dim_registry
+    from rag_wright.subgraphs.contract_ingestion_pipeline import aproduction_document_ingest
+
+    graph = aproduction_document_ingest(
+        h._store, cache_dir=inputs["cache_dir"], registry=load_dim_registry(), embedder=h._embedder,
+        extract_model=default_extraction_model(model=h.model_id(ModelRole.STRUCTURED_REASONING)))
+    return await graph.ainvoke({"document": inputs["document"]})
+
+
 def _model_clause_function_classification(h: WorkspaceHandle, inputs: dict) -> Any:  # noqa: ARG001 - local model
     from rag_wright.spans.clause_function_classifier import production_setfit_clause_classifier
 
@@ -59,7 +90,12 @@ def _model_clause_function_classification(h: WorkspaceHandle, inputs: dict) -> A
     return clf.classify_spans(inputs["chunk_text"], inputs["span_texts"])
 
 
-_SUBGRAPH_ADAPTERS: dict[str, Callable] = {"typed_property_retrieval": _sub_typed_property_retrieval}
+_SUBGRAPH_ADAPTERS: dict[str, Callable] = {
+    "typed_property_retrieval": _sub_typed_property_retrieval,
+    "relational_qa": _sub_relational_qa,
+    "intra_document_qa": _sub_intra_document_qa,
+    "contract_ingestion_pipeline": _sub_contract_ingestion,
+}
 _MODEL_ADAPTERS: dict[str, Callable] = {"clause_function_classification": _model_clause_function_classification}
 
 

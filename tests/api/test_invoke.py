@@ -61,6 +61,13 @@ async def test_ainvoke_subgraph_dispatches_under_usage_accounting(monkeypatch):
     assert out == {"ok": True} and seen["usage_open"] is True and seen["inputs"] == {"q": 1}
 
 
+def test_source_document_builds_a_text_doc():
+    from rag_wright.api import source_document
+
+    sd = source_document("ACME_MSA", text="Section 8. Limitation of Liability.")
+    assert sd.source_doc_id == "ACME_MSA" and "Limitation of Liability" in sd.text
+
+
 # --- live: a local model capability through the engine API ---
 
 _SETFIT_ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_clause"))
@@ -92,3 +99,38 @@ def test_ainvoke_subgraph_runs_typed_property_retrieval_live():
 
     out = asyncio.run(ainvoke_subgraph("typed_property_retrieval", {"query": "liability cap"}, resources=ws))
     assert out is not None and "retrieval" in out  # the leg ran end-to-end through the engine API (empty KG -> no spans)
+
+
+@pytest.mark.store
+def test_ainvoke_intra_document_qa_live():
+    """intra_document_qa over an empty workspace: serve finds no clauses -> generate abstains (no model call needed),
+    proving the adapter wires the leg end-to-end through the API."""
+    import asyncio
+
+    from rag_wright.api import open_workspace
+
+    cfg = EngineConfig(store=StoreConfig(
+        host=os.environ["ARCADEDB_HOST"], port=os.environ["ARCADEDB_PORT"],
+        user=os.environ["ARCADEDB_USER"], password=os.environ["ARCADEDB_PASSWORD"],
+        protocol=os.getenv("ARCADEDB_PROTOCOL", "http")))
+    ws = open_workspace(cfg, corpus="ragwright_invoke_idqa_live", reset=True)
+    out = asyncio.run(ainvoke_subgraph(
+        "intra_document_qa", {"contract_id": "no-such-doc", "question": "What is the liability cap?"}, resources=ws))
+    assert out is not None  # the leg ran; empty KG -> an honest abstain
+
+
+@pytest.mark.store
+def test_ainvoke_relational_qa_live():
+    import asyncio
+
+    from rag_wright.api import open_workspace
+
+    cfg = EngineConfig(store=StoreConfig(
+        host=os.environ["ARCADEDB_HOST"], port=os.environ["ARCADEDB_PORT"],
+        user=os.environ["ARCADEDB_USER"], password=os.environ["ARCADEDB_PASSWORD"],
+        protocol=os.getenv("ARCADEDB_PROTOCOL", "http")))
+    ws = open_workspace(cfg, corpus="ragwright_invoke_relqa_live", reset=True)
+    out = asyncio.run(ainvoke_subgraph(
+        "relational_qa", {"query": "who does Acme contract with?", "start_entity_id": "none", "max_hops": 1},
+        resources=ws))
+    assert out is not None  # empty graph -> empty traversal -> abstain; the leg ran through the API
