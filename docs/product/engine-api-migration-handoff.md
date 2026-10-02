@@ -116,6 +116,11 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   The tool takes an opaque `inputs` dict (the capability's own input contract). Use this for zero-boilerplate MCP
   exposure of a capability or a new-domain graph; the 4 bespoke Tier-1 servers in `rag_wright/mcp/` remain for
   curated, typed tool signatures. The product owns tenant→corpus routing (build one server per workspace).
+- **Done (EP-API-6):** **PDF/docling ingest entry point** — `engine.parse_document(id, path, *, cache_dir, metadata=None)`
+  (sync) / `engine.aparse_document(...)` (async) run the engine's real docling parse and return a structure-bearing
+  `SourceDocument` (`.parsed` set), which you then pass as the `document` input of `ainvoke_subgraph("contract_ingestion_pipeline", …)`.
+  So the product's byte-source ingest (PDF/DOCX/HTML/MD) now runs through the API; `source_document(id, text=…)` stays
+  for already-text input. (Docling parse was the last piece of G-bucket "parse" still product-side.)
 - **Done (EP-API-5):** **usage/cost on the API surface** — `with engine.measure_usage() as u: await engine.ainvoke_subgraph(...)`
   then read `u.calls / u.input_tokens / u.output_tokens / u.cost_usd / u.calls_without_cost / u.latency_ms_total /
   u.by_model` (`{model_id: ModelUsage}`). This is the public face of the engine's in-band usage accounting

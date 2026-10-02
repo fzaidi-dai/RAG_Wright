@@ -6,7 +6,7 @@ embedders (EP-API-4). The product imports from here; it never reaches the store/
 from __future__ import annotations
 
 from rag_wright.api.config import EngineConfig, StoreConfig
-from rag_wright.api.documents import source_document
+from rag_wright.api.documents import aparse_document, parse_document, source_document
 from rag_wright.api.ids import decode_bbox, document_of, id_source
 from rag_wright.api.invoke import ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import kg_read, kg_write, span_positions
@@ -18,6 +18,6 @@ __all__ = [
     "ainvoke_subgraph", "invoke_model", "capability_index",
     "kg_read", "kg_write", "span_positions",
     "document_of", "id_source", "decode_bbox",
-    "source_document",
+    "source_document", "parse_document", "aparse_document",
     "measure_usage", "UsageTotals", "ModelUsage",
 ]
