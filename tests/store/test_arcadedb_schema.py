@@ -132,6 +132,9 @@ class _InMemoryStore:
                 return []
         return []
 
+    def kg_write(self, nodes, edges=()):  # DD-1b seam conformance: accept the generic typed write (no-op stub)
+        return None
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()

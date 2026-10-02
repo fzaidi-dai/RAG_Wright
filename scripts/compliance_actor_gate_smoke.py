@@ -55,7 +55,7 @@ async def main() -> int:
         _req("§ 3", "prohibition", "advertiser",
              "An advertiser must not describe a price as a discount unless the higher price was the usual selling price."),
     ]
-    store.write_requirements(reqs)
+    ComplianceStore(store).write_requirements(reqs)
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
     log(f"[smoke]   -> {n} Requirement nodes (§1 advertiser/prohib, §2 endorser/oblig, §3 advertiser/prohib)")
 

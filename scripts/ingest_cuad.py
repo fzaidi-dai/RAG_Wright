@@ -32,6 +32,7 @@ from docling_core.types.doc.document import DoclingDocument
 from docling_core.types.doc.labels import DocItemLabel
 from dotenv import load_dotenv
 
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.capabilities.embedding import BGEM3Embedder
 from rag_wright.capabilities.parsing import ParsedDocument
 from rag_wright.capabilities.rlm_chunking import (
@@ -170,7 +171,7 @@ def main() -> None:
     n_spans = n_contracts = n_bad = 0
     for r in ok_results:
         c, sid, canonical = r["c"], r["sid"], r["canonical"]
-        store.upsert_contract(ContractRecord(
+        ContractKGStore(store).upsert_contract(ContractRecord(
             contract_id=sid, name=c.contract_id, source_doc_id=sid, content_hash=r["parsed"].content_hash))
         n_contracts += 1
         for ch in r["manifest"].chunks:

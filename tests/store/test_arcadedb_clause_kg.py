@@ -13,13 +13,12 @@ import pytest
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.store.arcadedb import (
     TYPED_PROPERTY_EDGE_TYPES,
     ArcadeDBStore,
-    _clause_kg_statements,
     _edge_predicate_iri,
     _stale_property_statements,
-    _TYPED_DIMENSION_EDGE,
 )
 
 _D = PropertyDimension
@@ -37,11 +36,6 @@ def _record(seed: str, function: str, props) -> tuple[ClausePropertyRecord, str]
 
 
 # --- hermetic -----------------------------------------------------------------------------------
-
-
-def test_every_dimension_maps_to_a_typed_edge() -> None:
-    """A new PropertyDimension cannot silently break the write path: the map must be total."""
-    assert set(_TYPED_DIMENSION_EDGE) == set(PropertyDimension)
 
 
 def test_sanctioned_edge_set() -> None:
@@ -66,53 +60,6 @@ def test_deontic_edges_ground_to_odrl_others_to_bridge() -> None:
     assert _edge_predicate_iri("HAS_MUTUALITY") == (
         "https://ragwright.local/ontology/contract-bridge#HAS_MUTUALITY"
     )
-
-
-def test_statements_use_typed_edges_with_predicate_and_provenance() -> None:
-    rec, _cid = _record("capA", "Cap On Liability", [
-        (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED),
-        (_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED),
-        (_D.DAMAGE_TYPE, "consequential", ConfidenceTag.EXTRACTED),
-    ])
-    statements = _clause_kg_statements(rec)
-    sql = "\n".join(statements)
-    # typed edges, not the legacy flat one
-    assert "CREATE EDGE HAS_MUTUALITY" in sql
-    assert "CREATE EDGE EXCEPTS" in sql
-    assert "CREATE EDGE PROHIBITS" in sql  # damage_type waiver
-    assert "CREATE EDGE HasProperty" not in sql
-    # predicate IRI grounding (ODRL on the deontic edge) + provenance on every edge
-    assert "http://www.w3.org/ns/odrl/2/prohibition" in sql
-    assert sql.count("predicate_iri = ") == 3
-    assert sql.count("confidence = ") == 3
-    # span_id on all 3 property edges AND the Clause vertex itself (clause-level span_id; persist-clause-span-id)
-    assert sql.count("span_id = ") == 4
-    assert statements[0].startswith("UPDATE Clause SET") and "span_id = " in statements[0]
-
-
-def test_value_nodes_get_folio_grounding() -> None:
-    """A carve-out subject with a FOLIO concept IRI grounds its shared value node."""
-    rec, _cid = _record("x", "Cap On Liability", [(_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED)])
-    sql = "\n".join(_clause_kg_statements(rec))
-    assert "https://folio.openlegalstandard.org/RqGxSnAp9vX42GRKHqwvBe" in sql  # fraud FOLIO IRI
-
-
-def test_cuad_extension_dims_route_to_grants_and_has_edges() -> None:
-    """KG-4: exclusivity -> GRANTS (ODRL permission IRI); an open dim -> its HAS_* edge."""
-    rec, _cid = _record("excl", "Exclusivity", [
-        (_D.EXCLUSIVITY_TYPE, "exclusive", ConfidenceTag.EXTRACTED),
-        (_D.AUDIT_FREQUENCY, "annual", ConfidenceTag.EXTRACTED),
-    ])
-    sql = "\n".join(_clause_kg_statements(rec))
-    assert "CREATE EDGE GRANTS" in sql
-    assert "http://www.w3.org/ns/odrl/2/permission" in sql  # GRANTS grounds to ODRL permission
-    assert "CREATE EDGE HAS_AUDIT_FREQUENCY" in sql
-
-
-def test_empty_record_writes_only_the_clause_node() -> None:
-    rec, _cid = _record("empty", "Cap On Liability", [])
-    stmts = _clause_kg_statements(rec)
-    assert len(stmts) == 1 and stmts[0].startswith("UPDATE Clause")
 
 
 # --- live ArcadeDB (opt-in) ---------------------------------------------------------------------
@@ -140,7 +87,7 @@ def test_write_typed_kg_and_readback(store) -> None:
         (_D.DAMAGE_TYPE, "consequential", ConfidenceTag.EXTRACTED),
         (_D.CAP_QUANTUM, "12_months", ConfidenceTag.EXTRACTED),
     ])
-    store.write_clause_kg(rec)
+    ContractKGStore(store).write_clause_kg(rec)
     assert store.clause_kg_counts() == {"clauses": 1, "property_values": 4, "typed_edges": 4}
 
     got = store.clause_typed_edges(cid)
@@ -157,8 +104,8 @@ def test_write_typed_kg_and_readback(store) -> None:
 @pytest.mark.store
 def test_write_is_idempotent(store) -> None:
     rec, _cid = _record("capB", "Cap On Liability", [(_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
-    store.write_clause_kg(rec)
-    store.write_clause_kg(rec)  # content-hash gate -> no duplicate edges
+    ContractKGStore(store).write_clause_kg(rec)
+    ContractKGStore(store).write_clause_kg(rec)  # content-hash gate -> no duplicate edges
     assert store.clause_kg_counts() == {"clauses": 1, "property_values": 1, "typed_edges": 1}
 
 
@@ -167,7 +114,7 @@ def test_shared_value_node_deduped_across_clauses(store) -> None:
     """The KG win: two clauses asserting the same (dimension,value) share one value node."""
     for seed in ("c1", "c2"):
         rec, _ = _record(seed, "Cap On Liability", [(_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED)])
-        store.write_clause_kg(rec)
+        ContractKGStore(store).write_clause_kg(rec)
     counts = store.clause_kg_counts()
     assert counts["clauses"] == 2 and counts["property_values"] == 1 and counts["typed_edges"] == 2
 
@@ -175,7 +122,7 @@ def test_shared_value_node_deduped_across_clauses(store) -> None:
 @pytest.mark.store
 def test_clear_clause_kg_empties_the_typed_graph(store) -> None:
     rec, _cid = _record("capC", "Cap On Liability", [(_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED)])
-    store.write_clause_kg(rec)
+    ContractKGStore(store).write_clause_kg(rec)
     store.clear_clause_kg()
     assert store.clause_kg_counts() == {"clauses": 0, "property_values": 0, "typed_edges": 0}
 
@@ -203,28 +150,6 @@ def test_span_properties_joins_typed_edges_by_span_id():
     assert out["s2"] == set()  # its only row had value=None -> nothing recorded
     assert "sX" not in out  # rows for spans outside the requested batch are ignored
     assert store.span_properties([]) == {}  # empty in -> empty out, no query
-
-
-def test_clause_upsert_emits_functions_json(): 
-    # ADR-0048: the Clause UPSERT persists the multi-label classification as a JSON string (primary-first).
-    import json
-
-    from rag_wright.contracts.function import FunctionConfidence, FunctionScore
-
-    rec, _ = _record("s1", "Cap On Liability", [])
-    rec = rec.model_copy(update={"functions": [
-        FunctionScore(function="Cap On Liability", confidence=FunctionConfidence.HIGH),
-        FunctionScore(function="Indemnification", confidence=FunctionConfidence.MEDIUM)]})
-    clause_update = _clause_kg_statements(rec)[0]
-    assert "functions = " in clause_update
-    payload = json.dumps([{"function": "Cap On Liability", "confidence": "high"},
-                          {"function": "Indemnification", "confidence": "medium"}])
-    assert payload in clause_update  # exact JSON payload present in the SET clause
-
-
-def test_clause_upsert_empty_functions_is_empty_json_array():
-    rec, _ = _record("s2", "Governing Law", [])
-    assert '[]' in _clause_kg_statements(rec)[0]
 
 
 # --- ADR-0048 Phase A mark-stale: the pure UPDATE builder (no store) --------------------------------------

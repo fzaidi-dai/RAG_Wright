@@ -41,6 +41,32 @@ class GraphEdge:
     chunk_id: str
 
 
+@dataclass(frozen=True)
+class KgNode:
+    """A typed KG node to upsert (DD-1b, ADR-0117): `type` is the vertex type, `key_field` the identity field to
+    upsert on, `props` the fields (including `key_field`) as DOMAIN-NATIVE values. The store encodes each prop by its
+    pack-declared storage type -- the caller never serializes to the store's wire format."""
+
+    type: str
+    key_field: str
+    props: dict[str, object]
+
+
+@dataclass(frozen=True)
+class KgEdge:
+    """A typed KG edge to create between two nodes identified by (type, key_field, key). `props` are native values
+    (edge properties are type-driven: edges declare no storage schema)."""
+
+    type: str
+    from_type: str
+    from_key_field: str
+    from_key: object
+    to_type: str
+    to_key_field: str
+    to_key: object
+    props: dict[str, object]
+
+
 @runtime_checkable
 class Store(Protocol):
     """A swappable store. The ArcadeDB implementation is the default; a stub proves swappability."""
@@ -143,3 +169,8 @@ class Store(Protocol):
         """Read typed nodes of `node_type`. `where` maps a field to a scalar (equality) or a list (membership);
         a list value that is EMPTY means scope-to-nothing and returns `[]` without a query. `distinct` returns the
         distinct values of one field; `fields=None` returns all fields. Equality/membership clauses are AND-ed."""
+
+    def kg_write(self, nodes: list["KgNode"], edges: "Iterable[KgEdge]" = ()) -> None:
+        """Upsert typed `nodes` (by each node's `key_field`) then create typed `edges` (FROM/TO by node key), ALL in
+        ONE transaction, nodes first so endpoints exist. The caller passes DOMAIN-NATIVE values; the store owns all
+        wire encoding, driven by each node type's pack-declared property storage type. Empty input is a no-op."""

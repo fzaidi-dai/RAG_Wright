@@ -23,13 +23,6 @@ from typing import Any, Iterable, Optional
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
-from rag_wright.contracts.compliance import Requirement
-from rag_wright.contracts.contract_meta import ContractRecord
-from rag_wright.contracts.property import (
-    FOLIO_SUBJECT_IRI,
-    ClausePropertyRecord,
-    PropertyDimension,
-)
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.corpus.canonicalize import normalize_entity_name  # issue 0030: name -> entity clustering key
 from rag_wright.ontology.loader import (  # ADR-0067: KG schema from the ontology
@@ -59,11 +52,10 @@ PROPERTY_EDGE_TYPE = "HasProperty"  # legacy flat edge (ADR-0025/0026); supersed
 # ADR-0067 P5a: the typed-edge map (dimension -> KG edge type) + the predicate IRIs are AUTHORITATIVE in
 # contract_bridge.ttl (cbr:kgEdge / cbr:KgEdgeType); loaded here, not a Python literal. Edit the ttl to retarget.
 _DIM_EDGE_STR, _EDGE_PREDICATE_IRI = load_typed_edges()
-_TYPED_DIMENSION_EDGE: dict[PropertyDimension, str] = {
-    PropertyDimension(dim): edge for dim, edge in _DIM_EDGE_STR.items()
-}
-# distinct edge types (deterministic order; used as a set / for counts + DDL, never order-dependent)
-TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(sorted(set(_TYPED_DIMENSION_EDGE.values())))
+# distinct edge types (deterministic order; a set / for counts + DDL, never order-dependent). The dim->edge map
+# stays str-keyed: only the clause-KG writer indexed it by `PropertyDimension`, and that moved to the
+# `capabilities/contract_kg_store.py` extension (DD-1b), so the engine store needs no `PropertyDimension`.
+TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(sorted(set(_DIM_EDGE_STR.values())))
 
 
 def _edge_predicate_iri(edge_type: str) -> str:
@@ -146,6 +138,56 @@ def _kg_sql_array(values: list) -> str:
     return "[" + ",".join(_kg_sql_value(v) for v in values) + "]"
 
 
+def _kg_sql(value: object) -> str:
+    """Type-driven serialization for `kg_write` EDGE props + undeclared fields: None->null, scalars native/quoted,
+    list/tuple -> a nested array literal."""
+    if value is None:
+        return "null"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, int):
+        return str(value)
+    if isinstance(value, float):
+        return repr(value)
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_kg_sql(v) for v in value) + "]"
+    return _sql_str(str(value))
+
+
+def _kg_encode(value: object, declared_type: Optional[str]) -> str:
+    """Encode a `kg_write` NODE prop by its PACK-DECLARED storage type (DD-1b): the declared type is what
+    disambiguates a list stored as a native array (`ARRAY_OF_*`) from one stored as a JSON string (`STRING`) --
+    e.g. `pages` (array) vs `bbox` (JSON string). None->null; an undeclared field falls back to type-driven."""
+    if value is None:
+        return "null"
+    dt = (declared_type or "").upper()
+    if dt == "STRING":
+        return _sql_str(value if isinstance(value, str) else json.dumps(value))
+    if dt in ("INTEGER", "LONG", "SHORT", "BYTE"):
+        return str(int(value))
+    if dt in ("FLOAT", "DOUBLE", "DECIMAL"):
+        return repr(float(value))
+    if dt == "BOOLEAN":
+        return "true" if value else "false"
+    if dt == "ARRAY_OF_INTEGERS":
+        return "[" + ",".join(str(int(x)) for x in value) + "]"
+    if dt == "ARRAY_OF_FLOATS":
+        return _float_array(value)
+    if dt == "ARRAY_OF_STRINGS":
+        return _str_array(value)
+    return _kg_sql(value)
+
+
+# DD-1b: the non-pack KG vertex property storage types, centralized so `ensure_compliance_schema` and `kg_write`'s
+# encoder read ONE source (the contract-pack vertices -- Clause/PropertyValue/Contract -- come from `load_kg_schema`).
+_ENGINE_VERTEX_PROPERTY_TYPES: dict[str, dict[str, str]] = {
+    REQUIREMENT_TYPE: {
+        "requirement_id": "STRING", "source": "STRING", "citation": "STRING", "deontic_type": "STRING",
+        "actor": "STRING", "requirement_text": "STRING", "evidence_standard": "STRING", "severity": "STRING",
+        "applicability_json": "STRING", "confidence": "STRING", "pages": "ARRAY_OF_INTEGERS", "bbox": "STRING"},
+}
+
+
 def _doc_id_of(chunk_id: str) -> str:
     """The source-document id embedded in a chunk/span/clause id (issue 0031). The id scheme is
     `<source_doc_id>:<index>:<hash>` and `source_doc_id` is delimiter-safe (no ':', enforced by `ChunkId`),
@@ -184,45 +226,6 @@ def _stale_property_statements(span_ids: list[str]) -> list[str]:
         f"UPDATE {edge_type} SET confidence = {amb} WHERE span_id IN {id_list} AND confidence <> {amb}"
         for edge_type in TYPED_PROPERTY_EDGE_TYPES
     ]
-
-
-def _clause_kg_statements(record: ClausePropertyRecord) -> list[str]:
-    """KG-3 (ADR-0033): the pure SQL for the TYPED clause KG -- the Clause node + one shared PropertyValue
-    node per (dimension,value) + one TYPED edge per assertion. Each typed edge carries the dimension, a
-    predicate IRI (ODRL for the deontic edges, our bridge IRI otherwise), and the assertion provenance
-    (confidence + span_id + chunk_id + source_doc_id; FR-S.4 / FR-Q.6). Value-node identity (`value_key`) is
-    unchanged from the flat graph. Separated from the DB call so the mapping is unit-tested with no store."""
-    cid = _sql_str(record.clause_id)
-    # ADR-0048: persist the multi-label classification as a JSON string (ranked primary-first); `function` above
-    # stays the PRIMARY for query readers. Empty list -> "[]".
-    functions_json = _sql_str(json.dumps(
-        [{"function": f.function, "confidence": f.confidence.value} for f in record.functions]))
-    statements: list[str] = [
-        f"UPDATE {CLAUSE_TYPE} SET clause_id = {cid}, function = {_sql_str(record.function)},"
-        f" folio_iri = {_sql_str(record.folio_iri)}, span_id = {_sql_str(record.span_id)},"
-        f" functions = {functions_json}"
-        f" UPSERT WHERE clause_id = {cid}",
-    ]
-    for a in record.assertions:
-        edge_type = _TYPED_DIMENSION_EDGE[a.dimension]
-        key_sql = _sql_str(_property_value_key(a.dimension.value, a.value))
-        statements.append(  # shared value node: upsert by canonical (dimension,value) key + FOLIO grounding
-            f"UPDATE {PROPVALUE_TYPE} SET value_key = {key_sql},"
-            f" dimension = {_sql_str(a.dimension.value)}, value = {_sql_str(a.value)},"
-            f" folio_iri = {_sql_str(FOLIO_SUBJECT_IRI.get(a.value, ''))}"
-            f" UPSERT WHERE value_key = {key_sql}"
-        )
-        statements.append(
-            f"CREATE EDGE {edge_type}"
-            f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {cid})"
-            f" TO (SELECT FROM {PROPVALUE_TYPE} WHERE value_key = {key_sql})"
-            f" SET dimension = {_sql_str(a.dimension.value)},"
-            f" predicate_iri = {_sql_str(_edge_predicate_iri(edge_type))},"
-            f" confidence = {_sql_str(a.confidence.value)}, span_id = {_sql_str(a.span_id)},"
-            f" chunk_id = {_sql_str(str(a.provenance.chunk_id))},"
-            f" source_doc_id = {_sql_str(a.provenance.source_doc_id)}"
-        )
-    return statements
 
 
 class ArcadeDBStore:
@@ -426,6 +429,38 @@ class ArcadeDBStore:
             sql += f" LIMIT {int(limit)}"
         return self._query(sql)
 
+    def _property_types(self, type_name: str) -> dict[str, str]:
+        """`{property -> declared storage type}` for a KG node type, used by `kg_write` to encode each prop. Sourced
+        from the pack schema (`load_kg_schema`) + the centralized non-pack declarations. Cached per store."""
+        cache = getattr(self, "_prop_types_cache", None)
+        if cache is None:
+            cache = {name: dict(props) for name, props in _ENGINE_VERTEX_PROPERTY_TYPES.items()}
+            vertex_types, _ = load_kg_schema()
+            for vt in vertex_types:
+                cache[vt.name] = dict(vt.properties)
+            self._prop_types_cache = cache
+        return cache.get(type_name, {})
+
+    def kg_write(self, nodes, edges=()) -> None:
+        """Upsert typed `nodes` (by `key_field`) then create typed `edges`, all in one transaction (see
+        `Store.kg_write`). Node props encode by the type's pack-declared storage type; edge props are type-driven."""
+        statements: list[str] = []
+        for n in nodes:
+            types = self._property_types(n.type)
+            sets = ", ".join(f"{k} = {_kg_encode(v, types.get(k))}" for k, v in n.props.items())
+            key_sql = _kg_encode(n.props[n.key_field], types.get(n.key_field))
+            statements.append(f"UPDATE {n.type} SET {sets} UPSERT WHERE {n.key_field} = {key_sql}")
+        for e in edges:
+            stmt = (
+                f"CREATE EDGE {e.type}"
+                f" FROM (SELECT FROM {e.from_type} WHERE {e.from_key_field} = {_kg_sql(e.from_key)})"
+                f" TO (SELECT FROM {e.to_type} WHERE {e.to_key_field} = {_kg_sql(e.to_key)})")
+            if e.props:
+                stmt += " SET " + ", ".join(f"{k} = {_kg_sql(v)}" for k, v in e.props.items())
+            statements.append(stmt)
+        if statements:
+            self._db.execute_transaction(statements)
+
     # --- operative-span write/search (FR-R, ADR-0025) -------------------------------------------
 
     def upsert_span(self, record: SpanRecord) -> None:
@@ -460,24 +495,6 @@ class ArcadeDBStore:
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
         )
 
-    def upsert_contract(self, record: ContractRecord) -> None:
-        """CU-B3: upsert a contract's metadata by `contract_id` (the CUAD document lookup unit). `parties`
-        is stored JSON-encoded; `page_count` may be null."""
-        page = "null" if record.page_count is None else int(record.page_count)
-        self._command(
-            f"UPDATE {CONTRACT_TYPE} SET"
-            f" contract_id = {_sql_str(record.contract_id)},"
-            f" name = {_sql_str(record.name)},"
-            f" agreement_type = {_sql_str(record.agreement_type)},"
-            f" parties_json = {_sql_str(json.dumps(record.parties))},"
-            f" agreement_date = {_sql_str(record.agreement_date)},"
-            f" effective_date = {_sql_str(record.effective_date)},"
-            f" source_doc_id = {_sql_str(record.source_doc_id)},"
-            f" content_hash = {_sql_str(record.content_hash)},"
-            f" page_count = {page}"
-            f" UPSERT WHERE contract_id = {_sql_str(record.contract_id)}"
-        )
-
     def contract_by_id(self, contract_id: str) -> dict | None:
         """CU-B3: look up a contract's metadata by id (the row, or None if absent)."""
         rows = self.kg_read(CONTRACT_TYPE, fields=[
@@ -494,38 +511,9 @@ class ArcadeDBStore:
         if REQUIREMENT_TYPE in self.type_names():
             return
         self._command(f"CREATE VERTEX TYPE {REQUIREMENT_TYPE}")
-        for prop in ("requirement_id", "source", "citation", "deontic_type", "actor", "requirement_text",
-                     "evidence_standard", "severity", "applicability_json", "confidence"):
-            self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.{prop} STRING")
-        self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.pages ARRAY_OF_INTEGERS")  # issue 0043: policy page(s)
-        self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.bbox STRING")  # issue 0043: best-effort [l,t,r,b] JSON
+        for prop, ptype in _ENGINE_VERTEX_PROPERTY_TYPES[REQUIREMENT_TYPE].items():  # DD-1b: one source of types
+            self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.{prop} {ptype}")  # incl. pages (array) + bbox (JSON str)
         self._command(f"CREATE INDEX ON {REQUIREMENT_TYPE} (requirement_id) UNIQUE")
-
-    def write_requirements(self, requirements: Iterable[Requirement]) -> int:
-        """Upsert `Requirement` nodes by `requirement_id` (idempotent -- a re-ingest is a no-op on unchanged
-        rules). `applicability_scope` is stored JSON-encoded ([[dimension, value], ...]); returns the count."""
-        count = 0
-        for req in requirements:
-            scope = json.dumps([[c.dimension, c.value] for c in req.applicability_scope])
-            pages = "[" + ",".join(str(int(p)) for p in req.pages) + "]"  # issue 0043: policy page(s)
-            bbox = "null" if req.bbox is None else _sql_str(json.dumps(list(req.bbox)))  # best-effort [l,t,r,b]
-            self._command(
-                f"UPDATE {REQUIREMENT_TYPE} SET"
-                f" requirement_id = {_sql_str(req.requirement_id)},"
-                f" source = {_sql_str(req.source)},"
-                f" citation = {_sql_str(req.citation)},"
-                f" deontic_type = {_sql_str(req.deontic_type.value)},"
-                f" actor = {_sql_str(req.actor)},"
-                f" requirement_text = {_sql_str(req.requirement_text)},"
-                f" evidence_standard = {_sql_str(req.evidence_standard or '')},"
-                f" severity = {_sql_str(req.severity.value if req.severity else '')},"
-                f" applicability_json = {_sql_str(scope)},"
-                f" confidence = {_sql_str(req.confidence.value)},"
-                f" pages = {pages}, bbox = {bbox}"  # issue 0043: policy page provenance
-                f" UPSERT WHERE requirement_id = {_sql_str(req.requirement_id)}"
-            )
-            count += 1
-        return count
 
     def all_requirements(self, sources: Optional[Iterable[str]] = None) -> list[dict]:
         """Stored `Requirement` rows (CC-6 loads these to match a claim's scope against applicability).
@@ -662,7 +650,7 @@ class ArcadeDBStore:
         if not span_ids:
             return out
         id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
-        for edge_type in sorted(set(_TYPED_DIMENSION_EDGE.values())):
+        for edge_type in TYPED_PROPERTY_EDGE_TYPES:
             rows = self._query(
                 f"SELECT span_id, dimension, inV().value AS value FROM {edge_type} WHERE span_id IN {id_list}")
             for r in rows:
@@ -1001,40 +989,6 @@ class ArcadeDBStore:
 
     # --- property graph (T57c, FR-R) ------------------------------------------------------------
 
-    def write_property_graph(self, record: ClausePropertyRecord) -> None:
-        """Write the clause node + its property-value nodes + the typed property edges in ONE transaction
-        (FR-S.1). Value nodes are shared/deduped by (dimension,value) -- the vocabulary is canonical, so no
-        entity-resolution clustering is needed. Idempotent by a content-hash gate: `clause_id` embeds the
-        content hash (FR-S.2), so a committed clause node means identical content and hence identical
-        assertions (a changed clause is a NEW node); if the clause already exists we skip -- which also
-        means the edge writes only ever run once per clause, so plain `CREATE EDGE` cannot duplicate. Every
-        edge carries the assertion's confidence + span_id + chunk_id provenance (FR-S.4 / FR-Q.6)."""
-        cid = _sql_str(record.clause_id)
-        if self._query(f"SELECT clause_id FROM {CLAUSE_TYPE} WHERE clause_id = {cid} LIMIT 1"):
-            return  # already populated (content-hash gate): a committed clause_id -> identical assertions
-        statements: list[str] = [
-            f"UPDATE {CLAUSE_TYPE} SET clause_id = {cid}, function = {_sql_str(record.function)},"
-            f" folio_iri = {_sql_str(record.folio_iri)} UPSERT WHERE clause_id = {cid}",
-        ]
-        for a in record.assertions:
-            key = _property_value_key(a.dimension.value, a.value)
-            key_sql = _sql_str(key)
-            statements.append(  # shared value node: upsert by canonical (dimension,value) key
-                f"UPDATE {PROPVALUE_TYPE} SET value_key = {key_sql},"
-                f" dimension = {_sql_str(a.dimension.value)}, value = {_sql_str(a.value)},"
-                f" folio_iri = {_sql_str(FOLIO_SUBJECT_IRI.get(a.value, ''))}"
-                f" UPSERT WHERE value_key = {key_sql}"
-            )
-            statements.append(
-                f"CREATE EDGE {PROPERTY_EDGE_TYPE}"
-                f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {cid})"
-                f" TO (SELECT FROM {PROPVALUE_TYPE} WHERE value_key = {key_sql})"
-                f" SET confidence = {_sql_str(a.confidence.value)}, span_id = {_sql_str(a.span_id)},"
-                f" chunk_id = {_sql_str(str(a.provenance.chunk_id))},"
-                f" source_doc_id = {_sql_str(a.provenance.source_doc_id)}"
-            )
-        self._db.execute_transaction(statements)
-
     def clear_property_graph(self) -> None:
         """Delete all property-graph records (Clause / PropertyValue / HasProperty) while LEAVING the span
         index intact -- so a property re-extraction can start from scratch without re-embedding (T58 resume
@@ -1066,19 +1020,6 @@ class ArcadeDBStore:
         return self._query(q)
 
     # --- KG-3 (ADR-0033): the TYPED unified clause KG (replaces the flat HasProperty write path) ---------
-
-    def write_clause_kg(self, record: ClausePropertyRecord) -> None:
-        """Write the clause + its TYPED property edges + shared value nodes in ONE transaction (FR-S.1).
-        The KG-3 counterpart of `write_property_graph`: one sanctioned typed edge per assertion
-        (HAS_*/EXCEPTS/COVERS/PROHIBITS/REQUIRES/CAPS/BOUNDED_BY/GOVERNED_BY), each grounded with a predicate
-        IRI (ODRL for the deontic edges) and carrying provenance (FR-S.4/FR-Q.6). Idempotent by the same
-        content-hash gate: `clause_id` embeds the content hash, so a committed clause means identical content
-        -> identical assertions; we skip, and the typed `CREATE EDGE` therefore runs at most once per clause
-        (no duplicates). Value-node identity (`value_key`) is preserved from the flat graph."""
-        cid = _sql_str(record.clause_id)
-        if self._query(f"SELECT clause_id FROM {CLAUSE_TYPE} WHERE clause_id = {cid} LIMIT 1"):
-            return  # content-hash gate: a committed clause_id -> identical typed assertions
-        self._db.execute_transaction(_clause_kg_statements(record))
 
     def clause_kg_counts(self) -> dict[str, int]:
         """Counts for the typed KG (introspection/tests): clauses, shared value nodes, and the total of the

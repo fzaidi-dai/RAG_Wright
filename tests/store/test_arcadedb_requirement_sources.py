@@ -82,7 +82,9 @@ def store():
 
 @pytest.mark.store
 def test_source_filter_roundtrip_live(store):
-    store.write_requirements(
+    from rag_wright.capabilities.compliance_store import ComplianceStore
+
+    ComplianceStore(store).write_requirements(  # DD-1b: writes moved to the compliance store extension
         [_req("p1", 0), _req("p1", 1), _req("p2", 0), _req("p2", 1), _req("p2", 2), _req("p3", 0)])
 
     assert {r["source"] for r in store.all_requirements()} == {"p1", "p2", "p3"}  # store-wide unchanged

@@ -969,12 +969,16 @@ def aproduction_document_ingest(
                 disambiguate(extraction_results), extraction_results, registry=registry)))
 
     async def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
+        from rag_wright.capabilities.contract_kg_store import ContractKGStore  # DD-1b: clause KG + contract meta
+
+        ckg = ContractKGStore(store)
+
         def _write() -> dict:
             for record in clause_records:
-                store.write_clause_kg(record)
+                ckg.write_clause_kg(record)
             nodes, edges = resolution
             store.write_graph(nodes, edges)
-            store.upsert_contract(ContractRecord(
+            ckg.upsert_contract(ContractRecord(
                 contract_id=doc.source_doc_id, name=doc.metadata.get("raw_title", ""),
                 source_doc_id=doc.source_doc_id,
                 content_hash=hashlib.sha256(doc.text.encode("utf-8")).hexdigest()))

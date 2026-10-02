@@ -11,11 +11,17 @@ from scripts.populate_clause_kg import extract_and_write
 
 
 class _FakeStore:
+    """DD-1b: `extract_and_write` now writes via `ContractKGStore(store).write_clause_kg`, so the fake implements
+    the generic store seam it uses -- `kg_read` (the content-hash gate -> absent) + `kg_write` (record the clause)."""
+
     def __init__(self) -> None:
         self.written: list[str] = []
 
-    def write_clause_kg(self, record: ClausePropertyRecord) -> None:
-        self.written.append(record.clause_id)
+    def kg_read(self, node_type, **kwargs):
+        return []  # content-hash gate: the clause is not already written
+
+    def kg_write(self, nodes, edges=()):
+        self.written.extend(n.props["clause_id"] for n in nodes if n.key_field == "clause_id")
 
 
 def _item(seed: str = "capA") -> tuple[ChunkId, str, str, str]:

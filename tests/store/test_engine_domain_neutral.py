@@ -31,3 +31,19 @@ def test_engine_storage_and_resolver_are_sec_free() -> None:
     assert not offenders, (
         "ADR-0067 P5c: the engine storage/resolver must stay SEC-free (the SEC resolver + adapters are the "
         f"plug-in layer). Re-coupled references: {offenders}")
+
+
+# ADR-0117 DD-1b: the clause-KG / contract-metadata / requirement writes moved to the capability-layer store
+# extensions (ContractKGStore / ComplianceStore), so the engine store must not import those domain contracts.
+# (contracts.property's PropertyDimension-keyed map + the edge-traversal reads + jurisdiction are DD-1c; the full
+# "no domain-contract import" guard lands then.)
+_FORBIDDEN_STORE_IMPORTS = ("contracts.compliance", "contracts.contract_meta", "contracts.property")
+
+
+def test_engine_store_does_not_import_the_moved_domain_contracts() -> None:
+    src = (_SRC / "store" / "arcadedb.py").read_text(encoding="utf-8")
+    offenders = [mod for mod in _FORBIDDEN_STORE_IMPORTS
+                 if re.search(rf"from rag_wright\.{re.escape(mod)} import", src)]
+    assert not offenders, (
+        "ADR-0117 DD-1b: store/arcadedb.py must not import the moved domain contracts (the clause-KG, contract-meta, "
+        f"and requirement writes live in the ContractKGStore/ComplianceStore extensions). Re-coupled: {offenders}")

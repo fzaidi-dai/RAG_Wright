@@ -34,6 +34,7 @@ import torch
 from dotenv import load_dotenv
 
 from eval.acord import load_corpus
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.capabilities.embedding import BGEM3Embedder
 from rag_wright.contracts.identifiers import ChunkId, canonical_source_doc_id
 from rag_wright.contracts.span import SpanRecord
@@ -176,7 +177,7 @@ def main() -> None:
             if GATE:  # quality gate (double duty): downgrade residual ungrounded EXTRACTED -> AMBIGUOUS
                 rec = reground(rec, text)
             with write_lock:  # serialize the DB write (one client); extraction is the concurrent part
-                store.write_property_graph(rec)  # each clause lands as it completes -> crash-safe/resumable
+                ContractKGStore(store).write_property_graph(rec)  # each clause lands as it completes -> crash-safe/resumable
             return len(rec.assertions)
         except Exception as e:  # noqa: BLE001 - isolate a per-clause failure; resume re-attempts it later
             with write_lock:

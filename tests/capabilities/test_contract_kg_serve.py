@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import pytest
 
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.capabilities.contract_kg_serve import (
     aggregate_by_property,
     clauses_of_function,
@@ -179,9 +180,9 @@ def store():
 
 @pytest.mark.store
 def test_live_disambiguate_over_typed_kg(store) -> None:
-    store.write_clause_kg(_cap("ACME_MSA", 0, "mutual"))
-    store.write_clause_kg(_cap("ACME_MSA", 1, "unilateral"))
-    store.write_clause_kg(_cap("OTHER_CO", 0, "mutual"))  # different contract -- must not leak in
+    ContractKGStore(store).write_clause_kg(_cap("ACME_MSA", 0, "mutual"))
+    ContractKGStore(store).write_clause_kg(_cap("ACME_MSA", 1, "unilateral"))
+    ContractKGStore(store).write_clause_kg(_cap("OTHER_CO", 0, "mutual"))  # different contract -- must not leak in
 
     idx = contract_clause_index(store, "ACME_MSA")
     assert len(idx) == 2  # scoped to the contract; OTHER_CO excluded

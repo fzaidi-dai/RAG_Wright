@@ -181,9 +181,13 @@ def build_compliance_ingest(
     return g.compile()
 
 
-def production_compliance_ingestion(store: Any, *, model: Any, extract_override: Optional[ExtractReqFn] = None):
+def production_compliance_ingestion(store: Any, *, model: Any, extract_override: Optional[ExtractReqFn] = None,
+                                    write_override: Optional[Any] = None):
     """Wire the real capabilities: extract = the requirement_extraction SUBGRAPH (CC-2, extract->adapt through
-    the model seam -- Granite), write = `store.write_requirements`. `extract_override` injects a stub for tests."""
+    the model seam -- Granite), write = `ComplianceStore(store).write_requirements` (ADR-0117 DD-1b: the Requirement
+    KG write is a capability-layer extension over the generic store, not a store method). `extract_override` /
+    `write_override` inject stubs for tests."""
+    from rag_wright.capabilities.compliance_store import ComplianceStore
     from rag_wright.subgraphs.requirement_extraction import run_requirement_extraction
 
     async def _extract(doc: SourceDocument) -> list:
@@ -194,8 +198,10 @@ def production_compliance_ingestion(store: Any, *, model: Any, extract_override:
             pages=doc.metadata.get("pages") or [], bbox=doc.metadata.get("bbox"),  # issue 0043: policy page(s)
             raise_on_failure=True)
 
+    write_fn = write_override or ComplianceStore(store).write_requirements
+
     async def _awrite(doc: SourceDocument, reqs: list) -> Any:
-        return await asyncio.to_thread(store.write_requirements, reqs)  # store I/O off the loop
+        return await asyncio.to_thread(write_fn, reqs)  # store I/O off the loop
 
     return build_compliance_ingest(extract_override or _extract, _awrite)
 
@@ -211,13 +217,14 @@ def _compliance_is_done(store: Any, source: str) -> Any:
 
 async def run_compliance_ingestion(
     sections_path: Any, store: Any, *, model: Any, source: str = "FTC 16 CFR 255",
-    extract_override: Optional[ExtractReqFn] = None,
+    extract_override: Optional[ExtractReqFn] = None, write_override: Optional[Any] = None,
 ) -> IngestionReport:
     """Ingest a regulation (`sections.json`) into the Requirement KG: ensure the compliance schema, then map
     every section through the per-section subgraph via the generic corpus driver (X/N progress, per-section
     dead-letter, is_done resume). Point `store` at the compliance database (`ragwright_compliance`)."""
     store.ensure_compliance_schema()
-    graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
+    graph = production_compliance_ingestion(
+        store, model=model, extract_override=extract_override, write_override=write_override)
     return await arun_corpus_ingestion(
         RegulationAdapter(sections_path, source), graph, is_done=_compliance_is_done(store, source))
 
@@ -225,12 +232,14 @@ async def run_compliance_ingestion(
 async def run_compliance_document_ingestion(
     doc_name: str, data: bytes, store: Any, *, model: Any, source: str,
     sections_fn: Optional[Any] = None, extract_override: Optional[ExtractReqFn] = None,
+    write_override: Optional[Any] = None,
 ) -> IngestionReport:
     """DOCPARSE-1: ingest a customer's OWN regulation/policy DOCUMENT (PDF/DOCX/HTML bytes) into the Requirement
     KG -- the same compliance pipeline, fed by a `DocumentRegulationAdapter` (docling parse -> heading-split
     sections) instead of a pre-sectioned eCFR `sections.json`. `sections_fn` injects the parse for tests."""
     store.ensure_compliance_schema()
-    graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
+    graph = production_compliance_ingestion(
+        store, model=model, extract_override=extract_override, write_override=write_override)
     return await arun_corpus_ingestion(
         DocumentRegulationAdapter(doc_name, data, source, sections_fn=sections_fn), graph,
         is_done=_compliance_is_done(store, source))
@@ -238,7 +247,8 @@ async def run_compliance_document_ingestion(
 
 def submit_compliance_ingestion(
     adapter: Any, store: Any, jobs: Any, *, job_id: str, model: Any, source: str,
-    extract_override: Optional[ExtractReqFn] = None, max_concurrency: int = 4,
+    extract_override: Optional[ExtractReqFn] = None, write_override: Optional[Any] = None,
+    max_concurrency: int = 4,
 ) -> str:
     """COMP-ASYNC-1 (ADR-0050): submit an ASYNC compliance ingestion job. Returns `job_id` IMMEDIATELY; sections
     ingest in the background with bounded parallelism, and a FAILED section is dead-lettered on the job (lossless).
@@ -248,7 +258,8 @@ def submit_compliance_ingestion(
     from rag_wright.subgraphs.async_ingestion import submit_ingestion
 
     store.ensure_compliance_schema()
-    graph = production_compliance_ingestion(store, model=model, extract_override=extract_override)
+    graph = production_compliance_ingestion(
+        store, model=model, extract_override=extract_override, write_override=write_override)
     return submit_ingestion(
         adapter, graph, jobs, job_id=job_id, db=getattr(store, "database", ""),
         corpus_ref={"kind": "compliance", "source": source}, max_concurrency=max_concurrency,

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import pytest
 
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
@@ -62,7 +63,7 @@ def test_write_and_readback_with_provenance(store):
         (PropertyDimension.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED),
         (PropertyDimension.CARVE_OUT, "indemnification", ConfidenceTag.EXTRACTED),
     ])
-    store.write_property_graph(rec)
+    ContractKGStore(store).write_property_graph(rec)
     assert store.property_graph_counts() == {"clauses": 1, "property_values": 2, "property_edges": 2}
     got = store.clause_property_values(cid)
     assert {(r["dimension"], r["value"]) for r in got} == {
@@ -78,8 +79,8 @@ def test_shared_value_node_deduped_across_clauses(store):
     # lets a property query traverse (:PropertyValue{carve_out:indemnification})<-(:Clause) instead of scanning
     a, _ = _record("capA", "Cap On Liability", [(PropertyDimension.CARVE_OUT, "indemnification", ConfidenceTag.EXTRACTED)])
     b, _ = _record("capB", "Cap On Liability", [(PropertyDimension.CARVE_OUT, "indemnification", ConfidenceTag.EXTRACTED)])
-    store.write_property_graph(a)
-    store.write_property_graph(b)
+    ContractKGStore(store).write_property_graph(a)
+    ContractKGStore(store).write_property_graph(b)
     counts = store.property_graph_counts()
     assert counts == {"clauses": 2, "property_values": 1, "property_edges": 2}  # ONE shared value node
 
@@ -89,7 +90,7 @@ def test_clear_property_graph_keeps_spans(store):
     store.upsert_span(SpanRecord(span_id="s#0", parent_chunk_id="s", span_index=0, text="x",
                                  dense_vector=[0.0] * BGE_M3_DENSE_DIM, sparse_vector={1: 1.0}))
     rec, _ = _record("capA", "Cap On Liability", [(PropertyDimension.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
-    store.write_property_graph(rec)
+    ContractKGStore(store).write_property_graph(rec)
     assert store.property_graph_counts()["clauses"] == 1
     store.clear_property_graph()
     assert store.property_graph_counts() == {"clauses": 0, "property_values": 0, "property_edges": 0}
@@ -100,7 +101,7 @@ def test_clear_property_graph_keeps_spans(store):
 @pytest.mark.store
 def test_repopulation_is_idempotent(store):
     rec, _ = _record("capA", "Cap On Liability", [(PropertyDimension.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
-    store.write_property_graph(rec)
-    store.write_property_graph(rec)  # a re-extract of the same clause must not duplicate the edge
+    ContractKGStore(store).write_property_graph(rec)
+    ContractKGStore(store).write_property_graph(rec)  # a re-extract of the same clause must not duplicate the edge
     counts = store.property_graph_counts()
     assert counts["clauses"] == 1 and counts["property_edges"] == 1

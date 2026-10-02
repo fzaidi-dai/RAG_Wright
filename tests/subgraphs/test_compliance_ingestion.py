@@ -125,7 +125,8 @@ async def test_run_over_the_corpus_writes_all_sections(tmp_path):
         return [f"req::{doc.metadata['section']}"]
 
     report = await run_compliance_ingestion(
-        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov)
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov,
+        write_override=store.write_requirements)  # DD-1b: write is an injectable seam; the fake records reqs
     assert isinstance(report, IngestionReport)
     assert report.documents_ingested == 2 and report.dead_lettered == []
     assert store.schema_ensured is True and store.reqs == ["req::255.1", "req::255.5"]
@@ -228,7 +229,7 @@ async def test_run_compliance_document_ingestion_parses_a_doc_and_writes_require
 
     report = await run_compliance_document_ingestion(
         "acme_privacy.pdf", b"%PDF...", store, model=None, source="ACME Privacy Policy",
-        sections_fn=_sections_fn, extract_override=_ov)
+        sections_fn=_sections_fn, extract_override=_ov, write_override=store.write_requirements)
     assert report.documents_ingested == 2 and report.dead_lettered == []  # section 2 (Definitions) skipped
     assert store.schema_ensured is True and store.reqs == ["req::1", "req::3"]
 
@@ -286,7 +287,8 @@ def test_submit_compliance_ingestion_is_async_and_dead_letters_a_failed_section(
         return [f"req::{doc.metadata['section']}"]
 
     job_id = submit_compliance_ingestion(
-        adapter, store, jobs, job_id="cjob", model=None, source="FTC 16 CFR 255", extract_override=_extract)
+        adapter, store, jobs, job_id="cjob", model=None, source="FTC 16 CFR 255", extract_override=_extract,
+        write_override=store.write_requirements)
     assert job_id == "cjob" and jobs.get("cjob") is not None  # returned immediately
 
     deadline = time.time() + 10
@@ -310,7 +312,8 @@ async def test_compliance_resume_skips_already_ingested_sections(tmp_path):
         return [f"req::{doc.metadata['section']}"]
 
     report = await run_compliance_ingestion(
-        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov)
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov,
+        write_override=store.write_requirements)  # DD-1b: write is an injectable seam; the fake records reqs
     assert report.documents_ingested == 2               # both counted present...
     assert extracted == ["255.5"]                        # ...but 255.1 was resume-skipped, only 255.5 extracted
     assert store.reqs == ["req::255.5"]
@@ -325,5 +328,6 @@ async def test_compliance_no_resume_when_nothing_ingested_yet(tmp_path):
         return []
 
     await run_compliance_ingestion(
-        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov)
+        _sections_file(tmp_path), store, model=None, source="FTC 16 CFR 255", extract_override=_ov,
+        write_override=store.write_requirements)
     assert sorted(extracted) == ["255.1", "255.5"]

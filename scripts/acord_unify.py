@@ -164,7 +164,7 @@ def cmd_ingest() -> None:
         if rec is None:
             continue
         try:
-            store.write_clause_kg(rec)
+            ContractKGStore(store).write_clause_kg(rec)
             n_written += 1
         except Exception:  # noqa: BLE001
             pass

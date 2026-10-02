@@ -32,6 +32,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.capabilities.dg_extraction import extract_clause, ollama_model, openrouter_model
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
@@ -85,7 +86,7 @@ def extract_and_write(
     try:
         rec = extractor(chunk_id=cid, function=function, text=text, span_id=span_id)
         with write_lock:
-            store.write_clause_kg(rec)  # typed edges; lands as it completes -> crash-safe / resumable
+            ContractKGStore(store).write_clause_kg(rec)  # typed edges; lands as it completes -> crash-safe / resumable
         return len(rec.assertions)
     except Exception as e:  # noqa: BLE001 - isolate a per-clause failure; resume re-attempts it later
         with write_lock:

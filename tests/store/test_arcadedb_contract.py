@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from rag_wright.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
 from rag_wright.contracts.contract_meta import ContractRecord
 from rag_wright.contracts.span import SpanRecord
@@ -44,7 +45,7 @@ def test_contract_schema_created(store):
 
 @pytest.mark.store
 def test_upsert_and_lookup_contract(store):
-    store.upsert_contract(ContractRecord(contract_id="C1", name="Distributor Agreement",
+    ContractKGStore(store).upsert_contract(ContractRecord(contract_id="C1", name="Distributor Agreement",
                                          agreement_type="Distribution", parties=["Acme", "Beta"], page_count=12))
     row = store.contract_by_id("C1")
     assert row["contract_id"] == "C1" and row["name"] == "Distributor Agreement"
