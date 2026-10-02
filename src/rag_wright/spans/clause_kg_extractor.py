@@ -322,14 +322,15 @@ class ClassifierPropertyExtractor:
         return record
 
 
-def classifier_property_extractor(*, registry: Any, runnable: Any = None, model_id: Optional[str] = None,
-                                  semantic_judge_fn: Any = None,
-                                  asemantic_judge_fn: Any = None) -> ClassifierPropertyExtractor:
-    """Build the CLS-C classifier-first Step-3a extractor over a `DimClassifierRegistry`. `registry` is required
-    here (the production 21-dim fleet loader + the pipeline flip land in CLS-D, once the checkpoints are fetched);
-    `runnable` defaults to the structured seam for the residual numeric call."""
+def classifier_property_extractor(*, registry: Any = None, runnable: Any = None, model_id: Optional[str] = None,
+                                  semantic_judge_fn: Any = None, asemantic_judge_fn: Any = None,
+                                  classifier_fn: Any = None) -> ClassifierPropertyExtractor:
+    """Build the CLS-C classifier-first Step-3a extractor. The classifier LANE comes from `classifier_fn` when given
+    (EP-RT-7: the ingestion pipeline passes the `clause_property_classification` capability dispatch, so the fleet is
+    invoked through the capability -- the single production path), else from the local `registry` fleet. `runnable`
+    defaults to the structured seam for the residual numeric call; the ADR-0028/0040 gates + the judge apply unchanged."""
     from rag_wright.spans.property_extractor import HybridPropertyExtractor
 
-    hybrid = HybridPropertyExtractor(registry, runnable=runnable, model_id=model_id)
+    hybrid = HybridPropertyExtractor(registry, runnable=runnable, model_id=model_id, classifier_fn=classifier_fn)
     return ClassifierPropertyExtractor(hybrid, semantic_judge_fn=semantic_judge_fn,
                                        asemantic_judge_fn=asemantic_judge_fn)

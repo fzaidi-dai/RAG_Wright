@@ -73,42 +73,19 @@ async def _sub_contract_ingestion(h: WorkspaceHandle, inputs: dict) -> Any:
     """Ingest ONE document (a `SourceDocument`, build via `api.source_document`) through the async per-document ingest
     graph. `inputs`: `document` (required) + `cache_dir` (the parse cache, required to be stable across calls)."""
     from rag_wright.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.spans.dim_classifier import load_dim_registry
+    from rag_wright.ontology.registry import EntityRegistry
     from rag_wright.subgraphs.contract_ingestion_pipeline import aproduction_document_ingest
 
+    # `registry` is the ENTITY-RESOLUTION registry (resolve_entities), NOT the dim-classifier fleet -- the pipeline
+    # builds its own dim fleet internally (classifier_property_extractor). The generic default is an empty,
+    # closed-world surface-form registry: an unknown entity resolves to None/unlinked, never a fabricated id
+    # (ADR-0013/DD-3). A product with its own canonical registry (e.g. the SEC/CIK pack) passes that instead.
     # embedder=None -> the pipeline builds its own BGE-M3 SPAN embedder (encode_batch); the handle's query embedder
     # is for retrieval, not ingest. (Pluggable ingest embedder via the config profile comes with EP-API-4.)
     graph = aproduction_document_ingest(
-        h._store, cache_dir=inputs["cache_dir"], registry=load_dim_registry(),
+        h._store, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
         extract_model=default_extraction_model(model=h.model_id(ModelRole.STRUCTURED_REASONING)))
     return await graph.ainvoke({"document": inputs["document"]})
-
-
-def _model_clause_function_classification(h: WorkspaceHandle, inputs: dict) -> Any:  # noqa: ARG001 - local model
-    from rag_wright.spans.clause_function_classifier import production_setfit_clause_classifier
-
-    clf = production_setfit_clause_classifier()
-    return clf.classify_spans(inputs["chunk_text"], inputs["span_texts"])
-
-
-_DIM_REGISTRY: Any = None
-
-
-def _dim_registry() -> Any:
-    """The 29-dim property-classifier fleet, loaded ONCE (heavy: shared Laya group agents + SetFit + abstain heads)."""
-    global _DIM_REGISTRY
-    if _DIM_REGISTRY is None:
-        from rag_wright.spans.dim_classifier import load_dim_registry
-
-        _DIM_REGISTRY = load_dim_registry()
-    return _DIM_REGISTRY
-
-
-def _model_clause_property_classification(h: WorkspaceHandle, inputs: dict) -> Any:  # noqa: ARG001 - local fleet
-    from rag_wright.spans.property_extractor import HybridPropertyExtractor
-
-    ext = HybridPropertyExtractor(_dim_registry(), runnable=object())  # classifier lane only; runnable unused
-    return ext.classify_properties(inputs["text"], functions=tuple(inputs.get("functions", ())))
 
 
 _SUBGRAPH_ADAPTERS: dict[str, Callable] = {
@@ -117,41 +94,43 @@ _SUBGRAPH_ADAPTERS: dict[str, Callable] = {
     "intra_document_qa": _sub_intra_document_qa,
     "contract_ingestion_pipeline": _sub_contract_ingestion,
 }
-_MODEL_ADAPTERS: dict[str, Callable] = {
-    "clause_function_classification": _model_clause_function_classification,
-    "clause_property_classification": _model_clause_property_classification,
-}
 
 
-def _resolve(name: str, kind: str, adapters: dict[str, Callable]) -> Callable:
+def _validate(name: str, kind: str) -> None:
+    """Validate a capability name against the ARD catalog (name known, kind matches). Raises KeyError/ValueError."""
     idx = _index()
     if name not in idx:
         raise KeyError(f"unknown capability {name!r} (not in the ARD catalog)")
     if idx[name].kind != kind:
         raise ValueError(f"capability {name!r} is kind {idx[name].kind!r}, not {kind!r}")
-    adapter = adapters.get(name)
-    if adapter is None:
-        raise NotImplementedError(f"no in-process invocation adapter wired for {kind} {name!r}")
-    return adapter
 
 
 async def ainvoke_subgraph(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:
     """Invoke a subgraph-kind capability by name over the workspace, inside a trace span. Retry/dead-letter comes
     from the LangGraph scaffold the subgraph is built on. Model usage is captured by the CALLER's `measure_usage()`
     (ambient + additive, EP-API-5), so the invoker does not open its own scope."""
-    adapter = _resolve(name, "subgraph", _SUBGRAPH_ADAPTERS)
+    _validate(name, "subgraph")
+    adapter = _SUBGRAPH_ADAPTERS.get(name)
+    if adapter is None:
+        raise NotImplementedError(f"no in-process invocation adapter wired for subgraph {name!r}")
     with traced_step(f"invoke:{name}"):
         return await adapter(resources, inputs)
 
 
-def invoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:
-    """Invoke a model-kind capability by name over the workspace, inside a trace span. Model usage is captured by
-    the caller's `measure_usage()` (EP-API-5); the invoker does not open its own scope."""
-    adapter = _resolve(name, "model", _MODEL_ADAPTERS)
-    with traced_step(f"invoke:{name}"):
-        return adapter(resources, inputs)
+def invoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:  # noqa: ARG001 - store-independent
+    """Invoke a model-kind capability by name. Validated against the ARD catalog, then dispatched through the SINGLE
+    model-capability binding (`spans.model_capabilities`) that the ingestion pipeline ALSO routes through -- so there
+    is one production path, never a second hand-built fleet. `resources` is accepted for API uniformity but model
+    capabilities are store-independent (local fleets). Usage is the caller's `measure_usage()` scope (EP-API-5)."""
+    from rag_wright.spans.model_capabilities import dispatch_model
+
+    _validate(name, "model")
+    return dispatch_model(name, inputs)
 
 
 def _invocable_names() -> dict[str, str]:
-    """{name: kind} for every capability with a wired in-process adapter -- used by the drift guard."""
-    return {**{n: "subgraph" for n in _SUBGRAPH_ADAPTERS}, **{n: "model" for n in _MODEL_ADAPTERS}}
+    """{name: kind} for every capability with a wired adapter -- used by the drift guard. Model-capability adapters
+    live in `spans.model_capabilities` (the single binding); subgraph adapters are workspace-bound and stay here."""
+    from rag_wright.spans.model_capabilities import model_adapter_names
+
+    return {**{n: "subgraph" for n in _SUBGRAPH_ADAPTERS}, **{n: "model" for n in model_adapter_names()}}

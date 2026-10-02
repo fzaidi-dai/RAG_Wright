@@ -805,7 +805,10 @@ def aproduction_document_ingest(
     from rag_wright.ontology.clause_template import Clause
     from rag_wright.capabilities.dg_extraction import default_extraction_model
     from rag_wright.spans.clause_kg_extractor import classifier_property_extractor
-    from rag_wright.spans.dim_classifier import load_dim_registry
+    from rag_wright.spans.model_capabilities import (
+        CapabilityFunctionClassifier,
+        capability_property_classifier_fn,
+    )
     from rag_wright.spans.segment import to_span_record
 
     parse_dir = Path(cache_dir) / "parsed"
@@ -836,11 +839,12 @@ def aproduction_document_ingest(
         clause_model = default_extraction_model("clause-extract", extract_model)
     graph_extract_id = getattr(graph_extract_model, "model", graph_extract_model)  # None or a bare model-id
     judge_id = getattr(judge_model, "model", judge_model) or model_for(ModelRole.STRUCTURED_REASONING)
-    # CLS-D (ADR-0115): Step-3a property extraction is the classifier-first path -- 21 dims via the best-of-both
-    # Laya/SetFit fleet, ONE residual LLM call for the 7 numeric/open dims (`clause_model`). No toggle, no full-LLM
-    # tag-parse fallback for these dims. The ADR-0028/0040/Layer-3 gates apply unchanged (ClassifierPropertyExtractor).
+    # CLS-D (ADR-0115): Step-3a property extraction is the classifier-first path -- the 29-dim best-of-both fleet,
+    # ONE residual LLM call for the 7 numeric/open dims (`clause_model`). EP-RT-7: the classifier LANE is dispatched
+    # through the `clause_property_classification` CAPABILITY (the single production path), never a second hand-built
+    # fleet here; the residual LLM call + the ADR-0028/0040/Layer-3 judge gates compose around it (ClassifierPropertyExtractor).
     clause_extractor = classifier_property_extractor(
-        registry=load_dim_registry(),
+        classifier_fn=capability_property_classifier_fn(),
         model_id=getattr(clause_model, "model", clause_model),  # the residual 7-numeric structured call
         asemantic_judge_fn=build_asemantic_judge_fn(judge_id))
     # party AND affiliation extraction share the graph-extract model (GP-1B); one arg drives both
@@ -854,9 +858,10 @@ def aproduction_document_ingest(
         # `classify_fn` overrides everything.
         _clf_kind = os.getenv("RAG_FUNCTION_CLASSIFIER", "setfit").lower()
         if _clf_kind == "setfit":
-            from rag_wright.spans.clause_function_classifier import production_setfit_clause_classifier
-
-            classify_fn = production_setfit_clause_classifier()
+            # EP-RT-7: the default clause-function classifier dispatches through the `clause_function_classification`
+            # CAPABILITY (the single production path) -- not a second hand-built SetFit instance. (RAG_FUNCTION_CLASSIFIER=llm
+            # or an injected classify_fn are explicit non-capability overrides.)
+            classify_fn = CapabilityFunctionClassifier()
         else:
             from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
 

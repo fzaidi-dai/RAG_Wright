@@ -52,10 +52,12 @@ def test_subgraph_capability_exposed_as_an_mcp_tool_named_for_the_capability(mon
 
 
 def test_model_capability_exposed_as_an_mcp_tool(monkeypatch):
-    def _stub(handle, inputs):
+    from rag_wright.spans import model_capabilities as _mc
+
+    def _stub(inputs):
         return [{"dimension": "dispute_method", "value": "ARBITRATION", "confidence": "EXTRACTED"}]
 
-    monkeypatch.setitem(_invoke._MODEL_ADAPTERS, "clause_property_classification", _stub)
+    monkeypatch.setitem(_mc._MODEL_ADAPTERS, "clause_property_classification", _stub)
     _, result = _call(build_capability_mcp("clause_property_classification", resources=_handle()),
                       "clause_property_classification", {"inputs": {"text": "...", "functions": ["Dispute Resolution"]}})
     assert result.data["result"][0]["dimension"] == "dispute_method"  # the model's soft tags under the envelope

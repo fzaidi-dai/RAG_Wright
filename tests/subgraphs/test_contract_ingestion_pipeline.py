@@ -260,8 +260,9 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     class _StopHere(Exception):
         pass
 
-    def _fake_classifier(*, registry=None, model_id=None, semantic_judge_fn=None, asemantic_judge_fn=None):
-        captured.update(model_id=model_id)
+    def _fake_classifier(*, registry=None, model_id=None, semantic_judge_fn=None, asemantic_judge_fn=None,
+                         classifier_fn=None):
+        captured.update(model_id=model_id, classifier_fn=classifier_fn)
         return object()  # dummy extractor; let wiring continue to the party-extraction call
 
     def _fake_party(**kw):
@@ -283,6 +284,7 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
             extract_model="some/model-x",
             graph_extract_model="party/model-z", judge_model="judge/model-q", chunk_model="chunk/model-c")
     assert captured["model_id"] == "some/model-x"                       # bare id -> ExtractionModel -> residual model_id
+    assert callable(captured["classifier_fn"])                          # EP-RT-7: classifier lane routes through the capability, not a local fleet
     assert captured["judge_id"] == "judge/model-q"                      # ingest semantic-judge model
     assert captured["graph_kw"] == {"model_id": "party/model-z"}        # party + affiliation share this
     assert captured["chunk_model_id"] == "chunk/model-c"                # chunker boundary-refinement model

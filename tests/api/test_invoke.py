@@ -63,15 +63,19 @@ async def test_ainvoke_subgraph_dispatches_the_inputs(monkeypatch):
     assert not usage_capturing()
 
 
-def test_invoke_model_dispatches_clause_property_classification(monkeypatch):
-    """The model invoker routes the slug to its adapter (hermetic: stub the adapter so no heavy fleet load)."""
+def test_invoke_model_dispatches_through_the_single_model_binding(monkeypatch):
+    """invoke_model validates against the ARD catalog then dispatches through the SINGLE model-capability binding
+    (`spans.model_capabilities`) -- the same binding the ingestion pipeline routes through (EP-RT-7). Hermetic: stub
+    the adapter in that binding so no heavy fleet loads."""
+    from rag_wright.spans import model_capabilities as _mc
+
     seen = {}
 
-    def _stub(handle, inputs):
+    def _stub(inputs):
         seen["inputs"] = inputs
         return [{"dimension": "liability_cap_basis", "value": "FEES_PAID", "confidence": "EXTRACTED"}]
 
-    monkeypatch.setitem(_invoke._MODEL_ADAPTERS, "clause_property_classification", _stub)
+    monkeypatch.setitem(_mc._MODEL_ADAPTERS, "clause_property_classification", _stub)
     out = invoke_model("clause_property_classification", {"text": "liability cap", "functions": ("Cap",)},
                        resources=_handle())
     assert out[0]["dimension"] == "liability_cap_basis"

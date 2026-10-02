@@ -246,11 +246,32 @@ class HybridPropertyExtractor:
     `PropertyExtractor` Protocol, so the ADR-0028 grounding + ADR-0040 symbolic gates downstream apply unchanged.
     Classifiers honor the device-agnostic serving seam (GPU-if-available-else-CPU); the LLM stays on the seam."""
 
-    def __init__(self, registry, *, runnable=None, model_id: Optional[str] = None, retries: int = 3) -> None:
+    def __init__(self, registry=None, *, runnable=None, model_id: Optional[str] = None, retries: int = 3,
+                 classifier_fn=None) -> None:
         self._registry = registry
         self._runnable = runnable or build_structured(
             model_id or model_for(ModelRole.STRUCTURED_REASONING), PropertyExtraction)
         self._retries = retries
+        # EP-RT-7: when set, the classifier LANE is obtained through the `clause_property_classification` capability
+        # (the single production path) instead of this instance's local fleet -- `(text, functions) -> [{dimension,
+        # value, confidence}]`. The capability impl (`classify_properties`) itself always uses the local fleet, so
+        # there is no recursion. `None` -> this instance owns the fleet (the capability adapter's own extractor).
+        self._classifier_fn = classifier_fn
+
+    def _classifier_lane(self, prov: Provenance, text: str, span_id: str,
+                         functions: tuple[str, ...]) -> list[PropertyAssertion]:
+        """The classifier-lane assertions: via the capability (`_classifier_fn`) when injected, else the local fleet."""
+        if self._classifier_fn is None:
+            return self._classifier_assertions(prov, text, span_id, scoped_dims(functions))
+        out: list[PropertyAssertion] = []
+        for tag in self._classifier_fn(text, tuple(functions)):
+            try:
+                out.append(PropertyAssertion(
+                    provenance=prov, confidence=ConfidenceTag(tag["confidence"]),
+                    dimension=PropertyDimension(tag["dimension"]), value=tag["value"], span_id=span_id))
+            except (ValidationError, ValueError):
+                continue  # a value/dim/confidence the contract rejects -> drop (same as the local lane)
+        return out
 
     def _classifier_assertions(self, prov: Provenance, text: str, span_id: str,
                                applicable: Optional[set[PropertyDimension]]) -> list[PropertyAssertion]:
@@ -310,7 +331,7 @@ class HybridPropertyExtractor:
                  functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
-        assertions = self._classifier_assertions(prov, text, span_id, scoped_dims(functions))
+        assertions = self._classifier_lane(prov, text, span_id, functions)
         extraction: Optional[PropertyExtraction] = None  # ONE residual call (the 7 numeric dims), always fires
         for _ in range(self._retries):
             try:
@@ -328,7 +349,7 @@ class HybridPropertyExtractor:
         `functions` = the clause's top-k function soft-tags for soft-scoping (empty -> every covered dim runs)."""
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
-        assertions = self._classifier_assertions(prov, text, span_id, scoped_dims(functions))
+        assertions = self._classifier_lane(prov, text, span_id, functions)
         extraction: Optional[PropertyExtraction] = None
         for _ in range(self._retries):
             try:
