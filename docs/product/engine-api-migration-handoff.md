@@ -109,7 +109,8 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   both the query-side and ingest-side embedders via the engine's profile seam (`capabilities/embedding_profiles.py`);
   default `bge-m3` unchanged, BGE-M3 no longer hardcoded. A new embedder family is one engine-side registry entry,
   invisible to the product.
-- **Pending (EP-API-4c):** pluggable parser (docling choice via config).
+  (EP-API-4c "pluggable parser" was dropped: the byte-ingest path already uses the tiered parser, which auto-detects
+  per page — fast docling for born-digital, VLM only for degraded/image-only pages — so there is no parser to pick.)
 - **Done (EP-E2E):** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api`
   (open_workspace → source_document → ainvoke_subgraph ingest → query); the developer-journey path works end-to-end.
   (Pending: a non-contract smoke domain, AC-journey.)
