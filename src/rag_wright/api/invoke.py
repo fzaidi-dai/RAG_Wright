@@ -88,6 +88,7 @@ async def _sub_contract_ingestion(h: WorkspaceHandle, inputs: dict) -> Any:
     graph = aproduction_document_ingest(
         h._store, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
         extract_model=default_extraction_model(model=h.model_id(ModelRole.STRUCTURED_REASONING)),
+        embedding_profile=h._config.embeddings.get("text", "bge-m3"),  # EP-API-4b: ingest embedder by config profile
         list_model=opts.list_model, samples=opts.clause_samples,
         classify_concurrency=opts.classify_concurrency, clause_concurrency=opts.clause_concurrency,
         affiliations=opts.affiliations, function_classifier=opts.function_classifier)

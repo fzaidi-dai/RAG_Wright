@@ -105,7 +105,11 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   `list_model`, `clause_samples`), each defaulting to `None` = the engine default. So the product sets ingest behavior
   through config instead of environment variables (`CLASSIFY_CONCURRENCY`, `RAG_INGEST_AFFILIATIONS`,
   `RAG_FUNCTION_CLASSIFIER`, …). Env stays the fallback, and leaving options unset reproduces today's behavior exactly.
-- **Pending (EP-API-4b/4c):** pluggable embedder by profile alias + pluggable parser (BGE-M3 / docling no longer hardcoded).
+- **Done (EP-API-4b):** **pluggable embedder by profile** — `EngineConfig(embeddings={"text": "<profile>"})` selects
+  both the query-side and ingest-side embedders via the engine's profile seam (`capabilities/embedding_profiles.py`);
+  default `bge-m3` unchanged, BGE-M3 no longer hardcoded. A new embedder family is one engine-side registry entry,
+  invisible to the product.
+- **Pending (EP-API-4c):** pluggable parser (docling choice via config).
 - **Done (EP-E2E):** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api`
   (open_workspace → source_document → ainvoke_subgraph ingest → query); the developer-journey path works end-to-end.
   (Pending: a non-contract smoke domain, AC-journey.)

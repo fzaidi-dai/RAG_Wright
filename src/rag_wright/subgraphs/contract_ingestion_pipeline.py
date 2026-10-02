@@ -775,7 +775,7 @@ def aproduction_document_ingest(
     classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None,
     graph_extract_model: Any = None, judge_model: Any = None, chunk_model: Any = None,
     classify_concurrency: Any = None, clause_concurrency: Any = None, affiliations: Any = None,
-    function_classifier: Any = None):
+    function_classifier: Any = None, embedding_profile: str = "bge-m3"):
     """ASYNC-B2e (ADR-0057): the async twin of `production_document_ingest`. Wires the ASYNC stage seams (achunk,
     aclassify_spans, clause_extractor.aextract, aper_contract_graph_extraction) so the ingest model calls run on
     the async seam with the true wall-clock deadline; CPU/store work (embed, resolve, DB writes) runs off the loop
@@ -814,7 +814,7 @@ def aproduction_document_ingest(
     from pathlib import Path
 
     from rag_wright.capabilities.disambiguation import disambiguate
-    from rag_wright.capabilities.embedding import BGEM3Embedder
+    from rag_wright.capabilities.embedding_profiles import build_ingest_embedder
     from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.capabilities.graph_extraction import aproduction_extract_fn
     from rag_wright.capabilities.graph_storage import to_graph
@@ -889,7 +889,7 @@ def aproduction_document_ingest(
             from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
 
             classify_fn = production_batch_clause_classifier(model_for(ModelRole.FUNCTION_CLASSIFY))
-    embedder = embedder if embedder is not None else BGEM3Embedder()
+    embedder = embedder if embedder is not None else build_ingest_embedder(embedding_profile)
     template_version = hashlib.sha256(
         json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]
     _CLAUSE_EXTRACT_ATTEMPTS = 3  # clause_concurrency resolved above (EP-API-4a)

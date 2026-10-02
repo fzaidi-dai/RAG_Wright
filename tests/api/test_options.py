@@ -43,6 +43,25 @@ def test_ingest_adapter_threads_the_options_into_the_pipeline(monkeypatch):
     assert captured["classify_concurrency"] == 4 and captured["clause_concurrency"] == 5
     assert captured["affiliations"] is False and captured["function_classifier"] == "llm"
     assert captured["list_model"] == "off" and captured["samples"] == 3
+    assert captured["embedding_profile"] == "bge-m3"  # EP-API-4b: default profile passed through
+
+
+def test_ingest_adapter_passes_the_configured_embedding_profile(monkeypatch):
+    captured: dict = {}
+
+    class _FakeGraph:
+        async def ainvoke(self, state):
+            return {}
+
+    monkeypatch.setattr(
+        "rag_wright.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest",
+        lambda store, **kw: captured.update(kw) or _FakeGraph())
+    cfg = EngineConfig(store=_store_cfg(), embeddings={"text": "my-profile"})
+    ws = WorkspaceHandle(store=object(), config=cfg, corpus="c")
+
+    asyncio.run(_invoke.ainvoke_subgraph(
+        "contract_ingestion_pipeline", {"document": object(), "cache_dir": "/tmp/x"}, resources=ws))
+    assert captured["embedding_profile"] == "my-profile"  # the ingest embedder follows EngineConfig.embeddings
 
 
 def test_unset_options_pass_none_so_the_pipeline_keeps_its_defaults(monkeypatch):

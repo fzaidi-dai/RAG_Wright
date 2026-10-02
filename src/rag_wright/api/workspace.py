@@ -71,13 +71,15 @@ def _build_store(config: EngineConfig, corpus: str, *, reset: bool) -> Any:
 
 
 def _build_embedder(config: EngineConfig) -> Optional[Any]:
-    profile = config.embeddings.get("text", "bge-m3")
-    if profile != "bge-m3":
-        raise ValueError(f"unsupported embedding profile: {profile!r}")  # pluggable embedders: EP-API-4
-    try:
-        from rag_wright.capabilities.remote_encoders import query_embedder
+    """The workspace's QUERY embedder, selected by the `text` embedding profile (EP-API-4b; default bge-m3). An
+    unknown profile raises; an unavailable backend degrades to None (the retrieval consumer surfaces it)."""
+    from rag_wright.capabilities.embedding_profiles import build_query_embedder
 
-        return query_embedder()
+    profile = config.embeddings.get("text", "bge-m3")
+    try:
+        return build_query_embedder(profile)
+    except ValueError:
+        raise  # an unknown profile is a config error, not a transient backend failure
     except Exception:  # noqa: BLE001 - embedder backend unavailable -> None; the retrieval consumer surfaces it
         logger.warning("engine_embedder_unavailable", exc_info=True)
         return None

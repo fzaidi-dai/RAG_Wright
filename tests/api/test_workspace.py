@@ -40,6 +40,23 @@ def test_handle_is_opaque_no_public_store_accessor():
     assert hasattr(h, "model_id")         # the public resolver is available
 
 
+# --- EP-API-4b: the query embedder is selected by the config embedding profile ---
+
+def test_workspace_query_embedder_uses_the_config_profile(monkeypatch):
+    from rag_wright.capabilities import embedding_profiles as ep
+
+    sentinel = object()
+    monkeypatch.setitem(ep._QUERY_BUILDERS, "stub", lambda: sentinel)
+    h = WorkspaceHandle(store=object(), config=_cfg(embeddings={"text": "stub"}), corpus="c")
+    assert h._embedder is sentinel  # the profile selected the embedder, not a hardcoded bge-m3
+
+
+def test_workspace_unknown_embedding_profile_raises():
+    h = WorkspaceHandle(store=object(), config=_cfg(embeddings={"text": "nope"}), corpus="c")
+    with pytest.raises(ValueError):
+        _ = h._embedder  # an unknown profile is a config error, not a silent None
+
+
 # --- live ArcadeDB: open_workspace resolves a real store + caches ---
 
 _TEST_CORPUS = "ragwright_ws_live"
