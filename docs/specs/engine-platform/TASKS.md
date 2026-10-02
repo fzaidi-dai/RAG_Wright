@@ -69,6 +69,23 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | EP-RT-3 | Per-kind capability-authoring skills (subgraph/function/model/agent_skill) + the registration+ARD+invocation contract; wire into CLAUDE.md/playbook. | R3 | todo | `.claude/skills/`, `docs/playbook.md` | a new capability of each kind can be authored by following the skill |
 | EP-RT-4 | **(later)** Resumability/interruptibility via the LangGraph checkpointer (store-backed) + `interrupt`/resume + a progress contract. | R5 | todo | `subgraphs/scaffold.py`, `rag_wright/api/` | a long run resumes after interruption with no recompute of completed nodes |
 
+## R3b — Reference domain pack on the new API (worked examples that de-risk the product migration).
+
+> **Why (2026-10-02, user):** implement the D-bucket domain functions ourselves, in the engine, as TESTED reference
+> implementations over the new API — so the product gets correct, properly-working examples + key domain-seam logic
+> already written in the new paradigm, minimizing product-side work. **ADR-0052 boundary (load-bearing):** these are
+> the **reference domain pack** (the contract/compliance worked example that keeps the open-core runnable + demoable),
+> NOT the product's seam verbatim. So the line is: domain data/vocabulary logic that is a pure composition over the
+> engine API lives here as reference; genuinely product-only concerns (tenancy/DB routing `databases_for`,
+> `ScopeViolation` confidentiality guard, observability→product telemetry, UI citation-preview types, the orchestration
+> harness + product-named tools) STAY product-only (handoff D / EP-SEAM-3). EP-REF-1 is the source EP-SEAM-3 lifts.
+
+| id | task | implements | status | files (proposed) | verify |
+|---|---|---|---|---|---|
+| EP-REF-1a | **Prereq (= DD-1d, un-deferred):** add a generic `kg_edges` traversal primitive to the store (3 ArcadeDB idioms + contract-scope range) + relocate the edge-traversal reads (`clause_typed_edges`/`contract_clause_kg`/`exceptions_of_clause`/`span_properties`/`clauses_with_property`) into `ContractKGStore` over it. Needed because the D reads (party traversal, requirement/clause locations) are edge traversals. | R1, R3b | todo | `store/{arcadedb,seam}.py`, `capabilities/contract_kg_store.py`, `tests/store/*` | traversal reads identical live vs today; store holds no domain traversal method |
+| EP-REF-1b | The domain **read + vocabulary** reference facade over `kg_read`/`kg_edges` + the ontology pack: compliance reads (`requirements_for`, `requirement_locations`, `curated_requirement_count`, `gated_pairs`, `policy_of_requirement`) on `ComplianceStore`; contract traversal + vocab (`party_counterparties`, `party_affiliates`, `contract_terms` — the `CONTRACTS_WITH`/counterparty naming over generic traversal, via DD-5); clause taxonomy (`canonical_clause_type`, `clause_type_vocabulary`) from the ontology `.ttl`; span/position assembly (`span_locations`). | R3b, AC-journey | todo | `capabilities/{contract_kg_store,compliance_store}.py` (+ a reference domain facade), `tests/capabilities/*` | each helper returns correct results hermetic + **live** on a real KG; no new domain import in the store |
+| EP-REF-1c | Thin **compliance-leg invoker wrappers** as worked examples (`invoke_compliance_check`/`_document_check`/`invoke_policy_ingest` → `ainvoke_subgraph("compliance_*", …, resources=ws)`), showing the product the exact call shape. Reference-only; the product owns the FTC-routing/ad-compliance variants + guardrails. | R3b, AC-journey | todo | reference domain facade, `tests/*` | each wrapper runs a real compliance leg over a workspace end-to-end |
+
 ## R4 — Seam cleanup + product migration (ADR-0117 Part C).
 
 | id | task | implements | status | files | verify |
