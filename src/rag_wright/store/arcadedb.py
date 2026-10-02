@@ -243,19 +243,24 @@ class ArcadeDBStore:
         `database` overrides `ARCADEDB_DATABASE` (used to point tests at a scratch database).
         `reset=True` drops and recreates the database first, for a clean-slate test.
         """
-        client = SyncClient(
-            os.environ["ARCADEDB_HOST"],
-            os.environ["ARCADEDB_PORT"],
+        return cls.from_config(
+            os.environ["ARCADEDB_HOST"], os.environ["ARCADEDB_PORT"],
+            os.environ["ARCADEDB_USER"], os.environ["ARCADEDB_PASSWORD"],
+            database=database or os.environ["ARCADEDB_DATABASE"],
             protocol=os.getenv("ARCADEDB_PROTOCOL", "http"),  # `https` for the Modal-hosted KG (EC-2)
-            username=os.environ["ARCADEDB_USER"],
-            password=os.environ["ARCADEDB_PASSWORD"],
-        )
-        name = database or os.environ["ARCADEDB_DATABASE"]
-        if reset and DatabaseDao.exists(client, name):
-            DatabaseDao.delete(client, name)
-        if not DatabaseDao.exists(client, name):
-            DatabaseDao.create(client, name)
-        return cls(client, name)
+            reset=reset)
+
+    @classmethod
+    def from_config(cls, host: str, port: str, user: str, password: str, *, database: str,
+                    protocol: str = "http", reset: bool = False) -> "ArcadeDBStore":
+        """Build a store from EXPLICIT connection params (EP-API-1: the de-env'd twin of `from_env`, so engine
+        config flows as data, not `os.environ`). Creates the database if absent; `reset=True` drops + recreates it."""
+        client = SyncClient(host, port, protocol=protocol, username=user, password=password)
+        if reset and DatabaseDao.exists(client, database):
+            DatabaseDao.delete(client, database)
+        if not DatabaseDao.exists(client, database):
+            DatabaseDao.create(client, database)
+        return cls(client, database)
 
     # --- seam surface ---------------------------------------------------------------------------
 
