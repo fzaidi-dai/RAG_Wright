@@ -100,7 +100,12 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   relational, and ingestion D-functions are now migratable.
 - **Pending (EP-API-2c):** `invoke_function`/`ainvoke_function` + agent-skill invokers (function/skill capabilities
   are internal building blocks, rarely invoked standalone by a product).
-- **Pending (EP-API-4):** the `options` catalog (reranker/retrieval/ingest knobs) + pluggable embedders/parsers.
+- **Done (EP-API-4a):** the **ingest options catalog** — `EngineConfig(store=…, options=EngineOptions(ingest=IngestOptions(…)))`
+  carries the ingest knobs (`classify_concurrency`, `clause_concurrency`, `affiliations`, `function_classifier`,
+  `list_model`, `clause_samples`), each defaulting to `None` = the engine default. So the product sets ingest behavior
+  through config instead of environment variables (`CLASSIFY_CONCURRENCY`, `RAG_INGEST_AFFILIATIONS`,
+  `RAG_FUNCTION_CLASSIFIER`, …). Env stays the fallback, and leaving options unset reproduces today's behavior exactly.
+- **Pending (EP-API-4b/4c):** pluggable embedder by profile alias + pluggable parser (BGE-M3 / docling no longer hardcoded).
 - **Done (EP-E2E):** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api`
   (open_workspace → source_document → ainvoke_subgraph ingest → query); the developer-journey path works end-to-end.
   (Pending: a non-contract smoke domain, AC-journey.)

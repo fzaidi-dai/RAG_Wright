@@ -754,10 +754,28 @@ async def _aextract_clause_with_retry(
     return None, reason
 
 
+def _resolve_ingest_knobs(*, classify_concurrency: Any, clause_concurrency: Any, affiliations: Any,
+                          function_classifier: Any) -> tuple:
+    """EP-API-4a: resolve the four ingest knobs, `None` -> the engine default (env fallback, so a non-API caller is
+    unaffected), else the explicit config override. Returns `(classify_concurrency, clause_concurrency, affiliations,
+    function_classifier_kind)`. `classify_concurrency` is passed through as-is (the segment leaf falls back to env
+    when it is None), so the whole chain keeps one env default per knob."""
+    import os
+
+    return (
+        classify_concurrency,
+        clause_concurrency if clause_concurrency is not None else int(os.environ.get("CLAUSE_CONCURRENCY", "8")),
+        affiliations if affiliations is not None else (os.getenv("RAG_INGEST_AFFILIATIONS", "1") != "0"),
+        (function_classifier or os.getenv("RAG_FUNCTION_CLASSIFIER", "setfit")).lower(),
+    )
+
+
 def aproduction_document_ingest(
     store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None, party_seed_path: Any = None,
     classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None,
-    graph_extract_model: Any = None, judge_model: Any = None, chunk_model: Any = None):
+    graph_extract_model: Any = None, judge_model: Any = None, chunk_model: Any = None,
+    classify_concurrency: Any = None, clause_concurrency: Any = None, affiliations: Any = None,
+    function_classifier: Any = None):
     """ASYNC-B2e (ADR-0057): the async twin of `production_document_ingest`. Wires the ASYNC stage seams (achunk,
     aclassify_spans, clause_extractor.aextract, aper_contract_graph_extraction) so the ingest model calls run on
     the async seam with the true wall-clock deadline; CPU/store work (embed, resolve, DB writes) runs off the loop
@@ -785,11 +803,14 @@ def aproduction_document_ingest(
       - `chunk_model`: the chunker's boundary-refinement model -- structural boundaries are deterministic (zero
         calls); ONLY an over-cap section triggers a bounded per-section tag-parse call, and this is the model it
         uses. A model-id string or an `ExtractionModel`; `None` -> `model_for(GENERAL)`.
+      EP-API-4a ingest knobs (each `None` -> the env/default, so existing callers are unaffected):
+      `classify_concurrency` (function-classify parallelism), `clause_concurrency` (clause-extraction parallelism),
+      `affiliations` (run affiliation extraction), `function_classifier` ("setfit" | "llm"). The engine API passes
+      these from `EngineConfig.options.ingest`.
       Env vars remain the fallback for every knob, so existing callers are unaffected."""
     import asyncio
     import hashlib
     import json
-    import os
     from pathlib import Path
 
     from rag_wright.capabilities.disambiguation import disambiguate
@@ -850,13 +871,15 @@ def aproduction_document_ingest(
     # party AND affiliation extraction share the graph-extract model (GP-1B); one arg drives both
     aextract_parties_fn = (aproduction_extract_fn(model_id=graph_extract_id) if graph_extract_id
                            else aproduction_extract_fn())
+    # EP-API-4a: resolve the ingest knobs ONCE (config override else env/default), then use the resolved values.
+    _classify_concurrency, clause_concurrency, _affiliations_on, _clf_kind = _resolve_ingest_knobs(
+        classify_concurrency=classify_concurrency, clause_concurrency=clause_concurrency,
+        affiliations=affiliations, function_classifier=function_classifier)
     if classify_fn is None:
         # T55/SETFIT-SEG-1: the clause-function classifier is a SOFT tag (ADR-0047), so its implementation swaps
         # behind this seam with NO contract/API change. DEFAULT is now the in-process trained SetFit ensemble
-        # soft-tagger (ms/span, no LLM call -- the ingestion-latency lever). RAG_FUNCTION_CLASSIFIER=llm reverts to
-        # the LLM tag-classifier (issue 0005; RAG_MODEL_FUNCTION_CLASSIFY still moves just that model). A passed-in
-        # `classify_fn` overrides everything.
-        _clf_kind = os.getenv("RAG_FUNCTION_CLASSIFIER", "setfit").lower()
+        # soft-tagger (ms/span, no LLM call -- the ingestion-latency lever). `function_classifier="llm"` (or env
+        # RAG_FUNCTION_CLASSIFIER=llm) reverts to the LLM tag-classifier; a passed-in `classify_fn` overrides all.
         if _clf_kind == "setfit":
             # EP-RT-7: the default clause-function classifier dispatches through the `clause_function_classification`
             # CAPABILITY (the single production path) -- not a second hand-built SetFit instance. (RAG_FUNCTION_CLASSIFIER=llm
@@ -869,17 +892,15 @@ def aproduction_document_ingest(
     embedder = embedder if embedder is not None else BGEM3Embedder()
     template_version = hashlib.sha256(
         json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]
-    clause_concurrency = int(os.environ.get("CLAUSE_CONCURRENCY", "8"))
-    _CLAUSE_EXTRACT_ATTEMPTS = 3
+    _CLAUSE_EXTRACT_ATTEMPTS = 3  # clause_concurrency resolved above (EP-API-4a)
 
     async def _aparty_names(text: str) -> list:
         parties = await aextract_parties_fn(text)
         return [p.name for p in parties.parties] if parties is not None else []
 
     # issue 0027: corporate-affiliation extraction (AFFILIATE_OF). Default ON -- the lexical pre-filter keeps it a
-    # no-op for contracts that state no affiliation; RAG_INGEST_AFFILIATIONS=0 disables it entirely.
-    _affiliations_on = os.getenv("RAG_INGEST_AFFILIATIONS", "1") != "0"
-
+    # no-op for contracts that state no affiliation; config `affiliations=False` (or RAG_INGEST_AFFILIATIONS=0)
+    # disables it entirely. `_affiliations_on` resolved above (EP-API-4a).
     async def _aaffiliations(text: str) -> list:
         from rag_wright.capabilities.graph_extraction import aextract_affiliations
 
@@ -893,7 +914,7 @@ def aproduction_document_ingest(
         return list(manifest.chunks)
 
     async def segment_fn(doc: SourceDocument, chunks: list) -> list:
-        segments = await _asegment_and_classify(chunks, classify_fn)
+        segments = await _asegment_and_classify(chunks, classify_fn, max_concurrency=_classify_concurrency)
         # issue 0032 (CU-B5): attach source-page provenance to each span. Build a page<->char-offset map over the
         # canonical text (from the parsed doc's per-item prov pages) and look up each span's [doc_start, doc_end).
         # Deterministic, no model call; degrades to no pages when the parse carried no provenance (text-only leg).

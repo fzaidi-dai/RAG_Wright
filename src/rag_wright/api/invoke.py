@@ -81,10 +81,16 @@ async def _sub_contract_ingestion(h: WorkspaceHandle, inputs: dict) -> Any:
     # closed-world surface-form registry: an unknown entity resolves to None/unlinked, never a fabricated id
     # (ADR-0013/DD-3). A product with its own canonical registry (e.g. the SEC/CIK pack) passes that instead.
     # embedder=None -> the pipeline builds its own BGE-M3 SPAN embedder (encode_batch); the handle's query embedder
-    # is for retrieval, not ingest. (Pluggable ingest embedder via the config profile comes with EP-API-4.)
+    # is for retrieval, not ingest. (Pluggable ingest embedder via the config profile comes with EP-API-4b.)
+    # EP-API-4a: ingest knobs come from EngineConfig.options.ingest (None -> the engine's env/default); the product
+    # tunes ingest through config, not environment variables.
+    opts = h._config.options.ingest
     graph = aproduction_document_ingest(
         h._store, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
-        extract_model=default_extraction_model(model=h.model_id(ModelRole.STRUCTURED_REASONING)))
+        extract_model=default_extraction_model(model=h.model_id(ModelRole.STRUCTURED_REASONING)),
+        list_model=opts.list_model, samples=opts.clause_samples,
+        classify_concurrency=opts.classify_concurrency, clause_concurrency=opts.clause_concurrency,
+        affiliations=opts.affiliations, function_classifier=opts.function_classifier)
     return await graph.ainvoke({"document": inputs["document"]})
 
 
