@@ -101,8 +101,9 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
 - **Pending (EP-API-2c):** `invoke_function`/`ainvoke_function` + agent-skill invokers (function/skill capabilities
   are internal building blocks, rarely invoked standalone by a product).
 - **Pending (EP-API-4):** the `options` catalog (reranker/retrieval/ingest knobs) + pluggable embedders/parsers.
-- **Pending (EP-E2E):** the full-stack live proof (ingest + query a real doc through the API; a non-contract smoke
-  domain).
+- **Done (EP-E2E):** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api`
+  (open_workspace → source_document → ainvoke_subgraph ingest → query); the developer-journey path works end-to-end.
+  (Pending: a non-contract smoke domain, AC-journey.)
 
 **Migration note:** with EP-API-3 landed, the compliance leg + citation-preview + party-exposure reads can now be
 re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functions migrate onto EP-API-1/2. The
@@ -151,6 +152,8 @@ out = await engine.ainvoke_subgraph("typed_property_retrieval", {"query": q}, re
 - 2026-10-02 — first draft (after EP-API-1 + EP-API-2).
 - 2026-10-02 — EP-API-3 landed: `kg_read`/`kg_write`/`span_positions` + `document_of`/`id_source`/`decode_bbox`;
   compliance/citation/party-read D-functions migratable.
-- 2026-10-02 — EP-API-2b landed: ingestion + relational + intra-doc-QA subgraph adapters + `source_document`; the
-  ingestion/QA/relational D-functions are migratable; **EP-E2E unblocked**. (Update as EP-API-2c/4 + EP-E2E land, and
-  when the compliance opaque-handle migration — EP-SEAM — is specced.)
+- 2026-10-02 — EP-API-2b landed: ingestion + relational + intra-doc-QA subgraph adapters + `source_document`;
+  ingestion/QA/relational D-functions migratable.
+- 2026-10-02 — **EP-E2E PASSED**: a real doc ingested + queried entirely through `rag_wright.api` (the migration
+  target path is proven). (Update as EP-API-2c/4 + R3 land, and when the compliance opaque-handle migration — EP-SEAM
+  — is specced.)

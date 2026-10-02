@@ -13,11 +13,13 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 > **EP-API-3 + EP-API-2b DONE.** API-3: `api/kg.py` + `api/ids.py` (scoped KG access + id/format accessors over the
 > handle; lazy so the API import stays light). API-2b: 3 subgraph adapters wired (`contract_ingestion_pipeline`,
 > `relational_qa`, `intra_document_qa`) + `api.source_document`; live query-leg adapters end-to-end over a workspace.
-> Full suite 1660 pass. **EP-E2E now UNBLOCKED** (source_document → ingest → query, all via the API).
-> **Next up: EP-E2E** (full-stack live: ingest + query a real doc through the API; then a non-contract smoke domain) —
-> my pick — or **EP-API-4** (options + pluggable embedders). **EP-API-2c** (`invoke_function`/agent-skill invokers)
-> deferred (function/skill caps are internal building blocks). **DD-2 + DD-1d DEFERRED**. Handoff:
-> `docs/product/engine-api-migration-handoff.md`.
+> **EP-E2E DONE (acceptance milestone)** — full-stack live: a real doc INGESTED + QUERIED entirely through
+> `rag_wright.api` (open_workspace → source_document → ainvoke_subgraph ingest → query), nothing touching
+> ArcadeDBStore/query_embedder/model ids; PASSED in 147s. Also fixed the ingest adapter to use the pipeline's BGE-M3
+> SPAN embedder (not the query embedder). The developer-journey path is proven end-to-end.
+> **Next up (your pick):** **EP-API-4** (options catalog + pluggable embedders), **R3** (register-all-at-startup +
+> generic capability→MCP + per-kind authoring skills), the **non-contract smoke domain** (AC-journey), or **EP-API-2c**
+> (`invoke_function`/agent-skill). **DD-2 + DD-1d DEFERRED**. Handoff: `docs/product/engine-api-migration-handoff.md`.
 >
 > **LIVE-TESTING POLICY (standing):** every task ends with a LIVE test on real infra where applicable (AC-parity),
 > not just hermetic — done each gate so far (DD-1b 15 live store tests; DD-1c live smoke; EP-API-1 live workspace).
@@ -47,6 +49,7 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | EP-API-2 | The invoker as a **progressive-loading ARD client**: light index from the ARD manifest specs (`capability_index`, no impl imports); `ainvoke_subgraph` + `invoke_model` over the opaque handle — name/kind validation vs the ARD catalog, LAZY adapter resolution (lazy impl import), `usage_scope` + trace span; drift guard (every wired adapter ∈ catalog, kind matches). ARD stays metadata; the binding is the client's. First-slice adapters: typed_property_retrieval, clause_function_classification. | R2, AC-runtime | **done (2026-10-02)** | `rag_wright/api/{invoke,__init__}.py`, `tests/api/test_invoke.py` | 5 hermetic + 2 live (real LegalBERT via invoke_model; real subgraph leg end-to-end over a workspace); full suite 1653 pass |
 | EP-API-2b | Subgraph adapters: `contract_ingestion_pipeline` (ingestion; unblocks EP-E2E), `relational_qa`, `intra_document_qa` + `api.source_document` (build a doc for ingest). | R2, AC-runtime | **done (2026-10-02)** | `rag_wright/api/{invoke,documents,__init__}.py`, `tests/api/test_invoke.py` | drift guard over all 5 adapters + source_document; 2 live query-leg adapters end-to-end; full suite 1660 pass |
 | EP-API-2c | Remaining invoker kinds (`invoke_function`/`ainvoke_function`, agent-skill) + uniform light retry/timeout for function/model + co-register adapters per capability module (vs the central binding). | R2, R3, AC-runtime | deferred | `rag_wright/api/invoke.py`, capability modules | each kind invocable by name; adapters co-located; drift guard green |
+| EP-E2E | **Acceptance:** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api` (open_workspace → source_document → ainvoke_subgraph ingest → query), nothing reaching ArcadeDBStore/query_embedder/model ids. (Also fixed the ingest adapter to use the pipeline's BGE-M3 SPAN embedder.) Non-contract smoke domain (AC-journey) = a follow-on. | R2/R3, AC-journey | **done (2026-10-02)** | `tests/api/test_e2e.py`, `rag_wright/api/invoke.py` | PASSED (147s): ingest wrote the clause KG (scoped to the doc) + the query leg ran over it, all via the API |
 | EP-API-3 | Generic `kg_read(ws, …)` / `kg_write(ws, …)` + `span_positions(ws, doc)` over the opaque handle, and id/format accessors (`document_of`, `id_source`, `decode_bbox`) — lazy-imported so `import rag_wright.api` stays light. The product never parses engine id strings or touches `ws._store`. | R2 | **done (2026-10-02)** | `rag_wright/api/{kg,ids,__init__}.py`, `tests/api/test_kg.py` | 6 hermetic + 1 live (round-trip over a real workspace); API import stays store-free; full suite 1659 pass |
 | EP-API-4 | Embedding + model as **options** (by alias/profile) + pluggable embedder/parser capabilities; formalize the `options` catalog (reranker/retrieval/chunking/ingest knobs) with defaults, replacing the six leaked ingest env-vars. | R2 | todo | `rag_wright/api/config.py`, model/embedding profile seams | a non-default embedder/model/knob is selected via config; defaults unchanged behavior |
 

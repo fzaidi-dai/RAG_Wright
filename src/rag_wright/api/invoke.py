@@ -77,8 +77,10 @@ async def _sub_contract_ingestion(h: WorkspaceHandle, inputs: dict) -> Any:
     from rag_wright.spans.dim_classifier import load_dim_registry
     from rag_wright.subgraphs.contract_ingestion_pipeline import aproduction_document_ingest
 
+    # embedder=None -> the pipeline builds its own BGE-M3 SPAN embedder (encode_batch); the handle's query embedder
+    # is for retrieval, not ingest. (Pluggable ingest embedder via the config profile comes with EP-API-4.)
     graph = aproduction_document_ingest(
-        h._store, cache_dir=inputs["cache_dir"], registry=load_dim_registry(), embedder=h._embedder,
+        h._store, cache_dir=inputs["cache_dir"], registry=load_dim_registry(),
         extract_model=default_extraction_model(model=h.model_id(ModelRole.STRUCTURED_REASONING)))
     return await graph.ainvoke({"document": inputs["document"]})
 
