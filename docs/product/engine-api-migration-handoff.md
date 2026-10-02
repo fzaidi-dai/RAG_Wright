@@ -108,6 +108,14 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   `engine.invoke_model("clause_property_classification", {"text": <provision>, "functions": (<clause functions>,)}, resources=ws)`
   returns `[{dimension, value, confidence}]` soft tags (the classifier lane of Step-3a, no LLM). The fleet loads once
   per process (cached). Invokable from a graph by direct import too.
+- **Done (EP-RT-2):** the **generic capability→MCP adapter** — `from rag_wright.api.mcp import build_capability_mcp`
+  (a submodule import: `api.mcp` pulls `fastmcp`, kept out of `rag_wright.api`'s light surface). `build_capability_mcp(slug, *, resources=ws)`
+  returns a `FastMCP` server exposing ANY catalogued invokable capability (subgraph/model) as one tool — name/title/
+  description from the ARD manifest, handler dispatching through the engine invoker over the bound workspace, output
+  in a uniform `{"result": <json>}` envelope. `serve_capability_mcp(slug, *, resources, transport="stdio")` serves it.
+  The tool takes an opaque `inputs` dict (the capability's own input contract). Use this for zero-boilerplate MCP
+  exposure of a capability or a new-domain graph; the 4 bespoke Tier-1 servers in `rag_wright/mcp/` remain for
+  curated, typed tool signatures. The product owns tenant→corpus routing (build one server per workspace).
 
 **Migration note:** with EP-API-3 landed, the compliance leg + citation-preview + party-exposure reads can now be
 re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functions migrate onto EP-API-1/2. The
