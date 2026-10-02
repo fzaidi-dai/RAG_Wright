@@ -4,12 +4,15 @@ Child task ledger for `./SPEC.md` (child of the root `SPEC.md`/`tasks.md`). Gove
 continuation. Runs under the main working loop (CLAUDE.md): one task, contract-first TDD + a live A/B or smoke test,
 approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval | done`.
 
-> **RESUME / NEXT UP (2026-10-02):** R1 AC-no-leak COMPLETE (DD-1a/b/c). **EP-API-1 DONE** — `rag_wright/api/`:
-> `EngineConfig`/`StoreConfig` + `open_workspace` -> opaque `WorkspaceHandle` (cached; `model_id` resolver;
-> `ArcadeDBStore.from_config`); 3 hermetic + 1 live test; full suite 1647 pass. **Next up: EP-API-2** (per-kind
-> invokers over the handle). Then EP-API-3/4, R3, R4. **DD-2 DEFERRED** (naming purity, high churn, not a leak);
-> **DD-1d DEFERRED** (store-purity). Design: `docs/proposals/*`. (Compliance opaque-handle with EP-API-1 done ->
-> migrate in EP-SEAM; RuleWright via handoffs.)
+> **RESUME / NEXT UP (2026-10-02):** R1 AC-no-leak COMPLETE (DD-1a/b/c). **EP-API-1 + EP-API-2 DONE.** API-1:
+> `EngineConfig`/`open_workspace` -> opaque `WorkspaceHandle`. API-2: the invoker as a **progressive-loading ARD
+> client** (`api/invoke.py`) — light index from manifest specs (no impl imports) + `ainvoke_subgraph`/`invoke_model`
+> over the handle (lazy adapter resolution, name/kind validation vs the ARD catalog, usage+trace hardening, drift
+> guard). 2 adapters wired (typed_property_retrieval, clause_function_classification); live: real LegalBERT classify +
+> **real subgraph leg end-to-end over a workspace via the API** (EP-E2E starting). Full suite 1653 pass.
+> **Next up: EP-API-3** (generic `kg_read`/`kg_write` + id/format accessors exposed on the API). Then EP-API-4
+> (options catalog + pluggable embedders), more invoker adapters + `invoke_function`/agent-skill, R3, EP-E2E, R4.
+> **DD-2 + DD-1d DEFERRED** (naming/method purity, not leaks). Design: `docs/proposals/*`.
 >
 > **LIVE-TESTING POLICY (standing):** every task ends with a LIVE test on real infra where applicable (AC-parity),
 > not just hermetic — done each gate so far (DD-1b 15 live store tests; DD-1c live smoke; EP-API-1 live workspace).
@@ -36,7 +39,8 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | id | task | implements | status | files (proposed) | verify |
 |---|---|---|---|---|---|
 | EP-API-1 | `open_workspace(config, *, corpus) -> WorkspaceHandle` (opaque; resolves+caches store, lazy embedder; ensures schema) + `EngineConfig`/`StoreConfig` (backend connection, model aliases, embedding profile; `options` catalog -> EP-API-4) + `model_id(role)` resolver + `ArcadeDBStore.from_config` (de-env'd). `corpus` = db-name (tenancy product-side). | R2 | **done (2026-10-02)** | `rag_wright/api/{__init__,config,workspace}.py`, `store/arcadedb.py` (from_config), `tests/api/test_workspace.py` | 3 hermetic + 1 live (real ArcadeDB round-trip + caching + opaque); full suite 1647 pass |
-| EP-API-2 | Per-kind invokers: `ainvoke_subgraph` / `invoke_function`+`ainvoke_function` / `invoke_model`+`ainvoke_model` / agent-skill invoker, name-driven; internal `name→impl` resolver (convention or dispatch table); per-kind hardening; every invoker opens `usage_scope` + progress/trace span. | R2, AC-runtime | todo | `rag_wright/api/invoke.py` | invoke each kind by name; functions/models gain uniform retry/timeout + automatic usage/progress |
+| EP-API-2 | The invoker as a **progressive-loading ARD client**: light index from the ARD manifest specs (`capability_index`, no impl imports); `ainvoke_subgraph` + `invoke_model` over the opaque handle — name/kind validation vs the ARD catalog, LAZY adapter resolution (lazy impl import), `usage_scope` + trace span; drift guard (every wired adapter ∈ catalog, kind matches). ARD stays metadata; the binding is the client's. First-slice adapters: typed_property_retrieval, clause_function_classification. | R2, AC-runtime | **done (2026-10-02)** | `rag_wright/api/{invoke,__init__}.py`, `tests/api/test_invoke.py` | 5 hermetic + 2 live (real LegalBERT via invoke_model; real subgraph leg end-to-end over a workspace); full suite 1653 pass |
+| EP-API-2b | Remaining invoker kinds (`invoke_function`/`ainvoke_function`, agent-skill) + more adapters (other query legs, ingestion) + uniform light retry/timeout for function/model kinds. Co-register adapters per capability module (vs the central binding). | R2, R3, AC-runtime | todo | `rag_wright/api/invoke.py`, capability modules | each kind invocable by name; adapters co-located; drift guard green |
 | EP-API-3 | Generic `kg_read(ws, node_type, *, where=…)` / `kg_write` + id/format accessors (`document_of`, span→location/bbox, requirement→policy) so the product never parses engine id strings. | R2 | todo | `rag_wright/api/kg.py`, `rag_wright/api/ids.py` | seam's `requirements_for`/`span_locations`/id-splits reproduced via the API |
 | EP-API-4 | Embedding + model as **options** (by alias/profile) + pluggable embedder/parser capabilities; formalize the `options` catalog (reranker/retrieval/chunking/ingest knobs) with defaults, replacing the six leaked ingest env-vars. | R2 | todo | `rag_wright/api/config.py`, model/embedding profile seams | a non-default embedder/model/knob is selected via config; defaults unchanged behavior |
 

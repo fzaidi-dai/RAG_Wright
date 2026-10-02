@@ -6,6 +6,10 @@ embedders (EP-API-4). The product imports from here; it never reaches the store/
 from __future__ import annotations
 
 from rag_wright.api.config import EngineConfig, StoreConfig
+from rag_wright.api.invoke import ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.workspace import WorkspaceHandle, open_workspace
 
-__all__ = ["EngineConfig", "StoreConfig", "WorkspaceHandle", "open_workspace"]
+__all__ = [
+    "EngineConfig", "StoreConfig", "WorkspaceHandle", "open_workspace",
+    "ainvoke_subgraph", "invoke_model", "capability_index",
+]
