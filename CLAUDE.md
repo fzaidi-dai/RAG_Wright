@@ -159,6 +159,7 @@ Commits are how the memory above becomes durable. Git history is the parallel re
 - `documentation-and-adrs`, ADRs kept short.
 - `debugging-and-error-recovery`, on demand only when a task is stuck.
 - `using-agent-skills`, to discover and invoke the above.
+- `authoring-a-capability` (`.claude/skills/authoring-a-capability/SKILL.md`), when adding a new engine capability of any kind (subgraph/function/model/agent_skill/mcp_tool): the shared registration + ARD + invocation contract (the five surfaces + definition of done), the per-kind specifics, and the conformance guardrail (`tests/capabilities/test_authoring_contract.py`).
 - `Graphify`, for the `framework` and `project` graphs.
 - The LangChain docs MCP server (`https://docs.langchain.com/mcp`), for understanding LangGraph and Deep Agents concepts. It explains; it does not confirm. Grounding still resolves against the code graph.
 

@@ -17,16 +17,16 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 > `rag_wright.api` (open_workspace → source_document → ainvoke_subgraph ingest → query), nothing touching
 > ArcadeDBStore/query_embedder/model ids; PASSED in 147s. Also fixed the ingest adapter to use the pipeline's BGE-M3
 > SPAN embedder (not the query embedder). The developer-journey path is proven end-to-end.
-> **EP-RT-1 + EP-RT-2 DONE (R3).** RT-1: the 29-dim classifier fleet is a lane-level `clause_property_classification`
-> **model** capability — `HybridPropertyExtractor.classify_properties(...)` + ARD slug/manifest + an `invoke_model`
-> adapter (process-cached fleet). RT-2: `api/mcp.py::build_capability_mcp(slug, *, resources)` — the GENERIC
-> capability→MCP adapter (any invokable subgraph/model → a FastMCP tool, ARD-driven, no bespoke code; uniform
-> `{"result": …}` envelope). Live for both: the real fleet fires `dispute_method` via `invoke_model` AND via the
-> generic MCP tool end-to-end. Full suite 1668 pass.
-> **Next up (your pick):** **EP-RT-3** (per-kind authoring skills), **EP-RT-1b** (sweep: every slug gets an adapter or
-> an internal-only marker), **EP-API-4** (options catalog + pluggable embedders), the **non-contract smoke domain**
-> (AC-journey), or **EP-API-2c** (`invoke_function`/agent-skill).
-> **DD-2 + DD-1d DEFERRED**. Handoff: `docs/product/engine-api-migration-handoff.md`.
+> **EP-RT-1 + EP-RT-2 + EP-RT-3 DONE (R3).** RT-1: the 29-dim classifier fleet is a lane-level
+> `clause_property_classification` **model** capability. RT-2: `api/mcp.py::build_capability_mcp(slug, *, resources)` —
+> the GENERIC capability→MCP adapter (any invokable subgraph/model → a FastMCP tool, ARD-driven, no bespoke code).
+> RT-3: ONE `authoring-a-capability` skill (per-kind sections) + the shared registration/ARD/invocation contract +
+> a conformance guardrail (`tests/capabilities/test_authoring_contract.py`), wired into CLAUDE.md + playbook. The
+> guardrail surfaced 4 reserved-without-manifest slugs → EP-RT-1b. Full suite 1672 pass.
+> **In progress:** **EP-RT-1b** (retire/resolve the 4 reserved-without-manifest slugs). **EP-REF-1** (reference
+> domain pack on the new API) is queued per the user. **Next up (your pick after):** **EP-API-4** (options catalog +
+> pluggable embedders), the **non-contract smoke domain** (AC-journey), or **EP-API-2c** (`invoke_function`/agent-skill).
+> **DD-2 DEFERRED; DD-1d folded into EP-REF-1a.** Handoff: `docs/product/engine-api-migration-handoff.md`.
 >
 > **LIVE-TESTING POLICY (standing):** every task ends with a LIVE test on real infra where applicable (AC-parity),
 > not just hermetic — done each gate so far (DD-1b 15 live store tests; DD-1c live smoke; EP-API-1 live workspace).
@@ -66,7 +66,7 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 |---|---|---|---|---|---|
 | EP-RT-1 | Register the **lane-level `clause_property_classification` `model` capability** (the 29-dim fleet): `HybridPropertyExtractor.classify_properties(text, *, functions=())` (the classifier lane as a standalone entry) + the ARD slug/manifest + an `invoke_model` adapter with a process-cached registry. Invokable from graphs (direct import, as the ingest pipeline already does) and products (`invoke_model(...)`). (A full "every slug has an adapter or an internal-only marker" sweep = a follow-on EP-RT-1b.) | R3, AC-runtime, ADR-0115/0116 | **done (2026-10-02)** | `spans/property_extractor.py`, `capabilities/{registry,manifests}.py`, `rag_wright/api/invoke.py`, `tests/api/test_invoke.py` | index carries the slug (kind=model) + drift guard green; hermetic dispatch (usage scope opens); **live: the real 29-dim fleet fires `dispute_method` via `invoke_model` through the API**; full suite 1663 pass |
 | EP-RT-2 | Generic capability→MCP adapter: `api/mcp.py::build_capability_mcp(slug, *, resources)` exposes any catalogued **invokable** capability (subgraph/model) as a FastMCP server with NO bespoke code — tool name/title/description from the ARD manifest, handler dispatches through the engine invoker over the bound workspace, uniform `{"result": …}` JSON envelope; `serve_capability_mcp` convenience. Opaque `inputs` dict (no JSON input schema in ARD to type it); store binds server-side (issue 0035). The 4 bespoke Tier-1 servers STAY (curated typed tools) — not retired. Submodule import (keeps `import rag_wright.api` light). | R3, AC-runtime | **done (2026-10-02)** | `rag_wright/api/mcp.py`, `tests/api/test_mcp.py` | 4 hermetic (subgraph + model exposed; reject non-invokable kind + unknown slug) + **1 live: the real 29-dim fleet fires `dispute_method` through the generic MCP tool end-to-end**; full suite 1668 pass |
-| EP-RT-3 | Per-kind capability-authoring skills (subgraph/function/model/agent_skill) + the registration+ARD+invocation contract; wire into CLAUDE.md/playbook. | R3 | todo | `.claude/skills/`, `docs/playbook.md` | a new capability of each kind can be authored by following the skill |
+| EP-RT-3 | **One** capability-authoring skill with per-kind sections (subgraph/function/model/agent_skill/mcp_tool) + the shared registration+ARD+invocation contract (the five surfaces + definition of done); wired into CLAUDE.md + playbook; a conformance guardrail test pinning the contract (no manifest under a non-canonical slug; reserved-without-manifest = fixed allowlist; every manifest kind valid; every invoker adapter = canonical slug w/ matching kind). | R3 | **done (2026-10-02)** | `.claude/skills/authoring-a-capability/SKILL.md`, `tests/capabilities/test_authoring_contract.py`, `CLAUDE.md`, `docs/playbook.md` | 4 conformance tests pass (guardrail proven to bite on a stray slug); full suite 1672 pass |
 | EP-RT-4 | **(later)** Resumability/interruptibility via the LangGraph checkpointer (store-backed) + `interrupt`/resume + a progress contract. | R5 | todo | `subgraphs/scaffold.py`, `rag_wright/api/` | a long run resumes after interruption with no recompute of completed nodes |
 
 ## R3b — Reference domain pack on the new API (worked examples that de-risk the product migration).

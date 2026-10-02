@@ -57,6 +57,7 @@ This repo is the ENGINE/platform (open-core candidate): it builds and registers 
 | debugging-and-error-recovery | Addy Osmani | Systematic debugging. | Keep, on demand only |
 | using-agent-skills | Addy Osmani | Meta-skill so Claude Code discovers and invokes the rest. | Keep |
 | library-grounding | Custom | Mandatory: query the index for the exact API before using a library. | Add (section 5) |
+| authoring-a-capability | Custom (`.claude/skills/`) | How to author a new engine capability of any kind (subgraph/function/model/agent_skill/mcp_tool): the shared registration + ARD + invocation contract, per-kind specifics, and the conformance guardrail. | Add (ADR-0117) |
 | `Graphify` | for example safishamsi/graphify | Builds the queryable knowledge graphs the agent consults. | Install |
 
 Contracts-first is folded into the TDD skill rather than added as a separate skill, to keep the active set small.
