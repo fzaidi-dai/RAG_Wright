@@ -13,14 +13,13 @@ from rag_wright.capabilities.manifests import MANIFEST_SPECS
 from rag_wright.capabilities.registry import CANONICAL_CAPABILITY_SLUGS
 
 # Canonical slugs that are deliberately NOT ARD-published (reserved / internal-only; no CapabilityManifest).
-# OKF was dropped (see memory acord-unified-into-production-kg); the other two are internal machinery. Pinning
-# this set means adding a NEW canonical slug without its manifest fails here -- the exact authoring mistake the
-# skill warns about. Moving one of these to published (or retiring the slug) is an EP-RT-1b decision.
+# Both are FR "foundation derivation" slugs -- a reserved name with no standalone invocation: okf_compile builds
+# the OKF bundle (FR-K.1-K.4, experimental ADR-0022), ontology_registry_derivation is the FR-C.8 placeholder with
+# no implementation yet. Pinning this set means adding a NEW canonical slug without its manifest fails here -- the
+# exact authoring mistake the skill warns about. (EP-RT-1b published span_relevance_judgment + okf_navigate.)
 _RESERVED_WITHOUT_MANIFEST = {
     "okf_compile",
-    "okf_navigate",
     "ontology_registry_derivation",
-    "span_relevance_judgment",
 }
 
 

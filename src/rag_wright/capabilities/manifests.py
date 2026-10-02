@@ -467,6 +467,45 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             success_criterion="transcribe a scanned image to text at ingestion (image-only filings)",
         ),
     ),
+    CapabilityManifest(
+        slug="span_relevance_judgment",
+        kind="agent_skill",  # a single grounded LLM relevance judgement; SKILL.md, applied via the seam (issue 0023)
+        display_name="Span relevance judgment (span x condition -> verdict; authored skill)",
+        description=(
+            "Decide whether ONE retrieved span (a clause's operative text) actually addresses ONE structured "
+            "condition being searched for (a clause type, optionally a value condition, with the question as "
+            "context) -- returning a VERDICT (relevant | not_relevant | uncertain), not a similarity score, so no "
+            "caller chooses a threshold (issue 0023, ADR-0088). The retrieval analog of the compliance judge and of "
+            "answer abstention. Applied by typed_property_retrieval (Leg B) over the returned spans; the applying "
+            "capability owns the verdict vocab + conservative default, this skill teaches only the reading."
+        ),
+        representative_queries=(
+            "decide whether a retrieved clause actually addresses the searched condition",
+            "judge a span as relevant, not_relevant, or uncertain for a clause-type + value condition",
+            "return a relevance verdict for a retrieved span instead of a similarity score",
+            "filter retrieved spans by whether they truly address the query condition",
+        ),
+        tags=("relevance", "judge", "retrieval", "verdict", "skill"),
+    ),
+    CapabilityManifest(
+        slug="okf_navigate",
+        kind="agent_skill",  # query-discovered traversal; SKILL.md, applied via the seam (FR-K.6, ADR-0022; T50)
+        display_name="OKF navigation (embedding-free progressive-disclosure traversal)",
+        description=(
+            "Find the concepts in an Open Knowledge Format (OKF) bundle that answer a question by progressive "
+            "disclosure rather than vector similarity (FR-K.6, experimental per ADR-0022): keep the bundle in "
+            "interpreter variables, read index signposts + frontmatter with tools, dispatch a selector sub-agent to "
+            "choose which signposts to explore, judge candidate bodies in parallel, and return the shortlist of "
+            "concept ids. The embedding-free complement to similarity retrieval."
+        ),
+        representative_queries=(
+            "find the concepts in a knowledge bundle that answer a question without embeddings",
+            "navigate an OKF bundle by progressive disclosure to a shortlist of concept ids",
+            "traverse a markdown knowledge tree by reading signposts instead of vector similarity",
+            "return the concept ids relevant to a query from an OKF foundation bundle",
+        ),
+        tags=("okf", "navigation", "embedding-free", "progressive-disclosure", "skill"),
+    ),
     # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
     CapabilityManifest(
         slug="candidate_routing",
