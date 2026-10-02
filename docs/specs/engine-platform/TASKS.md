@@ -17,9 +17,14 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 > `rag_wright.api` (open_workspace → source_document → ainvoke_subgraph ingest → query), nothing touching
 > ArcadeDBStore/query_embedder/model ids; PASSED in 147s. Also fixed the ingest adapter to use the pipeline's BGE-M3
 > SPAN embedder (not the query embedder). The developer-journey path is proven end-to-end.
-> **Next up (your pick):** **EP-API-4** (options catalog + pluggable embedders), **R3** (register-all-at-startup +
-> generic capability→MCP + per-kind authoring skills), the **non-contract smoke domain** (AC-journey), or **EP-API-2c**
-> (`invoke_function`/agent-skill). **DD-2 + DD-1d DEFERRED**. Handoff: `docs/product/engine-api-migration-handoff.md`.
+> **EP-RT-1 DONE (first R3 task):** the 29-dim classifier fleet is now a lane-level `clause_property_classification`
+> **model** capability — `HybridPropertyExtractor.classify_properties(...)` + ARD slug/manifest + an `invoke_model`
+> adapter (process-cached fleet). Live: the real fleet fires `dispute_method` via `invoke_model` through the API.
+> Full suite 1663 pass.
+> **Next up (your pick):** **EP-RT-2** (generic capability→MCP adapter), **EP-RT-3** (per-kind authoring skills),
+> **EP-RT-1b** (sweep: every slug gets an adapter or an internal-only marker), **EP-API-4** (options catalog +
+> pluggable embedders), the **non-contract smoke domain** (AC-journey), or **EP-API-2c** (`invoke_function`/agent-skill).
+> **DD-2 + DD-1d DEFERRED**. Handoff: `docs/product/engine-api-migration-handoff.md`.
 >
 > **LIVE-TESTING POLICY (standing):** every task ends with a LIVE test on real infra where applicable (AC-parity),
 > not just hermetic — done each gate so far (DD-1b 15 live store tests; DD-1c live smoke; EP-API-1 live workspace).
@@ -57,7 +62,7 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 
 | id | task | implements | status | files (proposed) | verify |
 |---|---|---|---|---|---|
-| EP-RT-1 | Register every capability (metadata + impl), **including a lane-level `clause_property_classification` `model` capability** (the 29-dim fleet) invokable from graphs (direct import) and products (`invoke_model(...)`). | R3, AC-runtime, ADR-0115/0116 | todo | `spans/` + `capabilities/registry.py` + `rag_wright/api/` | the classifier fleet invokes by name from a product; catalog complete |
+| EP-RT-1 | Register the **lane-level `clause_property_classification` `model` capability** (the 29-dim fleet): `HybridPropertyExtractor.classify_properties(text, *, functions=())` (the classifier lane as a standalone entry) + the ARD slug/manifest + an `invoke_model` adapter with a process-cached registry. Invokable from graphs (direct import, as the ingest pipeline already does) and products (`invoke_model(...)`). (A full "every slug has an adapter or an internal-only marker" sweep = a follow-on EP-RT-1b.) | R3, AC-runtime, ADR-0115/0116 | **done (2026-10-02)** | `spans/property_extractor.py`, `capabilities/{registry,manifests}.py`, `rag_wright/api/invoke.py`, `tests/api/test_invoke.py` | index carries the slug (kind=model) + drift guard green; hermetic dispatch (usage scope opens); **live: the real 29-dim fleet fires `dispute_method` via `invoke_model` through the API**; full suite 1663 pass |
 | EP-RT-2 | Generic capability→MCP adapter: one shim exposing any registered capability as an MCP tool via `ainvoke_<kind>(name, …)`; retire the bespoke per-subgraph servers. | R3, AC-runtime | todo | `rag_wright/mcp/` | any registered capability served as an MCP tool with no bespoke server |
 | EP-RT-3 | Per-kind capability-authoring skills (subgraph/function/model/agent_skill) + the registration+ARD+invocation contract; wire into CLAUDE.md/playbook. | R3 | todo | `.claude/skills/`, `docs/playbook.md` | a new capability of each kind can be authored by following the skill |
 | EP-RT-4 | **(later)** Resumability/interruptibility via the LangGraph checkpointer (store-backed) + `interrupt`/resume + a progress contract. | R5 | todo | `subgraphs/scaffold.py`, `rag_wright/api/` | a long run resumes after interruption with no recompute of completed nodes |

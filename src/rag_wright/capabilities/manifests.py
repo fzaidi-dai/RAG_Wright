@@ -692,6 +692,23 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("classification", "legalbert", "model"),
     ),
     CapabilityManifest(
+        slug="clause_property_classification",
+        kind="model",
+        display_name="Clause property classification (29-dim fleet)",
+        description=(
+            "Classify a provision's closed-vocab property dimensions (cap basis, mutuality, IP ownership, dispute "
+            "method, royalty basis, ...) with the best-of-both Laya/SetFit fleet (ADR-0115/0116), soft-scoped to the "
+            "clause's likely functions; abstaining dims say 'not present'. Returns (dimension, value, confidence) "
+            "soft tags -- the classifier lane of Step-3a, no LLM. Model inference (CPU/GPU)."
+        ),
+        representative_queries=(
+            "classify the closed-vocab property dimensions of a contract provision",
+            "tag a clause with its cap basis / mutuality / IP ownership values",
+            "get the soft property tags for a provision without an LLM call",
+        ),
+        tags=("classification", "laya", "setfit", "model"),
+    ),
+    CapabilityManifest(
         slug="query_function_classification",
         kind="agent_skill",
         display_name="Query function classification",

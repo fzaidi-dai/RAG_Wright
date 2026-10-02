@@ -24,6 +24,7 @@ def test_capability_index_is_built_from_the_ard_specs():
     idx = capability_index()
     assert idx["typed_property_retrieval"]["kind"] == "subgraph"
     assert idx["clause_function_classification"]["kind"] == "model"
+    assert idx["clause_property_classification"]["kind"] == "model"  # EP-RT-1: the 29-dim fleet as a model capability
     assert idx["typed_property_retrieval"]["description"]  # the 'card' carries a description
 
 
@@ -61,6 +62,23 @@ async def test_ainvoke_subgraph_dispatches_under_usage_accounting(monkeypatch):
     assert out == {"ok": True} and seen["usage_open"] is True and seen["inputs"] == {"q": 1}
 
 
+def test_invoke_model_dispatches_clause_property_classification_under_usage(monkeypatch):
+    """The model invoker routes the slug to its adapter and opens a usage scope (hermetic: stub the adapter so no
+    heavy fleet load is needed)."""
+    seen = {}
+
+    def _stub(handle, inputs):
+        seen["usage_open"] = usage_capturing()
+        seen["inputs"] = inputs
+        return [{"dimension": "liability_cap_basis", "value": "FEES_PAID", "confidence": "EXTRACTED"}]
+
+    monkeypatch.setitem(_invoke._MODEL_ADAPTERS, "clause_property_classification", _stub)
+    out = invoke_model("clause_property_classification", {"text": "liability cap", "functions": ("Cap",)},
+                       resources=_handle())
+    assert out[0]["dimension"] == "liability_cap_basis"
+    assert seen["usage_open"] is True and seen["inputs"] == {"text": "liability cap", "functions": ("Cap",)}
+
+
 def test_source_document_builds_a_text_doc():
     from rag_wright.api import source_document
 
@@ -82,6 +100,43 @@ def test_invoke_model_runs_the_real_clause_function_classifier():
                        resources=_handle())
     assert isinstance(out, list) and len(out) == 1          # one result row per span
     assert isinstance(out[0], list)                          # soft tags (FunctionScore list) for the span
+
+
+# --- live: the 29-dim property-classifier fleet as a model capability through the engine API ---
+
+def _fleet_present() -> bool:
+    """True only when every model dir the fleet references has been fetched (gitignored / local-only)."""
+    import json
+
+    cfg_path = Path("src/rag_wright/spans/dim_fleet.json")
+    models_dir = Path(os.getenv("RAG_DIM_MODELS_DIR", "data/models"))
+    try:
+        cfg = json.loads(cfg_path.read_text())
+    except OSError:
+        return False
+    for spec in cfg.values():
+        sub = "laya" if spec["framework"] == "laya" else "setfit"
+        if not (models_dir / sub / spec["model"]).exists():
+            return False
+    return True
+
+
+@pytest.mark.skipif(not _fleet_present(), reason="29-dim fleet checkpoints not present (gitignored / local-only)")
+def test_invoke_model_runs_the_real_clause_property_classifier():
+    """EP-RT-1: the classifier lane, invoked as a `model` capability through the engine API, returns real soft tags
+    for a provision. A dispute-resolution clause (soft-scoped to its function) must fire dispute_method non-abstain."""
+    out = invoke_model(
+        "clause_property_classification",
+        {"text": ("Any dispute, controversy or claim arising out of or relating to this Agreement shall be finally "
+                  "settled by binding arbitration administered by the American Arbitration Association under its "
+                  "Commercial Arbitration Rules."),
+         "functions": ("Dispute Resolution",)},
+        resources=_handle())
+    assert isinstance(out, list) and out, "the fleet emitted no soft tags for a dispute-resolution clause"
+    assert all(set(t) == {"dimension", "value", "confidence"} for t in out)
+    dispute = [t for t in out if t["dimension"] == "dispute_method"]
+    assert dispute and all(str(t["value"]).lower() != "none" for t in dispute), (
+        f"dispute_method did not fire (got {dispute}); emitted={[(t['dimension'], t['value']) for t in out]}")
 
 
 # --- live: a real subgraph over a workspace (needs ArcadeDB + the model backend) ---

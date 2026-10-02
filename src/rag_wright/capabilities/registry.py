@@ -90,6 +90,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "intra_document_scoped_query",  # function: intra-contract scoped KG serving (Leg A)
         "clause_disambiguation",  # function: disambiguation by property (Leg A)
         "clause_function_classification",  # model: LegalBERT function classifier (T56)
+        "clause_property_classification",  # model: the 29-dim best-of-both property classifier fleet (ADR-0115/0116, EP-RT-1)
         "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
         # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
         "candidate_routing",  # function: union combiner -> candidate pool (KG-5e)

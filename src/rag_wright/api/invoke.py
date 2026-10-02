@@ -92,13 +92,36 @@ def _model_clause_function_classification(h: WorkspaceHandle, inputs: dict) -> A
     return clf.classify_spans(inputs["chunk_text"], inputs["span_texts"])
 
 
+_DIM_REGISTRY: Any = None
+
+
+def _dim_registry() -> Any:
+    """The 29-dim property-classifier fleet, loaded ONCE (heavy: shared Laya group agents + SetFit + abstain heads)."""
+    global _DIM_REGISTRY
+    if _DIM_REGISTRY is None:
+        from rag_wright.spans.dim_classifier import load_dim_registry
+
+        _DIM_REGISTRY = load_dim_registry()
+    return _DIM_REGISTRY
+
+
+def _model_clause_property_classification(h: WorkspaceHandle, inputs: dict) -> Any:  # noqa: ARG001 - local fleet
+    from rag_wright.spans.property_extractor import HybridPropertyExtractor
+
+    ext = HybridPropertyExtractor(_dim_registry(), runnable=object())  # classifier lane only; runnable unused
+    return ext.classify_properties(inputs["text"], functions=tuple(inputs.get("functions", ())))
+
+
 _SUBGRAPH_ADAPTERS: dict[str, Callable] = {
     "typed_property_retrieval": _sub_typed_property_retrieval,
     "relational_qa": _sub_relational_qa,
     "intra_document_qa": _sub_intra_document_qa,
     "contract_ingestion_pipeline": _sub_contract_ingestion,
 }
-_MODEL_ADAPTERS: dict[str, Callable] = {"clause_function_classification": _model_clause_function_classification}
+_MODEL_ADAPTERS: dict[str, Callable] = {
+    "clause_function_classification": _model_clause_function_classification,
+    "clause_property_classification": _model_clause_property_classification,
+}
 
 
 def _resolve(name: str, kind: str, adapters: dict[str, Callable]) -> Callable:

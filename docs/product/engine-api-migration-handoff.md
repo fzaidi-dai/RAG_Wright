@@ -104,6 +104,10 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
 - **Done (EP-E2E):** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api`
   (open_workspace → source_document → ainvoke_subgraph ingest → query); the developer-journey path works end-to-end.
   (Pending: a non-contract smoke domain, AC-journey.)
+- **Done (EP-RT-1):** the 29-dim property-classifier fleet is a lane-level **`model`** capability —
+  `engine.invoke_model("clause_property_classification", {"text": <provision>, "functions": (<clause functions>,)}, resources=ws)`
+  returns `[{dimension, value, confidence}]` soft tags (the classifier lane of Step-3a, no LLM). The fleet loads once
+  per process (cached). Invokable from a graph by direct import too.
 
 **Migration note:** with EP-API-3 landed, the compliance leg + citation-preview + party-exposure reads can now be
 re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functions migrate onto EP-API-1/2. The

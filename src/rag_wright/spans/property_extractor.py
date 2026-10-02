@@ -277,6 +277,15 @@ class HybridPropertyExtractor:
                     continue  # a value outside the dim vocab (shouldn't happen from a trained head) -> drop
         return out
 
+    def classify_properties(self, text: str, *, functions: tuple[str, ...] = ()) -> list[dict]:
+        """EP-RT-1 (ADR-0117): the classifier LANE as a standalone `model`-kind capability -- closed-vocab property
+        assertions for one provision, soft-scoped to the clause `functions` (no LLM, no gates). Returns
+        `[{dimension, value, confidence}]` (primary-first within each dim). `functions=()` -> every covered dim."""
+        prov = Provenance.of(ChunkId(source_doc_id="classify", chunk_index=0, content_hash="0" * 64))
+        asserts = self._classifier_assertions(prov, text, "", scoped_dims(functions))
+        return [{"dimension": a.dimension.value, "value": a.value, "confidence": a.confidence.value}
+                for a in asserts]
+
     def _residual_assertions(self, prov: Provenance, extraction: Optional[PropertyExtraction],
                              span_id: str) -> list[PropertyAssertion]:
         """Keep ONLY the 7 residual dims from the LLM's answer -- never a classifier dim or a starved dim."""
