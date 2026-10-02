@@ -80,9 +80,9 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
 | the LegalBERT classifier wiring | `engine.invoke_model("clause_function_classification", {...}, resources=ws)` |
 | `query_embedder()` construction | hidden behind the handle (embedding = a config profile) |
 | `answer_model_for` / `default_extraction_model` / `judge_model_id` / pinned model id | model **aliases** in `EngineConfig.models`; the handle's `model_id(role)` |
-| `decode_bbox` / `document_of` / `policy_of_requirement` (id parsers) | engine id/format accessors (**EP-API-3, pending**) |
+| `decode_bbox` / `document_of` / `policy_of_requirement` (id parsers) | engine id/format accessors (`document_of`/`id_source`/`decode_bbox`) |
 | per-customer store/graph caches (`resources.py`) | absorbed by `open_workspace` caching |
-| `requirements_for` / `span_properties` / scoped KG reads | `engine.kg_read(...)` (**EP-API-3, pending**) |
+| `requirements_for` / `span_properties` / scoped KG reads | `engine.kg_read(ws, ...)` |
 
 ## The engine API surface (done vs pending)
 
@@ -92,17 +92,18 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   `capability_index()` (discovery). The invoker is a progressive-loading **ARD client** (light index from the ARD
   manifest specs; lazy per-capability adapter). First adapters wired: `typed_property_retrieval`,
   `clause_function_classification`.
+- **Done (EP-API-3):** `kg_read(ws, …)` / `kg_write(ws, …)` + `span_positions(ws, document)` (scoped KG access over
+  the handle), and id/format accessors `document_of` / `id_source` / `decode_bbox` — so the product does KG reads +
+  citations without `ws._store` or id-string parsing. (`import rag_wright.api` stays light — lazy internals.)
 - **Pending (EP-API-2b):** `invoke_function`/`ainvoke_function` + agent-skill invokers; more adapters (the other query
   legs, ingestion).
-- **Pending (EP-API-3):** generic `kg_read`/`kg_write` + id/format accessors on the API (what the compliance reads +
-  citation-preview types will migrate onto).
 - **Pending (EP-API-4):** the `options` catalog (reranker/retrieval/ingest knobs) + pluggable embedders/parsers.
 - **Pending (EP-E2E):** the full-stack live proof (ingest + query a real doc through the API; a non-contract smoke
   domain).
 
-**Migration note:** the compliance leg + citation-preview + party-exposure reads depend on **EP-API-3** (`kg_read` +
-id/format accessors). So those D functions can be re-implemented once EP-API-3 lands; the QA/retrieval D functions can
-migrate now onto EP-API-1/2. Sequence the product migration accordingly.
+**Migration note:** with EP-API-3 landed, the compliance leg + citation-preview + party-exposure reads can now be
+re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functions migrate onto EP-API-1/2. The
+ingestion D functions wait on EP-API-2b's ingestion adapter.
 
 ## Before / after (illustrative)
 
@@ -143,5 +144,7 @@ out = await engine.ainvoke_subgraph("typed_property_retrieval", {"query": q}, re
   the product CI.
 
 ## Changelog
-- 2026-10-02 — first draft, after EP-API-1 + EP-API-2. (Update as EP-API-3/4, EP-API-2b, and EP-E2E land, and when the
-  compliance opaque-handle migration — EP-SEAM — is specced.)
+- 2026-10-02 — first draft (after EP-API-1 + EP-API-2).
+- 2026-10-02 — EP-API-3 landed: `kg_read`/`kg_write`/`span_positions` + `document_of`/`id_source`/`decode_bbox` now on
+  the API; compliance/citation/party-read D-functions are migratable. (Update as EP-API-2b/4 + EP-E2E land, and when
+  the compliance opaque-handle migration — EP-SEAM — is specced.)
