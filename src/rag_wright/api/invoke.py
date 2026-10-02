@@ -7,8 +7,8 @@ Progressive loading, like an agent holding skill name+description and loading th
     (only that capability's module loads).
 The ARD registry stays metadata (no callables); the `name -> adapter` binding is the CLIENT's, keyed to the ARD
 catalog and drift-guarded. The per-kind invokers take an opaque `WorkspaceHandle` as resources and wrap each call
-with in-band usage accounting + a trace span; subgraph hardening (retry/dead-letter) comes from the LangGraph
-scaffold the subgraph is built on."""
+in a trace span; model usage/cost is captured by the CALLER's `api.measure_usage()` (ambient + additive, EP-API-5),
+not by the invoker. Subgraph hardening (retry/dead-letter) comes from the LangGraph scaffold the subgraph is built on."""
 from __future__ import annotations
 
 from typing import Any, Callable
@@ -16,7 +16,6 @@ from typing import Any, Callable
 from rag_wright.api.workspace import WorkspaceHandle
 from rag_wright.models.profiles import ModelRole
 from rag_wright.models.tracing import traced_step
-from rag_wright.models.usage import usage_scope
 
 _INDEX: dict[str, Any] | None = None
 
@@ -137,17 +136,19 @@ def _resolve(name: str, kind: str, adapters: dict[str, Callable]) -> Callable:
 
 
 async def ainvoke_subgraph(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:
-    """Invoke a subgraph-kind capability by name over the workspace. Retry/dead-letter comes from the LangGraph
-    scaffold the subgraph is built on; this wraps in-band usage accounting + a trace span."""
+    """Invoke a subgraph-kind capability by name over the workspace, inside a trace span. Retry/dead-letter comes
+    from the LangGraph scaffold the subgraph is built on. Model usage is captured by the CALLER's `measure_usage()`
+    (ambient + additive, EP-API-5), so the invoker does not open its own scope."""
     adapter = _resolve(name, "subgraph", _SUBGRAPH_ADAPTERS)
-    with traced_step(f"invoke:{name}"), usage_scope():
+    with traced_step(f"invoke:{name}"):
         return await adapter(resources, inputs)
 
 
 def invoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:
-    """Invoke a model-kind capability by name over the workspace, with usage accounting + a trace span."""
+    """Invoke a model-kind capability by name over the workspace, inside a trace span. Model usage is captured by
+    the caller's `measure_usage()` (EP-API-5); the invoker does not open its own scope."""
     adapter = _resolve(name, "model", _MODEL_ADAPTERS)
-    with traced_step(f"invoke:{name}"), usage_scope():
+    with traced_step(f"invoke:{name}"):
         return adapter(resources, inputs)
 
 

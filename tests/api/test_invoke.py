@@ -48,27 +48,26 @@ def test_invoke_model_reports_missing_adapter_clearly():
         invoke_model("embedding", {}, resources=_handle())  # 'embedding' is a model kind with no adapter wired yet
 
 
-async def test_ainvoke_subgraph_dispatches_under_usage_accounting(monkeypatch):
+async def test_ainvoke_subgraph_dispatches_the_inputs(monkeypatch):
     seen = {}
 
     async def _stub(handle, inputs):
-        seen["usage_open"] = usage_capturing()   # the invoker opened a usage scope around the call
         seen["inputs"] = inputs
         return {"ok": True}
 
     # 'relational_qa' is a real subgraph slug in the catalog with no adapter wired -> inject a stub
     monkeypatch.setitem(_invoke._SUBGRAPH_ADAPTERS, "relational_qa", _stub)
     out = await ainvoke_subgraph("relational_qa", {"q": 1}, resources=_handle())
-    assert out == {"ok": True} and seen["usage_open"] is True and seen["inputs"] == {"q": 1}
+    assert out == {"ok": True} and seen["inputs"] == {"q": 1}
+    # usage is the CALLER's concern now (EP-API-5): the invoker opens no scope of its own
+    assert not usage_capturing()
 
 
-def test_invoke_model_dispatches_clause_property_classification_under_usage(monkeypatch):
-    """The model invoker routes the slug to its adapter and opens a usage scope (hermetic: stub the adapter so no
-    heavy fleet load is needed)."""
+def test_invoke_model_dispatches_clause_property_classification(monkeypatch):
+    """The model invoker routes the slug to its adapter (hermetic: stub the adapter so no heavy fleet load)."""
     seen = {}
 
     def _stub(handle, inputs):
-        seen["usage_open"] = usage_capturing()
         seen["inputs"] = inputs
         return [{"dimension": "liability_cap_basis", "value": "FEES_PAID", "confidence": "EXTRACTED"}]
 
@@ -76,7 +75,7 @@ def test_invoke_model_dispatches_clause_property_classification_under_usage(monk
     out = invoke_model("clause_property_classification", {"text": "liability cap", "functions": ("Cap",)},
                        resources=_handle())
     assert out[0]["dimension"] == "liability_cap_basis"
-    assert seen["usage_open"] is True and seen["inputs"] == {"text": "liability cap", "functions": ("Cap",)}
+    assert seen["inputs"] == {"text": "liability cap", "functions": ("Cap",)}
 
 
 def test_source_document_builds_a_text_doc():

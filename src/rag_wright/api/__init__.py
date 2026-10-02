@@ -10,6 +10,7 @@ from rag_wright.api.documents import source_document
 from rag_wright.api.ids import decode_bbox, document_of, id_source
 from rag_wright.api.invoke import ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import kg_read, kg_write, span_positions
+from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage
 from rag_wright.api.workspace import WorkspaceHandle, open_workspace
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "kg_read", "kg_write", "span_positions",
     "document_of", "id_source", "decode_bbox",
     "source_document",
+    "measure_usage", "UsageTotals", "ModelUsage",
 ]

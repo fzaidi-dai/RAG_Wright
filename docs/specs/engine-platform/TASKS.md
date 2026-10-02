@@ -23,11 +23,14 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 > RT-3: ONE `authoring-a-capability` skill (per-kind sections) + the shared registration/ARD/invocation contract +
 > a conformance guardrail (`tests/capabilities/test_authoring_contract.py`), wired into CLAUDE.md + playbook. The
 > guardrail surfaced 4 reserved-without-manifest slugs → EP-RT-1b. Full suite 1672 pass.
-> **EP-RT-1b DONE:** none of the 4 flagged slugs were dead — published `span_relevance_judgment` + `okf_navigate`
-> (2 new agent_skill manifests, 51 total), kept `okf_compile` + `ontology_registry_derivation` reserved (foundation
-> slugs). **EP-REF-1** (reference domain pack on the new API) is queued per the user. **Next up (your pick after):**
-> **EP-API-4** (options catalog + pluggable embedders), the **non-contract smoke domain** (AC-journey), or
-> **EP-API-2c** (`invoke_function`/agent-skill). **DD-2 DEFERRED; DD-1d folded into EP-REF-1a.** Handoff:
+> **EP-RT-1b + EP-API-5 DONE.** RT-1b: published `span_relevance_judgment` + `okf_navigate` (51 manifests),
+> kept `okf_compile` + `ontology_registry_derivation` reserved. **EP-API-5: usage/cost is now on the API surface** —
+> `with api.measure_usage() as u: ...` returns calls/tokens/cost/latency + `by_model` (closes the "does the new API
+> return stats like the product's current one" gap); the invokers no longer open a dead capture-and-discard scope.
+> **Queued:** **EP-API-6** (PDF/docling ingest entry point on the API) + **EP-E2E-2** (full-pipeline live e2e incl
+> docling + usage) — together they give the full docling→classify→LLM→query proof through the API; **EP-REF-1**
+> (reference domain pack). **Next (your pick):** EP-API-6, EP-REF-1a, EP-API-4, the non-contract smoke domain
+> (AC-journey), or EP-API-2c. **DD-2 DEFERRED; DD-1d folded into EP-REF-1a.** Handoff:
 > `docs/product/engine-api-migration-handoff.md`.
 >
 > **LIVE-TESTING POLICY (standing):** every task ends with a LIVE test on real infra where applicable (AC-parity),
@@ -61,6 +64,9 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | EP-E2E | **Acceptance:** full-stack live proof — a real doc INGESTED + QUERIED entirely through `rag_wright.api` (open_workspace → source_document → ainvoke_subgraph ingest → query), nothing reaching ArcadeDBStore/query_embedder/model ids. (Also fixed the ingest adapter to use the pipeline's BGE-M3 SPAN embedder.) Non-contract smoke domain (AC-journey) = a follow-on. | R2/R3, AC-journey | **done (2026-10-02)** | `tests/api/test_e2e.py`, `rag_wright/api/invoke.py` | PASSED (147s): ingest wrote the clause KG (scoped to the doc) + the query leg ran over it, all via the API |
 | EP-API-3 | Generic `kg_read(ws, …)` / `kg_write(ws, …)` + `span_positions(ws, doc)` over the opaque handle, and id/format accessors (`document_of`, `id_source`, `decode_bbox`) — lazy-imported so `import rag_wright.api` stays light. The product never parses engine id strings or touches `ws._store`. | R2 | **done (2026-10-02)** | `rag_wright/api/{kg,ids,__init__}.py`, `tests/api/test_kg.py` | 6 hermetic + 1 live (round-trip over a real workspace); API import stays store-free; full suite 1659 pass |
 | EP-API-4 | Embedding + model as **options** (by alias/profile) + pluggable embedder/parser capabilities; formalize the `options` catalog (reranker/retrieval/chunking/ingest knobs) with defaults, replacing the six leaked ingest env-vars. | R2 | todo | `rag_wright/api/config.py`, model/embedding profile seams | a non-default embedder/model/knob is selected via config; defaults unchanged behavior |
+| EP-API-5 | **Usage/cost on the API surface.** `api.measure_usage()` context manager (public face of `usage_scope`, ADR-0105) + re-exported `UsageTotals`/`ModelUsage`, so a product reads calls/tokens/cost/latency + `by_model` around any invoke without touching `rag_wright.models`. Removed the invokers' dead capture-and-discard inner scope (nothing read it; `traced_step` doesn't consume it) — usage is now the CALLER's opt-in concern. | R2 | **done (2026-10-02)** | `rag_wright/api/{usage,__init__,invoke}.py`, `tests/api/{test_usage,test_invoke}.py` | 5 usage tests (type re-export; known+unknown-cost capture; caller scope captures an invoke; no-scope no-op) + invoke tests updated; full suite green |
+| EP-API-6 | **PDF/docling ingest entry point on the API.** `api.source_document(id, *, path=…)` (or `api.parse_document`) runs the engine's real docling parse (the byte-source/`parsed_source_document` path) and sets `SourceDocument.parsed`, so the FULL pipeline incl docling runs through the API (today `source_document` is text-only; docling lives in the corpus adapter, G-bucket not yet behind the API). Overlaps EP-SEAM-1. | R2, AC-journey | todo | `rag_wright/api/documents.py`, `tests/api/*` | a real PDF ingested via the API is docling-parsed (structure preserved), not text-fallback |
+| EP-E2E-2 | **Full-pipeline live e2e through the API.** Ingest a real PDF (docling) → classify → LLM extract (OpenRouter) → KG write → query, wrapped in `api.measure_usage()` asserting real calls + cost came back. `-m store` + OpenRouter-gated. Depends on EP-API-5 + EP-API-6. | R2/R3, AC-journey | todo | `tests/api/test_e2e.py` (or a new live test) | full stack incl docling runs via the API; usage/cost returned and non-zero |
 
 ## R3 — Capability runtime (ADR-0117). 
 

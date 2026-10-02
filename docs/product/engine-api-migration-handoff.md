@@ -116,6 +116,13 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   The tool takes an opaque `inputs` dict (the capability's own input contract). Use this for zero-boilerplate MCP
   exposure of a capability or a new-domain graph; the 4 bespoke Tier-1 servers in `rag_wright/mcp/` remain for
   curated, typed tool signatures. The product owns tenant→corpus routing (build one server per workspace).
+- **Done (EP-API-5):** **usage/cost on the API surface** — `with engine.measure_usage() as u: await engine.ainvoke_subgraph(...)`
+  then read `u.calls / u.input_tokens / u.output_tokens / u.cost_usd / u.calls_without_cost / u.latency_ms_total /
+  u.by_model` (`{model_id: ModelUsage}`). This is the public face of the engine's in-band usage accounting
+  (ADR-0105), so the product's telemetry layer (`record_session`/`UsageReport`/`report_from_usage`, D-bucket) wraps
+  `measure_usage()` instead of importing `rag_wright.models.usage`. Capturing is opt-in and additive across nesting
+  (a task-level scope totals everything; inner scopes attribute their slice); with no scope, zero overhead. The
+  invokers no longer open their own scope — usage is the caller's concern.
 
 **Migration note:** with EP-API-3 landed, the compliance leg + citation-preview + party-exposure reads can now be
 re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functions migrate onto EP-API-1/2. The
