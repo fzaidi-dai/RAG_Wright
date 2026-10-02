@@ -33,17 +33,16 @@ def test_engine_storage_and_resolver_are_sec_free() -> None:
         f"plug-in layer). Re-coupled references: {offenders}")
 
 
-# ADR-0117 DD-1b: the clause-KG / contract-metadata / requirement writes moved to the capability-layer store
-# extensions (ContractKGStore / ComplianceStore), so the engine store must not import those domain contracts.
-# (contracts.property's PropertyDimension-keyed map + the edge-traversal reads + jurisdiction are DD-1c; the full
-# "no domain-contract import" guard lands then.)
-_FORBIDDEN_STORE_IMPORTS = ("contracts.compliance", "contracts.contract_meta", "contracts.property")
+# ADR-0117 DD-1b/DD-1c: all domain writes + jurisdiction canonicalization moved to the capability-layer store
+# extensions (ContractKGStore / ComplianceStore). The engine store may import ONLY the generic engine contracts
+# (the retrieval-index chunk/span records + the provenance tag) -- any DOMAIN contract import re-couples it.
+_GENERIC_ENGINE_CONTRACTS = {"chunk", "provenance", "span"}
 
 
-def test_engine_store_does_not_import_the_moved_domain_contracts() -> None:
+def test_engine_store_imports_only_generic_contracts() -> None:
     src = (_SRC / "store" / "arcadedb.py").read_text(encoding="utf-8")
-    offenders = [mod for mod in _FORBIDDEN_STORE_IMPORTS
-                 if re.search(rf"from rag_wright\.{re.escape(mod)} import", src)]
-    assert not offenders, (
-        "ADR-0117 DD-1b: store/arcadedb.py must not import the moved domain contracts (the clause-KG, contract-meta, "
-        f"and requirement writes live in the ContractKGStore/ComplianceStore extensions). Re-coupled: {offenders}")
+    imported = set(re.findall(r"from rag_wright\.contracts\.([a-z_]+) import", src))
+    domain = sorted(imported - _GENERIC_ENGINE_CONTRACTS)
+    assert not domain, (
+        "ADR-0117 DD-1c: store/arcadedb.py must import no DOMAIN contract (only chunk/provenance/span). The clause-KG, "
+        f"contract-meta, requirement, and jurisdiction logic live in the store extensions. Re-coupled: {domain}")

@@ -1061,34 +1061,6 @@ class ArcadeDBStore:
         self._command(f"DELETE FROM {CLAUSE_TYPE}")
         self._command(f"DELETE FROM {PROPVALUE_TYPE}")
 
-    def patch_canonical_jurisdictions(self) -> dict[str, int]:
-        """KG-5a: additively canonicalize the `jurisdiction` value nodes -- write a `canonical_value` on each
-        (surface `value` untouched, kept for citation), deterministically (no LLM, no re-extraction). Fixes
-        the retrieval-match loss from surface variants (England / England and Wales / English law). Idempotent.
-        Returns {seen, canonicalized}."""
-        from rag_wright.contracts.jurisdiction import canonicalize_jurisdiction
-
-        if "canonical_value" not in self.property_names(PROPVALUE_TYPE):
-            self._command(f"CREATE PROPERTY {PROPVALUE_TYPE}.canonical_value STRING")
-        rows = self._query(
-            f"SELECT value_key, value FROM {PROPVALUE_TYPE} WHERE dimension = 'jurisdiction'"
-        )
-        n = 0
-        for r in rows:
-            canon = canonicalize_jurisdiction(r["value"])
-            if canon:
-                self._command(
-                    f"UPDATE {PROPVALUE_TYPE} SET canonical_value = {_sql_str(canon)} "
-                    f"WHERE value_key = {_sql_str(r['value_key'])}"
-                )
-                n += 1
-        return {"seen": len(rows), "canonicalized": n}
-
-    # --- KG-4 (Leg A): intra-contract scoped queries over the typed KG ------------------------------
-    # A clause_id is `<contract_id>:<index>:<hash>` (FR-S.2), and contract_id is delimiter-safe, so a
-    # contract's clauses are exactly the half-open key range [`<cid>:`, `<cid>;`) (';' = ':'+1). This is an
-    # exact prefix scan -- no LIKE (whose `_` would wildcard the underscores in CUAD contract ids).
-
     def _contract_bounds(self, contract_id: str) -> tuple[str, str]:
         return _sql_str(contract_id + ":"), _sql_str(contract_id + ";")
 

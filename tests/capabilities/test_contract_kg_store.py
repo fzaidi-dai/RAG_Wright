@@ -111,6 +111,22 @@ def test_write_property_graph_uses_the_legacy_flat_edge():
     assert "CREATE EDGE HasProperty" in sql and "predicate_iri = " not in sql  # flat edge, no predicate IRI
 
 
+def test_patch_canonical_jurisdictions_writes_canonical_value_for_resolvable_only():
+    """DD-1c: re-expressed onto kg_read (the jurisdiction value nodes) + kg_write (partial upsert of
+    `canonical_value`); a non-resolvable surface form is left untouched."""
+    s = object.__new__(ArcadeDBStore)
+    rows = [{"value_key": "jurisdiction:England and Wales", "value": "England and Wales"},
+            {"value_key": "jurisdiction:ref", "value": "a reference to the laws"}]
+    s._query = lambda sql: rows  # the kg_read over the jurisdiction PropertyValue nodes
+    txns: list[list[str]] = []
+    s._db = type("_Rec", (), {"execute_transaction": lambda self, stmts: txns.append(list(stmts))})()
+    out = ContractKGStore(s).patch_canonical_jurisdictions()
+    assert out == {"seen": 2, "canonicalized": 1}  # only 'England and Wales' resolves
+    stmt = txns[0][0]
+    assert "canonical_value = 'england'" in stmt  # surface untouched; canonical slug added
+    assert "UPSERT WHERE value_key = 'jurisdiction:England and Wales'" in stmt
+
+
 def test_upsert_contract_encodes_parties_as_json_and_null_page_count():
     s, txns = _capturing_store()
     ContractKGStore(s).upsert_contract(ContractRecord(

@@ -76,6 +76,25 @@ class ContractKGStore:
                                     "source_doc_id": a.provenance.source_doc_id}))
         self._store.kg_write(nodes, edges)
 
+    def patch_canonical_jurisdictions(self) -> dict[str, int]:
+        """KG-5a (DD-1c): additively canonicalize the `jurisdiction` value nodes -- write a `canonical_value` on
+        each (surface `value` untouched, kept for citation), deterministically (no LLM, no re-extraction). Fixes the
+        retrieval-match loss from surface variants (England / England and Wales / English law). Idempotent; the
+        `canonical_value` property is pack-declared. Returns {seen, canonicalized}."""
+        from rag_wright.contracts.jurisdiction import canonicalize_jurisdiction
+
+        rows = self._store.kg_read(PROPVALUE_TYPE, fields=["value_key", "value"],
+                                   where={"dimension": "jurisdiction"})
+        nodes = []
+        for r in rows:
+            canon = canonicalize_jurisdiction(r["value"])
+            if canon:
+                nodes.append(KgNode(PROPVALUE_TYPE, "value_key",
+                                    {"value_key": r["value_key"], "canonical_value": canon}))
+        if nodes:
+            self._store.kg_write(nodes)
+        return {"seen": len(rows), "canonicalized": len(nodes)}
+
     def upsert_contract(self, record: ContractRecord) -> None:
         """CU-B3: upsert a contract's metadata by `contract_id`. `parties` -> native list (the store json-encodes
         the `parties_json` STRING column); `page_count` may be None (-> null)."""
