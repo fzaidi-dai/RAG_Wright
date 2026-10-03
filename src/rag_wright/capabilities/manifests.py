@@ -681,6 +681,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "build the requirements KG from a regulatory corpus",
         ),
         tags=("compliance", "ingestion", "regulatory", "subgraph", "langgraph"),
+        impl_ref="rag_wright.subgraphs.compliance_ingestion:ainvoke",  # EP-REF-1c: invocable via ainvoke_subgraph
     ),
     CapabilityManifest(
         slug="compliance_check",
@@ -701,6 +702,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "audit a subject document against a regulatory requirements KG",
         ),
         tags=("compliance", "check", "verdict", "gap-matrix", "subgraph", "langgraph"),
+        impl_ref="rag_wright.subgraphs.compliance_check:ainvoke",  # EP-REF-1c: invocable via ainvoke_subgraph
     ),
     CapabilityManifest(
         slug="compliance_check_mcp",

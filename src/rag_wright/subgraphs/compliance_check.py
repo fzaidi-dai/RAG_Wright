@@ -1020,3 +1020,23 @@ def register_compliance_check(registry) -> None:
         kind="subgraph",
         display_name="Compliance check (subject doc x requirements -> cited findings + gap matrix)",
     )
+
+
+async def ainvoke(resources, inputs: dict):
+    """EP-REF-1c (ADR-0118): the capability invoke factory (impl_ref target) for the GENERIC compliance check --
+    NOT the FTC-tuned `run_ad_compliance_check` (the product owns that variant + its guardrails). The store, the
+    judge model (STRUCTURED_REASONING), and the embedder come from the workspace handle; the subject + scope from
+    `inputs`. Two subject shapes: `{subject_text, source_doc}` (text) or `{doc_name, data}` (raw document bytes).
+    `inputs` may also carry `k` (retrieval depth) and `sources` (scope to named policies)."""
+    from rag_wright.models.profiles import ModelRole
+
+    judge = resources.model_id(ModelRole.STRUCTURED_REASONING)
+    k = inputs.get("k", 8)
+    sources = inputs.get("sources")
+    if inputs.get("data") is not None:  # a subject DOCUMENT (bytes)
+        return await run_compliance_document_verdict(
+            inputs["doc_name"], inputs["data"], store=resources._store, judge_model_id=judge,
+            embedder=resources._embedder, k=k, sources=sources)
+    return await run_generic_compliance_verdict(  # a subject TEXT
+        inputs["subject_text"], inputs["source_doc"], store=resources._store, judge_model_id=judge,
+        embedder=resources._embedder, k=k, sources=sources)
