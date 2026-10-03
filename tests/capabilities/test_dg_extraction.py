@@ -168,8 +168,15 @@ async def test_aextract_parties_runs_beyond_the_default_cpu_pool_ceiling(monkeyp
     monkeypatch.setattr(dg, "extract_parties", _probe)
     try:
         import asyncio
+        import os
+
         await asyncio.gather(*(dg.aextract_parties("t", object()) for _ in range(24)))
-        assert state["max"] == 24  # all 24 extractions ran concurrently -> beyond the ~16 CPU-derived default
+        # TEST-FLAKE-1: assert the dedicated 24-worker pool ran MORE concurrently than asyncio's default executor
+        # (min(32, cpu+4)) -- the real claim. NOT `== 24`: under heavy full-suite load the OS can let an early probe
+        # exit the 50ms window before the last enters, so the peak lands at 22/23 even though the pool is in effect.
+        # Exceeding the default ceiling proves the knob without demanding an exact-timing coincidence.
+        default_ceiling = min(32, (os.cpu_count() or 1) + 4)
+        assert state["max"] > default_ceiling, (state["max"], default_ceiling)
     finally:
         dg.extraction_executor().shutdown(wait=False)
         monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)
