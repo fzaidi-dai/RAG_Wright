@@ -36,11 +36,14 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 > **EP-API-4 DONE** (4a ingest options catalog + 4b pluggable embedder; **4c dropped as mis-scoped** — the tiered
 > parser already auto-detects per page, so a global docling-vs-OCR switch is wrong). Products tune ingest + pick the
 > embedder through `EngineConfig`, not env vars; defaults behavior-neutral (hermetic + live EP-E2E-2). **Order (user):
-> → now EP-REF-1a → AC-journey.** **EP-API-2c DISSOLVED** (invoke_skill dropped — agents own skills; invoke_function
-> deferred — no standalone need). **DD-5a DONE**: `graph_query` de-contracted (generic `relationship_type: str`, no
-> `CONTRACTS_WITH` default) — the de-domaining rule applies to PRIMITIVES, not domain graphs ([[engine-primitives-vs-domain-graphs]]).
-> **Next: EP-REF-1a** (reference domain pack) or AC-journey. **DD-2 DEFERRED; DD-1d folded into EP-REF-1a; DD-5 enums remain.**
-> Handoff: `docs/product/engine-api-migration-handoff.md`.
+> **EP-API-2c DISSOLVED** (invoke_skill dropped — agents own skills; invoke_function deferred). **DD-5a DONE**:
+> `graph_query` de-contracted. **NEW ARC — ADR-0118 (R6): engine core API vs ARD.** Generic primitives leave ARD →
+> core API (direct import / MCP); ARD holds only developer-populated DOMAIN caps; the invoker becomes an adapter-free
+> **`impl_ref` ARD client** (central adapter dicts deleted); engine ships an empty capability registry. **Next:
+> EP-CORE-1** (de-register generics + de-couple property_boosted_retrieval/query_constraint_extraction), then
+> **EP-CORE-2** (impl_ref invoker, load-bearing), **EP-CORE-3** (empty registry + reference-pack as setup). Then
+> EP-REF-1a / AC-journey. **DD-2 DEFERRED; DD-1d folded into EP-REF-1a; DD-5 enums remain.** Handoff:
+> `docs/product/engine-api-migration-handoff.md`.
 >
 > **LIVE-TESTING POLICY (standing):** every task ends with a LIVE test on real infra where applicable (AC-parity),
 > not just hermetic — done each gate so far (DD-1b 15 live store tests; DD-1c live smoke; EP-API-1 live workspace).
@@ -91,6 +94,23 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | EP-RT-1b | Resolve the 4 reserved-without-manifest slugs the RT-3 guardrail surfaced. Found: NONE were unused dead code — `span_relevance_judgment` is LIVE (Leg B relevance judge), `okf_navigate`/`okf_compile` are experimental FR-K (ADR-0022), `ontology_registry_derivation` is the FR-C.8 placeholder. Decision (user): **don't drop; publish #1 `span_relevance_judgment` + #2 `okf_navigate`** (both have full impl + SKILL.md), **keep `okf_compile` + `ontology_registry_derivation` reserved** (foundation-derivation slugs, no standalone invocation). | R3 | **done (2026-10-02)** | `capabilities/manifests.py`, `tests/capabilities/test_authoring_contract.py` | 2 new agent_skill manifests author + publish (51 total); guardrail allowlist shrunk to the 2 reserved; parity 53 = 51 + 2; suite green |
 | EP-RT-7 | **Route the ingestion pipeline's classify stages THROUGH the capability invoker** (one production path; never a second hand-built fleet — [[route-production-through-capability-layer]]). Single model-capability binding moved to `spans/model_capabilities.py` (below api + subgraphs → no cycle): `dispatch_model`/`adispatch_model` + the two adapters + cached fleets. `api.invoke_model` validates vs the ARD catalog then delegates to it. Pipeline: function-classify → `CapabilityFunctionClassifier` (routes `clause_function_classification`, sem-bounded async preserved); property classifier LANE → `capability_property_classifier_fn()` (routes `clause_property_classification`), with residual-LLM + judge composing around it (`HybridPropertyExtractor` gained an injectable `classifier_fn` seam; the capability impl keeps the local fleet, no recursion). | R3, AC-runtime | **done (2026-10-03)** | `spans/model_capabilities.py`, `api/invoke.py`, `spans/{property_extractor,clause_kg_extractor}.py`, `subgraphs/contract_ingestion_pipeline.py`, `tests/spans/test_model_capabilities.py`, `tests/api/{test_invoke,test_mcp}.py` | guardrail: both classify shims dispatch via the single binding; **live EP-E2E-2: full pipeline (docling→classifiers-via-capability→LLM→KG→query+usage) end-to-end through the API, 2 passed**; full suite |
 | EP-RT-4 | **(later)** Resumability/interruptibility via the LangGraph checkpointer (store-backed) + `interrupt`/resume + a progress contract. | R5 | todo | `subgraphs/scaffold.py`, `rag_wright/api/` | a long run resumes after interruption with no recompute of completed nodes |
+
+## R6 — Engine core API vs ARD (ADR-0118): adapter-free `impl_ref` client; generic primitives OUT of ARD; empty registry at ship.
+
+> **Decision (2026-10-03, user + ADR-0118):** ARD holds only agent/product-facing DOMAIN capabilities (graphs,
+> functions, models, skills, MCP), developer-populated; the engine ships NO pre-populated generic-primitive registry.
+> Generic primitives (`hybrid_search`/`graph_query`/`fusion`/`embedding`/parsing/reranking/chunking/retrieval-core)
+> are **core API** — consumed by direct import (engine graphs + product), de-registered from ARD, kept as helpers,
+> promoted to the public core surface only on need. A generic cap reaches agents only via **MCP** (EP-RT-2). The
+> invoker becomes an **adapter-free ARD client resolving `impl_ref`** (a vendor-extension string pointer; ARD stays
+> metadata-only per ADR-0003) — the central adapter dicts are deleted, so a developer registering a cap (with its
+> `impl_ref`) makes it invocable with zero engine edits.
+
+| id | task | implements | status | files (proposed) | verify |
+|---|---|---|---|---|---|
+| EP-CORE-1 | **De-register the generic primitives from ARD** (remove from the manifests/`_SPECS`), keep them as `capabilities/` helpers (promote to the documented public core surface case-by-case, grounded). **De-couple `property_boosted_retrieval` + `query_constraint_extraction` from the clause vocab** (pass as args / config / `.ttl`). | R6, ADR-0118/0066 | todo | `capabilities/manifests.py`, `capabilities/{property_boosted_retrieval,query_constraint_extraction}.py` + callers, `tests/*` | the generics are gone from the catalog; the two de-coupled fns import no clause vocab (guard test); retrieval identical live |
+| EP-CORE-2 | **Adapter-free `impl_ref` invoker** (load-bearing; its own increment). Add `impl_ref` (vendor extension) + the declared input contract to capability registration + the light index; the client imports the `impl_ref` factory lazily, builds it over the handle, invokes, traces. **Delete `_SUBGRAPH_ADAPTERS` + the model adapter dict.** Update the drift guard / authoring-contract test to the `impl_ref`-resolves-to-the-declared-kind shape. | R6, AC-runtime, ADR-0118/0003 | todo | `capabilities/{ard,registry,manifests}.py`, `rag_wright/api/invoke.py`, `spans/model_capabilities.py`, `tests/api/*`, `tests/capabilities/test_authoring_contract.py` | every domain cap invocable by name with NO central adapter dict; hermetic + the live EP-E2E path green |
+| EP-CORE-3 | **Engine ships no pre-populated generic-primitive registry**; move the reference-pack (contract/compliance + classifier models) registrations to example/setup code a developer runs. Update the authoring skill + handoff to the adapter-free `impl_ref` model. | R6, ADR-0118/0052 | todo | `scripts/publish_manifests.py`, reference-pack setup, `.claude/skills/authoring-a-capability/SKILL.md`, handoff | a fresh install has an empty capability registry; the reference pack registers on demand |
 
 ## R3b — Reference domain pack on the new API (worked examples that de-risk the product migration).
 
