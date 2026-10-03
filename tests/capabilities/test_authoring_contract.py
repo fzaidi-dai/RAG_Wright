@@ -20,6 +20,11 @@ from rag_wright.capabilities.registry import CANONICAL_CAPABILITY_SLUGS
 _RESERVED_WITHOUT_MANIFEST = {
     "okf_compile",
     "ontology_registry_derivation",
+    # EP-CORE-1b-iii: internal ingestion-pipeline steps, composed by direct import (not agent-facing ARD
+    # caps), de-registered from the reference pack after DD-3/4/5 removed their domain-vocab coupling.
+    "graph_extraction",
+    "entity_disambiguation",
+    "entity_resolution",
 }
 
 

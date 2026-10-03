@@ -29,4 +29,4 @@ def test_reference_pack_is_opt_in_and_contains_the_contract_worked_example():
     # the conftest loaded the reference pack for the engine's own suite; a downstream product would not.
     assert "contract_ingestion_pipeline" in m.MANIFEST_SPECS
     assert {s.slug for s in reference_pack()} <= set(m.MANIFEST_SPECS)   # every reference cap registered
-    assert len(reference_pack()) == 38                                   # the committed reference pack (EP-CORE-1b-i: -3)
+    assert len(reference_pack()) == 35                                   # committed reference pack (EP-CORE-1b-i: -3, -iii: -3)

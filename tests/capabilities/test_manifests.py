@@ -65,9 +65,9 @@ def test_function_manifests_have_no_skill_runtime():
 
 
 def test_reclassified_capability_kinds():
-    assert author("graph_extraction").kind == "subgraph"  # multi-step LLM extractor stack
     assert author("generation").kind == "agent_skill"  # a single grounded LLM act
-    # (embedding/reranking were models but are de-registered from ARD — core API now, EP-CORE-1a/ADR-0118)
+    # (embedding/reranking were models but are de-registered from ARD — core API now, EP-CORE-1a/ADR-0118;
+    #  graph_extraction was a subgraph but is de-registered — an internal pipeline step now, EP-CORE-1b-iii)
 
 
 def test_generation_is_a_loaded_skill_without_runtime_or_bounds():
@@ -77,8 +77,8 @@ def test_generation_is_a_loaded_skill_without_runtime_or_bounds():
 
 
 def test_reclassified_models_and_subgraph_stay_callable_with_bounds():
-    for slug in ("clause_function_classification", "clause_property_classification", "graph_extraction"):
-        assert author(slug).response_bounds is not None  # model / subgraph are callable kinds
+    for slug in ("clause_function_classification", "clause_property_classification"):
+        assert author(slug).response_bounds is not None  # model kinds are callable
 
 
 # --- CAP-REG-2: register the built contract-KG capabilities -----------------------------------
@@ -161,9 +161,8 @@ def test_skill_runtime_is_rejected_on_a_non_agent_skill():
 # lives in their Python signatures (GraphWright is parked; see ADR-0118). What remains governed are the capabilities
 # still in ARD that declare an interface (the skills + the still-registered graph/entity caps, DD-3/4/5 pending).
 _GOVERNED_INTERFACE_SLUGS = (
-    "rlm_synthesis", "generation", "rlm_chunking", "graph_extraction",
-    "entity_disambiguation", "entity_resolution", "vision_to_text",
-)
+    "rlm_synthesis", "generation", "rlm_chunking", "vision_to_text",
+)  # EP-CORE-1b-iii: graph_extraction/entity_disambiguation/entity_resolution de-registered (internal steps)
 
 # The confirmed interfaces, grounded in the real callables (the reply to GraphWright). Types are what the
 # checker uses; this pins them so a change to a capability's real I/O that drifts from the governed manifest
@@ -186,9 +185,6 @@ _EXPECTED_INTERFACES = {
     "parsing": ({"source": "document"}, {"parsed": "parsed_doc"}),
     "rlm_chunking": ({"parsed": "parsed_doc"}, {"chunks": "chunk"}),
     "embedding": ({"chunks": "chunk"}, {"embeddings": "embedding"}),
-    "graph_extraction": ({"chunks": "chunk"}, {"facts": "extraction"}),
-    "entity_disambiguation": ({"facts": "extraction"}, {"clusters": "entity_cluster"}),
-    "entity_resolution": ({"clusters": "entity_cluster", "facts": "extraction"}, {"resolved": "resolved_entity"}),
     "vision_to_text": ({"image": "image"}, {"text": "text"}),
 }
 
@@ -233,7 +229,7 @@ def test_capability_interface_serializes_snake_case_inner_keys_under_a_camelcase
     # GraphWright ADR-0030 section 2: the top-level field is capabilityInterface (camelCase), but its inner
     # keys stay snake_case (success_criterion), because TypedInterface carries no ARD alias and their
     # extra="forbid" loader rejects camelCased inner keys. Publish and assert the exact on-disk shape.
-    data = json.loads(publish("graph_extraction", root=tmp_path).read_text())  # a still-registered governed cap
+    data = json.loads(publish("generation", root=tmp_path).read_text())  # a still-registered governed cap
     iface = data["capabilityInterface"]
     # top-level field is camelCase; its inner keys stay snake_case (success_criterion), which the extra="forbid"
     # loader requires (TypedInterface carries no ARD alias).

@@ -130,79 +130,11 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             success_criterion="split a parsed document into semantically coherent, capped, summarized chunks with stable ids",
         ),
     ),
-    CapabilityManifest(
-        slug="graph_extraction",
-        kind="subgraph",  # multi-step extractor workflow; CAP-REG-1
-        display_name="Graph extraction (GP-1B docling-graph party/relational)",
-        description=(
-            "Extract ontology-conforming graph facts from a parsed chunk with the GP-1B docling-graph "
-            "extractor (granite-4.2-8b): the signing parties as ORGANIZATION mentions plus the structural "
-            "CONTRACTS_WITH edges between them, EXTRACTED. This is the entity/relational extractor that "
-            "populated the relational (Leg C) graph at real recall 0.991; the earlier spaCy-NER + "
-            "contract-LLM + escalation hybrid is retired (ADR-0035). Every fact carries chunk_id provenance "
-            "and a confidence tag (FR-C.6, FR-I.4)."
-        ),
-        representative_queries=(
-            "extract the signing parties and their relationships from a contract chunk",
-            "identify the organizations party to an agreement and the CONTRACTS_WITH edges between them",
-            "produce ontology-conforming party/relational graph facts with provenance and confidence",
-        ),
-        tags=("extraction", "graph", "parties", "relational", "docling-graph", "ingestion"),
-        capability_interface=CapabilityInterface(
-            inputs={"chunks": "chunk"},  # consumes the same ingestion `chunk` (uses its id + text)
-            outputs={"facts": "extraction"},  # chunk-anchored entity mentions + relationship facts
-            success_criterion="extract ontology-conforming entity mentions and relationship facts from a chunk, with provenance and confidence",
-        ),
-    ),
-    CapabilityManifest(
-        slug="entity_disambiguation",
-        kind="function",  # an in-process graph-layer node
-        display_name="Entity disambiguation (normalize / reject / cluster)",
-        description=(
-            "Turn the raw extracted entity-mention stream into canonical mention clusters: normalize "
-            "surface-form variants to one key, reject non-entities (placeholders, role artifacts, bare "
-            "generic tokens, alias prefixes), and cluster survivors — flagging ambiguous near-duplicates "
-            "for human decision rather than merging. Clusters are human-verifiable proposals carrying "
-            "chunk_id provenance and confidence (FR-C.7)."
-        ),
-        representative_queries=(
-            "canonicalize entity surface-form variants into one entity",
-            "reject template placeholders and role artifacts from extracted parties",
-            "cluster contract party mentions that denote the same company",
-            "flag parent/subsidiary near-duplicate entities for human review",
-        ),
-        tags=("entity", "disambiguation", "canonicalization", "graph"),
-        capability_interface=CapabilityInterface(
-            inputs={"facts": "extraction"},  # the extracted mention stream (graph_extraction's output)
-            outputs={"clusters": "entity_cluster"},
-            success_criterion="normalize, reject, and cluster extracted entity mentions into human-verifiable canonical clusters",
-        ),
-    ),
-    CapabilityManifest(
-        slug="entity_resolution",
-        kind="function",  # an in-process graph-layer node
-        display_name="Entity resolution (closed-world to EDGAR CIK)",
-        description=(
-            "Link canonical mention clusters to their EDGAR CIK entity_id in the registry, closed-world "
-            "(exact normalized match; unknown -> unlinked, never fabricated). Resolves relationship "
-            "endpoints as the same stream so an entity in both channels is one node, and drops "
-            "post-resolution self-loops (FR-C.7)."
-        ),
-        representative_queries=(
-            "link an extracted company mention to its EDGAR CIK",
-            "resolve contract parties to canonical registry entities",
-            "map entity surface forms to a canonical entity id, closed-world",
-            "deduplicate relationship endpoints and standalone mentions to one entity node",
-        ),
-        tags=("entity", "resolution", "edgar", "cik", "graph"),
-        capability_interface=CapabilityInterface(
-            # Two inputs: the clusters to link AND the original extraction (to resolve relationship endpoints
-            # as the same mention stream) — resolve_entities(clusters, results, ...).
-            inputs={"clusters": "entity_cluster", "facts": "extraction"},
-            outputs={"resolved": "resolved_entity"},  # entities + relationships linked to a canonical id (the graph)
-            success_criterion="link mention clusters to canonical EDGAR ids (closed-world) and resolve relationship endpoints as one stream",
-        ),
-    ),
+    # EP-CORE-1b-iii (ADR-0118): graph_extraction / entity_disambiguation / entity_resolution are INTERNAL steps of
+    # `contract_ingestion_pipeline` (composed by direct import, no impl_ref, never invoked by ARD name), not
+    # agent/product-facing standalone caps -- so they are NOT published to the reference pack. They remain canonical
+    # FR-C slugs (CANONICAL_CAPABILITY_SLUGS) and reserved-without-manifest, like `ontology_registry_derivation`.
+    # DD-3/4/5 first removed their domain-vocab coupling (EntityId/EntityResolver seam; the entity/edge taxonomy).
     CapabilityManifest(
         slug="rlm_synthesis",
         kind="agent_skill",  # applies the RLM method; loaded knowledge, requires rlm_method
