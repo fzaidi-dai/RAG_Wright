@@ -992,7 +992,7 @@ def aproduction_document_ingest(
     async def resolve_fn(extraction_results: list) -> Any:
         return await asyncio.to_thread(
             lambda: to_graph(resolve_entities(
-                disambiguate(extraction_results), extraction_results, registry=registry)))
+                disambiguate(extraction_results), extraction_results, resolver=registry)))  # registry IS an EntityResolver (DD-3)
 
     async def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
         from rag_wright.capabilities.contract_kg_store import ContractKGStore  # DD-1b: clause KG + contract meta

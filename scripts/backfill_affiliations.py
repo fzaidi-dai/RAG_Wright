@@ -37,10 +37,11 @@ async def _run(cache_dir: str, database: str, vset_path: str | None) -> None:
 
     from rag_wright.capabilities.dg_extraction import build_verified_registry
     from rag_wright.capabilities.disambiguation import disambiguate
-    from rag_wright.capabilities.entity_resolution import EntityRegistry, resolve_entities
+    from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.capabilities.graph_extraction import aextract_affiliations, affiliations_to_extraction
     from rag_wright.capabilities.graph_storage import to_graph
     from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.ontology.registry import EntityRegistry
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     cache = Path(cache_dir)
@@ -79,7 +80,7 @@ async def _run(cache_dir: str, database: str, vset_path: str | None) -> None:
                 log(f"[backfill] {i}/{n} {doc_id}: no affiliation")
                 continue
             extraction = affiliations_to_extraction(ChunkId.of(doc_id, 0, text), pairs)
-            nodes, edges = to_graph(resolve_entities(disambiguate([extraction]), [extraction], registry=registry))
+            nodes, edges = to_graph(resolve_entities(disambiguate([extraction]), [extraction], resolver=registry))
             added = store.add_affiliation_edges(nodes, edges)
             affil_cache.write_text(json.dumps(pairs), encoding="utf-8")  # mark processed AFTER a successful write
             edges_added += added

@@ -1,9 +1,11 @@
-"""Entity resolution (T24, FR-C.7): closed-world linking of clusters to EDGAR CIKs.
+"""Entity resolution (T24, FR-C.7): closed-world linking of clusters to a canonical-id resolver.
 
-Hermetic tests over a small in-memory registry: known -> correct CIK / unknown -> None (never
+Hermetic tests over a small in-memory resolver: known -> correct canonical id / unknown -> None (never
 fabricated), the two-channel dedup (a relationship ref that is the same entity as a standalone mention
 takes that cluster's id), the post-resolution self-loop drop, fragmentation measured on a labeled
-fixture, and registration.
+fixture, and registration. DD-3 (ADR-0067 P5c): the resolution STRATEGY is the injected `EntityResolver`
+seam -- the generic default is the exact-normalized surface-form `EntityRegistry`; the SEC pack injects the
+EDGAR-CIK registry; a product may bind any strategy honoring the seam.
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId, EntityId
 from rag_wright.contracts.ontology import EntityType, RelationshipFact, RelationshipType
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
+from rag_wright.ontology.registry import EntityRegistry, EntityResolver, RegistryRecord
 
 _ORG = EntityType.ORGANIZATION
 _X = ConfidenceTag.EXTRACTED
@@ -60,7 +62,7 @@ def test_known_cluster_resolves_to_cik_unknown_resolves_to_none():
         _cluster("acme corporation", "Acme Corporation"),
         _cluster("private co", "Private Co"),  # not in the registry
     )
-    result = resolve_entities(clusters, [], registry=_registry())
+    result = resolve_entities(clusters, [], resolver=_registry())
 
     by_key = {e.key: e for e in result.entities}
     assert by_key["acme corporation"].entity_id == "0000000001"  # linked to the correct CIK
@@ -70,7 +72,7 @@ def test_known_cluster_resolves_to_cik_unknown_resolves_to_none():
 def test_cluster_resolves_via_an_alias_variant():
     # the representative fails but a variant ("Acme Inc") is a registry alias -> linked
     clusters = _disambig(_cluster("acme", "Acme", "Acme Inc"))
-    result = resolve_entities(clusters, [], registry=_registry())
+    result = resolve_entities(clusters, [], resolver=_registry())
     assert result.entities[0].entity_id == "0000000001"
 
 
@@ -82,7 +84,7 @@ def test_relationship_ref_takes_the_matching_cluster_id():
                          _cluster("beta distribution", "Beta Distribution LLC"))
     results = [_rel_result(0, "Acme Corporation", RelationshipType.CONTRACTS_WITH, "Beta Distribution LLC")]
 
-    result = resolve_entities(clusters, results, registry=_registry())
+    result = resolve_entities(clusters, results, resolver=_registry())
 
     edge = result.relationships[0]
     assert edge.source_id == "0000000001"  # same node as the standalone Acme mention
@@ -94,7 +96,7 @@ def test_post_resolution_self_loop_is_dropped():
     clusters = _disambig(_cluster("acme corporation", "Acme Corporation"))
     results = [_rel_result(0, "Acme Corporation", RelationshipType.AFFILIATE_OF, "Acme Inc")]
 
-    result = resolve_entities(clusters, results, registry=_registry())
+    result = resolve_entities(clusters, results, resolver=_registry())
 
     assert result.relationships == []  # both refs -> 0000000001, so the edge is a self-loop
 
@@ -103,7 +105,7 @@ def test_unresolved_refs_do_not_self_loop_drop():
     # two distinct unlinked refs are different entities -> kept (not dropped)
     clusters = _disambig()
     results = [_rel_result(0, "Private One", RelationshipType.AFFILIATE_OF, "Private Two")]
-    result = resolve_entities(clusters, results, registry=_registry())
+    result = resolve_entities(clusters, results, resolver=_registry())
     assert len(result.relationships) == 1
     assert result.relationships[0].source_id is None and result.relationships[0].target_id is None
 
@@ -115,7 +117,7 @@ def test_resolution_reduces_fragmentation_via_alias_linking():
     # two clusters T23b left separate ("Acme Corporation" and its alias "Acme Inc") both link to one CIK
     clusters = _disambig(_cluster("acme corporation", "Acme Corporation"),
                          _cluster("acme inc", "Acme Inc"))
-    result = resolve_entities(clusters, [], registry=_registry())
+    result = resolve_entities(clusters, [], resolver=_registry())
 
     gold = {"acme corporation": "ACME", "acme inc": "ACME"}  # both are truly the same entity
     assert fragmentation_rate(result, gold) == 0.0  # both -> CIK 0000000001 -> one node
@@ -124,7 +126,7 @@ def test_resolution_reduces_fragmentation_via_alias_linking():
 def test_fragmentation_counts_a_split_entity():
     clusters = _disambig(_cluster("acme corporation", "Acme Corporation"),
                          _cluster("acme systems", "Acme Systems"))  # unlinked (not in registry)
-    result = resolve_entities(clusters, [], registry=_registry())
+    result = resolve_entities(clusters, [], resolver=_registry())
     gold = {"acme corporation": "ACME", "acme systems": "ACME"}  # (hypothetically) one entity
     assert fragmentation_rate(result, gold) == 1.0  # one linked, one unlinked -> two nodes -> fragmented
 
@@ -136,3 +138,52 @@ def test_registers_under_fr_c_7():
     assert reg.name == "entity_resolution"
     assert reg.contract is ResolutionResult
     assert reg.kind == "function"
+
+
+# --- DD-3: the EntityResolver seam (ADR-0067 P5c) ------------------------------------------------
+
+
+def test_entity_registry_satisfies_the_entity_resolver_protocol():
+    # the generic default resolver structurally satisfies the seam (runtime_checkable)
+    assert isinstance(EntityRegistry(), EntityResolver)
+
+
+def test_resolve_entities_uses_any_injected_resolver_not_just_the_registry():
+    # a product may bind ANY resolution strategy; the capability depends on the SEAM, not EntityRegistry
+    class _CustomResolver:
+        """A stand-in custom strategy: resolves only the exact surface 'GAMMA' -> a canonical id."""
+
+        def resolve(self, surface_form: str):
+            return EntityId.of("gamma-ltd") if surface_form == "GAMMA" else None
+
+    assert isinstance(_CustomResolver(), EntityResolver)
+    clusters = _disambig(_cluster("gamma", "GAMMA"), _cluster("delta", "Delta"))
+
+    result = resolve_entities(clusters, [], resolver=_CustomResolver())
+
+    by_key = {e.key: e for e in result.entities}
+    assert by_key["gamma"].entity_id == "gamma-ltd"  # resolved by the injected strategy
+    assert by_key["delta"].entity_id is None  # unknown -> closed-world None
+
+
+def test_sec_corpus_resolves_via_the_injected_cik_resolver():
+    # acceptance: the SEC pack's EDGAR-CIK resolver (build_edgar_registry) is injected unchanged
+    from rag_wright.corpus.edgar import build_edgar_registry
+
+    sec = build_edgar_registry([{"cik_str": 320193, "title": "Apple Inc.", "ticker": "AAPL"}])
+    clusters = _disambig(_cluster("apple inc", "Apple Inc."))
+
+    result = resolve_entities(clusters, [], resolver=sec)
+
+    assert result.entities[0].entity_id == "0000320193"  # the EDGAR CIK (format owned by the SEC pack)
+
+
+def test_non_sec_doc_resolves_via_the_surface_form_default():
+    # acceptance: the generic default links a NON-CIK canonical id by exact normalized surface form
+    reg = EntityRegistry()
+    reg.add(RegistryRecord(entity_id=EntityId.of("acme-holdings-ltd"), canonical_name="Acme Holdings Ltd"))
+    clusters = _disambig(_cluster("acme holdings", "Acme Holdings Ltd"))
+
+    result = resolve_entities(clusters, [], resolver=reg)
+
+    assert result.entities[0].entity_id == "acme-holdings-ltd"  # generic surface-form id, no CIK shape

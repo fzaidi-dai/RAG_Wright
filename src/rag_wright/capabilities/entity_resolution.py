@@ -28,7 +28,7 @@ from rag_wright.contracts.extraction import ExtractionResult
 from rag_wright.contracts.ontology import EntityType, RelationshipType
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
-from rag_wright.ontology.registry import EntityRegistry
+from rag_wright.ontology.registry import EntityResolver
 
 
 class ResolvedEntity(BaseModel):
@@ -63,10 +63,10 @@ class ResolutionResult(BaseModel):
     relationships: list[ResolvedRelationship]
 
 
-def _resolve_cluster(cluster: MentionCluster, registry: EntityRegistry) -> Optional[str]:
-    """Resolve a cluster to a canonical id: the first of its surface forms the registry knows (closed-world)."""
+def _resolve_cluster(cluster: MentionCluster, resolver: EntityResolver) -> Optional[str]:
+    """Resolve a cluster to a canonical id: the first of its surface forms the resolver knows (closed-world)."""
     for surface in (cluster.representative, *cluster.variants):
-        entity_id = registry.resolve(surface)
+        entity_id = resolver.resolve(surface)
         if entity_id is not None:
             return entity_id.value
     return None
@@ -76,19 +76,21 @@ def resolve_entities(
     clusters: DisambiguationResult,
     results: Sequence[ExtractionResult],
     *,
-    registry: EntityRegistry,
+    resolver: EntityResolver,
 ) -> ResolutionResult:
     """Link clusters to canonical ids and resolve relationship endpoints as one stream (self-loops dropped).
 
-    Each cluster resolves to a canonical id (or None). A relationship ref resolves by matching a cluster key
-    first — so a ref that is the same entity as a standalone mention takes that cluster's id (the
-    two-channel dedup, ADR-0004) — falling back to a direct registry lookup only for a ref with no
-    cluster. A relationship whose two refs resolve to the same non-None id is dropped (self-loop).
+    Each cluster resolves to a canonical id (or None) via the injected `EntityResolver` seam (DD-3) — the
+    resolution STRATEGY is the domain's concern, not this capability's. A relationship ref resolves by matching
+    a cluster key first — so a ref that is the same entity as a standalone mention takes that cluster's id (the
+    two-channel dedup, ADR-0004) — falling back to a direct resolver lookup only for a ref with no cluster. A
+    relationship whose two refs resolve to the same non-None id is dropped (self-loop). These invariants are
+    domain-neutral and stay here; only the surface-form lookup is delegated to the resolver.
     """
     entities: list[ResolvedEntity] = []
     key_to_id: dict[str, Optional[str]] = {}
     for cluster in clusters.clusters:
-        entity_id = _resolve_cluster(cluster, registry)
+        entity_id = _resolve_cluster(cluster, resolver)
         key_to_id[cluster.key] = entity_id  # channel-unification map (may be None: same unlinked entity)
         entities.append(
             ResolvedEntity(
@@ -104,7 +106,7 @@ def resolve_entities(
         key = normalize_entity_name(ref)
         if key in key_to_id:  # same entity as a standalone mention -> its id (even if None)
             return key_to_id[key]
-        resolved = registry.resolve(ref)
+        resolved = resolver.resolve(ref)
         return resolved.value if resolved is not None else None
 
     relationships: list[ResolvedRelationship] = []

@@ -13,7 +13,7 @@ registry is the closed set T24 resolves against, plus an exact normalized-surfac
 from __future__ import annotations
 
 import re
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
@@ -25,6 +25,21 @@ _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 def default_surface_key(name: str) -> str:
     """The default DOMAIN-NEUTRAL surface-form key: lowercase, non-alphanumeric runs folded to a single space."""
     return _NON_ALNUM.sub(" ", (name or "").lower()).strip()
+
+
+@runtime_checkable
+class EntityResolver(Protocol):
+    """The entity-resolution seam (DD-3, ADR-0067 P5c): map a surface form to a canonical `entity_id`, or
+    `None` (closed-world -- never a fabricated id). The RESOLUTION STRATEGY is the domain's concern and is
+    injected into `resolve_entities` (FR-C.7): the generic default is the exact-normalized surface-form
+    `EntityRegistry` (below); a domain pack injects its own registry built by that corpus's loader in the
+    corpus layer (keyed by that domain's canonical ids). A product may bind any strategy (fuzzy / embedding /
+    an external service) as long as it honors this signature and the closed-world contract. The generic
+    resolution invariants (cluster surface-form sweep, two-channel dedup, self-loop dropping) stay in the
+    capability, not the resolver. This module names no specific domain (the SEC-free scope guard enforces it)."""
+
+    def resolve(self, surface_form: str) -> Optional[EntityId]:
+        ...
 
 
 class RegistryRecord(BaseModel):

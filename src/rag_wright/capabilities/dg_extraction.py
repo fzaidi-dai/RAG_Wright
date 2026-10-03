@@ -158,7 +158,7 @@ def resolve_extracted(
         names = [p.name for p in cp.parties]
         chunk_id = ChunkId.of(canonical_source_doc_id(contract_id), 0, "|".join(names) or contract_id)
         results.append(parties_to_extraction(chunk_id, names))
-    resolution = resolve_entities(disambiguate(results), results, registry=registry)
+    resolution = resolve_entities(disambiguate(results), results, resolver=registry)
     if private_map:
         resolution = _apply_private_identities(resolution, private_map)
     return resolution

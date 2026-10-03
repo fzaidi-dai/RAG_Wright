@@ -58,7 +58,7 @@ def test_composes_into_a_cik_keyed_graph():
     cik1, cik2 = normalize_cik("1").value, normalize_cik("2").value
 
     er = parties_to_extraction(_CID, ["Acme Corp", "Beta Inc"])
-    resolution = resolve_entities(disambiguate([er]), [er], registry=registry)
+    resolution = resolve_entities(disambiguate([er]), [er], resolver=registry)
 
     assert {e.entity_id for e in resolution.entities} == {cik1, cik2}  # both linked closed-world
     assert len(resolution.relationships) == 1
