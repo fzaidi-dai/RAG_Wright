@@ -52,7 +52,6 @@ def test_validate_documents_store_without_method_passes():
 
 def test_graph_query_scopes_and_validates():
     from rag_wright.capabilities.graph_query import graph_query
-    from rag_wright.contracts.ontology import RelationshipType
 
     seen = {}
 
@@ -64,9 +63,8 @@ def test_graph_query_scopes_and_validates():
             seen["documents"] = documents
             return []
 
-    graph_query("e1", store=_S(), relationship_type=RelationshipType.CONTRACTS_WITH, max_hops=1,
-                documents=["docA"])
+    graph_query("e1", store=_S(), relationship_type="related_to", max_hops=1, documents=["docA"])
     assert seen["documents"] == ["docA"]  # threaded through to the store
 
     with pytest.raises(UnknownDocumentError):
-        graph_query("e1", store=_S(), documents=["ghost"])
+        graph_query("e1", store=_S(), relationship_type="related_to", documents=["ghost"])

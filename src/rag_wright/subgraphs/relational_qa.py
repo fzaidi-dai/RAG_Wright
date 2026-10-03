@@ -132,7 +132,9 @@ def production_relational_qa(*, store: Any, answer_model: Any):
     from rag_wright.capabilities.graph_query import graph_query
 
     def traverse(start: str, rel: RelationshipType, max_hops: int) -> GraphAnswer:
-        return graph_query(start, store=store, relationship_type=rel, max_hops=max_hops)
+        # graph_query is domain-free and takes a generic edge-type string; this contract-reference leg passes the
+        # enum's value (the contract vocab stays on the caller side, not in the generic primitive).
+        return graph_query(start, store=store, relationship_type=rel.value, max_hops=max_hops)
 
     async def generate(query: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
         return await agenerate_answer(query, evidence, model=answer_model)

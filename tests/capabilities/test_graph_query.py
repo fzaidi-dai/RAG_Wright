@@ -39,11 +39,11 @@ def test_shapes_traversal_rows_into_cited_evidence():
     store = _FakeStore(rows)
 
     answer = graph_query("0000000001", store=store,
-                         relationship_type=RelationshipType.CONTRACTS_WITH, max_hops=1)
+                         relationship_type="related_to", max_hops=1)  # graph_query takes ANY edge-type string
 
     assert isinstance(answer, GraphAnswer)
-    assert store.calls[0] == {"entity_id": "0000000001", "relationship_type": "Contracts With",
-                              "max_hops": 1}  # passes the ontology value + hops through
+    assert store.calls[0] == {"entity_id": "0000000001", "relationship_type": "related_to",
+                              "max_hops": 1}  # passes the caller's edge type + hops straight through
     ev = answer.evidence[0]
     assert ev.entity_id == "0000000002" and ev.name == "Beta"
     assert ev.chunk_ids == ["docA:0:h"]  # cited (no claim without a citation, FR-Q.6)
@@ -54,14 +54,14 @@ def test_shapes_traversal_rows_into_cited_evidence():
 def test_confidence_is_surfaced_not_filtered():
     # an AMBIGUOUS edge is still returned as evidence (T26 surfaces, does not gate — FR-C.5/FR-Q.3)
     rows = [_row("x", "X", 1, ["a", "x"], ["c1"], ["AMBIGUOUS"])]
-    answer = graph_query("a", store=_FakeStore(rows))
+    answer = graph_query("a", store=_FakeStore(rows), relationship_type="related_to")
     assert answer.evidence[0].confidences == ["AMBIGUOUS"]  # present, not dropped
 
 
 def test_two_hop_evidence_carries_the_full_path():
     rows = [_row("0000000003", "Gamma", 2, ["0000000001", "0000000002", "0000000003"],
                  ["docA:0:h", "docB:1:h"], ["EXTRACTED", "INFERRED"])]
-    answer = graph_query("0000000001", store=_FakeStore(rows), max_hops=2)
+    answer = graph_query("0000000001", store=_FakeStore(rows), relationship_type="related_to", max_hops=2)
     ev = answer.evidence[0]
     assert ev.hops == 2
     assert ev.path_entity_ids == ["0000000001", "0000000002", "0000000003"]
@@ -75,6 +75,17 @@ def test_registers_under_fr_c_5():
     assert reg.name == "graph_query"
     assert reg.contract is GraphAnswer
     assert reg.kind == "function"
+
+
+def test_graph_query_is_domain_neutral_no_contract_imports():
+    """graph_query is a GENERIC engine primitive: it must not import the contract ontology (no CONTRACTS_WITH
+    default, no RelationshipType). A domain caller names the edge-type string (ADR-0117 / DD-5)."""
+    import inspect
+
+    from rag_wright.capabilities import graph_query as mod
+
+    src = inspect.getsource(mod)
+    assert "rag_wright.contracts" not in src and "RelationshipType" not in src
 
 
 # --- live ArcadeDB (opt-in): real traversal ------------------------------------------------------
@@ -107,7 +118,7 @@ def live_graph():
 
 @pytest.mark.store
 def test_live_one_hop_returns_cited_co_parties(live_graph):
-    answer = graph_query("A", store=live_graph, max_hops=1)
+    answer = graph_query("A", store=live_graph, relationship_type="Contracts With", max_hops=1)
     targets = {e.entity_id: e for e in answer.evidence}
     assert set(targets) == {"B", "C"}  # A's direct co-parties
     assert targets["B"].chunk_ids == ["c1"]  # cited from the edge's chunk
@@ -116,7 +127,7 @@ def test_live_one_hop_returns_cited_co_parties(live_graph):
 
 @pytest.mark.store
 def test_live_two_hop_reaches_the_far_entity_with_path_evidence(live_graph):
-    answer = graph_query("A", store=live_graph, max_hops=2)
+    answer = graph_query("A", store=live_graph, relationship_type="Contracts With", max_hops=2)
     two_hop = [e for e in answer.evidence if e.hops == 2]
     assert any(e.entity_id == "D" for e in two_hop)  # A -> B -> D reachable
     d = next(e for e in two_hop if e.entity_id == "D")
