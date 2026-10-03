@@ -26,12 +26,13 @@ from typing import Callable, Sequence
 
 from pydantic import BaseModel
 
-from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.value_match import constraint_match_count
-
 # The store seam for candidate_routing: given the routed functions, return the candidate clause ids. Bound in
 # production (LG-3c) to the store's function->pool query; injected as a fake in tests.
 PoolFn = Callable[[list[str]], list[str]]
+# EP-CORE-1b: the DOMAIN (dimension, value) match-counter, INJECTED so this retrieval mechanism imports no domain
+# vocab (the contract subsumption/canonicalization lives in `contracts.value_match.constraint_match_count`, provided
+# by the domain caller). `(query_constraints, clause_props) -> int`.
+MatchCountFn = Callable[[set, set], int]
 
 _NONE_FUNCTION = "NONE"  # the classifier's no-function sentinel; never routes a pool
 
@@ -93,13 +94,14 @@ def candidate_routing(
 
 
 def typed_constraint_match_rank(
-    query_constraints: set, candidate_props: Sequence[tuple[str, set]]
+    query_constraints: set, candidate_props: Sequence[tuple[str, set]], *, match_count_fn: MatchCountFn
 ) -> MatchRanking:
     """Grade each candidate by how many of the query's (dimension, value) constraints its grounded typed props
-    satisfy (KG-5a canonicalization + subsumption via `constraint_match_count`), returning descending graded
-    order. Recall-safe: the sort is stable, so a zero-match candidate keeps its input position, never dropped."""
+    satisfy -- the match semantics are the INJECTED `match_count_fn` (the contract pack supplies KG-5a
+    canonicalization + subsumption via `constraint_match_count`; this mechanism stays domain-free). Returns
+    descending graded order. Recall-safe: the sort is stable, so a zero-match candidate keeps its input position."""
     scored = [
-        RankedClause(clause_id=clause_id, match_score=float(constraint_match_count(query_constraints, props)))
+        RankedClause(clause_id=clause_id, match_score=float(match_count_fn(query_constraints, props)))
         for clause_id, props in candidate_props
     ]
     ranked = sorted(scored, key=lambda r: -r.match_score)  # stable -> ties keep input order
@@ -119,31 +121,6 @@ def dense_rank_tiebreak(
     return DenseRanking(ranked=ranked)
 
 
-def register_candidate_routing(registry: CapabilityRegistry) -> None:
-    """CAP-REG-3: register `candidate_routing` (function; the union combiner -> candidate pool)."""
-    registry.register(
-        "candidate_routing",
-        contract=CandidatePool,
-        kind="function",
-        display_name="Candidate routing (union combiner -> candidate pool)",
-    )
-
-
-def register_typed_constraint_match_rank(registry: CapabilityRegistry) -> None:
-    """CAP-REG-3: register `typed_constraint_match_rank` (function; KG-5a graded constraint match, recall-safe)."""
-    registry.register(
-        "typed_constraint_match_rank",
-        contract=MatchRanking,
-        kind="function",
-        display_name="Typed constraint match rank (graded, subsumption-aware)",
-    )
-
-
-def register_dense_rank_tiebreak(registry: CapabilityRegistry) -> None:
-    """CAP-REG-3: register `dense_rank_tiebreak` (function; cosine order for meaningful tie-breaking)."""
-    registry.register(
-        "dense_rank_tiebreak",
-        contract=DenseRanking,
-        kind="function",
-        display_name="Dense rank tiebreak (cosine order)",
-    )
+# (EP-CORE-1b/ADR-0118: candidate_routing / typed_constraint_match_rank / dense_rank_tiebreak are de-registered
+# from ARD -- generic retrieval primitives now, composed by direct import (the contract leg injects the domain
+# match-counter). Their register_* functions were removed.)

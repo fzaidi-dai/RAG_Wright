@@ -226,6 +226,7 @@ def production_typed_property_retrieval(
     `[]` = scope-to-nothing (no results)."""
     from rag_wright.capabilities.document_scope import validate_documents
     from rag_wright.capabilities.property_boosted_retrieval import property_boosted_retrieval
+    from rag_wright.contracts.value_match import constraint_match_count  # the contract-domain (dim,value) matcher
 
     model_id = getattr(extract_model, "model", extract_model)  # ExtractionModel.model, or a bare id
 
@@ -239,7 +240,7 @@ def production_typed_property_retrieval(
         # ADR-0047: functions=() -> property_boosted_retrieval runs over the WHOLE-INDEX BGE pool (no gate).
         return property_boosted_retrieval(
             query, store=store, embedder=embedder, functions=(), constraints=constraints, k=k, pool_k=pool_k,
-            documents=docs)
+            documents=docs, match_count_fn=constraint_match_count)  # EP-CORE-1b: inject the domain matcher
 
     relevance_judge: RelevanceJudgeFn | None = None
     if judge_model_id is not None:

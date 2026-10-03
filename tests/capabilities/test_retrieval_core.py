@@ -8,18 +8,15 @@ Hermetic: no store, no LLM, no embedding model -- the store pool lookup is an in
 
 from __future__ import annotations
 
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.retrieval_core import (
     CandidatePool,
     DenseRanking,
     MatchRanking,
     candidate_routing,
     dense_rank_tiebreak,
-    register_candidate_routing,
-    register_dense_rank_tiebreak,
-    register_typed_constraint_match_rank,
     typed_constraint_match_rank,
 )
+from rag_wright.contracts.value_match import constraint_match_count  # the DOMAIN matcher, injected (EP-CORE-1b)
 
 # --- candidate_routing: the union combiner + pool lookup -------------------------------------------------
 
@@ -63,7 +60,7 @@ def test_match_rank_grades_by_constraint_count_with_canonicalization_and_keeps_z
         ("c3", set()),                                                        # 0 -- kept, not dropped
     ]
 
-    out = typed_constraint_match_rank(query, candidates)
+    out = typed_constraint_match_rank(query, candidates, match_count_fn=constraint_match_count)
 
     assert isinstance(out, MatchRanking)
     assert [(r.clause_id, r.match_score) for r in out.ranked] == [("c2", 2.0), ("c1", 1.0), ("c3", 0.0)]
@@ -73,7 +70,7 @@ def test_match_rank_honors_subsumption_rollup():
     query = {("covered_parties", "affiliates")}
     candidates = [("c1", {("covered_parties", "licensor_affiliates")})]  # more specific satisfies broader
 
-    out = typed_constraint_match_rank(query, candidates)
+    out = typed_constraint_match_rank(query, candidates, match_count_fn=constraint_match_count)
 
     assert out.ranked[0].match_score == 1.0
 
@@ -81,7 +78,7 @@ def test_match_rank_honors_subsumption_rollup():
 def test_match_rank_is_stable_within_a_tie():
     query = {("d", "v")}
     candidates = [("a", set()), ("b", set()), ("c", set())]  # all zero -> input order preserved
-    out = typed_constraint_match_rank(query, candidates)
+    out = typed_constraint_match_rank(query, candidates, match_count_fn=constraint_match_count)
     assert [r.clause_id for r in out.ranked] == ["a", "b", "c"]
 
 
@@ -101,14 +98,16 @@ def test_dense_rank_zero_norm_is_zero_not_error():
     assert out.ranked[0].cosine == 0.0
 
 
-# --- registration (twofold DoD: internal register here; ARD manifest covered by test_manifests) ----------
+# (EP-CORE-1b/ADR-0118: the three retrieval functions are de-registered from ARD -- generic primitives,
+# composed by direct import; their registration test was removed.)
 
-def test_registers_the_three_functions():
-    reg = CapabilityRegistry()
-    register_candidate_routing(reg)
-    register_typed_constraint_match_rank(reg)
-    register_dense_rank_tiebreak(reg)
-    assert reg.get("candidate_routing").kind == "function"
-    assert reg.get("typed_constraint_match_rank").kind == "function"
-    assert reg.get("dense_rank_tiebreak").kind == "function"
-    assert reg.get("candidate_routing").contract is CandidatePool
+
+def test_retrieval_core_is_domain_neutral_no_contract_imports():
+    """EP-CORE-1b/ADR-0118: retrieval_core is a GENERIC primitive module -- it must import no domain vocab (the
+    (dim,value) matcher is injected via `match_count_fn`)."""
+    import inspect
+
+    from rag_wright.capabilities import retrieval_core as mod
+
+    src = inspect.getsource(mod)
+    assert "from rag_wright.contracts" not in src and "import rag_wright.contracts" not in src

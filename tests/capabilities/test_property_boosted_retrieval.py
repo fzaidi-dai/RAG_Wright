@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from rag_wright.contracts.value_match import constraint_match_count  # injected matcher (EP-CORE-1b)
 from rag_wright.capabilities.property_boosted_retrieval import RankedSpan, property_boosted_retrieval
 
 
@@ -49,7 +50,7 @@ def test_constraint_matching_spans_are_boosted_above_bge_order():
     )
     out = property_boosted_retrieval(
         "assignment", store=store, embedder=_FakeEmbedder(),
-        functions=["Anti-Assignment"], constraints={("assignment_consent", "free")}, k=3)
+        functions=["Anti-Assignment"], constraints={("assignment_consent", "free")}, k=3, match_count_fn=constraint_match_count)
     assert [r.span_id for r in out] == ["s3", "s1", "s2"]  # s3 boosted to rank 1; s1/s2 keep BGE order
     assert out[0] == RankedSpan(span_id="s3", text="three", function="Anti-Assignment",
                                 match_score=1.0, matched=[("assignment_consent", "free")], rank=1)
@@ -62,7 +63,7 @@ def test_bge_order_is_the_tiebreak_within_equal_match():
         pool={"F": ["a", "b", "c"]}, props={"a": set(), "b": set(), "c": set()},
         texts={"a": "A", "b": "B", "c": "C"})
     out = property_boosted_retrieval("q", store=store, embedder=_FakeEmbedder(),
-                                     functions=["F"], constraints=set(), k=3)
+                                     functions=["F"], constraints=set(), k=3, match_count_fn=constraint_match_count)
     assert [r.span_id for r in out] == ["a", "b", "c"]
 
 
@@ -71,14 +72,14 @@ def test_pool_is_deduped_across_functions_keeping_first_bge_position():
         pool={"F1": ["x", "y"], "F2": ["y", "z"]},  # y appears in both
         props={"x": set(), "y": set(), "z": set()}, texts={})
     out = property_boosted_retrieval("q", store=store, embedder=_FakeEmbedder(),
-                                     functions=["F1", "F2"], constraints=set(), k=10)
+                                     functions=["F1", "F2"], constraints=set(), k=10, match_count_fn=constraint_match_count)
     assert [r.span_id for r in out] == ["x", "y", "z"]  # y not duplicated
 
 
 def test_empty_pool_returns_empty():
     store = _FakeStore(pool={}, props={}, texts={})
     assert property_boosted_retrieval("q", store=store, embedder=_FakeEmbedder(),
-                                      functions=["F"], constraints=set()) == []
+                                      functions=["F"], constraints=set(), match_count_fn=constraint_match_count) == []
 
 
 # --- issue 0041: dense floor-protection. A strong dense match must SURVIVE into the returned k even when the
@@ -94,7 +95,7 @@ def test_dense_floor_span_absent_from_rrf_pool_is_guaranteed_into_k():
         dense=["d1"],                              # pure-dense #1
     )
     out = property_boosted_retrieval("payment terms", store=store, embedder=_FakeEmbedder(),
-                                     functions=(), constraints=set(), k=3, dense_floor_n=5)
+                                     functions=(), constraints=set(), k=3, dense_floor_n=5, match_count_fn=constraint_match_count)
     ids = [r.span_id for r in out]
     assert "d1" in ids                             # guaranteed present (was absent before 0041)
     assert ids == ["r1", "r2", "d1"]               # RRF order kept; d1 fills the reserved tail slot
@@ -106,7 +107,7 @@ def test_dense_floor_does_not_disturb_a_query_where_dense_is_already_top():
         pool={None: ["d1", "r1", "r2"]}, props={s: set() for s in ("d1", "r1", "r2")},
         texts={}, dense=["d1"])
     out = property_boosted_retrieval("q", store=store, embedder=_FakeEmbedder(),
-                                     functions=(), constraints=set(), k=3, dense_floor_n=5)
+                                     functions=(), constraints=set(), k=3, dense_floor_n=5, match_count_fn=constraint_match_count)
     assert [r.span_id for r in out] == ["d1", "r1", "r2"]  # unchanged
 
 
@@ -117,7 +118,7 @@ def test_dense_floor_never_displaces_a_constraint_match():
         props={"m1": {("mutuality", "mutual")}, "r1": set(), "d1": set()},
         texts={}, dense=["d1"])
     out = property_boosted_retrieval("q", store=store, embedder=_FakeEmbedder(),
-                                     functions=(), constraints={("mutuality", "mutual")}, k=2, dense_floor_n=5)
+                                     functions=(), constraints={("mutuality", "mutual")}, k=2, dense_floor_n=5, match_count_fn=constraint_match_count)
     ids = [r.span_id for r in out]
     assert ids[0] == "m1"                          # constraint match kept at rank 1
     assert "d1" in ids and "r1" not in ids         # dense floor took the non-matching slot, not the match

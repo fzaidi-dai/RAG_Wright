@@ -84,9 +84,6 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "clause_property_classification",  # model: the 29-dim best-of-both property classifier fleet (ADR-0115/0116, EP-RT-1)
         "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
         # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
-        "candidate_routing",  # function: union combiner -> candidate pool (KG-5e)
-        "typed_constraint_match_rank",  # function: KG-5a graded constraint match (recall-safe, subsumption)
-        "dense_rank_tiebreak",  # function: cosine order for meaningful tie-breaking (KG-6/V4)
         "span_relevance_judgment",  # agent_skill: per-span relevance VERDICT (span x condition -> relevant/not/uncertain); issue 0023, SKILL-SPLIT
         # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
         "clause_exception_linking",  # function: IsExceptionTo edges (Uncapped -> Cap carve-out) by proximity (ADR-0044)

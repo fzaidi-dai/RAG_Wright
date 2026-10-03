@@ -322,56 +322,6 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("okf", "navigation", "embedding-free", "progressive-disclosure", "skill"),
     ),
     # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
-    CapabilityManifest(
-        slug="candidate_routing",
-        kind="function",
-        display_name="Candidate routing (union combiner -> candidate pool)",
-        description=(
-            "Route a query to its candidate clause pool by unioning the ranked function predictions from each "
-            "router (taxonomy-constrained LLM, LegalBERT classifier, dimension-prior), first-wins and "
-            "recall-safe, then fetching the clauses of that function set (KG-5e). The union combiner that "
-            "replaces the oracle function filter; the store pool lookup is an injected seam."
-        ),
-        representative_queries=(
-            "select the candidate clause pool for a query from its predicted functions",
-            "union several function-routing signals into one recall-safe candidate set",
-            "route a query to clauses by its clause function(s)",
-        ),
-        tags=("retrieval", "routing", "query-side", "deterministic"),
-    ),
-    CapabilityManifest(
-        slug="typed_constraint_match_rank",
-        kind="function",
-        display_name="Typed constraint match rank (graded, subsumption-aware)",
-        description=(
-            "Grade candidate clauses by how many of the query's typed (dimension, value) constraints their "
-            "grounded props satisfy, under KG-5a canonicalization + subsumption, returning descending graded "
-            "order. Recall-safe: a zero-match candidate keeps its place (stable), never dropped. The symbolic "
-            "primary ranking of the KG-primary retrieval."
-        ),
-        representative_queries=(
-            "rank clauses by how many typed query constraints they satisfy",
-            "grade candidates by subsumption-aware constraint match",
-            "order a candidate pool by typed-property match count",
-        ),
-        tags=("retrieval", "ranking", "matching", "deterministic"),
-    ),
-    CapabilityManifest(
-        slug="dense_rank_tiebreak",
-        kind="function",
-        display_name="Dense rank tiebreak (cosine order)",
-        description=(
-            "Order candidate clauses by descending cosine similarity to the query's dense vector -- the "
-            "embedding signal that breaks constraint-match ties meaningfully (KG-6 / V4). Pure: the vectors "
-            "come from the embedding capability; no model or store call here."
-        ),
-        representative_queries=(
-            "break ranking ties by embedding cosine similarity",
-            "order candidates by dense similarity to the query",
-            "rank clauses by cosine to the query vector",
-        ),
-        tags=("retrieval", "ranking", "embedding", "deterministic"),
-    ),
     # (issue 0028 / ADR-0091: the KG-7 `party_clause_linking` manifest was retired with the PartyTo edge.)
     CapabilityManifest(
         slug="clause_exception_linking",

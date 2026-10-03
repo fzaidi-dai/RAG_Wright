@@ -69,6 +69,7 @@ def property_boosted_retrieval(
     pool_k: int = 30,
     documents: list[str] | None = None,
     dense_floor_n: int = 3,
+    match_count_fn: Any,
 ) -> list[RankedSpan]:
     """Retrieve the top-`k` cited spans for `query`, property-boosted by the typed constraints. Pool =
     `span_hybrid_search` (BGE RRF) over each routed function (deduped, BGE order preserved); rerank =
@@ -107,7 +108,8 @@ def property_boosted_retrieval(
     if not ordered:
         return []
     props = store.span_properties(ordered)
-    ranked = typed_constraint_match_rank(constraints, [(sid, props[sid]) for sid in ordered]).ranked
+    ranked = typed_constraint_match_rank(
+        constraints, [(sid, props[sid]) for sid in ordered], match_count_fn=match_count_fn).ranked
     top_ids = _select_with_dense_floor([r.clause_id for r in ranked], dense_floor, k)
     texts = store.span_texts(top_ids)
     score_of = {r.clause_id: r.match_score for r in ranked}

@@ -23,6 +23,7 @@ def main() -> None:
     load_dotenv()
     from rag_wright.capabilities.remote_encoders import query_embedder  # local (STACK_URL unset)
     from rag_wright.capabilities.retrieval_core import typed_constraint_match_rank
+    from rag_wright.contracts.value_match import constraint_match_count  # inject the domain matcher (EP-CORE-1b)
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     store = ArcadeDBStore.from_env()  # ragwright_cuad_full
@@ -47,7 +48,8 @@ def main() -> None:
             return next((v for d, v in props[sid] if d == dim), "-")
 
         # boosted: stable sort by constraint-match count; ties keep BGE (input) order
-        boosted = typed_constraint_match_rank({constraint}, [(sid, props[sid]) for sid in span_ids]).ranked
+        boosted = typed_constraint_match_rank(
+            {constraint}, [(sid, props[sid]) for sid in span_ids], match_count_fn=constraint_match_count).ranked
         boosted_ids = [r.clause_id for r in boosted]
 
         def _first_match_rank(order):  # 1-based rank of the first span matching the constraint
