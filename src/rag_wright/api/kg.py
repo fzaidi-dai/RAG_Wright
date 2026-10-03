@@ -29,6 +29,18 @@ def kg_write(ws: WorkspaceHandle, nodes: list, edges: Any = ()) -> None:
     ws._store.kg_write(nodes, edges)
 
 
+def kg_edges(ws: WorkspaceHandle, from_type: Optional[str] = None, *, where: Optional[dict] = None,
+             key_range: Optional[tuple] = None, direction: str = "out", edge_type: Optional[str] = None,
+             edge_where: Optional[dict] = None, target_where: Optional[dict] = None,
+             select: dict) -> list[dict]:
+    """Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out/in MATCH (by `where`
+    equality/membership or a contract-scope `key_range`) or a direct edge scan; `select` projects `c.`/`e.`/`v.`
+    expressions. The engine's relational/graph primitive on the API, so a domain's graph query never touches
+    `ws._store`. (`NOT_NULL` for a presence filter is `rag_wright.store.seam.NOT_NULL`.)"""
+    return ws._store.kg_edges(from_type, where=where, key_range=key_range, direction=direction,
+                              edge_type=edge_type, edge_where=edge_where, target_where=target_where, select=select)
+
+
 def span_positions(ws: WorkspaceHandle, document: str) -> list[dict]:
     """Every span of `document` with its position provenance (doc offsets, pages, DECODED bbox), ordered by document
     position. The engine MECHANISM behind a product's citation/highlight types -- the product wraps these rows into
