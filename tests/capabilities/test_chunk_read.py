@@ -14,9 +14,7 @@ import pytest
 from rag_wright.capabilities.chunk_read import (
     ChunkReadResult,
     chunk_read,
-    register_chunk_read,
 )
-from rag_wright.capabilities.registry import CANONICAL_CAPABILITY_SLUGS, CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.store.chunk_text import ChunkTextStore
 
@@ -55,10 +53,4 @@ def test_empty_input_yields_empty_result(tmp_path):
     assert chunk_read([], text_store=store).chunks == []
 
 
-def test_chunk_read_registers_as_a_canonical_fr_q_function_capability():
-    assert "chunk_read" in CANONICAL_CAPABILITY_SLUGS
-    reg = CapabilityRegistry()
-    register_chunk_read(reg)
-    entry = reg.get("chunk_read")
-    assert entry.contract is ChunkReadResult
-    assert entry.kind == "function"
+# (EP-CORE-1a/ADR-0118: chunk_read is de-registered from ARD — a core primitive now; registration test removed.)

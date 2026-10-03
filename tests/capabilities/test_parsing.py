@@ -19,9 +19,7 @@ from rag_wright.capabilities.parsing import (
     ParsedDocument,
     load_document,
     parse,
-    register_parsing,
 )
-from rag_wright.capabilities.registry import CapabilityRegistry
 
 
 def _stub_doc(law: str = "Delaware") -> DoclingDocument:
@@ -102,13 +100,7 @@ def test_load_document_reloads_the_structured_representation(tmp_path):
     assert "Governing Law" in doc.export_to_markdown()
 
 
-def test_parsing_registers_under_frc1_as_a_function(tmp_path):
-    reg = CapabilityRegistry()
-    register_parsing(reg)
-    registration = reg.get("parsing")
-    assert registration.kind == "function"
-    assert registration.contract is ParsedDocument
-    assert registration.skeleton.identifier == "urn:air:dreamai.io:rag_wright:parsing"
+# (EP-CORE-1a/ADR-0118: parsing is de-registered from ARD — a core primitive now; registration test removed.)
 
 
 # --- live Docling parse over the real corpus (opt-in: needs models + the gitignored corpus) ------

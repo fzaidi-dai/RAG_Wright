@@ -16,7 +16,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.store.chunk_text import ChunkTextStore
 
 
@@ -57,11 +56,3 @@ def chunk_read(chunk_ids: list[str], *, text_store: ChunkTextStore) -> ChunkRead
     return ChunkReadResult(chunks=chunks)
 
 
-def register_chunk_read(registry: CapabilityRegistry) -> None:
-    """Register chunk_read under FR-Q (`chunk_read`, an in-process `function`)."""
-    registry.register(
-        "chunk_read",
-        contract=ChunkReadResult,
-        kind="function",
-        display_name="Chunk read (rehydrate chunk_ids to full text)",
-    )

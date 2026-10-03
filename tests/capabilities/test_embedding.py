@@ -18,9 +18,7 @@ import pytest
 from rag_wright.capabilities.embedding import (
     ChunkEmbedding,
     embed_chunks_sync,
-    register_embedding,
 )
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.rlm_chunking import Chunk
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
 
@@ -119,13 +117,7 @@ def test_concurrent_is_faster_than_serial():
     assert concurrent < serial  # non-blocking: work overlaps
 
 
-def test_embedding_registers_under_frc2_as_a_model():
-    reg = CapabilityRegistry()
-    register_embedding(reg)
-    registration = reg.get("embedding")
-    assert registration.kind == "model"  # CAP-REG-1: BGE-M3 inference
-    assert registration.contract is ChunkEmbedding
-    assert registration.skeleton.identifier == "urn:air:dreamai.io:rag_wright:embedding"
+# (EP-CORE-1a/ADR-0118: embedding is de-registered from ARD — a core primitive now; registration test removed.)
 
 
 @pytest.mark.embed

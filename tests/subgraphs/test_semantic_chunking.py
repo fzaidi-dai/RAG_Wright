@@ -103,10 +103,4 @@ def test_discover_exhaustion_dead_letters_the_document(tmp_path):
     assert disc.calls == 3  # retried up to max_attempts, then error_handler compensated
 
 
-def test_registers_as_a_subgraph():
-    from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.subgraphs.semantic_chunking import register_semantic_chunking_subgraph
-
-    reg = CapabilityRegistry()
-    register_semantic_chunking_subgraph(reg)
-    assert reg.get("semantic_chunking").kind == "subgraph"
+# (EP-CORE-1a/ADR-0118: test_registers_as_a_subgraph removed — semantic_chunking is de-registered from ARD.)

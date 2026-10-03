@@ -20,7 +20,6 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
-from rag_wright.capabilities.registry import CapabilityRegistry
 
 DEFAULT_TOP_K = 5  # the precision-gate cut before synthesis; the eval and caller can override
 DEFAULT_RERANKER_MODEL = "BAAI/bge-reranker-v2-m3"  # the BGE-M3 companion cross-encoder
@@ -122,11 +121,3 @@ def rerank(
     return RerankResult(query=query, candidates=scored[:top_k])
 
 
-def register_reranking(registry: CapabilityRegistry) -> None:
-    """Register reranking under FR-C.4 (`reranking`, an in-process `function`)."""
-    registry.register(
-        "reranking",
-        contract=RerankResult,
-        kind="model",  # BGE cross-encoder inference (CAP-REG-1)
-        display_name="Reranking (BGE cross-encoder precision gate)",
-    )

@@ -22,7 +22,6 @@ from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, field_validator
 
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.rlm_chunking import Chunk
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
 
@@ -163,11 +162,3 @@ def embed_chunks_sync(
     return asyncio.run(embed_chunks(chunks, embedder=embedder, max_concurrency=max_concurrency))
 
 
-def register_embedding(registry: CapabilityRegistry) -> None:
-    """Register the embedding capability under FR-C.2 (`embedding`, an in-process `function`)."""
-    registry.register(
-        "embedding",
-        contract=ChunkEmbedding,
-        kind="model",  # BGE-M3 inference (CAP-REG-1)
-        display_name="Embedding (BGE-M3)",
-    )

@@ -15,9 +15,7 @@ from rag_wright.capabilities.hybrid_search import (
     Candidate,
     HybridSearchResult,
     hybrid_search,
-    register_hybrid_search,
 )
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.store.arcadedb import ArcadeDBStore
@@ -104,14 +102,7 @@ def test_k_caps_the_candidate_list():
     assert len(result.candidates) == 2
 
 
-def test_registers_under_fr_c_3():
-    registry = CapabilityRegistry()
-    register_hybrid_search(registry)
-
-    reg = registry.get("hybrid_search")
-    assert reg.name == "hybrid_search"
-    assert reg.contract is HybridSearchResult
-    assert reg.kind == "function"
+# (EP-CORE-1a/ADR-0118: hybrid_search is de-registered from ARD — a core primitive now; registration test removed.)
 
 
 # --- live ArcadeDB (opt-in): the real server-side RRF fusion ------------------------------------

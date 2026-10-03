@@ -23,7 +23,6 @@ from typing import Protocol, runtime_checkable
 from docling_core.types.doc.document import DoclingDocument
 from pydantic import BaseModel, field_validator
 
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import canonical_source_doc_id
 
 # Reused from the ChunkId scheme (T1): the delimiter-safe charset for a source_doc_id, so the id is
@@ -285,11 +284,3 @@ def load_document(parsed: ParsedDocument) -> DoclingDocument:
     return DoclingDocument.load_from_json(parsed.manifest_path)
 
 
-def register_parsing(registry: CapabilityRegistry) -> None:
-    """Register the parsing capability under FR-C.1 (`parsing`, an in-process `function`)."""
-    registry.register(
-        "parsing",
-        contract=ParsedDocument,
-        kind="function",
-        display_name="Document parsing (Docling)",
-    )

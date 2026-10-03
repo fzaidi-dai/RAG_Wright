@@ -12,7 +12,6 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from rag_wright.capabilities.graph_query import GraphAnswer
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.reranking import RerankResult
 
 DEFAULT_UNION_CAP = 20  # the fused evidence set is capped before synthesis (§16.7)
@@ -63,11 +62,3 @@ def fuse(
     return FusionResult(chunks=chunks)
 
 
-def register_fusion(registry: CapabilityRegistry) -> None:
-    """Register fusion under FR-Q.4 (`fusion`, an in-process `function`)."""
-    registry.register(
-        "fusion",
-        contract=FusionResult,
-        kind="function",
-        display_name="Fusion (union/dedup on chunk_id, capped)",
-    )

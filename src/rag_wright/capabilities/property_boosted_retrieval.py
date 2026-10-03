@@ -120,11 +120,3 @@ def property_boosted_retrieval(
     ]
 
 
-def register_property_boosted_retrieval(registry) -> None:
-    """Register `property_boosted_retrieval` (function; ADR-0033 typed property-boost rerank over CUAD-full)."""
-    registry.register(
-        "property_boosted_retrieval",
-        contract=RankedSpan,
-        kind="function",
-        display_name="Property-boosted typed retrieval",
-    )

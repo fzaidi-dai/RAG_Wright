@@ -517,15 +517,7 @@ def test_rlm_chunking_registers_as_an_agent_skill():
     assert registration.skeleton.response_bounds is None  # agent_skill is loaded, not callable
 
 
-def test_semantic_chunking_registers_as_a_subgraph():
-    from rag_wright.capabilities.rlm_chunking import register_semantic_chunking
-
-    reg = CapabilityRegistry()
-    register_semantic_chunking(reg)
-    registration = reg.get("semantic_chunking")
-    assert registration.kind == "subgraph"  # deterministic single-call chunker (CAP-REG-1b)
-    assert registration.contract is ChunkManifest
-    assert registration.skeleton.response_bounds is not None  # subgraph is callable
+# (EP-CORE-1a/ADR-0118: semantic_chunking is de-registered from ARD — a core helper now; registration test removed.)
 
 
 # --- concurrent summarization (async + semaphore backpressure, T19 pattern) ----------------------

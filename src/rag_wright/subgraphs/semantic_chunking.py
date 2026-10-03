@@ -179,12 +179,5 @@ def build_semantic_chunking(
     return g.compile()
 
 
-def register_semantic_chunking_subgraph(registry) -> None:
-    """LG-2: register `semantic_chunking` (subgraph). The manifest/slug already exist (CAP-REG-1b); this binds
-    the LangGraph runnable's contract (ChunkManifest)."""
-    registry.register(
-        "semantic_chunking",
-        contract=ChunkManifest,
-        kind="subgraph",
-        display_name="Semantic chunking (single-call)",
-    )
+# (EP-CORE-1a/ADR-0118: register_semantic_chunking_subgraph removed — semantic_chunking is de-registered from ARD;
+# it's a core helper now. The LangGraph runnable + ChunkManifest contract stay; they're just not ARD-catalogued.)

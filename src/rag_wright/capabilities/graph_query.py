@@ -14,7 +14,6 @@ from typing import Optional
 from pydantic import BaseModel
 
 from rag_wright.capabilities.document_scope import validate_documents
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.store.seam import Store
 
 
@@ -72,11 +71,3 @@ def graph_query(
     )
 
 
-def register_graph_query(registry: CapabilityRegistry) -> None:
-    """Register graph query under FR-C.5 (`graph_query`, an in-process `function`)."""
-    registry.register(
-        "graph_query",
-        contract=GraphAnswer,
-        kind="function",
-        display_name="Graph query (cited relational/multi-hop answer)",
-    )

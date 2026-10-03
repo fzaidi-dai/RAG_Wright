@@ -96,28 +96,6 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
     ),
     CapabilityManifest(
-        slug="parsing",
-        kind="function",  # an in-process graph-node call
-        display_name="Document parsing (Docling)",
-        description=(
-            "Turn a source document (PDF, Office file, or scan) into a clean structured "
-            "representation — reading order, headings, sections, tables, and OCR text — parsed once "
-            "and reused by chunking, embedding, and extraction (FR-C.1)."
-        ),
-        representative_queries=(
-            "parse a PDF contract into structured sections and tables",
-            "extract reading order and headings from a source document",
-            "OCR a scanned filing into machine-readable text",
-            "turn an Office document into a clean structured representation",
-        ),
-        tags=("parsing", "docling", "ingestion"),
-        capability_interface=CapabilityInterface(
-            inputs={"source": "document"},
-            outputs={"parsed": "parsed_doc"},  # a handle to the cached DoclingDocument; chunking consumes it
-            success_criterion="parse a source document into a cached structured representation, parsed once",
-        ),
-    ),
-    CapabilityManifest(
         slug="rlm_chunking",
         kind="agent_skill",  # applies the RLM method; loaded knowledge, requires rlm_method
         display_name="RLM chunking",
@@ -144,100 +122,6 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             inputs={"parsed": "parsed_doc"},
             outputs={"chunks": "chunk"},
             success_criterion="split a parsed document into semantically coherent, capped, summarized chunks with stable ids",
-        ),
-    ),
-    CapabilityManifest(
-        slug="semantic_chunking",
-        kind="subgraph",  # single-call boundary discovery + deterministic repair + hash-gate (CU-B4); CAP-REG-1b
-        display_name="Semantic chunking (single-call)",
-        description=(
-            "Split a parsed document into semantically coherent, token-capped chunks via a SINGLE-CALL "
-            "boundary discoverer (non-agentic) plus deterministic boundary repair, a minimum-size floor, "
-            "and a content-hash gate — the deterministic alternative to the RLM chunker (`rlm_chunking`). "
-            "Emits the ingestion `chunk` (id + text + summary + index) with stable chunk_ids (FR-I.1, ADR-0031)."
-        ),
-        representative_queries=(
-            "chunk a parsed document with a single boundary-discovery call plus deterministic repair",
-            "split a document into capped, semantically coherent chunks without the RLM machinery",
-            "produce stable chunk ids and a per-chunk summary deterministically",
-            "re-chunk a document only when its content changes",
-        ),
-        tags=("chunking", "ingestion", "deterministic"),
-        capability_interface=CapabilityInterface(
-            # Same ingestion `chunk` output as rlm_chunking; embedding and graph_extraction consume it.
-            inputs={"parsed": "parsed_doc"},
-            outputs={"chunks": "chunk"},
-            success_criterion="split a parsed document into semantically coherent, capped, summarized chunks with stable ids",
-        ),
-    ),
-    CapabilityManifest(
-        slug="embedding",
-        kind="model",  # BGE-M3 inference (CAP-REG-1)
-        display_name="Embedding (BGE-M3)",
-        description=(
-            "From one BGE-M3 model, produce a dense vector over the chunk summary and a native sparse "
-            "vector over the full chunk text (the summary-miss mitigation). Output shapes match the "
-            "chunk-record contract: dense length 1024, sparse token-id -> weight (FR-C.2, FR-I.3)."
-        ),
-        representative_queries=(
-            "embed a chunk summary into a dense vector with BGE-M3",
-            "produce a native sparse lexical vector over full chunk text",
-            "generate dense and sparse embeddings from one model",
-            "vectorize chunks for hybrid retrieval",
-        ),
-        tags=("embedding", "bge-m3", "ingestion"),
-        capability_interface=CapabilityInterface(
-            inputs={"chunks": "chunk"},  # needs the summary the ingestion `chunk` carries (dense-over-summary)
-            outputs={"embeddings": "embedding"},
-            success_criterion="produce a dense-over-summary and sparse-over-full-text vector per chunk (BGE-M3)",
-        ),
-    ),
-    CapabilityManifest(
-        slug="hybrid_search",
-        kind="function",  # an in-process query-side node
-        display_name="Hybrid search (RRF over dense + sparse)",
-        description=(
-            "Retrieve candidate chunks for a natural-language query by fusing a dense "
-            "semantic leg and a sparse lexical leg server-side with Reciprocal Rank Fusion "
-            "(ArcadeDB vector.fuse), honoring metadata filters, into one ranked candidate list "
-            "(FR-C.3, FR-Q.1)."
-        ),
-        representative_queries=(
-            "retrieve the most relevant chunks for a natural-language query",
-            "hybrid dense and sparse search fused by reciprocal rank fusion",
-            "find candidate passages combining semantic and lexical matching",
-            "search the chunk index and filter candidates by source document",
-        ),
-        tags=("retrieval", "hybrid", "rrf", "query"),
-        capability_interface=CapabilityInterface(
-            inputs={"query": "text"},
-            outputs={"candidates": "chunk_id"},  # id-only by design; rehydrate via chunk_read before any text consumer
-            success_criterion="retrieve RRF-fused candidate chunk references for a natural-language query",
-        ),
-    ),
-    CapabilityManifest(
-        slug="reranking",
-        kind="model",  # BGE cross-encoder inference (CAP-REG-1)
-        display_name="Reranking (BGE cross-encoder precision gate)",
-        description=(
-            "Re-score retrieved candidate passages against the query with a BGE-reranker "
-            "cross-encoder (which reads query and passage together, more precise than the "
-            "bi-encoder retrieval legs) and cut the list to a top-k precision gate before "
-            "synthesis (FR-C.4, FR-Q.2)."
-        ),
-        representative_queries=(
-            "rerank retrieved passages by cross-encoder relevance to the query",
-            "apply a precision gate that cuts candidates to the most relevant top-k",
-            "reorder hybrid-search results with a BGE reranker before answering",
-            "select the best passages to ground an answer on",
-        ),
-        tags=("reranking", "cross-encoder", "bge-reranker", "query"),
-        capability_interface=CapabilityInterface(
-            # Consumes chunk_with_text (only chunk_read produces it) — this is what forces a rehydrate
-            # upstream of reranking. It never fetches text itself (reranking.py). Output carries the score.
-            inputs={"query": "text", "passages": "chunk_with_text"},
-            outputs={"ranked": "scored_chunk"},
-            success_criterion="cross-encoder re-score candidate passages against the query and cut to top-k",
         ),
     ),
     CapabilityManifest(
@@ -311,81 +195,6 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             inputs={"clusters": "entity_cluster", "facts": "extraction"},
             outputs={"resolved": "resolved_entity"},  # entities + relationships linked to a canonical id (the graph)
             success_criterion="link mention clusters to canonical EDGAR ids (closed-world) and resolve relationship endpoints as one stream",
-        ),
-    ),
-    CapabilityManifest(
-        slug="graph_query",
-        kind="function",  # an in-process query-side graph node
-        display_name="Graph query (cited relational/multi-hop answer)",
-        description=(
-            "Answer relational and multi-hop questions by traversing the knowledge graph from a start "
-            "entity over relationship edges, returning cited chunk_ids, entity_ids, and confidence tags "
-            "as evidence for fusion (treated as evidence, not truth; confidence surfaced, not filtered) "
-            "(FR-C.5, FR-Q.3)."
-        ),
-        representative_queries=(
-            "who are the counterparties of this company in the contract graph",
-            "find entities connected to a company within two hops",
-            "answer a multi-hop relational question with cited graph evidence",
-            "traverse contract relationships between organizations",
-        ),
-        tags=("graph", "query", "traversal", "multi-hop", "relational"),
-        capability_interface=CapabilityInterface(
-            inputs={"query": "text"},
-            outputs={"graph": "graph_answer"},  # the distinct type fusion's graph leg consumes
-            success_criterion="answer a relational/multi-hop question by graph traversal, returning cited evidence",
-        ),
-    ),
-    CapabilityManifest(
-        slug="fusion",
-        kind="function",  # an in-process query-side node
-        display_name="Fusion (union/dedup on chunk_id, capped)",
-        description=(
-            "Union and deduplicate the reranked retrieval top set and the graph-cited chunks on "
-            "chunk_id into one capped, deterministic evidence set for synthesis. Not a score fusion "
-            "(the graph returns an answer, not a comparable ranked list) (FR-Q.4)."
-        ),
-        representative_queries=(
-            "combine retrieval results and graph evidence into one evidence set",
-            "union and deduplicate cited chunks from the text and graph legs",
-            "merge reranked passages with graph-cited chunks for synthesis",
-            "build one capped evidence set from both retrieval and the knowledge graph",
-        ),
-        tags=("fusion", "union", "evidence", "query"),
-        capability_interface=CapabilityInterface(
-            # Two DISTINCT input types (retrieval leg vs graph leg), not a variadic id-set. Output is
-            # id-only (the union carries id + sources[], no text/score) — typed `chunk_id` so the valid
-            # fusion -> chunk_read -> synthesis tail type-checks (GraphWright's §3 provenance rule: the
-            # `sources[]` sub-field does not fork the type name; no consumer gates on it). ADR-0021.
-            inputs={"reranked": "scored_chunk", "graph": "graph_answer"},
-            outputs={"fused": "chunk_id"},
-            success_criterion="union and dedup the retrieval and graph evidence on chunk_id, capped",
-        ),
-    ),
-    CapabilityManifest(
-        slug="chunk_read",
-        kind="function",  # an in-process query-side node
-        display_name="Chunk read (rehydrate chunk_ids to full text)",
-        description=(
-            "Rehydrate a set of retrieved chunk_ids to their full chunk text — the text the retrieval "
-            "index does not hold (it is dense-over-summary) — by reading the chunk-text sidecar, "
-            "returning text per chunk_id in the requested order for synthesis. The governed "
-            "text-rehydration step between fusion (FR-Q.4) and synthesis (FR-Q.5); no id is silently "
-            "dropped."
-        ),
-        representative_queries=(
-            "rehydrate retrieved chunk ids to their full text for synthesis",
-            "fetch the full source text of chunks by chunk_id",
-            "load the text behind a set of retrieved chunk ids before answering",
-            "get the chunk text for the evidence set the retriever returned",
-        ),
-        tags=("rehydration", "chunk-text", "evidence", "query"),
-        capability_interface=CapabilityInterface(
-            # The ONLY producer of chunk_with_text — so the checker forces it in wherever a text consumer
-            # (reranking, rlm_synthesis, generation) follows an id-only producer. Drops nothing.
-            inputs={"chunk_ids": "chunk_id"},
-            outputs={"chunks": "chunk_with_text"},
-            success_criterion="rehydrate chunk_ids to their full chunk text, order-preserving, dropping nothing",
         ),
     ),
     CapabilityManifest(
@@ -557,23 +366,6 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         ),
         tags=("retrieval", "ranking", "embedding", "deterministic"),
     ),
-    CapabilityManifest(
-        slug="property_boosted_retrieval",
-        kind="function",
-        display_name="Property-boosted typed retrieval",
-        description=(
-            "Typed retrieval over the CUAD-full KG (SPAN-CLAUSE-RERANK, ADR-0033): a bounded BGE base pool "
-            "(span_hybrid_search over the routed functions) is joined to each span's clause props via the "
-            "operative-span edge.span_id link, then reranked by typed-constraint match (BGE order as the "
-            "tiebreak). Returns top-k cited spans with the constraints each satisfied."
-        ),
-        representative_queries=(
-            "retrieve clauses matching a typed constraint, ranked over a BGE pool",
-            "find spans whose clause satisfies the query's typed properties",
-            "property-boosted retrieval with citations over the contract KG",
-        ),
-        tags=("retrieval", "ranking", "typed", "citation"),
-    ),
     # (issue 0028 / ADR-0091: the KG-7 `party_clause_linking` manifest was retired with the PartyTo edge.)
     CapabilityManifest(
         slug="clause_exception_linking",
@@ -666,21 +458,6 @@ _SPECS: tuple[CapabilityManifest, ...] = (
             "run the ADR-0040 Layer-3 semantic quality gate over an extraction record",
         ),
         tags=("grounding", "quality-gate", "semantic", "deterministic"),
-    ),
-    CapabilityManifest(
-        slug="operative_span_segmentation",
-        kind="function",
-        display_name="Operative span segmentation",
-        description=(
-            "Split a chunk into operative spans (the clause-level units the function classifier and property "
-            "extraction operate on), deterministically, with stable span ids."
-        ),
-        representative_queries=(
-            "split a chunk into operative clause-level spans",
-            "segment a contract chunk into the units for function classification",
-            "produce stable span ids for downstream extraction",
-        ),
-        tags=("segmentation", "ingestion", "deterministic"),
     ),
     CapabilityManifest(
         slug="intra_document_scoped_query",

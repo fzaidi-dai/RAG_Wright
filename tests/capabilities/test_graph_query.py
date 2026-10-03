@@ -10,8 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.capabilities.graph_query import GraphAnswer, graph_query, register_graph_query
-from rag_wright.capabilities.registry import CapabilityRegistry
+from rag_wright.capabilities.graph_query import GraphAnswer, graph_query
 from rag_wright.contracts.ontology import RelationshipType
 
 
@@ -68,13 +67,7 @@ def test_two_hop_evidence_carries_the_full_path():
     assert ev.chunk_ids == ["docA:0:h", "docB:1:h"]  # both edges' chunks cited
 
 
-def test_registers_under_fr_c_5():
-    registry = CapabilityRegistry()
-    register_graph_query(registry)
-    reg = registry.get("graph_query")
-    assert reg.name == "graph_query"
-    assert reg.contract is GraphAnswer
-    assert reg.kind == "function"
+# (EP-CORE-1a/ADR-0118: graph_query is de-registered from ARD — a core primitive now; registration test removed.)
 
 
 def test_graph_query_is_domain_neutral_no_contract_imports():

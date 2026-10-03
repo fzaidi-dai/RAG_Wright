@@ -10,14 +10,12 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.reranking import (
     BGEReranker,
     Passage,
     RerankResult,
     ScoredCandidate,
     rerank,
-    register_reranking,
 )
 
 
@@ -111,14 +109,7 @@ def test_mismatched_score_count_is_rejected():
         rerank("q", [_passage("c1", "a"), _passage("c2", "b")], reranker=_BadReranker(), top_k=5)
 
 
-def test_registers_under_fr_c_4():
-    registry = CapabilityRegistry()
-    register_reranking(registry)
-
-    reg = registry.get("reranking")
-    assert reg.name == "reranking"
-    assert reg.contract is RerankResult
-    assert reg.kind == "model"  # CAP-REG-1: BGE cross-encoder inference
+# (EP-CORE-1a/ADR-0118: reranking is de-registered from ARD — a core primitive now; registration test removed.)
 
 
 # --- live BGE-reranker (opt-in) ------------------------------------------------------------------

@@ -43,9 +43,11 @@ async def test_ainvoke_subgraph_rejects_unknown_name_and_wrong_kind():
         await ainvoke_subgraph("clause_function_classification", {}, resources=_handle())
 
 
-def test_invoke_model_reports_missing_adapter_clearly():
-    with pytest.raises(NotImplementedError):
-        invoke_model("embedding", {}, resources=_handle())  # 'embedding' is a model kind with no adapter wired yet
+def test_invoke_model_rejects_a_de_registered_or_unknown_capability():
+    # 'embedding' was de-registered from ARD (EP-CORE-1a/ADR-0118 — it's a core primitive now, not a capability),
+    # so it is no longer invocable by name: the catalog lookup fails.
+    with pytest.raises(KeyError):
+        invoke_model("embedding", {}, resources=_handle())
 
 
 async def test_ainvoke_subgraph_dispatches_the_inputs(monkeypatch):

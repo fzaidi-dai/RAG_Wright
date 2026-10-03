@@ -42,18 +42,18 @@ from rag_wright.contracts.chunk import ChunkRecord
 
 def test_register_and_lookup_by_name_returns_contract():
     reg = CapabilityRegistry()
-    reg.register("hybrid_search", contract=ChunkRecord, kind="mcp_tool")
-    got = reg.get("hybrid_search")
-    assert got.name == "hybrid_search"
+    reg.register("graph_extraction", contract=ChunkRecord, kind="mcp_tool")
+    got = reg.get("graph_extraction")
+    assert got.name == "graph_extraction"
     assert got.contract is ChunkRecord
     assert got.kind == "mcp_tool"
 
 
 def test_duplicate_registration_is_rejected():
     reg = CapabilityRegistry()
-    reg.register("embedding", contract=ChunkRecord, kind="function")
+    reg.register("graph_extraction", contract=ChunkRecord, kind="function")
     with pytest.raises(ValueError):
-        reg.register("embedding", contract=ChunkRecord, kind="function")
+        reg.register("graph_extraction", contract=ChunkRecord, kind="function")
 
 
 def test_lookup_of_unknown_name_is_rejected():
@@ -74,7 +74,7 @@ def test_register_rejects_non_canonical_name(bad):
 def test_register_rejects_unknown_kind():
     reg = CapabilityRegistry()
     with pytest.raises(ValueError):
-        reg.register("parsing", contract=ChunkRecord, kind="widget")  # not one of the six
+        reg.register("graph_extraction", contract=ChunkRecord, kind="widget")  # not one of the six
 
 
 def test_all_canonical_slugs_are_urn_safe():
@@ -95,7 +95,7 @@ def test_generation_and_vision_to_text_are_separate_capabilities():
 def test_kind_is_required_no_default():
     reg = CapabilityRegistry()
     with pytest.raises(TypeError):
-        reg.register("parsing", contract=ChunkRecord)  # kind is required
+        reg.register("graph_extraction", contract=ChunkRecord)  # kind is required
 
 
 # --- ARD skeleton derivation (RAC-6) --------------------------------------------------------
@@ -103,21 +103,21 @@ def test_kind_is_required_no_default():
 
 def test_skeleton_urn_anchors_on_the_capability_name():
     reg = CapabilityRegistry()
-    skel = reg.register("graph_query", contract=ChunkRecord, kind="mcp_tool").skeleton
-    assert skel.identifier == capability_urn("graph_query")
-    assert skel.identifier == "urn:air:dreamai.io:rag_wright:graph_query"
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="mcp_tool").skeleton
+    assert skel.identifier == capability_urn("graph_extraction")
+    assert skel.identifier == "urn:air:dreamai.io:rag_wright:graph_extraction"
 
 
 def test_callable_kind_gets_media_type_and_response_bounds():
     reg = CapabilityRegistry()
-    skel = reg.register("reranking", contract=ChunkRecord, kind="function").skeleton
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="function").skeleton
     assert skel.media_type == MEDIA_TYPE_BY_KIND["function"]
     assert isinstance(skel.response_bounds, ResponseBounds)
 
 
 def test_mcp_tool_media_type():
     reg = CapabilityRegistry()
-    skel = reg.register("graph_query", contract=ChunkRecord, kind="mcp_tool").skeleton
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="mcp_tool").skeleton
     assert skel.media_type == "application/mcp-server-card+json"
     assert skel.response_bounds is not None
 
@@ -145,7 +145,7 @@ def test_agent_skill_rejects_response_bounds():
 
 def test_partial_skeleton_is_not_a_loadable_registry_entry():
     reg = CapabilityRegistry()
-    skel = reg.register("parsing", contract=ChunkRecord, kind="function").skeleton
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="function").skeleton
     assert isinstance(skel, ManifestSkeleton)
     # A skeleton lacks the authored fields (representative queries), so it cannot validate as a
     # RegistryEntry: a partial can never masquerade as a registered, loadable entry.
@@ -155,10 +155,10 @@ def test_partial_skeleton_is_not_a_loadable_registry_entry():
 
 def test_author_produces_a_valid_loadable_registry_entry():
     reg = CapabilityRegistry()
-    skel = reg.register("hybrid_search", contract=ChunkRecord, kind="mcp_tool").skeleton
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="mcp_tool").skeleton
     entry = skel.author(["find the governing law clause", "what indemnities apply"])
     assert isinstance(entry, RegistryEntry)
-    assert entry.envelope.identifier == capability_urn("hybrid_search")
+    assert entry.envelope.identifier == capability_urn("graph_extraction")
     assert entry.envelope.type == MEDIA_TYPE_BY_KIND["mcp_tool"]
     assert entry.kind == "mcp_tool"
     assert entry.response_bounds is not None
@@ -168,14 +168,14 @@ def test_author_produces_a_valid_loadable_registry_entry():
 @pytest.mark.parametrize("queries", [[], ["only one"], ["a", "b", "c", "d", "e", "f"]])
 def test_author_enforces_two_to_five_representative_queries(queries):
     reg = CapabilityRegistry()
-    skel = reg.register("reranking", contract=ChunkRecord, kind="function").skeleton
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="function").skeleton
     with pytest.raises(ValidationError):
         skel.author(queries)
 
 
 def test_authored_entry_round_trips_through_camelcase_json():
     reg = CapabilityRegistry()
-    skel = reg.register("embedding", contract=ChunkRecord, kind="function").skeleton
+    skel = reg.register("graph_extraction", contract=ChunkRecord, kind="function").skeleton
     entry = skel.author(["embed this chunk", "vectorize the summary"])
     reloaded = RegistryEntry.model_validate_json(entry.model_dump_json(by_alias=True))
     assert reloaded == entry
@@ -237,7 +237,7 @@ def test_requires_closure_only_valid_on_agent_skill():
 # --- shared ARD registry root: config-addressed by ARD_REGISTRY_ROOT (registry-root.md) ------
 
 
-def _authored_entry(name: str = "hybrid_search") -> RegistryEntry:
+def _authored_entry(name: str = "graph_extraction") -> RegistryEntry:
     skel = CapabilityRegistry().register(name, contract=ChunkRecord, kind="mcp_tool").skeleton
     return skel.author(["find the governing law clause", "what indemnities apply"])
 
@@ -260,13 +260,13 @@ def test_registry_root_defaults_to_air_registry_when_unset(tmp_path, monkeypatch
 
 def test_write_manifest_writes_flat_slug_json_to_the_root(tmp_path, monkeypatch):
     monkeypatch.setenv("ARD_REGISTRY_ROOT", str(tmp_path))
-    entry = _authored_entry("hybrid_search")
+    entry = _authored_entry("graph_extraction")
 
     path = write_manifest(entry)
 
-    assert path == tmp_path / "hybrid_search.json"  # flat, named after the URN's final segment
+    assert path == tmp_path / "graph_extraction.json"  # flat, named after the URN's final segment
     data = json.loads(path.read_text())
-    assert data["envelope"]["identifier"] == "urn:air:dreamai.io:rag_wright:hybrid_search"
+    assert data["envelope"]["identifier"] == "urn:air:dreamai.io:rag_wright:graph_extraction"
     assert "representativeQueries" in data["envelope"]  # ARD-shaped camelCase on the wire
 
 

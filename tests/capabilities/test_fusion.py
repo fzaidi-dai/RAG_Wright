@@ -6,9 +6,8 @@ and no score (this is not a score fusion).
 
 from __future__ import annotations
 
-from rag_wright.capabilities.fusion import FusionResult, fuse, register_fusion
+from rag_wright.capabilities.fusion import fuse
 from rag_wright.capabilities.graph_query import GraphAnswer, GraphEvidence
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.reranking import RerankResult, ScoredCandidate
 
 
@@ -60,10 +59,5 @@ def test_handles_an_empty_stream_on_either_side():
     assert [c.chunk_id for c in fuse(_reranked(), _graph(["c2"])).chunks] == ["c2"]  # retrieval empty
 
 
-def test_registers_under_fr_q_4():
-    registry = CapabilityRegistry()
-    register_fusion(registry)
-    reg = registry.get("fusion")
-    assert reg.name == "fusion"
-    assert reg.contract is FusionResult
-    assert reg.kind == "function"
+# (EP-CORE-1a/ADR-0118: fusion is de-registered from ARD — a core helper now, not a capability; its
+# registration test was removed. `fuse` is tested below as an ordinary function.)

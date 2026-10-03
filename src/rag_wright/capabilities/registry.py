@@ -62,21 +62,13 @@ _DEFAULT_OWNER = "dreamai.io"
 # vision-to-text are one capability, bound at whichever node needs them.
 CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
     {
-        "parsing",  # FR-C.1
-        "embedding",  # FR-C.2
-        "hybrid_search",  # FR-C.3
-        "reranking",  # FR-C.4
-        "graph_query",  # FR-C.5
         "graph_extraction",  # FR-C.6
         "entity_disambiguation",  # FR-C.7 (canonicalize: normalize/reject/cluster; the T23b stage)
         "entity_resolution",  # FR-C.7 (closed-world linking to EDGAR CIK)
         "ontology_registry_derivation",  # FR-C.8 (foundation derivation: slug, but no ARD manifest)
         "generation",  # FR-C.9 (grounded/cited/abstaining answer generation)
         "vision_to_text",  # agent_skill: FR-C.9 single vision-language act (SKILL.md); split from generation (ADR-0014), SKILL-SPLIT
-        "fusion",  # FR-Q.4
-        "chunk_read",  # FR-Q (text rehydration between fusion and synthesis; T38)
         "rlm_chunking",  # FR-I.1 (applies the RLM skill; dynamic RLM discoverer -> agent_skill)
-        "semantic_chunking",  # FR-I.1 (single-call deterministic discoverer -> subgraph; CAP-REG-1b)
         "rlm_synthesis",  # FR-Q.5 (applies the RLM skill)
         "rlm_method",  # FR-C.10 (the shared RLM method skill, if registered)
         "okf_compile",  # FR-K.1-K.4 (foundation derivation: slug, but no ARD manifest; T46)
@@ -86,7 +78,6 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "extraction_grounding_judge",  # function: ADR-0028 lexical grounding gate
         "extraction_semantic_judge",  # agent_skill: ADR-0040 Layer 3 verify-or-refute reading (SKILL.md); SKILL-SPLIT
         "extraction_semantic_gate",  # function: applies the semantic-judge skill + AMBIGUOUS downgrade (deterministic)
-        "operative_span_segmentation",  # function: chunk -> operative spans
         "intra_document_scoped_query",  # function: intra-contract scoped KG serving (Leg A)
         "clause_disambiguation",  # function: disambiguation by property (Leg A)
         "clause_function_classification",  # model: LegalBERT function classifier (T56)
@@ -96,7 +87,6 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "candidate_routing",  # function: union combiner -> candidate pool (KG-5e)
         "typed_constraint_match_rank",  # function: KG-5a graded constraint match (recall-safe, subsumption)
         "dense_rank_tiebreak",  # function: cosine order for meaningful tie-breaking (KG-6/V4)
-        "property_boosted_retrieval",  # function: BGE pool + span-clause join + typed rerank (SPAN-CLAUSE-RERANK)
         "span_relevance_judgment",  # agent_skill: per-span relevance VERDICT (span x condition -> relevant/not/uncertain); issue 0023, SKILL-SPLIT
         # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
         "clause_exception_linking",  # function: IsExceptionTo edges (Uncapped -> Cap carve-out) by proximity (ADR-0044)

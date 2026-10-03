@@ -16,7 +16,6 @@ from typing import Optional
 from pydantic import BaseModel
 
 from rag_wright.capabilities.embedding import Embedder
-from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.chunk import MetadataValue
 from rag_wright.store.seam import Store
 
@@ -64,11 +63,3 @@ def hybrid_search(
     return HybridSearchResult(query=query, candidates=candidates)
 
 
-def register_hybrid_search(registry: CapabilityRegistry) -> None:
-    """Register hybrid search under FR-C.3 (`hybrid_search`, an in-process `function`)."""
-    registry.register(
-        "hybrid_search",
-        contract=HybridSearchResult,
-        kind="function",
-        display_name="Hybrid search (RRF over dense + sparse)",
-    )

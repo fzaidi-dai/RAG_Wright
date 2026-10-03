@@ -54,7 +54,7 @@ def test_granted_subagents_matches_the_names_the_skill_actually_declares():
 
 
 def test_function_manifests_have_no_skill_runtime():
-    for slug in ("parsing", "vision_to_text", "hybrid_search"):
+    for slug in ("clause_disambiguation", "vision_to_text", "requirement_adaptation"):
         assert author(slug).skill_runtime is None
 
 
@@ -65,10 +65,9 @@ def test_function_manifests_have_no_skill_runtime():
 
 
 def test_reclassified_capability_kinds():
-    assert author("embedding").kind == "model"  # BGE-M3 inference
-    assert author("reranking").kind == "model"  # BGE cross-encoder inference
     assert author("graph_extraction").kind == "subgraph"  # multi-step LLM extractor stack
     assert author("generation").kind == "agent_skill"  # a single grounded LLM act
+    # (embedding/reranking were models but are de-registered from ARD — core API now, EP-CORE-1a/ADR-0118)
 
 
 def test_generation_is_a_loaded_skill_without_runtime_or_bounds():
@@ -78,7 +77,7 @@ def test_generation_is_a_loaded_skill_without_runtime_or_bounds():
 
 
 def test_reclassified_models_and_subgraph_stay_callable_with_bounds():
-    for slug in ("embedding", "reranking", "graph_extraction"):
+    for slug in ("clause_function_classification", "clause_property_classification", "graph_extraction"):
         assert author(slug).response_bounds is not None  # model / subgraph are callable kinds
 
 
@@ -86,7 +85,6 @@ def test_reclassified_models_and_subgraph_stay_callable_with_bounds():
 
 _CAP_REG_2_KINDS = {
     "extraction_grounding_judge": "function",
-    "operative_span_segmentation": "function",
     "intra_document_scoped_query": "function",
     "clause_disambiguation": "function",
     "typed_value_normalization": "function",
@@ -113,30 +111,21 @@ def test_cap_reg_2_register_functions_register_the_right_kind():
     from rag_wright.contracts.value_match import register_typed_value_normalization
     from rag_wright.spans.legalbert_classifier import register_clause_function_classification
     from rag_wright.spans.property_grounding import register_extraction_grounding_judge
-    from rag_wright.spans.segment import register_operative_span_segmentation
 
     reg = CapabilityRegistry()
     register_typed_value_normalization(reg)
     register_extraction_grounding_judge(reg)
-    register_operative_span_segmentation(reg)
     register_intra_document_scoped_query(reg)
     register_clause_disambiguation(reg)
     register_clause_function_classification(reg)
     register_query_function_classification(reg)
-    assert len(reg) == 7
+    assert len(reg) == 6  # operative_span_segmentation de-registered (EP-CORE-1a)
     for slug, kind in _CAP_REG_2_KINDS.items():
         assert reg.get(slug).kind == kind
 
 
-def test_semantic_chunking_is_a_deterministic_subgraph():
-    # CAP-REG-1b Option A: the single-call chunker is a deterministic subgraph, distinct from the
-    # dynamic RLM chunker (rlm_chunking stays an agent_skill).
-    entry = author("semantic_chunking")
-    assert entry.kind == "subgraph"
-    assert entry.skill_runtime is None  # deterministic; no RLM dynamic dispatch
-    assert entry.response_bounds is not None  # subgraph is callable
-    assert entry.capability_interface is not None
-    assert entry.capability_interface.outputs == {"chunks": "chunk"}  # same ingestion `chunk` as rlm_chunking
+# (EP-CORE-1a: test_semantic_chunking_is_a_deterministic_subgraph removed — semantic_chunking is de-registered
+# from ARD; it's a core helper now, not a catalogued capability. ADR-0118.)
 
 
 def test_skill_runtime_serializes_camelcase_on_the_wire(tmp_path):
@@ -156,7 +145,7 @@ def test_requires_dynamic_dispatch_implies_interpreter():
 
 
 def test_skill_runtime_is_rejected_on_a_non_agent_skill():
-    data = author("parsing").model_dump(by_alias=True)  # a function entry
+    data = author("clause_disambiguation").model_dump(by_alias=True)  # a function entry
     data["skillRuntime"] = SkillRuntime(needs_interpreter=True).model_dump(by_alias=True)
     with pytest.raises(ValidationError):  # skill_runtime is agent_skill only (like requires)
         RegistryEntry.model_validate(data)
@@ -167,11 +156,12 @@ def test_skill_runtime_is_rejected_on_a_non_agent_skill():
 # The governed capabilities GraphWright's lowering checker verifies: the 7 retrieval->answer caps (T43) plus
 # the 7 ingestion->graph caps (T44). rlm_method is deliberately excluded — a required shared skill, not a
 # bound data node, so it has no data I/O to govern.
+# EP-CORE-1a (ADR-0118): the generic retrieval/ingestion primitives (hybrid_search, chunk_read, reranking,
+# graph_query, fusion, parsing, embedding) were de-registered from ARD — they are core API now, and their typed I/O
+# lives in their Python signatures (GraphWright is parked; see ADR-0118). What remains governed are the capabilities
+# still in ARD that declare an interface (the skills + the still-registered graph/entity caps, DD-3/4/5 pending).
 _GOVERNED_INTERFACE_SLUGS = (
-    # retrieval -> answer (T43)
-    "hybrid_search", "chunk_read", "reranking", "graph_query", "fusion", "rlm_synthesis", "generation",
-    # ingestion -> graph (T44)
-    "parsing", "rlm_chunking", "embedding", "graph_extraction",
+    "rlm_synthesis", "generation", "rlm_chunking", "graph_extraction",
     "entity_disambiguation", "entity_resolution", "vision_to_text",
 )
 
@@ -213,47 +203,15 @@ def test_governed_capabilities_declare_the_confirmed_interface(slug):
     assert iface.success_criterion.strip()  # required, informational one-liner
 
 
-def test_reranking_consumes_text_so_the_checker_forces_chunk_read_upstream():
-    # The load-bearing fact of the whole exchange: reranking's input is chunk_with_text, and the only
-    # producer of chunk_with_text is chunk_read. Under nominal typing that mismatch (chunk_id != chunk_with_text)
-    # is exactly what forces a rehydrate between an id-only producer and reranking.
-    assert author("reranking").capability_interface.inputs["passages"] == "chunk_with_text"
-    assert author("chunk_read").capability_interface.outputs["chunks"] == "chunk_with_text"
-    assert author("hybrid_search").capability_interface.outputs["candidates"] == "chunk_id"
-
-
-def test_fusion_output_type_checks_into_chunk_read(tmp_path):
-    # GraphWright's resolved call (ADR-0021): fusion output is `chunk_id` (id-only, the `sources[]`
-    # provenance does not fork the type name), so `fusion -> chunk_read` type-checks under nominal typing —
-    # the fused evidence set can be rehydrated before synthesis. `fused_chunk` is retired from the vocabulary.
-    assert author("fusion").capability_interface.outputs["fused"] == "chunk_id"
-    assert author("fusion").capability_interface.outputs["fused"] == author("chunk_read").capability_interface.inputs["chunk_ids"]
-    assert "fused_chunk" not in NOMINAL_TYPE_VOCABULARY
+# (EP-CORE-1a: the governed-composition tests for the de-registered primitives — reranking<-chunk_read,
+# fusion->chunk_read, and the ingestion->graph chain through parsing/embedding — were removed; those primitives
+# are core API now, not ARD capabilities, and GraphWright is parked.)
 
 
 def test_rlm_method_declares_no_interface_it_is_a_required_skill_not_a_data_node():
     # rlm_method (T44): a shared METHOD skill required by rlm_chunking/rlm_synthesis, never bound as a
     # data-processing node — no pipeline data I/O, so no governed interface (a type with no producer/consumer).
     assert author("rlm_method").capability_interface is None
-
-
-def test_ingestion_graph_chain_type_checks_end_to_end():
-    # The ingestion->graph chain must type-check under nominal typing: each producer's output name equals the
-    # next consumer's input name. document -> parsed_doc -> chunk -> {embedding, extraction} -> entity_cluster
-    # -> resolved_entity. This is the whole point of governing them — the checker forces the right chain.
-    def out(slug, port):
-        return author(slug).capability_interface.outputs[port]
-
-    def inp(slug, port):
-        return author(slug).capability_interface.inputs[port]
-
-    assert out("parsing", "parsed") == inp("rlm_chunking", "parsed") == "parsed_doc"
-    assert out("rlm_chunking", "chunks") == inp("embedding", "chunks") == "chunk"
-    assert out("rlm_chunking", "chunks") == inp("graph_extraction", "chunks") == "chunk"  # both consume `chunk`
-    assert out("graph_extraction", "facts") == inp("entity_disambiguation", "facts") == "extraction"
-    assert out("entity_disambiguation", "clusters") == inp("entity_resolution", "clusters") == "entity_cluster"
-    # entity_resolution also re-consumes the original extraction (relationship endpoints), the two-input node
-    assert inp("entity_resolution", "facts") == "extraction"
 
 
 def test_declared_interface_types_are_all_in_the_agreed_vocabulary():
@@ -275,12 +233,12 @@ def test_capability_interface_serializes_snake_case_inner_keys_under_a_camelcase
     # GraphWright ADR-0030 section 2: the top-level field is capabilityInterface (camelCase), but its inner
     # keys stay snake_case (success_criterion), because TypedInterface carries no ARD alias and their
     # extra="forbid" loader rejects camelCased inner keys. Publish and assert the exact on-disk shape.
-    data = json.loads(publish("hybrid_search", root=tmp_path).read_text())
-    assert data["capabilityInterface"] == {
-        "inputs": {"query": "text"},
-        "outputs": {"candidates": "chunk_id"},
-        "success_criterion": "retrieve RRF-fused candidate chunk references for a natural-language query",
-    }
+    data = json.loads(publish("graph_extraction", root=tmp_path).read_text())  # a still-registered governed cap
+    iface = data["capabilityInterface"]
+    # top-level field is camelCase; its inner keys stay snake_case (success_criterion), which the extra="forbid"
+    # loader requires (TypedInterface carries no ARD alias).
+    assert set(iface) == {"inputs", "outputs", "success_criterion"}
+    assert isinstance(iface["inputs"], dict) and isinstance(iface["outputs"], dict)
     RegistryEntry.model_validate(data)  # re-validates as GraphWright's store will load it
 
 
