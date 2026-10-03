@@ -2669,3 +2669,14 @@ cbr:field_Clause__has_warranty_scope skos:definition "Which warranties the claus
 cbr:field_CapConstraint__cap_basis skos:definition "The basis of the liability cap: fixed_fee (a fixed amount) / multiple_of_fees (a multiple of fees paid) / other." .
 cbr:field_TemporalConstraint__temporal_operator skos:definition "The temporal comparison operator ONLY (a few words), e.g. 'lteq' (within / at most), 'gteq' (at least), 'eq' (exactly)." .
 cbr:field_Jurisdiction__law_multiplicity skos:definition "Whether one law governs (single) or multiple laws govern (multiple)." .
+
+# =============================================================================
+# DD-7 (ADR-0066): the ENTITY-GRAPH taxonomy -- entity node types + entity-to-entity relationship (edge) types --
+# as PACK vocabulary (was the Python enum EntityType/RelationshipType, then the contract_taxonomy.py literals). The
+# ttl is now the single source of truth; codegen renders _generated_vocab.py (named constants + ENTITY_TYPES /
+# RELATIONSHIP_TYPES frozensets), CI-diff-enforced. A new domain declares its own entity/edge types the same way.
+# =============================================================================
+cbr:Organization a cbr:EntityNodeType ; rdfs:label "Organization" .
+cbr:Person a cbr:EntityNodeType ; rdfs:label "Person" .
+cbr:ContractsWith a cbr:EntityRelationshipType ; rdfs:label "Contracts With" .
+cbr:AffiliateOf a cbr:EntityRelationshipType ; rdfs:label "Affiliate Of" .

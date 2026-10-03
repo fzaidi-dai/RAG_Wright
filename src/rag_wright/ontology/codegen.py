@@ -41,6 +41,17 @@ def render_vocab_module() -> str:
         pairs = ", ".join(f"{k!r}: {v!r}" for k, v in sorted(view.value_synonyms[dim].items()))
         lines.append(f"    {dim!r}: {{{pairs}}},")
     lines.append("}")
+    # DD-7: the entity-graph taxonomy -- entity node types + entity-to-entity relationship types. Named constants
+    # (identifier = UPPER_SNAKE of the label) for ergonomic use, plus the two frozensets; `contract_taxonomy.py`
+    # re-exports these so no engine/domain code hardcodes the values (the ttl is the source of truth).
+    lines.append("")
+    for label in sorted(view.entity_types | view.relationship_types):
+        lines.append(f"{label.upper().replace(' ', '_')} = {label!r}")
+    ent = ", ".join(repr(v) for v in sorted(view.entity_types))
+    rel = ", ".join(repr(v) for v in sorted(view.relationship_types))
+    lines.append("")
+    lines.append(f"ENTITY_TYPES: frozenset[str] = frozenset({{{ent}}})")
+    lines.append(f"RELATIONSHIP_TYPES: frozenset[str] = frozenset({{{rel}}})")
     return "\n".join(lines) + "\n"
 
 

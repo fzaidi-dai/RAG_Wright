@@ -42,3 +42,11 @@ VOCAB: dict[str, frozenset[str]] = {
 VALUE_SYNONYMS: dict[str, dict[str, str]] = {
     'damage_type': {'businessinterruption': 'consequential', 'costofcover': 'consequential', 'lossofdata': 'consequential', 'lossofprofit': 'consequential', 'lossofprofits': 'consequential', 'lossofrevenue': 'consequential', 'lossofsavings': 'consequential', 'lossofuse': 'consequential', 'lostbusinessrevenue': 'consequential', 'lostprofits': 'consequential', 'lostrevenue': 'consequential', 'lostsavings': 'consequential'},
 }
+
+AFFILIATE_OF = 'Affiliate Of'
+CONTRACTS_WITH = 'Contracts With'
+ORGANIZATION = 'Organization'
+PERSON = 'Person'
+
+ENTITY_TYPES: frozenset[str] = frozenset({'Organization', 'Person'})
+RELATIONSHIP_TYPES: frozenset[str] = frozenset({'Affiliate Of', 'Contracts With'})

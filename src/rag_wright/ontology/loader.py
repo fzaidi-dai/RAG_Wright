@@ -151,6 +151,10 @@ class ContractOntologyView:
     # whose BROADER is a closed-vocab member but whose NARROWER is not (a specific surface term). Used at ingest to
     # canonicalize an out-of-vocab extracted value onto its canonical member (else the value is kept verbatim).
     value_synonyms: dict[str, dict[str, str]] = field(default_factory=dict)
+    # DD-7 (ADR-0066): the entity-graph taxonomy -- entity node types (cbr:EntityNodeType) + entity-to-entity
+    # relationship types (cbr:EntityRelationshipType), by label. Was the Python EntityType/RelationshipType enum.
+    entity_types: set[str] = field(default_factory=set)
+    relationship_types: set[str] = field(default_factory=set)
 
 
 def _label(g: Graph, node) -> str:
@@ -232,12 +236,17 @@ def load_contract_ontology(path: Path | str = _TTL_PATH) -> ContractOntologyView
             if key:
                 value_synonyms.setdefault(bdim, {})[key] = bval
 
+    # DD-7: the entity-graph taxonomy (entity node types + entity-to-entity relationship types), by label.
+    entity_types = {_label(g, s) for s in g.subjects(RDF.type, _cbr("EntityNodeType"))}
+    relationship_types = {_label(g, s) for s in g.subjects(RDF.type, _cbr("EntityRelationshipType"))}
+
     return ContractOntologyView(
         closed_vocab=closed_vocab, multivalued=multivalued,
         function_applicable_dims=function_applicable_dims,
         permission_polarity=permission_polarity, restrictive_functions=restrictive_functions,
         value_synonyms=value_synonyms,
-        value_rollup=value_rollup)
+        value_rollup=value_rollup,
+        entity_types=entity_types, relationship_types=relationship_types)
 
 
 @dataclass(frozen=True)
