@@ -7,6 +7,8 @@ types + the dimension->edge map + predicate IRIs are pack-authoritative (`contra
 values in; the store owns all wire encoding."""
 from __future__ import annotations
 
+from typing import Optional
+
 from rag_wright.contracts.contract_meta import ContractRecord
 from rag_wright.contracts.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
 from rag_wright.store.arcadedb import (
@@ -20,6 +22,7 @@ from rag_wright.store.arcadedb import (
     _edge_predicate_iri,
     _property_value_key,
 )
+from rag_wright.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH  # DD-5 contract edge names
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 
 
@@ -171,3 +174,32 @@ class ContractKGStore:
         relocatable follow-up, not an edge traversal). Kept here so this extension is the complete `_KGStore`
         reader the Leg-A serving (`contract_kg_serve`) needs."""
         return self._store.clauses_in_contract(contract_id)
+
+    # --- EP-REF-1b-ii: contract traversal + vocab (the reference reads EP-SEAM-3 lifts), over the entity-graph
+    #     traversal primitive + the clause index. The CONTRACTS_WITH / AFFILIATE_OF naming is the DD-5 contract
+    #     vocabulary over the generic (domain-free) graph_query.
+
+    def party_counterparties(self, entity_id: str, *, max_hops: int = 1,
+                             documents: Optional[list[str]] = None) -> list:
+        """The parties this one has a CONTRACTS_WITH edge to, each citing the contract it came from. ONE hop by
+        default -- two hops would return the counterparties OF the counterparties (parties this one has no
+        agreement with), overstating exposure. `documents` scopes the traversal (every edge on a path must belong)."""
+        from rag_wright.capabilities.graph_query import graph_query
+        return list(graph_query(entity_id, store=self._store, relationship_type=CONTRACTS_WITH,
+                                max_hops=max_hops, documents=documents).evidence)
+
+    def party_affiliates(self, entity_id: str, *, documents: Optional[list[str]] = None) -> list:
+        """The parties this one has an AFFILIATE_OF edge to (same corporate group). A SEPARATE traversal from
+        counterparties on purpose: a parent and its subsidiary are two legal persons whose obligations must not be
+        pooled, and the engine does not merge the entities -- the affiliate is its own node."""
+        from rag_wright.capabilities.graph_query import graph_query
+        return list(graph_query(entity_id, store=self._store, relationship_type=AFFILIATE_OF,
+                                documents=documents).evidence)
+
+    def contract_terms(self, contract_id: str) -> list:
+        """The typed clauses of one contract -- the terms that create the exposure. The FULL view, NOT
+        grounded-only: the high-precision view drops AMBIGUOUS properties, including the verbatim out-of-vocab
+        values ADR-0102 kept, so an exposure/citation surface must read what the graph holds, not less (a
+        precision filter is a per-caller UI choice, never baked into the facade)."""
+        from rag_wright.capabilities.contract_kg_serve import contract_clause_index
+        return list(contract_clause_index(self, contract_id))
