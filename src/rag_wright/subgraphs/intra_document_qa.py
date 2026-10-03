@@ -310,3 +310,14 @@ def register_intra_document_qa(registry) -> None:
         kind="subgraph",
         display_name="Intra-document QA (cited answer scoped to one contract)",
     )
+
+
+async def ainvoke(resources, inputs: dict):
+    """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target)."""
+    from rag_wright.capabilities.answer_generator import answer_model_for
+    from rag_wright.models.profiles import ModelRole
+
+    graph = production_intra_document_qa(store=resources._store,
+                                         answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)),
+                                         top_k=inputs.get("top_k", 12))
+    return await graph.ainvoke({"contract_id": inputs["contract_id"], "question": inputs["question"]})

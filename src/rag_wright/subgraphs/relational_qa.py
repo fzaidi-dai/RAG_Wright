@@ -151,3 +151,14 @@ def register_relational_qa(registry) -> None:
         kind="subgraph",
         display_name="Relational QA (cited answer from graph traversal)",
     )
+
+
+async def ainvoke(resources, inputs: dict):
+    """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target)."""
+    from rag_wright.capabilities.answer_generator import answer_model_for
+    from rag_wright.models.profiles import ModelRole
+
+    graph = production_relational_qa(store=resources._store,
+                                     answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)))
+    return await graph.ainvoke({"query": inputs["query"], "start_entity_id": inputs["start_entity_id"],
+                                "max_hops": inputs.get("max_hops", 1)})

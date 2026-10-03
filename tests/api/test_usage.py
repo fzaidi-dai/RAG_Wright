@@ -43,11 +43,11 @@ def test_measure_usage_captures_known_and_unknown_cost_calls():
 
 async def test_a_caller_scope_captures_an_invokes_usage(monkeypatch):
     """The product-facing contract: wrap the invoke in measure_usage() and read the model usage it incurred."""
-    async def _stub(handle, inputs):
+    async def _stub(resources, inputs):
         record_usage("m", input_tokens=10, output_tokens=5, cost=0.01)
         return {"ok": True}
 
-    monkeypatch.setitem(_invoke._SUBGRAPH_ADAPTERS, "relational_qa", _stub)
+    monkeypatch.setattr(_invoke, "capability_impl", lambda name: _stub)  # EP-CORE-2: impl resolved via capability_impl
     with measure_usage() as u:
         out = await ainvoke_subgraph("relational_qa", {"q": 1}, resources=_handle())
     assert out == {"ok": True}

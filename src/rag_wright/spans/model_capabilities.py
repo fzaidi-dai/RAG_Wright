@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Callable
 
+from rag_wright.capabilities.invoke import capability_impl
 from rag_wright.models.tracing import traced_step
 
 # --- cached fleets: loaded ONCE per process (heavy) ---
@@ -47,36 +48,28 @@ def _setfit_clause_classifier() -> Any:
 
 # --- the model-capability adapters: name -> (inputs -> output). Store-independent. ---
 
-def _model_clause_function_classification(inputs: dict) -> Any:
+# The model-capability invoke factories: `(resources, inputs) -> result`, uniform with the subgraph factories
+# (EP-CORE-2). Model capabilities are store-independent, so `resources` is ignored. These are the targets of the
+# manifests' `impl_ref` ("rag_wright.spans.model_capabilities:clause_function_classification", etc.).
+
+def clause_function_classification(resources: Any, inputs: dict) -> Any:  # noqa: ARG001 - store-independent
     return _setfit_clause_classifier().classify_spans(inputs["chunk_text"], inputs["span_texts"])
 
 
-def _model_clause_property_classification(inputs: dict) -> Any:
+def clause_property_classification(resources: Any, inputs: dict) -> Any:  # noqa: ARG001 - store-independent
     from rag_wright.spans.property_extractor import HybridPropertyExtractor
 
     ext = HybridPropertyExtractor(_dim_registry(), runnable=object())  # classifier lane only; runnable unused
     return ext.classify_properties(inputs["text"], functions=tuple(inputs.get("functions", ())))
 
 
-_MODEL_ADAPTERS: dict[str, Callable[[dict], Any]] = {
-    "clause_function_classification": _model_clause_function_classification,
-    "clause_property_classification": _model_clause_property_classification,
-}
-
-
-def model_adapter_names() -> list[str]:
-    """The model-capability slugs with a wired adapter (for the invoker's drift guard)."""
-    return list(_MODEL_ADAPTERS)
-
-
 def dispatch_model(name: str, inputs: dict) -> Any:
-    """Dispatch a model-capability by name through the single binding, inside a trace span. Raises
-    `NotImplementedError` if no adapter is wired (name validation vs the ARD catalog is the API invoker's job)."""
-    adapter = _MODEL_ADAPTERS.get(name)
-    if adapter is None:
-        raise NotImplementedError(f"no in-process model-capability adapter wired for {name!r}")
+    """Dispatch a model-capability by name, inside a trace span -- resolving the implementation via the manifest
+    `impl_ref` (the SAME adapter-free path the engine API invoker uses, EP-CORE-2). This is the ONE production path
+    the ingestion pipeline also routes through. Model factories are store-independent, so resources is `None`."""
+    factory = capability_impl(name)  # resolves impl_ref; raises KeyError/NotImplementedError on an unknown/unwired name
     with traced_step(f"invoke:{name}"):
-        return adapter(inputs)
+        return factory(None, inputs)
 
 
 async def adispatch_model(name: str, inputs: dict, *, sem: asyncio.Semaphore | None = None) -> Any:

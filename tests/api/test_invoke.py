@@ -53,12 +53,13 @@ def test_invoke_model_rejects_a_de_registered_or_unknown_capability():
 async def test_ainvoke_subgraph_dispatches_the_inputs(monkeypatch):
     seen = {}
 
-    async def _stub(handle, inputs):
+    async def _stub(resources, inputs):
         seen["inputs"] = inputs
         return {"ok": True}
 
-    # 'relational_qa' is a real subgraph slug in the catalog with no adapter wired -> inject a stub
-    monkeypatch.setitem(_invoke._SUBGRAPH_ADAPTERS, "relational_qa", _stub)
+    # EP-CORE-2: the invoker resolves the impl via `capability_impl` (no central adapter dict) -> stub it.
+    # 'relational_qa' is a real subgraph slug in the catalog (validated), so _validate passes.
+    monkeypatch.setattr(_invoke, "capability_impl", lambda name: _stub)
     out = await ainvoke_subgraph("relational_qa", {"q": 1}, resources=_handle())
     assert out == {"ok": True} and seen["inputs"] == {"q": 1}
     # usage is the CALLER's concern now (EP-API-5): the invoker opens no scope of its own
@@ -66,18 +67,16 @@ async def test_ainvoke_subgraph_dispatches_the_inputs(monkeypatch):
 
 
 def test_invoke_model_dispatches_through_the_single_model_binding(monkeypatch):
-    """invoke_model validates against the ARD catalog then dispatches through the SINGLE model-capability binding
-    (`spans.model_capabilities`) -- the same binding the ingestion pipeline routes through (EP-RT-7). Hermetic: stub
-    the adapter in that binding so no heavy fleet loads."""
-    from rag_wright.spans import model_capabilities as _mc
-
+    """invoke_model validates against the ARD catalog then resolves the impl via `capability_impl` (the impl_ref
+    path, EP-CORE-2) -- the same resolution the ingestion pipeline's dispatch uses. Hermetic: stub the resolver so
+    no heavy fleet loads. Model factories take `(resources, inputs)`."""
     seen = {}
 
-    def _stub(inputs):
+    def _stub(resources, inputs):
         seen["inputs"] = inputs
         return [{"dimension": "liability_cap_basis", "value": "FEES_PAID", "confidence": "EXTRACTED"}]
 
-    monkeypatch.setitem(_mc._MODEL_ADAPTERS, "clause_property_classification", _stub)
+    monkeypatch.setattr(_invoke, "capability_impl", lambda name: _stub)
     out = invoke_model("clause_property_classification", {"text": "liability cap", "functions": ("Cap",)},
                        resources=_handle())
     assert out[0]["dimension"] == "liability_cap_basis"

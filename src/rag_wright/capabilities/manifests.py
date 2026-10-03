@@ -61,6 +61,12 @@ class CapabilityManifest:
     # GraphWright vendor extension (ADR-0030): the governed typed I/O. Declared only for the query-graph
     # capabilities GraphWright's checker verifies (the 5 + graph_query + generation); None elsewhere.
     capability_interface: Optional[CapabilityInterface] = None
+    # EP-CORE-2 vendor extension (ADR-0118): the invoke factory for an INVOKABLE capability (subgraph/model), as a
+    # "module:attr" import pointer to a `(resources, inputs) -> result` callable (model factories ignore resources).
+    # ARD stays metadata-only (ADR-0003): this is a STRING pointer, not a callable. The invoker resolves + imports it
+    # lazily, so there is no central engine-owned adapter dict — a developer registering a cap with an impl_ref makes
+    # it invocable with zero engine edits. None for non-invokable kinds (function/agent_skill/mcp_tool) + reserved.
+    impl_ref: Optional[str] = None
 
 
 # One entry per capability, added at that capability's task. T15 registers the shared RLM method
@@ -493,6 +499,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="clause_function_classification",
+        impl_ref="rag_wright.spans.model_capabilities:clause_function_classification",
         kind="model",
         display_name="Clause function classification (LegalBERT)",
         description=(
@@ -509,6 +516,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="clause_property_classification",
+        impl_ref="rag_wright.spans.model_capabilities:clause_property_classification",
         kind="model",
         display_name="Clause property classification (29-dim fleet)",
         description=(
@@ -578,6 +586,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     # --- LG-3: composite pipeline subgraphs ---
     CapabilityManifest(
         slug="relational_qa",
+        impl_ref="rag_wright.subgraphs.relational_qa:ainvoke",
         kind="subgraph",
         display_name="Relational QA (cited answer from graph traversal)",
         description=(
@@ -597,6 +606,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="intra_document_qa",
+        impl_ref="rag_wright.subgraphs.intra_document_qa:ainvoke",
         kind="subgraph",
         display_name="Intra-document QA (cited answer scoped to one contract)",
         description=(
@@ -619,6 +629,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     # BGE+property pool via property_boosted_retrieval; cross_corpus's function-only pool was the inferior copy).
     CapabilityManifest(
         slug="typed_property_retrieval",
+        impl_ref="rag_wright.subgraphs.typed_property_retrieval:ainvoke",
         kind="subgraph",
         display_name="Typed property-boosted retrieval (Leg B)",
         description=(
@@ -639,6 +650,7 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
     CapabilityManifest(
         slug="contract_ingestion_pipeline",
+        impl_ref="rag_wright.subgraphs.contract_ingestion_pipeline:ainvoke",
         kind="subgraph",
         display_name="Contract ingestion pipeline (corpus -> populated, connected KG)",
         description=(

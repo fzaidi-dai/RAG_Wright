@@ -1028,3 +1028,23 @@ def register_contract_ingestion_pipeline(registry) -> None:
         kind="subgraph",
         display_name="Contract ingestion pipeline (corpus -> populated, connected KG)",
     )
+
+
+async def ainvoke(resources, inputs: dict):
+    """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target) -- ingest ONE document through the
+    async per-document graph over the opaque handle. `inputs`: document (an api.source_document / parse_document
+    SourceDocument) + cache_dir. Ingest knobs + embedder come from EngineConfig.options/embeddings (EP-API-4a/4b);
+    the entity resolver is the generic closed-world default (DD-3)."""
+    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.models.profiles import ModelRole
+    from rag_wright.ontology.registry import EntityRegistry
+
+    opts = resources._config.options.ingest
+    graph = aproduction_document_ingest(
+        resources._store, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
+        extract_model=default_extraction_model(model=resources.model_id(ModelRole.STRUCTURED_REASONING)),
+        embedding_profile=resources._config.embeddings.get("text", "bge-m3"),
+        list_model=opts.list_model, samples=opts.clause_samples,
+        classify_concurrency=opts.classify_concurrency, clause_concurrency=opts.clause_concurrency,
+        affiliations=opts.affiliations, function_classifier=opts.function_classifier)
+    return await graph.ainvoke({"document": inputs["document"]})

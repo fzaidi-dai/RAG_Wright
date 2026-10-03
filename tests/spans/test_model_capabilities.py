@@ -33,12 +33,19 @@ def test_property_classifier_fn_routes_through_the_capability(monkeypatch):
     assert calls == [("clause_property_classification", {"text": "some clause text", "functions": ("Cap On Liability",)})]
 
 
-def test_dispatch_model_rejects_an_unwired_name():
+def test_dispatch_model_rejects_an_unknown_name():
     import pytest
 
-    with pytest.raises(NotImplementedError):
-        mc.dispatch_model("embedding", {})  # a model-kind slug with no adapter wired
+    # EP-CORE-2: dispatch resolves via the manifest impl_ref; 'embedding' is de-registered (EP-CORE-1a), so it is
+    # unknown to the catalog -> KeyError.
+    with pytest.raises(KeyError):
+        mc.dispatch_model("embedding", {})
 
 
-def test_the_wired_model_adapters_are_the_two_classifiers():
-    assert set(mc.model_adapter_names()) == {"clause_function_classification", "clause_property_classification"}
+def test_the_two_model_capabilities_resolve_via_impl_ref():
+    # EP-CORE-2: both model capabilities resolve through capability_impl (the manifest impl_ref), to the factories
+    # in this module -- no central adapter dict.
+    from rag_wright.capabilities.invoke import capability_impl
+
+    assert capability_impl("clause_function_classification") is mc.clause_function_classification
+    assert capability_impl("clause_property_classification") is mc.clause_property_classification

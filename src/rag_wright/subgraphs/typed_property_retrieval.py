@@ -262,3 +262,16 @@ def register_typed_property_retrieval(registry) -> None:
         kind="subgraph",
         display_name="Typed property-boosted retrieval (Leg B)",
     )
+
+
+async def ainvoke(resources, inputs: dict):
+    """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target) -- build Leg B over the opaque
+    workspace handle and run it. `inputs`: query (+ optional k/pool_k/documents)."""
+    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.models.profiles import ModelRole
+
+    graph = production_typed_property_retrieval(
+        store=resources._store, embedder=resources._embedder,
+        extract_model=default_extraction_model(model=resources.model_id(ModelRole.STRUCTURED_REASONING)),
+        k=inputs.get("k", 8), pool_k=inputs.get("pool_k", 30), documents=inputs.get("documents"))
+    return await graph.ainvoke({"query": inputs["query"]})
