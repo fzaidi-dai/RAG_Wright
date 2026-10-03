@@ -22,6 +22,7 @@
 # reuse the value "other" without colliding with the compiler's auto-added OTHER escape member).
 
 @prefix cbr:   <https://ragwright.local/ontology/contract-bridge#> .
+@prefix eng:   <https://ragwright.local/ontology/engine#> .   # DD-8: the engine's pack-schema declaration vocabulary
 @prefix folio: <https://folio.openlegalstandard.org/> .
 @prefix odrl:  <http://www.w3.org/ns/odrl/2/> .
 @prefix prov:  <http://www.w3.org/ns/prov#> .
@@ -2639,21 +2640,23 @@ cbr:PROHIBITS a cbr:KgEdgeType ;
 # vector indexes) stays generic in store/arcadedb.py; these DOMAIN vertex/edge types are PACK-declared, so a new
 # domain ships its own node schema. cbr:kgProperty = "name:TYPE"; cbr:uniqueIndexOn = a UNIQUE id index.
 # =============================================================================
-cbr:ClauseNode a cbr:KgVertexType ; cbr:vertexName "Clause" ;
-    cbr:kgProperty "clause_id:STRING", "function:STRING", "folio_iri:STRING", "span_id:STRING", "functions:STRING" ;
-    cbr:uniqueIndexOn "clause_id" .
-cbr:PropertyValueNode a cbr:KgVertexType ; cbr:vertexName "PropertyValue" ;
-    cbr:kgProperty "value_key:STRING", "dimension:STRING", "value:STRING", "folio_iri:STRING", "canonical_value:STRING" ;
-    cbr:uniqueIndexOn "value_key" .
-cbr:ContractNode a cbr:KgVertexType ; cbr:vertexName "Contract" ;
-    cbr:kgProperty "contract_id:STRING", "name:STRING", "agreement_type:STRING", "parties_json:STRING",
+# DD-8: the vertex/edge-type DECLARATION vocabulary (a eng:KgVertexType, eng:vertexName/kgProperty/uniqueIndexOn,
+# eng:KgStructuralEdge/edgeName) is ENGINE-namespaced -- the SUBJECTS below (cbr:ClauseNode ...) are this pack's.
+cbr:ClauseNode a eng:KgVertexType ; eng:vertexName "Clause" ;
+    eng:kgProperty "clause_id:STRING", "function:STRING", "folio_iri:STRING", "span_id:STRING", "functions:STRING" ;
+    eng:uniqueIndexOn "clause_id" .
+cbr:PropertyValueNode a eng:KgVertexType ; eng:vertexName "PropertyValue" ;
+    eng:kgProperty "value_key:STRING", "dimension:STRING", "value:STRING", "folio_iri:STRING", "canonical_value:STRING" ;
+    eng:uniqueIndexOn "value_key" .
+cbr:ContractNode a eng:KgVertexType ; eng:vertexName "Contract" ;
+    eng:kgProperty "contract_id:STRING", "name:STRING", "agreement_type:STRING", "parties_json:STRING",
                    "agreement_date:STRING", "effective_date:STRING", "source_doc_id:STRING",
                    "content_hash:STRING", "page_count:INTEGER" ;
-    cbr:uniqueIndexOn "contract_id" .
-cbr:HasPropertyEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "HasProperty" .
+    eng:uniqueIndexOn "contract_id" .
+cbr:HasPropertyEdgeDecl a eng:KgStructuralEdge ; eng:edgeName "HasProperty" .
 # (issue 0028 / ADR-0091: PartyToEdgeDecl retired -- the PartyTo edge was written on every ingest and read by
 #  nothing; party->clause is reached via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
-cbr:IsExceptionToEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "IsExceptionTo" .
+cbr:IsExceptionToEdgeDecl a eng:KgStructuralEdge ; eng:edgeName "IsExceptionTo" .
 
 # =============================================================================
 # ADR-0066 P1b-3: fill the 10 previously-empty field descriptions (the LOOK-FOR meaning + enum options). Measured
@@ -2676,7 +2679,7 @@ cbr:field_Jurisdiction__law_multiplicity skos:definition "Whether one law govern
 # ttl is now the single source of truth; codegen renders _generated_vocab.py (named constants + ENTITY_TYPES /
 # RELATIONSHIP_TYPES frozensets), CI-diff-enforced. A new domain declares its own entity/edge types the same way.
 # =============================================================================
-cbr:Organization a cbr:EntityNodeType ; rdfs:label "Organization" .
-cbr:Person a cbr:EntityNodeType ; rdfs:label "Person" .
-cbr:ContractsWith a cbr:EntityRelationshipType ; rdfs:label "Contracts With" .
-cbr:AffiliateOf a cbr:EntityRelationshipType ; rdfs:label "Affiliate Of" .
+cbr:Organization a eng:EntityNodeType ; rdfs:label "Organization" .
+cbr:Person a eng:EntityNodeType ; rdfs:label "Person" .
+cbr:ContractsWith a eng:EntityRelationshipType ; rdfs:label "Contracts With" .
+cbr:AffiliateOf a eng:EntityRelationshipType ; rdfs:label "Affiliate Of" .

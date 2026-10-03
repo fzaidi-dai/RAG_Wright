@@ -134,6 +134,11 @@ def load_shapes_graph(path: str = str(_TTL_PATH)) -> Graph:
     g.parse(path, format="turtle")
     return g
 _CBR = "https://ragwright.local/ontology/contract-bridge#"
+# The engine's pack-schema DECLARATION meta-vocabulary (DD-8): the classes/predicates a pack `.ttl` uses to declare
+# its KG node/edge types + entity taxonomy (KgVertexType/vertexName/kgProperty/uniqueIndexOn/KgStructuralEdge/
+# edgeName, EntityNodeType/EntityRelationshipType). Engine-namespaced (not contract-namespaced), so a NON-contract
+# domain declares its schema in this shared language without borrowing the contract pack's namespace (AC-journey).
+_ENG = "https://ragwright.local/ontology/engine#"
 _DIMENSION_CLASS = _CBR + "PropertyDimension"
 
 
@@ -237,8 +242,8 @@ def load_contract_ontology(path: Path | str = _TTL_PATH) -> ContractOntologyView
                 value_synonyms.setdefault(bdim, {})[key] = bval
 
     # DD-7: the entity-graph taxonomy (entity node types + entity-to-entity relationship types), by label.
-    entity_types = {_label(g, s) for s in g.subjects(RDF.type, _cbr("EntityNodeType"))}
-    relationship_types = {_label(g, s) for s in g.subjects(RDF.type, _cbr("EntityRelationshipType"))}
+    entity_types = {_label(g, s) for s in g.subjects(RDF.type, _eng("EntityNodeType"))}
+    relationship_types = {_label(g, s) for s in g.subjects(RDF.type, _eng("EntityRelationshipType"))}
 
     return ContractOntologyView(
         closed_vocab=closed_vocab, multivalued=multivalued,
@@ -267,15 +272,15 @@ def load_kg_schema(path: str | None = None) -> tuple[tuple[KgVertexType, ...], f
     g = Graph()
     g.parse(str(path or _TTL_PATH), format="turtle")
     vertices = []
-    for v in g.subjects(RDF.type, _cbr("KgVertexType")):
+    for v in g.subjects(RDF.type, _eng("KgVertexType")):
         props = tuple(sorted((str(p).split(":", 1)[0], str(p).split(":", 1)[1])
-                             for p in g.objects(v, _cbr("kgProperty")) if ":" in str(p)))
-        ui = g.value(v, _cbr("uniqueIndexOn"))
-        vertices.append(KgVertexType(name=str(g.value(v, _cbr("vertexName"))), properties=props,
+                             for p in g.objects(v, _eng("kgProperty")) if ":" in str(p)))
+        ui = g.value(v, _eng("uniqueIndexOn"))
+        vertices.append(KgVertexType(name=str(g.value(v, _eng("vertexName"))), properties=props,
                                      unique_index=(str(ui) if ui is not None else None)))
     vertices.sort(key=lambda x: x.name)
-    edges = frozenset(str(g.value(e, _cbr("edgeName")))
-                      for e in g.subjects(RDF.type, _cbr("KgStructuralEdge")))
+    edges = frozenset(str(g.value(e, _eng("edgeName")))
+                      for e in g.subjects(RDF.type, _eng("KgStructuralEdge")))
     return tuple(vertices), edges
 
 
@@ -302,6 +307,11 @@ def _dim_class():
 def _cbr(frag: str):
     from rdflib import URIRef
     return URIRef(_CBR + frag)
+
+
+def _eng(frag: str):
+    from rdflib import URIRef
+    return URIRef(_ENG + frag)
 
 
 def load_template_fields(path: Path | str = _TTL_PATH):

@@ -21,6 +21,12 @@ _PACK = str(Path(__file__).with_name("incidents_pack.ttl"))
 # --- hermetic: the loader reads an arbitrary (non-contract) pack ttl ----------------------------
 
 
+def test_a_new_domain_pack_uses_only_the_engine_meta_vocabulary():
+    # DD-8: a new domain declares its schema with the ENGINE namespace, borrowing nothing from the contract pack.
+    src = Path(_PACK).read_text(encoding="utf-8")
+    assert "ontology/engine#" in src and "contract-bridge" not in src
+
+
 def test_load_kg_schema_reads_an_arbitrary_pack_ttl():
     vertices, edges = load_kg_schema(_PACK)
     by_name = {v.name: v for v in vertices}

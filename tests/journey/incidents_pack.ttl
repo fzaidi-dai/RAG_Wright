@@ -1,13 +1,14 @@
-@prefix cbr: <https://ragwright.local/ontology/contract-bridge#> .
+@prefix eng: <https://ragwright.local/ontology/engine#> .
+@prefix inc: <https://example.test/incidents#> .
 
-# AC-journey smoke domain: a tiny NON-CONTRACT pack ("incidents") declaring its OWN KG vertex + edge types, to
-# prove a new domain's schema is created from its own `.ttl` via `EngineConfig(pack=...)` -- "config + .ttl", no
-# engine edit. (The cbr: meta-vocabulary -- KgVertexType/vertexName/kgProperty/KgStructuralEdge -- is the engine's
-# pack-schema declaration language, reused; a follow-up could move it to an engine namespace.)
-cbr:IncidentNode a cbr:KgVertexType ; cbr:vertexName "Incident" ;
-    cbr:kgProperty "incident_id:STRING", "title:STRING", "severity:STRING" ;
-    cbr:uniqueIndexOn "incident_id" .
-cbr:SystemNode a cbr:KgVertexType ; cbr:vertexName "System" ;
-    cbr:kgProperty "system_id:STRING", "name:STRING" ;
-    cbr:uniqueIndexOn "system_id" .
-cbr:AffectsEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "AFFECTS" .
+# AC-journey / DD-8 smoke domain: a tiny NON-CONTRACT pack ("incidents") declaring its OWN KG vertex + edge types
+# using ONLY the engine's pack-schema declaration vocabulary (`eng:` -- KgVertexType/vertexName/kgProperty/
+# uniqueIndexOn, KgStructuralEdge/edgeName). It borrows NOTHING from the contract pack's namespace -- proving a new
+# domain's schema is "config + .ttl" in the shared engine language, created via EngineConfig(pack=...), no engine edit.
+inc:IncidentNode a eng:KgVertexType ; eng:vertexName "Incident" ;
+    eng:kgProperty "incident_id:STRING", "title:STRING", "severity:STRING" ;
+    eng:uniqueIndexOn "incident_id" .
+inc:SystemNode a eng:KgVertexType ; eng:vertexName "System" ;
+    eng:kgProperty "system_id:STRING", "name:STRING" ;
+    eng:uniqueIndexOn "system_id" .
+inc:AffectsEdgeDecl a eng:KgStructuralEdge ; eng:edgeName "AFFECTS" .
