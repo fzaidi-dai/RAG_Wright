@@ -6,15 +6,18 @@ what the engine provides. The `Requirement` vertex + its property storage types 
 so `kg_write` encodes each field (incl. `pages` as a native array, `bbox`/`applicability_json` as JSON strings)."""
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
-from rag_wright.contracts.compliance import Requirement
+from rag_wright.capabilities.highlight_serve import _decode_bbox
+from rag_wright.contracts.compliance import Requirement, RequirementLocation
 from rag_wright.store.arcadedb import REQUIREMENT_TYPE
 from rag_wright.store.seam import KgNode
 
 
 class ComplianceStore:
-    """Requirement-KG writes over a generic `Store`."""
+    """Requirement-KG writes + the compliance READ facade over a generic `Store` (EP-REF-1b). The reads shape
+    the stored `Requirement` rows into the domain answers a product serves (what EP-SEAM-3 lifts), so the engine
+    store stays generic and a new domain supplies its own facade the same way."""
 
     def __init__(self, store) -> None:
         self._store = store
@@ -41,3 +44,44 @@ class ComplianceStore:
         ]
         self._store.kg_write(nodes)
         return len(nodes)
+
+    # --- EP-REF-1b: the compliance READ facade (the reference versions the product seam lifts) ---------
+
+    def requirements_for(self, source: str) -> list[dict]:
+        """The curated requirement rows filed under one policy `source` -- the proof an ingest landed. DB-scoped
+        (`all_requirements(sources=[source])`), so a multi-policy store never fetches the rows outside scope."""
+        return self._store.all_requirements(sources=[source])
+
+    def requirement_locations(self, source: str) -> list[RequirementLocation]:
+        """Where each requirement of one policy sits in its document (pages + optional bbox), for a citation
+        preview. Reads defensively: a requirement curated before provenance landed (ADR-0107) has no pages/bbox,
+        so `pages` -> [] and a malformed/absent `bbox` -> None (a page is still openable without a rectangle)."""
+        return [
+            RequirementLocation(
+                requirement_id=str(r.get("requirement_id") or ""),
+                citation=str(r.get("citation") or ""),
+                pages=[int(p) for p in (r.get("pages") or [])],
+                bbox=_decode_bbox(r.get("bbox")),
+                text=str(r.get("requirement_text") or ""),
+            )
+            for r in self._store.all_requirements(sources=[source])
+        ]
+
+    def curated_requirement_count(self, sources: Optional[list[str]] = None) -> int:
+        """How many requirements are IN SCOPE -- the denominator of an honest coverage statement (consulted N of
+        curated M). `sources=None` counts store-wide; a list scopes it (DB-side), `[]` is zero."""
+        return len(self._store.all_requirements(sources=sources))
+
+    @staticmethod
+    def policy_of_requirement(requirement_id: str) -> str:
+        """The policy a requirement belongs to, from its id `<source>:<section>:<hash>`. Split on the FIRST colon
+        -- a source name may legitimately contain dots/hyphens ("ISO.27001-2022"), which a last-colon split eats.
+        Empty id -> ''. This prefix is the only link a `ComplianceFinding` carries back to its policy."""
+        return requirement_id.split(":", 1)[0] if requirement_id else ""
+
+    @staticmethod
+    def gated_pairs(report) -> list[dict]:
+        """The (assertion|document, rule) pairs the symbolic ACTOR gate skipped before any judge call -- honest
+        coverage (ADR-0068): a shallow copy of `ComplianceReport.gated_pairs`. The ACTOR gate ONLY; top-k semantic
+        narrowing also drops pairs and is NOT reported here, so `[]` does not mean every pair was evaluated."""
+        return [dict(entry) for entry in (getattr(report, "gated_pairs", None) or [])]

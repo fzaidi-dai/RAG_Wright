@@ -16,7 +16,7 @@ from __future__ import annotations
 import hashlib
 from enum import Enum
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -256,6 +256,19 @@ class ComplianceFinding(BaseModel):
 
 
 _AD_VIOLATION_THRESHOLD = 2  # a lone violation finding among many rules escalates, not hard-flags (RG-5 aggregation)
+
+
+class RequirementLocation(BaseModel):
+    """Where a curated requirement sits in its policy document, for a citation preview (EP-REF-1b): the
+    requirement id, its citation label, the source page number(s), an optional `[l, t, r, b]` rectangle, and
+    the rule text. `pages`/`bbox` are best-effort -- a requirement curated before provenance landed (ADR-0107)
+    reads back with `pages=[]` / `bbox=None`, which a preview renders honestly rather than erroring."""
+
+    requirement_id: str
+    citation: str
+    pages: list[int] = []
+    bbox: Optional[tuple[float, float, float, float]] = None
+    text: str
 
 
 class ComplianceReport(BaseModel):
