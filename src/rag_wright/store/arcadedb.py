@@ -231,36 +231,44 @@ def _stale_property_statements(span_ids: list[str]) -> list[str]:
 class ArcadeDBStore:
     """The default store: schema management over a single ArcadeDB database."""
 
-    def __init__(self, client: SyncClient, database: str) -> None:
+    def __init__(self, client: SyncClient, database: str, *, pack_ttl: str | None = None) -> None:
         self._client = client
         self._database = database
         self._db = DatabaseDao(client, database)
+        # AC-journey: the DOMAIN pack `.ttl` whose KG vertex/edge types `ensure_schema` creates and whose property
+        # storage types `kg_write` encodes by. `None` = the engine's reference CONTRACT pack (today's behavior); a
+        # new domain points this at its OWN pack, so "config + .ttl" creates that domain's schema with no engine edit.
+        self._pack_ttl = pack_ttl
 
     @classmethod
-    def from_env(cls, *, database: str | None = None, reset: bool = False) -> "ArcadeDBStore":
+    def from_env(cls, *, database: str | None = None, reset: bool = False,
+                 pack_ttl: str | None = None) -> "ArcadeDBStore":
         """Build a store from `ARCADEDB_*` env, creating the database if absent.
 
         `database` overrides `ARCADEDB_DATABASE` (used to point tests at a scratch database).
         `reset=True` drops and recreates the database first, for a clean-slate test.
+        `pack_ttl` selects the domain pack schema (None = the contract reference pack).
         """
         return cls.from_config(
             os.environ["ARCADEDB_HOST"], os.environ["ARCADEDB_PORT"],
             os.environ["ARCADEDB_USER"], os.environ["ARCADEDB_PASSWORD"],
             database=database or os.environ["ARCADEDB_DATABASE"],
             protocol=os.getenv("ARCADEDB_PROTOCOL", "http"),  # `https` for the Modal-hosted KG (EC-2)
-            reset=reset)
+            reset=reset, pack_ttl=pack_ttl)
 
     @classmethod
     def from_config(cls, host: str, port: str, user: str, password: str, *, database: str,
-                    protocol: str = "http", reset: bool = False) -> "ArcadeDBStore":
+                    protocol: str = "http", reset: bool = False,
+                    pack_ttl: str | None = None) -> "ArcadeDBStore":
         """Build a store from EXPLICIT connection params (EP-API-1: the de-env'd twin of `from_env`, so engine
-        config flows as data, not `os.environ`). Creates the database if absent; `reset=True` drops + recreates it."""
+        config flows as data, not `os.environ`). Creates the database if absent; `reset=True` drops + recreates it.
+        `pack_ttl` selects the domain pack schema (None = the contract reference pack)."""
         client = SyncClient(host, port, protocol=protocol, username=user, password=password)
         if reset and DatabaseDao.exists(client, database):
             DatabaseDao.delete(client, database)
         if not DatabaseDao.exists(client, database):
             DatabaseDao.create(client, database)
-        return cls(client, database)
+        return cls(client, database, pack_ttl=pack_ttl)
 
     # --- seam surface ---------------------------------------------------------------------------
 
@@ -309,7 +317,7 @@ class ArcadeDBStore:
         # ADR-0067 P5b: the DOMAIN vertex types (Clause / PropertyValue / Contract) + structural edges
         # (HasProperty / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
         # whatever the pack declares, so a new domain ships its own node schema without editing this method.
-        vertex_types, structural_edges = load_kg_schema()
+        vertex_types, structural_edges = load_kg_schema(getattr(self, "_pack_ttl", None))
         for vt in vertex_types:
             if vt.name not in types:
                 self._command(f"CREATE VERTEX TYPE {vt.name}")
@@ -504,7 +512,7 @@ class ArcadeDBStore:
         cache = getattr(self, "_prop_types_cache", None)
         if cache is None:
             cache = {name: dict(props) for name, props in _ENGINE_VERTEX_PROPERTY_TYPES.items()}
-            vertex_types, _ = load_kg_schema()
+            vertex_types, _ = load_kg_schema(getattr(self, "_pack_ttl", None))
             for vt in vertex_types:
                 cache[vt.name] = dict(vt.properties)
             self._prop_types_cache = cache

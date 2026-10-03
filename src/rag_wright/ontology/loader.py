@@ -259,12 +259,13 @@ class KgVertexType:
     unique_index: str | None
 
 
-@lru_cache(maxsize=4)
-def load_kg_schema(path: str = str(_TTL_PATH)) -> tuple[tuple[KgVertexType, ...], frozenset[str]]:
+@lru_cache(maxsize=8)
+def load_kg_schema(path: str | None = None) -> tuple[tuple[KgVertexType, ...], frozenset[str]]:
     """ADR-0067 P5b: the DOMAIN KG node/edge storage schema from the ttl -- `(vertex types, structural edge names)`.
-    The engine infra (Chunk/Span/Entity) stays generic in store code; these domain types are pack-declared. Cached."""
+    The engine infra (Chunk/Span/Entity) stays generic in store code; these domain types are pack-declared. Cached.
+    `path=None` is the engine's reference CONTRACT pack; a new domain passes its OWN pack `.ttl` (AC-journey)."""
     g = Graph()
-    g.parse(str(path), format="turtle")
+    g.parse(str(path or _TTL_PATH), format="turtle")
     vertices = []
     for v in g.subjects(RDF.type, _cbr("KgVertexType")):
         props = tuple(sorted((str(p).split(":", 1)[0], str(p).split(":", 1)[1])

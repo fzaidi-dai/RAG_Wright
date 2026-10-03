@@ -1,0 +1,13 @@
+@prefix cbr: <https://ragwright.local/ontology/contract-bridge#> .
+
+# AC-journey smoke domain: a tiny NON-CONTRACT pack ("incidents") declaring its OWN KG vertex + edge types, to
+# prove a new domain's schema is created from its own `.ttl` via `EngineConfig(pack=...)` -- "config + .ttl", no
+# engine edit. (The cbr: meta-vocabulary -- KgVertexType/vertexName/kgProperty/KgStructuralEdge -- is the engine's
+# pack-schema declaration language, reused; a follow-up could move it to an engine namespace.)
+cbr:IncidentNode a cbr:KgVertexType ; cbr:vertexName "Incident" ;
+    cbr:kgProperty "incident_id:STRING", "title:STRING", "severity:STRING" ;
+    cbr:uniqueIndexOn "incident_id" .
+cbr:SystemNode a cbr:KgVertexType ; cbr:vertexName "System" ;
+    cbr:kgProperty "system_id:STRING", "name:STRING" ;
+    cbr:uniqueIndexOn "system_id" .
+cbr:AffectsEdgeDecl a cbr:KgStructuralEdge ; cbr:edgeName "AFFECTS" .

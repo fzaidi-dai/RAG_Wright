@@ -67,7 +67,7 @@ def _build_store(config: EngineConfig, corpus: str, *, reset: bool) -> Any:
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     return ArcadeDBStore.from_config(sc.host, sc.port, sc.user, sc.password, database=corpus,
-                                     protocol=sc.protocol, reset=reset)
+                                     protocol=sc.protocol, reset=reset, pack_ttl=config.pack)
 
 
 def _build_embedder(config: EngineConfig) -> Optional[Any]:
