@@ -27,8 +27,8 @@ def _prov(source="doc-1"):
     return Provenance.of(ChunkId.of(source, 0, "body"))
 
 
-def _eid(cik="0000000001"):
-    return EntityId.of(cik)
+def _eid(value="0000000001"):
+    return EntityId.of(value)
 
 
 # --- ClauseCategory: the 41 CUAD categories (RAC-4, ADR-0002) --------------------------------

@@ -19,7 +19,6 @@ from pydantic import BaseModel, ConfigDict, field_validator
 _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 _SOURCE_DOC_ID = re.compile(r"^[A-Za-z0-9._-]+$")
 _SOURCE_DOC_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
-_CANONICAL_CIK = re.compile(r"^\d{10}$")
 
 
 def canonical_source_doc_id(raw: str) -> str:
@@ -115,48 +114,40 @@ class ChunkId(BaseModel):
 
 
 class EntityId(BaseModel):
-    """The canonical entity identifier (FR-S.3).
+    """The canonical entity identifier (FR-S.3): an opaque canonical-registry id string.
 
-    For the validation corpus (ADR-0002) the canonical identifier is the U.S. Securities and
-    Exchange Commission (SEC) Electronic Data Gathering, Analysis, and Retrieval (EDGAR) Central
-    Index Key (CIK) in its 10-digit zero-padded form, e.g. ``"0000320193"``.
-
-    This contract is deliberately strict: it accepts the canonical form only and rejects everything
-    else (unpadded, ``"CIK"``-prefixed, integer, whitespace-padded). An identifier contract's job
-    is to define the canonical invariant and reject anything that is not canonical, so every
-    downstream holder of an `EntityId` can trust it. Normalizing the messy EDGAR forms into this
-    canonical form is the registry loader's job (T8), where the world's mess actually arrives;
-    keeping the contract strict surfaces upstream defects loudly at that boundary instead of
-    silently minting wrong-but-normalizable identifiers and fragmenting the graph.
+    The engine is domain-agnostic (DD-4, ADR-0067/0117), so the FORMAT of a canonical id is owned by
+    the resolver / domain pack, NOT by this contract. The SEC pack resolves to a 10-digit zero-padded
+    EDGAR Central Index Key (CIK), e.g. ``"0000320193"`` (shaped in ``corpus/edgar.normalize_cik``); a
+    generic pack uses an exact-normalized surface-form key; another domain uses its own scheme. This
+    contract's only invariant is therefore the domain-neutral one: a non-empty string. That is still a
+    real invariant -- every downstream holder of an `EntityId` can trust it is a present, non-blank id --
+    while the format check lives at the one boundary that knows the domain (the resolver/loader), where
+    the world's mess actually arrives, per the "normalize at the boundary" rule.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    cik: str  # canonical 10-digit zero-padded CIK, e.g. "0000320193"
+    value: str  # an opaque canonical id; its FORMAT is the resolver/pack's concern, not this contract's
 
-    @field_validator("cik", mode="before")
+    @field_validator("value", mode="before")
     @classmethod
-    def _canonical_only(cls, v: object) -> str:
-        if not isinstance(v, str) or not _CANONICAL_CIK.match(v):
+    def _nonempty(cls, v: object) -> str:
+        if not isinstance(v, str) or not v.strip():
             raise ValueError(
-                "cik must be the canonical EDGAR form: a string of exactly 10 digits, zero-padded "
-                "(e.g. '0000320193'). Normalize upstream at the registry loader (T8)."
+                "EntityId.value must be a non-empty string. The canonical-id FORMAT is owned by the "
+                "resolver / domain pack (e.g. corpus/edgar.normalize_cik for SEC CIKs), not this contract."
             )
         return v
 
     @classmethod
-    def of(cls, cik: str) -> EntityId:
-        """Build an `EntityId` from a CIK already in canonical 10-digit form.
+    def of(cls, value: str) -> EntityId:
+        """Build an `EntityId` from an already-canonical id string.
 
-        This does not normalize; non-canonical input is rejected (see the class docstring). The
-        registry loader (T8) is where raw EDGAR forms are normalized before construction.
+        This does not normalize or format-check beyond non-emptiness; shaping the raw domain form into
+        the canonical id is the resolver / domain pack's job (e.g. `corpus/edgar.normalize_cik`).
         """
-        return cls(cik=cik)
-
-    @property
-    def value(self) -> str:
-        """The canonical string form: the 10-digit zero-padded CIK."""
-        return self.cik
+        return cls(value=value)
 
     def __str__(self) -> str:
         return self.value

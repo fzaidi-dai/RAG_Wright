@@ -109,22 +109,28 @@ def test_chunk_id_content_hash_normalized_to_lowercase():
     assert lower == upper
 
 
-# --- EntityId: strict canonical form only (RAC-1, FR-S.3, ADR-0002) --------------------------
-# The contract accepts the canonical 10-digit zero-padded CIK only. Normalizing the messy EDGAR
-# forms (CIK-prefixed, unpadded, integer) is the T8 registry loader's job, not the contract's.
+# --- EntityId: an opaque non-empty canonical id (FR-S.3, DD-4, ADR-0067/0117) ----------------
+# The engine is domain-agnostic: the id's FORMAT is the resolver/pack's concern (the SEC pack
+# shapes a 10-digit CIK in corpus/edgar.normalize_cik), so the contract's only invariant is a
+# non-empty string. Any present, non-blank id is accepted, whatever the domain's scheme.
 
 
-def test_entity_id_accepts_canonical_form():
-    eid = EntityId.of("0000320193")  # Apple Inc., canonical EDGAR form
-    assert eid.value == "0000320193"
-    assert str(eid) == "0000320193"
-    assert EntityId(cik="0000320193") == eid
+def test_entity_id_accepts_any_nonempty_canonical_id():
+    cik = EntityId.of("0000320193")  # an SEC CIK -- still valid, just not privileged by the contract
+    assert cik.value == "0000320193"
+    assert str(cik) == "0000320193"
+    assert EntityId(value="0000320193") == cik
+
+    # a non-SEC domain's canonical id (a surface-form key) is equally valid -- the engine is generic
+    sf = EntityId.of("acme-holdings-ltd")
+    assert sf.value == "acme-holdings-ltd"
+    assert str(sf) == "acme-holdings-ltd"
 
 
 def test_entity_id_is_frozen():
     eid = EntityId.of("0000320193")
     with pytest.raises(ValidationError):
-        eid.cik = "0000000001"
+        eid.value = "0000000001"
 
 
 def test_entity_id_is_hashable_and_usable_as_key():
@@ -133,26 +139,19 @@ def test_entity_id_is_hashable_and_usable_as_key():
 
 
 @pytest.mark.parametrize(
-    "noncanonical",
+    "invalid",
     [
-        320193,  # integer form
-        "320193",  # unpadded
-        "0000320193 ",  # trailing whitespace
-        " 0000320193",  # leading whitespace
-        "CIK0000320193",  # EDGAR "CIK" prefix
-        "cik0000320193",
-        "000032019",  # 9 digits
-        "00003201930",  # 11 digits
-        "0000abc193",  # non-numeric
-        "",
-        "   ",
-        3.5,  # wrong type
-        True,  # bool is an int subclass; still not canonical
+        "",  # empty
+        "   ",  # whitespace-only is blank
+        320193,  # wrong type (int)
+        3.5,  # wrong type (float)
+        True,  # bool is an int subclass; still not a string
+        None,  # wrong type
     ],
 )
-def test_entity_id_rejects_noncanonical_forms(noncanonical):
+def test_entity_id_rejects_empty_or_non_string(invalid):
     with pytest.raises(ValidationError):
-        EntityId.of(noncanonical)
+        EntityId.of(invalid)
 
 
 # --- the two ids are distinct types ---------------------------------------------------------

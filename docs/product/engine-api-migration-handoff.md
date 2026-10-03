@@ -153,6 +153,31 @@ re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functi
 ingestion D functions can now migrate onto `ainvoke_subgraph("contract_ingestion_pipeline", {document, cache_dir})`
 + `api.source_document`.
 
+## De-domaining the entity layer (EntityId / EntityResolver / taxonomy)
+
+The engine is being made domain-agnostic in the entity layer (DD-3/4/5, extending ADR-0066/0067/0117). A SEC-first
+assumption used to live in the engine's own contracts; it now moves out to the resolver / domain pack, so a non-SEC
+product is not forced to mint CIK-shaped ids.
+
+**DD-4 — `EntityId` is now an opaque non-empty id (landed).** `EntityId` was literally a CIK: a field `cik: str`
+validated to the 10-digit zero-padded EDGAR form. It is now a generic `{value: str}` whose only invariant is
+**non-empty string**; the CIK *format* is no longer enforced by the engine contract (it is shaped in the SEC pack's
+`corpus/edgar.normalize_cik`, which still returns `EntityId.of(digits.zfill(10))`). Accessors are unchanged:
+`EntityId.of(value)`, `eid.value`, `str(eid)`, frozen + hashable.
+
+**Product action for DD-4 — grep your repo and fix two call shapes:**
+- `EntityId(cik=...)` → `EntityId(value=...)` (keyword construction).
+- `eid.cik` → `eid.value` (field read). `.value` already existed as a property; if you only ever used `.value`/`.of()`
+  there is **nothing to change**.
+- The engine **no longer guarantees** an `EntityId.value` is a 10-digit CIK. If your product relied on that format
+  (e.g. parsed `.value` back as a CIK), move that format knowledge into **your** resolver/pack — the engine treats the
+  id as opaque. The KG stores the id as a plain string, so **no KG migration is needed** for this change.
+
+**DD-3 — the `EntityResolver` seam (surface-form default vs SEC-CIK impl)** and **DD-5 — pack-declared
+`EntityType`/`RelationshipType` taxonomy** are the next steps in this arc; this note will be extended as they land.
+(The product's entity-resolution wiring should inject its own resolver rather than assume the engine's; detail to follow
+with DD-3.)
+
 ## Before / after (illustrative)
 
 ```python
@@ -200,3 +225,7 @@ out = await engine.ainvoke_subgraph("typed_property_retrieval", {"query": q}, re
 - 2026-10-02 — **EP-E2E PASSED**: a real doc ingested + queried entirely through `rag_wright.api` (the migration
   target path is proven). (Update as EP-API-2c/4 + R3 land, and when the compliance opaque-handle migration — EP-SEAM
   — is specced.)
+- 2026-10-03 — **DD-4 landed**: `EntityId` genericized from `{cik: str}` (10-digit CIK validator) to `{value: str}`
+  (opaque, non-empty); CIK *format* moved to the SEC pack (`corpus/edgar.normalize_cik`). Product action: `EntityId(cik=)`
+  → `EntityId(value=)`, `eid.cik` → `eid.value`; stop assuming `.value` is a CIK. No KG migration. (See "De-domaining the
+  entity layer"; DD-3/DD-5 to follow.)
