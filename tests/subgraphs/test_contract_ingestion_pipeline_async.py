@@ -32,7 +32,6 @@ async def test_aper_contract_graph_extracts_once_then_caches(tmp_path):
 async def test_aper_contract_graph_appends_affiliations_and_caches_them_separately(tmp_path):
     # issue 0027: when the affiliation fn is wired, AFFILIATE_OF facts are appended alongside CONTRACTS_WITH,
     # cached in a SEPARATE dir, and not re-extracted on re-ingest.
-    from rag_wright.contracts.ontology import RelationshipType
 
     party_dir = tmp_path / "graph_parties"
     affil_dir = tmp_path / "graph_affiliations"
@@ -54,8 +53,8 @@ async def test_aper_contract_graph_appends_affiliations_and_caches_them_separate
     assert calls == {"party": 1, "affil": 1}                       # each extracted once, then cached
     facts = [f for er in first for f in er.relationship_facts]
     kinds = {f.relationship_type for f in facts}
-    assert RelationshipType.CONTRACTS_WITH in kinds and RelationshipType.AFFILIATE_OF in kinds
-    affil = next(f for f in facts if f.relationship_type is RelationshipType.AFFILIATE_OF)
+    assert "Contracts With" in kinds and "Affiliate Of" in kinds
+    affil = next(f for f in facts if f.relationship_type == "Affiliate Of")
     assert affil.source_ref == "Acme Holdings Ltd" and affil.target_ref == "Acme Corp"
     assert (affil_dir / "C3.json").exists()                        # separate cache written
     assert len(first) == len(second)

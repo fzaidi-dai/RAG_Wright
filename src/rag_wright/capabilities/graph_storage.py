@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import Literal, Optional
 
 from rag_wright.capabilities.entity_resolution import ResolutionResult
-from rag_wright.contracts.ontology import EntityType
 from rag_wright.corpus.canonicalize import normalize_entity_name
 from rag_wright.store.seam import GraphEdge, GraphNode, Store
 
@@ -47,7 +46,7 @@ def to_graph(resolution: ResolutionResult) -> tuple[list[GraphNode], list[GraphE
         key = _node_key(entity.entity_id, entity.key)
         nodes[key] = GraphNode(
             node_key=key, entity_id=entity.entity_id or "", name=entity.representative,
-            entity_type=entity.entity_type.value, confidence=entity.confidence.value,
+            entity_type=entity.entity_type, confidence=entity.confidence.value,
             chunk_id=entity.chunk_ids[0] if entity.chunk_ids else "",
         )
 
@@ -59,18 +58,18 @@ def to_graph(resolution: ResolutionResult) -> tuple[list[GraphNode], list[GraphE
             (source_key, rel.source_id, rel.source_ref),
             (target_key, rel.target_id, rel.target_ref),
         ):
-            nodes.setdefault(  # ref-only endpoint: minimal node (org by default, confidence from the edge)
+            nodes.setdefault(  # ref-only endpoint: minimal node (type UNKNOWN -- a bare ref carries no type; DD-5)
                 key,
                 GraphNode(
                     node_key=key, entity_id=resolved_id or "", name=ref,
-                    entity_type=EntityType.ORGANIZATION.value, confidence=rel.confidence.value,
+                    entity_type="", confidence=rel.confidence.value,
                     chunk_id=rel.chunk_id,
                 ),
             )
         edges.append(
             GraphEdge(
                 source_key=source_key, target_key=target_key,
-                relationship_type=rel.relationship_type.value, confidence=rel.confidence.value,
+                relationship_type=rel.relationship_type, confidence=rel.confidence.value,
                 chunk_id=rel.chunk_id,
             )
         )

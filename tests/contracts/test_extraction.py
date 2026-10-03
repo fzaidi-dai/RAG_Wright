@@ -21,9 +21,7 @@ from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.ontology import (
     ClauseCategory,
     ClauseFact,
-    EntityType,
     RelationshipFact,
-    RelationshipType,
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 
@@ -42,7 +40,7 @@ class _ClauseStub:
     def extract(self, chunk_id: ChunkId, text: str) -> ExtractionResult:
         return ExtractionResult(
             chunk_id=chunk_id,
-            entity_mentions=[EntityMention(text="Acme Corp", entity_type=EntityType.ORGANIZATION,
+            entity_mentions=[EntityMention(text="Acme Corp", entity_type="Organization",
                                             confidence=ConfidenceTag.EXTRACTED)],
             clause_facts=[
                 ClauseFact(
@@ -63,7 +61,7 @@ class _OpenIEStub:
             relationship_facts=[
                 RelationshipFact(
                     source_ref="Acme Corp",
-                    relationship_type=RelationshipType.CONTRACTS_WITH,
+                    relationship_type="Contracts With",
                     target_ref="Beta LLC",
                     provenance=Provenance.of(chunk_id),
                     confidence=ConfidenceTag.INFERRED,
@@ -102,7 +100,7 @@ def test_seam_is_load_bearing_second_extractor_added_without_code_change():
     result = run_extractors([_ClauseStub(), _OpenIEStub()], cid, "some text")
     assert len(result.clause_facts) == 1
     assert len(result.relationship_facts) == 1
-    assert result.relationship_facts[0].relationship_type is RelationshipType.CONTRACTS_WITH
+    assert result.relationship_facts[0].relationship_type == "Contracts With"
 
 
 def test_empty_pipeline_returns_empty_result_anchored_to_chunk():
@@ -151,22 +149,23 @@ def test_merge_rejects_results_for_different_chunks():
 
 
 def test_entity_mention_is_typed_and_confidence_bearing():
-    m = EntityMention(text="Beta LLC", entity_type=EntityType.ORGANIZATION,
+    m = EntityMention(text="Beta LLC", entity_type="Organization",
                       confidence=ConfidenceTag.EXTRACTED)
-    assert m.entity_type is EntityType.ORGANIZATION
+    assert m.entity_type == "Organization"
     assert m.confidence is ConfidenceTag.EXTRACTED  # a mention is a confidence-bearing fact (ADR-0012)
 
 
 def test_entity_mention_rejects_blank_text():
     with pytest.raises(ValidationError):
-        EntityMention(text="  ", entity_type=EntityType.PERSON, confidence=ConfidenceTag.EXTRACTED)
+        EntityMention(text="  ", entity_type="Person", confidence=ConfidenceTag.EXTRACTED)
 
 
-def test_entity_mention_rejects_type_outside_ontology():
-    with pytest.raises(ValidationError):
-        EntityMention(text="Acme", entity_type="ROBOT", confidence=ConfidenceTag.EXTRACTED)
+def test_entity_mention_accepts_any_domain_type():
+    # DD-5: entity_type is an opaque domain string; the engine no longer constrains the taxonomy
+    m = EntityMention(text="Unit 7", entity_type="Robot", confidence=ConfidenceTag.EXTRACTED)
+    assert m.entity_type == "Robot"
 
 
 def test_entity_mention_requires_confidence():
     with pytest.raises(ValidationError):
-        EntityMention(text="Acme", entity_type=EntityType.ORGANIZATION)  # confidence is required
+        EntityMention(text="Acme", entity_type="Organization")  # confidence is required

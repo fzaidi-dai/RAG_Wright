@@ -19,7 +19,6 @@ from rag_wright.capabilities.graph_extraction import (
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import ExtractionResult, run_extractors
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import EntityType, RelationshipType
 from rag_wright.contracts.provenance import ConfidenceTag
 
 _CID = ChunkId.of("docA", 0, "chunk text")
@@ -49,11 +48,11 @@ def test_extractor_emits_party_mentions_and_a_contracts_with_edge():
 
     assert result.chunk_id == _CID
     assert {m.text for m in result.entity_mentions} == {"Acme Corp", "Beta LLC"}  # dedup, order-stable
-    assert all(m.entity_type is EntityType.ORGANIZATION for m in result.entity_mentions)
+    assert all(m.entity_type == "Organization" for m in result.entity_mentions)
     assert all(m.confidence is ConfidenceTag.EXTRACTED for m in result.entity_mentions)
     assert len(result.relationship_facts) == 1  # one CONTRACTS_WITH between the two distinct parties
     edge = result.relationship_facts[0]
-    assert edge.relationship_type is RelationshipType.CONTRACTS_WITH
+    assert edge.relationship_type == "Contracts With"
     assert {edge.source_ref, edge.target_ref} == {"Acme Corp", "Beta LLC"}
     assert edge.confidence is ConfidenceTag.EXTRACTED
     assert edge.provenance.chunk_id == _CID  # anchored to the chunk
@@ -127,14 +126,13 @@ def test_parties_to_extraction_shared_fact_shape():
 
 def test_affiliations_to_extraction_emits_both_org_mentions_and_an_affiliate_of_edge():
     from rag_wright.capabilities.graph_extraction import affiliations_to_extraction
-    from rag_wright.contracts.ontology import RelationshipType
 
     er = affiliations_to_extraction(_CID, [("Acme Holdings Ltd", "Acme Corp"), ("", "X"), ("Y", "Y")])
     # both orgs become ORGANIZATION mentions (endpoints must resolve to nodes); empty + self pairs dropped
     assert {m.text for m in er.entity_mentions} == {"Acme Holdings Ltd", "Acme Corp"}
     assert len(er.relationship_facts) == 1
     fact = er.relationship_facts[0]
-    assert fact.relationship_type is RelationshipType.AFFILIATE_OF
+    assert fact.relationship_type == "Affiliate Of"
     assert fact.source_ref == "Acme Holdings Ltd" and fact.target_ref == "Acme Corp"  # NOT merged; edge added
 
 

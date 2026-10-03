@@ -8,11 +8,11 @@ membership entirely would leave the downstream contract and extraction work with
 - `ClauseCategory`: the 41 CUAD clause categories. Membership here is authoritative (ADR-0002). The
   values are the canonical CUAD label names; T8 reconciles them against the exact label strings in
   the CUAD data once the corpus is acquired (T7).
-- `EntityType` and `RelationshipType`: the party/entity types and relationship types. Membership
-  here is a minimal, provisional seed grounded in the CUAD + EDGAR corpus; **T8 is the authority**
-  that finalizes it from the Data Catalog (FR-C.8). The structure is built so T8 can extend the
-  membership without reopening the fact models (see the direction guarantee on `RelationshipFact`).
-  Changing the ontology is otherwise an ask-first change (CLAUDE.md boundaries).
+- Entity/relationship taxonomy (DD-5, ADR-0066/0117): the party/entity node types and the entity-to-entity
+  relationship (edge) types are NO LONGER a hardcoded engine enum. `EntityNode.entity_type` and
+  `RelationshipFact.relationship_type` are OPAQUE domain strings the caller names; the closed value sets are
+  DOMAIN knowledge declared by the pack (the reference contract pack's are in `ontology/contract_taxonomy.py`).
+  A new domain supplies its own without reopening these contracts.
 
 The extraction-target models (`EntityNode`, `ClauseFact`, `RelationshipFact`) are what graph
 extraction (T5) produces and graph storage (T24) writes. Their type fields are the ontology enums,
@@ -77,31 +77,17 @@ class ClauseCategory(str, Enum):
     THIRD_PARTY_BENEFICIARY = "Third Party Beneficiary"
 
 
-class EntityType(str, Enum):
-    """Party and entity node types. Provisional seed membership; T8 is the authority (FR-C.8)."""
-
-    ORGANIZATION = "Organization"  # contract parties and EDGAR filers
-    PERSON = "Person"  # individual signatories / named individuals
-
-
-class RelationshipType(str, Enum):
-    """Entity-to-entity relationship (edge) types. Provisional seed membership; T8/T10 are the
-    authority, finalizing from the EDGAR party-and-entity data. `RelationshipFact` is directed, so
-    T8 can add directed corporate-hierarchy types (e.g. a parent/subsidiary edge) without change."""
-
-    CONTRACTS_WITH = "Contracts With"  # co-party to the same agreement (see RelationshipFact)
-    AFFILIATE_OF = "Affiliate Of"  # corporate affiliation (parent / subsidiary / affiliate)
-
-
 class EntityNode(BaseModel):
     """A canonical entity node in the graph skeleton (SPEC.md section 8): identifier, name, type.
 
-    No facts and no confidence: entity nodes are canonical (resolved against the registry, FR-C.7),
-    not extracted facts. Conformance is enforced by `entity_type` being an `EntityType`.
+    No facts and no confidence: entity nodes are canonical (resolved against the registry, FR-C.7), not
+    extracted facts. DD-5 (ADR-0066/0117): `entity_type` is an OPAQUE string the domain names -- the engine
+    does not constrain the taxonomy. The reference contract pack's value set lives in
+    `ontology/contract_taxonomy.py` (e.g. "Organization"/"Person"); a new domain names its own.
     """
 
     entity_id: EntityId
-    entity_type: EntityType
+    entity_type: str
     name: str
 
 
@@ -123,10 +109,12 @@ class RelationshipFact(GraphFact):
     corporate-hierarchy relationship types without reopening this model. Entity resolution
     (FR-C.7 / T24) later maps each ref to a canonical `entity_id`.
 
-    `relationship_type` must be an ontology `RelationshipType`, so a non-ontology relationship is
-    rejected. The agreement a `CONTRACTS_WITH` fact derives from is its provenance's source document
-    (`provenance.source_doc_id`); because every `GraphFact` requires provenance, that reference is
-    always present, which is what makes shared-party multi-hop questions answerable from the graph.
+    `relationship_type` is an OPAQUE domain string (DD-5, ADR-0066/0117): the engine does not constrain the
+    edge taxonomy; the caller (a domain graph) names it, and the reference contract pack's value set lives in
+    `ontology/contract_taxonomy.py` (e.g. "Contracts With"/"Affiliate Of"). The agreement a co-party fact
+    derives from is its provenance's source document (`provenance.source_doc_id`); because every `GraphFact`
+    requires provenance, that reference is always present, which makes shared-party multi-hop questions
+    answerable from the graph.
 
     Self-loop is rejected here only at the ref level (the same mention as both source and target).
     The post-resolution check (two *distinct* mentions that resolve to the same `entity_id`) belongs
@@ -134,7 +122,7 @@ class RelationshipFact(GraphFact):
     """
 
     source_ref: str  # pre-resolution entity mention (surface form)
-    relationship_type: RelationshipType
+    relationship_type: str  # opaque domain edge type (DD-5); the caller/domain pack names it
     target_ref: str  # pre-resolution entity mention (surface form)
 
     @field_validator("source_ref", "target_ref")

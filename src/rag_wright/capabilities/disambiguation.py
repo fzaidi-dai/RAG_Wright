@@ -23,7 +23,6 @@ from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import ExtractionResult
-from rag_wright.contracts.ontology import EntityType
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
 
@@ -46,9 +45,9 @@ class MentionCluster(BaseModel):
     """
 
     key: str  # the normalized clustering key
-    representative: str  # the longest surface form, for display + EDGAR matching
+    representative: str  # the longest surface form, for display + registry matching
     variants: list[str]
-    entity_type: EntityType
+    entity_type: str  # opaque domain entity type (DD-5); carried through from the mention
     confidence: ConfidenceTag  # weakest over the clustered mentions
     chunk_ids: list[str]  # provenance: the chunks the mentions came from
     ambiguous_with: list[str] = []  # keys of flagged near-duplicate clusters (human decides)
@@ -105,7 +104,7 @@ def disambiguate(
     carries its provenance and weakest confidence, deferred coreference resolvers (if any) rewrite the
     clusters, and ambiguous near-duplicates are flagged for human decision (never merged).
     """
-    groups: dict[tuple[str, EntityType], dict] = {}
+    groups: dict[tuple[str, str], dict] = {}  # (normalized key, entity_type) -> cluster accumulator
     rejected: list[str] = []
     for result in results:
         chunk_id = result.chunk_id.value

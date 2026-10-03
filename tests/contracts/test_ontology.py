@@ -12,15 +12,9 @@ import pytest
 from pydantic import ValidationError
 
 from rag_wright.contracts.identifiers import ChunkId, EntityId
-from rag_wright.contracts.ontology import (
-    ClauseCategory,
-    ClauseFact,
-    EntityNode,
-    EntityType,
-    RelationshipFact,
-    RelationshipType,
-)
+from rag_wright.contracts.ontology import ClauseCategory, ClauseFact, EntityNode, RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.ontology import contract_taxonomy as T
 
 
 def _prov(source="doc-1"):
@@ -51,36 +45,41 @@ def test_clause_category_includes_known_cuad_categories():
     assert ClauseCategory.PARTIES.value == "Parties"
 
 
-# --- Entity and relationship type vocabularies (RAC-4) --------------------------------------
+# --- Entity/relationship taxonomy: de-domained to the reference pack (DD-5, ADR-0066/0117) --
+# The engine contracts are taxonomy-free (entity_type/relationship_type are plain strings); the reference
+# CONTRACT pack declares the closed value sets. The hardcoded EntityType/RelationshipType enums are gone.
 
 
-def test_entity_types_present():
-    assert {EntityType.ORGANIZATION, EntityType.PERSON} <= set(EntityType)
+def test_engine_contracts_no_longer_export_the_hardcoded_taxonomy_enums():
+    import rag_wright.contracts.ontology as onto
+    assert not hasattr(onto, "EntityType") and not hasattr(onto, "RelationshipType")
 
 
-def test_relationship_types_present():
-    assert {RelationshipType.CONTRACTS_WITH, RelationshipType.AFFILIATE_OF} <= set(RelationshipType)
+def test_reference_pack_declares_the_contract_entity_and_relationship_vocab():
+    assert T.ENTITY_TYPES == {"Organization", "Person"}
+    assert T.RELATIONSHIP_TYPES == {"Contracts With", "Affiliate Of"}
 
 
-# --- EntityNode: canonical node, conforms to EntityType (RAC-4) ------------------------------
+# --- EntityNode: canonical node, carries an opaque entity-type string (RAC-4, DD-5) ---------
 
 
 def test_entity_node_valid():
-    node = EntityNode(entity_id=_eid(), entity_type=EntityType.ORGANIZATION, name="Acme Corp")
-    assert node.entity_type is EntityType.ORGANIZATION
+    node = EntityNode(entity_id=_eid(), entity_type=T.ORGANIZATION, name="Acme Corp")
+    assert node.entity_type == "Organization"
     assert node.name == "Acme Corp"
 
 
-def test_entity_node_rejects_type_outside_ontology():
-    with pytest.raises(ValidationError):
-        EntityNode(entity_id=_eid(), entity_type="GOVERNMENT", name="Acme Corp")
+def test_entity_node_accepts_any_domain_entity_type():
+    # DD-5: the engine no longer constrains the type -- a non-contract domain's type is equally valid
+    node = EntityNode(entity_id=_eid(), entity_type="Vehicle", name="Unit 7")
+    assert node.entity_type == "Vehicle"
 
 
 def test_entity_node_requires_id_type_and_name():
     with pytest.raises(ValidationError):
-        EntityNode(entity_type=EntityType.ORGANIZATION, name="Acme")  # missing entity_id
+        EntityNode(entity_type=T.ORGANIZATION, name="Acme")  # missing entity_id
     with pytest.raises(ValidationError):
-        EntityNode(entity_id=_eid(), entity_type=EntityType.ORGANIZATION)  # missing name
+        EntityNode(entity_id=_eid(), entity_type=T.ORGANIZATION)  # missing name
 
 
 # --- ClauseFact: conforms to ClauseCategory, carries provenance + confidence (RAC-4) --------
@@ -114,7 +113,7 @@ def test_clause_fact_requires_confidence():
 def _rel(**overrides):
     base = dict(
         source_ref="Acme Corp",
-        relationship_type=RelationshipType.CONTRACTS_WITH,
+        relationship_type=T.CONTRACTS_WITH,
         target_ref="Beta LLC",
         provenance=_prov(),
         confidence=ConfidenceTag.INFERRED,
@@ -127,8 +126,13 @@ def test_relationship_fact_valid_carries_direction_provenance_confidence():
     fact = _rel()
     assert fact.source_ref == "Acme Corp"
     assert fact.target_ref == "Beta LLC"
-    assert fact.relationship_type is RelationshipType.CONTRACTS_WITH
+    assert fact.relationship_type == "Contracts With"
     assert fact.confidence is ConfidenceTag.INFERRED
+
+
+def test_relationship_fact_accepts_any_domain_edge_type():
+    # DD-5: relationship_type is an opaque string; a non-contract edge is equally valid
+    assert _rel(relationship_type="Owns").relationship_type == "Owns"
 
 
 def test_relationship_fact_is_directed_not_symmetric():
@@ -136,11 +140,6 @@ def test_relationship_fact_is_directed_not_symmetric():
     a = _rel(source_ref="Acme Corp", target_ref="Beta LLC")
     b = _rel(source_ref="Beta LLC", target_ref="Acme Corp")
     assert a != b
-
-
-def test_relationship_fact_rejects_type_outside_ontology():
-    with pytest.raises(ValidationError):
-        _rel(relationship_type="OWNS")
 
 
 def test_relationship_fact_rejects_ref_level_self_loop():

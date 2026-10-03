@@ -33,8 +33,11 @@ from rag_wright.contracts.extraction import (
     run_extractors,
 )
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import EntityType, RelationshipFact, RelationshipType
+from rag_wright.contracts.ontology import RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+# DD-5 (ADR-0066/0117): this is a CONTRACT-domain builder (reference pack). The engine contracts are
+# taxonomy-free; the reference pack's entity/edge values live in ontology/contract_taxonomy.
+from rag_wright.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH, ORGANIZATION
 
 DEFAULT_EXTRACT_CONCURRENCY = 4  # in-flight chunk extractions (backpressure); GPU/network-bound
 # The adopted graph-extraction model (GP-1B): granite-4.2-8b via OpenRouter; config-driven (SPEC §17).
@@ -58,13 +61,13 @@ def parties_to_extraction(chunk_id: ChunkId, parties: list[str]) -> ExtractionRe
     provenance = Provenance.of(chunk_id)
     names = list(dict.fromkeys(p.strip() for p in parties if p.strip()))
     mentions = [
-        EntityMention(text=name, entity_type=EntityType.ORGANIZATION, confidence=ConfidenceTag.EXTRACTED)
+        EntityMention(text=name, entity_type=ORGANIZATION, confidence=ConfidenceTag.EXTRACTED)
         for name in names
     ]
     relationships = [
         RelationshipFact(
             provenance=provenance, confidence=ConfidenceTag.EXTRACTED,
-            source_ref=names[i], relationship_type=RelationshipType.CONTRACTS_WITH, target_ref=names[j],
+            source_ref=names[i], relationship_type=CONTRACTS_WITH, target_ref=names[j],
         )
         for i in range(len(names))
         for j in range(i + 1, len(names))
@@ -73,7 +76,7 @@ def parties_to_extraction(chunk_id: ChunkId, parties: list[str]) -> ExtractionRe
 
 
 # --- issue 0027: corporate AFFILIATION extraction (AFFILIATE_OF) ---------------------------------
-# The ontology declares `RelationshipType.AFFILIATE_OF` and both `write_graph` and `graph_query` handle it, but
+# The reference pack declares the `AFFILIATE_OF` edge and both `write_graph` and `graph_query` handle it, but
 # nothing ever PRODUCED the edge, so corporate affiliation was unanswerable. Affiliation is stated in the text
 # ("Acme Holdings Ltd, an affiliate of Acme Corp"), so -- unlike the structural `CONTRACTS_WITH` -- it needs a
 # text-reading extraction. This runs once per contract on the preamble (like party extraction), gated by a lexical
@@ -128,10 +131,10 @@ def affiliations_to_extraction(chunk_id: ChunkId, affiliations: list) -> Extract
             if name.lower() not in seen:
                 seen.add(name.lower())
                 mentions.append(EntityMention(
-                    text=name, entity_type=EntityType.ORGANIZATION, confidence=ConfidenceTag.EXTRACTED))
+                    text=name, entity_type=ORGANIZATION, confidence=ConfidenceTag.EXTRACTED))
         facts.append(RelationshipFact(
             provenance=provenance, confidence=ConfidenceTag.EXTRACTED,
-            source_ref=org, relationship_type=RelationshipType.AFFILIATE_OF, target_ref=affil_of))
+            source_ref=org, relationship_type=AFFILIATE_OF, target_ref=affil_of))
     return ExtractionResult(chunk_id=chunk_id, entity_mentions=mentions, relationship_facts=facts)
 
 

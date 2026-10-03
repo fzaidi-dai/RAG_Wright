@@ -37,22 +37,23 @@ from langgraph.runtime import Runtime
 
 from rag_wright.capabilities.answer_generator import EvidenceItem, GeneratedAnswer
 from rag_wright.capabilities.graph_query import GraphAnswer
-from rag_wright.contracts.ontology import RelationshipType
+from rag_wright.ontology.contract_taxonomy import CONTRACTS_WITH  # this is a CONTRACT-reference leg (DD-5)
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
 # traverse_fn: (start_entity_id, relationship_type, max_hops) -> GraphAnswer (must raise on a transient blip).
-TraverseFn = Callable[[str, RelationshipType, int], GraphAnswer]
+# DD-5: relationship_type is an opaque edge-type string the caller names (graph_query is domain-free).
+TraverseFn = Callable[[str, str, int], GraphAnswer]
 # ASYNC-C1 (ADR-0057): generate_fn is async (the model call gets a true wall-clock deadline via the seam).
 GenerateFn = Callable[[str, list[EvidenceItem]], Awaitable[GeneratedAnswer]]
 
-DEFAULT_RELATIONSHIP = RelationshipType.CONTRACTS_WITH
+DEFAULT_RELATIONSHIP = CONTRACTS_WITH  # the contract co-party edge (this is the contract-reference leg)
 
 
 class RelationalQAState(TypedDict, total=False):
     query: str
     start_entity_id: str
-    relationship_type: RelationshipType
+    relationship_type: str
     max_hops: int
     graph_answer: GraphAnswer
     evidence: list[EvidenceItem]
@@ -102,7 +103,7 @@ def build_relational_qa(traverse_fn: TraverseFn, generate_fn: GenerateFn, *, ret
             except Exception as exc:  # noqa: BLE001 - transient -> retry, or degrade to empty on exhaustion
                 if attempt >= max_attempts:
                     return {"graph_answer": GraphAnswer(
-                        start_entity_id=start, relationship_type=rel.value, evidence=[])}
+                        start_entity_id=start, relationship_type=rel, evidence=[])}
                 raise TransientExtraction(str(exc)) from exc
         return {"graph_answer": graph_answer}
 
@@ -131,10 +132,10 @@ def production_relational_qa(*, store: Any, answer_model: Any):
     from rag_wright.capabilities.answer_generator import agenerate_answer
     from rag_wright.capabilities.graph_query import graph_query
 
-    def traverse(start: str, rel: RelationshipType, max_hops: int) -> GraphAnswer:
+    def traverse(start: str, rel: str, max_hops: int) -> GraphAnswer:
         # graph_query is domain-free and takes a generic edge-type string; this contract-reference leg passes the
-        # enum's value (the contract vocab stays on the caller side, not in the generic primitive).
-        return graph_query(start, store=store, relationship_type=rel.value, max_hops=max_hops)
+        # contract edge value (the contract vocab stays on the caller side, not in the generic primitive).
+        return graph_query(start, store=store, relationship_type=rel, max_hops=max_hops)
 
     async def generate(query: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
         return await agenerate_answer(query, evidence, model=answer_model)

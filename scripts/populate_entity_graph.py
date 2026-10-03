@@ -19,7 +19,7 @@ from dotenv import load_dotenv
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")
 
 from eval.multihop import _SKIP, _identity  # single source of truth for node identity (golden-set alignment)
-from rag_wright.contracts.ontology import EntityType, RelationshipType
+from rag_wright.ontology.contract_taxonomy import CONTRACTS_WITH, ORGANIZATION
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.store.seam import GraphEdge, GraphNode
 
@@ -28,8 +28,8 @@ DB = os.environ.get("DB", "ragwright_cuad")
 RESET = os.environ.get("RESET") == "1"
 
 _EXTRACTED = ConfidenceTag.EXTRACTED.value
-_CONTRACTS_WITH = RelationshipType.CONTRACTS_WITH.value
-_ORG = EntityType.ORGANIZATION.value
+_CONTRACTS_WITH = CONTRACTS_WITH
+_ORG = ORGANIZATION
 _PRIVATE = "PRIVATE"
 
 

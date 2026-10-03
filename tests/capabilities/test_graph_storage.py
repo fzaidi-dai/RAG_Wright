@@ -18,7 +18,6 @@ from rag_wright.capabilities.entity_resolution import (
 from rag_wright.capabilities.graph_storage import GraphWriter, to_graph
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import EntityType, RelationshipType
 from rag_wright.contracts.provenance import ConfidenceTag
 
 _CID = ChunkId.of("docA", 0, "chunk text")
@@ -26,13 +25,13 @@ _X = ConfidenceTag.EXTRACTED
 
 
 def _entity(key, rep, entity_id) -> ResolvedEntity:
-    return ResolvedEntity(key=key, representative=rep, entity_type=EntityType.ORGANIZATION,
+    return ResolvedEntity(key=key, representative=rep, entity_type="Organization",
                           entity_id=entity_id, confidence=_X, chunk_ids=[_CID.value])
 
 
 def _rel(source_ref, source_id, target_ref, target_id) -> ResolvedRelationship:
     return ResolvedRelationship(source_ref=source_ref, target_ref=target_ref, source_id=source_id,
-                                target_id=target_id, relationship_type=RelationshipType.CONTRACTS_WITH,
+                                target_id=target_id, relationship_type="Contracts With",
                                 confidence=_X, chunk_id=_CID.value)
 
 

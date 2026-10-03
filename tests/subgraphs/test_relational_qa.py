@@ -12,7 +12,6 @@ from langgraph.types import RetryPolicy
 
 from rag_wright.capabilities.answer_generator import GeneratedAnswer
 from rag_wright.capabilities.graph_query import GraphAnswer, GraphEvidence
-from rag_wright.contracts.ontology import RelationshipType
 from rag_wright.subgraphs.relational_qa import build_relational_qa, graph_structural_evidence
 
 _FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)
@@ -20,7 +19,7 @@ _FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)
 
 def _graph_answer(evidence):
     return GraphAnswer(
-        start_entity_id="acme", relationship_type=RelationshipType.CONTRACTS_WITH.value, evidence=evidence
+        start_entity_id="acme", relationship_type="Contracts With", evidence=evidence
     )
 
 

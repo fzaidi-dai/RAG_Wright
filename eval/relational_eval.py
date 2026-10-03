@@ -20,7 +20,7 @@ from typing import Any
 from eval.harness import recall_at_k
 from eval.multihop import RelationalQuestion
 from rag_wright.capabilities.graph_query import graph_query
-from rag_wright.contracts.ontology import RelationshipType
+from rag_wright.ontology.contract_taxonomy import CONTRACTS_WITH
 
 _K = 50  # set-valued answers: k covers the full neighbor set (reachability, not ranking)
 
@@ -29,7 +29,7 @@ def graph_leg_recall(
     questions: list[RelationalQuestion],
     store: Any,
     *,
-    relationship_type: RelationshipType = RelationshipType.CONTRACTS_WITH,
+    relationship_type: str = CONTRACTS_WITH,
     k: int = _K,
 ) -> dict:
     """Per-hop mean recall@k of the graph leg over the relational set.

@@ -18,14 +18,13 @@ from rag_wright.capabilities.disambiguation import (
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import EntityMention, ExtractionResult
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import EntityType
 from rag_wright.contracts.provenance import ConfidenceTag
 
-_ORG = EntityType.ORGANIZATION
+_ORG = "Organization"
 _X = ConfidenceTag.EXTRACTED
 
 
-def _result(idx: int, *mentions: tuple[str, EntityType, ConfidenceTag]) -> ExtractionResult:
+def _result(idx: int, *mentions: tuple[str, str, ConfidenceTag]) -> ExtractionResult:
     return ExtractionResult(
         chunk_id=ChunkId.of("docA", idx, f"chunk {idx}"),
         entity_mentions=[EntityMention(text=t, entity_type=et, confidence=c) for t, et, c in mentions],

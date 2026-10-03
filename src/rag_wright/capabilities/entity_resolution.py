@@ -25,7 +25,6 @@ from pydantic import BaseModel
 from rag_wright.capabilities.disambiguation import DisambiguationResult, MentionCluster
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import ExtractionResult
-from rag_wright.contracts.ontology import EntityType, RelationshipType
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
 from rag_wright.ontology.registry import EntityResolver
@@ -37,7 +36,7 @@ class ResolvedEntity(BaseModel):
 
     key: str
     representative: str
-    entity_type: EntityType
+    entity_type: str  # opaque domain entity type (DD-5); carried through from the cluster
     entity_id: Optional[str]  # the registry's canonical id, or None (unlinked)
     confidence: ConfidenceTag
     chunk_ids: list[str]
@@ -51,7 +50,7 @@ class ResolvedRelationship(BaseModel):
     target_ref: str
     source_id: Optional[str]
     target_id: Optional[str]
-    relationship_type: RelationshipType
+    relationship_type: str  # opaque domain edge type (DD-5); carried through from the fact
     confidence: ConfidenceTag
     chunk_id: str
 

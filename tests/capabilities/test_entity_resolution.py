@@ -19,11 +19,11 @@ from rag_wright.capabilities.entity_resolution import (
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId, EntityId
-from rag_wright.contracts.ontology import EntityType, RelationshipFact, RelationshipType
+from rag_wright.contracts.ontology import RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.ontology.registry import EntityRegistry, EntityResolver, RegistryRecord
 
-_ORG = EntityType.ORGANIZATION
+_ORG = "Organization"
 _X = ConfidenceTag.EXTRACTED
 _ACME = EntityId.of("0000000001")
 _BETA = EntityId.of("0000000002")
@@ -82,7 +82,7 @@ def test_cluster_resolves_via_an_alias_variant():
 def test_relationship_ref_takes_the_matching_cluster_id():
     clusters = _disambig(_cluster("acme corporation", "Acme Corporation"),
                          _cluster("beta distribution", "Beta Distribution LLC"))
-    results = [_rel_result(0, "Acme Corporation", RelationshipType.CONTRACTS_WITH, "Beta Distribution LLC")]
+    results = [_rel_result(0, "Acme Corporation", "Contracts With", "Beta Distribution LLC")]
 
     result = resolve_entities(clusters, results, resolver=_registry())
 
@@ -94,7 +94,7 @@ def test_relationship_ref_takes_the_matching_cluster_id():
 def test_post_resolution_self_loop_is_dropped():
     # two DISTINCT surface forms that resolve to the same entity -> self-loop dropped (RAC-24)
     clusters = _disambig(_cluster("acme corporation", "Acme Corporation"))
-    results = [_rel_result(0, "Acme Corporation", RelationshipType.AFFILIATE_OF, "Acme Inc")]
+    results = [_rel_result(0, "Acme Corporation", "Affiliate Of", "Acme Inc")]
 
     result = resolve_entities(clusters, results, resolver=_registry())
 
@@ -104,7 +104,7 @@ def test_post_resolution_self_loop_is_dropped():
 def test_unresolved_refs_do_not_self_loop_drop():
     # two distinct unlinked refs are different entities -> kept (not dropped)
     clusters = _disambig()
-    results = [_rel_result(0, "Private One", RelationshipType.AFFILIATE_OF, "Private Two")]
+    results = [_rel_result(0, "Private One", "Affiliate Of", "Private Two")]
     result = resolve_entities(clusters, results, resolver=_registry())
     assert len(result.relationships) == 1
     assert result.relationships[0].source_id is None and result.relationships[0].target_id is None

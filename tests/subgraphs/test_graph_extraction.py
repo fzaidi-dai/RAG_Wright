@@ -6,7 +6,6 @@ from langgraph.types import RetryPolicy
 
 from rag_wright.contracts.extraction import EntityMention, ExtractionResult
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import EntityType
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.subgraphs.graph_extraction import build_graph_extraction
 
@@ -15,7 +14,7 @@ _CID = ChunkId.of("doc", 0, "Acme and Beta contract")
 
 
 def _mention(text: str) -> EntityMention:
-    return EntityMention(text=text, entity_type=EntityType.ORGANIZATION, confidence=ConfidenceTag.EXTRACTED)
+    return EntityMention(text=text, entity_type="Organization", confidence=ConfidenceTag.EXTRACTED)
 
 
 class _StubExtractor:

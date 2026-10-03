@@ -11,7 +11,6 @@ from rag_wright.capabilities.entity_resolution import resolve_entities
 from rag_wright.capabilities.graph_extraction import parties_to_extraction
 from rag_wright.capabilities.graph_storage import to_graph
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import EntityType, RelationshipType
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.corpus.edgar import normalize_cik
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
@@ -23,11 +22,11 @@ def test_two_parties_give_mentions_and_one_contracts_with():
     er = parties_to_extraction(_CID, ["Acme Corp", "Beta Inc"])
     assert er.chunk_id == _CID
     assert {m.text for m in er.entity_mentions} == {"Acme Corp", "Beta Inc"}
-    assert all(m.entity_type == EntityType.ORGANIZATION for m in er.entity_mentions)
+    assert all(m.entity_type == "Organization" for m in er.entity_mentions)
     assert all(m.confidence == ConfidenceTag.EXTRACTED for m in er.entity_mentions)
     assert len(er.relationship_facts) == 1
     rf = er.relationship_facts[0]
-    assert rf.relationship_type == RelationshipType.CONTRACTS_WITH
+    assert rf.relationship_type == "Contracts With"
     assert {rf.source_ref, rf.target_ref} == {"Acme Corp", "Beta Inc"}
     assert rf.confidence == ConfidenceTag.EXTRACTED
 
@@ -48,7 +47,7 @@ def test_three_parties_give_all_pairwise_edges():
     er = parties_to_extraction(_CID, ["A Co", "B Co", "C Co"])
     assert len(er.entity_mentions) == 3
     assert len(er.relationship_facts) == 3  # C(3,2)
-    assert all(rf.relationship_type == RelationshipType.CONTRACTS_WITH for rf in er.relationship_facts)
+    assert all(rf.relationship_type == "Contracts With" for rf in er.relationship_facts)
 
 
 def test_composes_into_a_cik_keyed_graph():
@@ -68,5 +67,5 @@ def test_composes_into_a_cik_keyed_graph():
     nodes, edges = to_graph(resolution)
     assert {n.node_key for n in nodes} == {cik1, cik2}  # keyed by CIK (linked, not UNLINKED)
     assert len(edges) == 1
-    assert edges[0].relationship_type == RelationshipType.CONTRACTS_WITH.value
+    assert edges[0].relationship_type == "Contracts With"
     assert {edges[0].source_key, edges[0].target_key} == {cik1, cik2}

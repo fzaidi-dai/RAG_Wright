@@ -21,7 +21,7 @@ from typing import Protocol, runtime_checkable
 from pydantic import BaseModel, field_validator, model_validator
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import ClauseFact, EntityType, RelationshipFact
+from rag_wright.contracts.ontology import ClauseFact, RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag
 
 
@@ -49,7 +49,7 @@ class EntityMention(BaseModel):
     """
 
     text: str
-    entity_type: EntityType
+    entity_type: str  # opaque domain entity type (DD-5); the caller/domain pack names it
     confidence: ConfidenceTag
 
     @field_validator("text")

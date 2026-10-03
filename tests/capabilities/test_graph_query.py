@@ -11,7 +11,6 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.capabilities.graph_query import GraphAnswer, graph_query
-from rag_wright.contracts.ontology import RelationshipType
 
 
 class _FakeStore:
@@ -97,7 +96,7 @@ def live_graph():
     nodes = [GraphNode(node_key=k, entity_id=k, name=n, entity_type="Organization",
                        confidence="EXTRACTED", chunk_id="docA:0:h")
              for k, n in [("A", "Acme"), ("B", "Beta"), ("C", "Gamma"), ("D", "Delta")]]
-    cw = RelationshipType.CONTRACTS_WITH.value
+    cw = "Contracts With"  # DD-5: the edge type is an opaque domain string
     edges = [
         GraphEdge(source_key="A", target_key="B", relationship_type=cw, confidence="EXTRACTED", chunk_id="c1"),
         GraphEdge(source_key="A", target_key="C", relationship_type=cw, confidence="EXTRACTED", chunk_id="c2"),
