@@ -15,6 +15,9 @@ from rag_wright.capabilities.manifests import MANIFEST_SPECS, publish_all
 
 
 def main() -> None:
+    from rag_wright.capabilities.manifests import load_reference_pack
+
+    load_reference_pack()  # EP-CORE-3: the catalog ships empty; this script publishes the engine's reference pack
     root = registry_root()
     paths = publish_all(root=root)
     print(f"published {len(paths)} manifest(s) to {root}:")

@@ -139,6 +139,15 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   (a task-level scope totals everything; inner scopes attribute their slice); with no scope, zero overhead. The
   invokers no longer open their own scope — usage is the caller's concern.
 
+- **Done (ADR-0118 / EP-CORE-1a/2/3):** generic primitives (`hybrid_search`/`graph_query`/`fusion`/`embedding`/
+  parsing/reranking/chunking) are **core API, imported directly — NOT ARD capabilities** (so the product composes
+  them, never re-registers them). The invoker is **adapter-free**: a capability's manifest carries an `impl_ref`
+  ("module:attr") the invoker resolves lazily. The ARD catalog **ships empty** — the product calls
+  `engine.register_capability(manifest_with_impl_ref)` for each of its own domain caps (they become invocable +
+  MCP-exposable with zero engine edits); the engine's contract/compliance reference pack is opt-in
+  (`load_reference_pack()`), not forced on a new domain. The build sequence is in
+  `docs/product/new-domain-build-sequence.md`.
+
 **Migration note:** with EP-API-3 landed, the compliance leg + citation-preview + party-exposure reads can now be
 re-implemented on `kg_read` + the id/format accessors; the QA/retrieval D functions migrate onto EP-API-1/2. The
 ingestion D functions can now migrate onto `ainvoke_subgraph("contract_ingestion_pipeline", {document, cache_dir})`

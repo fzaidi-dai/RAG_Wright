@@ -17,18 +17,13 @@ from rag_wright.capabilities.invoke import capability_impl
 from rag_wright.api.workspace import WorkspaceHandle
 from rag_wright.models.tracing import traced_step
 
-_INDEX: dict[str, Any] | None = None
-
-
 def _index() -> dict[str, Any]:
-    """The light capability index (`slug -> manifest spec`), built once from the ARD manifest specs. Importing the
-    specs pulls NO capability implementation -- just the metadata (kind/description/impl_ref/representative_queries)."""
-    global _INDEX
-    if _INDEX is None:
-        from rag_wright.capabilities.manifests import _SPECS
+    """The light capability index (`slug -> manifest spec`): the LIVE runtime ARD catalog the developer populates
+    (EP-CORE-3). Read fresh each call so a just-registered capability is seen; carries only metadata (kind/
+    description/impl_ref/representative_queries), never an implementation."""
+    from rag_wright.capabilities.manifests import MANIFEST_SPECS
 
-        _INDEX = {s.slug: s for s in _SPECS}
-    return _INDEX
+    return MANIFEST_SPECS
 
 
 def capability_index() -> dict[str, dict]:

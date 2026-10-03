@@ -904,7 +904,29 @@ _SPECS: tuple[CapabilityManifest, ...] = (
     ),
 )
 
-MANIFEST_SPECS: dict[str, CapabilityManifest] = {spec.slug: spec for spec in _SPECS}
+# EP-CORE-3 (ADR-0118): the engine ships an EMPTY ARD catalog. `MANIFEST_SPECS` is the runtime registry the
+# DEVELOPER populates with their product's capabilities (via `register_capability`); the invoker + `capability_impl`
+# read it live. The committed `_SPECS` above is the ENGINE's REFERENCE PACK (the contract/compliance worked example,
+# kept in the engine repo per ADR-0052) -- it is OPT-IN, registered only by an explicit `load_reference_pack()`.
+MANIFEST_SPECS: dict[str, CapabilityManifest] = {}
+
+
+def register_capability(manifest: CapabilityManifest) -> None:
+    """Register (or replace) one capability in the runtime ARD catalog. A product calls this for each of its
+    domain capabilities (with an `impl_ref`); the invoker then resolves it by name with zero engine edits."""
+    MANIFEST_SPECS[manifest.slug] = manifest
+
+
+def reference_pack() -> tuple[CapabilityManifest, ...]:
+    """The engine's committed REFERENCE PACK manifests (the contract/compliance worked example). Opt-in."""
+    return _SPECS
+
+
+def load_reference_pack() -> None:
+    """Register the engine's reference pack into the runtime catalog -- the opt-in worked example (the engine's own
+    test suite loads it; a downstream product does NOT, registering its own capabilities instead)."""
+    for manifest in _SPECS:
+        register_capability(manifest)
 
 
 def author(slug: str) -> RegistryEntry:
