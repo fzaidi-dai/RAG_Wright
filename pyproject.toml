@@ -40,6 +40,7 @@ ocr-bench = [
 
 [dependency-groups]
 dev = [
+    "import-linter>=2.15",
     "modal>=1.5.3",
     "pytest>=8.0",
     "pytest-asyncio>=1.4.0",
@@ -75,3 +76,51 @@ src = ["src", "tests"]
 
 [tool.uv.sources]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+# DD-6 (ADR-0067 #5, AC-no-leak): the de-domaining import boundary, enforced by import-linter (run as a pytest
+# test, tests/arch/test_import_contracts.py -- no separate CI). The GENERIC engine foundation (the store + the
+# de-domained generic primitives) must not import the reference CONTRACT/COMPLIANCE domain pack; a re-coupling
+# import fails the contract. NOT in the source set: the domain GRAPHS (contract_ingestion_pipeline, compliance_check,
+# the contract/compliance stores -- allowed to import domain, the primitives-vs-domain-graphs rule) AND `rag_wright.api`
+# (the composition/invocation surface that dispatches to domain graphs, e.g. parse_document -> the ingestion pipeline).
+# Product->Engine (the other half of ADR-0067 #5) is a PRODUCT-repo contract, enforced in RuleWright.
+[tool.importlinter]
+root_packages = ["rag_wright"]
+
+[[tool.importlinter.contracts]]
+name = "Generic engine foundation is domain-free (de-domaining, ADR-0067 #5)"
+type = "forbidden"
+source_modules = [
+    "rag_wright.store.arcadedb",
+    "rag_wright.store.seam",
+    "rag_wright.store.chunk_text",
+    "rag_wright.ontology.registry",
+    "rag_wright.capabilities.graph_query",
+    "rag_wright.capabilities.retrieval_core",
+    "rag_wright.capabilities.invoke",
+    "rag_wright.capabilities.manifests",
+    "rag_wright.capabilities.registry",
+    "rag_wright.capabilities.remote_encoders",
+    "rag_wright.capabilities.embedding_profiles",
+    "rag_wright.capabilities.disambiguation",
+    "rag_wright.capabilities.entity_resolution",
+    "rag_wright.capabilities.graph_storage",
+]
+forbidden_modules = [
+    "rag_wright.corpus.edgar",
+    "rag_wright.corpus.cuad_ingestion",
+    "rag_wright.ontology.contract_taxonomy",
+    "rag_wright.contracts.compliance",
+    "rag_wright.contracts.contract_meta",
+    "rag_wright.capabilities.contract_kg_store",
+    "rag_wright.capabilities.contract_kg_serve",
+    "rag_wright.capabilities.compliance_store",
+    "rag_wright.capabilities.compliance_judgment",
+    "rag_wright.capabilities.dg_extraction",
+    "rag_wright.capabilities.graph_extraction",
+    "rag_wright.subgraphs.contract_ingestion_pipeline",
+    "rag_wright.subgraphs.compliance_check",
+    "rag_wright.subgraphs.compliance_ingestion",
+    "rag_wright.subgraphs.relational_qa",
+    "rag_wright.subgraphs.intra_document_qa",
+]
