@@ -9,7 +9,9 @@ from __future__ import annotations
 
 from typing import Optional
 
+from rag_wright.capabilities.highlight_serve import _decode_bbox
 from rag_wright.contracts.contract_meta import ContractRecord
+from rag_wright.contracts.highlight import SpanLocation
 from rag_wright.contracts.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
 from rag_wright.store.arcadedb import (
     CLAUSE_TYPE,
@@ -203,3 +205,41 @@ class ContractKGStore:
         precision filter is a per-caller UI choice, never baked into the facade)."""
         from rag_wright.capabilities.contract_kg_serve import contract_clause_index
         return list(contract_clause_index(self, contract_id))
+
+    # --- EP-REF-1b-iii: clause-type taxonomy (pure, from contracts/function.py) + span location assembly ---
+
+    @staticmethod
+    def canonical_clause_type(label: str) -> Optional[str]:
+        """Map a user's clause label onto the engine's clause-type taxonomy, or `None` if it maps to nothing.
+        Case-insensitive + alias-resolving ("Limitation of Liability" -> "Cap On Liability"), so a caller's label
+        (e.g. a correction) is VALIDATED rather than taken on trust -- an unmappable label returns None, not a
+        silent empty scope."""
+        from rag_wright.contracts.function import canonical_function
+        return canonical_function(label)
+
+    @staticmethod
+    def clause_type_vocabulary() -> tuple[str, ...]:
+        """Every clause type a sweep/correction UI can be scoped to (the engine's function-label vocabulary)."""
+        from rag_wright.contracts.function import FUNCTION_LABELS
+        return tuple(FUNCTION_LABELS)
+
+    def span_locations(self, contract_id: str) -> list[SpanLocation]:
+        """Every span of one document with where it sits in the original (pages/bbox/offsets) + the clause ids
+        extracted from it -- for a citation PREVIEW (a span-id-in-hand lookup, no query/model call). Each clause
+        carries the `span_id` it came from (the only bridge between the clause-id and span-id spaces); a clause
+        whose span is not in this document is dropped rather than inventing a location."""
+        spans = self._store.all_spans_by_contract(contract_id)
+        present = {r["span_id"] for r in spans}
+        clauses: dict[str, list[str]] = {}
+        for c in self.clauses_in_contract(contract_id):
+            sid = c.get("span_id") or ""
+            if sid in present:
+                clauses.setdefault(sid, []).append(str(c.get("clause_id") or ""))
+        return [
+            SpanLocation(
+                span_id=r["span_id"], clause_ids=clauses.get(r["span_id"], []),
+                pages=[int(p) for p in (r.get("pages") or [])], bbox=_decode_bbox(r.get("bbox")),
+                doc_start=r.get("doc_start"), doc_end=r.get("doc_end"), text=r.get("text") or "",
+            )
+            for r in spans
+        ]

@@ -36,6 +36,23 @@ class HighlightSpan(BaseModel):
         return self
 
 
+class SpanLocation(BaseModel):
+    """Where one span sits in the ORIGINAL document, for a citation PREVIEW (EP-REF-1b): a location + the text
+    to confirm it landed, plus the clause ids extracted from it (so an answer's `citation_id` -- a span id OR a
+    clause id, two different spaces -- resolves either way). Lighter than `HighlightSpan` (no function / clause
+    ref / extracted value / confidence): a preview answers "show me this span", not "which spans pertain". `pages`
+    is a LIST (a span can cross a page break; the first page is where the preview opens) and `bbox` is best-effort
+    -- a page is nearly always known and a rectangle usually is, so a missing rectangle never costs the page."""
+
+    span_id: str
+    clause_ids: list[str] = []
+    pages: list[int] = []
+    bbox: tuple[float, float, float, float] | None = None
+    doc_start: int | None = None
+    doc_end: int | None = None
+    text: str = ""
+
+
 class HighlightResult(BaseModel):
     """The full response to one query about one contract."""
 
