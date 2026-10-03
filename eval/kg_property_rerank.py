@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 from eval.acord import load_corpus, load_test_queries
 from eval.acord_retrieval import ndcg_at_k
 from eval.harness import recall_at_k
+from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
 from rag_wright.capabilities.reranking import BGEReranker
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.value_match import constraint_match_count
@@ -109,7 +110,7 @@ def main() -> None:
             n_constrained += 1
         bge = reranker.score(q.text, [corpus.get(c, "") for c in pool])
         b = dict(zip(pool, bge))
-        m = {c: property_match(qc, store.clause_typed_edges(_clause_key(c, corpus.get(c, ""))), grounded_only=True)
+        m = {c: property_match(qc, ContractKGStore(store).clause_typed_edges(_clause_key(c, corpus.get(c, ""))), grounded_only=True)
              for c in pool}
         # KG-enhanced ranking: typed constraint-match primary, BGE secondary
         ranked = sorted(pool, key=lambda c: (-m[c], -b[c], c))

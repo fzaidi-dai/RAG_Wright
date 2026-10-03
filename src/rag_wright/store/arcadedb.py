@@ -707,27 +707,6 @@ class ArcadeDBStore:
             f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({neighbours}){where} LIMIT {k}"
         )
 
-    def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:
-        """The typed property assertions on each span, joined via the ADR-0025 `span_id` key that the clause
-        KG persists on every property edge (`edge.span_id == Span.span_id`; SPAN-CLAUSE-RERANK). This is the
-        clause<->span link the retrieval rerank needs: a span retrieved from the BGE index gets its clause's
-        typed (dimension, value) constraints here. Batched over `span_ids`; returns {span_id: {(dimension,
-        value)}}. Queries each typed edge type once with an IN filter (ArcadeDB has no shared edge base), so
-        round-trips are bounded by the edge-type count, not the pool size. `value` is the target
-        PropertyValue's value (`inV().value`)."""
-        out: dict[str, set[tuple[str, str]]] = {s: set() for s in span_ids}
-        if not span_ids:
-            return out
-        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
-        for edge_type in TYPED_PROPERTY_EDGE_TYPES:
-            rows = self._query(
-                f"SELECT span_id, dimension, inV().value AS value FROM {edge_type} WHERE span_id IN {id_list}")
-            for r in rows:
-                sid, dim, val = r.get("span_id"), r.get("dimension"), r.get("value")
-                if sid in out and dim and val is not None:
-                    out[sid].add((str(dim), str(val)))
-        return out
-
     def span_texts(self, span_ids: list[str]) -> dict[str, str]:
         """The operative-span text for each span_id (batched), for citing a retrieved span. {span_id: text}."""
         if not span_ids:
@@ -984,14 +963,6 @@ class ArcadeDBStore:
         if statements:
             self._db.execute_transaction(statements)
 
-    def exceptions_of_clause(self, cap_clause_id: str) -> list[dict]:
-        """The exception/carve-out clauses linked to a Cap clause (`IsExceptionTo` in-edges, ADR-0044). For the
-        query side: serving a cap clause pulls its INFERRED carve-outs. Rows: {clause_id, function, span_id}."""
-        return self._query(
-            f"SELECT clause_id, function, span_id FROM ("
-            f"SELECT expand(in('{IS_EXCEPTION_TO_EDGE_TYPE}')) FROM {CLAUSE_TYPE} "
-            f"WHERE clause_id = {_sql_str(cap_clause_id)})")
-
     def graph_counts(self) -> dict[str, int]:
         entities = self._query(f"SELECT count(*) AS n FROM {ENTITY_TYPE}")
         rels = self._query(f"SELECT count(*) AS n FROM {REL_EDGE_TYPE}")
@@ -1108,17 +1079,6 @@ class ArcadeDBStore:
             "typed_edges": typed,
         }
 
-    def clause_typed_edges(self, clause_id: str) -> list[dict]:
-        """The clause's typed property edges: the edge TYPE, dimension, value, predicate IRI, and provenance
-        (confidence, span_id) -- the readback for tests and the shape the Leg-A/B scoped queries build on."""
-        q = (
-            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id = " + _sql_str(clause_id) + ")}"
-            ".outE(){as: e}.inV(){as: v}"
-            " RETURN e.@type AS edge_type, e.predicate_iri AS predicate_iri, v.dimension AS dimension,"
-            " v.value AS value, v.folio_iri AS folio_iri, e.confidence AS confidence, e.span_id AS span_id"
-        )
-        return self._query(q)
-
     def clear_clause_kg(self) -> None:
         """Delete the typed clause KG (all typed edges + the legacy flat edge + Clause + PropertyValue),
         leaving the span index intact -- the KG-3 counterpart of `clear_property_graph` for a clean
@@ -1141,37 +1101,6 @@ class ArcadeDBStore:
             f"SELECT clause_id, function, folio_iri, span_id FROM {CLAUSE_TYPE} "
             f"WHERE clause_id >= {lo} AND clause_id < {hi} ORDER BY clause_id"
         )
-
-    def contract_clause_kg(self, contract_id: str) -> list[dict]:
-        """The per-contract typed subgraph: one row per typed edge (clause -> value), carrying the clause
-        function, the edge type + dimension + value + predicate IRI, and the provenance (confidence, span_id).
-        The shape Leg-A aggregation / disambiguation / citation build on."""
-        lo, hi = self._contract_bounds(contract_id)
-        # Only typed-PROPERTY edges (clause -> value), which carry a `dimension`. A clause can also have
-        # clause->clause edges with no dimension (IsExceptionTo, ADR-0044); the `dimension IS NOT NULL` guard
-        # excludes those so they never surface as null-dimension "property" rows.
-        q = (
-            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id >= " + lo
-            + " AND clause_id < " + hi + ")}.outE(){as: e, where: (dimension IS NOT NULL)}.inV(){as: v}"
-            " RETURN c.clause_id AS clause_id, c.function AS function, e.@type AS edge_type,"
-            " e.dimension AS dimension, v.value AS value, v.folio_iri AS folio_iri,"
-            " e.predicate_iri AS predicate_iri, e.confidence AS confidence, e.span_id AS span_id"
-        )
-        return self._query(q)
-
-    def clauses_with_property(self, contract_id: str, dimension: str, value: str) -> list[dict]:
-        """Disambiguation: the clauses in one contract that assert (dimension, value) -- e.g. the *mutual*
-        cap clause, or every clause that covers *fraud*. Returns clause_id + function + the edge provenance."""
-        lo, hi = self._contract_bounds(contract_id)
-        q = (
-            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id >= " + lo
-            + " AND clause_id < " + hi + ")}"
-            ".outE(){as: e, where: (dimension = " + _sql_str(dimension) + ")}"
-            ".inV(){as: v, where: (value = " + _sql_str(value) + ")}"
-            " RETURN c.clause_id AS clause_id, c.function AS function, e.@type AS edge_type,"
-            " e.confidence AS confidence, e.span_id AS span_id"
-        )
-        return self._query(q)
 
     def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
         if not chunk_ids:

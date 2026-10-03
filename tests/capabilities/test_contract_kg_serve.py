@@ -184,9 +184,10 @@ def test_live_disambiguate_over_typed_kg(store) -> None:
     ContractKGStore(store).write_clause_kg(_cap("ACME_MSA", 1, "unilateral"))
     ContractKGStore(store).write_clause_kg(_cap("OTHER_CO", 0, "mutual"))  # different contract -- must not leak in
 
-    idx = contract_clause_index(store, "ACME_MSA")
+    ckg = ContractKGStore(store)  # EP-REF-1a-ii: the typed-KG reads are the domain store's, over store.kg_edges
+    idx = contract_clause_index(ckg, "ACME_MSA")
     assert len(idx) == 2  # scoped to the contract; OTHER_CO excluded
 
-    got = disambiguate(store, "ACME_MSA", "Cap On Liability", "mutuality", "mutual")
+    got = disambiguate(ckg, "ACME_MSA", "Cap On Liability", "mutuality", "mutual")
     assert len(got) == 1 and got[0].clause_id.startswith("ACME_MSA:0:")
     assert got[0].properties[0].dimension == "mutuality" and got[0].properties[0].value == "mutual"

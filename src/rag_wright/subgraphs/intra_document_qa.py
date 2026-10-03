@@ -270,6 +270,11 @@ def production_intra_document_qa(
         from rag_wright.capabilities.reranking import BGEReranker
         reranker = BGEReranker()
     from rag_wright.capabilities.contract_kg_serve import contract_clause_index
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+
+    # EP-REF-1a-ii: the typed-KG edge reads moved to the domain store extension; the raw `store` still serves the
+    # generic retrieval (span search, rehydrate). The serving reads go through a ContractKGStore over it.
+    ckg = ContractKGStore(store)
 
     def serve(contract_id: str, question: str) -> list[CitedClause]:
         # ADR-0044: pull each cap clause's INFERRED carve-outs (IsExceptionTo) so "how is liability capped, and
@@ -277,7 +282,7 @@ def production_intra_document_qa(
         # 0006-D: include_untyped so a clause the classifier left NONE is still a candidate (recall must not
         # depend on classification -- else a classifier miss is a silent recall hole, engine issue 0006).
         base = attach_exception_links(
-            contract_clause_index(store, contract_id, include_untyped=True), store.exceptions_of_clause,
+            contract_clause_index(ckg, contract_id, include_untyped=True), ckg.exceptions_of_clause,
             contract_id=contract_id)
         if len(base) <= top_k:
             return base  # small contract -> no narrowing needed

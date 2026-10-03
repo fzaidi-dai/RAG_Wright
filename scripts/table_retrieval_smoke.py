@@ -73,7 +73,8 @@ async def main() -> int:
     # the served, rehydrated evidence pool. Before the fix it was never chunked/indexed, so no served clause
     # carried it; after, its atomic table span is a served clause whose rehydrated text holds the figure.
     log("[smoke] 4/4 (a) retrieval-layer proof: the table span reaches the served evidence pool")
-    served = contract_clause_index(store, doc_id, include_untyped=True)
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
+    served = contract_clause_index(ContractKGStore(store), doc_id, include_untyped=True)
     texts = rehydrate_clause_texts(store, doc_id, served)
     table_clauses = [c for c in served if "48,000" in (texts.get(c.clause_id) or "")]
     ok_indexed = bool(table_clauses)

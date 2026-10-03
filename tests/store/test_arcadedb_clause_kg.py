@@ -90,7 +90,7 @@ def test_write_typed_kg_and_readback(store) -> None:
     ContractKGStore(store).write_clause_kg(rec)
     assert store.clause_kg_counts() == {"clauses": 1, "property_values": 4, "typed_edges": 4}
 
-    got = store.clause_typed_edges(cid)
+    got = ContractKGStore(store).clause_typed_edges(cid)
     by_dim = {r["dimension"]: r for r in got}
     assert by_dim["mutuality"]["edge_type"] == "HAS_MUTUALITY"
     assert by_dim["carve_out"]["edge_type"] == "EXCEPTS"
@@ -145,11 +145,14 @@ def test_span_properties_joins_typed_edges_by_span_id():
         return []
 
     store._query = fake_query
-    out = store.span_properties(["s1", "s2"])
+    # EP-REF-1a-ii: span_properties moved to ContractKGStore over store.kg_edges (which issues `FROM <edge_type>
+    # WHERE span_id IN ...` per type -> the fake still matches on `FROM {edge_type} `).
+    ckg = ContractKGStore(store)
+    out = ckg.span_properties(["s1", "s2"])
     assert out["s1"] == {("mutuality", "mutual"), ("cap_basis", "fixed_fee")}  # aggregated across edge types
     assert out["s2"] == set()  # its only row had value=None -> nothing recorded
     assert "sX" not in out  # rows for spans outside the requested batch are ignored
-    assert store.span_properties([]) == {}  # empty in -> empty out, no query
+    assert ckg.span_properties([]) == {}  # empty in -> empty out, no query
 
 
 # --- ADR-0048 Phase A mark-stale: the pure UPDATE builder (no store) --------------------------------------

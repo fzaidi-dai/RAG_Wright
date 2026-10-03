@@ -22,8 +22,12 @@ class _FakeStore:
     def span_dense_search(self, dense, *, k, documents=None):  # issue 0041: pure-dense floor
         return [{"span_id": s, "function": ""} for s in self._dense[:k]]
 
-    def span_properties(self, span_ids):
-        return {s: set(self._props.get(s, set())) for s in span_ids}
+    def kg_edges(self, from_type=None, *, where=None, key_range=None, direction="out", edge_type=None,
+                 edge_where=None, target_where=None, select):
+        # EP-REF-1a-ii: the typed-prop read now goes store.kg_edges (edge scan); ContractKGStore.span_properties
+        # aggregates these rows. Return the seeded (dimension, value) rows for the requested span_ids.
+        ids = set((edge_where or {}).get("span_id", []))
+        return [{"span_id": s, "dimension": d, "value": v} for s in ids for (d, v) in self._props.get(s, set())]
 
     def span_texts(self, span_ids):
         return {s: self._texts.get(s, "") for s in span_ids}

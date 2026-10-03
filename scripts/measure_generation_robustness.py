@@ -59,14 +59,16 @@ def _pick_contract(store, function: str) -> str | None:
 def _build_evidence(store, contract_id: str, function: str):
     """Fixed evidence for one query: target-function clauses + their ADR-0044 carve-outs, rehydrated."""
     from rag_wright.capabilities.contract_kg_serve import clauses_of_function
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
     from rag_wright.subgraphs.intra_document_qa import (
         _clause_to_evidence,
         attach_exception_links,
         rehydrate_clause_texts,
     )
-    base = clauses_of_function(store, contract_id, function)
-    linked = attach_exception_links(base, store.exceptions_of_clause, contract_id=contract_id)
-    texts = rehydrate_clause_texts(store, contract_id, linked)
+    ckg = ContractKGStore(store)
+    base = clauses_of_function(ckg, contract_id, function)
+    linked = attach_exception_links(base, ckg.exceptions_of_clause, contract_id=contract_id)
+    texts = rehydrate_clause_texts(store, contract_id, linked)  # raw store: generic span rehydrate
     return [_clause_to_evidence(c, texts.get(c.clause_id)) for c in linked]
 
 

@@ -42,7 +42,8 @@ def main() -> None:
         dense, sparse = embedder.encode_dense(query), embedder.encode_sparse(query)
         pool = store.span_hybrid_search(dense, sparse, k=12, function=function)  # BGE order
         span_ids = [h["span_id"] for h in pool]
-        props = store.span_properties(span_ids)
+        from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii
+        props = ContractKGStore(store).span_properties(span_ids)
 
         def _val(sid):  # the span's value for the constraint dim (or '-')
             return next((v for d, v in props[sid] if d == dim), "-")

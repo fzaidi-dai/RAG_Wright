@@ -342,7 +342,7 @@ async def test_production_serves_whole_contract_not_function_narrowed(monkeypatc
     monkeypatch.setattr(ag, "agenerate_answer", _agen)
 
     class _Store:
-        def exceptions_of_clause(self, cid):
+        def kg_edges(self, *a, **k):  # EP-REF-1a-ii: exceptions_of_clause now reads via store.kg_edges
             return []
 
         def spans_by_contract(self, cid, fns):
@@ -383,7 +383,7 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
     monkeypatch.setattr(ag, "agenerate_answer", _gen)
 
     class _Store:
-        def exceptions_of_clause(self, cid):
+        def kg_edges(self, *a, **k):  # EP-REF-1a-ii: exceptions_of_clause now reads via store.kg_edges
             return []
 
         def spans_by_contract(self, cid, fns):

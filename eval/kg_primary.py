@@ -31,6 +31,7 @@ from dotenv import load_dotenv
 from eval.acord import load_corpus, load_test_queries
 from eval.acord_retrieval import ndcg_at_k
 from eval.harness import recall_at_k
+from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
 from rag_wright.capabilities.dg_extraction import extract_clause, openrouter_model
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.value_match import constraint_match_count
@@ -262,7 +263,7 @@ def main() -> None:
         if acord_id not in props_cache:
             props_cache[acord_id] = {
                 (e["dimension"], e["value"])
-                for e in store.clause_typed_edges(_clause_key(acord_id, corpus.get(acord_id, "")))
+                for e in ContractKGStore(store).clause_typed_edges(_clause_key(acord_id, corpus.get(acord_id, "")))
                 if e.get("confidence") != "AMBIGUOUS"
             }
         return props_cache[acord_id]

@@ -107,7 +107,8 @@ def property_boosted_retrieval(
                 function_of[sid] = h.get("function", "")
     if not ordered:
         return []
-    props = store.span_properties(ordered)
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
+    props = ContractKGStore(store).span_properties(ordered)
     ranked = typed_constraint_match_rank(
         constraints, [(sid, props[sid]) for sid in ordered], match_count_fn=match_count_fn).ranked
     top_ids = _select_with_dense_floor([r.clause_id for r in ranked], dense_floor, k)

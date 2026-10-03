@@ -12,13 +12,15 @@ from rag_wright.contracts.property import FOLIO_SUBJECT_IRI, ClausePropertyRecor
 from rag_wright.store.arcadedb import (
     CLAUSE_TYPE,
     CONTRACT_TYPE,
+    IS_EXCEPTION_TO_EDGE_TYPE,
     PROPERTY_EDGE_TYPE,
     PROPVALUE_TYPE,
+    TYPED_PROPERTY_EDGE_TYPES,
     _DIM_EDGE_STR,
     _edge_predicate_iri,
     _property_value_key,
 )
-from rag_wright.store.seam import KgEdge, KgNode
+from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 
 
 class ContractKGStore:
@@ -103,3 +105,69 @@ class ContractKGStore:
             "parties_json": list(record.parties), "agreement_date": record.agreement_date,
             "effective_date": record.effective_date, "source_doc_id": record.source_doc_id,
             "content_hash": record.content_hash, "page_count": record.page_count})])
+
+    # --- EP-REF-1a-ii: the typed clause-KG edge-traversal READS, over the generic `kg_edges` primitive. These
+    #     moved OFF the engine store (which must hold no domain traversal, ADR-0117); the store keeps only the
+    #     generic kg_edges/kg_read. Shapes are byte-for-byte the old store methods' (acceptance: identical reads).
+
+    @staticmethod
+    def _bounds(contract_id: str) -> tuple[str, str]:
+        return contract_id + ":", contract_id + ";"  # clause_ids are `<contract>:<idx>:<hash>`
+
+    def clause_typed_edges(self, clause_id: str) -> list[dict]:
+        """The clause's typed property edges: edge type, dimension, value, predicate IRI, and provenance."""
+        return self._store.kg_edges(
+            CLAUSE_TYPE, where={"clause_id": clause_id}, direction="out",
+            select={"edge_type": "e.@type", "predicate_iri": "e.predicate_iri", "dimension": "v.dimension",
+                    "value": "v.value", "folio_iri": "v.folio_iri", "confidence": "e.confidence",
+                    "span_id": "e.span_id"})
+
+    def contract_clause_kg(self, contract_id: str) -> list[dict]:
+        """The per-contract typed subgraph: one row per typed (clause -> value) edge, with the clause function,
+        edge type/dimension/value/predicate IRI, and provenance. Only PROPERTY edges (which carry a `dimension`);
+        the `dimension IS NOT NULL` guard excludes clause->clause edges (IsExceptionTo, ADR-0044)."""
+        lo, hi = self._bounds(contract_id)
+        return self._store.kg_edges(
+            CLAUSE_TYPE, key_range=("clause_id", lo, hi), direction="out", edge_where={"dimension": NOT_NULL},
+            select={"clause_id": "c.clause_id", "function": "c.function", "edge_type": "e.@type",
+                    "dimension": "e.dimension", "value": "v.value", "folio_iri": "v.folio_iri",
+                    "predicate_iri": "e.predicate_iri", "confidence": "e.confidence", "span_id": "e.span_id"})
+
+    def clauses_with_property(self, contract_id: str, dimension: str, value: str) -> list[dict]:
+        """The clauses in one contract that assert (dimension, value) -- clause_id + function + edge provenance."""
+        lo, hi = self._bounds(contract_id)
+        return self._store.kg_edges(
+            CLAUSE_TYPE, key_range=("clause_id", lo, hi), direction="out",
+            edge_where={"dimension": dimension}, target_where={"value": value},
+            select={"clause_id": "c.clause_id", "function": "c.function", "edge_type": "e.@type",
+                    "confidence": "e.confidence", "span_id": "e.span_id"})
+
+    def exceptions_of_clause(self, cap_clause_id: str) -> list[dict]:
+        """The exception/carve-out clauses linked to a Cap clause (`IsExceptionTo` in-edges, ADR-0044): the SOURCE
+        clauses reached across the incoming edge. Rows: {clause_id, function, span_id}."""
+        return self._store.kg_edges(
+            CLAUSE_TYPE, where={"clause_id": cap_clause_id}, direction="in",
+            edge_type=IS_EXCEPTION_TO_EDGE_TYPE,
+            select={"clause_id": "v.clause_id", "function": "v.function", "span_id": "v.span_id"})
+
+    def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:
+        """The typed (dimension, value) assertions on each span, joined via the ADR-0025 `edge.span_id`. Scans each
+        typed edge type once (IN-filtered), so round-trips are bounded by the edge-type count, not the pool size.
+        Returns {span_id: {(dimension, value)}} (every input span present, empty if none)."""
+        out: dict[str, set[tuple[str, str]]] = {s: set() for s in span_ids}
+        if not span_ids:
+            return out
+        for edge_type in TYPED_PROPERTY_EDGE_TYPES:
+            for r in self._store.kg_edges(
+                edge_type=edge_type, edge_where={"span_id": span_ids},
+                select={"span_id": "span_id", "dimension": "dimension", "value": "inV().value"}):
+                sid, dim, val = r.get("span_id"), r.get("dimension"), r.get("value")
+                if sid in out and dim and val is not None:
+                    out[sid].add((str(dim), str(val)))
+        return out
+
+    def clauses_in_contract(self, contract_id: str) -> list[dict]:
+        """Every clause in one contract (a NODE read, delegated to the generic store -- it is a `kg_read`-
+        relocatable follow-up, not an edge traversal). Kept here so this extension is the complete `_KGStore`
+        reader the Leg-A serving (`contract_kg_serve`) needs."""
+        return self._store.clauses_in_contract(contract_id)
