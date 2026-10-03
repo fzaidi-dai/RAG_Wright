@@ -13,7 +13,7 @@ from typing import Any
 def source_document(document_id: str, *, text: str) -> Any:
     """A text-only `SourceDocument` (`source_doc_id`, `text`) to pass as the `document` input of the
     `contract_ingestion_pipeline` capability. The id should be a canonical, delimiter-safe source-doc id."""
-    from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
+    from rag_wright.capabilities.document_parse import SourceDocument
 
     return SourceDocument(source_doc_id=document_id, text=text)
 
@@ -24,7 +24,7 @@ def parse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dic
     fires on real headings, and `.text` holds the flattened text. This is the PDF/DOCX/HTML/MD ingest entry point
     of the engine API; pass the result as the `document` input of `contract_ingestion_pipeline`. The docling parse
     blocks; use `aparse_document` on an event loop."""
-    from rag_wright.subgraphs.contract_ingestion_pipeline import parsed_source_document
+    from rag_wright.capabilities.document_parse import parsed_source_document
 
     p = Path(path)
     return parsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata)
@@ -33,7 +33,7 @@ def parse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dic
 async def aparse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dict | None = None) -> Any:
     """The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the docling parse off the event loop
     so a hand-built async ingest can parse a document into a structure-bearing `SourceDocument` without blocking."""
-    from rag_wright.subgraphs.contract_ingestion_pipeline import aparsed_source_document
+    from rag_wright.capabilities.document_parse import aparsed_source_document
 
     p = Path(path)
     return await aparsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata)

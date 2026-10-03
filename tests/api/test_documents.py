@@ -28,7 +28,7 @@ def test_parse_document_plumbs_path_into_the_byte_builder(monkeypatch, tmp_path)
         return SourceDocument(source_doc_id=source_doc_id, text="x")
 
     monkeypatch.setattr(
-        "rag_wright.subgraphs.contract_ingestion_pipeline.parsed_source_document", _stub)
+        "rag_wright.capabilities.document_parse.parsed_source_document", _stub)
     pdf = tmp_path / "ACME Contract.pdf"
     pdf.write_bytes(b"%PDF-1.4 bytes")
     parse_document("ACME_MSA", pdf, cache_dir=tmp_path / "cache", metadata={"tier": "gold"})
@@ -46,7 +46,7 @@ def test_aparse_document_plumbs_path_into_the_async_byte_builder(monkeypatch, tm
         return SourceDocument(source_doc_id=source_doc_id, text="x")
 
     monkeypatch.setattr(
-        "rag_wright.subgraphs.contract_ingestion_pipeline.aparsed_source_document", _astub)
+        "rag_wright.capabilities.document_parse.aparsed_source_document", _astub)
     pdf = tmp_path / "doc.pdf"
     pdf.write_bytes(b"%PDF-1.4 async")
     asyncio.run(aparse_document("DOC", pdf, cache_dir=tmp_path / "cache"))

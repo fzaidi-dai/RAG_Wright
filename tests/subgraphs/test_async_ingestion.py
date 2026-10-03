@@ -228,7 +228,7 @@ def test_run_job_parses_pending_documents(tmp_path):
 # --- aparsed_source_document: the async-bounded twin of parsed_source_document (for a hand-built ingest) --------
 
 async def test_aparsed_source_document_is_the_async_bounded_twin(monkeypatch):
-    import rag_wright.subgraphs.contract_ingestion_pipeline as cip
+    import rag_wright.capabilities.document_parse as cip
 
     seen = {}
 
@@ -245,7 +245,7 @@ async def test_aparsed_source_document_is_the_async_bounded_twin(monkeypatch):
 async def test_aparsed_source_document_is_wall_clock_bounded(monkeypatch):
     import time
 
-    import rag_wright.subgraphs.contract_ingestion_pipeline as cip
+    import rag_wright.capabilities.document_parse as cip
 
     def _slow(sid, name, data, *, cache_dir, metadata=None):
         time.sleep(0.5)  # a hung OCR/VLM escalation
