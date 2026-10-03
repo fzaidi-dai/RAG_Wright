@@ -17,6 +17,16 @@ from typing import Optional, Protocol, runtime_checkable
 from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
 
 
+class _NotNull:
+    """Sentinel for a `kg_edges` where-value meaning `<field> IS NOT NULL` (vs an equality/membership match)."""
+
+    def __repr__(self) -> str:  # pragma: no cover - debug aid
+        return "NOT_NULL"
+
+
+NOT_NULL = _NotNull()  # kg_edges where-value: presence test, e.g. edge_where={"dimension": NOT_NULL}
+
+
 @dataclass(frozen=True)
 class GraphNode:
     """A graph entity node to write (T25). `node_key` is the vertex identity (the resolver's canonical id when
@@ -169,6 +179,33 @@ class Store(Protocol):
         """Read typed nodes of `node_type`. `where` maps a field to a scalar (equality) or a list (membership);
         a list value that is EMPTY means scope-to-nothing and returns `[]` without a query. `distinct` returns the
         distinct values of one field; `fields=None` returns all fields. Equality/membership clauses are AND-ed."""
+
+    def kg_edges(
+        self,
+        from_type: Optional[str] = None,
+        *,
+        where: Optional[dict[str, object]] = None,
+        key_range: Optional[tuple[str, object, object]] = None,
+        direction: str = "out",
+        edge_type: Optional[str] = None,
+        edge_where: Optional[dict[str, object]] = None,
+        target_where: Optional[dict[str, object]] = None,
+        select: dict[str, str],
+    ) -> list[dict]:
+        """Generic, backend-agnostic edge TRAVERSAL -- the primitive a domain store extension delegates to so it
+        never emits store-native traversal SQL (EP-REF-1a, ADR-0117). Three idioms behind one surface:
+
+        - **node-start traversal** (give a start selector): from the `from_type` nodes matched by `where`
+          (scalar=equality, list=membership, `NOT_NULL`=presence; a field in `key_range=(field, lo, hi)` adds
+          `field >= lo AND field < hi`, the contract-scope range), follow `direction="out"` (outgoing edges to
+          the TARGET vertex) or `"in"` (incoming edges to the SOURCE vertex). `edge_type=None` means every edge
+          in that direction. `edge_where` filters the edge, `target_where` the reached vertex.
+        - **edge scan** (give NEITHER `where` NOR `key_range`): scan the `edge_type` table directly, filtered by
+          `edge_where` -- for edge properties that are not reachable from a node key (e.g. a span id on the edge).
+
+        `select` maps each output alias to an expression: `c.<f>` (start node), `e.<f>` / `e.@type` (edge),
+        `v.<f>` (far vertex) for a traversal; or a bare edge field / `inV().<f>` / `outV().<f>` for an edge scan.
+        A membership value that is an EMPTY list means scope-to-nothing -> `[]` with no query. Returns the rows."""
 
     def kg_write(self, nodes: list["KgNode"], edges: "Iterable[KgEdge]" = ()) -> None:
         """Upsert typed `nodes` (by each node's `key_field`) then create typed `edges` (FROM/TO by node key), ALL in

@@ -135,6 +135,11 @@ class _InMemoryStore:
     def kg_write(self, nodes, edges=()):  # DD-1b seam conformance: accept the generic typed write (no-op stub)
         return None
 
+    def kg_edges(self, from_type=None, *, where=None, key_range=None, direction="out", edge_type=None,
+                 edge_where=None, target_where=None, select):
+        # EP-REF-1a seam conformance: the stub holds no graph, so every traversal is empty.
+        return []
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()

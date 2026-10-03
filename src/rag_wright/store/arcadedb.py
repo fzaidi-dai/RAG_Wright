@@ -30,7 +30,7 @@ from rag_wright.ontology.loader import (  # ADR-0067: KG schema from the ontolog
     load_typed_edges,  # P5a: typed-edge map
 )
 from rag_wright.contracts.span import SpanRecord
-from rag_wright.store.seam import GraphEdge, GraphNode
+from rag_wright.store.seam import NOT_NULL, GraphEdge, GraphNode
 
 CHUNK_TYPE = "Chunk"
 ENTITY_TYPE = "Entity"
@@ -433,6 +433,70 @@ class ArcadeDBStore:
         if limit is not None:
             sql += f" LIMIT {int(limit)}"
         return self._query(sql)
+
+    def kg_edges(
+        self,
+        from_type: Optional[str] = None,
+        *,
+        where: Optional[dict[str, object]] = None,
+        key_range: Optional[tuple[str, object, object]] = None,
+        direction: str = "out",
+        edge_type: Optional[str] = None,
+        edge_where: Optional[dict[str, object]] = None,
+        target_where: Optional[dict[str, object]] = None,
+        select: dict[str, str],
+    ) -> list[dict]:
+        """Generic edge traversal (see `Store.kg_edges`): node-start MATCH (out/in) when a start selector is
+        given, else a direct edge-table scan. An empty membership anywhere scopes to nothing -> `[]`."""
+
+        def _terms(d: Optional[dict[str, object]]) -> Optional[list[str]]:
+            out: list[str] = []
+            for field, value in (d or {}).items():
+                if value is NOT_NULL:
+                    out.append(f"{field} IS NOT NULL")
+                elif isinstance(value, (list, tuple, set)):
+                    vals = list(value)
+                    if not vals:
+                        return None  # empty membership -> scope-to-nothing
+                    out.append(f"{field} IN {_kg_sql_array(vals)}")
+                else:
+                    out.append(f"{field} = {_kg_sql_value(value)}")
+            return out
+
+        c_terms, e_terms, v_terms = _terms(where), _terms(edge_where), _terms(target_where)
+        if c_terms is None or e_terms is None or v_terms is None:
+            return []
+        if key_range is not None:
+            f, lo, hi = key_range
+            c_terms = c_terms + [f"{f} >= {_kg_sql_value(lo)}", f"{f} < {_kg_sql_value(hi)}"]
+        returns = ", ".join(f"{expr} AS {alias}" for alias, expr in select.items())
+
+        if not (where or key_range is not None):  # --- edge-scan idiom ---
+            if not edge_type:
+                raise ValueError("kg_edges edge-scan needs an edge_type (no start selector given)")
+            sql = f"SELECT {returns} FROM {edge_type}"
+            if e_terms:
+                sql += " WHERE " + " AND ".join(e_terms)
+            return self._query(sql)
+
+        # --- node-start MATCH traversal ---
+        if from_type is None:
+            raise ValueError("kg_edges traversal needs a from_type")
+        etok = f"'{edge_type}'" if edge_type else ""
+        if direction == "out":
+            edge_step, far_step = f"outE({etok})", "inV()"
+        elif direction == "in":
+            edge_step, far_step = f"inE({etok})", "outV()"
+        else:
+            raise ValueError(f"kg_edges direction must be 'out' or 'in', got {direction!r}")
+
+        def _blk(body: str, term_list: list[str]) -> str:
+            return "{" + body + (f", where: ({' AND '.join(term_list)})" if term_list else "") + "}"
+
+        c_blk = _blk(f"type: {from_type}, as: c", c_terms)
+        e_blk = _blk("as: e", e_terms)
+        v_blk = _blk("as: v", v_terms)
+        return self._query(f"MATCH {c_blk}.{edge_step}{e_blk}.{far_step}{v_blk} RETURN {returns}")
 
     def _property_types(self, type_name: str) -> dict[str, str]:
         """`{property -> declared storage type}` for a KG node type, used by `kg_write` to encode each prop. Sourced
