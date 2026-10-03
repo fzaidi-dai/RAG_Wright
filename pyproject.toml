@@ -66,6 +66,7 @@ markers = [
     "embed: opt-in live BGE-M3 encode (downloads the model); run with -m embed",
     "rerank: opt-in live BGE-reranker cross-encoder (downloads the model); run with -m rerank",
     "ner: opt-in live spaCy NER model (en_core_web_sm); run with -m ner",
+    "fleet: opt-in load of the LOCAL clause-classifier fleet (20+ transformer models, multi-GB RSS); run with -m fleet",
 ]
 
 [tool.ruff]

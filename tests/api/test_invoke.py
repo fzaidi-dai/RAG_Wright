@@ -96,6 +96,7 @@ _SETFIT_ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_claus
 _HAVE_SETFIT = (_SETFIT_ROOT / "cap128b_legalbert" / "model_head.pkl").exists()
 
 
+@pytest.mark.fleet  # loads a LOCAL model (multi-GB RSS) -> opt-in, out of the default run
 @pytest.mark.skipif(not _HAVE_SETFIT, reason="SetFit clause checkpoints not present (gitignored / local-only)")
 def test_invoke_model_runs_the_real_clause_function_classifier():
     out = invoke_model("clause_function_classification",
@@ -125,6 +126,7 @@ def _fleet_present() -> bool:
     return True
 
 
+@pytest.mark.fleet  # loads the LOCAL 20-model property fleet (~4.6GB RSS) -> opt-in, out of the default run
 @pytest.mark.skipif(not _fleet_present(), reason="29-dim fleet checkpoints not present (gitignored / local-only)")
 def test_invoke_model_runs_the_real_clause_property_classifier():
     """EP-RT-1: the classifier lane, invoked as a `model` capability through the engine API, returns real soft tags

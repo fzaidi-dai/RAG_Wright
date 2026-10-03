@@ -90,6 +90,7 @@ def _fleet_present() -> bool:
     return True
 
 
+@pytest.mark.fleet  # loads the LOCAL 20-model property fleet (multi-GB RSS) -> opt-in, out of the default run
 @pytest.mark.skipif(not _fleet_present(), reason="29-dim fleet checkpoints not present (gitignored / local-only)")
 def test_generic_mcp_tool_runs_the_real_fleet_end_to_end():
     """EP-RT-2 live: a catalogued model capability, exposed generically as an MCP tool with zero bespoke code, runs

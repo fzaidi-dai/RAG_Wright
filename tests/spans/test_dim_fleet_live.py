@@ -45,8 +45,11 @@ def _fleet_present() -> bool:
     return True
 
 
-pytestmark = pytest.mark.skipif(
-    not _fleet_present(), reason="29-dim fleet checkpoints not present (gitignored / local-only)")
+pytestmark = [
+    pytest.mark.fleet,  # loads the LOCAL 20+-model fleet (multi-GB RSS) -> opt-in, out of the default run
+    pytest.mark.skipif(
+        not _fleet_present(), reason="29-dim fleet checkpoints not present (gitignored / local-only)"),
+]
 
 
 ABSTAIN_DIMS = {
