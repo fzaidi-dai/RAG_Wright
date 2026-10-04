@@ -8,14 +8,14 @@ from __future__ import annotations
 from rag_wright.api.config import EngineConfig, EngineOptions, IngestOptions, StoreConfig
 from rag_wright.api.documents import aparse_document, parse_document, source_document
 from rag_wright.api.ids import decode_bbox, document_of, id_source
-from rag_wright.api.invoke import ainvoke_subgraph, capability_index, invoke_model
+from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import entities_by_name, kg_edges, kg_read, kg_write, span_positions
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage
 from rag_wright.api.workspace import WorkspaceHandle, open_workspace
 
 __all__ = [
     "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace",
-    "ainvoke_subgraph", "invoke_model", "capability_index",
+    "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index",
     "kg_read", "kg_write", "kg_edges", "entities_by_name", "span_positions",
     "document_of", "id_source", "decode_bbox",
     "source_document", "parse_document", "aparse_document",

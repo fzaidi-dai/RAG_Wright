@@ -11,6 +11,7 @@ opaque `WorkspaceHandle` as resources and wraps the call in a trace span; model 
 CALLER's `api.measure_usage()` (EP-API-5). Subgraph hardening (retry/dead-letter) comes from the LangGraph scaffold."""
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from rag_wright.capabilities.invoke import capability_impl
@@ -51,14 +52,45 @@ async def ainvoke_subgraph(name: str, inputs: dict, *, resources: WorkspaceHandl
 
 
 def invoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:
-    """Invoke a model-kind capability by name. Validated against the ARD catalog, then resolved via `impl_ref` and
-    dispatched -- the SAME path the ingestion pipeline routes through (one production path, no second hand-built
-    fleet). `resources` is accepted for API uniformity but model capabilities are store-independent (local fleets).
-    Usage is the caller's `measure_usage()` scope (EP-API-5)."""
+    """Invoke a model-kind capability by name (SYNCHRONOUSLY). Validated against the ARD catalog, then resolved via
+    `impl_ref` and dispatched -- the SAME path the ingestion pipeline routes through (one production path, no second
+    hand-built fleet). `resources` is accepted for API uniformity but model capabilities are store-independent.
+    Usage is the caller's `measure_usage()` scope (EP-API-5). A model impl may be async (I/O-bound, e.g. an
+    LLM-backed cap) -- those cannot be invoked here; call `ainvoke_model` instead (we refuse rather than silently
+    return an un-awaited coroutine)."""
     _validate(name, "model")
     factory = capability_impl(name)
+    if asyncio.iscoroutinefunction(factory):
+        raise TypeError(
+            f"capability {name!r} has an async impl; call ainvoke_model() instead of invoke_model()")
     with traced_step(f"invoke:{name}"):
         return factory(resources, inputs)
+
+
+async def ainvoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle,
+                        sem: asyncio.Semaphore | None = None) -> Any:
+    """Invoke a model-kind capability by name, ASYNCHRONOUSLY -- the async surface for model caps (the subgraph
+    legs already have `ainvoke_subgraph`). A model impl is one of two shapes, and this routes each honestly:
+      * SYNC (CPU-bound local inference -- a classifier/XGBoost fleet): run OFF the event loop in a worker thread
+        (`asyncio.to_thread`), so a big batch never blocks the loop;
+      * ASYNC (I/O-bound -- an LLM-backed cap calling OpenRouter or a local vLLM client): AWAITED directly, so the
+        I/O concurrency is real (not a thread wrapping a blocking call).
+    `sem` (an `asyncio.Semaphore`) bounds total in-flight work when a caller fans out a batch -- the same
+    backpressure the ingestion pipeline applies via `adispatch_model`. Usage is the caller's `measure_usage()`
+    scope (EP-API-5)."""
+    _validate(name, "model")
+    factory = capability_impl(name)
+
+    async def _run() -> Any:
+        with traced_step(f"invoke:{name}"):
+            if asyncio.iscoroutinefunction(factory):
+                return await factory(resources, inputs)
+            return await asyncio.to_thread(factory, resources, inputs)
+
+    if sem is None:
+        return await _run()
+    async with sem:
+        return await _run()
 
 
 def _invocable_names() -> dict[str, str]:
