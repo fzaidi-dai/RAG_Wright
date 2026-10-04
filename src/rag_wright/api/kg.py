@@ -41,6 +41,14 @@ def kg_edges(ws: WorkspaceHandle, from_type: Optional[str] = None, *, where: Opt
                               edge_type=edge_type, edge_where=edge_where, target_where=target_where, select=select)
 
 
+def entities_by_name(ws: WorkspaceHandle, name: str) -> list[dict]:
+    """Resolve an entity NAME to every entity node it matches: `[{entity_id, name, entity_type}]` (the engine owns
+    the surface-form normalization, so variants collapse to one id). One name can match several nodes (a resolved
+    node + an unlinked ref sharing a clustering key) -- all are returned. `entity_id` is exactly the
+    `start_entity_id` a graph traversal takes. The engine's generic entity-lookup primitive on the API."""
+    return ws._store.entities_by_name(name)
+
+
 def span_positions(ws: WorkspaceHandle, document: str) -> list[dict]:
     """Every span of `document` with its position provenance (doc offsets, pages, DECODED bbox), ordered by document
     position. The engine MECHANISM behind a product's citation/highlight types -- the product wraps these rows into

@@ -208,6 +208,25 @@ out = await engine.ainvoke_subgraph("typed_property_retrieval", {"query": q}, re
   (web API / agent tools / auth / tenancy). Any new product function lives in that product's seam, on the engine API.
 - **Product → Engine only** (ADR-0052), enforced by an import-linter on the product side at handoff.
 
+## EP-SEAM-3 — RuleWright `engine/seam.py`: exactly what lifts vs. stays
+
+The engine side is now complete (the API + the reference facades + a reference seam `rag_wright/reference/
+contract_seam.py`). EP-SEAM-3 is the RuleWright refactor: slim `engine/seam.py` (~1526 lines) to the D-bucket by
+replacing the lifted functions with engine calls. Match the reference seam's shape; see the generic
+`seam-adaptation-guide.md`. Grounded against RuleWright's current `seam.py`:
+
+**LIFT (delete the seam copy; call the engine):**
+- Documents: `parse_document_text`, `build_source_document`, `text_source_document` → `api.parse_document`/`aparse_document`/`source_document`.
+- Legs (hand-built graphs): `build_contract_ingest`+`invoke_contract_ingest`, `build_contract_qa`+`invoke_contract_qa`, `build_corpus_retrieval`+`invoke_corpus_retrieval`, `ingest_corpus` (driver) → `ainvoke_subgraph("contract_ingestion_pipeline" / "intra_document_qa" / "typed_property_retrieval")`.
+- Contract reads/vocab: `party_counterparties`, `party_affiliates`, `contract_terms`, `span_locations`, `canonical_clause_type`, `clause_type_vocabulary`, and the `SpanLocation` type → `ContractKGStore` facades + the engine `SpanLocation` contract.
+- Compliance reads/legs: `requirements_for`, `requirement_locations`, `curated_requirement_count`, `policy_of_requirement`, `gated_pairs`, the `RequirementLocation` type, `invoke_policy_ingest`, `invoke_compliance_check`, `invoke_compliance_document_check` → `ComplianceStore` facades + `rag_wright/reference/compliance.py` wrappers.
+- Query-side helpers (lift, thin glue): `understand_question` → the `query_understanding` capability; `generate_answer` → the `answer_generator` capability; `find_party` → `api.entities_by_name`.
+- Config/model/env + usage/ids: `export_engine_env`, `build_compliance_store`, `judge_model_id`, `build_compliance_model`, `answer_model` → `EngineConfig` (model-by-alias) + `open_workspace`; `measure_usage`, `decode_bbox`, `document_of`, `contract_exists` → the API equivalents.
+
+**STAY (the D-bucket):** tenancy (per-tenant `open_workspace` + policy); `ScopeViolation` + scoping; the **FTC/ad-tuned** variants `invoke_ad_compliance_check`/`invoke_ad_compliance_document_check` (the product owns `run_ad_compliance_check`); `UnknownPolicy` + the unknown-policy guard; presentation/shaping (`partial_entry`, `report_from_usage`/`UsageReport`, `unreadable_pages`, `engine_info`, the retrieval-result unwrap helpers `retrieved_spans`/`span_of`/`verdict_of`/`evidence_items` + the "which to cite" judgment); obs routing (`measured` + correlation ids — usage capture lifts, routing stays); the product corpus adapter `_ByteCorpus`.
+
+**Guardrail (engine/product boundary):** the reference seam is a *thin illustrative example* — it must NOT grow the product's real auth/tenancy/UI/guardrails. Those stay product-side. A minor engine follow-up: a cleaner retrieval-result contract so the product need not reach through `.span`/`.relevance` nesting in the unwrap helpers (non-blocking).
+
 ## Product-side acceptance (at handoff)
 
 - The product imports **nothing** from `rag_wright.store.*`, builds no embedder, holds no model id — only the engine
@@ -217,6 +236,9 @@ out = await engine.ainvoke_subgraph("typed_property_retrieval", {"query": q}, re
   the product CI.
 
 ## Changelog
+- 2026-10-04 — EP-REF-1d: reference seam `rag_wright/reference/contract_seam.py` + the generic
+  `seam-adaptation-guide.md`; added the "EP-SEAM-3 — what lifts vs. stays" enumeration above. Engine side of the
+  seam migration complete; EP-SEAM-3 is the RuleWright refactor to match.
 - 2026-10-02 — first draft (after EP-API-1 + EP-API-2).
 - 2026-10-02 — EP-API-3 landed: `kg_read`/`kg_write`/`span_positions` + `document_of`/`id_source`/`decode_bbox`;
   compliance/citation/party-read D-functions migratable.
