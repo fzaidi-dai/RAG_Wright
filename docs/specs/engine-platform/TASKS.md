@@ -159,6 +159,26 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | EP-SEAM-2 | Remove the I-bucket leaks from the product (13 `ArcadeDBStore.from_env`, raw-store-into-compliance, `query_embedder`, model-profile knowledge, id/format reimpls, the env-var bridge → `EngineConfig`). | R4, AC-no-leak | todo | RuleWright `engine/seam.py`, `resources.py` | import-linter: product imports no `rag_wright.store.*`/embedder/model ids |
 | EP-SEAM-3 | Keep only the D-bucket in the seam (tenancy, scoping/`ScopeViolation`, compliance leg + FTC routing, clause/party vocabulary, citation-preview types, obs wiring, caching); split MIXED functions via DD-5. | R4 | todo | RuleWright `engine/seam.py` | seam = domain concerns only; both suites green |
 
+## CIC — Compliance-ingest classifier decomposition (cut the per-section ingest LLM cost).
+
+> **Why (2026-10-04, user):** the biggest contract ingest LLM cost was (Step 2) deciding whether a segment starts a
+> new clause — replaced by a deterministic boundary + soft classifier — then (Step 3a) tagging the clause type.
+> Compliance's per-section requirement extraction (`capabilities/requirement_extraction.py`, docling-graph
+> `auto`/`dense`) is the **un-decomposed analog**: one multi-LLM pass per section both FINDS each rule and FILLS all
+> its fields — thousands of calls on a 100-page regulation. Decompose it the same way: deterministic span-split +
+> ttl-driven cue-rule + per-rule field classifiers + verbatim text, with at most one residual LLM call. ttl-driven,
+> so it covers every pack. Full analysis: `docs/proposals/compliance-ingest-classifier-decomposition.md`. The judge
+> is query-time (its verdict IS a classification) — we live with the LLM there for now, as contracts do at query time.
+
+| id | task | implements | status | files (proposed) | verify |
+|---|---|---|---|---|---|
+| CIC-0 | **Do-now, no-ML slice.** Decompose `requirement_extraction` ingest into: (a) deterministic sub-section rule-span splitting (paragraph / `(a)(b)` enumeration), (b) span-level `is_operative` deontic-cue gate (extend the section-level `_deontic_cue_pattern`), (c) `deontic_type` from the matched `cmp:cue` (deterministic cue-rule, off-cue → `AMBIGUOUS`, preserving graceful-degrade), (d) `requirement_text` = **verbatim span** (drop the paraphrase). Residual **single LLM call per section** only for the genuinely open field(s) (`evidence_standard`) + any field a cue-rule can't resolve. Generic mechanism reading the loaded pack `.ttl` — covers the reference compliance pack AND the FTC ads pack (same ingest vocab). | ADR-0066/0115/0116 | todo | `subgraphs/compliance_ingestion.py`, `capabilities/requirement_extraction.py`, `skills/requirement_extraction/template.py`, `ontology/loader.py`, `tests/*` | contract-first TDD + **live A/B on 1–2 real policies** (requirement recall + per-field agreement vs the current per-section `auto`/`dense` extraction), OpenRouter |
+| CIC-1 | **Follow-on: per-vocab closed-vocab field classifiers** (`actor` / `claim_types` multi-label / `applicability` dims), distilled from the current LLM extractor's labels (SetFit, per the `setfit` skill), behind the capability / model-profile seam, reference-pack vocab. Replaces the residual LLM field-fill for the closed dims. Symmetric, source-disjoint eval; per-value floor; top-k for the multi-label dims. | ADR-0066/0115 | todo | `capabilities/requirement_extraction.py` (classifier seam), new model capability + registration, `tests/*` | per-value floor met; fidelity-gated serving loader; live end-to-end re-ingest A/B vs CIC-0 |
+| CIC-2 | **Standing per-pack note (not engine work here).** A genuinely NEW-vocabulary domain pack trains its OWN CIC-1-style classifiers against the seam (product / domain-pack side); the no-ML slice (CIC-0) transfers for free via the pack `.ttl`. **FTC ads is NOT such a case** — `ftc_16cfr255.ttl` is a query-side `cmp:SectionOverride` overlay reusing the shared `compliance_bridge.ttl` ingest vocab; its specialness (`run_ad_compliance_check` + the overrides) is query-time, covered by the existing LLM path we live with. | ADR-0066/0052 | n/a (note) | — | — |
+
 ## Deferred
 - **ARD dynamic discovery seam** (search manifests by `representative_queries`) — not urgent; direct import of the API
   layer is the fast path.
+- **Query-time judge as a pair-classifier** — the verdict is a 3-way (claim, requirement) classification; a
+  cross-encoder/NLI verdict + LLM-for-rationale/fallback is a candidate, but query-time + semantic → live with the
+  LLM for now (as contracts do at query time). Separate from the CIC ingest arc.
