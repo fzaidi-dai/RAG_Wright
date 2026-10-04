@@ -110,6 +110,12 @@ Apply in this order; stop when the per-class bar is met.
 - **Serving:** these models are small and CPU-capable (milliseconds per inference). Prefer in-process/local for
   throughput (no network hop) or a shared endpoint, and slot the classifier **behind the existing implementation
   seam/adapter** so nothing upstream (contracts, APIs) changes.
+- **Register it as a capability — do not stop at a loose seam.** A trained classifier becomes a `kind="model"`
+  capability: an `impl_ref` factory `def <slug>(resources, inputs)` over the cached checkpoint, registered in ARD
+  and invoked BY NAME through the engine (`invoke_model` / `ainvoke_model`, `dispatch_model` / `adispatch_model`) —
+  routed THROUGH the capability layer, never hand-constructed around it. The full registration + invocation
+  contract (the DoD) is the **`authoring-a-capability`** skill; follow its `model` section. (Upstream, the
+  **`classifier-opportunity-analysis`** skill is where you decide a classifier belongs here at all.)
 - **Train/serve version parity — the single biggest operational trap (verified this session).** A model saved by a
   NEWER `sentence-transformers` (or `transformers`) can FAIL TO LOAD under an older one — module paths move between
   majors (e.g. the pooling/normalize modules relocated in ST 6.x), so the serving env throws `ModuleNotFoundError`

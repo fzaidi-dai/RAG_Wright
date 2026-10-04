@@ -68,9 +68,13 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 - **Home:** `spans/` or `capabilities/` wrapping the checkpoint (e.g. the SetFit clause classifier; the 29-dim
   property fleet via `spans/property_extractor.py`). Load the checkpoint ONCE and cache it (the fleet is heavy) —
   see `spans/model_capabilities.py::_dim_registry`.
-- Serve behind the existing seam/adapter so nothing upstream changes (see the `setfit` skill for the training +
-  checkpoint + serving discipline). The impl_ref factory is `def <slug>(resources, inputs)` (sync, resources ignored; the MCP adapter
-  offloads it with `asyncio.to_thread`).
+- Serve behind the existing seam/adapter so nothing upstream changes (to FIND where a model cap belongs, use the
+  `classifier-opportunity-analysis` skill; to BUILD/train + checkpoint + serve it, the `setfit` skill). The impl_ref
+  factory is `def <slug>(resources, inputs)` for a SYNC impl (CPU-bound local inference — a classifier/XGBoost
+  checkpoint; `resources` ignored) or `async def <slug>(resources, inputs)` for an ASYNC impl (I/O-bound — an
+  LLM-backed model cap calling OpenRouter / a local vLLM client). `invoke_model` runs a sync impl and REFUSES an
+  async one; `ainvoke_model` (EP-API-7) off-loads a sync impl with `asyncio.to_thread` and awaits an async impl
+  directly, with an optional `sem` for fan-out backpressure.
 
 ### agent_skill — authored SKILL.md + the Deep Agents runtime
 - **Home:** `skills/<slug>/SKILL.md` + the agent runtime (e.g. `skills/rlm/`). It is LOADED (progressive
