@@ -73,7 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.6** (clean-venv install gate PASS). **WS0 + WS1 complete.** Next up: **PREP-2.1** (WS2).
+Last approved: **PREP-1.6** (clean-venv install gate PASS). **WS0 + WS1 complete.** Next up: **PREP-2.2**
+(PREP-2.1 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -231,7 +232,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   language.
 - Acceptance: no parked-architecture claims; the snippet is copy-run identical to the tested `examples/quickstart.py`.
 - Verify: `rg -i "graphwright|orchestration spec|capability half" README.md` empty; snippet diffed against the example.
-- Files: `README.md`. Deps: WS1 (install story + api surface final). Status: todo.
+- Files: `README.md`. Deps: WS1 (install story + api surface final). Status: **done** (rewritten to open-core
+  framing; no parked claims; layout matches the real tree; grounded `rag_wright.api` quickstart teaser [reconciled
+  against the runnable example in PREP-2.5]; docs-set links are forward-refs that go live across WS2).
 
 **PREP-2.2 — `docs/concepts.md`.**
 - What: the mental model — workspace & `open_workspace`, capabilities & ARD (the kinds, invocable vs composed),
