@@ -73,8 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-0.4** (ADR index + 21 Status banners + deferred link fixes; RLM set parked). Next up:
-**PREP-0.5**.
+Last approved: **PREP-0.5** (0015 collision repaired → 0120). **WS0 complete.** Next up: **PREP-1.1** (WS1).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -144,7 +143,8 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   Update the PREP-0.4 index + any inbound references.
 - Acceptance: no two ADRs share a number; no "ADR-00XX" heading remains; references resolve.
 - Verify: `ls docs/adr | sort | uniq -d` on the numeric prefix is empty; `rg "ADR-00XX" docs` empty.
-- Files: the two 0015 files + index. Deps: PREP-0.4. Status: todo.
+- Files: the two 0015 files + index. Deps: PREP-0.4. Status: **done** (stray file renumbered to 0120 via `git mv`;
+  heading fixed to `# ADR-0120:` + a numbering note; index updated; no duplicate prefix, no live `ADR-00XX`).
 
 ### WS1 — Package for release (ready, not published)
 

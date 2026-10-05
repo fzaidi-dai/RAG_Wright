@@ -1,6 +1,7 @@
 # Architecture Decision Records — index
 
-120 ADR files (0001–0119; `0015` has a numbering collision repaired under engine-prep PREP-0.5). ADRs are an
+120 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision).
+ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -42,8 +43,8 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 | ADR | Title | Note |
 |---|---|---|
 | 0003 | ARD registration — schema mirroring and capability kinds | ARD retained; framing reframed by 0117/0118 |
-| 0015 (a) | RLM is interpreter + dynamic sub-agents; `grantedSubagents` populated | interpreter runtime parked |
-| 0015 (b) | RLM sub-agent identity + dynamic-dispatch trigger | numbering collision → PREP-0.5 |
+| 0015 | RLM is interpreter + dynamic sub-agents; `grantedSubagents` populated | interpreter runtime parked |
+| 0120 | RLM sub-agent identity + dynamic-dispatch trigger | formerly a duplicate 0015; renumbered |
 | 0017 | Dynamic-dispatch trigger as a typed `skill_runtime` flag | parked |
 | 0018 | The RLM method is the orchestrator's system prompt | parked |
 | 0020 | Serialize interpreter sessions per process (KI-1) | no interpreter runtime now |

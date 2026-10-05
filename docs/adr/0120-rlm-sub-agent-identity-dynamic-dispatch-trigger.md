@@ -1,4 +1,7 @@
-## ADR-00XX: RLM sub-agent identity, and the dynamic-dispatch trigger under hydrated instructions
+# ADR-0120: RLM sub-agent identity, and the dynamic-dispatch trigger under hydrated instructions
+
+> **Numbering:** formerly mis-filed as a second `ADR-0015` (heading read `ADR-00XX`); the collision was repaired on
+> 2026-10-05 (engine-prep PREP-0.5) by renumbering this record to 0120. Content unchanged.
 
 > **Status: PARKED (ADR-0052).** Part of the GraphWright-era RLM-as-interpreter / dynamic-sub-agent runtime, which is parked. The engine's RLM today is authored SKILL.md content built as ordinary software (used by the `rlm_chunking` / `rlm_synthesis` capabilities); there is no interpreter or dynamic-dispatch runtime in this repo.
 
