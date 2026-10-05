@@ -215,3 +215,18 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 - **Query-time judge as a pair-classifier** — the verdict is a 3-way (claim, requirement) classification; a
   cross-encoder/NLI verdict + LLM-for-rationale/fallback is a candidate, but query-time + semantic → live with the
   LLM for now (as contracts do at query time). Separate from the CIC ingest arc.
+
+## Engine-prep follow-ups (de-domaining exposure, PREP-4.7)
+
+Surfaced while writing the engine docs + domain-adaptation guide; full register in
+`docs/domain-adaptation/_engine-gaps.md`. New domains work today via the documented paths — these are the
+"does a new customer benefit?" follow-ups.
+
+- **G1 — Domain entity-resolver seam.** No public `rag_wright.api` / `EngineConfig` hook to supply a domain's
+  `EntityResolver` / `EntityRegistry`; `entity_resolution` / `entity_disambiguation` are internal pipeline steps
+  (ADR-0118). A domain wires its resolver in its own ingestion subgraph today. Candidate: a resolver/registry hook
+  on `EngineConfig`, or an `api` helper. (ER is already injectable per ADR-0067 — an exposure gap, not coupling.)
+- **G2 — De-domain the public config/env names.** `IngestOptions.clause_concurrency`/`clause_samples`,
+  `CLAUSE_CONCURRENCY`/`RAG_INGEST_CLAUSE_*`/`RAG_SETFIT_CLAUSE_DIR`, and the `Clause`/`function` KG vertex types
+  carry contract vocabulary in the engine's public surface. Candidate: generic aliases (keep the contract names as
+  the reference pack's). Field renames are engine changes, not doc edits.

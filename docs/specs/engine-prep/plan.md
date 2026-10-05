@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.5** (`authoring-capabilities.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.7**
-(PREP-4.6 awaiting approval).
+Last approved: **PREP-4.6** (`classification-and-decision-models.md`). **WS0 + WS1 + WS2 complete.** Next up:
+**PREP-3.1** (WS3; PREP-4.7 awaiting approval, closes WS4).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -412,7 +412,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   red→green tests + a live cited answer; boundary design captured in ADR-0122.
 - Acceptance: a concrete, de-duplicated list; the genuine engine items appear in the child ledger.
 - Verify: read-through; link into `docs/specs/engine-platform/TASKS.md`.
-  Files: the register + a child-ledger append. Deps: PREP-4.2–4.6. Status: todo.
+  Files: the register + a child-ledger append. Deps: PREP-4.2–4.6. Status: **awaiting-approval** (register
+  `docs/domain-adaptation/_engine-gaps.md`: 2 OPEN engine follow-ups [G1 ER-resolver seam, G2 config/env contract
+  vocabulary] + 3 RESOLVED [spaCy extra, api re-export, the ADR-0122 QA chain] + prerequisites; the 2 open items
+  cross-posted to engine-platform `TASKS.md`. **WS4 complete.**)
 
 ### WS5 — Consumer onboarding (skill + product-starter templates)
 
