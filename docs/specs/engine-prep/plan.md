@@ -73,9 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-5.2** (CLAUDE.md product-starter template). **WS0–WS4 complete.** Next up: **PREP-5.4**
-(PREP-5.3 awaiting approval). WS5 = 5.1→5.2→5.3(playbook template)→5.4(starter README+dry-run)→
-**5.5 (refresh the ENGINE's OWN CLAUDE.md + playbook — two-track reminder).**
+Last approved: **PREP-5.3** (playbook product-starter template). **WS0–WS4 complete.** Next up: **PREP-5.5**
+(PREP-5.4 awaiting approval) — the engine-prep FINAL task (refresh the ENGINE's OWN CLAUDE.md + playbook).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -472,7 +471,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   no `{{PLACEHOLDER}}` remains and references resolve.
 - Acceptance: the dry-run scratch copy has zero unfilled placeholders and resolvable links.
 - Verify: `rg "{{" <scratch>` empty; link check. Files: the starter README (+ a throwaway scratch instantiation, not
-  committed). Deps: PREP-5.2, PREP-5.3. Status: todo.
+  committed). Deps: PREP-5.2, PREP-5.3. Status: **awaiting-approval** (`docs/templates/product-starter/README.md`:
+  how-to-use + the 13-placeholder table + the assumptions; DRY-RUN PASS — instantiated both templates with TexWright
+  values, 0 unfilled `{{…}}`, engine skills/boundary carried through [scratch, not committed]).
 
 **PREP-5.5 — Refresh the ENGINE repo's own `CLAUDE.md` + `docs/playbook.md`.**
 - Driver: the two-track point — the product templates (5.2–5.4) are for a NEW repo; the engine's OWN working-loop
