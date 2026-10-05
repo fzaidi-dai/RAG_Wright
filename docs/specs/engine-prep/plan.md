@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-2.2** (`docs/concepts.md`). **WS0 + WS1 complete.** Next up: **PREP-2.4** (PREP-2.3 awaiting
-approval).
+Last approved: **PREP-2.3** (`docs/architecture.md`). **WS0 + WS1 complete.** Next up: **PREP-2.5** (PREP-2.4
+awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -265,7 +265,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: a reader can go from zero to a configured `open_workspace` call; all config fields match the frozen
   dataclasses.
 - Verify: field lists diffed against `api/config.py`; the ArcadeDB steps match `docs/ArcadeDB_Local.md`.
-- Files: `docs/installation.md`, `docs/configuration.md`. Deps: WS1. Status: todo.
+- Files: `docs/installation.md`, `docs/configuration.md`. Deps: WS1. Status: **awaiting-approval** (installation:
+  prereqs, `uv add`/path-dep, the `[ner]`/`[ocr-bench]` extras + spacy download, ArcadeDB 26.7.1 Docker + heap note
+  + `.env`; configuration: full EngineConfig/StoreConfig/EngineOptions/IngestOptions field tables [verbatim from
+  `config.py`], the model-profile seam + roles, and an env-var reference table drawn from the real
+  `os.environ`/`getenv` names in `src`).
 
 **PREP-2.5 — `docs/quickstart.md` + a runnable example (the docs gate).**
 - Driver: "docs must be executed".
