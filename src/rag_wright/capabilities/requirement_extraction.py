@@ -84,8 +84,45 @@ def _jev_questions() -> dict:
     return q
 
 
+# --- ADR-0119: the GATED residual extraction for the OPEN fields (applicability + evidence_standard). These are
+# open-text, not closed decisions, so Jev cannot produce them; a tiny structured LLM call fills them ONLY for the
+# rules that carry a conditional/evidence cue (most rules skip it -> per-rule LLM stays near-zero).
+_COND_CUES = ("if ", "where ", "unless", "provided", "only if", "when ", "except")
+_EVID_CUES = ("substantiat", "evidence", "competent and reliable", "scientific", "proof")
+
+
+def _needs_residual(span_text: str) -> bool:
+    low = span_text.lower()
+    return any(c in low for c in _COND_CUES) or any(c in low for c in _EVID_CUES)
+
+
+async def _residual_open_fields(span_text: str, model_id: str) -> tuple[list[str], str]:
+    """Extract the OPEN fields (applicability conditions + evidence standard) of one rule via a tiny structured
+    LLM call (the model-profile seam). Gated by `_needs_residual`, so this runs only on the few rules that have a
+    conditional/evidence cue. Degrades to ([], '') on any failure (recall-first: never drop the rule)."""
+    from pydantic import BaseModel, Field
+
+    from rag_wright.models.seam import build_structured
+
+    class _Open(BaseModel):
+        applicability: list[str] = Field(
+            default_factory=list,
+            description="conditions the rule applies under, as 'dimension: value' (e.g. 'jurisdiction: California', "
+                        "'employee_class: hourly'); empty if the rule applies unconditionally")
+        evidence_standard: str = Field(
+            default="", description="the substantiation the rule requires, if any (e.g. 'competent and reliable scientific evidence')")
+
+    try:
+        out = await build_structured(model_id, _Open).ainvoke(
+            f"Extract the applicability conditions and the evidence standard of this regulatory rule, if any:\n{span_text}")
+        return list(out.applicability or []), (out.evidence_standard or "").strip()
+    except Exception:  # noqa: BLE001 - recall-first: open fields are best-effort, never fail the rule
+        return [], ""
+
+
 async def ajev_extract_regulation_section(
     text: str, *, concurrency: int = 8, op_threshold: float | None = None, ct_threshold: float | None = None,
+    residual_model_id: str | None = None,
 ) -> ExtractedRegulationSection:
     """CIC (ADR-0119): the Jev-decision extraction act. Deterministic `operative_rule_spans` produces candidate
     spans; ONE Jev call per span (routed through the capability layer, `jev_decision`) decides operative-gate +
@@ -101,6 +138,9 @@ async def ajev_extract_regulation_section(
     prof = decision_profile()
     op_thr = prof.op_threshold if op_threshold is None else op_threshold
     ct_thr = prof.multilabel_threshold if ct_threshold is None else ct_threshold
+    if residual_model_id is None:
+        from rag_wright.models.profiles import ModelRole, model_for
+        residual_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     jev = capability_impl("jev_decision")  # async (resources, inputs) -> decision body; store-independent
     questions = _jev_questions()
     ct_keys = [k[3:] for k in questions if k.startswith("ct_")]  # the ttl-driven ClaimType set
@@ -109,13 +149,17 @@ async def ajev_extract_regulation_section(
     async def _one(span_text: str, deontic: str) -> ExtractedRequirement | None:
         async with sem:
             d = await jev(None, {"state": _JEV_GUIDANCE + span_text, "questions": questions})
-        ans = d["answers"]
-        if float(ans["operative"].get("noul", 0.0)) < op_thr:
-            return None  # Jev gate: not a binding rule -> drop (refines the cue-presence gate's precision)
-        claim_types = [ct for ct in ct_keys if float(ans[f"ct_{ct}"].get("noul", 0.0)) >= ct_thr]
+            ans = d["answers"]
+            if float(ans["operative"].get("noul", 0.0)) < op_thr:
+                return None  # Jev gate: not a binding rule -> drop (refines the cue-presence gate's precision)
+            claim_types = [ct for ct in ct_keys if float(ans[f"ct_{ct}"].get("noul", 0.0)) >= ct_thr]
+            # GATED residual: open fields only for rules with a conditional/evidence cue (most skip -> no LLM)
+            applicability, evidence = ([], "")
+            if _needs_residual(span_text):
+                applicability, evidence = await _residual_open_fields(span_text, residual_model_id)
         return ExtractedRequirement(requirement_text=span_text, deontic_type=deontic,
                                     actor=str(ans["actor"].get("choice", "")), claim_types=claim_types,
-                                    applicability=[], evidence_standard="")
+                                    applicability=applicability, evidence_standard=evidence)
     reqs = [r for r in await asyncio.gather(*(_one(t, d) for t, d in spans)) if r is not None]
     return ExtractedRegulationSection(section="", requirements=reqs)
 

@@ -231,3 +231,32 @@ def test_ajev_extract_live():
     sec = asyncio.run(ajev_extract_regulation_section(text))
     assert len(sec.requirements) >= 2  # the two operative sentences; the definition is dropped
     assert all(r.requirement_text in text and r.deontic_type for r in sec.requirements)
+
+
+async def test_ajev_gated_residual_open_fields(monkeypatch):
+    # ADR-0119: the residual open-field extraction runs ONLY for rules with a conditional/evidence cue.
+    import rag_wright.capabilities.invoke as inv
+    import rag_wright.capabilities.requirement_extraction as rex
+    calls = []
+
+    async def keep(resources, inputs):
+        ans = {"operative": {"noul": 0.9}, "actor": {"choice": "employer"}}
+        for ct in _CT:
+            ans[f"ct_{ct}"] = {"noul": 0.0}
+        return {"answers": ans}
+
+    async def fake_residual(span, mid):
+        calls.append(span)
+        return (["jurisdiction: california"], "competent and reliable scientific evidence")
+
+    monkeypatch.setattr(inv, "capability_impl", lambda name: keep)
+    monkeypatch.setattr(rex, "_residual_open_fields", fake_residual)
+    text = ("Employers must keep the log if the company has more than ten employees. "
+            "Each injury must be recorded on the OSHA 300 Log.")
+    sec = await ajev_extract_regulation_section(text)
+    assert len(sec.requirements) == 2
+    cued = next(r for r in sec.requirements if "if the company" in r.requirement_text)
+    plain = next(r for r in sec.requirements if "OSHA 300 Log" in r.requirement_text)
+    assert cued.applicability == ["jurisdiction: california"] and cued.evidence_standard.startswith("competent")
+    assert plain.applicability == [] and plain.evidence_standard == ""
+    assert len(calls) == 1  # residual invoked only for the cued rule
