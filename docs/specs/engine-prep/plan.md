@@ -377,6 +377,12 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   the api re-export [resolved in 1.5], the spacy-model requirement, the ArcadeDB prerequisite, any
   domain-assumption leak), each with a proposed resolution; cross-post the real engine items into the
   engine-platform `TASKS.md` as follow-ups.
+- SURFACED (PREP-4.1 doc audit): the engine's PUBLIC config/env names carry contract-domain vocabulary —
+  `IngestOptions.clause_concurrency` / `clause_samples`, `CLAUSE_CONCURRENCY` / `RAG_INGEST_CLAUSE_*` /
+  `RAG_SETFIT_CLAUSE_DIR`, and the `Clause`/`function` KG types. A de-domaining gap in the surface a new (non-contract)
+  domain sees. Propose: generic aliases (e.g. `unit_concurrency`) with the contract names kept as the reference
+  pack's, or document them as reference-pack-flavored. Doc prose was kept domain-neutral; the field RENAMES are an
+  engine change for here.
 - SURFACED → RESOLVED (PREP-2.5 diversion, ADR-0122): `intra_document_qa` abstained. Root-caused to THREE real
   bugs (not a text-only rough edge; my first guess was wrong, verified before acting): (A) provision boundary
   missed "Section N"/"Article N" headings → one provision; (B) `HybridPropertyExtractor._record` dropped the clause

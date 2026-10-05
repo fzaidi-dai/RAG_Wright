@@ -40,7 +40,7 @@ A **capability** is a named, discoverable unit of work (ARD = Agentic Resource D
 
 | kind | what it is | how it runs |
 |---|---|---|
-| `subgraph` | a composite pipeline (ingestion, retrieval, QA, compliance) | `ainvoke_subgraph(name, inputs, resources=ws)` |
+| `subgraph` | a composite pipeline (e.g. an ingestion, retrieval, or QA graph) | `ainvoke_subgraph(name, inputs, resources=ws)` |
 | `model` | a model-backed decision (a classifier, a typed-decision model, an LLM step) | `invoke_model` / `ainvoke_model(name, inputs, resources=ws)` |
 | `function` | a deterministic function other capabilities compose | imported directly |
 | `agent_skill` | authored SKILL.md knowledge loaded into an agent | loaded, not called |
@@ -76,7 +76,7 @@ The engine isolates its two external dependencies behind seams, so neither leaks
 ## Knowledge lives in the ontology (ADR-0066)
 
 Domain **knowledge** is declarative and lives in a `.ttl` pack: closed value sets, the schema (classes, properties,
-KG edge types), constraints (applicability, cardinality, deontic polarity — authored as SHACL), and
+KG edge types), constraints (e.g. applicability, cardinality — authored as SHACL), and
 mappings/synonyms. **Code holds mechanism only** (the pipeline, the router, the judge). A new customer domain is a
 new pack, not an engine edit — load it with `EngineConfig(pack=…)`. When a generated artifact must carry concerns
 the ontology can't express (e.g. prompt engineering), the source of truth stays the ontology and the overlay is

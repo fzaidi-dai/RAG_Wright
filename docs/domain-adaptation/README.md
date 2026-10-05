@@ -23,7 +23,7 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
    drives the capabilities: classifiers classify into its vocab, extraction targets its schema, the query graphs
    are parameterized by it). → [Ontology authoring](ontology-authoring.md).
 
-4. **Build and register the domain capabilities.** Your ingestion + query/compliance GRAPHS, domain functions, and
+4. **Build and register the domain capabilities.** Your ingestion + query GRAPHS, domain functions, and
    skills. They **compose the engine's generic primitives by direct import** (hybrid search, graph query, fusion,
    embedding, parsing, chunking, reranking) and register only your OWN domain graphs/models/skills via
    `register_capability(manifest)` with an `impl_ref` — invocable (and MCP-exposable) with zero engine edits.
@@ -37,7 +37,7 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 
 6. **Ingest the corpus → populate the KG.** Run the ingestion capability over your corpus (PDF via
    `api.parse_document`, or already-text via `api.source_document`): parse → chunk → segment → extract → embed →
-   write. Most query/compliance capabilities READ this populated KG, so it comes first.
+   write. Most query capabilities READ this populated KG, so it comes first.
    → [KG construction](kg-construction.md). Entities are canonicalized here →
    [Entity resolution](entity-resolution.md).
 

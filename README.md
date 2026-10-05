@@ -88,7 +88,7 @@ uv run ruff check .     # lint
 src/rag_wright/
   api/           the stable, domain-agnostic public surface (import everything from here)
   capabilities/  the capability catalog + ARD runtime (manifests, registry, the invoker)
-  subgraphs/     the composite LangGraph pipelines (ingestion, retrieval, QA, compliance)
+  subgraphs/     the composite LangGraph pipelines (domain graphs; e.g. the reference pack's)
   models/        the model-profile seam (OpenRouter default / self-hosted open models)
   ontology/      the .ttl packs + entity-registry derivation (knowledge lives here)
   store/         the single ArcadeDB store behind the query seam

@@ -14,7 +14,7 @@ config = EngineConfig(
     models={},                         # ModelRole value -> model alias override (empty = engine defaults)
     embeddings={"text": "bge-m3"},     # embedding profile -> supported embedder
     options=EngineOptions(),           # the knobs catalog (ingest today)
-    pack=None,                         # path to a domain .ttl; None = the reference contract pack
+    pack=None,                         # path to a domain .ttl; None = the bundled reference pack
 )
 ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the backend DB name
 ```
@@ -25,7 +25,7 @@ ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the ba
 | `models` | `dict[str,str]` | `{}` | override the model for a `ModelRole` (e.g. `{"general": "ibm-granite/granite-4.2-8b"}`) |
 | `embeddings` | `dict[str,str]` | `{"text": "bge-m3"}` | the embedding profile → supported embedder |
 | `options` | `EngineOptions` | defaults | the options catalog (ingest knobs today) |
-| `pack` | `str \| None` | `None` | path to the domain `.ttl` pack; `None` uses the reference contract pack |
+| `pack` | `str \| None` | `None` | path to the domain `.ttl` pack; `None` uses the bundled reference pack |
 
 `open_workspace(config, *, corpus, reset=False)` resolves and caches a workspace and ensures the schema. `corpus`
 is the backend database name (tenancy is the product's concern); `reset=True` drops and recreates it and bypasses

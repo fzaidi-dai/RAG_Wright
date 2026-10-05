@@ -29,7 +29,7 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 |---|---|---|
 | `api/` | the stable, domain-agnostic public surface: config, workspace, invokers, KG accessors, ids, usage | **yes** (in the enforced source set) |
 | `capabilities/` | the capability catalog + ARD runtime — `CapabilityManifest`, `registry`, `manifests`, the adapter-free `invoke` client; plus the generic primitives (graph query, retrieval core, embedding, disambiguation, entity resolution) | generic parts **yes**; reference-pack caps are domain |
-| `subgraphs/` | the composite LangGraph pipelines (ingestion, retrieval, QA, compliance) built on `scaffold.py` | **domain graphs** (may import domain) |
+| `subgraphs/` | the composite LangGraph pipelines, built on `scaffold.py` (the reference pack's ingestion/retrieval/QA graphs live here; a new domain adds its own) | **domain graphs** (may import domain) |
 | `models/` | the model-profile seam: `ModelRole`, `profiles`, `seam`, `tag_structured`, usage/tracing | yes |
 | `store/` | the single ArcadeDB store behind the seam: `arcadedb`, `seam` (`KgNode`/`KgEdge`), `chunk_text` | generic subset **yes** |
 | `ontology/` | the `.ttl` packs + loaders + the `EntityRegistry` derivation (knowledge lives here) | `registry` **yes**; contract taxonomy is domain |
