@@ -73,7 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.3** (release metadata; twine check clean). **WS0 complete.** Next up: **PREP-1.4**.
+Last approved: **PREP-1.4** (`py.typed` ships in the wheel). **WS0 complete.** Next up: **PREP-1.5**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -196,7 +196,8 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   `rag_wright.api` types.
 - Verify: `uv build` then `unzip -l dist/*.whl | rg py.typed`; a one-line type probe in the clean-venv script
   (PREP-1.6).
-- Files: `src/rag_wright/py.typed` (new). Deps: PREP-1.3. Status: todo.
+- Files: `src/rag_wright/py.typed` (new). Deps: PREP-1.3. Status: **done** (0B marker; wheel contains
+  `rag_wright/py.typed`; clean-venv type-checker probe folded into PREP-1.6).
 
 **PREP-1.5 — Smooth the public API seam.**
 - Driver: baseline (one inconsistent import path); makes the documented surface "everything is `rag_wright.api`".
