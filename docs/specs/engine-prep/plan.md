@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.3** (`kg-construction.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.5**
-(PREP-4.4 awaiting approval).
+Last approved: **PREP-4.4** (`entity-resolution.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.6**
+(PREP-4.5 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -371,7 +371,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   skill.
 - Acceptance: a developer can register an invocable cap with zero engine edits following this doc.
 - Verify: grounded against `capabilities/*` + the conformance guardrail test.
-  Files: `docs/domain-adaptation/authoring-capabilities.md`. Deps: PREP-4.1. Status: todo.
+  Files: `docs/domain-adaptation/authoring-capabilities.md`. Deps: PREP-4.1. Status: **awaiting-approval** (manifest
+  fields; the 5 kinds + how each runs; impl_ref invocable-by-name vs composed/loaded/served [9-of-36 reference];
+  `register_capability` takes ANY domain slug — `CANONICAL_CAPABILITY_SLUGS` is the reference pack's internal
+  join-key set, not a restriction; compose-don't-re-register; eval-first + the conformance guardrail; cross-links
+  the authoring-a-capability skill. All symbols/paths verified).
 
 **PREP-4.6 — `classification-and-decision-models.md`.**
 - What: identifying classifier/routing opportunities (the `classifier-opportunity-analysis` recipe), SetFit vs
