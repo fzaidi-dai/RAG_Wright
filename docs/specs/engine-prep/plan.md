@@ -73,7 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-0.2** (70 delivered docs archived + inbound links fixed). Next up: **PREP-0.3**.
+Last approved: **PREP-0.3** (root trio oriented with banners; not moved — amended at gate). Next up: **PREP-0.4**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -103,17 +103,21 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Files: the moves above + any link fixes. Deps: PREP-0.1. Status: **done** (70 files; 7 current-doc/source
   links fixed; ADR-body links deferred to PREP-0.4; `tasks.md` internal refs left as historical record).
 
-**PREP-0.3 — Archive the legacy root ledger & plan (confirm at gate).**
-- Driver: Decision 2; the active ledgers are the engine-platform `TASKS.md` and this plan.
-- What: `git mv` the legacy root `plan.md` and the 615 KB historical `tasks.md` into `docs/archive/`, leaving a
-  one-line pointer at root (`plan.md`→ this plan + engine-platform SPEC; `tasks.md`→ the active child ledgers).
-  **Confirm at the gate** before moving `tasks.md`, since CLAUDE.md names `tasks.md` the authoritative ledger —
-  verify nothing still writes to the root file first.
-- Acceptance: root has only current, non-stale ledgers/pointers; CLAUDE.md's "start of session" references still
-  resolve.
-- Verify: `rg -n "tasks.md|plan.md" CLAUDE.md docs/specs` and confirm pointers resolve.
-- Files: `plan.md`, `tasks.md` (moves) + root pointer stubs + CLAUDE.md banner tweak if needed. Deps: PREP-0.1.
-  Status: todo.
+**PREP-0.3 — Orient the root SPEC/plan/tasks trio (banner, don't move) — AMENDED at gate.**
+- Driver: Decision 2; repo navigability — but grounding at the gate showed the root trio is NOT dead legacy.
+- Amendment (user-approved 2026-10-05, "banner, don't move"): root `tasks.md` is the still-live authoritative
+  ledger, hard-wired into CLAUDE.md's session-start + working-loop + commit/memory rules, and already carries a
+  routing banner to the active child ledger; archiving it would break that contract and force a CLAUDE.md rewrite.
+  All three are repo-root (never in the wheel). So we **keep the trio in place and banner it** instead of moving it
+  — the same "banner not move" treatment as the ADRs.
+- What: add an ADR-0052 orientation banner under the title of `SPEC.md` and `plan.md` (engine/product split,
+  GraphWright parked, the capability-half/Orchestration-Spec language superseded, where to read current material);
+  confirm `tasks.md`'s existing routing banner is adequate and leave it unchanged.
+- Acceptance: a reader opening `SPEC.md`/`plan.md` is oriented at the top; no file moved; CLAUDE.md's session-start
+  references still resolve unchanged.
+- Verify: `head -8 SPEC.md plan.md` shows the banners; `rg -n "tasks.md|plan.md" CLAUDE.md` unchanged & resolving.
+- Files: `SPEC.md`, `plan.md` (banner only). Deps: PREP-0.1. Status: **done** (banners added; `tasks.md` left as-is;
+  no moves; CLAUDE.md untouched).
 
 **PREP-0.4 — ADR index + legacy status banners (in place).**
 - Driver: Decision 2.

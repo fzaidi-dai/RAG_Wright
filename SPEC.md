@@ -1,5 +1,12 @@
 # Spec: Hybrid RAG, Capability Spec
 
+> **⚠ Orientation (2026-10-05, ADR-0052).** This repo is the open-core **engine**; the product is a separate repo
+> (dependency is one-way, Product → Engine). The "capability half", "Orchestration Spec", and "GraphWright
+> compiler" framing in this document is **superseded**: GraphWright is **parked**, and the engine builds its own
+> ingestion and query graphs as ordinary tested software. This spec is retained as the historical FR-C/FR-S source
+> of truth; for the current architecture read `docs/ARCHITECTURE_OVERVIEW.md` and the engine-platform child spec
+> noted below, and for the decision history see `docs/adr/` (grouped index added under engine-prep).
+
 Version 0.1. This is the capability half of the Hybrid Retrieval-Augmented Generation (RAG) specification: the objective, the shared store and identifiers, and the capabilities the system is built from. It is what a coding agent builds through ordinary spec-driven development (plan, break into tasks, implement, test, register each capability). Its companion is the Orchestration Spec, which holds the two graph briefs dispatched to the compiler. The two documents share one vocabulary: the capability names defined here (the FR-C set) are what the orchestration briefs expect to bind, and what the built capabilities are registered under. This document defines and builds capabilities; it does not describe orchestration.
 
 > **Active child spec (2026-10-02):** the engine-platform boundary workstream — publishing a stable engine API layer +

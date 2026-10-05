@@ -1,5 +1,12 @@
 # plan.md: RAG_Wright build plan
 
+> **⚠ Orientation (2026-10-05, ADR-0052).** This repo is the open-core **engine**; the product is a separate repo
+> (Product → Engine, one way). The "capability half" / "Orchestration Spec" / "GraphWright compiler" framing below
+> is **superseded**: GraphWright is **parked**, and the engine builds its own ingestion and query graphs as
+> ordinary tested software. This document is retained as the historical capability-build plan; the live plans are
+> the engine-platform child spec (below) and `docs/specs/engine-prep/plan.md`, and the current-state architecture
+> is `docs/ARCHITECTURE_OVERVIEW.md`.
+
 > **Active child spec (2026-10-02):** the engine-platform boundary workstream (engine API layer + capability runtime +
 > de-domaining) is planned in **`docs/specs/engine-platform/SPEC.md`** + **`docs/specs/engine-platform/TASKS.md`**
 > (ADR-0117). Follow that child spec + tasks for the current work; this plan remains the overall capability-build plan.
