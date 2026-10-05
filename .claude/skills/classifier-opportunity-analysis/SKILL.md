@@ -145,6 +145,12 @@ Produce a decomposition plan, not prose:
 
 - **Deterministic rule / cue-rule / span-split** → plain code inside the ingestion subgraph. NOT a capability; it is
   mechanism, and the knowledge it reads lives in the `.ttl`.
+- **System-1 decision model (NO training)** → for a closed-set decision (yes/no, choice, score), A/B a decision
+  model — **Jev** (managed, OpenRouter Decisions API, zero/few-shot, calibrated) or **Laya** (open, fine-tuned) —
+  BEFORE committing to a trained classifier. It often wins when data is scarce or label-ambiguous, or when you need
+  calibrated uncertainty to route/gate (measured: RAG_Wright CIC-1c — Jev zero-shot 0.92 vs a trained SetFit 0.82;
+  ADR-0119). See `setfit` Phase 0.5 (the decision-vs-train A/B) and the `laya` skill; wire it as a `jev_decision`-style
+  model capability with a `DecisionModelProfile`. **Evaluate this first; it may remove the need to train at all.**
 - **Trained classifier** → build it with the **`setfit`** skill (framing, symmetric leakage-safe eval, per-class
   floor, soft-tag/top-k, rare-class curation, checkpointing). Serve the teacher / bulk-labeler with **`qwen-vllm-modal`**.
   Then register it as a capability with **`authoring-a-capability`**: a `kind="model"` capability with an

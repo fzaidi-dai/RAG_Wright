@@ -1,6 +1,6 @@
 ---
 name: laya
-description: Recipe for fine-tuning and serving a Laya (ModernBERT-large, RL-trained typed-decision) classifier to replace an LLM decision that a SetFit/encoder classifier PLATEAUS on. Use when confusable/relational/subjective closed-vocab values won't clear the bar with any encoder backbone. Covers uv install + env-isolation gotchas, the JSONL schema, per-value criteria, single-T4 fine-tune (RLCD), few-shot-in-context, balance, OOM knobs, Modal harness, and CPU/MPS/GPU serving.
+description: Recipe for fine-tuning and serving a Laya (ModernBERT-large, RL-trained typed-decision) classifier -- the OPEN-weight System-1 decision model -- to replace an LLM decision that a SetFit/encoder classifier PLATEAUS on. Also explains Jev, the MANAGED zero-shot sibling (OpenRouter Decisions API), and when to A/B Jev first (usually) vs fine-tune Laya (on-prem / no managed API). Use when confusable/relational/subjective closed-vocab values won't clear the bar with any encoder backbone. Covers uv install + env-isolation gotchas, the JSONL schema, per-value criteria, single-T4 fine-tune (RLCD), few-shot-in-context, balance, OOM knobs, Modal harness, CPU/MPS/GPU serving, and the jev_decision/DecisionModelProfile wiring (ADR-0119).
 ---
 
 # Laya typed-decision classifier recipe
@@ -11,6 +11,17 @@ forward pass, with per-option **criteria** (written descriptions) and calibrated
 past SetFit**: use it when the decision — not the representation — is the bottleneck.
 
 **Every number below is a DIRECTION from one project, never a target — re-measure on your own data.**
+
+## Laya vs Jev (the managed sibling) — pick the decision model first
+Laya is the **open-weight** System-1 decision model; **Jev** (TypeSafe, https://openrouter.ai, `typesafe/jev-1.13`
+via the OpenRouter **Decisions API**) is the **managed** one — same idea (typed `noul`/`choice`/`score` + calibrated
+probabilities), but **strong ZERO/few-shot with no fine-tuning**, whereas Laya scores near-random zero-shot and MUST
+be fine-tuned. Measured (RAG_Wright CIC-1c, ADR-0119): on the operative-rule gate **Jev zero-shot hit 0.92** where a
+trained SetFit capped ~0.82 and fine-tuned Laya reached ~0.70–0.74. So: **for a closed-set decision, A/B Jev
+(zero-shot, instant) first**; reach for Laya when a **managed API is unacceptable** (on-prem / data-residency) and
+you can fine-tune. In RAG_Wright a decision model is wired as a `kind="model"` capability (`jev_decision`) behind a
+`DecisionModelProfile` (model id / endpoint / thresholds in config, swappable Jev ↔ Laya) — see `setfit` Phase 0.5 +
+`authoring-a-capability`. The decision questions/criteria live in the `.ttl` (ADR-0066), not the capability.
 
 ## When to use Laya (vs SetFit)
 - A closed-vocab value **plateaus below the bar with EVERY encoder backbone you try** (we ruled it out with

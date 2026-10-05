@@ -5,8 +5,10 @@ description: >-
   short text (spans, clauses, sentences, snippets). Use it when framing a decision as classification, or when
   building/improving a few-shot-to-full-data text classifier: problem framing, data & evaluation design,
   backbone selection, soft-tagging/top-k, ensembling, rare-class data curation (including sourcing examples
-  online), calibration, and checkpointing. It exists so the NEXT classifier converges faster and re-uses hard-won
-  lessons instead of re-discovering them.
+  online), calibration, and checkpointing. ALSO covers when NOT to train -- Phase 0.5: A/B a zero/few-shot
+  System-1 decision model (Jev / Laya) first, which often wins on scarce or label-ambiguous data (the hard-won
+  CIC-1c lesson). It exists so the NEXT classifier converges faster and re-uses hard-won lessons instead of
+  re-discovering them.
 ---
 
 # SetFit classifier recipe
@@ -32,6 +34,42 @@ your label set, data volume, and confusable structure differ, so re-measure ever
   more forgiving than a *hard* decision (one answer that gets acted on). If the downstream only needs hints/augmentation, choose soft-tagging — it turns many "errors" into acceptable extra tags.
 - **Define the label set explicitly**, and include an `OTHER`/`NONE` escape so out-of-taxonomy inputs don't get
   force-fit to a wrong class.
+
+## Phase 0.5 — Before you train: A/B a System-1 decision model (Jev / Laya)
+
+Once the task is framed as a closed-set decision (Phase 0), a trained classifier is NOT the only option — and
+often not the best. A **System-1 decision model** returns a CALIBRATED typed answer (yes/no, choice, score) with
+**no training, no text, in ~70–500 ms**. Evaluate one *before* committing to training; it frequently wins when:
+- **data is scarce or label-ambiguous** (training plateaus; the decision model is zero/few-shot). Measured
+  (RAG_Wright CIC-1c, ADR-0119): a trained SetFit operative-rule classifier capped at ~0.82 on a 0.905-agreement
+  gold (confident, unroutable errors; Laya no better; no public labeled negatives), while **Jev zero-shot hit 0.92**
+  (the label ceiling), with claim_types micro-F1 0.85 / actor 0.90 few-shot;
+- **you need honest uncertainty to route/gate** — a decision model's probabilities are calibrated; a SetFit
+  logistic head is overconfident, so a confidence-routed hybrid couldn't be rescued (ADR-0119);
+- **low-to-moderate volume** where there's no reason to host a local model (~$0.00002/call for a managed one).
+
+**Prefer a trained classifier** when: high volume where per-call API cost compounds AND you have a large labeled
+corpus (the contract Step-3a fleet, ADR-0115/0116); on-prem-only with no managed API (then fine-tune **Laya**, the
+open decision model — the `laya` skill); or the decision needs features a prompt can't express.
+
+Two decision models:
+- **Jev** (TypeSafe, managed) — the **OpenRouter Decisions API** (`typesafe/jev-1.13`, POST `/api/alpha/decisions`,
+  NOT chat completions). `questions` keyed by id: `noul` (yes/no → P(yes)), `choice` (options + probabilities),
+  `score`. **Multi-label = several `noul` in one call.** **Few-shot = labeled exemplars in the `state`** (helps
+  choice/multi-label; can BIAS a binary gate — zero-shot the gate). Tune the `noul` threshold for precision/recall
+  (and note the threshold is a config knob, not a precision fix for confident errors).
+- **Laya** (Convai, open, Apache-2.0, ModernBERT-large + RL head) — on-prem; near-random zero-shot so **fine-tune
+  it** (the `laya` skill). The open fallback when a managed API is unacceptable.
+
+**Wire it as a capability, don't hand-call it** (route-production-through-the-capability-layer): register a
+`kind="model"` capability with an `impl_ref` client (RAG_Wright ships `jev_decision`, an ASYNC model cap invoked via
+`ainvoke_model`) and keep the model id / endpoint / thresholds in a decision-model **profile**
+(`DecisionModelProfile`), never hardcoded — so swapping Jev ↔ Laya ↔ a future open-weight alternative is config.
+See `authoring-a-capability` + ADR-0119. The decision knowledge (the questions / criteria) belongs in the ontology
+(`.ttl`), not the capability (ADR-0066).
+
+**Rule of thumb: for a closed-set decision, A/B a decision model (Jev zero/few-shot) against a trained classifier
+on your REAL gold, and select on accuracy + calibration + cost — do not assume training is the answer.**
 
 ## Phase 1 — Data & evaluation design (do this FIRST; it is the foundation)
 - **Judge by the per-class FLOOR, not overall accuracy.** A high average hides dead classes. Set an explicit
