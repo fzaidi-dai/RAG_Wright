@@ -62,6 +62,11 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
 - **OOM knob (hit this):** ModernBERT-large (~400M) OOMs a T4/L4 at the default `batch_size=16, max_seq=256`. Clauses
   are short → set `--batch-size 8 --max-seq 128` (the script/notebook also enables gradient checkpointing). That fit
   comfortably.
+- **Run preflight FIRST — see the [[setfit]] "Run preflight & monitoring" section.** It is framework-agnostic and
+  applies to Laya exactly as to SetFit, including when you GENERATE the Laya JSONL labels with a teacher: resolve
+  the model from the engine (never a hardcoded/stale id; bulk teacher labeling on Modal Qwen, not OpenRouter), load
+  `.env` by EXPLICIT path from an out-of-repo script, SMOKE one item before the fan-out, and stream X/N to a log you
+  actively monitor. Those exact mistakes cost runs on 2026-10-04.
 - **Modal harness = reuse the [[setfit]] hardened pattern:** `.uv_pip_install("laya")` + `.add_local_file` the
   finetune script; launcher BLOCKS on `.get()` per spawn (no spawn-and-return), stamps + verifies a `data_sha`,
   writes a manifest, streams X/N; snapshot keepers server-side to a `/checkpoints/<name>` path (a small copy fn) —

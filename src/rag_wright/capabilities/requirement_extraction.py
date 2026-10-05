@@ -28,7 +28,25 @@ from rag_wright.skills.requirement_extraction.template import (  # the skill's s
 )
 
 __all__ = ["ExtractedRegulationSection", "ExtractedRequirement", "extract_regulation_section",
-           "to_requirements", "register_requirement_adaptation"]
+           "operative_rule_spans", "to_requirements", "register_requirement_adaptation"]
+
+
+def operative_rule_spans(text: str) -> list[tuple[str, str]]:
+    """CIC (ADR-0119 scaffolding): deterministically split a section's text into candidate rule spans (reusing the
+    engine's byte-faithful `segment_clause`), keep the OPERATIVE ones (carrying a deontic cue), and derive each
+    span's deontic_type from its cue (ttl-driven `deontic_type_of`). Returns `[(verbatim_span_text,
+    deontic_local_name)]`. NO LLM. This is the span-producer front end a decision model (`jev_decision`, ADR-0119)
+    judges per span; it is NOT wired into the live ingest extraction, which is unchanged."""
+    from rag_wright.ontology.loader import deontic_type_of
+    from rag_wright.spans.segment import segment_clause
+
+    out: list[tuple[str, str]] = []
+    for span in segment_clause("", text or ""):
+        span_text = span.text.strip()
+        deontic = deontic_type_of(span_text)
+        if deontic is not None:
+            out.append((span_text, deontic))
+    return out
 
 _CLAIM_TYPES = {c.value for c in ClaimType}
 _DEONTIC = {d.value for d in DeonticType}

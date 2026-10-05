@@ -18,6 +18,7 @@ from rag_wright.capabilities.requirement_extraction import (
     ExtractedRegulationSection,
     ExtractedRequirement,
     extract_regulation_section,
+    operative_rule_spans,
     register_requirement_adaptation,
     to_requirements,
 )
@@ -143,3 +144,29 @@ def test_registers_requirement_adaptation_as_a_function():
     register_requirement_adaptation(reg)
     entry = reg.get("requirement_adaptation")
     assert entry.kind == "function" and entry.contract is Requirement
+
+
+# --- CIC (ADR-0119 scaffolding): deterministic rule-span identification (split + operative gate + cue-type) ---
+
+
+def test_operative_rule_spans_splits_gates_and_types():
+    text = ("Advertisers must disclose any material connection with an endorser. "
+            "Definitions in this part apply throughout. "
+            "An endorser may not misrepresent their actual experience.")
+    spans = operative_rule_spans(text)
+    types = {t: d for t, d in spans}
+    assert len(spans) == 2  # the definitional sentence (no deontic cue) is dropped
+    assert types[next(t for t in types if "must disclose" in t)] == "obligation"
+    assert types[next(t for t in types if "may not misrepresent" in t)] == "prohibition"
+    assert not any("Definitions in this part" in t for t in types)
+
+
+def test_operative_rule_spans_text_is_verbatim_not_paraphrased():
+    text = "The seller must substantiate every efficacy claim with competent and reliable scientific evidence."
+    spans = operative_rule_spans(text)
+    assert len(spans) == 1 and spans[0][1] == "obligation" and spans[0][0] in text  # VERBATIM slice
+
+
+def test_operative_rule_spans_empty_and_cueless():
+    assert operative_rule_spans("") == []
+    assert operative_rule_spans("This part describes definitions and scope.") == []  # no deontic cue -> nothing

@@ -55,6 +55,47 @@ def load_deontic_cues(path: str = str(_COMPLIANCE_TTL_PATH)) -> frozenset[str]:
 
 
 @lru_cache(maxsize=4)
+def load_deontic_cue_map(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
+    """CIC-0 (ADR-0066): the deontic CUE -> deontic TYPE map authored in compliance_bridge.ttl (`cmp:cue` on each
+    `cmp:DeonticType`), e.g. {'must': 'obligation', 'must not': 'prohibition', 'may': 'permission'}. Keys are
+    lowercased cue phrases; values are the DeonticType local-names. This is the ttl-driven source for the ingest
+    cue-RULE (`deontic_type_of`): a rule's deontic_type is derived deterministically from its text's cue instead of
+    from an LLM field. Shares its cue set with `load_deontic_cues` (the operative gate). Cached per path."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    cue = URIRef(_CMP + "cue")
+    out: dict[str, str] = {}
+    for subj, obj in g.subject_objects(cue):
+        value = str(obj).strip().lower()
+        if value:
+            out[value] = str(subj).rsplit("#", 1)[-1]
+    return out
+
+
+@lru_cache(maxsize=1)
+def _deontic_cue_type_pattern() -> tuple[re.Pattern, dict[str, str]]:
+    """The compiled cue regex (longest cue first, so 'must not' is tried before 'must') + the cue->type map."""
+    cue_map = load_deontic_cue_map()
+    cues = sorted(cue_map, key=len, reverse=True)
+    return re.compile(r"\b(?:" + "|".join(re.escape(c) for c in cues) + r")\b", re.IGNORECASE), cue_map
+
+
+def deontic_type_of(text: str) -> str | None:
+    """CIC-0 (ADR-0066): the deontic TYPE of a rule span, from its FIRST deontic cue (ttl `cmp:cue`), longest cue
+    first so 'must not' / 'may not' (prohibition) win over 'must' / 'may'. Returns the DeonticType local-name
+    (obligation / prohibition / permission) or None when the text carries no cue (non-operative). The deterministic
+    cue-rule that replaces the LLM's deontic_type field at ingest; a non-None result also means the span is
+    operative (same cue basis as `is_operative`)."""
+    if not text:
+        return None
+    pattern, cue_map = _deontic_cue_type_pattern()
+    m = pattern.search(text)
+    return cue_map[m.group(0).lower()] if m else None
+
+
+@lru_cache(maxsize=4)
 def load_actor_synonyms(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
     """ADR-0066 P4a: the actor-role synonyms from compliance_bridge.ttl -- `{synonym -> canonical role}` built from
     each `cmp:ActorRole`'s `skos:altLabel` (synonym) -> `skos:prefLabel` (canonical). The query-side actor gate

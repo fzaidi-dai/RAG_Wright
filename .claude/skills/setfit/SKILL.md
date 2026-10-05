@@ -157,6 +157,34 @@ Apply in this order; stop when the per-class bar is met.
   silver only fixes a value that is *absent/starved from TRAIN* (top-k=0 even at max k because the class isn't in
   the head). Diagnose which failure you have before spending compute.
 
+## Run preflight & monitoring — do this BEFORE any labeling/training run (non-negotiable)
+Read this section FIRST when you return to this skill after a gap. These are the mistakes re-learned 2026-10-04
+after the 21-classifier runs — each one cost real time and each is avoidable with a 30-second preflight. Do them in
+order before you fan out any bulk job.
+
+1. **Resolve the model from the engine, never hardcode a model id.** A hardcoded id rots: `ibm-granite/granite-4.1-8b`
+   now 404s on OpenRouter ("No endpoints found"). Use the engine resolver (`default_extraction_model()` / the
+   model-profile seam) so the id and backend come from config, and **confirm it with a one-call smoke before any
+   bulk run**. Bulk teacher labeling runs on **self-hosted Qwen on Modal** (`qwen-vllm-modal` skill + ADR-0110), NOT
+   OpenRouter (flat-GPU = the warn-before-bulk rule); reasoning ON for label fidelity; client concurrency ≤16; raise
+   the structured timeout for reasoning-ON bulk; `modal app stop` when done.
+2. **Load `.env` by EXPLICIT path in any script run from outside the repo root** (a scratchpad / one-off script).
+   `load_dotenv()` with no path searches the CALLING SCRIPT's directory, so a script in `/tmp/...` silently misses
+   the project `.env` → `KeyError` or wrong creds. Pass the repo `.env` path (`load_dotenv("/abs/repo/.env")`) or
+   export the vars in the run command. Do NOT assume the shell already has them — some keys are shell-exported,
+   others live only in `.env`, so one working (e.g. `OPENROUTER_API_KEY`) does not mean all do (`VLLM_BASE_URL`).
+3. **Smoke ONE item end-to-end before the bulk fan-out** (early error catching). One real call through the EXACT
+   path the bulk will use; assert the parsed label/shape; only then fan out. This catches a broken prompt, a wrong
+   served-model-name, a dead endpoint, or a schema mismatch for the cost of one call, not a whole run.
+4. **X/N progress is mandatory and so is active monitoring.** Every bulk/label/train run writes a start line with
+   the total N, then `[stage] i/N <what>` (FLUSHED) per item or small batch, then an end summary — to a LOG FILE,
+   and you tail the file / Monitor-loop it (never pipe a live run through `grep`/`tail`; never a run whose only
+   output is at the end — it is unmonitorable). Report progress back in X/N form. This is how errors are caught
+   early instead of after an hour.
+5. **Checkpoint + registry + adopt-only-if-better** (ADR-0030, and Phase 5 below): snapshot before retrain, version
+   every run with a data fingerprint, load-don't-retrain. **Read metrics from the result artifact (JSON), not
+   stdout.**
+
 ## Operational notes — avoid the friction we already hit (remote training/eval)
 Concrete tool gotchas from a real run; following them saves real time.
 - **Downloading a whole model DIRECTORY from a cloud volume expects the destination PARENT** — the tool recreates

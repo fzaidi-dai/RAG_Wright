@@ -397,6 +397,25 @@ _SPECS: tuple[CapabilityManifest, ...] = (
         tags=("classification", "legalbert", "model"),
     ),
     CapabilityManifest(
+        slug="jev_decision",
+        impl_ref="rag_wright.capabilities.jev_decision:jev_decision",
+        kind="model",
+        display_name="Jev typed-decision model (TypeSafe System-1, via OpenRouter)",
+        description=(
+            "A calibrated TYPED-DECISION model (ADR-0119): given a `state` and typed `questions` -- a yes/no "
+            "(`noul`), a `choice` from a set, or a `score` -- it returns calibrated typed answers with no text in "
+            "~70-500 ms. Used for the compliance closed-set decisions (operative-rule gate zero-shot ~0.92; "
+            "claim_types / actor few-shot ~0.85/0.90) and for any domain's routing / tagging / screening. "
+            "I/O-bound -> ASYNC: invoke via `ainvoke_model`. Laya is the open-weight / on-prem fallback."
+        ),
+        representative_queries=(
+            "make a calibrated yes/no decision about a sentence",
+            "classify text into a closed set of options with probabilities",
+            "route or tag an input with a fast typed-decision model, no training",
+        ),
+        tags=("decision", "jev", "typesafe", "model"),
+    ),
+    CapabilityManifest(
         slug="clause_property_classification",
         impl_ref="rag_wright.spans.model_capabilities:clause_property_classification",
         kind="model",

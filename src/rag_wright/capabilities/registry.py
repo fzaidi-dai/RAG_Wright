@@ -82,6 +82,7 @@ CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
         "clause_disambiguation",  # function: disambiguation by property (Leg A)
         "clause_function_classification",  # model: LegalBERT function classifier (T56)
         "clause_property_classification",  # model: the 29-dim best-of-both property classifier fleet (ADR-0115/0116, EP-RT-1)
+        "jev_decision",  # model: generic Jev System-1 typed-decision client (OpenRouter Decisions API), ADR-0119; async/IO-bound
         "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
         # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
         "span_relevance_judgment",  # agent_skill: per-span relevance VERDICT (span x condition -> relevant/not/uncertain); issue 0023, SKILL-SPLIT

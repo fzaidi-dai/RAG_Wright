@@ -76,8 +76,21 @@ the OFFICIAL prebuilt vLLM image** rather than pip-building vLLM:
   because it was CPU-only; GPU retry not done). Run long deploys detached; poll `/health` for readiness.
 - **A100 is billed while up — `modal app stop <app> --yes` the moment you're done.** Verify with `modal app list`
   (state `stopped`, 0 tasks) + endpoint 404.
+- **Do NOT warm the GPU before the consumer is ready, and do NOT trust auto-scaledown to protect billing** (burned
+  2026-10-04: a smoke-warmed A100 sat idle ~20 min while unrelated work ran, because "scaledown_window will handle
+  it" was assumed — it did not, fast enough). RULE: build the bulk/label/eval consumer FIRST (while the app is
+  stopped/cold), THEN warm → smoke → run → **`modal app stop` immediately after**, in one continuous go. If you warm
+  only to prove stand-up and the consumer is not next, STOP it right after the smoke. Treat the explicit stop as
+  mandatory, not the scaledown as sufficient; verify stopped with `modal app list`.
 
 ## The meta-lesson
 Config + recipe live in **ADR-0110 + the script + this skill**. Before any Qwen/Modal work: read them, don't
 reconstruct. When something "was working and we changed accounts/rebuilt," expect the image-builder + concurrency +
 timeout trio above — they are the recurring three.
+
+## Client side (when you use this server for bulk labeling/eval)
+The SERVER config is here; the CLIENT preflight (resolve the model from the engine not a hardcoded id, load `.env`
+by explicit path from an out-of-repo script, smoke ONE item before the bulk fan-out, mandatory X/N progress +
+active monitoring) is in the **`setfit` skill's "Run preflight & monitoring"** section. Read it before driving a
+bulk job against this server — those client gotchas (a stale model id, a silently-unloaded `.env`) cost a run each
+on 2026-10-04.

@@ -9,7 +9,13 @@ the enforcement.
 from __future__ import annotations
 
 from rag_wright.contracts.compliance import ClaimType, DeonticType, RuleScope, Severity, Verdict
-from rag_wright.ontology.loader import load_actor_synonyms, load_compliance_vocab
+from rag_wright.ontology.loader import (
+    deontic_type_of,
+    load_actor_synonyms,
+    load_compliance_vocab,
+    load_deontic_cue_map,
+    load_deontic_cues,
+)
 
 _VOCAB = load_compliance_vocab()
 
@@ -24,6 +30,27 @@ def test_every_python_enum_matches_the_ttl() -> None:
 
 def test_the_ttl_declares_exactly_the_five_closed_vocabs() -> None:
     assert set(_VOCAB) == {"DeonticType", "ClaimType", "Severity", "RuleScope", "Verdict"}
+
+
+def test_deontic_cue_map_is_authoritative_in_the_ttl() -> None:
+    # CIC-0: the cue -> deontic TYPE map is loaded from compliance_bridge.ttl (`cmp:cue` per cmp:DeonticType),
+    # so the ingest-time deontic_type cue-rule is ttl-driven, not a Python literal.
+    cue_map = load_deontic_cue_map()
+    assert cue_map["must"] == "obligation"
+    assert cue_map["must not"] == "prohibition"
+    assert cue_map["shall not"] == "prohibition"
+    assert cue_map["may"] == "permission"
+    assert set(cue_map.values()) == {"obligation", "prohibition", "permission"}  # the three closed deontic values
+    assert set(cue_map) == set(load_deontic_cues())  # same cue set the operative gate uses
+
+
+def test_deontic_type_of_prefers_the_longest_cue() -> None:
+    # CIC-0: the deterministic deontic-type derivation -- longest cue first so 'must not' beats 'must'.
+    assert deontic_type_of("The advertiser must not misrepresent the results.") == "prohibition"
+    assert deontic_type_of("The advertiser must disclose the connection.") == "obligation"
+    assert deontic_type_of("The endorser may decline the request.") == "permission"
+    assert deontic_type_of("This section defines the terms used herein.") is None  # no cue -> non-operative
+    assert deontic_type_of("") is None
 
 
 def test_actor_synonyms_are_authoritative_in_the_ttl() -> None:
