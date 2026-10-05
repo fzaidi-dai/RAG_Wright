@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.1** (domain-adaptation guide). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.3**
-(PREP-4.2 awaiting approval).
+Last approved: **PREP-4.2** (`ontology-authoring.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.4**
+(PREP-4.3 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -347,7 +347,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   `entity_id` schemes (ask-first to change).
 - Acceptance: matches the ingestion subgraphs + identifier rules.
 - Verify: cross-check against `subgraphs/` + `contracts/`. Files: `docs/domain-adaptation/kg-construction.md`.
-  Deps: PREP-4.1. Status: todo.
+  Deps: PREP-4.1. Status: **awaiting-approval** (generic stages parse→chunk→segment→index/extract/graph→resolve→
+  write; the two graphs in one store; the load-bearing identifiers quoted from `contracts/identifiers.py`
+  [`chunk_id`/`span_id`/`entity_id`]; provenance + `ConfidenceTag`; content-hash gating/idempotence; "clause" only
+  as the reference example).
 
 **PREP-4.4 — `entity-resolution.md` (and surface the gap).**
 - Driver: ER/disambiguation are canonical-but-reserved slugs (ADR-0004/0013) with no clear new-domain story today.
