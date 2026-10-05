@@ -125,6 +125,13 @@ def is_extractable_span(text: str) -> bool:
 # rule (issue 0039: a naive marker/number regex over-splits at depth 3-4, trading one granularity bug for a
 # smaller one). A parenthesised letter/roman item ('(a)', '(i)') is likewise not a section (no leading digit).
 _SECTION_START = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2})?\)?\.\s")
+# A section-WORD prefix ('Section 8', 'Article 2', 'Clause 12', 'Sec.'/'Art.', '§3') before a number -- the dominant
+# contract heading style. Stripped so the depth-capped number rule above decides exactly as for a bare '8.'. The
+# digit lookahead means a prose line like 'Section hereof shall mean ...' is left untouched (not a start).
+_SECTION_WORD = re.compile(r"^(?:§\s*|(?:section|article|clause|sec|art)\.?\s+)(?=\(?\d)", re.IGNORECASE)
+# The number FOLLOWING a section word (depth-capped to two levels; trailing '.'/')' optional, since the section
+# word already signals a heading): 'Section 8.' and 'Clause 12 Governing Law' both start a provision.
+_SECTION_NUM = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2})?\)?[.)]?(?:\s|$)")
 
 
 def starts_new_provision(text: str) -> bool:
@@ -141,6 +148,9 @@ def starts_new_provision(text: str) -> bool:
     caller also breaks on a chunk change), so a heading-less contract degrades to chunk-level -- never one clause
     per sentence, never per document."""
     t = text.strip()
+    m = _SECTION_WORD.match(t)
+    if m:  # an explicit 'Section/Article/Clause N' heading -> a start (depth-capped; trailing period optional)
+        return bool(_SECTION_NUM.match(t[m.end():]))
     if re.match(r"^\(?\d", t):  # a numbered item: ONLY the depth-capped section rule decides (no heading override)
         return bool(_SECTION_START.match(t))
     if _is_bare_heading(t):  # un-numbered but titled ('Governing Law', a short Title-case line)
@@ -148,6 +158,34 @@ def starts_new_provision(text: str) -> bool:
     if t and not any(c.islower() for c in t) and len(_WORD_RE.findall(t)) < _MIN_ALLCAPS_WORDS:
         return True  # a short ALL-CAPS heading ('CONFIDENTIALITY')
     return False
+
+
+def provision_boundary_verdict(text: str) -> str:
+    """Three-way boundary classification used to group spans into provisions: `"start"` (a confident, deterministic
+    provision start), `"continue"` (clearly provision body), or `"uncertain"` (a short, plausibly-heading line in a
+    style the deterministic rules do not confidently classify -- e.g. a roman-numeral or colon heading). Only the
+    `"uncertain"` residue is sent to a decision model (Jev) by `spans.boundary`; a deterministic `"start"`/
+    `"continue"` never pays for a model call, so cost stays bounded to the ambiguous SHORT lines -- and new heading
+    styles get a model's judgment instead of another regex (the flexibility regex alone cannot give)."""
+    t = text.strip()
+    if starts_new_provision(t):
+        return "start"
+    if _heading_candidate(t):
+        return "uncertain"
+    return "continue"
+
+
+def _heading_candidate(text: str) -> bool:
+    """A short line that plausibly BEGINS a provision but was not a confident deterministic start: an enumerated
+    lead-in (number / roman numeral / letter) we did not confidently start, or a short capitalized title-like line
+    that is NOT a full sentence (no sentence punctuation). Deliberately broad -- the model decides -- but bounded to
+    SHORT lines, so ordinary body prose (long, lowercase-led, or a terminated sentence) is never a candidate."""
+    t = text.strip()
+    if not t or len(t) > 90 or t[0].islower():
+        return False  # empty, long, or lowercase-led -> provision body, never a candidate
+    if _LEADING_ENUM.match(t):
+        return True  # an enumerated lead-in the deterministic rules did not confidently start
+    return not (re.search(r"\.\s", t) or t.endswith("."))  # short + capitalized + NOT a full sentence -> a heading candidate
 
 
 def _is_bare_heading(text: str) -> bool:

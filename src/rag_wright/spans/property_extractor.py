@@ -322,10 +322,13 @@ class HybridPropertyExtractor:
                 continue
         return out
 
-    def _record(self, chunk_id: ChunkId, function: str,
-                assertions: list[PropertyAssertion]) -> ClausePropertyRecord:
+    def _record(self, chunk_id: ChunkId, function: str, assertions: list[PropertyAssertion],
+                span_id: str = "") -> ClausePropertyRecord:
+        # Carry the record-level operative-span anchor (ADR-0025) EVEN when property-less: Leg A rehydrates a
+        # property-less clause from its own `span_id` (else it has no citable text and the serve step abstains).
         return ClausePropertyRecord(clause_id=str(chunk_id), function=function,
-                                    folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=assertions)
+                                    folio_iri=FOLIO_CLAUSE_IRI.get(function, ""),
+                                    span_id=span_id, assertions=assertions)
 
     def __call__(self, *, chunk_id: ChunkId, function: str, text: str, span_id: str = "",
                  functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
@@ -341,7 +344,7 @@ class HybridPropertyExtractor:
             if extraction is not None:
                 break
         assertions += self._residual_assertions(prov, extraction, span_id)
-        return self._record(chunk_id, function, assertions)
+        return self._record(chunk_id, function, assertions, span_id)
 
     async def aextract(self, *, chunk_id: ChunkId, function: str, text: str,
                        span_id: str = "", functions: tuple[str, ...] = ()) -> ClausePropertyRecord:
@@ -359,4 +362,4 @@ class HybridPropertyExtractor:
             if extraction is not None:
                 break
         assertions += self._residual_assertions(prov, extraction, span_id)
-        return self._record(chunk_id, function, assertions)
+        return self._record(chunk_id, function, assertions, span_id)

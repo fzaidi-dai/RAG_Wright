@@ -177,6 +177,12 @@ class ContractKGStore:
         reader the Leg-A serving (`contract_kg_serve`) needs."""
         return self._store.clauses_in_contract(contract_id)
 
+    def all_spans_by_contract(self, contract_id: str) -> list[dict]:
+        """Every span in one contract (delegated to the generic store). The Leg-A serving
+        (`contract_clause_index(..., include_untyped=True)`) reads this so a span the classifier left untyped is
+        still a candidate -- without it, serve raised AttributeError and intra_document_qa abstained on EVERY doc."""
+        return self._store.all_spans_by_contract(contract_id)
+
     # --- EP-REF-1b-ii: contract traversal + vocab (the reference reads EP-SEAM-3 lifts), over the entity-graph
     #     traversal primitive + the clause index. The CONTRACTS_WITH / AFFILIATE_OF naming is the DD-5 contract
     #     vocabulary over the generic (domain-free) graph_query.

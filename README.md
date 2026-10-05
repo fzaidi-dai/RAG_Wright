@@ -49,12 +49,13 @@ from rag_wright.api import EngineConfig, StoreConfig, open_workspace, load_refer
 
 load_reference_pack()  # opt in to the contract/compliance worked example (the engine ships an empty catalog)
 
-config = EngineConfig(store=StoreConfig(host="localhost", port=2480, user="root", password="<arcadedb-password>"))
+config = EngineConfig(store=StoreConfig(host="localhost", port="2480", user="root", password="<arcadedb-password>"))
 ws = open_workspace(config, corpus="demo")  # corpus = the backend DB name
 
 async def main():
-    answer = await ainvoke_subgraph("intra_document_qa", {"question": "..."}, resources=ws)
-    print(answer)
+    out = await ainvoke_subgraph(
+        "intra_document_qa", {"contract_id": "ACME_MSA", "question": "What is the liability cap?"}, resources=ws)
+    print(out["answer"].answer, out["answer"].citations)   # a grounded, cited answer (or an abstention)
 
 asyncio.run(main())
 ```

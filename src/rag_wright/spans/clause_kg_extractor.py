@@ -213,10 +213,11 @@ class DGClausePropertyExtractor:
         self._aextract = aextract_fn
         self._asemantic_judge_fn = asemantic_judge_fn
 
-    def _empty(self, chunk_id: ChunkId, function: str) -> ClausePropertyRecord:
+    def _empty(self, chunk_id: ChunkId, function: str, span_id: str = "") -> ClausePropertyRecord:
         return ClausePropertyRecord(
             clause_id=str(chunk_id), function=canonical_function(function) or function,
-            folio_iri=FOLIO_CLAUSE_IRI.get(function, ""), assertions=[])
+            folio_iri=FOLIO_CLAUSE_IRI.get(function, ""),
+            span_id=span_id, assertions=[])  # carry the operative-span anchor even when property-less (ADR-0025)
 
     def _grounded(self, clause: Any, *, chunk_id: ChunkId, function: str, text: str, span_id: str
                   ) -> ClausePropertyRecord:
@@ -229,7 +230,7 @@ class DGClausePropertyExtractor:
     ) -> ClausePropertyRecord:
         clause = self._extract(text)
         if clause is None:
-            return self._empty(chunk_id, function)
+            return self._empty(chunk_id, function, span_id)
         record = self._grounded(clause, chunk_id=chunk_id, function=function, text=text, span_id=span_id)
         if self._semantic_judge_fn is not None:  # ADR-0040 Layer 3 LLM semantic gate (production only)
             record = semantic_judge(record, text, self._semantic_judge_fn)
@@ -243,7 +244,7 @@ class DGClausePropertyExtractor:
         Layer-3 semantic judge. Same contract as `__call__`."""
         clause = await self._aextract(text)
         if clause is None:
-            return self._empty(chunk_id, function)
+            return self._empty(chunk_id, function, span_id)
         record = self._grounded(clause, chunk_id=chunk_id, function=function, text=text, span_id=span_id)
         if self._asemantic_judge_fn is not None:
             record = await asemantic_judge(record, text, self._asemantic_judge_fn)

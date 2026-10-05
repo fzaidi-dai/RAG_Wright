@@ -89,3 +89,20 @@ def test_seam_extractor_plumbing_with_stub_runnable_and_retry():
         (PropertyDimension.FAVORABILITY, "seller_favorable", ConfidenceTag.INFERRED)
     ]
     assert rec.assertions[0].span_id == f"{_CID}#1"
+
+
+def test_property_less_record_carries_span_id():
+    """Bug-B regression (quickstart abstention): a provision that yields NO typed properties must still carry its
+    operative-span anchor (`span_id`, ADR-0025), so Leg A (`intra_document_qa`) can rehydrate its text and cite it.
+    Before the fix, `HybridPropertyExtractor._record` dropped the record-level span_id -> a property-less clause had
+    no citable text -> `rehydrate_clause_texts` omitted it -> the serve step returned no clauses -> abstain."""
+    from rag_wright.spans.property_extractor import HybridPropertyExtractor
+
+    class _NoResidual:  # the residual LLM lane returns nothing -> no assertions at all
+        def invoke(self, _prompt):
+            return None
+
+    hx = HybridPropertyExtractor(registry=None, runnable=_NoResidual(), classifier_fn=lambda _t, _f: [])
+    rec = hx(chunk_id=_CID, function="Payment Terms", text="Section 3. Fees. ...", span_id=f"{_CID}#0")
+    assert rec.assertions == []              # genuinely property-less
+    assert rec.span_id == f"{_CID}#0"        # ...but the operative-span anchor is persisted

@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-2.3** (`docs/architecture.md`). **WS0 + WS1 complete.** Next up: **PREP-2.5** (PREP-2.4
-awaiting approval).
+Last approved: **PREP-2.4** (`installation.md` + `configuration.md`). **WS0 + WS1 complete.** Next up: **PREP-2.6**
+(PREP-2.5 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -280,8 +280,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: `uv run python examples/quickstart.py` completes green against a real store and prints a cited answer;
   README + quickstart snippets are generated from / verified against this file.
 - Verify: run the example (shown at the gate); diff README/quickstart snippets against it.
-- Files: `examples/quickstart.py`, `docs/quickstart.md`, a small sample fixture (non-restricted). Deps: WS1,
-  PREP-2.4. Status: todo.
+- Files: `examples/quickstart.py`, `docs/quickstart.md`. Deps: WS1, PREP-2.4. Status: **awaiting-approval**
+  (runnable example: load_reference_pack → open_workspace → source_document ingest → kg_read → cited retrieval via
+  `typed_property_retrieval` + measure_usage; LIVE run PASS against the clean ArcadeDB — ingested 1 clause + 11
+  spans, returned the liability-cap provisions cited & function-labelled, 6 calls/$0.0038. Used
+  `typed_property_retrieval` [works] not `intra_document_qa` [abstains on text-only ingest → logged in PREP-4.7]).
 
 **PREP-2.6 — `docs/reference-pack.md`.**
 - What: what the contract/compliance worked example is; `load_reference_pack()`; the 36 caps (9 invocable-by-name);
@@ -368,6 +371,12 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   the api re-export [resolved in 1.5], the spacy-model requirement, the ArcadeDB prerequisite, any
   domain-assumption leak), each with a proposed resolution; cross-post the real engine items into the
   engine-platform `TASKS.md` as follow-ups.
+- SURFACED → RESOLVED (PREP-2.5 diversion, ADR-0122): `intra_document_qa` abstained. Root-caused to THREE real
+  bugs (not a text-only rough edge; my first guess was wrong, verified before acting): (A) provision boundary
+  missed "Section N"/"Article N" headings → one provision; (B) `HybridPropertyExtractor._record` dropped the clause
+  `span_id`; (C, decisive) `ContractKGStore` was missing the `all_spans_by_contract` delegation, so `serve` raised
+  (caught) → empty clauses → abstain for EVERY document (an EP-REF de-domaining regression). All three fixed with
+  red→green tests + a live cited answer; boundary design captured in ADR-0122.
 - Acceptance: a concrete, de-duplicated list; the genuine engine items appear in the child ledger.
 - Verify: read-through; link into `docs/specs/engine-platform/TASKS.md`.
   Files: the register + a child-ledger append. Deps: PREP-4.2–4.6. Status: todo.

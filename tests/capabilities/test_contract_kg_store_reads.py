@@ -116,3 +116,17 @@ def test_contract_terms_reads_the_clause_kg_live(store):
     terms = ckg.contract_terms("K")
     assert len(terms) == 1 and terms[0].clause_id == str(cid)
     assert ("mutuality", "mutual") in {(p.dimension, p.value) for p in terms[0].properties}
+
+
+def test_contract_kg_store_delegates_all_spans_by_contract():
+    """Regression (intra_document_qa abstained for EVERY document): `contract_clause_index(..., include_untyped=True)`
+    calls `store.all_spans_by_contract`, but the serve store is a ContractKGStore. It delegates `clauses_in_contract`
+    yet was missing `all_spans_by_contract`, so serve raised AttributeError -> (caught) -> empty clauses -> abstain."""
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+
+    class _Raw:
+        def all_spans_by_contract(self, contract_id):
+            return [{"span_id": f"{contract_id}:0:h#0", "function": "", "text": "a clause body"}]
+
+    ckg = ContractKGStore(_Raw())
+    assert ckg.all_spans_by_contract("C1") == [{"span_id": "C1:0:h#0", "function": "", "text": "a clause body"}]

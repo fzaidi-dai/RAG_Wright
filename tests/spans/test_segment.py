@@ -250,3 +250,32 @@ def test_to_span_record_no_pages_leaves_page_none():
     rec = to_span_record(op, contract_id="docA", chunk_doc_start=0,
                          dense_vector=[0.0] * BGE_M3_DENSE_DIM, sparse_vector={1: 1.0})
     assert rec.pages == [] and rec.page is None and rec.bbox is None  # text-only leg: no provenance
+
+
+# --- Bug-A: provision boundary detection (section-word prefixes + a 3-way verdict for the residue) ---
+
+def test_section_word_prefixed_headings_start_a_provision():
+    """The dominant contract heading style is 'Section N'/'Article N'/'Clause N'/'§N' -- not a bare leading digit.
+    These collapsed into one provision before (quickstart abstained); they must now start a provision."""
+    from rag_wright.spans.segment import starts_new_provision
+    for t in ["Section 8. Limitation of Liability.", "Article 2. Term and Termination.",
+              "§ 3. Fees", "Sec. 4. Notices", "Clause 12 Governing Law"]:
+        assert starts_new_provision(t), t
+
+
+def test_section_word_without_a_following_number_is_not_a_start():
+    from rag_wright.spans.segment import starts_new_provision
+    assert not starts_new_provision("Section hereof shall mean the provisions of this agreement and its exhibits")
+
+
+def test_bare_leading_number_still_starts_a_provision():  # regression
+    from rag_wright.spans.segment import starts_new_provision
+    assert starts_new_provision("8. Limitation of Liability shall apply.")
+    assert starts_new_provision("2.1. Sub-provision text follows here.")
+
+
+def test_provision_boundary_verdict_is_three_way():
+    from rag_wright.spans.segment import provision_boundary_verdict
+    assert provision_boundary_verdict("Section 8. Limitation of Liability.") == "start"      # deterministic start
+    assert provision_boundary_verdict("the parties agree to indemnify each other for any losses") == "continue"
+    assert provision_boundary_verdict("Limitation of Liability:") == "uncertain"      # colon heading -> ask the model

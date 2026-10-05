@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-121 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
-and 0121). ADRs are an
+122 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+0121, and 0122). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -177,4 +177,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0117 The engine API layer + capability runtime ·
 0118 Engine core API vs ARD — adapter-free `impl_ref` client ·
 0119 Jev typed-decision model for compliance closed-set decisions ·
-0121 spaCy is an optional extra; its model is a runtime download (supersedes ADR-0012 point 4)
+0121 spaCy is an optional extra; its model is a runtime download (supersedes ADR-0012 point 4) ·
+0122 Provision-boundary detection is deterministic-first with a decision-model (Jev) fallback for the residue

@@ -627,7 +627,7 @@ async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any
     return out
 
 
-def clause_extraction_jobs(segments: list) -> list:
+def clause_extraction_jobs(segments: list, boundary_starts: list[bool] | None = None) -> list:
     """Group ordered `segments` into PROVISIONS and emit one clause-extraction job per provision, as
     `[(index, anchor_op, function, scores, text)]`: `text` is the provision's merged span text (what the extractor
     reads), `anchor_op` is its first span (the citation anchor + provenance), `index` is the provision ordinal.
@@ -648,10 +648,13 @@ def clause_extraction_jobs(segments: list) -> list:
     from rag_wright.spans.segment import is_extractable_span, starts_new_provision
 
     # 1) group consecutive segments into provisions (boundary = chunk change OR a provision-heading span)
+    # `boundary_starts` (when provided) is the per-span "starts a new provision?" decision from
+    # `spans.boundary.adecide_provision_starts` (deterministic + the Jev residue fallback); None -> deterministic only.
     groups: list[list] = []
-    for seg in segments:
+    for i, seg in enumerate(segments):
         op = seg[0]
-        if groups and op.parent_chunk_id == groups[-1][-1][0].parent_chunk_id and not starts_new_provision(op.text):
+        starts = boundary_starts[i] if boundary_starts is not None else starts_new_provision(op.text)
+        if groups and op.parent_chunk_id == groups[-1][-1][0].parent_chunk_id and not starts:
             groups[-1].append(seg)
         else:
             groups.append([seg])
@@ -864,7 +867,13 @@ def aproduction_document_ingest(
         # issue 0038: a Clause is a PROVISION -- clause_extraction_jobs groups spans into provisions (numbered
         # section, else chunk) and yields one job per provision (merged text + anchor span). Retrieval stays per
         # span (index_fn unchanged). The function is a soft tag (ADR-0082), never a gate (issue 0036).
-        jobs = clause_extraction_jobs(segments)
+        # Boundaries: deterministic-first, with a Jev decision-model fallback for the UNCERTAIN residue only
+        # (spans.boundary) -- flexible on new heading styles, degrades to deterministic with no decision model.
+        from rag_wright.spans.boundary import adecide_provision_starts, jev_boundary_decider
+
+        boundary_starts = await adecide_provision_starts(
+            [seg[0].text for seg in segments], decider=jev_boundary_decider())
+        jobs = clause_extraction_jobs(segments, boundary_starts=boundary_starts)
         if not jobs:
             return {"clause_records": [], "clause_failures": []}
         failures: list[dict] = []
