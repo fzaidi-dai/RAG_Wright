@@ -1,5 +1,8 @@
 # ADR-0032: NL->type via two-step reason->emit on the GENERAL model (Gemma)
 
+> **Status: SUPERSEDED (ADR-0045).** The two-step reason→emit guided-decoding path is replaced by client-side tag-parse (ADR-0045).
+
+
 Status: accepted
 Date: 2026-07-26
 Related: ADR-0006 (model profile / Qwen thinking-disable), ADR-0023 (DeepSeek default, Gemma as benchmarked

@@ -76,7 +76,7 @@ Convert the engine to **async end to end**, with a true wall-clock deadline on e
 
 ## Migration
 
-Sequenced bottom-up in `docs/plans/async-migration.md`, tracked as the `ASYNC-*` arc in `tasks.md`: Phase A
+Sequenced bottom-up in `docs/archive/plans/async-migration.md`, tracked as the `ASYNC-*` arc in `tasks.md`: Phase A
 (async seam + deadline + streaming + docling-graph client), Phase B (async ingestion), Phase C (async query +
 MCP), Phase D (async entrypoints, remove sync shims), Phase E (RuleWright FastAPI async, its session). Each phase
 ends with a review gate and a green suite.

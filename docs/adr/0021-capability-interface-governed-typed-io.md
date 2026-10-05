@@ -1,9 +1,12 @@
 # ADR-0021: Emit a governed typed I/O interface (`capabilityInterface`) on authored ARD manifests
 
+> **Status: SUPERSEDED (ADR-0117/0118).** The `capabilityInterface` governed-typed-I/O was a GraphWright vendor extension; the engine now invokes capabilities via the adapter-free `impl_ref` client (ADR-0118). GraphWright is parked (ADR-0052).
+
+
 Date: 2026-07-20. Status: Accepted. The RAG-side record of the cross-repo coordination with GraphWright
 ADR-0030 (their governed capability interface). Mirrors, on the capability half, the vendor-extension field
 their lowering checker verifies a realization against. See the handoff exchange in
-`docs/handoff/2026-07-20*_graphwright_*.md`.
+`docs/archive/handoffs/2026-07-20*_graphwright_*.md`.
 
 ## Context
 

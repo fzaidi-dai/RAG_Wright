@@ -33,7 +33,7 @@ Construct with the GP-1B recipe (the `kg-extraction-recipe` Skill): `docling-gra
 Pydantic template -> per-span extraction (granite-4.1-8b, the Leg-C model; no A/B, DeepSeek = below-par
 contingency only -- KG-0 gate 2026-07-28; gated by the property-grounding judge ADR-0028) -> resolve/ground
 (CIK + `PRIVATE:` sentinel; values -> FOLIO/ODRL IRIs) ->
-write. Plan: `docs/unified_contract_kg_plan.md` (tasks KG-0..KG-6).
+write. Plan: `docs/archive/plans/unified_contract_kg_plan.md` (tasks KG-0..KG-6).
 
 ## Consequences
 
@@ -53,4 +53,4 @@ write. Plan: `docs/unified_contract_kg_plan.md` (tasks KG-0..KG-6).
   `BOUNDED_BY` naming; **build typed, retire the flat `HasProperty` graph** (not a fallback); ODRL adopted at
   **full depth** (deontic core + `odrl:constraint` for cap/temporal bounds); the `.ttl` authored+validated at
   KG-1; **KG-2 extracts with granite-4.1-8b, no A/B** (DeepSeek = below-par contingency only). Design:
-  `docs/unified_contract_kg_ontology_bridge.md`.
+  `docs/archive/plans/unified_contract_kg_ontology_bridge.md`.

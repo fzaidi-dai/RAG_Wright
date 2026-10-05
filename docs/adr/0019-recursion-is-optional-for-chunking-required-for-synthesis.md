@@ -1,5 +1,8 @@
 # ADR-0019: Recursion is available-when-warranted for chunking, intrinsic to synthesis
 
+> **Status: PARKED (ADR-0052).** A GraphWright / RLM-era decision, parked for now as part of the engine/product split; the referenced capability may still exist in code but is not treated as part of the current supported surface. Revisit or revive if a future need arises.
+
+
 Date: 2026-07-15. Status: Accepted. Records why the RLM chunking capability (T17) does **not** gate on the
 ADR-0016 fail-if-absent recursion test, while RLM synthesis (T28) and the RLM method (T15) do. Answers
 "why doesn't chunking prove recursion the way synthesis must" once, so a future reader does not re-derive

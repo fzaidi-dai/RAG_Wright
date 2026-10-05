@@ -1,5 +1,8 @@
 # ADR-0108: Qwen3.8-27B serves on a single A100-80GB; max_model_len is the concurrency lever
 
+> **Status: SUPERSEDED (ADR-0110).** The interim single-A100 serving profile is superseded by the FP8 KV-cache 16K config (ADR-0110).
+
+
 **Status:** accepted · **Date:** 2026-09-16 · **Related:** ADR-0039 (product substrate: self-hosted vLLM on Modal/A100), ADR-0100 (profile-based model routing), the `qwen3.8-27b-modal-or` profile (OpenRouter-pinned, Modal-destined)
 
 ## Context

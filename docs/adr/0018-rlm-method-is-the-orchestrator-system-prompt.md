@@ -1,5 +1,8 @@
 # ADR-0018: The RLM method is the orchestrator's system prompt, not a lazy skill source
 
+> **Status: PARKED (ADR-0052).** Part of the GraphWright-era RLM-as-interpreter / dynamic-sub-agent runtime, which is parked. The engine's RLM today is authored SKILL.md content built as ordinary software (used by the `rlm_chunking` / `rlm_synthesis` capabilities); there is no interpreter or dynamic-dispatch runtime in this repo.
+
+
 Date: 2026-07-15. Status: Accepted. Records a grounded finding from the T15 rebuild's opt-in real-model
 smoke test: a real model does not reliably follow the RLM method when the method is wired only as a lazy
 `skills=` source, because it never reads it. The method is loaded into the orchestrator's **system

@@ -1,5 +1,8 @@
 ## ADR-00XX: RLM sub-agent identity, and the dynamic-dispatch trigger under hydrated instructions
 
+> **Status: PARKED (ADR-0052).** Part of the GraphWright-era RLM-as-interpreter / dynamic-sub-agent runtime, which is parked. The engine's RLM today is authored SKILL.md content built as ordinary software (used by the `rlm_chunking` / `rlm_synthesis` capabilities); there is no interpreter or dynamic-dispatch runtime in this repo.
+
+
 Status: Accepted. Owns what grantedSubagents holds and how the RLM skill guarantees dynamic dispatch. The control-level rule for RLM nodes is owned by the GraphWright side and recorded here only as context. Complements the RLM-requirements ADR (recursive decomposition, per-slice tools, per-slice skills, dynamic sub-agents as enforceable tests).
 
 ## Context

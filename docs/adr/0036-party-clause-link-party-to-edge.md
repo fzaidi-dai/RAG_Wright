@@ -1,5 +1,8 @@
 # ADR-0036: The `Party <-> Contract` unifying link (`PARTY_TO` edge)
 
+> **Status: RETIRED (ADR-0091).** The `PARTY_TO` edge and `party_clause_linking` were retired (ADR-0091); `entities_by_name` restores the lookup (ADR-0093).
+
+
 - Status: accepted
 - Date: 2026-07-31
 - Related: ADR-0033 (unified contract KG, three legs, one graph), ADR-0035 (graph_extraction re-backed with

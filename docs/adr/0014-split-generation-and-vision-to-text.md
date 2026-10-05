@@ -1,5 +1,8 @@
 # ADR-0014: Split FR-C.9 into `generation` and `vision_to_text` (discovery dilution)
 
+> **Status: PARKED (ADR-0052).** A GraphWright / RLM-era decision, parked for now as part of the engine/product split; the referenced capability may still exist in code but is not treated as part of the current supported surface. Revisit or revive if a future need arises.
+
+
 Date: 2026-07-14. Status: Accepted. Splits the bundled FR-C.9 `generation` capability into two slugs —
 `generation` (grounded, cited, abstaining answer generation) and `vision_to_text` (scanned-image
 transcription) — so ARD discovery ranks each on its own intents. Approved SPEC change (from GraphWright's

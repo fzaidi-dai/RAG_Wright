@@ -1,5 +1,8 @@
 # ADR-0022: FR-K, an embedding-free OKF knowledge-navigation retrieval path (experimental, gated)
 
+> **Status: SUPERSEDED / RETIRED (ADR-0025, ADR-0046).** The FR-K embedding-free OKF navigation experiment was shelved by the retrieval pivot (ADR-0025) and retired when ACORD folded into one production KG (ADR-0046).
+
+
 Date: 2026-07-22. Status: Accepted (spec + task-ledger authoring; no capability code built yet). Adds a new
 experimental capability block FR-K to `SPEC.md` and tasks T45-T53 + GATE-3a/GATE-3 to `tasks.md`. Derived
 from an external feeder draft (`temp/okf_spec_delta_and_tasks.md`) reworked in review.

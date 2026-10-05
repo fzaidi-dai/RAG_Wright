@@ -1,5 +1,8 @@
 # ADR-0006: Empirical model profiles for structured output under reasoning
 
+> **Status: SUPERSEDED (ADR-0045).** Query-side structured output now uses client-side XML-tag parsing (ADR-0045), not guided decoding under reasoning.
+
+
 Date: 2026-07-07. Status: Accepted. Records the working structured-output profiles for the
 structured-reasoning models, confirmed by a live forced-schema call at T12 (A-T2, risk 3). Fills the
 placeholders T11 shipped in `src/rag_wright/models/profiles.py`.

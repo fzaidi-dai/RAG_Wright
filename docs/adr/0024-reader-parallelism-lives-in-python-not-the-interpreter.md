@@ -1,5 +1,8 @@
 # ADR-0024: OKF reader parallelism lives in a Python PTC tool, not sub-agent dispatch
 
+> **Status: SUPERSEDED / RETIRED (ADR-0025, ADR-0046).** The FR-K embedding-free OKF navigation experiment was shelved by the retrieval pivot (ADR-0025) and retired when ACORD folded into one production KG (ADR-0046).
+
+
 Status: accepted
 Date: 2026-07-22
 

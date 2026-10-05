@@ -1,5 +1,8 @@
 # ADR-0003: ARD registration — schema mirroring and capability kinds
 
+> **Status: SUPERSEDED — framing (ADR-0117/0118).** ARD registration is retained as a standing commitment, but the RegistryEntry-schema-mirroring framing here is reframed by the engine API + adapter-free `impl_ref` runtime (ADR-0117/0118). GraphWright is parked (ADR-0052).
+
+
 - Status: Accepted
 - Date: 2026-07-05
 - Deciders: farhan.zaidi@dreamai.io, Claude Code

@@ -1,5 +1,8 @@
 # ADR-0023: A cheap model role for OKF signpost enrichment (Gemma-4-26b-a4b), this task only
 
+> **Status: SUPERSEDED / RETIRED (ADR-0025, ADR-0046).** The FR-K embedding-free OKF navigation experiment was shelved by the retrieval pivot (ADR-0025) and retired when ACORD folded into one production KG (ADR-0046).
+
+
 Date: 2026-07-22. Status: Accepted. Adds a fourth model-profile role, `OKF_ENRICHMENT`, defaulting to
 `google/gemma-4-26b-a4b-it`, used only by the OKF bundle-compile enrichment step (FR-K.2, T46). Every other
 call class stays on its existing DeepSeek/Gemma role. Extends the T11 model-profile seam (ADR-0006).

@@ -1,5 +1,8 @@
 # ADR-0009: RLM semantic chunking is a retained, configurable capability — GATE-2 measures it, it does not delete it
 
+> **Status: PARKED (ADR-0052).** A GraphWright / RLM-era decision, parked for now as part of the engine/product split; the referenced capability may still exist in code but is not treated as part of the current supported surface. Revisit or revive if a future need arises.
+
+
 Date: 2026-07-11. Status: Accepted. Records the design intent behind RLM semantic chunking and the
 Knowledge Graph, and constrains the GATE-2 / T22 "earns-its-cost" decision accordingly: the gate
 measures the RLM chunker, but the decision space is keep-as-default vs. make-optional, never "drop."

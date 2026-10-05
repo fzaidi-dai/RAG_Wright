@@ -1,5 +1,8 @@
 # ADR-0040: Neuro-symbolic extraction fidelity — ontology-driven SHACL validation + a narrowed semantic-judge
 
+> **Status: REVISED (ADR-0082).** The symbolic clause-validation gate became function-INDEPENDENT (ADR-0082); the rest of the neuro-symbolic cascade stands.
+
+
 Date: 2026-08-03
 Status: Accepted (design; implementation staged as JUDGE-ONTOLOGY-1..3 + JUDGE-SEMANTIC)
 

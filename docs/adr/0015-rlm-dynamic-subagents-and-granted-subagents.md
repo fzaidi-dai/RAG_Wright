@@ -1,5 +1,8 @@
 # ADR-0015: RLM is interpreter + dynamic sub-agents; `grantedSubagents` is populated (self-dispatching)
 
+> **Status: PARKED (ADR-0052).** Part of the GraphWright-era RLM-as-interpreter / dynamic-sub-agent runtime, which is parked. The engine's RLM today is authored SKILL.md content built as ordinary software (used by the `rlm_chunking` / `rlm_synthesis` capabilities); there is no interpreter or dynamic-dispatch runtime in this repo.
+
+
 > **Update 2026-09-20 (ADR-0112):** the `deepagents==0.6.12` pin referenced below is relaxed to a
 > `deepagents>=0.7.15` floor (issue 0047 — an `==` in a library binds every consumer). Q2's premise that a
 > self-referential sub-agent is *not constructible* (eager roster compilation on 0.6.12) sits in the exact

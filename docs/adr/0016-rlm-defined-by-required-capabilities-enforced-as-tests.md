@@ -1,5 +1,8 @@
 # ADR-0016: RLM is defined by required capabilities, enforced as tests
 
+> **Status: PARKED (ADR-0052).** A GraphWright / RLM-era decision, parked for now as part of the engine/product split; the referenced capability may still exist in code but is not treated as part of the current supported surface. Revisit or revive if a future need arises.
+
+
 Date: 2026-07-15. Status: Accepted. Defines RLM by what an implementation must DO, enforced as
 fail-if-absent tests, so the rebuild cannot drift the way the first implementation did. This ADR is the
 RLM-requirements record on the RAG_Wright side; ADR-0015 records sub-agent identity and the workflow

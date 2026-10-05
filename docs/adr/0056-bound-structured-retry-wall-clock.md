@@ -1,5 +1,8 @@
 # ADR-0056: Bound the structured-call retry to one layer (no stacked retry budgets)
 
+> **Status: SUPERSEDED (ADR-0057).** Retry bounding is subsumed by the async engine architecture (ADR-0057).
+
+
 Status: Accepted
 Date: 2026-08-18
 Component: `models/seam.py` (`build_structured`), surfaced through `spans/clause_function_classifier.py`

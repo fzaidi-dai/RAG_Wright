@@ -1,5 +1,8 @@
 # ADR-0017: The dynamic-dispatch trigger is a typed `skill_runtime` flag, not a magic word in text
 
+> **Status: PARKED (ADR-0052).** Part of the GraphWright-era RLM-as-interpreter / dynamic-sub-agent runtime, which is parked. The engine's RLM today is authored SKILL.md content built as ordinary software (used by the `rlm_chunking` / `rlm_synthesis` capabilities); there is no interpreter or dynamic-dispatch runtime in this repo.
+
+
 Date: 2026-07-15. Status: Accepted. The RLM skills' code-driven fan-out ("workflow") trigger is declared
 as a typed flag `requires_dynamic_dispatch: bool` on `skill_runtime` (ADR-0003 mirror), and GraphWright's
 runtime translates it into whatever trigger phrasing the installed interpreter expects. The trigger word

@@ -1,5 +1,8 @@
 # ADR-0048: INGEST-LLM-CLASSIFIER — LLM clause classification (multi-label + confidence) as a non-destructive, upsert-style reclassify pass
 
+> **Status: SHELVED (ADR-0114).** The LLM clause-function classifier is shelved behind a flag; the trained SetFit ensemble is the default (ADR-0114), with classifier-first Step-3a (ADR-0115/0116).
+
+
 ## Context
 
 ADR-0047 retired the precomputed clause `function` as a *query* pre-filter. The label is now used only at

@@ -73,7 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-0.3** (root trio oriented with banners; not moved — amended at gate). Next up: **PREP-0.4**.
+Last approved: **PREP-0.4** (ADR index + 21 Status banners + deferred link fixes; RLM set parked). Next up:
+**PREP-0.5**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -131,7 +132,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   no ADR number changed.
 - Verify: a quick check script counting `docs/adr/0*.md` vs index rows; `rg -L "^> Status:" docs/adr/00{03,09,14}*.md`
   etc. confirms banners.
-- Files: `docs/adr/README.md` (new) + banner lines on ~21 ADR files. Deps: none. Status: todo.
+- Files: `docs/adr/README.md` (new) + banner lines on 21 ADR files. Deps: none. Status: **done** (index covers all
+  120; 21 Status banners added [0087 already self-labeled]; 4 deferred ADR-body link fixes from PREP-0.2 done
+  [0021/0033/0057/0110]; RLM set 0009/0014/0016/0019 also PARKED per user direction — revivable later; 0015
+  collision left to PREP-0.5).
 
 **PREP-0.5 — Repair the ADR-0015 numbering collision.**
 - Driver: baseline cleanup (two files claim 0015; one heading reads "ADR-00XX").

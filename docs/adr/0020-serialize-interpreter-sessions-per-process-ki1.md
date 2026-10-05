@@ -1,5 +1,8 @@
 # ADR-0020: Interpreter sessions must not coexist in one process (KI-1); serialize the interpreter step across concurrent document graphs
 
+> **Status: PARKED (ADR-0052).** Part of the GraphWright-era RLM-as-interpreter / dynamic-sub-agent runtime, which is parked. The engine's RLM today is authored SKILL.md content built as ordinary software (used by the `rlm_chunking` / `rlm_synthesis` capabilities); there is no interpreter or dynamic-dispatch runtime in this repo.
+
+
 Date: 2026-07-16. Status: Accepted. Records a cross-graph correctness constraint from GraphWright's KI-1
 resolution that RAG_Wright's ingestion harness must enforce, and closes the interpreter-concurrency
 dimension of SPEC OQ8 (ingestion batch sizes and worker counts). Confirms the current harness already
