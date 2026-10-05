@@ -182,15 +182,17 @@ def build_compliance_ingest(
 
 
 def production_compliance_ingestion(store: Any, *, model: Any, extract_override: Optional[ExtractReqFn] = None,
-                                    write_override: Optional[Any] = None, extraction_backend: str = "docling"):
-    """Wire the real capabilities: extract = the requirement_extraction SUBGRAPH (CC-2, extract->adapt through
-    the model seam -- Granite), write = `ComplianceStore(store).write_requirements` (ADR-0117 DD-1b: the Requirement
-    KG write is a capability-layer extension over the generic store, not a store method). `extract_override` /
-    `write_override` inject stubs for tests.
+                                    write_override: Optional[Any] = None, extraction_backend: str = "jev"):
+    """Wire the real capabilities: extract = the requirement_extraction SUBGRAPH (CC-2), write =
+    `ComplianceStore(store).write_requirements` (ADR-0117 DD-1b). `extract_override` / `write_override` inject
+    stubs for tests.
 
-    `extraction_backend` (ADR-0119): "docling" (default, unchanged -- the per-section docling-graph LLM extraction)
-    or "jev" (opt-in -- deterministic `operative_rule_spans` + one `jev_decision` call/span for the operative gate +
-    actor + claim_types + cue-deontic + verbatim text; applicability/evidence_standard left empty, see the act)."""
+    `extraction_backend` (ADR-0119): "jev" (DEFAULT since the corpus A/B -- deterministic `operative_rule_spans` +
+    one `jev_decision` call/span for the operative gate + actor + claim_types, cue-deontic, verbatim text; recall
+    1.00 vs the rubric gold, ~4.5x cheaper than docling, calibrated, full actor/claim coverage; applicability /
+    evidence_standard left empty). REQUIRES the reference pack loaded (`load_reference_pack`, so `jev_decision`
+    resolves) + the decision-model key (`OPENROUTER_API_KEY`, or a Laya decisions endpoint via the profile). Set
+    "docling" to fall back to the per-section docling-graph LLM extraction (no OpenRouter/Jev dependency)."""
     from rag_wright.capabilities.compliance_store import ComplianceStore
     from rag_wright.capabilities.requirement_extraction import ajev_extract_regulation_section
     from rag_wright.subgraphs.requirement_extraction import run_requirement_extraction
@@ -225,12 +227,14 @@ def _compliance_is_done(store: Any, source: str) -> Any:
 async def run_compliance_ingestion(
     sections_path: Any, store: Any, *, model: Any, source: str = "FTC 16 CFR 255",
     extract_override: Optional[ExtractReqFn] = None, write_override: Optional[Any] = None,
-    extraction_backend: str = "docling",
+    extraction_backend: str = "jev",
 ) -> IngestionReport:
     """Ingest a regulation (`sections.json`) into the Requirement KG: ensure the compliance schema, then map
     every section through the per-section subgraph via the generic corpus driver (X/N progress, per-section
     dead-letter, is_done resume). Point `store` at the compliance database (`ragwright_compliance`).
-    `extraction_backend` ("docling" default | "jev", ADR-0119) selects the requirement-extraction act."""
+    `extraction_backend` ("jev" DEFAULT since the corpus A/B | "docling" fallback, ADR-0119) selects the
+    requirement-extraction act; "jev" needs `load_reference_pack()` + `OPENROUTER_API_KEY` (see
+    `production_compliance_ingestion`)."""
     store.ensure_compliance_schema()
     graph = production_compliance_ingestion(
         store, model=model, extract_override=extract_override, write_override=write_override,
