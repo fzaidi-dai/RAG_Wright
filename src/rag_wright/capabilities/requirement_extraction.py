@@ -17,6 +17,7 @@ with the skill (an Agent-Skill asset), re-exported here for consumers/tests.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, Callable
 
 from rag_wright.capabilities.dg_extraction import aextract_parties, extract_parties
@@ -28,7 +29,8 @@ from rag_wright.skills.requirement_extraction.template import (  # the skill's s
 )
 
 __all__ = ["ExtractedRegulationSection", "ExtractedRequirement", "extract_regulation_section",
-           "operative_rule_spans", "to_requirements", "register_requirement_adaptation"]
+           "ajev_extract_regulation_section", "operative_rule_spans", "to_requirements",
+           "register_requirement_adaptation"]
 
 
 def operative_rule_spans(text: str) -> list[tuple[str, str]]:
@@ -50,6 +52,79 @@ def operative_rule_spans(text: str) -> list[tuple[str, str]]:
 
 _CLAIM_TYPES = {c.value for c in ClaimType}
 _DEONTIC = {d.value for d in DeonticType}
+
+# --- CIC (ADR-0119): the Jev-decision extraction act -- deterministic spans + ONE Jev call/span (operative gate +
+# claim_types + actor), cue-deontic, verbatim text. The question-sets are compliance-domain knowledge (they mirror
+# the ttl ClaimType/ActorRole vocabs; a later move into the .ttl per ADR-0066 is a documented follow-up). The open
+# fields applicability + evidence_standard are NOT produced here (open-vocab; a residual-LLM/ttl follow-up) -- for
+# FTC the claim_types ARE the applicability (claim_type constraints via `to_requirements`).
+_CLAIM_CRITERIA = {
+    "efficacy": "the product WORKS / is effective at its purpose (cures, treats, achieves the promised result)",
+    "comparative": "COMPARES the product to competitors or alternatives",
+    "pricing": "PRICE, discount, 'reduced', 'free', or savings",
+    "health": "HEALTH, medical, disease, nutrition, or bodily-safety",
+    "environmental": "ENVIRONMENTAL / green / eco / sustainable",
+    "endorsement": "ENDORSEMENTS, testimonials, reviews, or who may endorse",
+    "performance": "measurable HOW-WELL -- speed, durability, strength, capacity (not merely that it works)",
+    "guarantee": "a GUARANTEE, warranty, or money-back promise",
+}
+_ACTOR_ROLES = {
+    "advertiser": "the advertiser / marketer / manufacturer / brand making the claim",
+    "endorser": "the endorser / testimonial-giver / reviewer / influencer",
+    "expert": "an expert whose evaluation is relied upon",
+    "seller": "the seller / vendor / retailer, when named distinctly",
+    "consumer": "the consumer / customer / audience",
+    "employer": "the employer (workplace safety / injury recordkeeping)",
+    "other": "none of the above, multiple parties, or unspecified",
+}
+_JEV_GUIDANCE = (
+    "Guidance: 'This supplement cures insomnia' -> efficacy, health; 'lasts 3x longer than Brand X' -> "
+    "performance, comparative; 'reduced to $9.99' -> pricing; 'as recommended by Dr. Smith' -> endorsement. "
+    "Actor: who the rule binds (advertiser/endorser/expert/seller/consumer/employer).\n\nRule:\n")
+
+
+def _jev_questions() -> dict:
+    q = {"operative": {"type": "noul",
+                       "instructions": "Is this sentence itself a BINDING operative rule (obligation/prohibition/"
+                                       "permission or a binding liability/conditional consequence)?",
+                       "criteria": {"true": "it binds conduct directly",
+                                    "false": "an illustrative example, definition, scope, cross-reference, negated "
+                                             "requirement, or descriptive remark"}},
+         "actor": {"type": "choice", "instructions": "Who does this rule primarily bind?", "criteria": _ACTOR_ROLES}}
+    for ct, desc in _CLAIM_CRITERIA.items():
+        q[f"ct_{ct}"] = {"type": "noul", "instructions": f"Does this rule apply to {ct} advertising claims?",
+                         "criteria": {"true": desc, "false": f"not specifically about {ct}"}}
+    return q
+
+
+async def ajev_extract_regulation_section(
+    text: str, *, concurrency: int = 8, op_threshold: float = 0.5, ct_threshold: float = 0.6,
+) -> ExtractedRegulationSection:
+    """CIC (ADR-0119): the Jev-decision extraction act. Deterministic `operative_rule_spans` produces candidate
+    spans; ONE Jev call per span (routed through the capability layer, `jev_decision`) decides operative-gate +
+    actor + claim_types; deontic_type is the cue-rule; requirement_text is the verbatim span. Drops spans the Jev
+    operative gate rejects (< `op_threshold`). applicability/evidence_standard are left empty here (see note)."""
+    from rag_wright.capabilities.invoke import capability_impl
+
+    spans = operative_rule_spans(text)
+    if not spans:
+        return ExtractedRegulationSection(section="", requirements=[])
+    jev = capability_impl("jev_decision")  # async (resources, inputs) -> decision body; store-independent
+    questions = _jev_questions()
+    sem = asyncio.Semaphore(max(1, concurrency))
+
+    async def _one(span_text: str, deontic: str) -> ExtractedRequirement | None:
+        async with sem:
+            d = await jev(None, {"state": _JEV_GUIDANCE + span_text, "questions": questions})
+        ans = d["answers"]
+        if float(ans["operative"].get("noul", 0.0)) < op_threshold:
+            return None  # Jev gate: not a binding rule -> drop (refines the cue-presence gate's precision)
+        claim_types = [ct for ct in _CLAIM_CRITERIA if float(ans[f"ct_{ct}"].get("noul", 0.0)) >= ct_threshold]
+        return ExtractedRequirement(requirement_text=span_text, deontic_type=deontic,
+                                    actor=str(ans["actor"].get("choice", "")), claim_types=claim_types,
+                                    applicability=[], evidence_standard="")
+    reqs = [r for r in await asyncio.gather(*(_one(t, d) for t, d in spans)) if r is not None]
+    return ExtractedRegulationSection(section="", requirements=reqs)
 
 
 def _coerce_deontic(raw: str) -> tuple[DeonticType, bool]:

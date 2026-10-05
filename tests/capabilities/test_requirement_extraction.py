@@ -170,3 +170,64 @@ def test_operative_rule_spans_text_is_verbatim_not_paraphrased():
 def test_operative_rule_spans_empty_and_cueless():
     assert operative_rule_spans("") == []
     assert operative_rule_spans("This part describes definitions and scope.") == []  # no deontic cue -> nothing
+
+
+# --- CIC (ADR-0119): the Jev-decision extraction act (opt-in backend) ---
+import os  # noqa: E402
+
+import pytest  # noqa: E402
+
+from rag_wright.capabilities.requirement_extraction import ajev_extract_regulation_section  # noqa: E402
+
+_CT = ["efficacy", "comparative", "pricing", "health", "environmental", "endorsement", "performance", "guarantee"]
+
+
+async def test_ajev_extract_gates_fills_and_is_verbatim(monkeypatch):
+    import rag_wright.capabilities.invoke as inv
+
+    async def fake_jev(resources, inputs):
+        state = inputs["state"]
+        is_rule = ("must disclose" in state) or ("may not" in state)  # the Jev operative gate
+        ans = {"operative": {"noul": 0.9 if is_rule else 0.1}, "actor": {"choice": "advertiser"}}
+        for ct in _CT:
+            ans[f"ct_{ct}"] = {"noul": 0.8 if (ct == "endorsement" and "endorser" in state) else 0.1}
+        return {"answers": ans}
+
+    monkeypatch.setattr(inv, "capability_impl", lambda name: fake_jev)
+    text = ("Advertisers must disclose any material connection with an endorser. "
+            "Definitions in this part apply throughout. "
+            "An endorser may not misrepresent their actual experience.")
+    sec = await ajev_extract_regulation_section(text)
+    assert len(sec.requirements) == 2  # definition dropped (no cue); both operative spans pass the Jev gate
+    texts = [r.requirement_text for r in sec.requirements]
+    assert all(t in text for t in texts)  # VERBATIM
+    assert {r.deontic_type for r in sec.requirements} == {"obligation", "prohibition"}  # cue-rule
+    assert all(r.actor == "advertiser" for r in sec.requirements)
+    assert all("endorsement" in r.claim_types for r in sec.requirements)
+    assert all(r.applicability == [] for r in sec.requirements)  # open fields empty in this path (documented)
+
+
+async def test_ajev_extract_drops_spans_the_jev_gate_rejects(monkeypatch):
+    import rag_wright.capabilities.invoke as inv
+
+    async def all_nonrule(resources, inputs):
+        ans = {"operative": {"noul": 0.1}, "actor": {"choice": "other"}}
+        for ct in _CT:
+            ans[f"ct_{ct}"] = {"noul": 0.0}
+        return {"answers": ans}
+
+    monkeypatch.setattr(inv, "capability_impl", lambda name: all_nonrule)
+    sec = await ajev_extract_regulation_section("The seller must substantiate every efficacy claim.")
+    assert sec.requirements == []  # cue present but Jev gate says not-a-rule -> dropped
+
+
+@pytest.mark.model
+@pytest.mark.skipif(not os.getenv("OPENROUTER_API_KEY"), reason="OPENROUTER_API_KEY not set")
+def test_ajev_extract_live():
+    import asyncio
+    text = ("Endorsements must reflect the honest opinions of the endorser. "
+            "For purposes of this part, an endorsement means any advertising message. "
+            "An advertiser may not misrepresent a consumer's experience.")
+    sec = asyncio.run(ajev_extract_regulation_section(text))
+    assert len(sec.requirements) >= 2  # the two operative sentences; the definition is dropped
+    assert all(r.requirement_text in text and r.deontic_type for r in sec.requirements)
