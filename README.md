@@ -1,28 +1,55 @@
 # RAG_Wright
 
-A **domain-retargetable, open-core engine for hybrid retrieval + knowledge-graph RAG**. It parses documents,
-chunks and embeds them, runs hybrid (dense + sparse) search with reranking, extracts a knowledge graph with entity
-resolution, and answers cited, abstention-willing questions over a corpus — with provenance and confidence on every
-claim. Domain knowledge lives in an ontology (`.ttl`), not in code, so a new domain is a pack, not a fork.
+**A domain-retargetable, open-core engine for hybrid retrieval + knowledge-graph RAG.**
 
-> **Engine, not the product (ADR-0052).** This repository is the reusable **engine**. A user-facing product (e.g. a
-> contract-management + compliance app) is a separate repository that depends on it one way: **Product → Engine,
-> never the reverse.** A runnable **reference pack** (a contract/compliance worked example) ships here so the
-> open-core is demoable; your product brings its own domain pack.
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
+![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)
+![status: alpha](https://img.shields.io/badge/status-alpha-orange.svg)
 
-## What it gives you
+RAG_Wright parses documents, chunks and embeds them, runs hybrid (dense + sparse) search with reranking, extracts a
+knowledge graph with resolved entities, and answers **cited, abstention-willing** questions over a corpus — with
+provenance and confidence on every claim. What a document *means* (the vocabulary, schema, and constraints) lives in
+an ontology (`.ttl`), not in code, so standing up a **new domain is a pack, not a fork**.
+
+## Why it exists
+
+Building a retrieval + knowledge-graph system for a new domain usually means rebuilding the same plumbing every time,
+or hardcoding one domain so deeply that the next one is a rewrite. RAG_Wright splits the two:
+
+- the **engine** (this repo) is the reusable, domain-neutral machinery — ingestion and query pipelines, a capability
+  runtime, one store, and the model seam;
+- the **domain** is just an ontology pack + a few capabilities you author against the engine.
+
+Answers carry citations and will abstain rather than guess, because retrieval over real corpora has to be
+trustworthy. It is **open-core**: a user-facing product is a separate repo that depends on the engine one way
+(**Product → Engine, never the reverse**). A runnable **reference pack** (a contract/compliance worked example) ships
+here so the engine is demoable out of the box — your product brings its own domain pack, not this one.
+
+## What you get
 
 - **One store.** ArcadeDB holds both the hybrid retrieval index and the knowledge graph — no cross-store join to
   keep consistent.
 - **A capability runtime (ARD).** Parsing, chunking, embedding, hybrid search, reranking, graph extraction, entity
-  resolution, reasoning/generation and more are registered capabilities, invoked by name through one API. The
-  engine ships with an **empty catalog**; you register your domain's capabilities (or opt into the reference pack).
-- **Knowledge in the ontology.** Closed vocabularies, schema, constraints (SHACL) and mappings live in a `.ttl`
-  pack; code holds mechanism only.
-- **Model-neutral.** Model access is a profile seam — OpenRouter by default, self-hosted open models (vLLM) as a
-  supported mode — never a hardcoded provider.
-- **Typed, provenance-first, test-driven.** Shipped with `py.typed`; every answer carries citations; every
-  capability has an eval.
+  resolution, reasoning/generation and more are registered capabilities invoked by name through one API. The engine
+  ships with an **empty catalog**; you register your domain's capabilities (or opt into the reference pack).
+- **Knowledge in the ontology.** Closed vocabularies, schema, SHACL constraints and mappings live in a `.ttl` pack;
+  code holds mechanism only.
+- **Model-neutral.** Model access is a profile seam — OpenRouter by default, self-hosted open models (vLLM)
+  supported — never a hardcoded provider.
+- **Typed, provenance-first, test-driven.** Ships with `py.typed`; every answer carries citations; every capability
+  has an eval.
+
+## Documentation — start here
+
+The whole doc set is under [`docs/`](docs/). Pick your path:
+
+- **New here?** Read [Concepts](docs/concepts.md) (the mental model), then run the [Quickstart](docs/quickstart.md).
+- **Installing / configuring?** [Installation](docs/installation.md) → [Configuration](docs/configuration.md).
+- **Building a product on the engine?** The [domain-adaptation guide](docs/domain-adaptation/) walks the whole
+  sequence (author a `.ttl` pack → build & register capabilities → eval-first → ingest → entity resolution → the
+  product seam); a coding agent should drive it with the `using-the-rag-wright-engine` skill.
+- **Going deep?** [Architecture](docs/architecture.md), the generated [API reference](docs/api/), the
+  [Reference pack](docs/reference-pack.md), and the [ADR index](docs/adr/README.md).
 
 ## Install
 
@@ -30,18 +57,15 @@ claim. Domain knowledge lives in an ontology (`.ttl`), not in code, so a new dom
 uv add rag-wright
 ```
 
-Runtime prerequisites:
-
-- **ArcadeDB** (the single store) — run it locally with Docker; see [`docs/ArcadeDB_Local.md`](docs/ArcadeDB_Local.md).
-- **A model provider** — an OpenRouter key by default, or a self-hosted open-model endpoint (the model-profile seam).
-- **Optional spaCy NER** — `uv pip install 'rag-wright[ner]'` then `uv run python -m spacy download en_core_web_sm`
-  (the model is a runtime download, not a packaged dependency; configurable via `RAG_SPACY_MODEL`).
+Runtime prerequisites: **ArcadeDB** (the store — run it locally with Docker, see
+[`docs/installation.md`](docs/installation.md)); **a model provider** (an OpenRouter key by default, or a self-hosted
+endpoint); and, only for NER, the optional extra `uv pip install 'rag-wright[ner]'` + `uv run python -m spacy
+download en_core_web_sm`.
 
 ## Quickstart (shape)
 
-The whole public surface is `rag_wright.api`. A minimal "open a workspace and ask a question over the reference
-pack" looks like this; the full, runnable walkthrough (including ingesting a document) is in
-[`docs/quickstart.md`](docs/quickstart.md).
+The whole public surface is `rag_wright.api`. The full runnable walkthrough (ingest a document, then query it) is in
+[`docs/quickstart.md`](docs/quickstart.md) / [`examples/quickstart.py`](examples/quickstart.py):
 
 ```python
 import asyncio
@@ -60,26 +84,17 @@ async def main():
 asyncio.run(main())
 ```
 
-## Documentation
+## Status
 
-Current and being consolidated under [`docs/`](docs/) (engine-prep WS2):
-
-- [Concepts](docs/concepts.md) · [Architecture](docs/architecture.md) — the mental model and the engine/product boundary
-- [Installation](docs/installation.md) · [Configuration](docs/configuration.md) · [Quickstart](docs/quickstart.md)
-- [API reference](docs/api/) — generated from `rag_wright.api`
-- [Reference pack](docs/reference-pack.md) — the contract/compliance worked example
-- [Building a new domain](docs/domain-adaptation/) — the domain-adaptation guide (ontology, KG, entity resolution, capabilities, evals)
-- [Architecture Decision Records](docs/adr/README.md) — the grouped decision index
-- [Engine-platform spec](docs/specs/engine-platform/SPEC.md) — the engine API + capability runtime boundary
+Alpha, and not yet on PyPI — install from source or a git/path dependency for now. The bundled reference pack is a
+worked example, not the product; restrictively-licensed evaluation corpora (CUAD/ACORD) are not shipped.
 
 ## Development
 
 Python with uv (never bare `python`/`pip`):
 
 ```sh
-uv sync                 # create the environment from pyproject.toml + uv.lock
-uv run pytest           # run the tests
-uv run ruff check .     # lint
+uv sync && uv run pytest && uv run ruff check .
 ```
 
 ## Layout
@@ -96,9 +111,7 @@ src/rag_wright/
   reference/     the reference-pack facades (the worked example)
   mcp/           MCP tool surfaces over registered capabilities
   skills/        authored capability SKILL.md content
-eval/            the evaluation suite + golden sets by archetype
-tests/           pytest (contract, capability, and architecture tests)
-docs/            documentation; docs/archive/ holds superseded/historical material
+docs/            documentation (docs/archive/ holds superseded/historical material)
 ```
 
-Licensed under MIT. Working rules for coding agents are in [`CLAUDE.md`](CLAUDE.md).
+Licensed under [MIT](LICENSE). Working rules for coding agents are in [`CLAUDE.md`](CLAUDE.md).
