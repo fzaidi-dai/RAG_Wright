@@ -196,4 +196,4 @@ Two registries:
 
 ## Pointers
 ADRs `docs/adr/` (esp. 0033 unified KG, 0045 tag-parse, 0052 engine/product, 0066 ontology-as-truth,
-0079–0082 the current ingestion arc). Ledger: `tasks.md`. Handoff: `docs/handoff/2026-09-05_tagparse-ingestion-and-granite-4.2_rulewright.md`.
+0079–0082 the current ingestion arc). Ledger: `tasks.md`. Handoff: `docs/archive/handoffs/2026-09-05_tagparse-ingestion-and-granite-4.2_rulewright.md`.

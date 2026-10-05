@@ -1,4 +1,4 @@
-"""EDGAR entity acquisition logic (T7, docs/Corpus_Acquisition.md).
+"""EDGAR entity acquisition logic (T7, docs/archive/plans/Corpus_Acquisition.md).
 
 Pure logic; the throttled/cached fetch and the CLI live in `scripts/acquire_edgar.py`.
 

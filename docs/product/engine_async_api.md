@@ -147,4 +147,4 @@ from its in-process subgraph identity (`kind="subgraph"`), same output contract.
 - ADR-0057 — async engine architecture (the deadline model).
 - ADR-0052 — engine/product split; GraphWright parked; ARD standing.
 - ADR-0050 — async LangGraph ingestion (the job/dead-letter model).
-- `docs/plans/async-migration.md` — the phased migration record.
+- `docs/archive/plans/async-migration.md` — the phased migration record.

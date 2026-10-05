@@ -73,7 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-0.1** (archive home created). Next up: **PREP-0.2**.
+Last approved: **PREP-0.2** (70 delivered docs archived + inbound links fixed). Next up: **PREP-0.3**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -100,7 +100,8 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   link; `git log --follow` shows history preserved.
 - Verify: `rg -n "docs/(results|plans|design|handoff|engine-issues)/" docs README.md` returns only archive-relative
   or updated links; `git status` shows renames.
-- Files: the moves above + any link fixes. Deps: PREP-0.1. Status: todo.
+- Files: the moves above + any link fixes. Deps: PREP-0.1. Status: **done** (70 files; 7 current-doc/source
+  links fixed; ADR-body links deferred to PREP-0.4; `tasks.md` internal refs left as historical record).
 
 **PREP-0.3 — Archive the legacy root ledger & plan (confirm at gate).**
 - Driver: Decision 2; the active ledgers are the engine-platform `TASKS.md` and this plan.

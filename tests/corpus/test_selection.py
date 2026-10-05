@@ -1,4 +1,4 @@
-"""Tests for CUAD subset selection (T7, RAC-7, docs/Corpus_Acquisition.md).
+"""Tests for CUAD subset selection (T7, RAC-7, docs/archive/plans/Corpus_Acquisition.md).
 
 The subset is a deliberate recorded filter over the full pull, chosen for archetype coverage, NOT a
 first-N slice. These tests pin the coverage guarantees: scanned PDFs are included (vision-to-text

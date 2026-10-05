@@ -1,4 +1,4 @@
-"""CUAD parsing + scanned-PDF detection (T7, docs/Corpus_Acquisition.md).
+"""CUAD parsing + scanned-PDF detection (T7, docs/archive/plans/Corpus_Acquisition.md).
 
 `party_entities` extracts the real company parties from the CUAD `Parties` annotation, which mixes
 company names with defined-term role labels ("Company", "MA", "Marketing Affiliate"). It keeps only

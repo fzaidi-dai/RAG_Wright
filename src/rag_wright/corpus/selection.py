@@ -1,4 +1,4 @@
-"""CUAD subset selection (T7, docs/Corpus_Acquisition.md).
+"""CUAD subset selection (T7, docs/archive/plans/Corpus_Acquisition.md).
 
 The subset is a **deliberate, recorded filter over the full CUAD pull, chosen for archetype
 coverage, never a first-N slice**. Given per-contract metadata, `select_subset` picks ~100-150

@@ -1,5 +1,5 @@
 # Unified Contract KG — the bridge ontology (KG-1, ADR-0033).
-# Design: docs/unified_contract_kg_ontology_bridge.md (KG-0, schema-review gate approved 2026-07-28).
+# Design: docs/archive/plans/unified_contract_kg_ontology_bridge.md (KG-0, schema-review gate approved 2026-07-28).
 #
 # Small, closed-vocabulary bridge. Three grounding layers: FOLIO (clause-type IRIs), ODRL 2.2 (rights/duties
 # spine + odrl:constraint for cap/temporal bounds), and PROV-O (provenance). Compiled to a Pydantic clause
