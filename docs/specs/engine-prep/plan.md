@@ -73,8 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.5** (capability-registration surface re-exported from `rag_wright.api`). **WS0 complete.**
-Next up: **PREP-1.6**.
+Last approved: **PREP-1.6** (clean-venv install gate PASS). **WS0 + WS1 complete.** Next up: **PREP-2.1** (WS2).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -219,7 +218,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   are present in site-packages; `py.typed` present.
 - Acceptance: the script exits 0 against the built wheel.
 - Verify: `bash scripts/verify_wheel_install.sh` (shown at the gate).
-- Files: `scripts/verify_wheel_install.sh` (new). Deps: PREP-1.1–1.5. Status: todo.
+- Files: `scripts/verify_wheel_install.sh` (new). Deps: PREP-1.1–1.5. Status: **done** (PASS: resolved 260 pkgs +
+  installed clean from the index, no direct-URL dep, `spacy` absent [extra]; 17 api symbols incl the re-exports;
+  py.typed + 2 ttls + 11 SKILL.md shipped; all resolved from site-packages). **WS1 complete.**
 
 ### WS2 — Core docs (grounded; runnable quickstart)
 
