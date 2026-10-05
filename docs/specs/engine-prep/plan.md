@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.4** (`entity-resolution.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.6**
-(PREP-4.5 awaiting approval).
+Last approved: **PREP-4.5** (`authoring-capabilities.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.7**
+(PREP-4.6 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -383,7 +383,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   Cross-link the `setfit`/`laya`/`creating-evals` skills.
 - Acceptance: a developer can decide rule vs classifier vs decision-model vs LLM and knows which skill to open.
 - Verify: cross-links resolve; grounded against `models/profiles.py` + `capabilities/jev_decision.py`.
-  Files: `docs/domain-adaptation/classification-and-decision-models.md`. Deps: PREP-4.1. Status: todo.
+  Files: `docs/domain-adaptation/classification-and-decision-models.md`. Deps: PREP-4.1. Status: **awaiting-approval**
+  (the opportunity-shape→mechanism table; SetFit vs Jev vs Laya with the A/B framing [reference numbers marked
+  directional]; eval-first as the judge; wire as a `model` cap on a `DecisionModelProfile`, questions in the `.ttl`,
+  graceful-degrade; the identify→eval→build→register skill chain. Domain-neutral).
 
 **PREP-4.7 — Engine-gaps register.**
 - What: `docs/domain-adaptation/_engine-gaps.md` — every under-exposed seam the guide work surfaced (ER exposure,
