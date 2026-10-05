@@ -6,6 +6,14 @@ embedders (EP-API-4). The product imports from here; it never reaches the store/
 from __future__ import annotations
 
 from rag_wright.api.config import EngineConfig, EngineOptions, IngestOptions, StoreConfig
+# The capability-registration surface lives in capabilities.manifests; re-export it here (PREP-1.5) so the public
+# story is uniformly "everything is rag_wright.api". The original import path keeps working — these are the same
+# objects, not a fork.
+from rag_wright.capabilities.manifests import (
+    load_reference_pack,
+    reference_pack,
+    register_capability,
+)
 from rag_wright.api.documents import aparse_document, parse_document, source_document
 from rag_wright.api.ids import decode_bbox, document_of, id_source
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
@@ -20,4 +28,5 @@ __all__ = [
     "document_of", "id_source", "decode_bbox",
     "source_document", "parse_document", "aparse_document",
     "measure_usage", "UsageTotals", "ModelUsage",
+    "register_capability", "load_reference_pack", "reference_pack",
 ]

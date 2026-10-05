@@ -73,7 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.4** (`py.typed` ships in the wheel). **WS0 complete.** Next up: **PREP-1.5**.
+Last approved: **PREP-1.5** (capability-registration surface re-exported from `rag_wright.api`). **WS0 complete.**
+Next up: **PREP-1.6**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -206,7 +207,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: `from rag_wright.api import register_capability, load_reference_pack, reference_pack` works and so do
   the old paths; no circular import.
 - Verify (TDD): a test importing both paths and asserting identity (red first); `uv run pytest`.
-- Files: `src/rag_wright/api/__init__.py`, a test. Deps: none (parallel to 1.1–1.4). Status: todo.
+- Files: `src/rag_wright/api/__init__.py`, `tests/api/test_capability_reexports.py`. Deps: none. Status: **done**
+  (re-exported all three from `rag_wright.api`, added to `__all__`; same objects as `capabilities.manifests`
+  [identity-asserted], old path intact; import-linter domain-free contract still passes; suite 1694 / 88 skipped).
 
 **PREP-1.6 — Clean-venv install validation (the packaging gate).**
 - Driver: "live test at the gate" for packaging; proves the consumer path.
