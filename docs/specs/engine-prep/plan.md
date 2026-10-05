@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.2** (`ontology-authoring.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.4**
-(PREP-4.3 awaiting approval).
+Last approved: **PREP-4.3** (`kg-construction.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.5**
+(PREP-4.4 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -359,7 +359,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   under-exposed for a new domain. Any genuine engine gap is logged in PREP-4.7, not hand-waved.
 - Acceptance: an honest account of current ER + a named list of what a new domain cannot yet do cleanly.
 - Verify: grounded against `ontology/` ER code + `api/kg.py`. Files: `docs/domain-adaptation/entity-resolution.md`.
-  Deps: PREP-4.1. Status: todo.
+  Deps: PREP-4.1. Status: **awaiting-approval** (the two phases disambiguation→resolution, closed-world/never-fabricate;
+  the generic injectable `EntityRegistry`/`EntityResolver` [ADR-0067/0013/0004]; how a domain declares entity types +
+  provides/ wires a resolver; the `entity_id` rule; the exposure gap flagged + logged in PREP-4.7; EDGAR/CIK only as
+  the reference example).
 
 **PREP-4.5 — `authoring-capabilities.md`.**
 - What: building & registering domain capabilities — the kinds; `impl_ref` invocable-by-name (the 9-of-36 pattern)
@@ -383,6 +386,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   the api re-export [resolved in 1.5], the spacy-model requirement, the ArcadeDB prerequisite, any
   domain-assumption leak), each with a proposed resolution; cross-post the real engine items into the
   engine-platform `TASKS.md` as follow-ups.
+- SURFACED (PREP-4.4): no public seam to supply a domain's entity resolver/registry. `entity_resolution` +
+  `entity_disambiguation` are internal pipeline steps (ADR-0118), not invocable-by-name, and `rag_wright.api` /
+  `EngineConfig` have no "bring your resolver" hook — a domain must wire its `EntityRegistry`/`EntityResolver` inside
+  its own ingestion subgraph. Propose: a resolver/registry hook on `EngineConfig` or an `api` helper. (ER itself is
+  already domain-neutral + injectable per ADR-0067; this is an exposure gap, not a coupling one.)
 - SURFACED (PREP-4.1 doc audit): the engine's PUBLIC config/env names carry contract-domain vocabulary —
   `IngestOptions.clause_concurrency` / `clause_samples`, `CLAUSE_CONCURRENCY` / `RAG_INGEST_CLAUSE_*` /
   `RAG_SETFIT_CLAUSE_DIR`, and the `Clause`/`function` KG types. A de-domaining gap in the surface a new (non-contract)
