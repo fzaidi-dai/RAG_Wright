@@ -522,7 +522,9 @@ def test_actor_matches_recall_first_and_ontology_disjoint(monkeypatch):
     assert actor_matches("endorser", {"endorser"})                             # exact
     assert actor_matches("advertiser", {"seller"})                             # ISSUE 0013: overlapping ad roles MATCH
     assert actor_matches("advertiser", {"endorser"})                           # same domain -> compatible (recall-first)
-    assert actor_matches("employer", {"advertiser"})                           # employer UNMODELLED -> compatible
+    assert not actor_matches("employer", {"advertiser"})                       # ADR-0119: employer is now a MODELLED
+    #                                                                            workplace role -> disjoint from an ad role
+    assert actor_matches("inspector", {"advertiser"})                          # a genuinely UNMODELLED role -> compatible
     assert actor_matches("party", {"endorser"})                                # generic rule actor -> recall-first
     assert actor_matches("endorser", set())                                    # subject has no actor -> recall-first
     assert not roles_disjoint("advertiser", "seller")                          # same domain -> not disjoint

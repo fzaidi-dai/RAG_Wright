@@ -62,7 +62,22 @@ def test_actor_synonyms_are_authoritative_in_the_ttl() -> None:
     assert syn["physician"] == "expert"
     assert syn["customer"] == "consumer"
     assert syn["vendor"] == "seller"
-    assert len(syn) == 20  # the full role pack (5 roles x their synonyms)
+    assert syn["establishment"] == "employer"  # ADR-0119: employer (workplace) role added
+    assert len(syn) == 23  # 5 advertising roles (20) + employer's 3 altLabels
+
+
+def test_decision_criteria_are_authoritative_in_the_ttl() -> None:
+    # ADR-0119: the Jev decision knowledge (claim-type + actor criteria, operative rubric) is loaded from the ttl,
+    # not hardcoded in the capability. A ttl edit that drops a criterion is caught here.
+    from rag_wright.ontology.loader import (
+        load_actor_role_criteria, load_claim_type_criteria, load_operative_rubric,
+    )
+    ct = load_claim_type_criteria()
+    assert set(ct) == {m.value for m in ClaimType} and all(ct.values())  # every ClaimType has a criterion
+    ar = load_actor_role_criteria()
+    assert {"advertiser", "endorser", "expert", "seller", "consumer", "employer"} <= set(ar) and all(ar.values())
+    rub = load_operative_rubric()
+    assert rub["instructions"] and rub["true"] and rub["false"]  # the operative gate's instructions + both criteria
 
 
 def test_ftc_domain_pack_section_overrides() -> None:

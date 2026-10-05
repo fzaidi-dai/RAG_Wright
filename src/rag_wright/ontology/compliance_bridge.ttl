@@ -143,3 +143,44 @@ cmp:appliesToClaimType a owl:ObjectProperty ; rdfs:domain cmp:SectionOverride ; 
 cmp:Verdict a owl:Class ; skos:prefLabel "Compliance verdict" ;
     owl:oneOf ( cmp:compliant cmp:violation cmp:needs_review ) .
 cmp:compliant a cmp:Verdict . cmp:violation a cmp:Verdict . cmp:needs_review a cmp:Verdict .
+
+# =============================================================================
+# Decision criteria (ADR-0119) — the typed-decision (Jev) question knowledge, authored here (NOT in capability
+# code) per ADR-0066. `cmp:decisionCriterion` is a vocab member's one-line criterion for a yes/no (noul) or a
+# choice option; `cmp:DecisionQuestion` holds a binary gate's instructions + true/false criteria. The engine's
+# `jev_decision` question-builder reads these from the ttl; the few-shot/prompt framing stays a code overlay.
+# =============================================================================
+cmp:decisionCriterion a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    skos:prefLabel "decision criterion" ;
+    rdfs:comment "A one-line criterion for a vocab member as a typed-decision answer option (ADR-0119)." .
+
+# ClaimType criteria (the 8 noul questions: 'does this rule apply to <type> claims?')
+cmp:efficacy      cmp:decisionCriterion "the product WORKS / is effective at its purpose (cures, treats, achieves the promised result); NOT mere speed/durability" .
+cmp:comparative   cmp:decisionCriterion "COMPARES the product to competitors or alternatives (better than, #1, versus)" .
+cmp:pricing       cmp:decisionCriterion "PRICE, discount, 'reduced', 'free', 2-for-1, or savings" .
+cmp:health        cmp:decisionCriterion "HEALTH, medical, disease, nutrition, or bodily-safety" .
+cmp:environmental cmp:decisionCriterion "ENVIRONMENTAL / green / eco / sustainable / biodegradable" .
+cmp:endorsement   cmp:decisionCriterion "ENDORSEMENTS, testimonials, reviews, or who may endorse" .
+cmp:performance   cmp:decisionCriterion "measurable HOW-WELL -- speed, durability, strength, capacity, output level (not merely that it works)" .
+cmp:guarantee     cmp:decisionCriterion "a GUARANTEE, warranty, or money-back promise" .
+
+# ActorRole criteria (the actor `choice` options) + the workplace-domain `employer` role (OSHA).
+cmp:advertiser cmp:decisionCriterion "the advertiser / marketer / manufacturer / brand making the claim" .
+cmp:endorser   cmp:decisionCriterion "the endorser / testimonial-giver / reviewer / influencer" .
+cmp:expert     cmp:decisionCriterion "an expert whose evaluation is relied upon" .
+cmp:seller     cmp:decisionCriterion "the seller / vendor / retailer, when named distinctly" .
+cmp:consumer   cmp:decisionCriterion "the consumer / customer / audience" .
+cmp:employer a cmp:ActorRole ; skos:prefLabel "employer" ; cmp:roleDomain "workplace" ;
+    skos:altLabel "establishment", "worksite", "employing entity" ;
+    cmp:decisionCriterion "the employer responsible (workplace safety / injury recordkeeping)" .
+
+# The operative-rule binary gate (ADR-0119): is a span itself a binding rule?
+cmp:DecisionQuestion a owl:Class ; skos:prefLabel "Decision question" ;
+    rdfs:comment "A typed yes/no decision: instructions + the true/false criteria a decision model is asked." .
+cmp:questionInstructions a owl:DatatypeProperty ; rdfs:domain cmp:DecisionQuestion ; rdfs:range xsd:string .
+cmp:criterionTrue  a owl:DatatypeProperty ; rdfs:domain cmp:DecisionQuestion ; rdfs:range xsd:string .
+cmp:criterionFalse a owl:DatatypeProperty ; rdfs:domain cmp:DecisionQuestion ; rdfs:range xsd:string .
+cmp:operativeRuleQuestion a cmp:DecisionQuestion ;
+    cmp:questionInstructions "Is this sentence itself a BINDING operative rule (obligation/prohibition/permission or a binding liability/conditional consequence)?" ;
+    cmp:criterionTrue "it binds conduct directly" ;
+    cmp:criterionFalse "an illustrative example, definition, scope, cross-reference, negated requirement, or descriptive remark" .

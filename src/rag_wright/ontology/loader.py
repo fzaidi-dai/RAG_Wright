@@ -115,6 +115,58 @@ def load_actor_synonyms(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]
 
 
 @lru_cache(maxsize=4)
+def load_claim_type_criteria(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
+    """ADR-0119: `{ClaimType local-name -> cmp:decisionCriterion}` -- the one-line criterion each claim type uses
+    as its typed-decision (noul) question. Authored in compliance_bridge.ttl, not in capability code (ADR-0066)."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    crit = URIRef(_CMP + "decisionCriterion")
+    out: dict[str, str] = {}
+    for m in g.subjects(RDF.type, URIRef(_CMP + "ClaimType")):
+        c = g.value(m, crit)
+        if c is not None:
+            out[str(m).rsplit("#", 1)[-1]] = str(c)
+    return out
+
+
+@lru_cache(maxsize=4)
+def load_actor_role_criteria(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
+    """ADR-0119: `{ActorRole prefLabel -> cmp:decisionCriterion}` -- the actor `choice` options + their criteria,
+    from the ttl (includes the workplace-domain `employer`). Authored in the ontology, not capability code."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    crit = URIRef(_CMP + "decisionCriterion")
+    out: dict[str, str] = {}
+    for role in g.subjects(RDF.type, URIRef(_CMP + "ActorRole")):
+        c = g.value(role, crit)
+        label = str(g.value(role, SKOS.prefLabel) or str(role).rsplit("#", 1)[-1]).strip().lower()
+        if c is not None and label:
+            out[label] = str(c)
+    return out
+
+
+@lru_cache(maxsize=4)
+def load_operative_rubric(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
+    """ADR-0119: the operative-rule binary gate's `{instructions, true, false}` from `cmp:operativeRuleQuestion`
+    in compliance_bridge.ttl -- the decision knowledge the `jev_decision` gate asks, authored in the ontology."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    q = URIRef(_CMP + "operativeRuleQuestion")
+
+    def _v(prop: str) -> str:
+        v = g.value(q, URIRef(_CMP + prop))
+        return str(v) if v is not None else ""
+
+    return {"instructions": _v("questionInstructions"), "true": _v("criterionTrue"), "false": _v("criterionFalse")}
+
+
+@lru_cache(maxsize=4)
 def load_role_domains(path: str = str(_COMPLIANCE_TTL_PATH)) -> dict[str, str]:
     """ADR-0068 (engine issue 0013): the DISJOINTNESS knowledge for the actor gate -- `{canonical role -> domain}`
     built from each `cmp:ActorRole`'s `skos:prefLabel` (canonical) -> `cmp:roleDomain`. Two roles are disjoint iff
