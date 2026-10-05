@@ -73,7 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: — (plan under review). Next up: **PREP-0.1** on approval.
+Last approved: **PREP-0.1** (archive home created). Next up: **PREP-0.2**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -88,7 +88,7 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: the folder + README exist; README names the current source-of-truth docs.
 - Verify: `ls docs/archive` + read README.
 - Files: `docs/archive/**` (new).
-- Deps: none. Status: todo.
+- Deps: none. Status: **done**.
 
 **PREP-0.2 — Archive delivered plans / handoffs / results / design / engine-issues.**
 - Driver: Decision 2.
