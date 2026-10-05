@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-2.6** (`docs/reference-pack.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.2**
-(PREP-4.1 awaiting approval).
+Last approved: **PREP-4.1** (domain-adaptation guide). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.3**
+(PREP-4.2 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -336,7 +336,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   examples. Cross-link the ontology loaders.
 - Acceptance: a new-domain author can write + load + validate a pack; grounded against `ontology/loader.py`.
 - Verify: Graphify checks of the loader functions named. Files: `docs/domain-adaptation/ontology-authoring.md`.
-  Deps: PREP-4.1. Status: todo.
+  Deps: PREP-4.1. Status: **awaiting-approval** (generic `eng:` schema-declaration mechanism [KgVertexType/
+  KgStructuralEdge/EntityNodeType], SHACL constraints, SKOS synonyms; `EngineConfig(pack=…)`→`ensure_schema`
+  load path; ADR-0066 source-of-truth + CI-drift; a NEUTRAL toy pack example, contract bridges only as the labelled
+  reference; cited loader symbols + the drift test verified to exist).
 
 **PREP-4.3 — `kg-construction.md`.**
 - What: how ingestion builds the KG (parse → chunk → segment → extract → graph), the two graphs (entity KG vs
