@@ -251,3 +251,28 @@ replacing the lifted functions with engine calls. Match the reference seam's sha
   (opaque, non-empty); CIK *format* moved to the SEC pack (`corpus/edgar.normalize_cik`). Product action: `EntityId(cik=)`
   → `EntityId(value=)`, `eid.cik` → `eid.value`; stop assuming `.value` is a CIK. No KG migration. (See "De-domaining the
   entity layer"; DD-3/DD-5 to follow.)
+
+## 2026-10-05 — Compliance ingest decision layer flipped to Jev (ADR-0119): PRODUCT ACTION
+
+The compliance requirement-extraction backend changed. **`extraction_backend` now defaults to `"jev"`** (was
+`"docling"`) in `run_compliance_ingestion` / `run_compliance_document_ingestion` / `production_compliance_ingestion`.
+
+**Why:** the corpus A/B showed the Jev typed-decision path has recall 1.00 vs the rubric gold (docling both
+over-extracts definitions sections and under-extracts long ones), is ~4.5× cheaper, calibrated, with full actor +
+claim_type coverage. The decision knowledge (operative rubric, claim-type + actor criteria) is authored in
+`compliance_bridge.ttl`; a gated residual LLM fills the open fields (applicability / evidence_standard) only for
+rules with a conditional/evidence cue.
+
+**Product action — do ONE of:**
+- **Pass nothing** — the default (`"jev"`) applies. Recommended: this keeps the product in sync with the engine
+  default automatically.
+- **Pass `extraction_backend="jev"`** explicitly — same result, explicit.
+
+Either way, the jev path **requires** (a) the reference pack loaded (`load_reference_pack()`, so the `jev_decision`
+capability resolves) and (b) `OPENROUTER_API_KEY` (the decision-model key) — or a Laya/alternative decisions
+endpoint configured via the `DecisionModelProfile` (`RAG_DECISION_MODEL` / `DECISION_PROFILES`).
+
+**Do NOT pin `extraction_backend="docling"`** unless you specifically need the no-OpenRouter LLM path — it is the
+fallback, not the path we validate going forward. When an **open-weight Jev equivalent** (e.g. a SemIf-OpenJev /
+Laya-served decisions endpoint) is adopted, it will be a `DecisionModelProfile` swap — **no product code change** if
+you took the default. So: **pass nothing (preferred) or `"jev"`, and stay on the default.**
