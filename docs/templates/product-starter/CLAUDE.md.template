@@ -1,0 +1,191 @@
+# CLAUDE.md: {{PRODUCT_NAME}} (the product)
+
+Project memory and working rules for Claude Code, for the **{{PRODUCT_NAME}} product** repo. Read this in full at
+the start of every session. This is the user-facing product ({{PRODUCT_DOMAIN}}) built ON TOP of the RAG_Wright
+engine — a separate repo that depends on the open-core engine, one way.
+
+> **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}` (where
+> the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it — `uv add rag-wright`, a path dep, or git),
+> `{{STACK}}` (your backend/frontend/model/infra choices), the grounding-lane paths, the `{{SPEC}}`/`{{PLAN}}`/
+> `{{TASKS}}` scheme, and `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill, if any). The generic core
+> below — the boundary, grounding discipline, skills, working loop, memory, version control, boundaries — stays as
+> written.
+
+> Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
+
+---
+
+## 0. Project parameters
+
+| Parameter | Value | What it controls |
+|---|---|---|
+| Project name | {{PRODUCT_NAME}} | The title |
+| What it is | The user-facing **product** for {{PRODUCT_DOMAIN}}, over the RAG_Wright engine. | Scope |
+| Spec | `{{SPEC}}` — the single source of truth (requirements `{{REQ_SCHEME}}`, acceptance `{{AC_SCHEME}}`). | Source of truth |
+| Plan / tasks | `{{PLAN}}` (build order) · `{{TASKS}}` (the ledger). | Build order + ledger |
+| Engine dependency | **RAG_Wright** (open-core engine) via `{{ENGINE_DEP}}`; repo at `{{ENGINE_PATH}}` as a read/reference directory. One-way: **Product → Engine**. | The boundary |
+| Stack | {{STACK}} · Python 3.12 + uv (pinned `>=3.12,<3.13` to match the engine). | Environment |
+| Grounding | **Graphify lanes** (section "Grounding"): `engine` · `project` (+ the docs lane). | Grounding |
+
+### The engine / product boundary (read this first) — mirrors engine ADR-0052
+
+- **This repo is the PRODUCT.** The **RAG_Wright ENGINE** (open-core) is a separate repo it depends on. The engine
+  owns the capabilities, ingestion/query pipelines, MCP servers, ARD, and the ontology machinery. This repo owns
+  UI/UX, the product tool surface, orchestration, data-source integrations, guardrails, and the user loops.
+- **Dependency is strict and one-way: Product → Engine, never the reverse.** Consume the engine; do not fork it.
+  **Never modify the engine from this repo or session.** If the product needs an engine capability or change, FLAG
+  it and make that change in the engine repo (`{{ENGINE_PATH}}`), where the engine's own CLAUDE.md governs.
+- **The whole engine surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
+  invokers, `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack` — never engine internals
+  (`ArcadeDBStore`, `query_embedder`, engine id formats). The product never touches the store directly.
+- **Your domain is a `.ttl` pack + capabilities, authored HERE against the engine** (the engine is
+  domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
+  template, never as your domain). Follow the engine's domain-adaptation guide.
+- **GraphWright is PARKED (ADR-0052).** There is no orchestration compiler; the product hand-builds orchestration.
+
+---
+
+## Grounding: index before code
+
+**Two jobs, never confused.** The **code graph** is the authority for what exists and its exact signature; the
+**docs** explain how a thing is meant to be used. Order on any unfamiliar surface: **docs to understand, code to
+confirm, then write.** A method name seen in prose is never confirmation. **No code that calls a library is written
+before that library is in a graph** — declare + install → build/refresh the graph → write the grounded call.
+
+| Lane | Path | Authority for |
+|---|---|---|
+| `engine` | `{{ENGINE_LANE_PATH}}` | the installed `rag_wright` package — every `rag_wright.api` call grounds here first |
+| `project` | `{{PROJECT_LANE_PATH}}` | this product's own code + libraries |
+
+The **`using-the-rag-wright-engine`** skill is the engine-usage playbook: how to install, build these lanes, ground
+every engine call, and follow the build sequence. Load it before engine work.
+
+---
+
+## Skills: check for an applicable one before starting work
+
+Follow `using-agent-skills` (the meta-skill). **Check for an applicable skill before any task, and invoke every
+relevant one.** Skills are workflows — follow their steps and verification, do not skip.
+
+| When | Skill |
+|---|---|
+| Using / calling the engine | **`using-the-rag-wright-engine`** |
+| Authoring a domain `.ttl` / KG / ER / capability | the engine's domain-adaptation guide + **`authoring-a-capability`** |
+| Writing a capability's eval (do it first, TDD) | **`creating-evals`** |
+| Deciding rule vs classifier vs decision-model vs LLM | **`classifier-opportunity-analysis`** → **`setfit`** / **`laya`** |
+| Bulk teacher-labeling for training data | **`qwen-vllm-modal`** |
+| Before writing any library call | `library-grounding` (mandatory) |
+| Implementing anything | `incremental-implementation` + `test-driven-development` |
+| Loading the right context per task | `context-engineering` |
+| Verifying against official docs | `source-driven-development` |
+| Something broke | `debugging-and-error-recovery` |
+| An architectural decision was made | `documentation-and-adrs` |
+| Before merging | `code-review-and-quality` |
+| Requirements are vague | `interview-me`, then `idea-refine` |
+| UI work (if any) | `{{PROJECT_FRONTEND_SKILL}}` + `frontend-ui-engineering` |
+
+The engine-authored skills (`using-the-rag-wright-engine`, `authoring-a-capability`, `creating-evals`,
+`classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`) ship in the engine repo's `.claude/skills/`;
+the generic ones are the shared (Addy Osmani) set. The one-time setup links both into this repo's `.claude/skills/`
+(see the playbook).
+
+## Engine documentation (not shipped in the wheel — read in the engine repo / on GitHub)
+
+- **Concepts** + **Architecture** — the mental model and the engine/product boundary.
+- **Installation** + **Configuration** + **Quickstart** — `uv add`, ArcadeDB, the model provider, `EngineConfig`.
+- **Domain adaptation** (`docs/domain-adaptation/`) — the build sequence + companions (ontology, KG, ER,
+  capabilities, classification & decision models).
+- **Reference pack** — the contract/compliance worked example (a template, not your domain).
+- **API reference** (`docs/api/`) — generated from `rag_wright.api`.
+
+## Environment discipline
+
+- **Python: uv only.** `uv run` to execute, `uv add`/`uv sync`/`uv remove` for deps. Never bare `python`/`pip`. A
+  "module not found" almost always means a missing `uv run` prefix or an undeclared dep — re-run with `uv run` or
+  `uv add`, never reinstall/recreate the env.
+- **This product has its OWN environment** (its own `.venv`, interpreter, site-packages); it consumes the engine
+  through the package/seam, not a shared interpreter.
+
+## Source of truth
+
+`{{SPEC}}` is the single source of truth; `{{PLAN}}` the build order, `{{TASKS}}` the ledger. Do not invent
+requirements; if something is unspecified or ambiguous, ask, do not assume.
+
+## Start of every session
+
+1. **This file, in full.**
+2. **The `RESUME / NEXT UP` block at the top of `{{TASKS}}`** — the authoritative handoff (last/next task, the
+   skills it needs, open questions, hazards). Read only the entries it names.
+3. **Load the skills the resume block names** (Skill tool), before writing code — `library-grounding` and
+   `using-the-rag-wright-engine` on any engine/library task.
+4. **Only the ADRs the resume block cites**, plus any the task touches (engine-side decisions are cited from the
+   engine repo's ADRs).
+5. **Verify state:** `git log --oneline -5 && git status --short && uv run pytest -q`.
+6. **Confirm grounding is available** (the engine lane resolves; `{{ENGINE_PATH}}` reachable) and any engine
+   services the task needs (ArcadeDB, a model provider) are up.
+7. **Say where we are in two or three lines**, then wait.
+
+End a session by updating the resume block before context clears.
+
+## The working loop: one task, then stop for us
+
+One task at a time; keep us in the loop after each. For each task: (1) state the task by id + the requirement/
+acceptance; (2) **ground the calls** (engine against the `engine` lane, libraries against `project`) — show what
+you found, never guess an API; (3) define/confirm the contract; (4) write the failing test(s) (TDD red) — **and a
+LIVE test against the real engine on any engine-seam task** (fakes prove the mapping, only a live run proves the
+integration); (5) implement the minimum to pass (green), this task only; (6) run the task's tests + verify, show
+results + diff; (7) **stop and wait for our explicit approval** — do not mark done, do not start the next task;
+(8) after approval only: mark done in `{{TASKS}}`, write an ADR if you made an architectural decision, update
+docs, commit atomically. Never mark done without approval; never batch tasks.
+
+## How to write the code
+
+Think before coding; state assumptions; present options rather than silently picking one. Keep it simple — the
+minimum that satisfies the task and the spec. Change surgically; match existing style. Parallelize multiple
+LLM/model calls (async + semaphore) in evals/tests/scripts; never sequential.
+
+## Long-running background work: stream X/N progress and monitor it (never launch-and-forget)
+
+Any background task over ~30s (an ingest, an eval, a bulk LLM loop, a migration) MUST (1) emit periodic `X/N`
+progress to its log (start line with total N, `[stage] i/N …` flushed, end summary) and (2) be actively monitored
+and reported in `X/N` form (tail the log FILE; never pipe a live job through grep/tail). Never launch and sit
+silently.
+
+## Cross-session memory and decisions
+
+- `{{TASKS}}` is the persistent ledger (id, requirement/acceptance, status, files, verify, one-line note; a
+  "last approved / next up" summary at top). Update status only as the loop allows; `done` only after approval.
+  Task ids are stable; execution order may be reordered without renumbering.
+- `docs/adr/` holds short ADRs, one per architectural decision. Cite the ADR a task is shaped by; if a task would
+  contradict one, stop and raise it. Engine-side decisions live in the engine repo's ADRs — cite by id.
+
+## Version control
+
+Start each task from a clean, committed tree. After approval, commit once atomically (code + `{{TASKS}}` status +
+any ADR + docs), naming the task + its requirement/acceptance. Every main-line commit is green and reviewed. Never
+commit secrets or generated data (`.env`, caches, `graphify-out/` stay gitignored). Commits are local; ask before
+pushing to a shared remote. Keep changes small (~100 lines; ~300 max for one logical change); when a change grows,
+land the small one and stack the next on top — don't widen.
+
+## Boundaries
+
+- **Always:** a LIVE engine-seam test on every engine integration; ground engine/library calls before writing them,
+  against the right lane; cite every claim; run the task's tests before presenting; stream `X/N` + monitor
+  long-running work; stop for approval after each task; commit each approved task from a clean tree.
+- **Ask first:** changing `{{SPEC}}`; adding a dependency; changing a data model/schema; anything that needs an
+  **engine** change (flag it, do it in the engine repo).
+- **Never:** modify the engine from this repo/session; fork or copy engine code wholesale; reach past
+  `rag_wright.api` into engine internals; treat the reference pack as your domain; mark a task done or start a new
+  one without approval; run bare `python`/`pip`; commit secrets; let a claim out without a citation; suggest
+  pausing/stopping as a recommendation (we decide when to pause — propose only substantive next steps, or state
+  done and wait).
+
+## Phases (each ends with our review gate)
+
+- Phase 0, setup: repo scaffold, environment, grounding lanes, the engine seam, `{{SPEC}}` placeholders repaid.
+- Phase 1, Plan: produce `{{PLAN}}` (read-only plan mode). We review.
+- Phase 2, Tasks: produce `{{TASKS}}`, each mapped to its requirement/acceptance. We review.
+- Phase 3, Contracts: define the product contracts. We review.
+- Phase 4, Build: the working loop above, per task, each with our approval gate.
+- Phase 5, Integrate + end to end: wire the surfaces + the engine, run the end-to-end scenarios, confirm
+  acceptance. We review.

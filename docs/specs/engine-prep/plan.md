@@ -73,8 +73,9 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-3.1 + 3.2** (generated API ref; closed WS3). **WS0–WS4 complete.** Next up: **PREP-5.2**
-(PREP-5.1 awaiting approval).
+Last approved: **PREP-5.1** (using-the-rag-wright-engine skill). **WS0–WS4 complete.** Next up: **PREP-5.3**
+(PREP-5.2 awaiting approval). WS5 = 5.1→5.2(CLAUDE template)→5.3(playbook template)→5.4(starter README+dry-run)→
+**5.5 (refresh the ENGINE's OWN CLAUDE.md + playbook — added per the two-track reminder).**
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -449,7 +450,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   project-scoped skill name. A leading "fill these first" block.
 - Acceptance: every product-specific token is a placeholder; the generic rules are intact and engine-agnostic.
 - Verify: `rg "RuleWright|contract|compliance" docs/templates/product-starter/CLAUDE.md.template` returns only
-  placeholder examples. Files: the template. Deps: PREP-5.1. Status: todo.
+  placeholder examples. Files: the template. Deps: PREP-5.1. Status: **awaiting-approval** (templatized from
+  RuleWright's CLAUDE.md: generic core verbatim + `{{PLACEHOLDERS}}` + a "fill these first" block; mentions ALL
+  engine skills [using-the-rag-wright-engine, authoring-a-capability, creating-evals, classifier-opportunity-
+  analysis, setfit, laya, qwen-vllm-modal] + the engine doc set + the rag_wright.api-only / reference-pack-is-not-
+  your-domain rules; RuleWright's product-specific war-stories dropped).
 
 **PREP-5.3 — Playbook product-starter template.**
 - What: `docs/templates/product-starter/playbook.md.template` — same treatment of RuleWright's `docs/playbook.md`;
@@ -465,6 +470,21 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: the dry-run scratch copy has zero unfilled placeholders and resolvable links.
 - Verify: `rg "{{" <scratch>` empty; link check. Files: the starter README (+ a throwaway scratch instantiation, not
   committed). Deps: PREP-5.2, PREP-5.3. Status: todo.
+
+**PREP-5.5 — Refresh the ENGINE repo's own `CLAUDE.md` + `docs/playbook.md`.**
+- Driver: the two-track point — the product templates (5.2–5.4) are for a NEW repo; the engine's OWN working-loop
+  files are stale after the engine-prep effort (they reference none of it). This is the engine side.
+- What: update `CLAUDE.md` + `docs/playbook.md` to current: the active-workstream banner points at
+  `docs/specs/engine-prep/` (not only engine-platform); add the engine-authored skills to the skills list
+  (`creating-evals`, `authoring-a-capability`, `classifier-opportunity-analysis`, `setfit`, `laya`,
+  `qwen-vllm-modal`, `using-the-rag-wright-engine`); reference the consolidated doc set (`docs/concepts`,
+  `architecture`, `installation`, `configuration`, `quickstart`, `reference-pack`, `domain-adaptation/`, `api/`) and
+  `docs/archive/` + the ADR index; keep the engine/product + de-domaining framing. Do NOT change the standing
+  working-loop/grounding/commit rules.
+- Acceptance: both files cite the new skills + doc set + engine-prep workstream; no stale "GraphWright builds the
+  graphs" or dead-doc references; standing rules intact.
+- Verify: `rg` for the new skills/docs present; `rg -i "graphwright compiler|orchestration spec"` clean.
+- Files: `CLAUDE.md`, `docs/playbook.md`. Deps: WS5 docs exist. Status: todo.
 
 ---
 
