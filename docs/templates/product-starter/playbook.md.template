@@ -1,0 +1,174 @@
+# DreamAI Claude Code Build Playbook: {{PRODUCT_NAME}} (the product)
+
+The DreamAI recipe for building a spec-driven product with Claude Code — spec-driven development, test-driven
+development, contracts-first, library-grounded coding — on top of the **RAG_Wright engine** (open-core). The
+product depends on the engine one-way (Product → Engine) and hand-builds its own orchestration (GraphWright, the
+orchestration compiler, is PARKED per engine ADR-0052).
+
+> **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}`,
+> `{{ENGINE_DEP}}`, `{{STACK}}`, the `{{SPEC}}`/`{{PLAN}}`/`{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme,
+> the grounding-lane paths, and `{{PROJECT_FRONTEND_SKILL}}`. The boundary, skills, phases, per-task loop,
+> grounding discipline, and memory/commit rules stay as written. Companion to this repo's `CLAUDE.md`.
+
+> Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
+
+---
+
+## 0. Project parameters
+
+| Parameter | Value | What it controls |
+|---|---|---|
+| Project name | {{PRODUCT_NAME}} | Title + commit scope |
+| What it is | The user-facing product for {{PRODUCT_DOMAIN}}, over the RAG_Wright engine | Scope |
+| Spec | `{{SPEC}}` (requirements `{{REQ_SCHEME}}`, acceptance `{{AC_SCHEME}}`) | The single source of truth |
+| Engine dependency | **RAG_Wright** via `{{ENGINE_DEP}}`; repo at `{{ENGINE_PATH}}` (read/reference). One-way: Product → Engine; consumed via `rag_wright.api` | The boundary |
+| Stack | {{STACK}} · Python 3.12 + uv (pinned `>=3.12,<3.13` to match the engine) | Environment, test runner, tooling |
+| Grounding index | **Graphify lanes**: `engine` (the installed `rag_wright` package) · `project` (own code/libs). Plus the docs lane | The index the agent consults |
+| Data artifacts | caches, model caches, eval outputs, `graphify-out/` (all gitignored) | The `.gitignore` |
+
+### The engine / product boundary (mirrors engine ADR-0052)
+
+This repo is the **PRODUCT**: UI/UX, the product tool surface, orchestration, data-source integrations, guardrails,
+and the user loops. The **RAG_Wright ENGINE** (open-core) owns the capabilities, ingestion/query pipelines, MCP
+servers, ARD, and the ontology machinery. Dependency is strict and one-way: **Product → Engine.** Never modify the
+engine from this repo; flag needed engine changes and make them in the engine project. The product consumes the
+engine **only through `rag_wright.api`** and never touches the store (ArcadeDB) directly. Your domain is a `.ttl`
+pack + capabilities authored here against the engine; the contract/compliance **reference pack** is only the
+engine's worked example — a template, never your domain.
+
+---
+
+## 1. The skill set
+
+**Engine-authored** (in the engine repo's `.claude/skills/`; link them in — step 2):
+
+| Skill | Role |
+|---|---|
+| **using-the-rag-wright-engine** | The engine-usage playbook: install, grounding lanes, follow the build sequence |
+| **authoring-a-capability** | Register a domain capability (the five surfaces + definition of done) |
+| **creating-evals** | Write a capability's eval FIRST (TDD) |
+| **classifier-opportunity-analysis** → **setfit** / **laya** | Find + build a classifier / System-1 decision model |
+| **qwen-vllm-modal** | The flat-GPU substrate for bulk teacher-labeling |
+
+**Generic** (the shared Addy-Osmani set): interview-me, idea-refine, spec-driven-development,
+planning-and-task-breakdown, incremental-implementation, test-driven-development, context-engineering,
+documentation-and-adrs, debugging-and-error-recovery, library-grounding, source-driven-development,
+code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries the graphs) · plus your UI skill
+`{{PROJECT_FRONTEND_SKILL}}` + `frontend-ui-engineering` if you have a front end.
+
+---
+
+## 2. One-time setup (Phase 0)
+
+1. Scaffold the repo from the templates: `CLAUDE.md` (from `CLAUDE.md.template`), `{{SPEC}}`, `{{PLAN}}`,
+   `{{TASKS}}`; fill the placeholders.
+2. Depend on the engine (`{{ENGINE_DEP}}`); wire the engine repo as a read/reference additional directory
+   (`.claude/settings.local.json`) so its docs + source are reachable.
+3. `.gitignore` covers `.env`, environments, caches, `graphify-out/`, and `.claude/skills/`.
+4. Create the uv project, pin Python `>=3.12,<3.13` (match the engine), declare deps with `uv add`, commit
+   `uv.lock`.
+5. **Build the grounding lanes:** index the installed `rag_wright` package as the `engine` lane and your own repo
+   as the `project` lane (the engine's `refresh_framework_graph.sh` is the pattern). Ground every `rag_wright.api`
+   call against the `engine` lane before writing it.
+6. **Link the skills into `.claude/skills/`:** the engine-authored skills from the engine repo and the shared
+   generic skills from their source (symlink so each tracks its version; never copy). Load
+   **`using-the-rag-wright-engine`** first on any engine work.
+7. Remaining Phase 0: the engine seam, config/secrets, any front-end scaffold, observability, and repaying the
+   `{{SPEC}}` placeholders.
+
+---
+
+## 3. CLAUDE.md standing rules (load-bearing summary)
+
+```
+- {{SPEC}} is the single source of truth. Do not invent requirements; if unspecified, ask.
+- Product -> Engine, one way. Never modify the engine from this repo. Consume it only through
+  rag_wright.api; never access the store (ArcadeDB) directly.
+- INDEX BEFORE CODE. No code calling a library is written before it is in a graph. Declaring/
+  installing is not calling: declare+install -> refresh graph -> write the grounded call.
+- Ground engine API calls against the `engine` lane (the installed rag_wright package); ground
+  your own libs against `project`.
+- The reference pack (contract/compliance) is the engine's EXAMPLE, not your domain — author your
+  own .ttl pack + capabilities.
+- Per task: ground, define the contract, failing test (TDD), implement to green, verify, short ADR
+  if an architectural decision was made, update docs. A LIVE engine-seam test on every integration.
+- One task at a time; stop for approval; commit each approved task atomically from a clean tree.
+- Python: uv only (uv run / uv add), never bare python/pip.
+```
+
+---
+
+## 4. The build workflow
+
+Each phase has a human review gate; do not advance until approved.
+
+- **Phase 1, Plan.** `interview-me`/`idea-refine` → the discovery set → author `{{SPEC}}` → `{{PLAN}}` (read-only
+  Plan Mode).
+- **Phase 2, Tasks.** `{{TASKS}}`, each task mapped to its requirement + acceptance, with a verify step and files
+  (early phases in full; later phases as headlines, expanded when reached).
+- **Phase 3, Contracts.** Define the product contracts (API/tool schemas, workflow I/O) before implementation.
+- **Phase 4, Contract-first TDD build, per task.** Ground the calls (engine against the `engine` lane) → failing
+  test against the contract → implement to green → verify → short ADR + docs → commit after approval. Write each
+  capability's eval first (`creating-evals`).
+- **Phase 5, Integrate + end to end.** Wire the surfaces + the engine, run the end-to-end scenarios, confirm
+  acceptance.
+
+---
+
+## 5. Indexing and the grounding discipline
+
+**Two jobs, never confused.** The **code graph** is the authority for what exists and its exact signature; the
+**docs lane** explains how a thing is meant to be used. Order on any unfamiliar surface: **docs to understand, code
+to confirm, then write.** A method name seen in prose is never confirmation.
+
+| Lane | Authority for |
+|---|---|
+| `engine` | the installed `rag_wright` package — every `rag_wright.api` call grounds here first |
+| `project` | this product's own code + libraries |
+
+(Ground against **both** the graph **and** the installed `inspect.signature` — a clone at latest can drift from the
+pinned install.) `graphify-out/` is gitignored and local-only; it will not work in CI without a build step.
+
+The engine's `docs/` are NOT shipped in the wheel — read them in the engine repo (`{{ENGINE_PATH}}/docs/`) or on
+GitHub: concepts, architecture, installation, configuration, quickstart, the domain-adaptation guide, reference
+pack, and the generated API reference.
+
+**Onboarding a new library:** `uv add` it, then index it by the route that fits (pip-stable → add to the refresh
+script's `PKGS`; fast-moving/monorepo → clone-stage at the installed tag; no source + no docs MCP → LLM-extract its
+vendor docs), then refresh and query before writing the call. **Gate activation on real configuration, never on
+mere importability** (a transitive dep can flip importability-gated behaviour).
+
+---
+
+## 6. Example prompts
+
+```
+Phase 4 (per task):
+  "Take the next task in {{TASKS}}. First ground the calls it needs — engine APIs against the `engine`
+   lane — and show me what you found. Then write the failing test against the contract, implement to
+   green, run the verify step. Record an ADR if you made an architectural decision."
+
+Adding a dependency:
+  "uv add it, refresh the framework graph, then show me the grounded signature before writing any call."
+```
+
+---
+
+## 7. What not to do
+
+- Do not do engine work here; flag a needed engine change and make it in the engine repo.
+- Do not call a `rag_wright.api` symbol without grounding it against the `engine` lane first.
+- Do not reach past `rag_wright.api` into engine internals, or access the store directly.
+- Do not treat the reference pack as your domain, or copy its vocabulary — author your own `.ttl`.
+- Do not write a library call before the library is in a graph. Split the task instead.
+- Do not skip the contracts phase, or write a capability without its eval first.
+- Do not fork or copy engine code wholesale; depend on it.
+- Never use pip or a bare `python`. A missing-module error is a forgotten `uv run`, not a broken environment.
+- Do not over-install process; the active loop is plan → tasks → contracts → contract-first TDD, terse docs/ADRs.
+
+---
+
+## How to reuse
+
+Filled for {{PRODUCT_NAME}}. The boundary, skills, phases, per-task loop, grounding discipline, and memory/commit
+rules stay as written; swap the stack slots and the requirement scheme for a new engagement.

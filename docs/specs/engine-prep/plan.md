@@ -73,9 +73,9 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-5.1** (using-the-rag-wright-engine skill). **WS0–WS4 complete.** Next up: **PREP-5.3**
-(PREP-5.2 awaiting approval). WS5 = 5.1→5.2(CLAUDE template)→5.3(playbook template)→5.4(starter README+dry-run)→
-**5.5 (refresh the ENGINE's OWN CLAUDE.md + playbook — added per the two-track reminder).**
+Last approved: **PREP-5.2** (CLAUDE.md product-starter template). **WS0–WS4 complete.** Next up: **PREP-5.4**
+(PREP-5.3 awaiting approval). WS5 = 5.1→5.2→5.3(playbook template)→5.4(starter README+dry-run)→
+**5.5 (refresh the ENGINE's OWN CLAUDE.md + playbook — two-track reminder).**
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -461,7 +461,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   include the Phase-0 setup that pulls the Addy Osmani skills + the `using-the-rag-wright-engine` skill and builds
   the Graphify lanes; placeholders as in 5.2.
 - Acceptance: generic phases/loop intact; product tokens placeholdered; setup references the onboarding skill.
-- Verify: placeholder scan as in 5.2. Files: the template. Deps: PREP-5.2. Status: todo.
+- Verify: placeholder scan as in 5.2. Files: the template. Deps: PREP-5.2. Status: **awaiting-approval**
+  (templatized from RuleWright's playbook: generic recipe + phases + a Phase-0 setup that links the engine skills +
+  builds the two grounding lanes [installed `rag_wright` pkg + project] + loads using-the-rag-wright-engine; all 7
+  engine skills + the shared generics listed; `{{PLACEHOLDERS}}`; no product leakage).
 
 **PREP-5.4 — Starter README + dry-run instantiation.**
 - What: `docs/templates/product-starter/README.md` explaining how to copy the starter into a new product repo, fill
