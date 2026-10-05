@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-2.5** (runnable quickstart; committed with the ADR-0122 bug-fix diversion). **WS0 + WS1
-complete.** Next up: **PREP-4.1** (WS4 — recommended order WS2→WS4→WS3; PREP-2.6 awaiting approval, closes WS2).
+Last approved: **PREP-2.6** (`docs/reference-pack.md`). **WS0 + WS1 + WS2 complete.** Next up: **PREP-4.2**
+(PREP-4.1 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -325,7 +325,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   `new-domain-build-sequence.md` content in and leave a pointer.
 - Acceptance: the main guide is short (fits on a screen or two) and links to every companion below.
 - Verify: read-through; link check.
-- Files: `docs/domain-adaptation/README.md`, pointer at old path. Deps: WS2. Status: todo.
+- Files: `docs/domain-adaptation/README.md`, pointer at old path. Deps: WS2. Status: **awaiting-approval** (lean
+  9-step guide at the new path, each step short + linking its companion [ontology/KG/ER/capabilities/decision-models
+  + the creating-evals skill]; old `new-domain-build-sequence.md` replaced with a redirect stub; companion links are
+  forward-refs created in PREP-4.2–4.6).
 
 **PREP-4.2 — `ontology-authoring.md`.**
 - What: authoring a domain `.ttl` pack (closed value sets, schema/classes/properties/edge types, SHACL constraints,

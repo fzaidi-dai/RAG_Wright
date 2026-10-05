@@ -1,0 +1,71 @@
+# Building a new domain on the engine
+
+The sequence a developer follows to build a new-domain product (contracts, textiles, policies, …) on the engine.
+Each step is short here; the detail lives in the linked companion. A new domain is **config + a `.ttl` pack +
+capabilities**, never an engine edit (ADR-0052 engine/product split, ADR-0066 knowledge-in-the-ontology,
+ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) and
+[Architecture](../architecture.md) first.
+
+> **Dependency direction is one-way: Product → Engine, never the reverse.** Your product is a separate repo that
+> depends on the engine package; it never forks or edits the engine.
+
+## The sequence
+
+1. **Install the engine.** `uv add rag-wright` (or a path/git dep pre-publish), plus ArcadeDB and a model provider.
+   → [Installation](../installation.md).
+
+2. **Configure the engine.** Construct an `EngineConfig` (store, model roles, embedding profile, ingest options)
+   and `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name; tenancy is
+   product-side. → [Configuration](../configuration.md).
+
+3. **Author the domain `.ttl` pack.** The domain KNOWLEDGE — closed value sets, the KG schema, SHACL constraints,
+   mappings — lives in the ontology, declaratively, never in Python (ADR-0066). It co-evolves with step 4 (it
+   drives the capabilities: classifiers classify into its vocab, extraction targets its schema, the query graphs
+   are parameterized by it). → [Ontology authoring](ontology-authoring.md).
+
+4. **Build and register the domain capabilities.** Your ingestion + query/compliance GRAPHS, domain functions, and
+   skills. They **compose the engine's generic primitives by direct import** (hybrid search, graph query, fusion,
+   embedding, parsing, chunking, reranking) and register only your OWN domain graphs/models/skills via
+   `register_capability(manifest)` with an `impl_ref` — invocable (and MCP-exposable) with zero engine edits.
+   → [Authoring capabilities](authoring-capabilities.md).
+
+5. **Write each capability's EVAL first (TDD).** As soon as a capability is *defined* (contract + acceptance),
+   before you implement it, write its eval: a reproducible gold set + the metric + a pass/fail gate. It's the red
+   the implementation turns green, the permanent regression guard, and it fixes the data design (a classifier's
+   training data IS its eval). → the **`creating-evals`** skill. Do this per capability, interleaved with building
+   — not as a later phase.
+
+6. **Ingest the corpus → populate the KG.** Run the ingestion capability over your corpus (PDF via
+   `api.parse_document`, or already-text via `api.source_document`): parse → chunk → segment → extract → embed →
+   write. Most query/compliance capabilities READ this populated KG, so it comes first.
+   → [KG construction](kg-construction.md). Entities are canonicalized here →
+   [Entity resolution](entity-resolution.md).
+
+7. **(If needed) train classifiers, then adopt them behind the seam.** Classifiers bootstrap from an initial
+   LLM-based extraction: `.ttl` → LLM teacher → curated labels → train → adopt-only-if-better → swap in behind the
+   existing seam. The step-5 eval is what you A/B the LLM teacher vs a trained classifier vs a System-1 decision
+   model (Jev/Laya) on, and the bar you adopt against.
+   → [Classification & decision models](classification-and-decision-models.md).
+
+8. **Build the product seam.** Your thin layer over the engine API + registered caps: tenancy/scoping, product
+   orchestration, the product-named tool surface, and domain/app logic. It wraps `open_workspace` / the invokers /
+   `kg_read` / `measure_usage` — never `ArcadeDBStore` / `query_embedder` / engine id formats. (Product-repo work,
+   not engine.)
+
+9. **(Optional) a product demo** for your users. (Distinct from the engine's [reference pack](../reference-pack.md),
+   which is the engine's own worked example — your domain pack is steps 3–4.)
+
+## Terminology
+
+- **Domain pack** = your product's `.ttl` + capabilities + classifiers (steps 3–4).
+- **Reference pack** = the ENGINE's contract/compliance worked example, opt-in via `load_reference_pack()` — read it
+  as a template ([reference-pack](../reference-pack.md)).
+- The engine ships an **empty ARD catalog**; a fresh install registers nothing until you (or the reference pack) do.
+
+## Companions
+
+- [Ontology authoring](ontology-authoring.md) · [KG construction](kg-construction.md) ·
+  [Entity resolution](entity-resolution.md) · [Authoring capabilities](authoring-capabilities.md) ·
+  [Classification & decision models](classification-and-decision-models.md)
+- Skills (coding-agent playbooks): `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya`,
+  `authoring-a-capability`.
