@@ -10,7 +10,6 @@ dependencies = [
     "docling>=2.109.0",
     "docling-core>=2.86.0",
     "docling-graph[templategen]==1.9.1",
-    "en-core-web-sm",
     "fastmcp>=3.4.6",
     "flagembedding>=1.4.0",
     "google-cloud-storage>=3.13.1",
@@ -26,11 +25,17 @@ dependencies = [
     "pyshacl>=0.40.1",
     "scikit-learn>=1.9.0",
     "sentence-transformers>=6.1.0",
-    "spacy>=3.8.14",
     "transformers>=5.4,<5.9",
 ]
 
 [project.optional-dependencies]
+# Optional spaCy NER (ADR superseding ADR-0012): spaCy is an extra, and its model
+# (en_core_web_sm) is a runtime download (`uv run python -m spacy download en_core_web_sm`,
+# configurable via RAG_SPACY_MODEL) — the model is not on PyPI, so it is never a declared
+# or direct-URL dependency. Loaded via rag_wright.util.spacy_model.load_spacy_model.
+ner = [
+    "spacy>=3.8.14",
+]
 ocr-bench = [
     "mlx-vlm>=0.3.9",
     "ocrmac>=1.0.1",
@@ -73,9 +78,6 @@ markers = [
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
-
-[tool.uv.sources]
-en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 
 # DD-6 (ADR-0067 #5, AC-no-leak): the de-domaining import boundary, enforced by import-linter (run as a pytest
 # test, tests/arch/test_import_contracts.py -- no separate CI). The GENERIC engine foundation (the store, the engine

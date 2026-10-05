@@ -912,14 +912,6 @@ wheels = [
 ]
 
 [[package]]
-name = "en-core-web-sm"
-version = "3.8.0"
-source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
-wheels = [
-    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl", hash = "sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85" },
-]
-
-[[package]]
 name = "et-xmlfile"
 version = "2.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3541,7 +3533,6 @@ dependencies = [
     { name = "docling" },
     { name = "docling-core" },
     { name = "docling-graph", extra = ["templategen"] },
-    { name = "en-core-web-sm" },
     { name = "fastmcp" },
     { name = "flagembedding" },
     { name = "google-cloud-storage" },
@@ -3557,11 +3548,13 @@ dependencies = [
     { name = "pyshacl" },
     { name = "scikit-learn" },
     { name = "sentence-transformers" },
-    { name = "spacy" },
     { name = "transformers" },
 ]
 
 [package.optional-dependencies]
+ner = [
+    { name = "spacy" },
+]
 ocr-bench = [
     { name = "mlx-vlm" },
     { name = "ocrmac" },
@@ -3585,7 +3578,6 @@ requires-dist = [
     { name = "docling", specifier = ">=2.109.0" },
     { name = "docling-core", specifier = ">=2.86.0" },
     { name = "docling-graph", extras = ["templategen"], specifier = "==1.9.1" },
-    { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "fastmcp", specifier = ">=3.4.6" },
     { name = "flagembedding", specifier = ">=1.4.0" },
     { name = "google-cloud-storage", specifier = ">=3.13.1" },
@@ -3605,10 +3597,10 @@ requires-dist = [
     { name = "scikit-image", marker = "extra == 'ocr-bench'", specifier = ">=0.26.0" },
     { name = "scikit-learn", specifier = ">=1.9.0" },
     { name = "sentence-transformers", specifier = ">=6.1.0" },
-    { name = "spacy", specifier = ">=3.8.14" },
+    { name = "spacy", marker = "extra == 'ner'", specifier = ">=3.8.14" },
     { name = "transformers", specifier = ">=5.4,<5.9" },
 ]
-provides-extras = ["ocr-bench"]
+provides-extras = ["ner", "ocr-bench"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -73,7 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-0.5** (0015 collision repaired → 0120). **WS0 complete.** Next up: **PREP-1.1** (WS1).
+Last approved: **PREP-1.1** (spaCy → optional extra; model a runtime asset; publish blocker gone — awaiting
+approval). **WS0 complete.** Next up: **PREP-1.2**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -148,18 +149,24 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 
 ### WS1 — Package for release (ready, not published)
 
-**PREP-1.1 — Remove the `en-core-web-sm` publish blocker.**
-- Driver: baseline blocker; Non-goal (make installable).
-- What: drop `en-core-web-sm` from `[project.dependencies]` and the `tool.uv.sources` URL; document the model
-  install as a post-install step (`uv run spacy download en_core_web_sm`, or a thin `rag_wright` helper) in
-  installation docs; add a clear, actionable runtime error at the single point the spacy model is loaded when it's
-  absent (not an obscure import error).
-- Acceptance: built wheel metadata contains no direct-URL dependency; a clean-venv `pip install` of the wheel
-  resolves without the spacy wheel URL; using an NER path without the model raises a message naming the fix.
-- Verify (TDD): a test asserting the friendly error when the model is missing (red first); `uv build` then inspect
-  `*.dist-info/METADATA` for no `@ https://` dep.
-- Files: `pyproject.toml`, the spacy-load site (likely `ontology/` or `spans/`), a test, installation doc stub.
-  Deps: WS0 done (clean tree). Status: todo.
+**PREP-1.1 — Make spaCy a runtime asset; remove the `en-core-web-sm` publish blocker.**
+- Driver: baseline blocker; Non-goal (make installable). ADR-0121.
+- Grounding finding: the spaCy NER path was retired (ADR-0035) — no live `import spacy`/`spacy.load` in `src`;
+  `spacy` + the model were a dead, heavyweight chain pulled only by our own declarations. The model
+  (`en_core_web_sm`) is not on PyPI, so it can never be a declared dep; only `spacy` (the library) can be an extra.
+- What (per user "make it a runtime asset now, keep the seam"): drop `en-core-web-sm` from deps + delete the
+  `[tool.uv.sources]` URL; move `spacy` into an optional extra `rag-wright[ner]`; add
+  `rag_wright.util.spacy_model.load_spacy_model` (lazy import, honors `RAG_SPACY_MODEL`, one actionable error);
+  write ADR-0121 superseding ADR-0012 point 4 + a partial-update note on ADR-0012 + index update. Installation-doc
+  step belongs to PREP-2.4.
+- Acceptance: built wheel metadata has no direct-URL dep and `spacy` only under `extra == 'ner'`; the loader raises
+  an actionable error when spaCy/model absent; suite green.
+- Verify (TDD): `tests/util/test_spacy_model.py` (3 tests, hermetic via a fake `spacy`) — red first, then green;
+  `uv lock` resolves ("Removed en-core-web-sm"); `uv build` wheel METADATA shows no `@ http` dep, no
+  `en-core-web-sm`, `spacy` only under `extra == 'ner'`; full suite 1691 passed / 88 skipped.
+- Files: `pyproject.toml`, `uv.lock`, `src/rag_wright/util/spacy_model.py`, `tests/util/test_spacy_model.py`,
+  `docs/adr/0121-*.md`, `docs/adr/0012-*.md` (note), `docs/adr/README.md`. Deps: WS0 done. Status:
+  **awaiting-approval**.
 
 **PREP-1.2 — `>=`-only pins + add the `langgraph` floor.**
 - Driver: user's standing no-`==` rule; baseline gap.

@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-120 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision).
-ADRs are an
+121 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+and 0121). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -35,6 +35,8 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 - ADR-0040 → revised by **ADR-0082** (symbolic gate made function-independent)
 - ADR-0048 → shelved behind a flag by **ADR-0114**
 - ADR-0056 → superseded by **ADR-0057** · ADR-0087 → superseded by **ADR-0088** · ADR-0108 → superseded by **ADR-0110**
+- ADR-0012 point 4 (the `en_core_web_sm` wheel-URL pin) → superseded by **ADR-0121** (spaCy is an optional extra;
+  the model is a runtime download). The rest of ADR-0012 stands.
 - Retirements that are themselves *current* decisions: 0043 retires `cross_corpus_retrieval`; 0047 retires the
   precomputed function gate; 0091 retires the `PartyTo` edge.
 
@@ -174,4 +176,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0116 Soft function-scoping for the classifier lane ·
 0117 The engine API layer + capability runtime ·
 0118 Engine core API vs ARD — adapter-free `impl_ref` client ·
-0119 Jev typed-decision model for compliance closed-set decisions
+0119 Jev typed-decision model for compliance closed-set decisions ·
+0121 spaCy is an optional extra; its model is a runtime download (supersedes ADR-0012 point 4)

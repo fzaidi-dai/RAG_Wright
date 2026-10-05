@@ -1,5 +1,10 @@
 # ADR-0012: EntityMention carries confidence; the spaCy path emits mentions, never proximity edges
 
+> **Partial update (ADR-0121):** point 4 below — pinning `en_core_web_sm` as a `[tool.uv.sources]` wheel-URL
+> dependency — is **superseded**. spaCy is now an optional extra (`rag-wright[ner]`) and its model is a runtime
+> download (never a declared/direct-URL dependency), loaded via `rag_wright.util.spacy_model.load_spacy_model`. The
+> `RAG_SPACY_MODEL` seam and the rest of this ADR stand.
+
 Date: 2026-07-13. Status: Accepted. Contract change (ask-first, approved): `EntityMention` gains a
 `confidence` field, and the design rule that graph extraction never writes a relationship edge from
 entity proximity — CONTRACTS_WITH comes from signing-party structure only.
