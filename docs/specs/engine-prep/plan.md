@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-2.1** (README → open-core). **WS0 + WS1 complete.** Next up: **PREP-2.3** (PREP-2.2
-awaiting approval).
+Last approved: **PREP-2.2** (`docs/concepts.md`). **WS0 + WS1 complete.** Next up: **PREP-2.4** (PREP-2.3 awaiting
+approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -254,7 +254,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   `ARCHITECTURE_OVERVIEW.md` + engine-platform SPEC.
 - Acceptance: the boundary + import-linter rule stated correctly; diagram or layer table matches `src/rag_wright/`.
 - Verify: layer list diffed against `ls src/rag_wright`.
-- Files: `docs/architecture.md`. Deps: PREP-2.2. Status: todo.
+- Files: `docs/architecture.md`. Deps: PREP-2.2. Status: **done** (generic structural doc: engine/product boundary,
+  a 14-package layer table [all covered], the enforced domain-free rule [cited test path exists], ingest + query
+  data flow, the two seams; links ARCHITECTURE_OVERVIEW for as-built detail).
 
 **PREP-2.4 — `docs/installation.md` + `docs/configuration.md`.**
 - What: install (`uv add rag-wright` or path/git; the spacy-model step from PREP-1.1); ArcadeDB Docker bring-up +
