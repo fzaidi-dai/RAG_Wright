@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.1** (spaCy → optional extra; model a runtime asset; publish blocker gone — awaiting
-approval). **WS0 complete.** Next up: **PREP-1.2**.
+Last approved: **PREP-1.2** (no-`==`: docling-graph/langchain-quickjs → `>=`; langgraph floor added — awaiting
+approval). **WS0 complete.** Next up: **PREP-1.3**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -175,7 +175,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: no `==` anywhere in `[project.dependencies]`; `langgraph` has a `>=` floor; lock resolves; full
   suite green.
 - Verify: `rg "==" pyproject.toml` shows none in the deps table; `uv lock`; `uv run pytest`.
-- Files: `pyproject.toml`, `uv.lock`. Deps: PREP-1.1 (same file). Status: todo.
+- Files: `pyproject.toml`, `uv.lock`. Deps: PREP-1.1 (same file). Status: **awaiting-approval**
+  (docling-graph→`>=1.9.1`, langchain-quickjs→`>=0.3.2` [it is LIVE — the RLM interpreter agent], langgraph→
+  `>=1.2.11`; no real `==` pins remain; `uv lock` resolves; suite 1691 passed / 88 skipped).
 
 **PREP-1.3 — Release metadata.**
 - Driver: baseline gaps (twine-check readiness).
