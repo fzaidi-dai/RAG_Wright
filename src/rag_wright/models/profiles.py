@@ -287,3 +287,45 @@ def model_for(role: ModelRole) -> str:
 def profile_for(model_id: str) -> ModelProfile:
     """The registered profile for a model id, or a safe default profile for an unregistered one."""
     return PROFILES.get(model_id, ModelProfile(model_id=model_id))
+
+
+# --- ADR-0119: typed-DECISION model profiles (a separate API surface from the chat/structured LLM profiles) ---
+
+class DecisionModelProfile(BaseModel):
+    """How to reach a typed-DECISION model (TypeSafe Jev, or an on-prem Laya decisions server). This is a DIFFERENT
+    API surface from `ModelProfile`: a decision model POSTs a `state` + typed `questions` to a Decisions endpoint
+    and returns calibrated typed answers (`noul`/`choice`/`score`), not chat completions -- so it needs its own
+    profile shape (endpoint + served id + key env + default thresholds), not the structured-output fields.
+
+    Keyed by model id so swapping `jev-1.13` -> `jev-latest`, or Jev -> an on-prem Laya decisions endpoint, is a
+    config change, not a code edit (the Laya fallback, ADR-0119). The capability (`capabilities/jev_decision.py`)
+    reads this; the model id is never hardcoded in capability/node code (the model-neutrality rule)."""
+
+    model_config = ConfigDict(frozen=True, protected_namespaces=())
+
+    model_id: str
+    served_model_id: Optional[str] = None   # the id the endpoint expects (default = model_id)
+    endpoint: str = "https://openrouter.ai/api/alpha/decisions"
+    api_key_env: str = "OPENROUTER_API_KEY"
+    timeout_s: float = 60.0
+    # default decision thresholds (callers may override): yes/no (noul) acceptance + multi-label noul cutoff.
+    op_threshold: float = 0.5
+    multilabel_threshold: float = 0.6
+
+    @property
+    def served(self) -> str:
+        return self.served_model_id or self.model_id
+
+
+DECISION_PROFILES: dict[str, DecisionModelProfile] = {
+    "jev-1.13": DecisionModelProfile(model_id="jev-1.13", served_model_id="typesafe/jev-1.13"),
+    "jev-latest": DecisionModelProfile(model_id="jev-latest", served_model_id="typesafe/jev-latest"),
+}
+_DEFAULT_DECISION_MODEL = "jev-1.13"
+
+
+def decision_profile(model_id: Optional[str] = None) -> DecisionModelProfile:
+    """The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `jev-1.13`).
+    An unregistered id gets a default profile using that id as its served id (so a raw slug still works)."""
+    mid = model_id or os.getenv("RAG_DECISION_MODEL") or _DEFAULT_DECISION_MODEL
+    return DECISION_PROFILES.get(mid, DecisionModelProfile(model_id=mid, served_model_id=mid))

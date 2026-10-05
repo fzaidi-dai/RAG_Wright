@@ -14,24 +14,25 @@ from __future__ import annotations
 import os
 from typing import Any
 
-_ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
-_DEFAULT_MODEL = "typesafe/jev-1.13"
-
 
 async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - API model, store-independent
-    """Invoke Jev. `inputs`: `state` (the text/object to judge), `questions` (dict keyed by question id, each
-    `{type: "noul"|"choice"|"score", instructions, criteria}`), optional `model` (default `typesafe/jev-1.13`).
-    Returns the Decisions-API body: `{answers: {<id>: {type, noul|choice|score, ...}}, usage: {...}}`. Raises if
-    `OPENROUTER_API_KEY` is unset or the API errors."""
+    """Invoke a typed-decision model (Jev). `inputs`: `state` (the text/object to judge), `questions` (dict keyed
+    by question id, each `{type: "noul"|"choice"|"score", instructions, criteria}`), optional `model` (a
+    DecisionModelProfile key, default `jev-1.13`). The endpoint, served id, key env and timeout come from the
+    decision-model PROFILE (`models.profiles.decision_profile`, ADR-0119) -- not hardcoded here -- so swapping
+    Jev versions or pointing at an on-prem Laya decisions server is config. Returns the Decisions-API body
+    `{answers: {<id>: {type, noul|choice|score, ...}}, usage: {...}}`. Raises if the key env is unset or the API errors."""
     import httpx
 
-    api_key = os.environ.get("OPENROUTER_API_KEY")
+    from rag_wright.models.profiles import decision_profile
+
+    prof = decision_profile(inputs.get("model"))
+    api_key = os.environ.get(prof.api_key_env)
     if not api_key:
-        raise RuntimeError("jev_decision requires OPENROUTER_API_KEY")
-    body = {"model": inputs.get("model", _DEFAULT_MODEL),
-            "state": inputs["state"], "questions": inputs["questions"]}
-    timeout = float(os.environ.get("RAG_JEV_TIMEOUT_S", "60"))
+        raise RuntimeError(f"jev_decision requires {prof.api_key_env}")
+    body = {"model": prof.served, "state": inputs["state"], "questions": inputs["questions"]}
+    timeout = float(os.environ.get("RAG_JEV_TIMEOUT_S", str(prof.timeout_s)))
     async with httpx.AsyncClient() as client:
-        r = await client.post(_ENDPOINT, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
+        r = await client.post(prof.endpoint, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
         r.raise_for_status()
         return r.json()

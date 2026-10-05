@@ -96,3 +96,24 @@ def test_jev_decision_live():
                                                  "false": "an example, definition, cross-reference, or description"}}}}))
     v = out["answers"]["operative"]["noul"]
     assert 0.0 <= v <= 1.0 and v > 0.5  # a clear 'must' obligation -> rule
+
+
+# --- ADR-0119: the decision-model profile ---
+
+
+def test_decision_profile_resolves_and_defaults():
+    from rag_wright.models.profiles import decision_profile
+    p = decision_profile()  # default
+    assert p.model_id == "jev-1.13" and p.served == "typesafe/jev-1.13"
+    assert p.endpoint.endswith("/api/alpha/decisions") and p.api_key_env == "OPENROUTER_API_KEY"
+    assert 0.0 < p.op_threshold <= 1.0 and 0.0 < p.multilabel_threshold <= 1.0
+    # a raw/unregistered id still works (used as its own served id) -> swapping is config, not code
+    raw = decision_profile("typesafe/jev-latest")
+    assert raw.served == "typesafe/jev-latest"
+
+
+def test_jev_decision_uses_profile_served_id_and_key_env(_stub_http):
+    import asyncio
+    asyncio.run(jd.jev_decision(None, {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?",
+                                                                         "criteria": {"true": "a", "false": "b"}}}}))
+    assert _Client.captured["body"]["model"] == "typesafe/jev-1.13"  # resolved from the profile, not hardcoded

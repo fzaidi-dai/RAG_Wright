@@ -98,17 +98,22 @@ def _jev_questions() -> dict:
 
 
 async def ajev_extract_regulation_section(
-    text: str, *, concurrency: int = 8, op_threshold: float = 0.5, ct_threshold: float = 0.6,
+    text: str, *, concurrency: int = 8, op_threshold: float | None = None, ct_threshold: float | None = None,
 ) -> ExtractedRegulationSection:
     """CIC (ADR-0119): the Jev-decision extraction act. Deterministic `operative_rule_spans` produces candidate
     spans; ONE Jev call per span (routed through the capability layer, `jev_decision`) decides operative-gate +
     actor + claim_types; deontic_type is the cue-rule; requirement_text is the verbatim span. Drops spans the Jev
-    operative gate rejects (< `op_threshold`). applicability/evidence_standard are left empty here (see note)."""
+    operative gate rejects. Thresholds default from the decision-model profile (`op_threshold`/`multilabel`),
+    overridable here. applicability/evidence_standard are left empty here (see note)."""
     from rag_wright.capabilities.invoke import capability_impl
+    from rag_wright.models.profiles import decision_profile
 
     spans = operative_rule_spans(text)
     if not spans:
         return ExtractedRegulationSection(section="", requirements=[])
+    prof = decision_profile()
+    op_thr = prof.op_threshold if op_threshold is None else op_threshold
+    ct_thr = prof.multilabel_threshold if ct_threshold is None else ct_threshold
     jev = capability_impl("jev_decision")  # async (resources, inputs) -> decision body; store-independent
     questions = _jev_questions()
     sem = asyncio.Semaphore(max(1, concurrency))
@@ -117,9 +122,9 @@ async def ajev_extract_regulation_section(
         async with sem:
             d = await jev(None, {"state": _JEV_GUIDANCE + span_text, "questions": questions})
         ans = d["answers"]
-        if float(ans["operative"].get("noul", 0.0)) < op_threshold:
+        if float(ans["operative"].get("noul", 0.0)) < op_thr:
             return None  # Jev gate: not a binding rule -> drop (refines the cue-presence gate's precision)
-        claim_types = [ct for ct in _CLAIM_CRITERIA if float(ans[f"ct_{ct}"].get("noul", 0.0)) >= ct_threshold]
+        claim_types = [ct for ct in _CLAIM_CRITERIA if float(ans[f"ct_{ct}"].get("noul", 0.0)) >= ct_thr]
         return ExtractedRequirement(requirement_text=span_text, deontic_type=deontic,
                                     actor=str(ans["actor"].get("choice", "")), claim_types=claim_types,
                                     applicability=[], evidence_standard="")
