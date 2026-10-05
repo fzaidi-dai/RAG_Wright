@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.6** (`classification-and-decision-models.md`). **WS0 + WS1 + WS2 complete.** Next up:
-**PREP-3.1** (WS3; PREP-4.7 awaiting approval, closes WS4).
+Last approved: **PREP-4.7** (engine-gaps register; closed WS4). **WS0 + WS1 + WS2 + WS4 complete.** Next up:
+**PREP-5.1** (WS5; PREP-3.1 + 3.2 awaiting approval, close WS3).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -306,14 +306,19 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   (regenerate → diff → fail on delta), mirroring the ontology-overlay zero-drift rule.
 - Acceptance: `docs/api/` is generated from live symbols; the freshness check fails on a stale commit.
 - Verify: `bash scripts/build_api_docs.sh && git diff --exit-code docs/api`.
-- Files: `scripts/build_api_docs.sh`, `docs/api/**` (generated), a CI note. Deps: WS1 (final surface). Status: todo.
+- Files: `scripts/build_api_docs.{py,sh}`, `docs/api/README.md` (generated). Deps: WS1. Status: **awaiting-approval**
+  (inspect-based markdown generator over `rag_wright.api.__all__` [27 symbols incl the re-exported registration
+  surface]; deterministic [two gens identical]; `.sh` + regenerate→diff drift guard. Chose a controlled markdown
+  generator over pdoc's HTML per decision #3; hosted site deferred).
 
 **PREP-3.2 — Docstring pass on the public surface.**
 - What: ensure every public symbol (the 22 api + `register_capability`/`load_reference_pack`/`reference_pack`) and
   each public module has a docstring with params/returns; fix any pdoc "missing docs" on public names.
-- Acceptance: pdoc emits no missing-doc warnings for public names.
-- Verify: re-run PREP-3.1; inspect warnings.
-- Files: docstrings across `src/rag_wright/api/*` (+ the two manifest symbols). Deps: PREP-3.1. Status: todo.
+- Acceptance: no public symbol lacks a docstring.
+- Verify: the generator reports 0 `(no docstring)` for the 27 public symbols.
+- Files: docstrings across `src/rag_wright/api/*` (+ the two manifest symbols). Deps: PREP-3.1. Status:
+  **awaiting-approval — ALREADY GREEN** (the generator found 0 missing docstrings across all 27 public symbols; no
+  edits needed). Closes WS3.
 
 > Extension (later gate): wrap `docs/` in mkdocs-material for a hosted site. Out of scope here.
 
