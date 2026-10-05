@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.6** (clean-venv install gate PASS). **WS0 + WS1 complete.** Next up: **PREP-2.2**
-(PREP-2.1 awaiting approval).
+Last approved: **PREP-2.1** (README → open-core). **WS0 + WS1 complete.** Next up: **PREP-2.3** (PREP-2.2
+awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -244,7 +244,9 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: every named symbol/kind exists in the code graph; no parked concepts (RLM-as-compiler, OKF, graph
   brief).
 - Verify: Graphify spot-checks of each symbol named; `rg -i "graph brief|okf|dagster" docs/concepts.md` reviewed.
-- Files: `docs/concepts.md`. Deps: WS1. Status: todo.
+- Files: `docs/concepts.md`. Deps: WS1. Status: **done** (mental model: engine/product, workspace, capabilities &
+  ARD [5 kinds, impl_ref invocable-vs-composed, empty catalog], the two seams, ontology-as-knowledge, the KG +
+  identifiers + provenance, reference pack; no parked concepts; named symbols verified to exist).
 
 **PREP-2.3 — `docs/architecture.md` (the final architecture doc).**
 - What: engine/product boundary (ADR-0052), the layer map (api / capabilities / subgraphs / models / ontology /
