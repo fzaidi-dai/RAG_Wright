@@ -22,19 +22,27 @@ ADR-0117 (engine API + capability runtime), ADR-0118 (engine core API vs ARD; sh
    `graph_query`, `fusion`, `embedding`, parsing, chunking, reranking — core API, EP-CORE-1a; NOT re-registered),
    and register only the product's OWN domain graphs/models/skills via `register_capability(manifest)` with an
    `impl_ref` (EP-CORE-2/3). A new cap is invocable (and MCP-exposable) with zero engine edits.
-5. **Ingest the corpus → populate the KG.** Run the ingestion capability over the product's corpus (PDF via
+5. **Write each capability's EVAL — eval-first (TDD).** As soon as a capability is DEFINED (its contract +
+   acceptance criterion from step 4), **before you implement it**, write its eval: a reproducible gold set + the
+   metric + a pass/fail gate drawn from the acceptance criterion. This is the TDD red that the implementation turns
+   green, and the regression guard thereafter; it also fixes the data design (a classifier's training data IS its
+   eval). Follow the **`creating-evals`** skill (gold-set design + reliability, per-capability-KIND metrics,
+   gate-vs-diagnostic, isolated harness, optional Langfuse Datasets/Experiments/Scores automation next to the
+   traces we already collect). Do this per capability, interleaved with building it — not as a later phase.
+6. **Ingest the corpus → populate the KG.** Run the ingestion capability over the product's corpus (PDF via
    `api.parse_document`/docling, or already-text via `api.source_document`). Most query/compliance capabilities
    READ this already-populated KG, so this must happen before they're useful.
-6. **(If needed) train classifiers, then adopt them behind the seam.** Classifiers have a bootstrapping
+7. **(If needed) train classifiers, then adopt them behind the seam.** Classifiers have a bootstrapping
    dependency: `.ttl` → an INITIAL LLM-based ingest/extraction (the LLM teacher) → curated labeled data → train
    (see the `setfit` skill + ADR-0030 training standard) → adopt-only-if-better → swap the classifier in behind the
    existing seam (classifier-first Step-3a, ADR-0115/0116). So classifiers come AFTER an initial ingest + data, not
-   at first capability authoring.
-7. **Build the product seam.** The product's thin layer OVER the engine API + its registered caps: tenancy +
+   at first capability authoring. The eval from step 5 is what you A/B the LLM-teacher vs the trained classifier vs
+   a System-1 decision model (Jev/Laya) on, and the bar you adopt against.
+8. **Build the product seam.** The product's thin layer OVER the engine API + its registered caps: tenancy +
    scoping, product orchestration, the product-named tool surface, and the D-bucket domain/app logic (compliance
    leg wrappers, vocabulary, citation-preview types, observability→product telemetry). It wraps `open_workspace` /
    the invokers / `kg_read` / `measure_usage` — never `ArcadeDBStore`/`query_embedder`/engine id formats.
-8. **(Optional) a product demo/example** for the product's own users. (NOT a "reference pack" — that term is the
+9. **(Optional) a product demo/example** for the product's own users. (NOT a "reference pack" — that term is the
    ENGINE's own worked example, the contract/compliance pack that ships in the engine repo to keep the open-core
    demoable; the product builds its domain pack in steps 3–4, not a reference pack.)
 
