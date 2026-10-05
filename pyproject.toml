@@ -1,9 +1,31 @@
 [project]
 name = "rag-wright"
 version = "0.1.0"
-description = "RAG_Wright: the capability half of the Hybrid RAG system (SPEC.md v0.1). Builds and registers the FR-C capabilities as ordinary tested software."
+description = "A domain-retargetable, open-core engine for hybrid retrieval + knowledge-graph RAG: parsing, chunking, embedding, hybrid search, reranking, graph extraction, entity resolution, ontology-driven knowledge, and a capability runtime."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Farhan Zaidi", email = "farhan.zaidi@dreamai.io" }]
+maintainers = [{ name = "Farhan Zaidi", email = "farhan.zaidi@dreamai.io" }]
+keywords = [
+    "rag",
+    "retrieval-augmented-generation",
+    "knowledge-graph",
+    "ontology",
+    "arcadedb",
+    "reranking",
+    "capability-runtime",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Text Processing :: Linguistic",
+]
 dependencies = [
     "arcadedb-python>=0.4.0",
     "deepagents>=0.7.15", # floor, not a hard pin: an == bound every downstream consumer (issue 0047, ADR-0015)
@@ -27,6 +49,11 @@ dependencies = [
     "sentence-transformers>=6.1.0",
     "transformers>=5.4,<5.9",
 ]
+
+[project.urls]
+Homepage = "https://github.com/fzaidi-dai/RAG_Wright"
+Repository = "https://github.com/fzaidi-dai/RAG_Wright"
+Documentation = "https://github.com/fzaidi-dai/RAG_Wright/tree/main/docs"
 
 [project.optional-dependencies]
 # Optional spaCy NER (ADR superseding ADR-0012): spaCy is an extra, and its model

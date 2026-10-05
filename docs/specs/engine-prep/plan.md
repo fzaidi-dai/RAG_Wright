@@ -73,8 +73,7 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-1.2** (no-`==`: docling-graph/langchain-quickjs → `>=`; langgraph floor added — awaiting
-approval). **WS0 complete.** Next up: **PREP-1.3**.
+Last approved: **PREP-1.3** (release metadata; twine check clean). **WS0 complete.** Next up: **PREP-1.4**.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -185,7 +184,10 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
   (Homepage/Repository/Documentation), and `classifiers` (Python 3.12, MIT, dev status, intended audience, topic).
 - Acceptance: `uvx twine check` on the built artifacts passes with no warnings.
 - Verify: `uv build && uvx twine check dist/*`.
-- Files: `pyproject.toml`. Deps: PREP-1.2. Status: todo.
+- Files: `pyproject.toml`. Deps: PREP-1.2. Status: **done** (added `license="MIT"` SPDX + `license-files`,
+  `authors`/`maintainers` = Farhan Zaidi <farhan.zaidi@dreamai.io> [user-confirmed], `[project.urls]` →
+  github.com/fzaidi-dai/RAG_Wright [user-confirmed canonical], 7 classifiers + keywords; refreshed the stale
+  GraphWright `description`. twine check PASSED for wheel + sdist).
 
 **PREP-1.4 — Ship type information (`py.typed`).**
 - Driver: baseline gap (consumer type-checkers see nothing today).
