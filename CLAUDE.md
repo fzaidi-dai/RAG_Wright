@@ -55,12 +55,22 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT ACTIVE WORKSTREAM (2026-10-02): the engine-platform boundary** — engine API layer + capability runtime +
-> de-domaining (ADR-0117, extending ADR-0052/0066/0067). It is specced in its own **child spec + ledger**:
-> **`docs/specs/engine-platform/SPEC.md`** and **`docs/specs/engine-platform/TASKS.md`**. Treat that child spec + tasks
-> as the current plan: read them after the parent spec/tasks, and run the working loop against the child ledger. The
-> root `SPEC.md`/`plan.md`/`tasks.md` remain the overall source of truth; their top banners point here. Detail:
-> `docs/proposals/de-domaining-and-capability-runtime.md` + `docs/proposals/new-domain-developer-journey.md`.
+> **CURRENT ACTIVE WORKSTREAM (2026-10-06): engine-prep — ready the engine for a new product.** Make the engine
+> installable as a package, documented like an open-source framework, archived clean of the GraphWright-era
+> history, and adaptable to a new domain. Specced in its own **plan + ledger**: **`docs/specs/engine-prep/plan.md`**
+> (task-numbered `PREP-*`). Treat that plan as the current ledger: read it first and run the working loop against it.
+> The preceding **engine-platform boundary** workstream (engine API layer + capability runtime + de-domaining,
+> ADR-0117/0052/0066/0067) landed the public API + capability runtime; its spec/ledger
+> (`docs/specs/engine-platform/SPEC.md` + `TASKS.md`) remain the reference for that surface. The root
+> `SPEC.md`/`plan.md`/`tasks.md` carry orientation banners (ADR-0052: engine/product split, GraphWright parked);
+> historical/superseded docs are under `docs/archive/`, and the ADR index is `docs/adr/README.md`.
+>
+> **The consolidated doc set** (engine-prep WS2/WS4): `docs/concepts.md`, `docs/architecture.md`,
+> `docs/installation.md`, `docs/configuration.md`, `docs/quickstart.md` (+ `examples/quickstart.py`),
+> `docs/reference-pack.md`, the generated `docs/api/`, and the domain-adaptation guide
+> `docs/domain-adaptation/` (ontology authoring, KG construction, entity resolution, authoring capabilities,
+> classification & decision models) + `_engine-gaps.md`. The product-starter templates are
+> `docs/templates/product-starter/`.
 
 Before doing anything else:
 
@@ -160,6 +170,9 @@ Commits are how the memory above becomes durable. Git history is the parallel re
 - `debugging-and-error-recovery`, on demand only when a task is stuck.
 - `using-agent-skills`, to discover and invoke the above.
 - `authoring-a-capability` (`.claude/skills/authoring-a-capability/SKILL.md`), when adding a new engine capability of any kind (subgraph/function/model/agent_skill/mcp_tool): the shared registration + ARD + invocation contract (the five surfaces + definition of done), the per-kind specifics, and the conformance guardrail (`tests/capabilities/test_authoring_contract.py`).
+- `creating-evals`, to write a capability's eval FIRST (eval-first/TDD) — before implementing it; the gold-set design, per-capability-kind metrics, and the gate-vs-diagnostic split.
+- `classifier-opportunity-analysis`, to find where an LLM call can become a deterministic rule / trained classifier / routing decision; then `setfit` (build a trained classifier) or `laya` (fine-tune the open System-1 decision model), with `qwen-vllm-modal` for the bulk teacher-labeling substrate and a Jev A/B. ADR-0115/0116/0119.
+- `using-the-rag-wright-engine`, the CONSUMER-side playbook (for a product repo building on the engine) — kept here, version-matched to the engine; a product pulls it into its own `.claude/skills/`.
 - `Graphify`, for the `framework` and `project` graphs.
 - The LangChain docs MCP server (`https://docs.langchain.com/mcp`), for understanding LangGraph and Deep Agents concepts. It explains; it does not confirm. Grounding still resolves against the code graph.
 

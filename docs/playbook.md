@@ -2,7 +2,14 @@
 
 The DreamAI recipe for building a spec-driven project with Claude Code, following spec-driven development, test-driven development, contracts-first, and library-grounded coding. Filled for RAG_Wright: the parameters below are set, and the body applies as written. RAG_Wright is the reusable **engine/platform** (open-core candidate) of the Hybrid RAG system; the user-facing **product** is a separate repo that depends on it, and GraphWright (the orchestration compiler) is PARKED (ADR-0052).
 
-> **Current active workstream (2026-10-02):** the engine-platform boundary (engine API layer + capability runtime + de-domaining, ADR-0117) is driven by the child spec + ledger at **`docs/specs/engine-platform/SPEC.md`** and **`docs/specs/engine-platform/TASKS.md`**. Follow that child spec + tasks for current work; the root spec/plan/tasks point to it.
+> **Current active workstream (2026-10-06): engine-prep** — ready the engine for a new product (package + docs +
+> archive + domain-adaptation). Driven by **`docs/specs/engine-prep/plan.md`** (`PREP-*`); follow that plan for
+> current work. The preceding **engine-platform boundary** (engine API + capability runtime + de-domaining,
+> ADR-0117) landed the public API; its spec/ledger (`docs/specs/engine-platform/SPEC.md` + `TASKS.md`) remain the
+> reference for that surface. The consolidated doc set is under `docs/` (`concepts`, `architecture`, `installation`,
+> `configuration`, `quickstart`, `reference-pack`, `api/`, and the `domain-adaptation/` guide); historical docs are
+> in `docs/archive/`; the ADR index is `docs/adr/README.md`; product-starter templates are
+> `docs/templates/product-starter/`.
 
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
 
@@ -58,6 +65,11 @@ This repo is the ENGINE/platform (open-core candidate): it builds and registers 
 | using-agent-skills | Addy Osmani | Meta-skill so Claude Code discovers and invokes the rest. | Keep |
 | library-grounding | Custom | Mandatory: query the index for the exact API before using a library. | Add (section 5) |
 | authoring-a-capability | Custom (`.claude/skills/`) | How to author a new engine capability of any kind (subgraph/function/model/agent_skill/mcp_tool): the shared registration + ARD + invocation contract, per-kind specifics, and the conformance guardrail. | Add (ADR-0117) |
+| creating-evals | Custom (`.claude/skills/`) | Write a capability's eval FIRST (eval-first/TDD): gold-set design, per-capability-kind metrics, gate-vs-diagnostic. | Add |
+| classifier-opportunity-analysis | Custom (`.claude/skills/`) | Find where an LLM call can become a deterministic rule / trained classifier / routing decision (upstream of setfit). | Add |
+| setfit / laya | Custom (`.claude/skills/`) | Build a trained classifier (SetFit) or fine-tune the open System-1 decision model (Laya); A/B the managed Jev decision model (ADR-0119). | Add |
+| qwen-vllm-modal | Custom (`.claude/skills/`) | The self-hosted Qwen3 vLLM substrate on Modal for bulk teacher-labeling / production inference (ADR-0110). | Add |
+| using-the-rag-wright-engine | Custom (`.claude/skills/`) | The CONSUMER-side playbook for a product repo building on the engine — kept here, version-matched; the product links it in. | Add |
 | `Graphify` | for example safishamsi/graphify | Builds the queryable knowledge graphs the agent consults. | Install |
 
 Contracts-first is folded into the TDD skill rather than added as a separate skill, to keep the active set small.

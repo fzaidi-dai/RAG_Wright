@@ -73,8 +73,9 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-5.3** (playbook product-starter template). **WS0–WS4 complete.** Next up: **PREP-5.5**
-(PREP-5.4 awaiting approval) — the engine-prep FINAL task (refresh the ENGINE's OWN CLAUDE.md + playbook).
+Last approved: **PREP-5.5** — **engine-prep plan COMPLETE (2026-10-06).** All WS0–WS5 done (+ the ADR-0122 bug-fix
+diversion). The engine is ready to install as a package and build a new product on. **Deferred follow-ons (user
+gates): public PyPI publish; the TexWright build.** Nothing is "next up" in this plan.
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -488,7 +489,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: both files cite the new skills + doc set + engine-prep workstream; no stale "GraphWright builds the
   graphs" or dead-doc references; standing rules intact.
 - Verify: `rg` for the new skills/docs present; `rg -i "graphwright compiler|orchestration spec"` clean.
-- Files: `CLAUDE.md`, `docs/playbook.md`. Deps: WS5 docs exist. Status: todo.
+- Files: `CLAUDE.md`, `docs/playbook.md`. Deps: WS5 docs exist. Status: **awaiting-approval** (both files: active
+  workstream banner → engine-prep; the 6 engine-authored skills added to the skills list; the consolidated doc set
+  + `docs/archive/` + ADR index + product-starter templates referenced; standing working-loop/grounding/commit
+  rules untouched; the only GraphWright mention is the authoritative PARKED statement). **done — WS5 + the
+  engine-prep plan COMPLETE.**
 
 ---
 

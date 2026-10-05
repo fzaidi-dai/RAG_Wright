@@ -3,12 +3,24 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ ACTIVE WORKSTREAM (2026-10-02): the engine-platform boundary** (engine API layer + capability runtime +
-> de-domaining, ADR-0117). Its spec + ledger live in **`docs/specs/engine-platform/SPEC.md`** +
-> **`docs/specs/engine-platform/TASKS.md`** — that child ledger is the current plan; work it there, not here. This
-> root ledger stays the authoritative record for everything else.
+> **⇒ ACTIVE WORKSTREAM (2026-10-06): engine-prep — COMPLETE.** Readying the engine for a new product (package +
+> docs + archive + domain-adaptation) is done; spec + ledger at **`docs/specs/engine-prep/plan.md`** (all `PREP-*`
+> tasks done). The prior **engine-platform boundary** (engine API + capability runtime, ADR-0117) is at
+> `docs/specs/engine-platform/SPEC.md` + `TASKS.md`. This root ledger stays the authoritative record for everything
+> else.
+>
+> **RESUME / NEXT UP (2026-10-06, NEWEST): engine-prep plan COMPLETE — the engine is ready to install + build a
+> product on.** All six workstreams done (WS0 hygiene/archive · WS1 package-ready · WS2 core docs · WS3 generated
+> API ref · WS4 domain-adaptation guide + engine-gaps register · WS5 onboarding skill + product-starter templates +
+> the engine's own CLAUDE.md/playbook refresh), plus the **ADR-0122** bug-fix diversion (intra_document_qa restored
+> to cited answers: provision-boundary split + clause `span_id` + the `ContractKGStore.all_spans_by_contract` serve
+> regression). Doc set: `docs/{concepts,architecture,installation,configuration,quickstart,reference-pack,api}` +
+> `docs/domain-adaptation/`; historical docs in `docs/archive/`; ADR index `docs/adr/README.md`; product-starter
+> templates `docs/templates/product-starter/`; engine-gaps follow-ups in `docs/domain-adaptation/_engine-gaps.md`
+> (+ cross-posted to engine-platform `TASKS.md`). **Deferred follow-ons (user gates): public PyPI publish; the
+> TexWright build.** The dated resume block below is HISTORICAL (superseded).
 
-> **RESUME / NEXT UP (2026-09-04 NEWEST): MODEL DEFAULT SWITCHED + TAGPARSE-INGEST-1 IS NEXT.**
+> **RESUME / NEXT UP (2026-09-04, HISTORICAL — superseded by the 2026-10-06 block above): MODEL DEFAULT SWITCHED + TAGPARSE-INGEST-1 IS NEXT.**
 > **MODEL-DEFAULT-1 (DONE, ADR-0079)**: the product default `ibm-granite/granite-4.1-8b` was DE-LISTED on
 > OpenRouter (404). Evaluated replacements first-hand, live, on the real ingestion path: `~deepseek/deepseek-v4-flash-latest`
 > (pre-approved "if it works") is FLAKY on the docling-graph extraction path (a clean clause retried 5× failed
