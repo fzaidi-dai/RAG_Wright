@@ -73,8 +73,8 @@ out of the installed package and out of the newcomer's way.
 
 ## Task ledger
 
-Last approved: **PREP-4.7** (engine-gaps register; closed WS4). **WS0 + WS1 + WS2 + WS4 complete.** Next up:
-**PREP-5.1** (WS5; PREP-3.1 + 3.2 awaiting approval, close WS3).
+Last approved: **PREP-3.1 + 3.2** (generated API ref; closed WS3). **WS0–WS4 complete.** Next up: **PREP-5.2**
+(PREP-5.1 awaiting approval).
 
 Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`/`in-progress`/`awaiting-approval`/
 `done`). Status changes only per the working loop. Verify commands are run and shown at the gate.
@@ -434,7 +434,11 @@ Each task carries: driver, what, acceptance, verify, files, deps, status (`todo`
 - Acceptance: the skill names the exact commands, the exact public imports, and the exact doc paths; reviewed
   against the real API; no parked concepts.
 - Verify: Graphify/code cross-check of every symbol + command; link check. Files:
-  `.claude/skills/using-the-rag-wright-engine/SKILL.md` (new). Deps: WS1, WS4. Status: todo.
+  `.claude/skills/using-the-rag-wright-engine/SKILL.md` (new). Deps: WS1, WS4. Status: **awaiting-approval**
+  (consumer playbook: Product→Engine + `rag_wright.api`-only rules; install; the `engine`/`project` graphify lanes +
+  ground-before-write; docs-not-in-wheel [read at repo path/GitHub]; the 6-move sequence linking the
+  domain-adaptation companions + engine skills; anti-patterns incl. "don't treat the reference pack as the engine's
+  purpose").
 
 **PREP-5.2 — `CLAUDE.md` product-starter template.**
 - Driver: Decision 4; RuleWright's `CLAUDE.md` already exposes the reuse seam.
