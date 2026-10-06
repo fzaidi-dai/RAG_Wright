@@ -59,8 +59,14 @@ register_capability(CapabilityManifest(
 
 `register_capability` places the manifest in the runtime ARD catalog (ship-empty) and imposes **no canonical-slug
 restriction** — use your domain's names. (`CANONICAL_CAPABILITY_SLUGS` is the *reference pack's* internal
-cross-spec join-key set, not a constraint on your domain.) Discover what's registered with `capability_index()`;
-expose a capability over MCP by registering an `mcp_tool` surface.
+cross-spec join-key set, not a constraint on your domain.) Expose a capability over MCP by registering an
+`mcp_tool` surface.
+
+**Discovery.** Once registered, a product agent finds your capability two ways: `capability_index()` — the flat
+`{slug: {kind, description}}` listing (what exists) — or **`discover(task, resources=ws)`** — embedding-ranked
+selection over the live catalog for a task (returns the top matches by BGE-M3 similarity to each capability's
+`representative_queries` + description), for an agent that must *plan* over the engine rather than invoke a known
+slug. Write good `representative_queries` (2–5, phrased like real tasks) — that is the field discovery ranks on.
 
 ## Compose the engine's primitives — don't re-register them
 

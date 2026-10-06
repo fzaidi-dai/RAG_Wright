@@ -210,8 +210,10 @@ approval gate, atomic commit. Statuses: `todo | in-progress | awaiting-approval 
 | CIC-2 | **Standing per-pack note (not engine work here).** A genuinely NEW-vocabulary domain pack trains its OWN classifiers against the seam (product / domain-pack side); the deterministic scaffolding (CIC-1a) transfers for free via the pack `.ttl`. **FTC ads is NOT such a case** — `ftc_16cfr255.ttl` is a query-side `cmp:SectionOverride` overlay reusing the shared `compliance_bridge.ttl` ingest vocab; its specialness (`run_ad_compliance_check` + the overrides) is query-time, covered by the existing LLM path we live with. | ADR-0066/0052 | n/a (note) | — | — |
 
 ## Deferred
-- **ARD dynamic discovery seam** (search manifests by `representative_queries`) — not urgent; direct import of the API
-  layer is the fast path.
+- **ARD dynamic discovery seam** — **DONE (2026-10-06):** `rag_wright.api.discover(task, resources=ws, kind=None, k=8)`
+  ranks the live catalog by BGE-M3 embedding similarity to each capability's `representative_queries` + description
+  (returns `Discovered{slug, kind, description, representative_queries, score}`), for a product agent planning over
+  the engine. Hermetic tests (fake keyword-embedder) + a live `-m embed` ranking check; `tests/api/test_discover.py`.
 - **Query-time judge as a pair-classifier** — the verdict is a 3-way (claim, requirement) classification; a
   cross-encoder/NLI verdict + LLM-for-rationale/fallback is a candidate, but query-time + semantic → live with the
   LLM for now (as contracts do at query time). Separate from the CIC ingest arc.

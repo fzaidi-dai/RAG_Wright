@@ -24,6 +24,10 @@ Ingest-time knobs, settable through config instead of environment variables (EP-
 
 An opaque handle to a resolved engine workspace. Public surface: `model_id(role)`. The resolved store + embedder are engine-internal (`_store` / `_embedder`), used by the invokers -- NOT a product accessor.
 
+### `Discovered(slug: 'str', kind: 'str', description: 'str', representative_queries: 'tuple[str, ...]', score: 'float') -> None`
+
+One ranked capability match from `discover` — enough for an agent to pick and invoke it by `slug`.
+
 ### `UsageTotals(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0, by_model: 'dict[str, ModelUsage]' = <factory>, _lock: 'threading.Lock' = <factory>) -> None`
 
 The usage accumulated within one `usage_scope()`: top-level totals + a per-model breakdown.
@@ -53,6 +57,10 @@ Invoke a model-kind capability by name, ASYNCHRONOUSLY -- the async surface for 
 ### `capability_index() -> 'dict[str, dict]'`
 
 Public discovery index: `{slug: {kind, description}}` for every catalogued capability (the 'cards').
+
+### `discover(query: 'str', *, resources: 'WorkspaceHandle', kind: 'Optional[str]' = None, k: 'int' = 8) -> 'list[Discovered]'`
+
+Rank the live ARD catalog by semantic match to `query`; return the top `k` (optionally filtered to one `kind`: `subgraph` / `model` / `function` / `agent_skill` / `mcp_tool`). Embedding-based, via the workspace's query embedder (BGE-M3, the same space retrieval uses). Returns `[]` when the (filtered) catalog is empty; raises `RuntimeError` if the workspace has no query embedder available (discovery needs one).
 
 ### `kg_read(ws: 'WorkspaceHandle', node_type: 'str', *, where: 'Optional[dict]' = None, fields: 'Optional[list]' = None, distinct: 'Optional[str]' = None, order_by: 'Optional[str]' = None, limit: 'Optional[int]' = None) -> 'list[dict]'`
 
