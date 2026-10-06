@@ -24,7 +24,12 @@ release-please reads the **squash-merged PR titles / commit messages** on `main`
 | `fix:` | patch bump (0.1.0 → 0.1.1), listed under Bug Fixes |
 | `feat:` | minor bump (0.1.x → 0.2.0), listed under Features |
 | `feat!:` / `BREAKING CHANGE:` footer | minor bump while 0.x (major once ≥ 1.0) |
-| `docs:` `ci:` `chore:` `test:` `refactor:` | no release on their own (not user-facing) |
+| `perf:` `deps:` `revert:` | patch bump, listed under their own section |
+| `docs:` `ci:` `chore:` `test:` `refactor:` `build:` `style:` | no release on their own (not user-facing) |
+
+The visible/hidden split is set explicitly by `changelog-sections` in `release-please-config.json`. Keep it there:
+the Python strategy's built-in default treats `docs:` as user-facing, so without that list a docs-only change opens a
+release PR.
 
 Use a scope for traceability, e.g. `fix(ingest): carry clause span_id (ADR-0122)`. A PR whose title is not
 conventional is ignored for versioning, so it will not trigger or appear in a release.
