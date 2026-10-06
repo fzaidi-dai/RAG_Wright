@@ -51,6 +51,8 @@ The whole doc set is under [`docs/`](docs/). Pick your path:
   product seam); a coding agent should drive it with the `using-the-rag-wright-engine` skill.
 - **Going deep?** [Architecture](docs/architecture.md), the generated [API reference](docs/api/), the
   [Reference pack](docs/reference-pack.md), and the [ADR index](docs/adr/README.md).
+- **Releases?** See the [CHANGELOG](CHANGELOG.md) and [how releases work](docs/releasing.md) (batched via
+  release-please; products adopt them through automated dependency PRs).
 
 ## Install
 

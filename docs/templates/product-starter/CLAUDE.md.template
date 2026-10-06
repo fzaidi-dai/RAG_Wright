@@ -44,6 +44,10 @@ engine — a separate repo that depends on the open-core engine, one way.
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.
 - **GraphWright is PARKED (ADR-0052).** There is no orchestration compiler; the product hand-builds orchestration.
+- **Engine upgrades arrive as Dependabot PRs** (`.github/dependabot.yml`), gated by CI incl. the live engine-seam
+  tests — never bump the engine by hand outside that path. The one exception: a temporary `[tool.uv.sources]` git
+  `rev` pin to adopt an engine fix before it is released, removed when the release lands (playbook section 5).
+  Engine bugs found here are fixed in the engine repo via a PR with a conventional `fix:` title.
 
 ---
 

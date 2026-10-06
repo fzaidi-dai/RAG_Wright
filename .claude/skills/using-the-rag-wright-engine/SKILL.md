@@ -74,6 +74,19 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
 Read the engine's **reference pack** (`load_reference_pack()`) as a worked template — but the contract/compliance
 domain is only an example; your pack and capabilities are your own.
 
+## 5. Keep the engine current
+
+The engine releases in batches (release-please; the engine's `docs/releasing.md`), so you never chase every
+engine PR:
+
+- Depend on a floor (`rag-wright>=X.Y.Z`, never `==`); `uv.lock` holds the exact version. Dependabot (uv ecosystem)
+  opens a PR per new release; your CI — with a LIVE engine-seam test — gates it.
+- Found an engine bug? Fix it **in the engine repo** (PR titled `fix(scope): …` so it lands in the next release),
+  not by patching around it in the product.
+- Need that fix before the next release? Temporarily pin
+  `[tool.uv.sources] rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<merged-sha>" }` and
+  `uv lock`; drop the override when the release containing it arrives.
+
 ## Engine skills to use
 
 `creating-evals` (eval-first), `classifier-opportunity-analysis` → `setfit`/`laya` (build a decision),

@@ -1,0 +1,22 @@
+# Dependabot for a product built on the RAG_Wright engine. Copy to `.github/dependabot.yml` at Phase 0.
+#
+# When a new `rag-wright` release lands on PyPI, this opens a PR bumping uv.lock (the engine in its own group,
+# other dependencies in a second group). Your CI — including the LIVE engine-seam tests — gates each PR; merge on
+# green. pyproject keeps a `>=` floor; uv.lock holds the exact version, so the engine only moves through these PRs.
+#
+# While a temporary `[tool.uv.sources] rag-wright = { git = ..., rev = ... }` override is in place (an unreleased
+# engine fix), remove it in the PR that adopts the release containing that fix. See the engine's docs/releasing.md.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    groups:
+      engine:
+        patterns: ["rag-wright"]
+      other-dependencies:
+        patterns: ["*"]
+        exclude-patterns: ["rag-wright"]
+    commit-message:
+      prefix: "deps"

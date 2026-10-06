@@ -73,7 +73,9 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 6. **Link the skills into `.claude/skills/`:** the engine-authored skills from the engine repo and the shared
    generic skills from their source (symlink so each tracks its version; never copy). Load
    **`using-the-rag-wright-engine`** first on any engine work.
-7. Remaining Phase 0: the engine seam, config/secrets, any front-end scaffold, observability, and repaying the
+7. **Engine-release automation:** copy the starter's `dependabot.yml` to `.github/dependabot.yml`, so each new
+   `rag-wright` release arrives as a PR gated by your CI (section 5, "Keeping the engine current").
+8. Remaining Phase 0: the engine seam, config/secrets, any front-end scaffold, observability, and repaying the
    `{{SPEC}}` placeholders.
 
 ---
@@ -137,6 +139,22 @@ pack, and the generated API reference.
 script's `PKGS`; fast-moving/monorepo → clone-stage at the installed tag; no source + no docs MCP → LLM-extract its
 vendor docs), then refresh and query before writing the call. **Gate activation on real configuration, never on
 mere importability** (a transitive dep can flip importability-gated behaviour).
+
+### Keeping the engine current
+
+Engine fixes land as engine PRs, but the engine **releases in batches** (release-please; the engine's
+`docs/releasing.md`). This product adopts releases automatically:
+
+- **Normal path:** `pyproject` keeps `rag-wright>={{ENGINE_FLOOR}}` (a floor, never `==`); `uv.lock` pins the exact
+  version. Dependabot (`.github/dependabot.yml`) opens a PR when a new release appears on PyPI; CI — including the
+  LIVE engine-seam tests — gates it; merge on green.
+- **Need an engine fix before it's released?** Pin the merged engine commit temporarily:
+  `[tool.uv.sources] rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`, then
+  `uv lock`. Remove the override in the Dependabot PR that adopts the release containing the fix.
+- **Developing both at once, locally:** an editable path dep on `{{ENGINE_PATH}}` is fine on your machine, but
+  never commit it (CI cannot see that path).
+- Engine bugs found here are fixed **in the engine repo** (a PR with a conventional `fix:` title), never patched
+  around in this repo.
 
 ---
 
