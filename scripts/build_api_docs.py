@@ -25,7 +25,15 @@ def _summary(obj: object) -> str:
     return " ".join(para.split())
 
 
+def _is_protocol(obj: object) -> bool:
+    return inspect.isclass(obj) and bool(getattr(obj, "_is_protocol", False))
+
+
 def _signature(name: str, obj: object) -> str:
+    if _is_protocol(obj):  # a hook protocol: show the call it requires, not the Protocol constructor
+        params = list(inspect.signature(obj.__call__).parameters.values())[1:]  # drop `self`
+        sig = inspect.signature(obj.__call__).replace(parameters=params)
+        return f"{name}: {sig}"
     try:
         return f"{name}{inspect.signature(obj)}"
     except (TypeError, ValueError):
@@ -42,13 +50,22 @@ def main() -> None:
         "",
     ]
     classes: list[str] = []
+    protocols: list[str] = []
+    aliases: list[str] = []
     functions: list[str] = []
     for name in api.__all__:
         obj = getattr(api, name)
+        if (not inspect.isclass(obj) and not callable(obj)) or getattr(obj, "__module__", "") == "typing":
+            aliases.append(f"### `{name} = {obj!r}`\n")  # a typing alias (Literal / Callable): show its definition
+            continue
         block = [f"### `{_signature(name, obj)}`", "", _summary(obj), ""]
-        (classes if inspect.isclass(obj) else functions).append("\n".join(block))
+        bucket = protocols if _is_protocol(obj) else classes if inspect.isclass(obj) else functions
+        bucket.append("\n".join(block))
 
     lines += ["## Types", ""] + classes
+    lines += ["## Hook protocols", "", "Callables you pass to the engine; any function with this signature conforms.",
+              ""] + protocols
+    lines += ["## Type aliases", ""] + aliases
     lines += ["## Functions", ""] + functions
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")

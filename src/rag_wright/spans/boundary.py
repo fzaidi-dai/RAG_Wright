@@ -12,12 +12,10 @@ the clear majority + a model only for the ambiguous part -- flexible where regex
 from __future__ import annotations
 
 import os
-from typing import Any, Awaitable, Callable, Optional
+from typing import Any, Optional
 
+from rag_wright.contracts.ingestion import BoundaryDecider  # the shared residue-decider contract (ING-1, ADR-0124)
 from rag_wright.spans.segment import provision_boundary_verdict
-
-# A residue decider: candidate texts (the UNCERTAIN spans) -> a start flag each (True = begins a new provision).
-BoundaryDecider = Callable[[list[str]], Awaitable[list[bool]]]
 
 _THRESHOLD = 0.5
 

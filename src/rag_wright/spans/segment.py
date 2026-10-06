@@ -21,8 +21,7 @@ from __future__ import annotations
 
 import re
 
-from pydantic import BaseModel
-
+from rag_wright.contracts.ingestion import Span
 from rag_wright.contracts.span import SpanRecord
 
 DEFAULT_MIN_CHARS = 25  # a span whose stripped text is shorter folds into its neighbour (a bare heading/marker)
@@ -202,18 +201,9 @@ def _is_bare_heading(text: str) -> bool:
     return not re.search(r"[.;:]", rest)  # a bare title has no sentence punctuation; a provision does
 
 
-class OperativeSpan(BaseModel):
-    """One operative span of a clause, pointing back to its parent clause (FR-R small-to-big unit)."""
-
-    span_id: str  # "{parent_chunk_id}#{span_index}" -- embeds the parent (identifier rule, ADR-0025)
-    parent_chunk_id: str
-    parent_okf_path: str  # where the parent clause lives in the clause OKF bundle (locate/fetch for rerank)
-    span_index: int
-    start: int  # char offset into the parent clause body
-    end: int  # exclusive; spans tile the body: body[start:end] concatenated == body
-    text: str  # body[start:end] (raw slice; strip at use time)
-    pages: list[int] = []  # issue 0032: the source page(s) this span's canonical range overlaps (set at ingest)
-    bbox: tuple[float, float, float, float] | None = None  # best-effort single-item box (l, t, r, b)
+# ING-1 (ADR-0124): the span contract is the engine's generic `Span`; this legal segmenter is one implementation
+# of the `Segmenter` hook. The name is kept for the reference pack's callers.
+OperativeSpan = Span
 
 
 def _boundaries(body: str) -> list[int]:

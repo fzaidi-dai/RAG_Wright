@@ -28,6 +28,14 @@ An opaque handle to a resolved engine workspace. Public surface: `model_id(role)
 
 One ranked capability match from `discover` — enough for an agent to pick and invoke it by `slug`.
 
+### `KgNode(type: 'str', key_field: 'str', props: 'dict[str, object]') -> None`
+
+A typed KG node to upsert (DD-1b, ADR-0117): `type` is the vertex type, `key_field` the identity field to upsert on, `props` the fields (including `key_field`) as DOMAIN-NATIVE values. The store encodes each prop by its pack-declared storage type -- the caller never serializes to the store's wire format.
+
+### `KgEdge(type: 'str', from_type: 'str', from_key_field: 'str', from_key: 'object', to_type: 'str', to_key_field: 'str', to_key: 'object', props: 'dict[str, object]') -> None`
+
+A typed KG edge to create between two nodes identified by (type, key_field, key). `props` are native values (edge properties are type-driven: edges declare no storage schema).
+
 ### `UsageTotals(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0, by_model: 'dict[str, ModelUsage]' = <factory>, _lock: 'threading.Lock' = <factory>) -> None`
 
 The usage accumulated within one `usage_scope()`: top-level totals + a per-model breakdown.
@@ -35,6 +43,60 @@ The usage accumulated within one `usage_scope()`: top-level totals + a per-model
 ### `ModelUsage(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0) -> None`
 
 Per-model totals within a scope (`cost_usd` sums KNOWN per-call costs only).
+
+### `LayoutItem(*, kind: Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other'], text: str, start: int, end: int, level: Optional[int] = None, pages: list[int] = []) -> None`
+
+One layout element of the parsed document that overlaps a chunk, in CHUNK-relative offsets.
+
+### `Span(*, span_id: str, parent_chunk_id: str, parent_okf_path: str = '', span_index: int, start: int, end: int, text: str, pages: list[int] = [], bbox: tuple[float, float, float, float] | None = None) -> None`
+
+One span: the smallest citeable unit, indexed for retrieval. It points back to its parent chunk; `span_id` is `<parent_chunk_id>#<span_index>` (identifier rule) and `start`/`end` are offsets into the chunk text.
+
+### `TaggedSpan(*, span: rag_wright.contracts.ingestion.Span, tags: list[str] = [], scores: dict[str, float] = {}) -> None`
+
+A span with the optional span tagger's soft tags (primary first) and their scores.
+
+### `Unit(*, index: int, anchor: rag_wright.contracts.ingestion.Span, spans: list[rag_wright.contracts.ingestion.Span], text: str, tags: list[str] = []) -> None`
+
+The extraction unit: consecutive spans grouped by the unit grouper. `text` is what the extractor reads; `anchor` is the citation anchor for records read from it (a member span).
+
+### `UnitExtraction(*, nodes: list[rag_wright.store.seam.KgNode] = [], edges: list[rag_wright.store.seam.KgEdge] = []) -> None`
+
+What an extractor returns for one unit: typed KG nodes/edges in the pack's schema. Every node carries `span_id` (a span of the unit) and `confidence` (a `ConfidenceTag` value) as props (FR-S.4).
+
+### `IngestionContractError`
+
+A hook's output broke the ingestion contract (tiling, unit integrity, or record provenance).
+
+## Hook protocols
+
+Callables you pass to the engine; any function with this signature conforms.
+
+### `Segmenter: (chunk_id: 'str', text: 'str', layout: 'Sequence[LayoutItem]') -> 'list[Span]'`
+
+chunk -> spans that tile its text. Sync (CPU). `layout` is the parse's layout overlapping the chunk (empty for a text-only source).
+
+### `SpanTagger: (chunk_text: 'str', spans: 'Sequence[Span]') -> 'Awaitable[list[TaggedSpan]]'`
+
+Optional: soft tags per span of one chunk, aligned to `spans`.
+
+### `UnitGrouper: (spans: 'Sequence[TaggedSpan]', *, decider: 'Optional[BoundaryDecider]' = None) -> 'Awaitable[list[Unit]]'`
+
+A document's spans (in order, across chunks) -> extraction units. May drop spans (e.g. page furniture); a dropped span stays in the span index. `decider`, when set, adjudicates boundaries the grouper is unsure of.
+
+### `Extractor: (unit: 'Unit', *, source_doc_id: 'str') -> 'Awaitable[UnitExtraction]'`
+
+One unit -> the domain's typed records (required; the domain-specific step).
+
+### `RecordWriter: (source_doc_id: 'str', extractions: 'Sequence[UnitExtraction]') -> 'Awaitable[None]'`
+
+Optional: persist a document's extractions. The engine default writes them with `kg_write`.
+
+## Type aliases
+
+### `LayoutKind = typing.Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']`
+
+### `BoundaryDecider = typing.Callable[[list[str]], typing.Awaitable[list[bool]]]`
 
 ## Functions
 
@@ -121,3 +183,15 @@ Register the engine's reference pack into the runtime catalog -- the opt-in work
 ### `reference_pack() -> 'tuple[CapabilityManifest, ...]'`
 
 The engine's committed REFERENCE PACK manifests (the contract/compliance worked example). Opt-in.
+
+### `check_tiling(chunk_id: 'str', text: 'str', spans: 'Sequence[Span]') -> 'None'`
+
+A segmenter's spans must tile `text` in order, byte-faithfully, under the `span_id` scheme.
+
+### `check_units(spans: 'Sequence[Span]', units: 'Sequence[Unit]') -> 'None'`
+
+A grouper's units must use known spans, each at most once, in document order, indexed 0..k-1.
+
+### `check_extraction(unit: 'Unit', extraction: 'UnitExtraction') -> 'None'`
+
+Every record node must cite a span of its unit and carry a `ConfidenceTag` (FR-S.4).
