@@ -17,9 +17,11 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
 - **Product → Engine, one way.** Never fork, edit, or reach into engine internals. If the engine needs a change,
   flag it upstream — don't work around it here.
 - **The public surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the invokers
-  (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), `kg_read`/`kg_write`/`kg_edges`/`entities_by_name`,
-  `measure_usage`, and `register_capability`/`load_reference_pack`/`reference_pack` — nothing deeper (never
-  `ArcadeDBStore`, `query_embedder`, or engine id formats).
+  (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`),
+  `kg_read`/`kg_write`/`kg_edges`/`entities_by_name`, `measure_usage`, and
+  `register_capability`/`load_reference_pack`/`reference_pack` — nothing deeper (never `ArcadeDBStore`,
+  `query_embedder`, or engine id formats). To **plan** over the engine for a task, `discover(task, resources=ws)`
+  returns the best-matching capabilities (embedding-ranked); then invoke the top ones by slug.
 
 ## 1. Install
 

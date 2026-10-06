@@ -56,7 +56,8 @@ Two things matter for a new domain:
   it with `register_capability(manifest)`; the reference pack is opt-in via `load_reference_pack()`. The invoker
   resolves `impl_ref` lazily — there is no central adapter table.
 
-Discovery is `capability_index()` (slug → kind + description). Authoring one is the
+Discovery is `capability_index()` (the flat `slug → kind + description` listing) or `discover(task, resources=ws)`
+(embedding-ranked selection over the live catalog, for an agent planning over the engine). Authoring one is the
 [`authoring-a-capability`](domain-adaptation/authoring-capabilities.md) workflow.
 
 ## The two seams

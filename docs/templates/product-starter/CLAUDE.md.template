@@ -36,8 +36,10 @@ engine — a separate repo that depends on the open-core engine, one way.
   **Never modify the engine from this repo or session.** If the product needs an engine capability or change, FLAG
   it and make that change in the engine repo (`{{ENGINE_PATH}}`), where the engine's own CLAUDE.md governs.
 - **The whole engine surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
-  invokers, `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack` — never engine internals
-  (`ArcadeDBStore`, `query_embedder`, engine id formats). The product never touches the store directly.
+  invokers, discovery (`capability_index`/`discover` — `discover(task, resources=ws)` embedding-ranks the catalog
+  for an agent planning over the engine), `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack` —
+  never engine internals (`ArcadeDBStore`, `query_embedder`, engine id formats). The product never touches the
+  store directly.
 - **Your domain is a `.ttl` pack + capabilities, authored HERE against the engine** (the engine is
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.

@@ -30,8 +30,9 @@ here so the engine is demoable out of the box — your product brings its own do
 - **One store.** ArcadeDB holds both the hybrid retrieval index and the knowledge graph — no cross-store join to
   keep consistent.
 - **A capability runtime (ARD).** Parsing, chunking, embedding, hybrid search, reranking, graph extraction, entity
-  resolution, reasoning/generation and more are registered capabilities invoked by name through one API. The engine
-  ships with an **empty catalog**; you register your domain's capabilities (or opt into the reference pack).
+  resolution, reasoning/generation and more are registered capabilities invoked by name through one API — and
+  **discoverable by task** (`discover`), so an agent can plan over them. The engine ships with an **empty
+  catalog**; you register your domain's capabilities (or opt into the reference pack).
 - **Knowledge in the ontology.** Closed vocabularies, schema, SHACL constraints and mappings live in a `.ttl` pack;
   code holds mechanism only.
 - **Model-neutral.** Model access is a profile seam — OpenRouter by default, self-hosted open models (vLLM)
