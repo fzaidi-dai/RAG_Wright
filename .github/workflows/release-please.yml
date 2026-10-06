@@ -1,0 +1,30 @@
+name: Release Please
+
+# Batches merged changes into releases (nothing ships per PR). release-please keeps ONE open "release PR" that
+# accumulates conventional commits (feat: / fix: / ...) since the last release, bumping pyproject.toml's version
+# and CHANGELOG.md. When you decide a batch is ready, merge that PR: release-please tags it (plain `X.Y.Z`, no `v`)
+# and creates the GitHub Release, which triggers publish.yml (tag guard -> uv build -> PyPI via OIDC).
+#
+# Requires the repo secret RELEASE_PLEASE_TOKEN: a fine-grained PAT scoped to this repo with
+# Contents: read/write and Pull requests: read/write. A Release created with the default GITHUB_TOKEN does NOT
+# trigger other workflows, so without the PAT publish.yml won't fire automatically. Fallback: run publish.yml by
+# hand from the Actions tab, selecting the release TAG as the ref. See docs/releasing.md.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

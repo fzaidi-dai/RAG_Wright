@@ -3,6 +3,7 @@ name: Publish to PyPI
 # Publishes `rag-wright` to PyPI via Trusted Publishing (OIDC) — no API token or stored secret.
 # It runs ONLY when a GitHub Release is published (a deliberate action), or manually from the Actions tab;
 # merely pushing commits never publishes. On a Release it first asserts the tag matches the pyproject version.
+# Releases are normally created by release-please.yml when its batched release PR is merged (docs/releasing.md).
 #
 # PyPI Trusted Publisher config (pypi.org → your account → Publishing, add a "pending publisher" before the
 # first release, or project `rag-wright` → Settings → Publishing afterwards):
