@@ -182,8 +182,8 @@ flag. `RAG_SERVING` selects backend (`openrouter` default / `vllm` self-hosted).
 | clause functions / closed-vocab properties | local trained classifiers (SetFit ensemble; 29-dim SetFit/Laya fleet) |
 
 Override one role with `RAG_MODEL_<ROLE>`, every role with `RAG_MODEL_ALL`. The old list-union knobs
-(`RAG_INGEST_LIST_MODEL`, `RAG_INGEST_CLAUSE_SAMPLES`, `RAG_INGEST_CLAUSE_EXTRACTOR`) are no-ops on the default path
-(pending removal). See ADR-0100/0110 (product LLM routing and serving), ADR-0119 (decision model), ADR-0115 (classifier-first).
+(`RAG_INGEST_LIST_MODEL`, `RAG_INGEST_CLAUSE_SAMPLES`, `RAG_INGEST_CLAUSE_EXTRACTOR`) are read only by the contracts
+pack's legacy tag-parse extractor, which the default path does not use. See ADR-0100/0110 (product LLM routing and serving), ADR-0119 (decision model), ADR-0115 (classifier-first).
 
 ---
 

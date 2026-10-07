@@ -121,8 +121,8 @@ def main() -> None:
             dense_vecs, sparse_vecs = embedder.encode_batch(span_texts)  # batched dense+sparse per clause
             for s, text, fn, dense, sparse in zip(spans, span_texts, span_functions, dense_vecs, sparse_vecs):
                 store.upsert_span(SpanRecord(
-                    span_id=s.span_id, parent_chunk_id=str(cid), parent_okf_path=clause.clause_id,
-                    span_index=s.span_index, text=text, function=fn,
+                    span_id=s.span_id, parent_chunk_id=str(cid),  # ING-8d: no parent_okf_path locator
+                    span_index=s.span_index, text=text, primary_tag=fn,
                     dense_vector=dense, sparse_vector=sparse,
                 ))
                 n_spans += 1

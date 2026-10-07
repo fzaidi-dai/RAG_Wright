@@ -27,7 +27,7 @@ def _span(text: str, span_index: int = 0, chunk: str = "chunk"):
     from rag_wright.packs.contracts.spans.segment import OperativeSpan
 
     return OperativeSpan(
-        span_id=f"{chunk}#{span_index}", parent_chunk_id=chunk, parent_okf_path="p",
+        span_id=f"{chunk}#{span_index}", parent_chunk_id=chunk,
         span_index=span_index, start=0, end=len(text), text=text)
 
 

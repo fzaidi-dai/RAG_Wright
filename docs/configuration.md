@@ -42,22 +42,32 @@ the cache.
 | `backend` | `str` | `"arcadedb"` | store implementation (only `arcadedb` today) |
 | `protocol` | `str` | `"http"` | `http` locally; `https` for a remote/Modal store |
 
-### `EngineOptions` / `IngestOptions`
+### `EngineOptions` / `IngestOptions` / pack options
 
-`EngineOptions.ingest` holds the ingest knobs. Every field defaults to `None` = "use the engine default", so an API
-caller that leaves them unset gets the engine's current behavior; set a field to override. Each mirrors an env var
-(the env is the fallback when the config field is `None`). All but `tuning` are read by the reference contract
-pipeline only.
+`EngineOptions.ingest` (an `IngestOptions`) holds the engine's generic ingest knobs; `EngineOptions.packs` holds each
+domain pack's own options object, keyed by the pack's name (ING-8d). The engine passes `packs` through untouched; a
+pack reads its entry and falls back to its defaults when it is absent.
 
 | `IngestOptions` field | type | env fallback | meaning |
+|---|---|---|---|
+| `tuning` | `IngestionTuning` | — | the structural thresholds of the generic ingestion hooks (unit size cap, record-table rule, identifier rule, extraction and document concurrency). `build_ingestion` uses its own `tuning=` argument, else this, else the defaults. Tune it from `evaluate_ingestion` runs on your own samples. |
+
+The reference contracts pack reads `EngineOptions.packs["contracts"]`, a `ContractIngestOptions`
+(`rag_wright.packs.contracts.options`). Every field defaults to `None` = the pack's env/default:
+
+| `ContractIngestOptions` field | type | env fallback | meaning |
 |---|---|---|---|
 | `classify_concurrency` | `int` | `CLASSIFY_CONCURRENCY` | function-classify parallelism |
 | `clause_concurrency` | `int` | `CLAUSE_CONCURRENCY` | clause-extraction parallelism |
 | `affiliations` | `bool` | `RAG_INGEST_AFFILIATIONS` | run affiliation extraction |
 | `function_classifier` | `str` | `RAG_FUNCTION_CLASSIFIER` | `"setfit"` (default, the trained SetFit ensemble) \| `"llm"` |
-| `list_model` | `str` | `RAG_INGEST_LIST_MODEL` | **no-op**: accepted but unused since clause extraction became classifier-first; pending removal (ING-8d) |
-| `clause_samples` | `int` | `RAG_INGEST_CLAUSE_SAMPLES` | **no-op**: accepted but unused; pending removal (ING-8d) |
-| `tuning` | `IngestionTuning` | — | the structural thresholds of the generic ingestion hooks (unit size cap, record-table rule, identifier rule, extraction and document concurrency). `build_ingestion` uses its own `tuning=` argument, else this, else the defaults. Tune it from `evaluate_ingestion` runs on your own samples. |
+
+```python
+from rag_wright.api import EngineConfig, EngineOptions
+from rag_wright.packs.contracts.options import ContractIngestOptions
+
+cfg = EngineConfig(store=..., options=EngineOptions(packs={"contracts": ContractIngestOptions(clause_concurrency=8)}))
+```
 
 ## Models and the model-profile seam
 
@@ -95,8 +105,8 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `RAG_SERVING` / `VLLM_BASE_URL` / `VLLM_API_KEY` / `STACK_URL` | serving backend (openrouter \| vllm) + self-hosted endpoint |
 | `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_GENERAL`, `RAG_MODEL_VISION_OCR`) / `RAG_MODEL_ALL` / `RAG_GRAPH_EXTRACT_MODEL` / `RAG_DECISION_MODEL` | model overrides (one role / all roles / graph extraction / decision-model profile) |
 | `RAG_SEMANTIC_JUDGE` / `RAG_RESIDUAL_EXTRACTOR` | set to `llm` to move the reference pipeline's extraction judge / residual property values off the decision model |
-| `CLASSIFY_CONCURRENCY` / `CLAUSE_CONCURRENCY` / `RAG_INGEST_AFFILIATIONS` / `RAG_FUNCTION_CLASSIFIER` | ingest knobs (mirror `IngestOptions`) |
-| `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` | **no-ops** for the reference pipeline (clause extraction is classifier-first); pending removal (ING-8d) |
+| `CLASSIFY_CONCURRENCY` / `CLAUSE_CONCURRENCY` / `RAG_INGEST_AFFILIATIONS` / `RAG_FUNCTION_CLASSIFIER` | contracts-pack ingest knobs (mirror `ContractIngestOptions`) |
+| `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` | read only by the contracts pack's legacy tag-parse clause extractor, which the default pipeline does not use (it is classifier-first) |
 | `RAG_STRUCTURED_TIMEOUT_S` / `RAG_JEV_TIMEOUT_S` / `RAG_JUDGE_TIMEOUT_S` / `RAG_RELEVANCE_TIMEOUT_S` | call timeouts (raise for reasoning-ON bulk work) |
 | `RAG_SPACY_MODEL` | the spaCy model name for the optional NER extra |
 | `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs |

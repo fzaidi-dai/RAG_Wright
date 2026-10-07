@@ -52,7 +52,7 @@ def main() -> None:
 
     # a diverse sample: distinct functions, non-trivial text
     seen, spans = set(), []
-    for r in dao.query("sql", "SELECT text, dense, function FROM Span WHERE function <> 'NONE' LIMIT 400"):
+    for r in dao.query("sql", "SELECT text, dense, primary_tag AS function FROM Span WHERE primary_tag <> 'NONE' LIMIT 400"):
         f = r.get("function")
         if f and f not in seen and 40 < len(r["text"]) < 900:
             seen.add(f)

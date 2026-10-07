@@ -138,8 +138,8 @@ def cmd_ingest() -> None:
         for idx, (op, raw, dv, sv) in enumerate(zip(ops, raws, dvecs, svecs)):
             fn = canonical_function(raw) or raw
             try:  # OKF dropped: no parent_okf_path; the ACORD id lives in the canonical parent_chunk_id
-                store.upsert_span(to_span_record(op, contract_id="", chunk_doc_start=0,
-                                                 dense_vector=list(dv), sparse_vector=sv, function=fn))
+                store.upsert_span(to_span_record(op, document_id="", chunk_doc_start=0,
+                                                 dense_vector=list(dv), sparse_vector=sv, primary_tag=fn))
                 spans_written += 1
             except Exception:  # noqa: BLE001 - a per-span index write must not sink the clause
                 pass

@@ -27,13 +27,13 @@ def _span(**kw) -> SpanRecord:
 
 def test_span_record_defaults_are_backward_compatible():
     s = _span()  # no CUAD fields set -> ACORD leg unaffected
-    assert s.contract_id == ""
+    assert s.document_id == ""
     assert s.doc_start is None and s.doc_end is None and s.page is None and s.bbox is None
 
 
 def test_span_record_with_offsets_and_bbox():
-    s = _span(contract_id="C1", doc_start=100, doc_end=140, page=2, bbox=(1.0, 2.0, 3.0, 4.0))
-    assert s.contract_id == "C1"
+    s = _span(document_id="C1", doc_start=100, doc_end=140, page=2, bbox=(1.0, 2.0, 3.0, 4.0))
+    assert s.document_id == "C1"
     assert (s.doc_start, s.doc_end) == (100, 140)
     assert s.page == 2 and s.bbox == (1.0, 2.0, 3.0, 4.0)
 

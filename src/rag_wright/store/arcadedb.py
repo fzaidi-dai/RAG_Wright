@@ -63,6 +63,8 @@ _SPARSE_INDEX = f"{CHUNK_TYPE}[sparse_indices,sparse_weights]"
 _CHUNK_ID_INDEX = f"{CHUNK_TYPE}[chunk_id]"
 _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
 _SPAN_ID_INDEX = f"{SPAN_TYPE}[span_id]"
+# ING-8d: the pre-ING-8d Span field names -> the generic ones (`migrate_span_fields`; `ensure_schema` refuses the old)
+_SPAN_FIELD_RENAMES = {"contract_id": "document_id", "function": "primary_tag", "functions": "tags"}
 _DOCUMENT_ID_INDEX = f"{DOCUMENT_TYPE}[doc_id]"
 _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
@@ -240,8 +242,14 @@ class ArcadeDBStore:
     # --- seam surface ---------------------------------------------------------------------------
 
     def ensure_schema(self) -> None:
-        """Create the chunk-record and graph-node types and the hybrid indexes, idempotently."""
+        """Create the chunk-record and graph-node types and the hybrid indexes, idempotently. ING-8d: refuses a
+        `Span` type that still declares the pre-ING-8d field names, so an unmigrated KG fails loudly instead of
+        returning silently-empty filters (migrate it with `migrate_span_fields`)."""
         types = self.type_names()
+        if SPAN_TYPE in types and (stale := sorted(set(_SPAN_FIELD_RENAMES) & self.property_names(SPAN_TYPE))):
+            raise RuntimeError(
+                f"this database's {SPAN_TYPE} type still has the pre-ING-8d fields {stale}; migrate it first: "
+                f"`uv run python scripts/migrate_span_fields.py {self._database}` (ArcadeDBStore.migrate_span_fields)")
         if CHUNK_TYPE not in types:
             self._command(f"CREATE VERTEX TYPE {CHUNK_TYPE}")
             self._command(f"CREATE PROPERTY {CHUNK_TYPE}.chunk_id STRING")
@@ -268,15 +276,14 @@ class ArcadeDBStore:
             self._command(f"CREATE VERTEX TYPE {SPAN_TYPE}")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.span_id STRING")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.parent_chunk_id STRING")
-            self._command(f"CREATE PROPERTY {SPAN_TYPE}.parent_okf_path STRING")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.span_index INTEGER")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.text STRING")
-            self._command(f"CREATE PROPERTY {SPAN_TYPE}.function STRING")  # the PRIMARY function-classifier tag (T56)
-            self._command(f"CREATE PROPERTY {SPAN_TYPE}.functions STRING")  # T55/ADR-0114: top-k soft tags, JSON list
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.primary_tag STRING")  # the span tagger's PRIMARY tag (ING-8d)
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.tags STRING")  # ADR-0114: top-k soft tags, JSON list (ING-8d)
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.dense ARRAY_OF_FLOATS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_indices ARRAY_OF_INTEGERS")
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.sparse_weights ARRAY_OF_FLOATS")
-            self._command(f"CREATE PROPERTY {SPAN_TYPE}.contract_id STRING")  # CU-B2: within-contract filter
+            self._command(f"CREATE PROPERTY {SPAN_TYPE}.document_id STRING")  # within-document filter (ING-8d)
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_start INTEGER")  # CU-B2: doc-absolute char offset
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_end INTEGER")  # CU-B2: exclusive (citation)
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.pages ARRAY_OF_INTEGERS")  # issue 0032: source page(s)
@@ -360,6 +367,34 @@ class ArcadeDBStore:
             if row.get("name") == type_name:
                 return {prop["name"] for prop in row.get("properties", [])}
         return set()
+
+    def migrate_span_fields(self, *, batch: int = 5000, progress: Any = None) -> int:
+        """ING-8d: move a pre-ING-8d `Span` type to the generic field names (`contract_id` -> `document_id`,
+        `function` -> `primary_tag`, `functions` -> `tags`), in batches, then drop the old properties. Idempotent:
+        returns the number of records moved (0 when already migrated). The legacy `parent_okf_path` values are left
+        in place (no longer declared by the engine). `progress(done, total)` is called after each batch."""
+        if SPAN_TYPE not in self.type_names():
+            return 0
+        props = self.property_names(SPAN_TYPE)
+        for old, new in _SPAN_FIELD_RENAMES.items():
+            if new not in props:
+                self._command(f"CREATE PROPERTY {SPAN_TYPE}.{new} STRING")
+        pending = " OR ".join(f"{old} IS NOT NULL" for old in _SPAN_FIELD_RENAMES)
+        total = self._query(f"SELECT count(*) AS n FROM {SPAN_TYPE} WHERE {pending}")[0]["n"]
+        sets = ", ".join(f"{new} = {old}" for old, new in _SPAN_FIELD_RENAMES.items())
+        removes = ", ".join(_SPAN_FIELD_RENAMES)
+        done = 0
+        while done < total:
+            self._command(f"UPDATE {SPAN_TYPE} SET {sets} REMOVE {removes} WHERE {pending} LIMIT {int(batch)}")
+            left = self._query(f"SELECT count(*) AS n FROM {SPAN_TYPE} WHERE {pending}")[0]["n"]
+            if total - left <= done:
+                raise RuntimeError(f"span migration made no progress at {done}/{total}")
+            done = total - left
+            if progress is not None:
+                progress(done, total)
+        for old in sorted(set(_SPAN_FIELD_RENAMES) & self.property_names(SPAN_TYPE)):
+            self._command(f"DROP PROPERTY {SPAN_TYPE}.{old}")
+        return total
 
     def index_names(self) -> set[str]:
         return {row["name"] for row in self._query("SELECT name FROM schema:indexes")}
@@ -567,24 +602,23 @@ class ArcadeDBStore:
         doc_start = "null" if record.doc_start is None else int(record.doc_start)
         doc_end = "null" if record.doc_end is None else int(record.doc_end)
         pages = "[" + ",".join(str(int(p)) for p in record.pages) + "]"  # issue 0032: source page(s)
-        functions_json = _sql_str(json.dumps(list(record.functions)))  # T55/ADR-0114: top-k soft tags (primary-first)
+        tags_json = _sql_str(json.dumps(list(record.tags)))  # ADR-0114: top-k soft tags (primary-first)
         bbox = "null" if record.bbox is None else _sql_str(json.dumps(list(record.bbox)))  # best-effort [l,t,r,b]
         self._command(
             f"UPDATE {SPAN_TYPE} SET"
             f" span_id = {_sql_str(record.span_id)},"
             f" parent_chunk_id = {_sql_str(record.parent_chunk_id)},"
-            f" parent_okf_path = {_sql_str(record.parent_okf_path)},"
             f" span_index = {int(record.span_index)},"
             f" text = {_sql_str(record.text)},"
-            f" function = {_sql_str(record.function)},"
+            f" primary_tag = {_sql_str(record.primary_tag)},"
             f" dense = {dense},"
             f" sparse_indices = {sparse_indices},"
             f" sparse_weights = {sparse_weights},"
-            f" contract_id = {_sql_str(record.contract_id)},"  # CU-B2: citation + within-contract filter
+            f" document_id = {_sql_str(record.document_id)},"  # CU-B2: citation + within-document filter
             f" doc_start = {doc_start},"
             f" doc_end = {doc_end},"
             f" pages = {pages},"  # issue 0032 (CU-B5): source page(s) for the citation highlight
-            f" functions = {functions_json},"  # T55/ADR-0114: top-k soft tags (JSON list, primary-first)
+            f" tags = {tags_json},"  # ADR-0114: top-k soft tags (JSON list, primary-first)
             f" bbox = {bbox}"
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
         )
@@ -647,15 +681,15 @@ class ArcadeDBStore:
         return {r["c"] for r in rows if r.get("c")}
 
     def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
-        """CU-B3: the within-contract typed filter -- every span in `contract_id` whose `function` is in
-        `functions`, ordered by document position (the CUAD serve retrieval; empty `functions` -> []).
-        Returns citation-ready rows (span_id, parent pointer, text, function, doc offsets)."""
+        """CU-B3: the within-contract typed filter -- every span of document `contract_id` whose `primary_tag`
+        is in `functions`, ordered by document position (the CUAD serve retrieval; empty `functions` -> []).
+        Returns citation-ready rows (span_id, parent pointer, text, primary_tag, doc offsets)."""
         if not functions:
             return []
         return self.kg_read(SPAN_TYPE, fields=[
-            "span_id", "parent_chunk_id", "parent_okf_path", "span_index", "text", "function",
-            "contract_id", "doc_start", "doc_end", "pages", "bbox"],
-            where={"contract_id": contract_id, "function": functions}, order_by="doc_start")
+            "span_id", "parent_chunk_id", "span_index", "text", "primary_tag",
+            "document_id", "doc_start", "doc_end", "pages", "bbox"],
+            where={"document_id": contract_id, "primary_tag": functions}, order_by="doc_start")
 
     def all_spans_by_contract(self, contract_id: str) -> list[dict]:
         """CU-C2: EVERY span in a contract (all functions incl NONE), with its dense vector, ordered by
@@ -663,9 +697,9 @@ class ArcadeDBStore:
         spans), so ranking happens in Python -- a global ANN + contract filter would miss, since one
         contract is ~1% of the corpus. Returns citation-ready rows plus `dense`."""
         return self._query(
-            f"SELECT span_id, parent_chunk_id, span_index, text, function, contract_id,"
+            f"SELECT span_id, parent_chunk_id, span_index, text, primary_tag, document_id,"
             f" doc_start, doc_end, pages, bbox, dense FROM {SPAN_TYPE}"  # issue 0032: page citation
-            f" WHERE contract_id = {_sql_str(contract_id)} ORDER BY doc_start"
+            f" WHERE document_id = {_sql_str(contract_id)} ORDER BY doc_start"
         )
 
     def span_hybrid_search(
@@ -674,16 +708,16 @@ class ArcadeDBStore:
         sparse_query: dict[int, float],
         *,
         k: int,
-        function: str | None = None,
+        primary_tag: str | None = None,
         documents: list[str] | None = None,
     ) -> list[dict]:
-        """RRF-fused dense+sparse search over the `Span` index, optionally restricted to one `function` tag
-        (the function-classifier's routing filter, FR-R) and/or a `documents` set (issue 0031: a workspace
-        scope -- `Span.contract_id IN [...]`, the source-document id). Mirrors `hybrid_search`; returns span_id
+        """RRF-fused dense+sparse search over the `Span` index, optionally restricted to one `primary_tag`
+        (the span tagger's routing filter, FR-R) and/or a `documents` set (issue 0031: a workspace
+        scope -- `Span.document_id IN [...]`, the source-document id). Mirrors `hybrid_search`; returns span_id
         + the parent pointer so the caller can follow the span back to its clause for the rerank stage.
 
         Issue 0031: when `documents` is given, the vector legs pull a LARGER pool (`SCOPED_CANDIDATE_POOL`)
-        before the `contract_id IN [...]` cut, because the KNN ranks across the whole index and only then is
+        before the `document_id IN [...]` cut, because the KNN ranks across the whole index and only then is
         scoped -- a small workspace could otherwise under-fill `k` from the default pool. `documents=[]` is a
         valid scope-to-nothing -> no query (`[]`)."""
         if documents is not None and not documents:
@@ -700,13 +734,13 @@ class ArcadeDBStore:
             "{ fusion: 'RRF' }))"
         )
         clauses = []
-        if function:
-            clauses.append(f"function = {_sql_str(function)}")
+        if primary_tag:
+            clauses.append(f"primary_tag = {_sql_str(primary_tag)}")
         if documents:
-            clauses.append(f"contract_id IN {_str_array(documents)}")
+            clauses.append(f"document_id IN {_str_array(documents)}")
         where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
         return self._query(
-            f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({fused}){where} LIMIT {k}"
+            f"SELECT span_id, parent_chunk_id, primary_tag FROM ({fused}){where} LIMIT {k}"
         )
 
     def span_dense_search(
@@ -719,17 +753,17 @@ class ArcadeDBStore:
         """Issue 0041 (dense floor): PURE-DENSE nearest-neighbour search over the `Span` dense index -- the dense
         leg of `span_hybrid_search` WITHOUT the sparse leg or RRF fusion, so a strong semantic match a short
         common-token query's sparse leg would crowd out of the fused pool is still recoverable. Returns the same
-        row shape as `span_hybrid_search` (span_id + parent pointers + function), in descending cosine order.
-        `documents` scopes to a workspace exactly as the hybrid search does (`contract_id IN [...]`, with the
+        row shape as `span_hybrid_search` (span_id + parent pointer + primary_tag), in descending cosine order.
+        `documents` scopes to a workspace exactly as the hybrid search does (`document_id IN [...]`, with the
         larger scoped pool before the cut); `documents=[]` is scope-to-nothing."""
         if documents is not None and not documents:
             return []
         leg_k = max(k, SCOPED_CANDIDATE_POOL if documents else DEFAULT_CANDIDATE_POOL)
         dense = _float_array(dense_query)
         neighbours = f"SELECT expand(`vector.neighbors`('{_SPAN_DENSE_INDEX}', {dense}, {leg_k}))"
-        where = f" WHERE contract_id IN {_str_array(documents)}" if documents else ""
+        where = f" WHERE document_id IN {_str_array(documents)}" if documents else ""
         return self._query(
-            f"SELECT span_id, parent_chunk_id, parent_okf_path, function FROM ({neighbours}){where} LIMIT {k}"
+            f"SELECT span_id, parent_chunk_id, primary_tag FROM ({neighbours}){where} LIMIT {k}"
         )
 
     def span_texts(self, span_ids: list[str]) -> dict[str, str]:
@@ -941,7 +975,7 @@ class ArcadeDBStore:
             return []
         id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
         spans = self._query(
-            f"SELECT span_id, doc_start, doc_end, contract_id FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
+            f"SELECT span_id, doc_start, doc_end, document_id FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
         by_span = {s["span_id"]: s for s in spans}
         out: list[dict] = []
         for c in clauses:
@@ -949,7 +983,7 @@ class ArcadeDBStore:
             if s is None:
                 continue
             out.append({"clause_id": c["clause_id"], "function": c["function"],
-                        "contract_id": s.get("contract_id"), "doc_start": s.get("doc_start"),
+                        "contract_id": s.get("document_id"), "doc_start": s.get("doc_start"),
                         "doc_end": s.get("doc_end")})
         return out
 

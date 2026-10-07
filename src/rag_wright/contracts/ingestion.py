@@ -61,9 +61,10 @@ class Span(BaseModel):
     """One span: the smallest citeable unit, indexed for retrieval. It points back to its parent chunk; `span_id` is
     `<parent_chunk_id>#<span_index>` (identifier rule) and `start`/`end` are offsets into the chunk text."""
 
+    model_config = {"extra": "forbid"}  # ING-8d: a dropped field (`parent_okf_path`) fails loudly, never silently
+
     span_id: str
     parent_chunk_id: str
-    parent_okf_path: str = ""  # reference-pack legacy locator; unused by the generic path
     span_index: int
     start: int
     end: int  # exclusive; the spans of a chunk tile its text

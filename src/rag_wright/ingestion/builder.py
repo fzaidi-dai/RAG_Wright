@@ -187,8 +187,8 @@ class IngestionStages:
             for t, d, sp in zip(tagged, dense, sparse):
                 try:
                     self.store.upsert_span(to_span_record(
-                        t.span, contract_id=sd.source_doc_id, chunk_doc_start=doc_start[t.span.parent_chunk_id],
-                        dense_vector=list(d), sparse_vector=sp, function=t.primary_tag, functions=list(t.tags)))
+                        t.span, document_id=sd.source_doc_id, chunk_doc_start=doc_start[t.span.parent_chunk_id],
+                        dense_vector=list(d), sparse_vector=sp, primary_tag=t.primary_tag, tags=list(t.tags)))
                     out["span_count"] += 1
                 except Exception as exc:  # noqa: BLE001 - a failed span write is reported, not swallowed
                     out["span_failures"].append({"span_id": t.span.span_id, "reason": repr(exc)})

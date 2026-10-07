@@ -183,8 +183,8 @@ def main() -> None:
             dense_vecs, sparse_vecs = embedder.encode_batch(span_texts)
             for op, fn, dense, sparse in zip(ops, fns[1:], dense_vecs, sparse_vecs):
                 fn = canonical_function(fn) or fn  # normalize classifier casing at the boundary (e.g. Ip->IP)
-                rec = to_span_record(op, contract_id=sid, chunk_doc_start=ch.doc_start,
-                                     dense_vector=dense, sparse_vector=sparse, function=fn)
+                rec = to_span_record(op, document_id=sid, chunk_doc_start=ch.doc_start,
+                                     dense_vector=dense, sparse_vector=sparse, primary_tag=fn)
                 if canonical[rec.doc_start:rec.doc_end] != op.text:  # the citation invariant, checked live
                     n_bad += 1
                 store.upsert_span(rec)

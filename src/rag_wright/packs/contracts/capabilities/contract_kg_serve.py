@@ -98,7 +98,7 @@ def contract_clause_index(
             sid = row.get("span_id")
             if sid and sid not in covered and (row.get("text") or "").strip():
                 index.append(CitedClause(
-                    contract_id=contract_id, clause_id=sid, function=row.get("function") or "NONE",
+                    contract_id=contract_id, clause_id=sid, function=row.get("primary_tag") or "NONE",
                     span_id=sid, properties=[]))  # bare; rehydrate_clause_texts fetches its text by function+span
     return index
 

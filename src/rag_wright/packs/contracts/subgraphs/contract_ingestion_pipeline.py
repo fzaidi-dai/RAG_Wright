@@ -699,7 +699,7 @@ def _resolve_ingest_knobs(*, classify_concurrency: Any, clause_concurrency: Any,
 
 def aproduction_document_ingest(
     store: Any, *, cache_dir: Any, registry: Any, embedder: Any = None, party_seed_path: Any = None,
-    classify_fn: Any = None, extract_model: Any = None, list_model: Any = None, samples: Any = None,
+    classify_fn: Any = None, extract_model: Any = None,
     graph_extract_model: Any = None, judge_model: Any = None, chunk_model: Any = None,
     classify_concurrency: Any = None, clause_concurrency: Any = None, affiliations: Any = None,
     function_classifier: Any = None, embedding_profile: str = "bge-m3"):
@@ -714,14 +714,6 @@ def aproduction_document_ingest(
       - `extract_model`: the PRIMARY clause-property extraction model -- an `ExtractionModel` OR a bare model-id
         string (wrapped via `default_extraction_model`). `None` keeps the backend default (granite, per
         `RAG_SERVING`). This is the model that produces the typed clause properties.
-      - `list_model`: the SECOND model for the cross-model UNION on the LIST-bearing groups only (carve_out /
-        covered_subject / damage_type). granite and gemma under-enumerate DIFFERENT list items, so their union
-        is more complete than either alone; the second model is cost-scoped to list groups. A bare model-id
-        string, `"off"` to disable, or `None` for the default (gemma, `RAG_INGEST_LIST_MODEL`). If you override
-        `extract_model` (e.g. to qwen), set `list_model` deliberately -- the union's value depends on the two
-        models being complementary.
-      - `samples`: same-model multi-sample count for the list union (`None` -> env `RAG_INGEST_CLAUSE_SAMPLES`,
-        default 1).
       - `graph_extract_model`: the model for BOTH party AND affiliation extraction (the GP-1B graph-extract
         surface -- they share one model). A bare model-id string or an `ExtractionModel` (unwrapped to its id);
         `None` -> the default (granite, `RAG_GRAPH_EXTRACT_MODEL`).
@@ -735,7 +727,7 @@ def aproduction_document_ingest(
       EP-API-4a ingest knobs (each `None` -> the env/default, so existing callers are unaffected):
       `classify_concurrency` (function-classify parallelism), `clause_concurrency` (clause-extraction parallelism),
       `affiliations` (run affiliation extraction), `function_classifier` ("setfit" | "llm"). The engine API passes
-      these from `EngineConfig.options.ingest`.
+      these from `EngineConfig.options.packs["contracts"]` (a `ContractIngestOptions`, ING-8d).
       Env vars remain the fallback for every knob, so existing callers are unaffected."""
     import asyncio
     import hashlib
@@ -981,13 +973,13 @@ async def ainvoke(resources, inputs: dict):
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.models.profiles import ModelRole
     from rag_wright.ontology.registry import EntityRegistry
+    from rag_wright.packs.contracts.options import contract_ingest_options
 
-    opts = resources._config.options.ingest
+    opts = contract_ingest_options(resources._config)
     graph = aproduction_document_ingest(
         resources._store, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
         extract_model=default_extraction_model(model=resources.model_id(ModelRole.STRUCTURED_REASONING)),
         embedding_profile=resources._config.embeddings.get("text", "bge-m3"),
-        list_model=opts.list_model, samples=opts.clause_samples,
         classify_concurrency=opts.classify_concurrency, clause_concurrency=opts.clause_concurrency,
         affiliations=opts.affiliations, function_classifier=opts.function_classifier)
     return await graph.ainvoke({"document": inputs["document"]})

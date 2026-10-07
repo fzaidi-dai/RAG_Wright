@@ -12,13 +12,13 @@ The product's view of the engine: the store connection, chosen models (by role a
 
 How to reach the KG/retrieval store. `backend` selects the implementation (only `arcadedb` today; a new backend -- e.g. Neo4j -- is added here, invisibly to the product).
 
-### `EngineOptions(ingest: 'IngestOptions' = <factory>) -> None`
+### `EngineOptions(ingest: 'IngestOptions' = <factory>, packs: 'Mapping[str, Any]' = <factory>) -> None`
 
-The engine's options catalog. Ingest knobs today; retrieval / reranking / chunking groups are added here as they are promoted off environment variables.
+The engine's options catalog: the generic ingest knobs, plus `packs` -- each domain pack's own options object keyed by the pack's name (ING-8d), e.g. `packs={"contracts": ContractIngestOptions(...)}`. The engine passes `packs` through untouched; a pack reads its entry and falls back to its defaults when absent.
 
-### `IngestOptions(classify_concurrency: 'Optional[int]' = None, clause_concurrency: 'Optional[int]' = None, affiliations: 'Optional[bool]' = None, function_classifier: 'Optional[str]' = None, list_model: 'Optional[str]' = None, clause_samples: 'Optional[int]' = None, tuning: 'Optional[IngestionTuning]' = None) -> None`
+### `IngestOptions(tuning: 'Optional[IngestionTuning]' = None) -> None`
 
-Ingest-time knobs, settable through config instead of environment variables (EP-API-4a). Every field defaults to `None` = "use the engine default", so the engine's existing env fallback is preserved (a non-API caller is unaffected) and an API caller that leaves these unset gets today's behavior exactly. Set a field to override.
+The engine's generic ingest knobs, settable through config instead of environment variables (EP-API-4a). ING-8d: only engine mechanism lives here; a domain pack's own knobs travel in `EngineOptions.packs`.
 
 ### `WorkspaceHandle(store: 'Any', config: 'EngineConfig', corpus: 'str') -> 'None'`
 
@@ -48,7 +48,7 @@ Per-model totals within a scope (`cost_usd` sums KNOWN per-call costs only).
 
 One layout element of the parsed document that overlaps a chunk, in CHUNK-relative offsets.
 
-### `Span(*, span_id: str, parent_chunk_id: str, parent_okf_path: str = '', span_index: int, start: int, end: int, text: str, pages: list[int] = [], bbox: tuple[float, float, float, float] | None = None, kind: Optional[Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'table_row', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']] = None) -> None`
+### `Span(*, span_id: str, parent_chunk_id: str, span_index: int, start: int, end: int, text: str, pages: list[int] = [], bbox: tuple[float, float, float, float] | None = None, kind: Optional[Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'table_row', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']] = None) -> None`
 
 One span: the smallest citeable unit, indexed for retrieval. It points back to its parent chunk; `span_id` is `<parent_chunk_id>#<span_index>` (identifier rule) and `start`/`end` are offsets into the chunk text.
 

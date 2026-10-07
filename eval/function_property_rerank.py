@@ -83,7 +83,7 @@ def main() -> None:
         fn = functions[q.query_id]
         pool = [] if not fn else list(dict.fromkeys(
             r["parent_okf_path"] for r in store._query(
-                f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function IN {_str_array([fn])}")))
+                f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag IN {_str_array([fn])}")))
         if not pool:
             r50_fr.append(0.0)
             r50_fpr.append(0.0)

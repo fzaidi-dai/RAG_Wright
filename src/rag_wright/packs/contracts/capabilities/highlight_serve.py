@@ -45,8 +45,8 @@ def _to_span(row: dict, *, confidence: float, extracted_value: str | None = None
     pages = [int(p) for p in (row.get("pages") or [])]  # issue 0032: source page(s) for the citation highlight
     return HighlightSpan(
         span_id=row["span_id"],
-        contract_id=row["contract_id"],
-        function=row.get("function", ""),
+        contract_id=row["document_id"],  # the span's source document (ING-8d engine field name)
+        function=row.get("primary_tag", ""),  # the span's primary tag is the clause function in this pack
         clause_ref=row.get("parent_chunk_id", ""),  # heading/number not extracted yet -> the clause id
         text=row["text"],
         doc_start=row.get("doc_start"),

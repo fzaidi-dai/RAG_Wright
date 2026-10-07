@@ -37,7 +37,7 @@ def main() -> None:
 
     def poolset(fn):
         return {x["parent_okf_path"] for x in store._query(
-            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function = {_sql_str(fn)}")}
+            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag = {_sql_str(fn)}")}
 
     pool_of = {q.query_id: poolset(of1(sorted(q.relevant))) for q in queries}
     qids = sorted(q.query_id for q in queries)

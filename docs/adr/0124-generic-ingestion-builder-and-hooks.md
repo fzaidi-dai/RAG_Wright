@@ -219,3 +219,14 @@ writing to change one decision (engine gaps G3/G4).
   every other package), and `packs.contracts` never imports `packs.compliance`.
 - **Verified.** Full suite green; a live Aimmune re-ingest is record-identical to ING-8b (131 clauses, 105 property
   values, 700 spans).
+
+## ING-8d addendum (2026-10-07): generic option and span field names
+
+- **Decision.** `IngestOptions` holds only engine knobs (`tuning`); a domain pack's knobs travel in
+  `EngineOptions.packs[<pack name>]` (the contracts pack's `ContractIngestOptions`), so the engine never names a
+  domain field. The engine span fields are `document_id`, `primary_tag`, `tags`; `parent_okf_path` left the engine.
+  New names only: `SpanRecord`/`Span` forbid unknown fields, and `ensure_schema` refuses a database whose `Span` type
+  still declares the old fields. Existing databases migrate once with `migrate_span_fields`
+  (`scripts/migrate_span_fields.py`), in batches, idempotently.
+- **Verified.** Full suite and the live store tests green; a live Aimmune re-ingest is record-identical to ING-8c, and
+  migrating the ING-8c database makes it identical to the ING-8d one.

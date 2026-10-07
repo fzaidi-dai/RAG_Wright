@@ -53,7 +53,7 @@ def main() -> None:
         for q in qmap.values():
             fn = of1(sorted(q.relevant))
             pool = {x["parent_okf_path"] for x in store._query(
-                f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function = {_sql_str(fn)}")} if fn else set()
+                f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag = {_sql_str(fn)}")} if fn else set()
             pools[q.query_id] = [c for c in q.graded if c in pool]
         POOLS.write_text(json.dumps(pools))
         store.close()

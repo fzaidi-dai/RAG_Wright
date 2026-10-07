@@ -1,6 +1,6 @@
 """issue 0031 / ADR-0094: a workspace `documents` scope on corpus retrieval, applied IN THE STORE.
 
-`span_hybrid_search` filters `contract_id IN [...]`; `graph_neighbors` filters `source_doc_id IN [...]` on
+`span_hybrid_search` filters `document_id IN [...]`; `graph_neighbors` filters `source_doc_id IN [...]` on
 EVERY edge of a path; `write_graph`/`add_affiliation_edges` stamp `source_doc_id` on each Relationship edge
 (derived from its provenance chunk_id); `known_document_ids` is the union used for unknown-document
 validation. Hermetic -- `_query`/`_db` stubbed, no live DB.
@@ -32,15 +32,15 @@ def test_span_hybrid_search_scopes_to_documents():
     store, calls = _capturing_store()
     store.span_hybrid_search([0.1, 0.2], {1: 0.5}, k=8, documents=["docA", "docB"])
     sql = calls[-1]
-    assert "contract_id IN ['docA','docB']" in sql  # the store-side workspace cut
+    assert "document_id IN ['docA','docB']" in sql  # the store-side workspace cut
     assert " 1000)" in sql or "1000" in sql  # SCOPED_CANDIDATE_POOL: a larger KNN pool when scoped
 
 
-def test_span_hybrid_search_combines_function_and_documents():
+def test_span_hybrid_search_combines_primary_tag_and_documents():
     store, calls = _capturing_store()
-    store.span_hybrid_search([0.1], {1: 0.5}, k=8, function="indemnification", documents=["docA"])
+    store.span_hybrid_search([0.1], {1: 0.5}, k=8, primary_tag="indemnification", documents=["docA"])
     sql = calls[-1]
-    assert "function = 'indemnification'" in sql and "contract_id IN ['docA']" in sql and " AND " in sql
+    assert "primary_tag = 'indemnification'" in sql and "document_id IN ['docA']" in sql and " AND " in sql
 
 
 def test_span_hybrid_search_empty_documents_is_scope_to_nothing():
@@ -52,7 +52,7 @@ def test_span_hybrid_search_empty_documents_is_scope_to_nothing():
 def test_span_hybrid_search_none_documents_unchanged():
     store, calls = _capturing_store()
     store.span_hybrid_search([0.1], {1: 0.5}, k=8, documents=None)
-    assert "contract_id IN" not in calls[-1]  # whole index, no doc filter
+    assert "document_id IN" not in calls[-1]  # whole index, no doc filter
 
 
 # --- graph_neighbors ------------------------------------------------------------------------------------------

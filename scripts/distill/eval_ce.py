@@ -59,7 +59,7 @@ def main() -> None:
 
     def poolset(fn):
         return {x["parent_okf_path"] for x in store._query(
-            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function = {_sql_str(fn)}")}
+            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag = {_sql_str(fn)}")}
 
     bge = BGEReranker()
     m = {"ce": defaultdict(list), "bge": defaultdict(list), "gemma": defaultdict(list)}

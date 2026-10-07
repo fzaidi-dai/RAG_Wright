@@ -40,7 +40,7 @@ def main() -> None:
         _line("=" * 90)
         _line(f"Q: {query!r}  | function={function}  | constraint={constraint[0]}={constraint[1]!r}")
         dense, sparse = embedder.encode_dense(query), embedder.encode_sparse(query)
-        pool = store.span_hybrid_search(dense, sparse, k=12, function=function)  # BGE order
+        pool = store.span_hybrid_search(dense, sparse, k=12, primary_tag=function)  # BGE order
         span_ids = [h["span_id"] for h in pool]
         from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii
         props = ContractKGStore(store).span_properties(span_ids)

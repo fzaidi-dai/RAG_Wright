@@ -23,14 +23,15 @@ def _dense() -> list[float]:
 
 def _span(cid: str, span_id: str, function: str, doc_start: int) -> SpanRecord:
     return SpanRecord(span_id=span_id, parent_chunk_id=f"{cid}:0:h", span_index=0, text=f"span {span_id}",
-                      function=function, dense_vector=_dense(), sparse_vector={1: 1.0},
-                      contract_id=cid, doc_start=doc_start, doc_end=doc_start + 10)
+                      primary_tag=function, dense_vector=_dense(), sparse_vector={1: 1.0},
+                      document_id=cid, doc_start=doc_start, doc_end=doc_start + 10)
 
 
 @pytest.fixture
 def store():
     s = ArcadeDBStore.from_env(database=_TEST_DB, reset=True)
     s.ensure_schema()
+    ContractKGStore(s)  # ING-8a: the contract pack ensures its own types + typed edges (not in the default)
     yield s
     s.drop()
     s.close()
@@ -63,7 +64,7 @@ def test_spans_by_contract_typed_filter(store):
 
     gl = store.spans_by_contract("C1", ["Governing Law"])
     assert [r["span_id"] for r in gl] == ["C1:0:h#1", "C1:0:h#0"]  # C1 only, ordered by doc_start (10, 100)
-    assert all(r["contract_id"] == "C1" for r in gl)
+    assert all(r["document_id"] == "C1" for r in gl)
 
     both = store.spans_by_contract("C1", ["Governing Law", "Indemnification"])  # multi-type
     assert {r["span_id"] for r in both} == {"C1:0:h#0", "C1:0:h#1", "C1:0:h#2"}

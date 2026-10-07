@@ -45,6 +45,7 @@ def test_property_value_key_is_dimension_and_value():
 def store():
     s = ArcadeDBStore.from_env(database=_TEST_DB, reset=True)
     s.ensure_schema()
+    ContractKGStore(s)  # ING-8a: the contract pack ensures its own types + typed edges (not in the default)
     yield s
     s.drop()
     s.close()

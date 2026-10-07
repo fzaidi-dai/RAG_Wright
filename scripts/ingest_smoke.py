@@ -75,7 +75,7 @@ async def main() -> None:
     q = "limitation of the parties' liability under the agreement"
     hits = store.span_hybrid_search(emb.encode_dense(q), emb.encode_sparse(q), k=3)
     print(f"[smoke] hybrid_search({q!r}) -> {len(hits)} hits "
-          f"(top function={hits[0].get('function') if hits else None})", flush=True)
+          f"(top tag={hits[0].get('primary_tag') if hits else None})", flush=True)
     store.close()
 
 

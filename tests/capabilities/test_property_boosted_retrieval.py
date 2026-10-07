@@ -16,11 +16,11 @@ class _FakeStore:
         self._texts = texts  # {span_id: text}
         self._dense = dense or []  # [span_id, ...] in pure-dense (cosine) order
 
-    def span_hybrid_search(self, dense, sparse, *, k, function=None, documents=None):
-        return [{"span_id": s, "function": function} for s in self._pool.get(function, [])[:k]]
+    def span_hybrid_search(self, dense, sparse, *, k, primary_tag=None, documents=None):
+        return [{"span_id": s, "primary_tag": primary_tag} for s in self._pool.get(primary_tag, [])[:k]]
 
     def span_dense_search(self, dense, *, k, documents=None):  # issue 0041: pure-dense floor
-        return [{"span_id": s, "function": ""} for s in self._dense[:k]]
+        return [{"span_id": s, "primary_tag": ""} for s in self._dense[:k]]
 
     def kg_edges(self, from_type=None, *, where=None, key_range=None, direction="out", edge_type=None,
                  edge_where=None, target_where=None, select):

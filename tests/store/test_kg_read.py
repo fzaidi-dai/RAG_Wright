@@ -102,6 +102,6 @@ def test_spans_by_contract_parity():
     assert s.spans_by_contract("c1", []) == [] and calls == []  # empty functions -> [] without a query
     s.spans_by_contract("c1", ["cap_on_liability"])
     assert cap["sql"] == (
-        "SELECT span_id, parent_chunk_id, parent_okf_path, span_index, text, function, contract_id, doc_start,"
-        " doc_end, pages, bbox FROM Span WHERE contract_id = 'c1' AND function IN ['cap_on_liability']"
+        "SELECT span_id, parent_chunk_id, span_index, text, primary_tag, document_id, doc_start,"
+        " doc_end, pages, bbox FROM Span WHERE document_id = 'c1' AND primary_tag IN ['cap_on_liability']"
         " ORDER BY doc_start")

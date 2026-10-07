@@ -93,7 +93,7 @@ def main() -> None:
     q = next(x for x in load_test_queries() if x.text.strip().lower() == QUERY.lower())
     gold = set(q.relevant)
     pool = list(dict.fromkeys(r["parent_okf_path"] for r in store._query(
-        f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function IN {_str_array([FUNCTION])}")))
+        f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag IN {_str_array([FUNCTION])}")))
     _progress(f"[setup] query='{QUERY}' function='{FUNCTION}' pool={len(pool)} gold_in_pool={len(gold & set(pool))}/{len(gold)}  reranker={RERANK_MODEL}")
 
     disc = build_model(DECOMP_MODEL, temperature=0.0).invoke(_decompose_prompt(QUERY)).content.strip()

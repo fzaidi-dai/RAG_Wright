@@ -27,13 +27,12 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 ### G2: The public config/env names carry contract-domain vocabulary (partly closed)
 - **Closed part:** the `Clause` (and other contract) KG types are no longer in the default schema; `pack=None`
   creates only the engine types (ING-8a).
-- **Still open:** `IngestOptions.clause_concurrency` / `clause_samples`; env `CLAUSE_CONCURRENCY` /
-  `RAG_INGEST_CLAUSE_*` / `RAG_SETFIT_CLAUSE_DIR`; the span fields `Span.parent_okf_path` and the stored span
-  record's `function` / `functions` / `contract_id`.
-- **Impact:** a non-contract domain still sees contract vocabulary in the engine's public API and env.
-- **Planned:** ING-8d (todo) moves the `IngestOptions` contract knobs to a reference-pack options object and renames
-  the span fields (`contract_id` to `document_id`, `function` to `primary_tag`, `functions` to `tags`;
-  `parent_okf_path` leaves the engine `Span`).
+- **Closed by ING-8d:** `IngestOptions` holds only the generic `tuning`; the contract knobs moved to the pack's
+  `ContractIngestOptions` (via `EngineOptions.packs["contracts"]`); the span fields are `document_id`,
+  `primary_tag`, `tags` (`parent_okf_path` left the engine `Span`). The env vars `CLAUSE_CONCURRENCY`,
+  `RAG_INGEST_CLAUSE_*`, `RAG_SETFIT_CLAUSE_DIR` are read only inside the contracts pack.
+- **Still open:** the generic store keeps contract-shaped methods (`spans_by_contract`, `all_spans_by_contract`,
+  `contract_by_id`, `clauses_in_contract`, `clause_positions`): ING-8e moves or renames them.
 - Surfaced: PREP-4.1 audit.
 
 ### G5: Pack and manifest helpers are not on `rag_wright.api`
@@ -81,10 +80,8 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Impact:** a domain that authors shapes validates its records itself (in its extractor or writer).
 - **Proposed:** an optional SHACL validation step over the pack's shapes.
 
-### G11: Dead reference-pipeline knobs
-- **Where:** `IngestOptions.list_model` and `IngestOptions.clause_samples` are passed to the reference pipeline
-  (`aproduction_document_ingest(list_model=, samples=)`), which accepts them and does not use them.
-- **Proposed:** remove them in ING-8d.
+### G11: Dead reference-pipeline knobs (closed)
+- `IngestOptions.list_model` / `clause_samples` and the pipeline's `list_model=` / `samples=` were removed (ING-8d).
 
 ### G12: No config route to register a decision-model profile
 - **Where:** `DECISION_PROFILES` (`rag_wright.models.profiles`) holds only `jev-1.13` and `jev-latest`. An unknown id

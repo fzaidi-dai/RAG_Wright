@@ -90,12 +90,12 @@ def property_boosted_retrieval(
     function_of: dict[str, str] = {}
     seen: set[str] = set()
     for f in (list(functions) or [None]):  # None -> no function filter (whole-index pool)
-        for h in store.span_hybrid_search(dense, sparse, k=pool_k, function=f, documents=documents):
+        for h in store.span_hybrid_search(dense, sparse, k=pool_k, primary_tag=f, documents=documents):
             sid = h["span_id"]
             if sid not in seen:
                 seen.add(sid)
                 ordered.append(sid)
-                function_of[sid] = h.get("function", "") or (f or "")
+                function_of[sid] = h.get("primary_tag", "") or (f or "")
     dense_floor: list[str] = []  # issue 0041: the top-N pure-dense spans, guaranteed into the returned k
     if dense_floor_n:
         for h in store.span_dense_search(dense, k=dense_floor_n, documents=documents):
@@ -104,7 +104,7 @@ def property_boosted_retrieval(
             if sid not in seen:  # pool it (for props + rerank) if the RRF leg missed it
                 seen.add(sid)
                 ordered.append(sid)
-                function_of[sid] = h.get("function", "")
+                function_of[sid] = h.get("primary_tag", "")
     if not ordered:
         return []
     from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store

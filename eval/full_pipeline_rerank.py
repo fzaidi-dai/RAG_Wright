@@ -63,7 +63,7 @@ def main() -> None:
         if not fn:
             return []
         return list(dict.fromkeys(r["parent_okf_path"] for r in store._query(
-            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function IN {_str_array([fn])}")))
+            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag IN {_str_array([fn])}")))
 
     pool_of = {q.query_id: pool_for(oracle_f1(sorted(q.relevant))) for q in queries}
 

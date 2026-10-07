@@ -9,7 +9,7 @@ from rag_wright.packs.contracts.schemas.query_intent import QueryIntent
 
 
 def _row(span_id, function, text, doc_start, doc_end, dense=None):
-    return {"span_id": span_id, "contract_id": "C1", "function": function, "parent_chunk_id": "C1:0:h",
+    return {"span_id": span_id, "document_id": "C1", "primary_tag": function, "parent_chunk_id": "C1:0:h",
             "text": text, "doc_start": doc_start, "doc_end": doc_end, "dense": dense or [1.0, 0.0, 0.0]}
 
 
@@ -21,7 +21,7 @@ class _FakeStore:
 
     def spans_by_contract(self, cid, functions):
         self.calls.append(("typed", cid, tuple(functions)))
-        return [r for r in self._typed if r["function"] in functions]
+        return [r for r in self._typed if r["primary_tag"] in functions]
 
     def all_spans_by_contract(self, cid):
         self.calls.append(("all", cid))

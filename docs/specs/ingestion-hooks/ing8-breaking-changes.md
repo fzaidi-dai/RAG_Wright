@@ -180,3 +180,46 @@ skills (`generation`, `rlm`, `vision_to_text`, `span_relevance_judgment`, `okf_n
 | `reference.compliance` | `packs.compliance.invokers` |
 | `reference.contract_seam` | `packs.reference_seam` |
 | `reference.pack` | split into `packs.contracts.pack` + `packs.compliance.pack` (above) |
+
+## ING-8d: generic option and span field names
+
+**Options.** `IngestOptions` keeps only the generic `tuning`. A domain pack's knobs travel in the new
+`EngineOptions.packs` mapping, keyed by the pack's name; the engine passes it through untouched.
+
+| Before | After |
+|---|---|
+| `EngineOptions(ingest=IngestOptions(classify_concurrency=, clause_concurrency=, affiliations=, function_classifier=))` | `EngineOptions(packs={"contracts": ContractIngestOptions(classify_concurrency=, clause_concurrency=, affiliations=, function_classifier=)})`; `ContractIngestOptions` is in `rag_wright.packs.contracts.options` (a wrong type under `"contracts"` raises `TypeError`) |
+| `IngestOptions.list_model`, `IngestOptions.clause_samples` | removed (they were accepted and never used) |
+| `aproduction_document_ingest(..., list_model=, samples=)` | removed parameters |
+
+The env fallbacks (`CLASSIFY_CONCURRENCY`, `CLAUSE_CONCURRENCY`, `RAG_INGEST_AFFILIATIONS`, `RAG_FUNCTION_CLASSIFIER`)
+are unchanged. `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` are read only by
+the contracts pack's legacy tag-parse extractor (not the default pipeline).
+
+**Span fields** (new names only, no dual read). `SpanRecord` and the `Span` hook contract now forbid unknown fields,
+so an old keyword argument raises a `ValidationError` instead of being silently dropped.
+
+| Before | After |
+|---|---|
+| `SpanRecord.contract_id`, stored `Span.contract_id` | `document_id` |
+| `SpanRecord.function`, stored `Span.function` | `primary_tag` |
+| `SpanRecord.functions`, stored `Span.functions` (JSON list) | `tags` (JSON list, primary-first) |
+| `SpanRecord.parent_okf_path`, `Span.parent_okf_path` (hook contract), stored `Span.parent_okf_path` | removed from the engine; the store no longer declares or writes it (existing values are left in place) |
+| `to_span_record(op, contract_id=, function=, functions=, parent_okf_path=)` | `to_span_record(op, document_id=, primary_tag=, tags=)` |
+| `segment_clause(..., parent_okf_path=)` (contracts pack) | parameter removed |
+| `ArcadeDBStore.span_hybrid_search(..., function=)` | `span_hybrid_search(..., primary_tag=)` |
+| rows from `span_hybrid_search` / `span_dense_search`: `span_id, parent_chunk_id, parent_okf_path, function` | `span_id, parent_chunk_id, primary_tag` |
+| rows from `spans_by_contract` / `all_spans_by_contract` / `api.span_positions`: `function`, `contract_id` | `primary_tag`, `document_id` (`parent_okf_path` dropped) |
+
+`clause_positions` rows keep their `contract_id` key (a contracts-pack row; it now reads `Span.document_id`).
+
+**Existing databases.** `ArcadeDBStore.ensure_schema()` (and so `open_workspace`) raises a `RuntimeError` on a database
+whose `Span` type still declares `contract_id` / `function` / `functions`, naming the fix. Migrate each existing
+database once, in place:
+
+```
+uv run python -u scripts/migrate_span_fields.py <database>     # X/N progress; idempotent
+```
+
+(or `ArcadeDBStore.migrate_span_fields()`): it copies the values to the new fields in batches, removes the old fields
+and drops the old properties. The legacy `parent_okf_path` values stay (the ACORD-era eval scripts read them).

@@ -23,9 +23,12 @@ from rag_wright.store.arcadedb import ArcadeDBStore
 
 
 @pytest.fixture(autouse=True)
-def _no_reference_schema_ddl(monkeypatch):
+def _no_reference_schema_ddl(request, monkeypatch):
     # ING-8a: these tests capture the WRITE statements over stub stores; the reference pack's schema check (its own
-    # DDL, covered in tests/store/test_neutral_schema.py) is not what they test
+    # DDL, covered in tests/store/test_neutral_schema.py) is not what they test. The live (`store`) tests run the
+    # real DDL, so they are left unpatched.
+    if request.node.get_closest_marker("store"):
+        return
     from rag_wright.packs.contracts.ontology.loader import reference_pack_ttl
 
     def _has_reference_pack(store):  # the stub HAS the pack's schema (so encodes by its types); no DDL issued
@@ -83,6 +86,7 @@ def test_deontic_edges_ground_to_odrl_others_to_bridge() -> None:
 def store():
     s = ArcadeDBStore.from_env(database=_TEST_DB, reset=True)
     s.ensure_schema()
+    ContractKGStore(s)  # ING-8a: the contract pack ensures its own types + typed edges (not in the default)
     yield s
     s.drop()
     s.close()

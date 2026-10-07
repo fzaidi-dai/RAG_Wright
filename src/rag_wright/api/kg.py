@@ -11,7 +11,7 @@ from rag_wright.api.workspace import WorkspaceHandle
 
 # the span-position fields a citation needs (NOT the dense vector) -- offsets + page/bbox provenance
 _SPAN_POSITION_FIELDS = [
-    "span_id", "parent_chunk_id", "span_index", "text", "function", "contract_id",
+    "span_id", "parent_chunk_id", "span_index", "text", "primary_tag", "document_id",
     "doc_start", "doc_end", "pages", "bbox",
 ]
 
@@ -56,6 +56,6 @@ def span_positions(ws: WorkspaceHandle, document: str) -> list[dict]:
     from rag_wright.api.ids import decode_bbox
     from rag_wright.store.arcadedb import SPAN_TYPE
 
-    rows = ws._store.kg_read(SPAN_TYPE, fields=_SPAN_POSITION_FIELDS, where={"contract_id": document},
+    rows = ws._store.kg_read(SPAN_TYPE, fields=_SPAN_POSITION_FIELDS, where={"document_id": document},
                              order_by="doc_start")
     return [{**r, "bbox": decode_bbox(r.get("bbox"))} for r in rows]

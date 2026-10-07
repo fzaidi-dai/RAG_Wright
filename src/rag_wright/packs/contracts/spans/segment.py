@@ -253,7 +253,6 @@ def segment_clause(
     parent_chunk_id: str,
     body: str,
     *,
-    parent_okf_path: str = "",
     min_chars: int = DEFAULT_MIN_CHARS,
 ) -> list[OperativeSpan]:
     """Segment a clause body into operative spans. Deterministic; spans tile the body byte-faithfully."""
@@ -266,7 +265,6 @@ def segment_clause(
         OperativeSpan(
             span_id=f"{parent_chunk_id}#{i}",
             parent_chunk_id=parent_chunk_id,
-            parent_okf_path=parent_okf_path,
             span_index=i,
             start=s,
             end=e,

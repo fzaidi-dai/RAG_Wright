@@ -1,10 +1,10 @@
 """Function-gate ON/OFF GRADED RECALL on the unified KG (ADR-0046 ACORD qrels; the ADR-0047 evidence).
 
-Answers: does the precomputed clause `function` pre-filter (Leg B `span_hybrid_search(function=f)`) buy recall?
+Answers: does the precomputed clause `function` pre-filter (Leg B `span_hybrid_search(primary_tag=f)`) buy recall?
 Two legs, identical except the function filter:
-  ON  = span_hybrid_search(function=oracle_fn)  -- oracle picks the function covering the most gold clauses, so
+  ON  = span_hybrid_search(primary_tag=oracle_fn)  -- oracle picks the function covering the most gold clauses, so
         this is the gate's BEST case (its recall CEILING with a perfect classifier).
-  OFF = span_hybrid_search(function=None)        -- whole-index BGE pool, no function pre-filter.
+  OFF = span_hybrid_search(primary_tag=None)      -- whole-index BGE pool, no function pre-filter.
 Recall unit = clause (parent_chunk_id): retrieve spans, dedup to distinct clauses, recall@{10,20,50} vs grade>=2.
 
   raw    - raw BGE-hybrid pool recall (no reranker, no LLM). Isolates the gate's pure effect on reachability.
@@ -72,7 +72,7 @@ def main() -> None:
     pcid_fns: dict[str, set[str]] = {}
     for i in range(0, len(all_rel), 100):
         idlist = "[" + ",".join(_sql_str(p) for p in all_rel[i:i + 100]) + "]"
-        for r in store._query(f"SELECT parent_chunk_id, function FROM Span WHERE parent_chunk_id IN {idlist}"):
+        for r in store._query(f"SELECT parent_chunk_id, primary_tag AS function FROM Span WHERE parent_chunk_id IN {idlist}"):
             pcid_fns.setdefault(r["parent_chunk_id"], set()).add(r.get("function") or "")
     print(f"[{mode}] {len(qrels)} queries | {len(all_rel)} relevant clauses | POOL_K={POOL_K}", flush=True)
 
@@ -94,8 +94,8 @@ def main() -> None:
                     reach[f] += 1
         oracle = reach.most_common(1)[0][0] if reach else None
         ceil_sum += (reach[oracle] / len(rel)) if oracle else 0.0
-        on_hits = store.span_hybrid_search(dense, sparse, k=POOL_K, function=oracle)
-        off_hits = store.span_hybrid_search(dense, sparse, k=POOL_K, function=None)
+        on_hits = store.span_hybrid_search(dense, sparse, k=POOL_K, primary_tag=oracle)
+        off_hits = store.span_hybrid_search(dense, sparse, k=POOL_K, primary_tag=None)
         if mode == "rerank":
             texts = store.span_texts(list({h["span_id"] for h in on_hits} | {h["span_id"] for h in off_hits}))
             on_clauses = _rerank_to_clauses(reranker, q["text"], on_hits, texts)

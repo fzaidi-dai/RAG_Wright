@@ -5,7 +5,7 @@ retrieval/rerank groups land as needed), so a product tunes the engine through c
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Mapping, Optional
 
 from rag_wright.contracts.ingestion import IngestionTuning
 
@@ -25,25 +25,20 @@ class StoreConfig:
 
 @dataclass(frozen=True)
 class IngestOptions:
-    """Ingest-time knobs, settable through config instead of environment variables (EP-API-4a). Every field defaults
-    to `None` = "use the engine default", so the engine's existing env fallback is preserved (a non-API caller is
-    unaffected) and an API caller that leaves these unset gets today's behavior exactly. Set a field to override."""
+    """The engine's generic ingest knobs, settable through config instead of environment variables (EP-API-4a).
+    ING-8d: only engine mechanism lives here; a domain pack's own knobs travel in `EngineOptions.packs`."""
 
-    classify_concurrency: Optional[int] = None    # function-classify parallelism (was CLASSIFY_CONCURRENCY)
-    clause_concurrency: Optional[int] = None       # clause-extraction parallelism (was CLAUSE_CONCURRENCY)
-    affiliations: Optional[bool] = None            # run affiliation extraction (was RAG_INGEST_AFFILIATIONS)
-    function_classifier: Optional[str] = None      # "setfit" | "llm" (was RAG_FUNCTION_CLASSIFIER)
-    list_model: Optional[str] = None               # secondary list-union model, "off" to disable (was RAG_INGEST_LIST_MODEL)
-    clause_samples: Optional[int] = None           # multi-sample count for the list union (was RAG_INGEST_CLAUSE_SAMPLES)
     tuning: Optional[IngestionTuning] = None     # ING-4b: the generic ingestion thresholds (build_ingestion default)
 
 
 @dataclass(frozen=True)
 class EngineOptions:
-    """The engine's options catalog. Ingest knobs today; retrieval / reranking / chunking groups are added here as
-    they are promoted off environment variables."""
+    """The engine's options catalog: the generic ingest knobs, plus `packs` -- each domain pack's own options
+    object keyed by the pack's name (ING-8d), e.g. `packs={"contracts": ContractIngestOptions(...)}`. The engine
+    passes `packs` through untouched; a pack reads its entry and falls back to its defaults when absent."""
 
     ingest: IngestOptions = field(default_factory=IngestOptions)
+    packs: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

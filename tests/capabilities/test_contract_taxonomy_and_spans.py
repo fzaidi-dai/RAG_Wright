@@ -87,7 +87,7 @@ def test_span_locations_roundtrip_live(store):
     dense[0] = 1.0
     store.upsert_span(SpanRecord(
         span_id=span_id, parent_chunk_id=str(cid), span_index=0, text="In no event shall Supplier be liable.",
-        function="Cap On Liability", dense_vector=dense, sparse_vector={1: 1.0}, contract_id="K",
+        primary_tag="Cap On Liability", dense_vector=dense, sparse_vector={1: 1.0}, document_id="K",
         doc_start=10, doc_end=48, pages=[3], bbox=(1.0, 2.0, 3.0, 4.0)))
     ContractKGStore(store).write_clause_kg(ClausePropertyRecord(
         clause_id=str(cid), function="Cap On Liability", span_id=span_id,  # the clause-level span bridge

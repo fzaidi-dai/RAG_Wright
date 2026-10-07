@@ -26,26 +26,25 @@ class SpanRecord(BaseModel):
     """One operative-span record for the `Span` hybrid index (dense + sparse over the span text).
 
     CUAD-highlighting fields (CU-A1, ADR-0029) are OPTIONAL/defaulted so the ACORD span leg (which does not
-    set them) is unaffected: `contract_id` is the source-document id used by the within-contract typed filter
+    set them) is unaffected: `document_id` is the source-document id used by the within-document filter
     (derivable from `parent_chunk_id` but stored explicitly for an indexed WHERE); `doc_start`/`doc_end` are
     document-absolute character offsets of the span (the citation the app highlights on); `page`/`bbox` are the
     optional PDF-overlay provenance (Docling-supplied where available). `parent_chunk_id` is the parent-clause
     pointer (a clause == a chunk), so no separate clause_id field is added.
     """
 
-    model_config = {"frozen": True}
+    model_config = {"frozen": True, "extra": "forbid"}  # ING-8d: an old field name fails loudly
 
     span_id: str  # "{parent_chunk_id}#{span_index}"
-    parent_chunk_id: str  # the parent CLAUSE id (a clause is a chunk); the span<->clause link
-    parent_okf_path: str = ""  # where the parent clause lives in the clause OKF bundle
+    parent_chunk_id: str  # the parent chunk id; the span<->chunk (or unit) link
     span_index: int
     text: str
-    function: str = ""  # the PRIMARY function-classifier tag (T56); "" until classified. == functions[0] when set.
-    functions: list[str] = []  # T55/ADR-0114: the top-k soft tags primary-first (SetFit ensemble); `function` is
-    #   functions[0]. Realizes the multi-tag soft-tagger so a span is discoverable under several clause types.
+    primary_tag: str = ""  # the span tagger's PRIMARY tag (ING-8d; was `function`); "" until tagged. == tags[0].
+    tags: list[str] = []  # the top-k soft tags, primary-first (ING-8d; was `functions`), so a span is discoverable
+    #   under several tags (ADR-0114 multi-tag soft-tagging).
     dense_vector: list[float]  # dense over the span; length == BGE_M3_DENSE_DIM
     sparse_vector: dict[int, float]  # sparse over the span: token-id -> non-negative weight
-    contract_id: str = ""  # CU-A1: source contract/document id (within-contract typed filter)
+    document_id: str = ""  # the source-document id (within-document filter; ING-8d, was `contract_id`)
     doc_start: int | None = None  # CU-A1: document-absolute char offset (citation); None on the ACORD leg
     doc_end: int | None = None  # CU-A1: exclusive
     page: int | None = None  # CU-A1: 1-based FIRST page for PDF-overlay highlight (== pages[0] when known)
@@ -85,13 +84,12 @@ class SpanRecord(BaseModel):
 def to_span_record(
     op: "Span",
     *,
-    contract_id: str,
+    document_id: str,
     chunk_doc_start: int,
     dense_vector: list[float],
     sparse_vector: dict[int, float],
-    function: str = "",
-    functions: list[str] | None = None,
-    parent_okf_path: str | None = None,
+    primary_tag: str = "",
+    tags: list[str] | None = None,
 ) -> SpanRecord:
     """CU-B2 (ADR-0029): OperativeSpan -> SpanRecord with DOCUMENT-ABSOLUTE offsets.
 
@@ -104,14 +102,13 @@ def to_span_record(
     return SpanRecord(
         span_id=op.span_id,
         parent_chunk_id=op.parent_chunk_id,
-        parent_okf_path=op.parent_okf_path if parent_okf_path is None else parent_okf_path,
         span_index=op.span_index,
         text=op.text,
-        function=function,
-        functions=list(functions) if functions else ([function] if function else []),
+        primary_tag=primary_tag,
+        tags=list(tags) if tags else ([primary_tag] if primary_tag else []),
         dense_vector=dense_vector,
         sparse_vector=sparse_vector,
-        contract_id=contract_id,
+        document_id=document_id,
         doc_start=chunk_doc_start + op.start,
         doc_end=chunk_doc_start + op.end,
         page=(op.pages[0] if op.pages else None),  # issue 0032: FIRST page for the singular highlight field

@@ -239,7 +239,7 @@ def main() -> None:
     def _function_pool(fns):
         fns = [f for f in fns if f and f != "NONE"]
         return [] if not fns else list(dict.fromkeys(r["parent_okf_path"] for r in store._query(
-            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function IN {_str_array(fns)}")))
+            f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag IN {_str_array(fns)}")))
 
     def pool_of(q):
         if MODE in ("corpus", "hybrid"):  # KG-primary: the whole clause corpus (no hard function filter)

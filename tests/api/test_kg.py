@@ -45,7 +45,7 @@ def test_kg_write_delegates_to_the_handle_store():
 def test_span_positions_reads_spans_and_decodes_bbox():
     s = _FakeStore()
     rows = span_positions(_FakeWS(s), "doc")
-    assert s.calls[0][1] == "Span" and s.calls[0][2]["where"] == {"contract_id": "doc"}
+    assert s.calls[0][1] == "Span" and s.calls[0][2]["where"] == {"document_id": "doc"}
     assert rows[0]["bbox"] == (0.1, 0.2, 0.3, 0.4)  # JSON string decoded to a tuple
 
 

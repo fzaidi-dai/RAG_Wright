@@ -56,7 +56,7 @@ def _clauses_in_functions(store: ArcadeDBStore, functions: list[str]) -> list[st
     fs = [f for f in functions if f]
     if not fs:
         return []
-    rows = store._query(f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE function IN {_str_array(fs)}")
+    rows = store._query(f"SELECT parent_okf_path FROM {SPAN_TYPE} WHERE primary_tag IN {_str_array(fs)}")
     return list(dict.fromkeys(r["parent_okf_path"] for r in rows))  # dedup, order-stable
 
 
