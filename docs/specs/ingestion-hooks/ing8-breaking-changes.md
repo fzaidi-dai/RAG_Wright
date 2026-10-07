@@ -4,6 +4,9 @@ ING-8 de-legalizes the engine. There are **no transition defaults and no dual re
 when it lands, and a product built on the engine (RuleWright) migrates afterwards, from this record. Each entry
 says what changed, who is affected, and the exact change a consumer makes.
 
+**RuleWright:** `rulewright-migration-0.2.0.md` (beside this file) applies this record to RuleWright's code as it is
+(scanned import by import), as a step-by-step migration to rag-wright 0.2.0.
+
 ## ING-8a: the default schema is neutral
 
 **What changed.**
