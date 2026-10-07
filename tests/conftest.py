@@ -8,6 +8,7 @@ must not reach the network. Unmocked model calls in the default suite cost real 
 escalation on a synthetic PDF), so any non-local lookup is blocked AND fails the test, naming the host.
 """
 import os
+import re
 import socket
 
 import pytest
@@ -44,3 +45,48 @@ def _no_network_unless_live(request, monkeypatch):
     yield
     if attempts:
         pytest.fail(f"this test tried to reach {sorted(set(attempts))}: mock the call, or mark the test live")
+
+
+# ING-CLEAN: a live store test leaves no database behind. The databases created DURING a `store` test whose names
+# follow the test convention are dropped after it; anything that existed before the test is never touched.
+_TEST_DB = re.compile(r"^(ragwright_test_\w+|ragwright_doccheck_\w+|\w+_live)$")
+
+
+def _database_names() -> set[str] | None:
+    import base64
+    import json
+    import urllib.request
+
+    host, port = os.environ.get("ARCADEDB_HOST", "localhost"), os.environ.get("ARCADEDB_PORT", "2480")
+    user, password = os.environ.get("ARCADEDB_USER"), os.environ.get("ARCADEDB_PASSWORD")
+    if not (user and password):
+        return None
+    req = urllib.request.Request(f"http://{host}:{port}/api/v1/databases")
+    req.add_header("Authorization", "Basic " + base64.b64encode(f"{user}:{password}".encode()).decode())
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310 - the local test ArcadeDB
+            return set(json.load(resp)["result"])
+    except Exception:  # noqa: BLE001 - no store reachable: nothing to clean
+        return None
+
+
+@pytest.fixture(autouse=True)
+def _drop_test_databases(request):
+    if not request.node.get_closest_marker("store"):
+        yield
+        return
+    from dotenv import load_dotenv
+
+    load_dotenv(".env")
+    before = _database_names()
+    yield
+    after = _database_names()
+    if before is None or after is None:
+        return
+    from rag_wright.store.arcadedb import ArcadeDBStore
+
+    for name in sorted(after - before):
+        if _TEST_DB.match(name):
+            store = ArcadeDBStore.from_env(database=name)
+            store.drop()
+            store.close()
