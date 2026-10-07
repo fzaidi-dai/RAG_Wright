@@ -239,9 +239,9 @@ class ArcadeDBStore:
         self._client = client
         self._database = database
         self._db = DatabaseDao(client, database)
-        # AC-journey: the DOMAIN pack `.ttl` whose KG vertex/edge types `ensure_schema` creates and whose property
-        # storage types `kg_write` encodes by. `None` = the engine's reference CONTRACT pack (today's behavior); a
-        # new domain points this at its OWN pack, so "config + .ttl" creates that domain's schema with no engine edit.
+        # AC-journey / ING-8a: the DOMAIN pack `.ttl` whose KG vertex/edge types `ensure_schema` creates and whose
+        # property storage types `kg_write` encodes by. `None` = NO domain pack (the neutral engine schema); a domain
+        # points this at its OWN pack ("config + .ttl", no engine edit), or ensures it on use (`ensure_pack_schema`).
         self._pack_ttl = pack_ttl
 
     @classmethod
@@ -251,7 +251,7 @@ class ArcadeDBStore:
 
         `database` overrides `ARCADEDB_DATABASE` (used to point tests at a scratch database).
         `reset=True` drops and recreates the database first, for a clean-slate test.
-        `pack_ttl` selects the domain pack schema (None = the contract reference pack).
+        `pack_ttl` selects the domain pack schema (None = the neutral engine schema, no domain pack).
         """
         return cls.from_config(
             os.environ["ARCADEDB_HOST"], os.environ["ARCADEDB_PORT"],
@@ -266,7 +266,7 @@ class ArcadeDBStore:
                     pack_ttl: str | None = None) -> "ArcadeDBStore":
         """Build a store from EXPLICIT connection params (EP-API-1: the de-env'd twin of `from_env`, so engine
         config flows as data, not `os.environ`). Creates the database if absent; `reset=True` drops + recreates it.
-        `pack_ttl` selects the domain pack schema (None = the contract reference pack)."""
+        `pack_ttl` selects the domain pack schema (None = the neutral engine schema, no domain pack)."""
         client = SyncClient(host, port, protocol=protocol, username=user, password=password)
         if reset and DatabaseDao.exists(client, database):
             DatabaseDao.delete(client, database)
@@ -325,20 +325,6 @@ class ArcadeDBStore:
         for edge in (EMBEDDED_IN_EDGE_TYPE, ATTACHED_TO_EDGE_TYPE):
             if edge not in types:
                 self._command(f"CREATE EDGE TYPE {edge}")
-        # ADR-0067 P5b: the DOMAIN vertex types (Clause / PropertyValue / Contract) + structural edges
-        # (HasProperty / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
-        # whatever the pack declares, so a new domain ships its own node schema without editing this method.
-        vertex_types, structural_edges = load_kg_schema(getattr(self, "_pack_ttl", None))
-        for vt in vertex_types:
-            if vt.name not in types:
-                self._command(f"CREATE VERTEX TYPE {vt.name}")
-                for pname, ptype in vt.properties:
-                    self._command(f"CREATE PROPERTY {vt.name}.{pname} {ptype}")
-        # edge types: the structural edges (pack) + the typed property edges (P5a, ttl-driven)
-        for edge in sorted(structural_edges) + list(TYPED_PROPERTY_EDGE_TYPES):
-            if edge not in types:
-                self._command(f"CREATE EDGE TYPE {edge}")
-
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
             self._command(f"CREATE INDEX ON {CHUNK_TYPE} (chunk_id) UNIQUE")
@@ -366,7 +352,35 @@ class ArcadeDBStore:
             self._command(
                 f"CREATE INDEX ON {SPAN_TYPE} (sparse_indices, sparse_weights) LSM_SPARSE_VECTOR"
             )
-        # ADR-0067 P5b: the domain vertex UNIQUE id indexes (pack-declared, `cbr:uniqueIndexOn`)
+        # ING-8a: the engine default is domain-NEUTRAL -- a domain's types come only from a CONFIGURED pack
+        if getattr(self, "_pack_ttl", None):
+            self.ensure_pack_schema(self._pack_ttl)
+
+    def schema_packs(self) -> list[str]:
+        """ING-8a: the pack `.ttl`s this store's schema includes -- the configured pack (if any) plus every pack
+        ensured on use (`ensure_pack_schema`). Empty for the neutral default."""
+        configured = [self._pack_ttl] if getattr(self, "_pack_ttl", None) else []
+        return list(dict.fromkeys(configured + list(getattr(self, "_ensured_packs", []))))
+
+    def ensure_pack_schema(self, pack_ttl: str) -> None:
+        """ING-8a (ADR-0067 P5a/P5b): create a domain PACK's schema from its own `.ttl`, idempotently -- the vertex
+        types + their unique id indexes (`load_kg_schema`), the structural edges, and the typed property edges
+        (`load_typed_edges`). Called by `ensure_schema` for a configured pack, and by a pack's own pipeline to
+        ensure its schema on use (the reference contract pipeline does this)."""
+        vertex_types, structural_edges = load_kg_schema(pack_ttl)
+        typed_edges = sorted(set(load_typed_edges(pack_ttl)[0].values()))
+        self._ensured_packs = [*getattr(self, "_ensured_packs", []), pack_ttl]
+        self._prop_types_cache = None  # re-derive the property encodings with this pack included
+        types = self.type_names()
+        for vt in vertex_types:
+            if vt.name not in types:
+                self._command(f"CREATE VERTEX TYPE {vt.name}")
+                for pname, ptype in vt.properties:
+                    self._command(f"CREATE PROPERTY {vt.name}.{pname} {ptype}")
+        for edge in sorted(structural_edges) + typed_edges:
+            if edge not in types:
+                self._command(f"CREATE EDGE TYPE {edge}")
+        indexes = self.index_names()
         for vt in vertex_types:
             if vt.unique_index and f"{vt.name}[{vt.unique_index}]" not in indexes:
                 self._command(f"CREATE INDEX ON {vt.name} ({vt.unique_index}) UNIQUE")
@@ -521,13 +535,14 @@ class ArcadeDBStore:
 
     def _property_types(self, type_name: str) -> dict[str, str]:
         """`{property -> declared storage type}` for a KG node type, used by `kg_write` to encode each prop. Sourced
-        from the pack schema (`load_kg_schema`) + the centralized non-pack declarations. Cached per store."""
+        from the schemas of this store's packs (`schema_packs`) + the centralized non-pack declarations. Cached per
+        store (reset when a pack is ensured)."""
         cache = getattr(self, "_prop_types_cache", None)
         if cache is None:
             cache = {name: dict(props) for name, props in _ENGINE_VERTEX_PROPERTY_TYPES.items()}
-            vertex_types, _ = load_kg_schema(getattr(self, "_pack_ttl", None))
-            for vt in vertex_types:
-                cache[vt.name] = dict(vt.properties)
+            for ttl in self.schema_packs():  # ING-8a: only the packs this store has -- none by default
+                for vt in load_kg_schema(ttl)[0]:
+                    cache[vt.name] = dict(vt.properties)
             self._prop_types_cache = cache
         return cache.get(type_name, {})
 
@@ -926,17 +941,16 @@ class ArcadeDBStore:
         return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
 
     def known_document_ids(self) -> set[str]:
-        """Issue 0031: the DISTINCT ids of every INGESTED document -- the `Contract` nodes (CU-B3), the
-        per-document registry written once per ingested source document. This is the validation set for a
-        `documents` scope: a scope naming a document that was never ingested raises (mirrors issue 0007's
-        `requirement_sources`), but a document that WAS ingested yet indexed nothing (unreadable / empty ->
-        no spans, no edges) is a KNOWN document and PASSES -- it simply contributes nothing to the sweep,
-        which the product reports through its coverage line rather than having one bad document raise and
-        break the whole matter's sweep. (Deliberately the ingested-document set, not the narrower union of
-        documents that produced spans or edges.) The Contract type may not exist yet on a fresh DB -> empty."""
-        if CONTRACT_TYPE not in self.type_names():
+        """Issue 0031 / ING-8a: the DISTINCT ids of every INGESTED document -- the generic `Document` nodes, one per
+        ingested source document (ING-4b; the reference contract pipeline writes them too). The validation set for
+        a `documents` scope: a scope naming a document that was never ingested raises (mirrors issue 0007's
+        `requirement_sources`), but a document that WAS ingested yet indexed nothing (unreadable / empty -> no
+        spans, no edges) is a KNOWN document and PASSES -- it contributes nothing to the sweep, which the product
+        reports through its coverage line rather than having one bad document break the sweep. The `Document`
+        type may not exist yet on a fresh DB -> empty."""
+        if DOCUMENT_TYPE not in self.type_names():
             return set()
-        return {r["contract_id"] for r in self.all_contracts() if r.get("contract_id")}
+        return {r["doc_id"] for r in self._query(f"SELECT doc_id FROM {DOCUMENT_TYPE}") if r.get("doc_id")}
 
     def entities_by_name(self, name: str) -> list[dict]:
         """Resolve a party NAME to its graph entities (issue 0030 / ADR-0093): the first step before

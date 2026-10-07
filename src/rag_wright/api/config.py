@@ -56,7 +56,8 @@ class EngineConfig:
     models: dict[str, str] = field(default_factory=dict)  # ModelRole value -> engine-supported model alias (override)
     embeddings: dict[str, str] = field(default_factory=lambda: {"text": "bge-m3"})  # profile -> supported embedder
     options: EngineOptions = field(default_factory=EngineOptions)  # EP-API-4a: ingest (+ future) knobs via config
-    # AC-journey: the DOMAIN pack `.ttl` declaring this domain's KG vertex/edge types (open_workspace creates them).
-    # None = the engine's reference CONTRACT pack. A new domain points this at its own `.ttl` -- "config + .ttl",
-    # no engine edit -- and `ensure_schema` creates that domain's schema on top of the always-on engine types.
+    # AC-journey / ING-8a: the DOMAIN pack `.ttl` declaring this domain's KG vertex/edge types (open_workspace creates
+    # them). None = no domain pack: the neutral engine schema only (Chunk, Entity, Span, Document + their edges). A
+    # domain points this at its own `.ttl` -- "config + .ttl", no engine edit -- and `ensure_schema` creates that
+    # schema on top of the engine types. (The reference contract pipeline ensures its own pack schema on use.)
     pack: Optional[str] = None

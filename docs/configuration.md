@@ -14,7 +14,7 @@ config = EngineConfig(
     models={},                         # ModelRole value -> model alias override (empty = engine defaults)
     embeddings={"text": "bge-m3"},     # embedding profile -> supported embedder
     options=EngineOptions(),           # the knobs catalog (ingest today)
-    pack=None,                         # path to a domain .ttl; None = the bundled reference pack
+    pack=None,                         # path to a domain .ttl; None = no domain pack (neutral engine schema)
 )
 ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the backend DB name
 ```

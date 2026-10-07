@@ -28,11 +28,25 @@ from rag_wright.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH  
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 
 
+def _ensure_reference_schema(store) -> None:
+    """ING-8a: the engine's default schema is neutral, so the reference contract pack ensures ITS schema (Clause,
+    PropertyValue, Contract, the typed edges) on the store it uses -- once per store object."""
+    ensure = getattr(store, "ensure_pack_schema", None)
+    if not callable(ensure):
+        return
+    from rag_wright.ontology.loader import reference_pack_ttl
+
+    ttl = reference_pack_ttl()
+    if ttl not in store.schema_packs():
+        ensure(ttl)
+
+
 class ContractKGStore:
     """Typed clause-KG + contract-metadata writes over a generic `Store`."""
 
     def __init__(self, store) -> None:
         self._store = store
+        _ensure_reference_schema(store)
 
     def _already_written(self, clause_id: str) -> bool:
         """Content-hash gate (FR-S.2): a committed `clause_id` embeds the content hash, so identical content ->

@@ -21,6 +21,20 @@ from rag_wright.store.arcadedb import (
     _stale_property_statements,
 )
 
+
+@pytest.fixture(autouse=True)
+def _no_reference_schema_ddl(monkeypatch):
+    # ING-8a: these tests capture the WRITE statements over stub stores; the reference pack's schema check (its own
+    # DDL, covered in tests/store/test_neutral_schema.py) is not what they test
+    from rag_wright.ontology.loader import reference_pack_ttl
+
+    def _has_reference_pack(store):  # the stub HAS the pack's schema (so encodes by its types); no DDL issued
+        if hasattr(store, "__dict__"):
+            store._ensured_packs = [reference_pack_ttl()]
+            store._prop_types_cache = None
+
+    monkeypatch.setattr("rag_wright.capabilities.contract_kg_store._ensure_reference_schema", _has_reference_pack)
+
 _D = PropertyDimension
 _TEST_DB = "ragwright_test_clause_kg"
 

@@ -59,7 +59,7 @@ canonical values — again, read from the one pack, used everywhere.
 
 ```python
 from rag_wright.api import EngineConfig, StoreConfig, open_workspace
-cfg = EngineConfig(store=StoreConfig(...), pack="packs/mydomain.ttl")   # None = the bundled reference pack
+cfg = EngineConfig(store=StoreConfig(...), pack="packs/mydomain.ttl")   # None = no domain pack (neutral schema)
 ws = open_workspace(cfg, corpus="mydomain")   # ensure_schema() creates your declared vertex/edge types
 ```
 

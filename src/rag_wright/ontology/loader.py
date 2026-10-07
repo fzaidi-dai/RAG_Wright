@@ -358,6 +358,12 @@ class KgVertexType:
 
 
 @lru_cache(maxsize=8)
+def reference_pack_ttl() -> str:
+    """ING-8a: the path of the reference CONTRACT pack's ontology -- the pack the reference pipeline ensures for
+    itself (`ArcadeDBStore.ensure_pack_schema`). The engine default schema does not include it."""
+    return str(_TTL_PATH)
+
+
 def load_kg_schema(path: str | None = None) -> tuple[tuple[KgVertexType, ...], frozenset[str]]:
     """ADR-0067 P5b: the DOMAIN KG node/edge storage schema from the ttl -- `(vertex types, structural edge names)`.
     The engine infra (Chunk/Span/Entity) stays generic in store code; these domain types are pack-declared. Cached.

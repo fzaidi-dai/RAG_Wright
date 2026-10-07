@@ -26,7 +26,8 @@ A product configures the engine once and opens a workspace:
 
 - **`EngineConfig`** — the whole view of the engine: a `StoreConfig` (how to reach ArcadeDB), model aliases by role,
   the embedding profile, ingest options (`EngineOptions` / `IngestOptions`), and `pack` (the path to a domain
-  `.ttl`; `None` uses the reference contract pack).
+  `.ttl`; `None` means no domain pack: only the neutral engine schema -- Chunk, Entity, Span, Document and their
+  edges. The reference contract pipeline ensures its own pack schema when it runs).
 - **`open_workspace(config, *, corpus, reset=False) -> WorkspaceHandle`** — resolves and caches a workspace and
   ensures the schema. `corpus` is the backend database name (tenancy is the product's concern). The returned
   `WorkspaceHandle` is opaque: the store and embedder are private; you pass the handle to the invokers and the KG
