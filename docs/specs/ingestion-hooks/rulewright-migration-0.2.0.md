@@ -210,6 +210,34 @@ the compliance pack's `.ttl`).
 4. Live: ingest one contract and one policy; the contract run should show Jev calls and no per-provision LLM calls
    (`measure_usage` / the run report), the policy run no dead-lettered sections.
 
+## 9. Dependency setup: develop against the local engine, verify against the release
+
+Keep the editable path dependency for local work: every engine change is visible to RuleWright (and its coding agent)
+the moment it is saved, with no build, publish or reinstall. A wheel would be a snapshot to rebuild and reinstall on
+every change, so it is only worth it where there is no checkout (a sealed deploy image, an offline machine). Make the
+setup safe as well as fast:
+
+1. **Declare a version floor** in `pyproject.toml` (`dependencies`): `"rag-wright"` becomes `"rag-wright>=0.2.0"`. The
+   editable source still satisfies it locally; an install without the source can no longer resolve an older release.
+
+   ```toml
+   [project]
+   dependencies = ["rag-wright>=0.2.0", ...]
+
+   [tool.uv.sources]  # local development only
+   rag-wright = { path = "../RAG_Wright", editable = true }
+   ```
+
+2. **Test against the published release where it matters** (CI, before a deploy): `uv sync --no-sources` ignores the
+   path override and installs `rag-wright` from PyPI under the floor, then run the suite. Locally, the plain
+   `uv sync` keeps the editable engine.
+3. **Share an unreleased engine fix without publishing** by pinning a commit instead of the path, for a teammate or
+   CI: `rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`; drop it once the fix is
+   released (the engine's `docs/releasing.md`).
+4. **Expect the trade-off.** Editable means a breaking engine change breaks RuleWright at once (as 0.2.0 did). That is
+   useful feedback when deliberate: before the engine commits a change to a public symbol or store method, RuleWright's
+   suite is run against the engine working tree.
+
 ## Later (optional): move to the public API
 
 RuleWright reaches into engine internals everywhere (none of its 52 engine symbols comes from `rag_wright.api`). 0.2.0 exposes a
