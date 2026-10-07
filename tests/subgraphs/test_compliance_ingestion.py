@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.compliance_fakes import FakeRequirementSeam
+
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.packs.compliance.subgraphs.compliance_ingestion import (
     RegulationAdapter,
@@ -101,21 +103,28 @@ async def test_write_failure_dead_letters():
 # --- the driver: reuses run_corpus_ingestion (fake store + stub extract) -------------------------
 
 
-class _FakeStore:
-    def __init__(self):
-        self.reqs = []
-        self.schema_ensured = False
+class _FakeStore(FakeRequirementSeam):
+    """The generic seam the compliance pack reads through `ComplianceStore` (ING-8e), plus a test-local
+    `write_requirements` the tests inject as the write override."""
 
-    def ensure_compliance_schema(self):
-        self.schema_ensured = True
+    def __init__(self):
+        super().__init__()
+        self.reqs = []
+        self._done_citations: set[str] = set()
+
+    @property
+    def schema_ensured(self) -> bool:
+        return bool(self.packs)  # ComplianceStore ensured the pack schema from compliance_bridge.ttl
 
     def write_requirements(self, reqs):
         reqs = list(reqs)
         self.reqs.extend(reqs)
         return len(reqs)
 
-    def ingested_citations(self, source):
-        return getattr(self, "_done_citations", set())
+    def kg_read(self, node_type, *, where=None, fields=None, distinct=None, order_by=None, limit=None):
+        if distinct == "citation":  # the resume read: citations already ingested for this source
+            return [{"citation": c} for c in sorted(self._done_citations)]
+        return super().kg_read(node_type, where=where, fields=fields, distinct=distinct)
 
 
 async def test_run_over_the_corpus_writes_all_sections(tmp_path):

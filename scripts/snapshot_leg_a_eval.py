@@ -52,7 +52,7 @@ _NEGATIVES = [
 
 
 def _pick_contract(store, function: str) -> str | None:
-    from rag_wright.store.arcadedb import CLAUSE_TYPE
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE
     rows = store._query(f"SELECT clause_id FROM {CLAUSE_TYPE} WHERE function = '{function}'")
     if not rows:
         return None

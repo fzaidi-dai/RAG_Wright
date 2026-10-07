@@ -109,13 +109,13 @@ def serve_highlight(
     low_confidence = False
 
     if intent.in_taxonomy:
-        rows = store.spans_by_contract(contract_id, intent.clause_types)
+        rows = store.spans_by_document(contract_id, intent.clause_types)
         spans = [_to_span(r, confidence=intent.confidence) for r in rows]
         if intent.intent == "extract" and intent.value_to_extract and spans:
             spans = _field_extract(spans, intent.value_to_extract, structured_factory, model_id)
         # intent == "discriminate": the value_condition discriminator + (b) rerank is stubbed -> passthrough.
     else:
-        rows = store.all_spans_by_contract(contract_id)
+        rows = store.all_spans_by_document(contract_id)
         query_vec = embedder.encode_dense(query) if embedder is not None else None
         if query_vec is not None:
             rows = sorted(rows, key=lambda r: _cosine(query_vec, r["dense"]), reverse=True)

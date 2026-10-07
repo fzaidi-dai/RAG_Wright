@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 
 def _sha(text: str) -> str:
@@ -59,18 +60,19 @@ def main() -> None:
     from dotenv import load_dotenv
 
     load_dotenv()
-    from rag_wright.store.arcadedb import CLAUSE_TYPE, ArcadeDBStore, _sql_str
+    from rag_wright.store.arcadedb import ArcadeDBStore, _sql_str
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE
 
     dry = os.environ.get("DRY_RUN") == "1"
     store = ArcadeDBStore.from_env()
-    contracts = [r["contract_id"] for r in store.all_contracts()]
+    contracts = [r["contract_id"] for r in ContractKGStore(store).all_contracts()]
     n = len(contracts)
     print(f"[backfill] {'DRY-RUN' if dry else 'APPLY'} clause span_id over {n} contracts", flush=True)
 
     agg = {"total": 0, "matched": 0, "already": 0, "unmatched": 0, "updated": 0}
     for i, cid in enumerate(contracts, 1):
-        spans = store.all_spans_by_contract(cid)
-        clauses = store.clauses_in_contract(cid)
+        spans = store.all_spans_by_document(cid)
+        clauses = ContractKGStore(store).clauses_in_contract(cid)
         updates, stats = plan_backfill(spans, clauses)
         for key in ("total", "matched", "already", "unmatched"):
             agg[key] += stats[key]

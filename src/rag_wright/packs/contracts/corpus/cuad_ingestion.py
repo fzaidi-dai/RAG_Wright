@@ -57,6 +57,7 @@ async def arun_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, lim
     import json
     from pathlib import Path
 
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
     from rag_wright.packs.contracts.capabilities.dg_extraction import build_verified_registry
 
     store.ensure_schema()
@@ -69,4 +70,4 @@ async def arun_cuad_ingestion(cuad_path: Any, store: Any, *, cache_dir: Any, lim
         CuadAdapter(cuad_path, limit=limit), ingest_graph,
         # (issue 0028 / ADR-0091: the KG-7 PartyTo link step was retired; no link_fn is wired.)
         # RESUME-skip: a present Contract node means the whole document already landed (Contract is written last).
-        is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)
+        is_done=lambda doc: ContractKGStore(store).contract_by_id(doc.source_doc_id) is not None)

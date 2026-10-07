@@ -230,3 +230,12 @@ writing to change one decision (engine gaps G3/G4).
   (`scripts/migrate_span_fields.py`), in batches, idempotently.
 - **Verified.** Full suite and the live store tests green; a live Aimmune re-ingest is record-identical to ING-8c, and
   migrating the ING-8c database makes it identical to the ING-8d one.
+
+## ING-8e addendum (2026-10-07): the generic store names no domain type
+
+- **Decision.** Every contract- or compliance-shaped method and type left `ArcadeDBStore`: the contract reads/writes
+  and type constants live on the contracts pack's `ContractKGStore`; the compliance `Requirement` type is declared in
+  `compliance_bridge.ttl` (engine pack-schema vocabulary, like the contracts pack) and its schema + reads live on
+  `ComplianceStore`. Pack stores ensure their schema on construction. The span reads are per document
+  (`spans_by_document`, `all_spans_by_document`).
+- **Verified.** Full suite and the 54 live store tests green; a live Aimmune re-ingest is record-identical to ING-8d.

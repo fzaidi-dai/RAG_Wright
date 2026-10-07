@@ -16,7 +16,8 @@ from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.contracts.span import SpanRecord
-from rag_wright.store.arcadedb import ArcadeDBStore, _property_value_key
+from rag_wright.store.arcadedb import ArcadeDBStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import _property_value_key
 
 _TEST_DB = "ragwright_test_property"
 
@@ -65,8 +66,8 @@ def test_write_and_readback_with_provenance(store):
         (PropertyDimension.CARVE_OUT, "indemnification", ConfidenceTag.EXTRACTED),
     ])
     ContractKGStore(store).write_property_graph(rec)
-    assert store.property_graph_counts() == {"clauses": 1, "property_values": 2, "property_edges": 2}
-    got = store.clause_property_values(cid)
+    assert ContractKGStore(store).property_graph_counts() == {"clauses": 1, "property_values": 2, "property_edges": 2}
+    got = ContractKGStore(store).clause_property_values(cid)
     assert {(r["dimension"], r["value"]) for r in got} == {
         ("mutuality", "mutual"), ("carve_out", "indemnification"),
     }
@@ -82,7 +83,7 @@ def test_shared_value_node_deduped_across_clauses(store):
     b, _ = _record("capB", "Cap On Liability", [(PropertyDimension.CARVE_OUT, "indemnification", ConfidenceTag.EXTRACTED)])
     ContractKGStore(store).write_property_graph(a)
     ContractKGStore(store).write_property_graph(b)
-    counts = store.property_graph_counts()
+    counts = ContractKGStore(store).property_graph_counts()
     assert counts == {"clauses": 2, "property_values": 1, "property_edges": 2}  # ONE shared value node
 
 
@@ -92,9 +93,9 @@ def test_clear_property_graph_keeps_spans(store):
                                  dense_vector=[0.0] * BGE_M3_DENSE_DIM, sparse_vector={1: 1.0}))
     rec, _ = _record("capA", "Cap On Liability", [(PropertyDimension.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
     ContractKGStore(store).write_property_graph(rec)
-    assert store.property_graph_counts()["clauses"] == 1
-    store.clear_property_graph()
-    assert store.property_graph_counts() == {"clauses": 0, "property_values": 0, "property_edges": 0}
+    assert ContractKGStore(store).property_graph_counts()["clauses"] == 1
+    ContractKGStore(store).clear_property_graph()
+    assert ContractKGStore(store).property_graph_counts() == {"clauses": 0, "property_values": 0, "property_edges": 0}
     # the span index is untouched (re-extraction does not re-embed)
     assert store._query("SELECT count(*) AS n FROM Span")[0]["n"] == 1
 
@@ -104,5 +105,5 @@ def test_repopulation_is_idempotent(store):
     rec, _ = _record("capA", "Cap On Liability", [(PropertyDimension.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
     ContractKGStore(store).write_property_graph(rec)
     ContractKGStore(store).write_property_graph(rec)  # a re-extract of the same clause must not duplicate the edge
-    counts = store.property_graph_counts()
+    counts = ContractKGStore(store).property_graph_counts()
     assert counts["clauses"] == 1 and counts["property_edges"] == 1

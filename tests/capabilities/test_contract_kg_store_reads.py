@@ -53,7 +53,8 @@ class _FakeStore:
              "predicate_iri": "cbr:EXCEPTS", "folio_iri": "", "confidence": "AMBIGUOUS", "span_id": "sA"},
         ]
 
-    def clauses_in_contract(self, contract_id):
+    def _query(self, sql):  # ING-8e: ContractKGStore reads a contract's clauses itself (a clause-id range query)
+        assert "FROM Clause" in sql
         return [{"clause_id": self._A, "function": "Cap On Liability", "folio_iri": "folio:CAP"}]
 
 
@@ -120,12 +121,12 @@ def test_contract_terms_reads_the_clause_kg_live(store):
 
 def test_contract_kg_store_delegates_all_spans_by_contract():
     """Regression (intra_document_qa abstained for EVERY document): `contract_clause_index(..., include_untyped=True)`
-    calls `store.all_spans_by_contract`, but the serve store is a ContractKGStore. It delegates `clauses_in_contract`
-    yet was missing `all_spans_by_contract`, so serve raised AttributeError -> (caught) -> empty clauses -> abstain."""
+    calls `store.all_spans_by_contract`, but the serve store is a ContractKGStore. It must answer it (over the generic
+    `all_spans_by_document`, ING-8e), else serve raised AttributeError -> (caught) -> empty clauses -> abstain."""
     from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
     class _Raw:
-        def all_spans_by_contract(self, contract_id):
+        def all_spans_by_document(self, contract_id):
             return [{"span_id": f"{contract_id}:0:h#0", "function": "", "text": "a clause body"}]
 
     ckg = ContractKGStore(_Raw())

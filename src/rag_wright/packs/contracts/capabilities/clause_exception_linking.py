@@ -100,7 +100,8 @@ def derive_exception_links(
 def clause_exception_linking(store: Any, *, window: int = DEFAULT_PROXIMITY_WINDOW) -> ClauseExceptionLinkResult:
     """The registered capability (ADR-0044): read the Cap + Uncapped clause positions, derive the proximity-based
     `IsExceptionTo` links, write them (idempotent, clears the layer first), and return the result. No re-ingest --
-    a derived-relationship pass over the existing KG."""
+    a derived-relationship pass over the existing KG. `store` is the contracts pack's `ContractKGStore` (ING-8e:
+    the clause reads/writes live there, not on the generic store)."""
     positions = store.clause_positions([CAP_FUNCTION, EXCEPTION_FUNCTION])
     result = derive_exception_links(positions, window=window)
     store.write_clause_exception_links(result.links)

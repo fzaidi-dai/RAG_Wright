@@ -31,6 +31,7 @@ from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
 )
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 # extract_fn: a section's SourceDocument -> its extracted Requirement[]; write_fn: (doc, reqs) -> count written.
 ExtractReqFn = Callable[[SourceDocument], list]
@@ -220,7 +221,7 @@ def _compliance_is_done(store: Any, source: str) -> Any:
     -- the compliance analogue of a present `Contract` node). Computed ONCE (one query); a failed/empty section
     wrote no requirement, so it is absent and correctly re-runs. The section's citation is `§ {section}` (matches
     `to_requirements`)."""
-    done = store.ingested_citations(source)
+    done = ComplianceStore(store).ingested_citations(source)
     return lambda doc: f"§ {doc.metadata.get('section', '')}" in done
 
 
@@ -235,7 +236,7 @@ async def run_compliance_ingestion(
     `extraction_backend` ("jev" DEFAULT since the corpus A/B | "docling" fallback, ADR-0119) selects the
     requirement-extraction act; "jev" needs `load_reference_pack()` + `OPENROUTER_API_KEY` (see
     `production_compliance_ingestion`)."""
-    store.ensure_compliance_schema()
+    ComplianceStore(store).ensure_compliance_schema()
     graph = production_compliance_ingestion(
         store, model=model, extract_override=extract_override, write_override=write_override,
         extraction_backend=extraction_backend)
@@ -251,7 +252,7 @@ async def run_compliance_document_ingestion(
     """DOCPARSE-1: ingest a customer's OWN regulation/policy DOCUMENT (PDF/DOCX/HTML bytes) into the Requirement
     KG -- the same compliance pipeline, fed by a `DocumentRegulationAdapter` (docling parse -> heading-split
     sections) instead of a pre-sectioned eCFR `sections.json`. `sections_fn` injects the parse for tests."""
-    store.ensure_compliance_schema()
+    ComplianceStore(store).ensure_compliance_schema()
     graph = production_compliance_ingestion(
         store, model=model, extract_override=extract_override, write_override=write_override)
     return await arun_corpus_ingestion(
@@ -271,7 +272,7 @@ def submit_compliance_ingestion(
     `jobs` = the `JobStore`; poll `jobs.get(job_id)` for status."""
     from rag_wright.packs.contracts.subgraphs.async_ingestion import submit_ingestion
 
-    store.ensure_compliance_schema()
+    ComplianceStore(store).ensure_compliance_schema()
     graph = production_compliance_ingestion(
         store, model=model, extract_override=extract_override, write_override=write_override)
     return submit_ingestion(

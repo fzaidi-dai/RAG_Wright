@@ -24,6 +24,7 @@ from rag_wright.packs.compliance.subgraphs.compliance_check import (
     build_compliance_check,
     register_compliance_check,
 )
+from tests.compliance_fakes import FakeRequirementSeam
 
 
 def _claim(text="clinically proven to work", ctype=ClaimType.HEALTH, disc=None) -> Claim:
@@ -275,13 +276,12 @@ async def test_run_generic_compliance_verdict_produces_a_cited_report_without_on
     from rag_wright.packs.compliance.capabilities.compliance_judgment import JudgeVerdict
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
-    class _Store:
-        def all_requirements(self):
-            return [{"requirement_id": "osha:1904.4:h", "source": "OSHA", "citation": "§ 1904.4",
-                     "deontic_type": "obligation", "actor": "employer",
-                     "requirement_text": "Employers must record each work-related injury.",
-                     "evidence_standard": None, "severity": None, "applicability_json": "[]",
-                     "confidence": "EXTRACTED"}]
+    def _Store():
+        return FakeRequirementSeam([{"requirement_id": "osha:1904.4:h", "source": "OSHA", "citation": "§ 1904.4",
+                                     "deontic_type": "obligation", "actor": "employer",
+                                     "requirement_text": "Employers must record each work-related injury.",
+                                     "evidence_standard": None, "severity": None, "applicability_json": "[]",
+                                     "confidence": "EXTRACTED"}])
 
     class _Emb:
         def encode_dense(self, text):
@@ -370,21 +370,9 @@ def _row(source: str, citation: str, text: str, deontic: str = "prohibition", co
             "evidence_standard": None, "severity": None, "applicability_json": "[]", "confidence": confidence}
 
 
-class _MultiPolicyStore:
-    """A hermetic store mirroring the real seam: `all_requirements(sources=...)` filters, `requirement_sources()`
-    returns the distinct policy names."""
-
-    def __init__(self, rows: list[dict]) -> None:
-        self._rows = rows
-
-    def all_requirements(self, sources=None) -> list[dict]:
-        if sources is None:
-            return list(self._rows)
-        s = set(sources)
-        return [r for r in self._rows if r["source"] in s]
-
-    def requirement_sources(self) -> set[str]:
-        return {r["source"] for r in self._rows}
+class _MultiPolicyStore(FakeRequirementSeam):
+    """A hermetic store mirroring the real seam (ING-8e: the generic `kg_read` the `ComplianceStore` facade reads):
+    a `source` list scopes the rows DB-side, `distinct="source"` lists the policy names."""
 
 
 class _Emb1:
@@ -1049,22 +1037,20 @@ async def test_empty_sources_scopes_to_nothing_no_findings():
 
 
 async def test_sources_none_does_not_consult_requirement_sources():
-    # back-compat: sources=None must NOT call requirement_sources() -> a store without it still works
+    # sources=None must NOT run the source-validation query (the distinct `source` read) -- store-wide, no lookup
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
-    class _NoValidateStore:
-        def all_requirements(self, sources=None):
-            return [_row("p1", "§ 1", "P1 rule: a party must act.")]
-        # deliberately NO requirement_sources()
+    store = FakeRequirementSeam([_row("p1", "§ 1", "P1 rule: a party must act.")])
 
     cj, orig = _inject_generic_violation_judge()
     try:
         report = await run_generic_compliance_verdict(
-            "The party acted in a way that must be recorded.", "doc", store=_NoValidateStore(),
+            "The party acted in a way that must be recorded.", "doc", store=store,
             judge_model_id="stub", embedder=_Emb1(), sources=None, aextract_fn=_stub_sentence_extractor())
     finally:
         cj.build_ageneric_judge_fn = orig
     assert [f.citation_requirement for f in report.findings]  # ran fine, produced findings
+    assert not [r for r in store.reads if r["distinct"] == "source"]  # no validation query on a store-wide check
 
 
 # --- issue 0008 (0008-A): check a subject DOCUMENT (upload), segmented per section -----------------

@@ -37,6 +37,7 @@ from rag_wright.models.seam import build_model
 from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
 from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
 from rag_wright.util.concurrent import map_concurrent
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 DB = os.environ.get("PIVOT_DB", "ragwright_acord_pivot")
 MODEL = os.environ.get("RERANK_MODEL", "google/gemma-4-31b-it")
@@ -231,7 +232,7 @@ def main() -> None:
         for c in judged_of[q.query_id]:
             if c not in clause_props:
                 clause_props[c] = {(r["dimension"], r["value"])
-                                   for r in store.clause_property_values(_clause_key(c, corpus.get(c, "")))}
+                                   for r in ContractKGStore(store).clause_property_values(_clause_key(c, corpus.get(c, "")))}
 
     def property_tiebreak_order(qid):
         qc = qcon.get(qid, set())

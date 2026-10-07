@@ -48,11 +48,11 @@ def test_contract_schema_created(store):
 def test_upsert_and_lookup_contract(store):
     ContractKGStore(store).upsert_contract(ContractRecord(contract_id="C1", name="Distributor Agreement",
                                          agreement_type="Distribution", parties=["Acme", "Beta"], page_count=12))
-    row = store.contract_by_id("C1")
+    row = ContractKGStore(store).contract_by_id("C1")
     assert row["contract_id"] == "C1" and row["name"] == "Distributor Agreement"
     assert json.loads(row["parties_json"]) == ["Acme", "Beta"]
     assert row["page_count"] == 12
-    assert store.contract_by_id("nope") is None  # absent -> None
+    assert ContractKGStore(store).contract_by_id("nope") is None  # absent -> None
 
 
 @pytest.mark.store
@@ -62,12 +62,12 @@ def test_spans_by_contract_typed_filter(store):
     store.upsert_span(_span("C1", "C1:0:h#2", "Indemnification", 50))
     store.upsert_span(_span("C2", "C2:0:h#0", "Governing Law", 5))  # another contract -- must not leak in
 
-    gl = store.spans_by_contract("C1", ["Governing Law"])
+    gl = store.spans_by_document("C1", ["Governing Law"])
     assert [r["span_id"] for r in gl] == ["C1:0:h#1", "C1:0:h#0"]  # C1 only, ordered by doc_start (10, 100)
     assert all(r["document_id"] == "C1" for r in gl)
 
-    both = store.spans_by_contract("C1", ["Governing Law", "Indemnification"])  # multi-type
+    both = store.spans_by_document("C1", ["Governing Law", "Indemnification"])  # multi-type
     assert {r["span_id"] for r in both} == {"C1:0:h#0", "C1:0:h#1", "C1:0:h#2"}
 
-    assert store.spans_by_contract("C1", ["Non-Compete"]) == []  # absent type -> not present
-    assert store.spans_by_contract("C1", []) == []  # empty function set -> empty
+    assert store.spans_by_document("C1", ["Non-Compete"]) == []  # absent type -> not present
+    assert store.spans_by_document("C1", []) == []  # empty function set -> empty

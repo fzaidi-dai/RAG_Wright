@@ -31,9 +31,9 @@ def test_canonical_clause_type_maps_or_returns_none():
 
 
 class _FakeStore:
-    """Fakes the generic reads span_locations delegates to: all_spans_by_contract + clauses_in_contract."""
+    """Fakes the reads span_locations uses: the generic all_spans_by_document + the clause-range query (ING-8e)."""
 
-    def all_spans_by_contract(self, contract_id):
+    def all_spans_by_document(self, contract_id):
         return [
             {"span_id": "K:0:h#0", "text": "cap clause text", "pages": [3],
              "bbox": json.dumps([1.0, 2.0, 3.0, 4.0]), "doc_start": 10, "doc_end": 42},
@@ -41,7 +41,8 @@ class _FakeStore:
              "doc_start": 50, "doc_end": 60},  # a span that never became a clause -> clause_ids == []
         ]
 
-    def clauses_in_contract(self, contract_id):
+    def _query(self, sql):
+        assert "FROM Clause" in sql
         return [
             {"clause_id": "K:0:h", "function": "Cap On Liability", "span_id": "K:0:h#0"},
             {"clause_id": "K:9:h", "function": "Indemnification", "span_id": "OTHER#9"},  # span not here -> dropped

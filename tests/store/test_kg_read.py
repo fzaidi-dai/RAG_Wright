@@ -9,6 +9,8 @@ captured `_query` (the established store-test pattern); no ArcadeDB connection.
 from __future__ import annotations
 
 from rag_wright.store.arcadedb import ArcadeDBStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 def _store_capturing_sql():
@@ -24,6 +26,11 @@ def _store_capturing_sql():
         return list(rows_to_return)
 
     s._query = fake_query  # type: ignore[attr-defined]
+    # ING-8e: the pack stores (ContractKGStore / ComplianceStore) ensure their schema on construction; this store
+    # already "has" both packs, so they issue no DDL and the captured SQL is only the read under test
+    from rag_wright.packs.compliance.capabilities.compliance_store import _COMPLIANCE_TTL
+    from rag_wright.packs.contracts.ontology.loader import reference_pack_ttl
+    s._ensured_packs = [reference_pack_ttl(), _COMPLIANCE_TTL]  # type: ignore[attr-defined]
     return s, captured, calls, (lambda r: rows_to_return.__iadd__(r))
 
 
@@ -79,28 +86,28 @@ _REQ_SQL = ("SELECT requirement_id, source, citation, deontic_type, actor, requi
 
 def test_all_requirements_parity():
     s, cap, calls, _ = _store_capturing_sql()
-    s.all_requirements()
+    ComplianceStore(s).all_requirements()
     assert cap["sql"] == _REQ_SQL
-    s.all_requirements(sources=["FTC-16CFR255"])
+    ComplianceStore(s).all_requirements(sources=["FTC-16CFR255"])
     assert cap["sql"] == _REQ_SQL + " WHERE source IN ['FTC-16CFR255']"
     calls.clear()
-    assert s.all_requirements(sources=[]) == [] and calls == []  # empty scope -> [] without a query
+    assert ComplianceStore(s).all_requirements(sources=[]) == [] and calls == []  # empty scope -> [] without a query
 
 
 def test_contract_by_id_parity():
     s, cap, _, add = _store_capturing_sql()
-    assert s.contract_by_id("c1") is None  # no rows -> None
+    assert ContractKGStore(s).contract_by_id("c1") is None  # no rows -> None
     assert cap["sql"] == (
         "SELECT contract_id, name, agreement_type, parties_json, agreement_date, effective_date,"
         " source_doc_id, content_hash, page_count FROM Contract WHERE contract_id = 'c1'")
     add([{"contract_id": "c1"}])
-    assert s.contract_by_id("c1") == {"contract_id": "c1"}  # row -> the row
+    assert ContractKGStore(s).contract_by_id("c1") == {"contract_id": "c1"}  # row -> the row
 
 
 def test_spans_by_contract_parity():
     s, cap, calls, _ = _store_capturing_sql()
-    assert s.spans_by_contract("c1", []) == [] and calls == []  # empty functions -> [] without a query
-    s.spans_by_contract("c1", ["cap_on_liability"])
+    assert s.spans_by_document("c1", []) == [] and calls == []  # empty functions -> [] without a query
+    s.spans_by_document("c1", ["cap_on_liability"])
     assert cap["sql"] == (
         "SELECT span_id, parent_chunk_id, span_index, text, primary_tag, document_id, doc_start,"
         " doc_end, pages, bbox FROM Span WHERE document_id = 'c1' AND primary_tag IN ['cap_on_liability']"

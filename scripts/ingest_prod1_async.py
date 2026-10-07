@@ -11,6 +11,7 @@ import os
 import time
 
 from dotenv import load_dotenv
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 
 def log(m: str) -> None:
@@ -68,7 +69,7 @@ def main() -> None:
     job_id = submit_ingestion(
         adapter, ingest_graph, jobs, job_id="prod1-2d", db=db,
         corpus_ref={"kind": "gcs", "bucket": bucket, "prefix": "prod1-corpus/", "include": sorted(include)},
-        is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None,
+        is_done=lambda doc: ContractKGStore(store).contract_by_id(doc.source_doc_id) is not None,
         max_concurrency=3)
     log(f"[2d] submit_ingestion RETURNED IMMEDIATELY -> job_id={job_id} (non-blocking). Polling status ...")
 

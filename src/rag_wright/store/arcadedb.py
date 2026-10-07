@@ -33,13 +33,6 @@ ENTITY_TYPE = "Entity"
 REL_EDGE_TYPE = "Relationship"  # entity -> entity relationship edge (the graph's primary content)
 MENTIONS_EDGE_TYPE = "Mentions"  # chunk -> entity provenance edge (FR-S.1: chunk and entities connect)
 
-# FR-R (ADR-0025/0026) property graph: clause node -> typed property edge -> shared property-value node.
-# Distinct from the generic Entity graph. Value nodes are deduped by (dimension,value); the controlled
-# vocabulary is already canonical, so no entity-resolution clustering is needed.
-CLAUSE_TYPE = "Clause"
-PROPVALUE_TYPE = "PropertyValue"
-PROPERTY_EDGE_TYPE = "HasProperty"  # legacy flat edge (ADR-0025/0026); superseded by the KG-3 typed edges
-
 # Candidates fetched per leg before fusion. RRF reorders within this pool, so it is set well above a
 # typical final `k` to give fusion (and any metadata filter) room to work; the fused list is then
 # cut to `k`. Tuned at GATE-2 against the golden set if recall calls for it.
@@ -48,14 +41,9 @@ SCOPED_CANDIDATE_POOL = 1000  # issue 0031: a larger KNN pool when a `documents`
 #   legs, so a small workspace does not under-fill k (the vector functions do not pre-filter; ADR-0008)
 
 SPAN_TYPE = "Span"  # FR-R (ADR-0025): the operative-span hybrid index; dense+sparse over the span text
-CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUAD document lookup unit)
-# (issue 0028 / ADR-0091: the `PartyTo` edge was retired -- written on every ingest, read by nothing; party->clause
-#  is reached via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
-IS_EXCEPTION_TO_EDGE_TYPE = "IsExceptionTo"  # ADR-0044: exception clause (Uncapped) -> the Cap clause it excepts
 DOCUMENT_TYPE = "Document"  # ING-4b (ADR-0124): one node per ingested document, incl. embedded children
 EMBEDDED_IN_EDGE_TYPE = "EmbeddedIn"  # ING-4b: child Document -> parent Document (position as provenance)
 ATTACHED_TO_EDGE_TYPE = "AttachedTo"  # ING-4b: child Document -> the record-row Span it belongs to (+ confidence)
-REQUIREMENT_TYPE = "Requirement"  # CC-5 (compliance §13): a deontic regulatory rule (its own DB, ragwright_compliance)
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
 _DENSE_INDEX = f"{CHUNK_TYPE}[dense]"
@@ -70,12 +58,6 @@ _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 # ADR-0067 P5b: the domain vertex UNIQUE id indexes (Clause/PropertyValue/Contract) are pack-declared
 # (cbr:uniqueIndexOn) and built by the generic ensure_schema loop, not hardcoded here.
-
-
-def _property_value_key(dimension: str, value: str) -> str:
-    """The shared `PropertyValue` node identity: the canonical (dimension, value). The controlled
-    vocabulary is already canonical, so dedup across clauses is a deterministic upsert by this key."""
-    return f"{dimension}:{value}"
 
 
 def _sql_str(value: str) -> str:
@@ -159,16 +141,6 @@ def _kg_encode(value: object, declared_type: Optional[str]) -> str:
     if dt == "ARRAY_OF_STRINGS":
         return _str_array(value)
     return _kg_sql(value)
-
-
-# DD-1b: the non-pack KG vertex property storage types, centralized so `ensure_compliance_schema` and `kg_write`'s
-# encoder read ONE source (the contract-pack vertices -- Clause/PropertyValue/Contract -- come from `load_kg_schema`).
-_ENGINE_VERTEX_PROPERTY_TYPES: dict[str, dict[str, str]] = {
-    REQUIREMENT_TYPE: {
-        "requirement_id": "STRING", "source": "STRING", "citation": "STRING", "deontic_type": "STRING",
-        "actor": "STRING", "requirement_text": "STRING", "evidence_standard": "STRING", "severity": "STRING",
-        "applicability_json": "STRING", "confidence": "STRING", "pages": "ARRAY_OF_INTEGERS", "bbox": "STRING"},
-}
 
 
 def _doc_id_of(chunk_id: str) -> str:
@@ -537,11 +509,11 @@ class ArcadeDBStore:
 
     def _property_types(self, type_name: str) -> dict[str, str]:
         """`{property -> declared storage type}` for a KG node type, used by `kg_write` to encode each prop. Sourced
-        from the schemas of this store's packs (`schema_packs`) + the centralized non-pack declarations. Cached per
+        from the schemas of this store's packs (`schema_packs`). Cached per
         store (reset when a pack is ensured)."""
         cache = getattr(self, "_prop_types_cache", None)
         if cache is None:
-            cache = {name: dict(props) for name, props in _ENGINE_VERTEX_PROPERTY_TYPES.items()}
+            cache: dict[str, dict[str, str]] = {}
             for ttl in self.schema_packs():  # ING-8a: only the packs this store has -- none by default
                 for vt in load_kg_schema(ttl)[0]:
                     cache[vt.name] = dict(vt.properties)
@@ -623,83 +595,26 @@ class ArcadeDBStore:
             f" UPSERT WHERE span_id = {_sql_str(record.span_id)}"
         )
 
-    def contract_by_id(self, contract_id: str) -> dict | None:
-        """CU-B3: look up a contract's metadata by id (the row, or None if absent)."""
-        rows = self.kg_read(CONTRACT_TYPE, fields=[
-            "contract_id", "name", "agreement_type", "parties_json", "agreement_date", "effective_date",
-            "source_doc_id", "content_hash", "page_count"], where={"contract_id": contract_id})
-        return rows[0] if rows else None
-
-    # --- Compliance module (CC-5, §13): the Requirement KG, in its OWN database (ragwright_compliance) ---
-
-    def ensure_compliance_schema(self) -> None:
-        """Create the compliance schema: the `Requirement` vertex type + a UNIQUE index on `requirement_id`.
-        Additive + idempotent (create only what is absent, by introspection). Intended for a SEPARATE database
-        (`ragwright_compliance`) so the contract KG stays clean; touches no existing type or identifier."""
-        if REQUIREMENT_TYPE in self.type_names():
-            return
-        self._command(f"CREATE VERTEX TYPE {REQUIREMENT_TYPE}")
-        for prop, ptype in _ENGINE_VERTEX_PROPERTY_TYPES[REQUIREMENT_TYPE].items():  # DD-1b: one source of types
-            self._command(f"CREATE PROPERTY {REQUIREMENT_TYPE}.{prop} {ptype}")  # incl. pages (array) + bbox (JSON str)
-        self._command(f"CREATE INDEX ON {REQUIREMENT_TYPE} (requirement_id) UNIQUE")
-
-    def all_requirements(self, sources: Optional[Iterable[str]] = None) -> list[dict]:
-        """Stored `Requirement` rows (CC-6 loads these to match a claim's scope against applicability).
-
-        `sources=None` returns every row (store-wide, unchanged). Issue 0007: when a list of policy `source`s is
-        given, the filter is pushed into the QUERY (`WHERE source IN [...]`) so a store holding thousands of rows
-        across many policies/tenants never fetches the ones outside the scope -- scale-ready, not an in-memory
-        filter. An empty scope (`sources=[]`) returns `[]` without a query (scope-to-nothing; also avoids an
-        invalid `IN []`)."""
-        if sources is not None:
-            sources = list(sources)
-            if not sources:
-                return []  # empty scope -> [] without a query
-        return self.kg_read(REQUIREMENT_TYPE, fields=[
-            "requirement_id", "source", "citation", "deontic_type", "actor", "requirement_text",
-            "evidence_standard", "severity", "applicability_json", "confidence", "pages", "bbox"],
-            where=({"source": sources} if sources is not None else None))
-
-    def requirement_sources(self) -> set[str]:
-        """Issue 0007: the DISTINCT set of policy `source`s present in the Requirement KG -- powers unknown-source
-        validation (naming a policy that does not exist) WITHOUT loading any requirement rows. The Requirement type
-        may not exist yet on a fresh DB -> empty set."""
-        if REQUIREMENT_TYPE not in self.type_names():
-            return set()
-        rows = self._query(f"SELECT DISTINCT(source) AS s FROM {REQUIREMENT_TYPE}")
-        return {r["s"] for r in rows if r.get("s")}
-
-    def ingested_citations(self, source: str) -> set[str]:
-        """COMP-ASYNC-1 resume (PROD-2 #2): the set of `citation`s that ALREADY have >=1 `Requirement` for `source`
-        -- the compliance analogue of a present `Contract` node. A section in this set was successfully ingested
-        (a FAILED or genuinely-empty section wrote 0 requirements, so it is absent and correctly re-runs). The
-        Requirement type may not exist yet on a fresh DB -> empty set."""
-        if REQUIREMENT_TYPE not in self.type_names():
-            return set()
-        rows = self._query(
-            f"SELECT DISTINCT(citation) AS c FROM {REQUIREMENT_TYPE} WHERE source = {_sql_str(source)}")
-        return {r["c"] for r in rows if r.get("c")}
-
-    def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
-        """CU-B3: the within-contract typed filter -- every span of document `contract_id` whose `primary_tag`
-        is in `functions`, ordered by document position (the CUAD serve retrieval; empty `functions` -> []).
+    def spans_by_document(self, document_id: str, primary_tags: list[str]) -> list[dict]:
+        """The within-document tag filter (CU-B3; ING-8e, was `spans_by_contract`) -- every span of `document_id`
+        whose `primary_tag` is in `primary_tags`, ordered by document position (empty `primary_tags` -> []).
         Returns citation-ready rows (span_id, parent pointer, text, primary_tag, doc offsets)."""
-        if not functions:
+        if not primary_tags:
             return []
         return self.kg_read(SPAN_TYPE, fields=[
             "span_id", "parent_chunk_id", "span_index", "text", "primary_tag",
             "document_id", "doc_start", "doc_end", "pages", "bbox"],
-            where={"document_id": contract_id, "primary_tag": functions}, order_by="doc_start")
+            where={"document_id": document_id, "primary_tag": primary_tags}, order_by="doc_start")
 
-    def all_spans_by_contract(self, contract_id: str) -> list[dict]:
-        """CU-C2: EVERY span in a contract (all functions incl NONE), with its dense vector, ordered by
-        document position. For the out-of-taxonomy semantic fallback: the contract is small (hundreds of
-        spans), so ranking happens in Python -- a global ANN + contract filter would miss, since one
-        contract is ~1% of the corpus. Returns citation-ready rows plus `dense`."""
+    def all_spans_by_document(self, document_id: str) -> list[dict]:
+        """EVERY span of one document (all tags), with its dense vector, ordered by document position (CU-C2;
+        ING-8e, was `all_spans_by_contract`). For an in-document semantic fallback: one document is small (hundreds
+        of spans), so ranking happens in Python -- a global ANN + document filter would miss. Returns citation-ready
+        rows plus `dense`."""
         return self._query(
             f"SELECT span_id, parent_chunk_id, span_index, text, primary_tag, document_id,"
             f" doc_start, doc_end, pages, bbox, dense FROM {SPAN_TYPE}"  # issue 0032: page citation
-            f" WHERE document_id = {_sql_str(contract_id)} ORDER BY doc_start"
+            f" WHERE document_id = {_sql_str(document_id)} ORDER BY doc_start"
         )
 
     def span_hybrid_search(
@@ -920,9 +835,6 @@ class ArcadeDBStore:
             added += 1
         return added
 
-    def all_contracts(self) -> list[dict]:
-        """Every contract id in the store (e.g. for a corpus-wide backfill pass)."""
-        return self._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
 
     def known_document_ids(self) -> set[str]:
         """Issue 0031 / ING-8a: the DISTINCT ids of every INGESTED document -- the generic `Document` nodes, one per
@@ -958,51 +870,6 @@ class ArcadeDBStore:
             for r in rows
             if normalize_entity_name(r.get("name") or "") == target
         ]
-
-    # --- ADR-0044: the IS_EXCEPTION_TO derived carve-out relationship (exception clause -> Cap clause) ------
-
-    def clause_positions(self, functions: list[str]) -> list[dict]:
-        """Clauses of the given functions with their operative-span DOCUMENT offsets (via the clause-level
-        span_id, ADR-0042), for proximity-based exception linking. Rows: {clause_id, function, contract_id,
-        doc_start, doc_end}. A clause with no resolvable span (legacy/unbackfilled) is skipped."""
-        if not functions:
-            return []
-        fn_list = "[" + ",".join(_sql_str(f) for f in functions) + "]"
-        clauses = self._query(
-            f"SELECT clause_id, function, span_id FROM {CLAUSE_TYPE} WHERE function IN {fn_list}")
-        span_ids = [c["span_id"] for c in clauses if c.get("span_id")]
-        if not span_ids:
-            return []
-        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
-        spans = self._query(
-            f"SELECT span_id, doc_start, doc_end, document_id FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
-        by_span = {s["span_id"]: s for s in spans}
-        out: list[dict] = []
-        for c in clauses:
-            s = by_span.get(c.get("span_id"))
-            if s is None:
-                continue
-            out.append({"clause_id": c["clause_id"], "function": c["function"],
-                        "contract_id": s.get("document_id"), "doc_start": s.get("doc_start"),
-                        "doc_end": s.get("doc_end")})
-        return out
-
-    def write_clause_exception_links(self, links: list) -> None:
-        """ADR-0044: write the `IsExceptionTo` edges (exception/Uncapped clause -> the Cap clause it excepts).
-        Idempotent: clears the existing IsExceptionTo layer first, so re-linking is safe and re-derivable. The
-        edge carries the INFERRED confidence (a derived, reasoned link, FR-S.4). One transaction."""
-        statements = (
-            [f"DELETE FROM {IS_EXCEPTION_TO_EDGE_TYPE} UNSAFE"]
-            if IS_EXCEPTION_TO_EDGE_TYPE in self.type_names() else [])
-        for link in links:
-            statements.append(
-                f"CREATE EDGE {IS_EXCEPTION_TO_EDGE_TYPE}"
-                f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {_sql_str(link.exception_clause_id)})"
-                f" TO (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {_sql_str(link.cap_clause_id)})"
-                f" SET confidence = {_sql_str(link.confidence.value)}"
-            )
-        if statements:
-            self._db.execute_transaction(statements)
 
     def graph_counts(self) -> dict[str, int]:
         entities = self._query(f"SELECT count(*) AS n FROM {ENTITY_TYPE}")
@@ -1070,47 +937,6 @@ class ArcadeDBStore:
 
     # --- property graph (T57c, FR-R) ------------------------------------------------------------
 
-    def clear_property_graph(self) -> None:
-        """Delete all property-graph records (Clause / PropertyValue / HasProperty) while LEAVING the span
-        index intact -- so a property re-extraction can start from scratch without re-embedding (T58 resume
-        control). Edges first (UNSAFE bypasses the edge-safety check this dialect requires), then vertices."""
-        self._command(f"DELETE FROM {PROPERTY_EDGE_TYPE} UNSAFE")
-        self._command(f"DELETE FROM {CLAUSE_TYPE}")
-        self._command(f"DELETE FROM {PROPVALUE_TYPE}")
-
-    def property_graph_counts(self) -> dict[str, int]:
-        """Counts for introspection/tests: clauses, shared property-value nodes, and property edges."""
-        clauses = self._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
-        values = self._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
-        edges = self._query(f"SELECT count(*) AS n FROM {PROPERTY_EDGE_TYPE}")
-        return {
-            "clauses": int(clauses[0]["n"]) if clauses else 0,
-            "property_values": int(values[0]["n"]) if values else 0,
-            "property_edges": int(edges[0]["n"]) if edges else 0,
-        }
-
-    def clause_property_values(self, clause_id: str) -> list[dict]:
-        """The property values a clause asserts, each with the edge's provenance (dimension, value,
-        confidence, span_id) -- the readback for tests and the shape T58's query builds on."""
-        q = (
-            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id = " + _sql_str(clause_id) + ")}"
-            ".outE('" + PROPERTY_EDGE_TYPE + "'){as: e}.inV(){as: v}"
-            " RETURN v.dimension AS dimension, v.value AS value, e.confidence AS confidence,"
-            " e.span_id AS span_id"
-        )
-        return self._query(q)
-
-    def _contract_bounds(self, contract_id: str) -> tuple[str, str]:
-        return _sql_str(contract_id + ":"), _sql_str(contract_id + ";")
-
-    def clauses_in_contract(self, contract_id: str) -> list[dict]:
-        """Every clause in one contract (Leg-A scope): clause_id, function, folio_iri -- including clauses
-        with no typed properties (still queryable by type)."""
-        lo, hi = self._contract_bounds(contract_id)
-        return self._query(
-            f"SELECT clause_id, function, folio_iri, span_id FROM {CLAUSE_TYPE} "
-            f"WHERE clause_id >= {lo} AND clause_id < {hi} ORDER BY clause_id"
-        )
 
     def _existing_chunks(self, chunk_ids: set[str]) -> set[str]:
         if not chunk_ids:

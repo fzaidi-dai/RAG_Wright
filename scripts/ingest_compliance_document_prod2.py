@@ -12,6 +12,7 @@ from collections import Counter
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 def log(m: str) -> None:
@@ -22,7 +23,8 @@ async def main() -> None:
     load_dotenv("/Users/farhan/work/RAG_Wright/.env")
     os.environ.setdefault("RAG_SERVING", "openrouter")
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.packs.compliance.capabilities.compliance_store import REQUIREMENT_TYPE
     from rag_wright.packs.compliance.subgraphs.compliance_ingestion import run_compliance_document_ingestion
 
     doc_path = Path(os.environ["DOC"])
@@ -38,7 +40,7 @@ async def main() -> None:
     report = await run_compliance_document_ingestion(doc_path.name, data, store, model=model, source=source)
 
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
-    rows = store.all_requirements()
+    rows = ComplianceStore(store).all_requirements()
     log("\n=== PROD-2 PHASE-2 (customer document) RESULT ===")
     log(f"sections ingested: {report.documents_ingested} | dead-lettered: {len(report.dead_lettered)} | "
         f"partial: {len(report.partial)}")

@@ -29,6 +29,7 @@ from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
 from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
 from rag_wright.util.concurrent import map_concurrent
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 DB = os.environ.get("PIVOT_DB", "ragwright_acord_pivot")
 DECOMP_MODEL = os.environ.get("DECOMP_MODEL", "deepseek/deepseek-v4-flash")
@@ -92,7 +93,7 @@ def main() -> None:
             qc = constraints[q.query_id]
             match = []
             for c in pool:
-                props = {(r["dimension"], r["value"]) for r in store.clause_property_values(_clause_key(c, corpus.get(c, "")))}
+                props = {(r["dimension"], r["value"]) for r in ContractKGStore(store).clause_property_values(_clause_key(c, corpus.get(c, "")))}
                 match.append(len(qc & props))
             ranked_fr = [c for c, _ in sorted(zip(pool, bge), key=lambda cb: -cb[1])]
             ranked_fpr = [c for c, _, _ in sorted(zip(pool, match, bge), key=lambda cmb: (-cmb[1], -cmb[2]))]

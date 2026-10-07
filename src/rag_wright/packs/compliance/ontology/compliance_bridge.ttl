@@ -6,6 +6,7 @@
 # applicability. The thin advertising vocab (ClaimType) is authored here (closed). The rule/claim INSTANCES are
 # extracted from text (CC-2/CC-3); this file is only the schema.
 
+@prefix eng:   <https://ragwright.local/ontology/engine#> .   # the engine's pack-schema declaration vocabulary
 @prefix cmp:   <https://ragwright.local/ontology/compliance-bridge#> .
 @prefix odrl:  <http://www.w3.org/ns/odrl/2/> .
 @prefix lkif:  <http://www.estrellaproject.org/lkif-core/norm.owl#> .
@@ -184,3 +185,11 @@ cmp:operativeRuleQuestion a cmp:DecisionQuestion ;
     cmp:questionInstructions "Is this sentence itself a BINDING operative rule (obligation/prohibition/permission or a binding liability/conditional consequence)?" ;
     cmp:criterionTrue "it binds conduct directly" ;
     cmp:criterionFalse "an illustrative example, definition, scope, cross-reference, negated requirement, or descriptive remark" .
+
+# ING-8e: the compliance pack's KG vertex type, declared in the engine's pack-schema vocabulary (moved off the generic
+# store's Python table). `pages` is a native integer array; `bbox` / `applicability_json` are JSON strings.
+cmp:RequirementNode a eng:KgVertexType ; eng:vertexName "Requirement" ;
+    eng:kgProperty "requirement_id:STRING", "source:STRING", "citation:STRING", "deontic_type:STRING", "actor:STRING",
+                   "requirement_text:STRING", "evidence_standard:STRING", "severity:STRING",
+                   "applicability_json:STRING", "confidence:STRING", "pages:ARRAY_OF_INTEGERS", "bbox:STRING" ;
+    eng:uniqueIndexOn "requirement_id" .

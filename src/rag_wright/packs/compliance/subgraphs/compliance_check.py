@@ -43,6 +43,7 @@ from rag_wright.packs.compliance.schemas.compliance import (
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.packs.compliance.ontology.loader import load_actor_synonyms, load_role_domains, load_section_overrides
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 _ALL_CLAIM_TYPES = {c.value for c in ClaimType}
 
@@ -595,7 +596,7 @@ def _validate_sources(store: Any, sources: Optional[list[str]]) -> None:
     `None` (whole store) is not validated (a store without `requirement_sources()` still works)."""
     if sources is None:
         return
-    present = store.requirement_sources()
+    present = ComplianceStore(store).requirement_sources()
     unknown = sorted(set(sources) - present)
     if unknown:
         raise UnknownComplianceSourceError(unknown, sorted(present))
@@ -609,12 +610,14 @@ def _load_requirements(store: Any, sources: Optional[list[str]] = None) -> list[
     `UnknownComplianceSourceError`, not a silent empty match), then load ONLY those via the DB-side filter
     (`store.all_requirements(sources=...)`). An empty list is a valid scope-to-nothing -> zero requirements."""
     if sources is None:
-        rows = store.all_requirements()
+        rows = ComplianceStore(store).all_requirements()
     else:
-        unknown = sorted(set(sources) - store.requirement_sources())
+        reqs = ComplianceStore(store)
+        present = reqs.requirement_sources()
+        unknown = sorted(set(sources) - present)
         if unknown:
-            raise UnknownComplianceSourceError(unknown, sorted(store.requirement_sources()))
-        rows = store.all_requirements(sources=list(sources))
+            raise UnknownComplianceSourceError(unknown, sorted(present))
+        rows = reqs.all_requirements(sources=list(sources))
     return [_requirement_from_row(r) for r in rows]
 
 

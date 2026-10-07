@@ -20,6 +20,7 @@ import os
 import sys
 
 from dotenv import load_dotenv
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 def log(m: str) -> None:
@@ -34,13 +35,14 @@ async def main() -> int:
     from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint, DeonticType, Requirement
     from rag_wright.contracts.provenance import ConfidenceTag
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.packs.compliance.capabilities.compliance_store import REQUIREMENT_TYPE
     from rag_wright.packs.compliance.subgraphs.compliance_check import production_generic_compliance_check
 
     db = os.environ.get("COMPLIANCE_DB", "ragwright_issue0013")
     log(f"[smoke] 1/4 fresh ArcadeDB {db!r} + write the 3-rule policy")
     store = ArcadeDBStore.from_env(database=db, reset=True)
-    store.ensure_compliance_schema()
+    ComplianceStore(store).ensure_compliance_schema()
 
     def _req(cite: str, deontic: str, actor: str, text: str) -> Requirement:
         return Requirement(requirement_id=f"ftc:{cite}", source="ftc", citation=cite,

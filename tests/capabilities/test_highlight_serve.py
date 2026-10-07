@@ -19,11 +19,11 @@ class _FakeStore:
         self._all = all_rows or []
         self.calls = []
 
-    def spans_by_contract(self, cid, functions):
+    def spans_by_document(self, cid, functions):
         self.calls.append(("typed", cid, tuple(functions)))
         return [r for r in self._typed if r["primary_tag"] in functions]
 
-    def all_spans_by_contract(self, cid):
+    def all_spans_by_document(self, cid):
         self.calls.append(("all", cid))
         return self._all
 

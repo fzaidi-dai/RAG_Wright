@@ -17,7 +17,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from rag_wright.packs.contracts.schemas.function_routing import build_cooccurrence
-from rag_wright.store.arcadedb import CLAUSE_TYPE, ArcadeDBStore
+from rag_wright.store.arcadedb import ArcadeDBStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE
 
 CUAD_DB = os.environ.get("CUAD_DB", "ragwright_cuad")
 OUT = Path(os.environ.get("ROUTE_MAP", "data/models/dimension_function_map.json"))

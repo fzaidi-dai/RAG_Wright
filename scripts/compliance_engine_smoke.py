@@ -23,6 +23,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 async def main() -> None:
@@ -36,7 +37,7 @@ async def main() -> None:
     from rag_wright.packs.compliance.subgraphs.compliance_check import _requirement_from_row, build_compliance_check
 
     store = ArcadeDBStore.from_env(database="ragwright_compliance")
-    reqs = [_requirement_from_row(r) for r in store.all_requirements()
+    reqs = [_requirement_from_row(r) for r in ComplianceStore(store).all_requirements()
             if r["citation"] == "§ 255.5" and "disclos" in r["requirement_text"].lower()][:3]
     emodel = default_extraction_model("claim-extract", "ibm-granite/granite-4.1-8b")
     graph = build_compliance_check(

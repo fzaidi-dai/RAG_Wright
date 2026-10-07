@@ -15,6 +15,7 @@ import asyncio
 import os
 
 from dotenv import load_dotenv
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 
 def log(m: str) -> None:
@@ -63,7 +64,7 @@ async def main() -> None:
         # GENERIC party->clause linking (KG-7), no cache: the single-provenance join straight from the KG's own
         # extracted parties. (The CUAD many-to-many enrichment needs a mention cache; this cacheless path is the
         # generic default.) Runs ONCE after all documents are written.
-        is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None)
+        is_done=lambda doc: ContractKGStore(store).contract_by_id(doc.source_doc_id) is not None)
 
     log("\n=== PROD-1 INGEST REPORT ===")
     log(f"documents_ingested: {report.documents_ingested} | dead_lettered: {len(report.dead_lettered)}")

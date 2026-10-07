@@ -15,12 +15,14 @@ from collections import Counter
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 async def main() -> None:
     load_dotenv()
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.packs.compliance.capabilities.compliance_store import REQUIREMENT_TYPE
     from rag_wright.packs.compliance.subgraphs.compliance_ingestion import run_compliance_ingestion
 
     db = os.environ.get("COMPLIANCE_DB", "ragwright_compliance")
@@ -33,7 +35,7 @@ async def main() -> None:
     report = await run_compliance_ingestion(sections, store, model=model, source="FTC 16 CFR 255")
 
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
-    rows = store.all_requirements()
+    rows = ComplianceStore(store).all_requirements()
     print(f"[compliance] REPORT: {report.documents_ingested} sections ingested, "
           f"{len(report.dead_lettered)} dead-lettered", flush=True)
     for d in report.dead_lettered:

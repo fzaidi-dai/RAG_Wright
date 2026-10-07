@@ -13,6 +13,7 @@ from collections import Counter
 from pathlib import Path
 
 from dotenv import load_dotenv
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 def log(m: str) -> None:
@@ -23,7 +24,8 @@ def main() -> None:
     load_dotenv("/Users/farhan/work/RAG_Wright/.env")
     os.environ.setdefault("RAG_SERVING", "openrouter")
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.packs.compliance.capabilities.compliance_store import REQUIREMENT_TYPE
     from rag_wright.packs.contracts.subgraphs.async_ingestion import JobStore
     from rag_wright.packs.compliance.subgraphs.compliance_ingestion import RegulationAdapter, submit_compliance_ingestion
 
@@ -53,7 +55,7 @@ def main() -> None:
         time.sleep(3)
 
     n = store._query(f"SELECT count(*) AS n FROM {REQUIREMENT_TYPE}")[0]["n"]
-    rows = store.all_requirements()
+    rows = ComplianceStore(store).all_requirements()
     log(f"\n=== COMP-ASYNC-1 LIVE RESULT ===\nstatus={job.status.value} ingested={job.ingested} "
         f"dead_lettered={len(job.dead_lettered)}")
     log(f"Requirement nodes: {n} | deontic: {dict(Counter(r['deontic_type'] for r in rows))}")

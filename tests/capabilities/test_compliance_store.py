@@ -9,6 +9,8 @@ import json
 
 import pytest
 
+from tests.compliance_fakes import FakeRequirementSeam
+
 from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 from rag_wright.packs.compliance.schemas.compliance import DeonticType, Requirement
 
@@ -35,17 +37,8 @@ def test_gated_pairs_copies_the_report_field_and_tolerates_absence():
 # --- store reads over a fake store ---------------------------------------------------------------
 
 
-class _FakeStore:
-    """Canned `all_requirements` honoring the DB-side `sources` scope (scalar None = store-wide, [] = none)."""
-
-    def __init__(self, rows):
-        self._rows = rows
-
-    def all_requirements(self, sources=None):
-        if sources is None:
-            return list(self._rows)
-        wanted = set(sources)
-        return [r for r in self._rows if r.get("source") in wanted]
+class _FakeStore(FakeRequirementSeam):
+    """Canned Requirement rows behind the generic seam (ING-8e): `kg_read` honors the DB-side `source` scope."""
 
 
 _ROWS = [
@@ -97,7 +90,7 @@ def store():
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     s = ArcadeDBStore.from_env(database="ragwright_test_compliance_store", reset=True)
-    s.ensure_compliance_schema()
+    ComplianceStore(s).ensure_compliance_schema()
     yield s
     s.close()
 

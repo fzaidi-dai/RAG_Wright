@@ -11,6 +11,7 @@ import pytest
 
 from rag_wright.api import EngineConfig, StoreConfig, WorkspaceHandle, open_workspace
 from rag_wright.models.profiles import ModelRole, model_for
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 def _cfg(**over):
@@ -73,7 +74,7 @@ def test_open_workspace_resolves_live_store_roundtrips_and_caches():
 
     ws = open_workspace(cfg, corpus=_TEST_CORPUS, reset=True)
     assert not hasattr(ws, "store")                      # opaque; engine-internal access is via _store
-    ws._store.ensure_compliance_schema()
+    ComplianceStore(ws._store).ensure_compliance_schema()
     ws._store.kg_write([KgNode("Requirement", "requirement_id", {
         "requirement_id": "r1", "source": "S", "citation": "c", "deontic_type": "obligation", "actor": "a",
         "requirement_text": "t", "evidence_standard": "", "severity": "", "applicability_json": [],

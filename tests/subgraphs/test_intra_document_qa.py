@@ -167,7 +167,7 @@ class _FakeSpanStore:
     def __init__(self, spans: list[dict]) -> None:
         self._spans = spans  # [{span_id, text, function}]
 
-    def spans_by_contract(self, contract_id: str, functions: list[str]) -> list[dict]:
+    def spans_by_document(self, contract_id: str, functions: list[str]) -> list[dict]:
         return [s for s in self._spans if s["function"] in functions]
 
 
@@ -345,7 +345,7 @@ async def test_production_serves_whole_contract_not_function_narrowed(monkeypatc
         def kg_edges(self, *a, **k):  # EP-REF-1a-ii: exceptions_of_clause now reads via store.kg_edges
             return []
 
-        def spans_by_contract(self, cid, fns):
+        def spans_by_document(self, cid, fns):
             return []
 
     leg = idq.production_intra_document_qa(store=_Store(), answer_model=object())
@@ -386,7 +386,7 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
         def kg_edges(self, *a, **k):  # EP-REF-1a-ii: exceptions_of_clause now reads via store.kg_edges
             return []
 
-        def spans_by_contract(self, cid, fns):
+        def spans_by_document(self, cid, fns):
             return []
 
     leg = idq.production_intra_document_qa(store=_Store(), reranker=_RR(), answer_model=object(), top_k=k)

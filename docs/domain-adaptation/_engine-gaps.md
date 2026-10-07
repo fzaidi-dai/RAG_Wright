@@ -24,15 +24,16 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   domain-neutral and injectable per ADR-0067; this is an exposure gap, not coupling.)
 - Surfaced: PREP-4.4.
 
-### G2: The public config/env names carry contract-domain vocabulary (partly closed)
+### G2: The public config/env names carry contract-domain vocabulary (closed)
 - **Closed part:** the `Clause` (and other contract) KG types are no longer in the default schema; `pack=None`
   creates only the engine types (ING-8a).
 - **Closed by ING-8d:** `IngestOptions` holds only the generic `tuning`; the contract knobs moved to the pack's
   `ContractIngestOptions` (via `EngineOptions.packs["contracts"]`); the span fields are `document_id`,
   `primary_tag`, `tags` (`parent_okf_path` left the engine `Span`). The env vars `CLAUSE_CONCURRENCY`,
   `RAG_INGEST_CLAUSE_*`, `RAG_SETFIT_CLAUSE_DIR` are read only inside the contracts pack.
-- **Still open:** the generic store keeps contract-shaped methods (`spans_by_contract`, `all_spans_by_contract`,
-  `contract_by_id`, `clauses_in_contract`, `clause_positions`): ING-8e moves or renames them.
+- **Closed by ING-8e:** the generic store no longer carries contract- or compliance-shaped methods or types: the
+  contract reads/writes live on `ContractKGStore`, the Requirement schema (declared in `compliance_bridge.ttl`) and
+  reads on `ComplianceStore`, and the span reads are per document (`spans_by_document`, `all_spans_by_document`).
 - Surfaced: PREP-4.1 audit.
 
 ### G5: Pack and manifest helpers are not on `rag_wright.api`

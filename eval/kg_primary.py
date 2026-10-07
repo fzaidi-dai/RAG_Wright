@@ -36,7 +36,8 @@ from rag_wright.packs.contracts.capabilities.dg_extraction import extract_clause
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.packs.contracts.schemas.value_match import constraint_match_count
 from rag_wright.packs.contracts.spans.clause_kg_extractor import clause_to_record
-from rag_wright.store.arcadedb import CLAUSE_TYPE, SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
+from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
+from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE
 from rag_wright.util.concurrent import map_concurrent
 
 DB = os.environ.get("PIVOT_DB", "ragwright_acord_pivot")

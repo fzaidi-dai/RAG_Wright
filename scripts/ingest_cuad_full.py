@@ -24,7 +24,8 @@ async def main() -> None:
     load_dotenv()
     from rag_wright.packs.contracts.corpus.cuad_ingestion import arun_cuad_ingestion
     from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
-    from rag_wright.store.arcadedb import CONTRACT_TYPE, SPAN_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import CONTRACT_TYPE
 
     db = os.environ.get("FULL_DB", "ragwright_cuad_full")
     cache_dir = Path("data/cache/cuad_full")  # persistent: a re-run reuses everything already extracted

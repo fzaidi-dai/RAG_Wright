@@ -223,3 +223,21 @@ uv run python -u scripts/migrate_span_fields.py <database>     # X/N progress; i
 
 (or `ArcadeDBStore.migrate_span_fields()`): it copies the values to the new fields in batches, removes the old fields
 and drops the old properties. The legacy `parent_okf_path` values stay (the ACORD-era eval scripts read them).
+
+## ING-8e: no domain methods or types on the generic store
+
+`ArcadeDBStore` no longer knows a contract or compliance type. The methods moved to the packs' store extensions,
+which wrap the generic store (`ContractKGStore(store)`, `ComplianceStore(store)`); each ensures its own pack schema on
+construction.
+
+| Before (`ArcadeDBStore`) | After |
+|---|---|
+| `contract_by_id(id)`, `all_contracts()`, `clauses_in_contract(id)`, `clause_positions(functions)`, `write_clause_exception_links(links)`, `clear_property_graph()`, `property_graph_counts()`, `clause_property_values(clause_id)` | same names on `ContractKGStore` (`rag_wright.packs.contracts.capabilities.contract_kg_store`) |
+| `ensure_compliance_schema()`, `all_requirements(sources=)`, `requirement_sources()`, `ingested_citations(source)` | same names on `ComplianceStore` (`rag_wright.packs.compliance.capabilities.compliance_store`); constructing it ensures the schema |
+| `spans_by_contract(contract_id, functions)` | `spans_by_document(document_id, primary_tags)` (generic store) |
+| `all_spans_by_contract(contract_id)` | `all_spans_by_document(document_id)` (generic store); `ContractKGStore.all_spans_by_contract` remains as the pack's reader |
+| constants `CLAUSE_TYPE`, `PROPVALUE_TYPE`, `PROPERTY_EDGE_TYPE`, `CONTRACT_TYPE`, `IS_EXCEPTION_TO_EDGE_TYPE`, helper `_property_value_key` in `rag_wright.store.arcadedb` | `rag_wright.packs.contracts.capabilities.contract_kg_store` |
+| constant `REQUIREMENT_TYPE` in `rag_wright.store.arcadedb`; the `Requirement` property types in a Python table | `rag_wright.packs.compliance.capabilities.compliance_store.REQUIREMENT_TYPE`; the type is declared in `compliance_bridge.ttl` (`cmp:RequirementNode`, engine pack-schema vocabulary) and created by `ensure_pack_schema` |
+
+`ingested_citations` / `requirement_sources` now read through the generic `kg_read(distinct=...)`. Existing compliance
+databases need no migration: the `Requirement` type and its properties are unchanged.

@@ -14,7 +14,8 @@ from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKG
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.store.arcadedb import CLAUSE_TYPE, PROPVALUE_TYPE, ArcadeDBStore
+from rag_wright.store.arcadedb import ArcadeDBStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE, PROPVALUE_TYPE
 from rag_wright.store.seam import NOT_NULL
 
 _D = PropertyDimension

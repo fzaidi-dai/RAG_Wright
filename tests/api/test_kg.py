@@ -8,6 +8,7 @@ import os
 import pytest
 
 from rag_wright.api import decode_bbox, document_of, id_source, kg_read, kg_write, span_positions
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
 class _FakeStore:
@@ -78,7 +79,7 @@ def test_kg_access_and_span_positions_live():
         user=os.environ["ARCADEDB_USER"], password=os.environ["ARCADEDB_PASSWORD"],
         protocol=os.getenv("ARCADEDB_PROTOCOL", "http")))
     ws = open_workspace(cfg, corpus="ragwright_epapi3_live", reset=True)
-    ws._store.ensure_compliance_schema()
+    ComplianceStore(ws._store).ensure_compliance_schema()
 
     kg_write(ws, [KgNode("Requirement", "requirement_id", {
         "requirement_id": "FTC:255.1:h", "source": "FTC", "citation": "c", "deontic_type": "obligation",

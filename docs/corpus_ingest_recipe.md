@@ -31,7 +31,7 @@ Extend the EDGAR verified registry (`build_verified_registry`) for the corpus's 
 report = await arun_corpus_ingestion(
     YourAdapter(path),
     aproduction_document_ingest(store, cache_dir=..., registry=...),
-    is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None,   # optional resume-skip
+    is_done=lambda doc: ContractKGStore(store).contract_by_id(doc.source_doc_id) is not None,   # optional resume-skip
 )
 ```
 Both are async (the sync `run_corpus_ingestion` / `production_document_ingest` and the KG-7 `party_clause_linking`

@@ -97,7 +97,8 @@ def extract_and_write(
 
 def main() -> None:
     load_dotenv()
-    from rag_wright.store.arcadedb import CLAUSE_TYPE, ArcadeDBStore
+    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE
 
     rows = [json.loads(line) for line in EXTRACT_CACHE.read_text(encoding="utf-8").splitlines() if line.strip()]
     if LIMIT:

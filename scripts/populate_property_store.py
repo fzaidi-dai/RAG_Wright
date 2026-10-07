@@ -148,12 +148,12 @@ def main() -> None:
     # Durable + resumable: each clause is written the moment it is extracted (a stall/crash loses only
     # in-flight work), and a re-run skips clauses already in the graph. DB writes are serialized by a
     # lock (one store client); extraction stays concurrent.
-    from rag_wright.store.arcadedb import CLAUSE_TYPE
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import CLAUSE_TYPE
 
     from rag_wright.packs.contracts.spans.property_grounding import needs_escalation, reground
 
     if FRESH:  # start property extraction over from the top, keeping the (expensive) span index
-        store.clear_property_graph()
+        ContractKGStore(store).clear_property_graph()
         _progress("[extract] FRESH: cleared the property graph (spans kept)")
     extractor = SeamPropertyExtractor(model_id=EXTRACT_MODEL or None)
     escalate = SeamPropertyExtractor(model_id=ESCALATE_MODEL) if ESCALATE_MODEL else None
@@ -190,7 +190,7 @@ def main() -> None:
         label="[extract]", every=1, echo=True,  # X/N in front (stdout) AND in the flushed progress file
     )
 
-    counts = store.property_graph_counts()
+    counts = ContractKGStore(store).property_graph_counts()
     esc = f"  escalated_to_{ESCALATE_MODEL}={escalations[0]}/{len(todo)}" if escalate else ""
     print(f"\nDONE db={DB}  spans={n_spans}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}{esc}"
           f"  errors={errors[0]}", flush=True)

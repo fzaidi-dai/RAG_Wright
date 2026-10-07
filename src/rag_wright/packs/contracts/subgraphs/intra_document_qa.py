@@ -155,7 +155,7 @@ def rehydrate_clause_texts(store: Any, contract_id: str, clauses: list[CitedClau
     (which is one-to-many). A clause with no span link at all (legacy pre-backfill) is omitted, and the evidence
     builder falls back to the function label. This is why the clause-level span_id is persisted."""
     functions = sorted({c.function for c in clauses if c.function})
-    text_by_span = {row["span_id"]: row["text"] for row in store.spans_by_contract(contract_id, functions)}
+    text_by_span = {row["span_id"]: row["text"] for row in store.spans_by_document(contract_id, functions)}
     out: dict[str, str] = {}
     for clause in clauses:
         span_ids = list(dict.fromkeys(p.span_id for p in clause.properties if p.span_id))
