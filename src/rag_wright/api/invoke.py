@@ -76,7 +76,7 @@ async def ainvoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle,
       * ASYNC (I/O-bound -- an LLM-backed cap calling OpenRouter or a local vLLM client): AWAITED directly, so the
         I/O concurrency is real (not a thread wrapping a blocking call).
     `sem` (an `asyncio.Semaphore`) bounds total in-flight work when a caller fans out a batch -- the same
-    backpressure the ingestion pipeline applies via `adispatch_model`. Usage is the caller's `measure_usage()`
+    backpressure the ingestion pipeline applies. Usage is the caller's `measure_usage()`
     scope (EP-API-5)."""
     _validate(name, "model")
     factory = capability_impl(name)

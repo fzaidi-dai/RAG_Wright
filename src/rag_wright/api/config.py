@@ -43,9 +43,12 @@ class EngineOptions:
 
 @dataclass(frozen=True)
 class EngineConfig:
-    """The product's view of the engine: the store connection, chosen models (by role alias), the embedding profile,
-    and the `options` catalog. Defaults just work; override only to trade quality/cost/latency. Implementation
-    details (ArcadeDB, BGE) never cross this boundary."""
+    """The product's view of the engine: the store connection, chosen models (`models`: `ModelRole` value -> model
+    alias), the embedding profile, the `options` catalog (generic `ingest` knobs + each pack's options under
+    `packs`), and `pack`: the path to the domain pack `.ttl` whose KG types `open_workspace` creates (None = only the
+    neutral engine types: Chunk, Entity, Relationship, Mentions, Span, Document, EmbeddedIn, AttachedTo). Defaults
+    just work; override only to trade quality/cost/latency. Implementation details (ArcadeDB, BGE) never cross this
+    boundary."""
 
     store: StoreConfig
     models: dict[str, str] = field(default_factory=dict)  # ModelRole value -> engine-supported model alias (override)

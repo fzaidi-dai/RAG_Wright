@@ -40,6 +40,13 @@ _SEPARATOR = re.compile(r"[ \t]*\|?[ \t:|-]*-[ \t:|-]*\|?[ \t]*")
 
 @dataclass
 class DocumentEvaluation:
+    """One sample document's structural measures. Segmentation: `tiles` (spans tile every chunk),
+    `table_row_integrity` (share of table rows that are their own span), `layout_respect` (share of spans inside one
+    layout item), `bare_heading_spans`. Grouping: `headings_start_units` (share of headings that start a unit),
+    `tables_whole` (share of tables kept whole or split by the record/header rule), `furniture_in_units` (page
+    furniture that leaked into units), `coverage` (share of content spans in some unit), `cap_ok` (every unit within
+    `max_unit_chars`). `table_modes`: the mode chosen per table. `error`: why the document could not be evaluated."""
+
     doc: str
     tiles: bool = True
     spans: int = 0
@@ -61,6 +68,10 @@ class DocumentEvaluation:
 
 @dataclass
 class IngestionEvaluation:
+    """The result of `evaluate_ingestion`: per-document measures, the `failures` (each check that did not hold, by
+    document) and `unlabelled_tables` (tables no `table_labels` pattern matched). `passed` (property) is True when
+    there are no failures."""
+
     documents: list[DocumentEvaluation] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
     unlabelled_tables: list[str] = field(default_factory=list)
@@ -166,7 +177,13 @@ def evaluate_ingestion(sources: Sequence[Union[str, Path, IngestSource]], *, cac
                        tuning: Optional[IngestionTuning] = None, segmenter: Optional[Segmenter] = None,
                        unit_grouper: Optional[UnitGrouper] = None,
                        table_labels: Optional[list[dict[str, Any]]] = None) -> IngestionEvaluation:
-    """Measure the ingestion hooks' structural fidelity on sample documents (see the module docstring)."""
+    """Measure the ingestion hooks' structural fidelity on YOUR sample documents, before trusting them. Runs parse,
+    chunk, segment and group only (no store, no model calls) with the default hooks or the `segmenter` /
+    `unit_grouper` you pass, under `tuning`. Checks: spans tile the text, table rows stay whole, spans respect layout
+    items, no bare-heading spans, headings start units, tables stay whole (or split per row for a record table), no
+    page furniture in units, full coverage, units within the cap. `table_labels`
+    (`[{"pattern": <regex on the header row>, "label": "record" | "block"}]`, first match wins) also checks each
+    table's mode. Returns an `IngestionEvaluation`; tune `IngestionTuning` until `passed`."""
     tuning = tuning or IngestionTuning()
     out = IngestionEvaluation()
     for s in sources:

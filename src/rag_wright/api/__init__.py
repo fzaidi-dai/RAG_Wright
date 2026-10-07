@@ -42,10 +42,16 @@ from rag_wright.contracts.ingestion import (
     check_tiling,
     check_units,
 )
-from rag_wright.ingestion.builder import DocumentReport, IngestionReport, build_ingestion
+from rag_wright.ingestion.builder import (
+    DocumentHook,
+    DocumentReport,
+    IngestionPipeline,
+    IngestionReport,
+    build_ingestion,
+)
 from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, evaluate_ingestion
 from rag_wright.ingestion.tables import table_rows
-from rag_wright.store.seam import KgEdge, KgNode
+from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import entities_by_name, kg_edges, kg_read, kg_write, span_positions
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage
@@ -54,7 +60,7 @@ from rag_wright.api.workspace import WorkspaceHandle, open_workspace
 __all__ = [
     "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace",
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
-    "kg_read", "kg_write", "kg_edges", "entities_by_name", "span_positions", "KgNode", "KgEdge",
+    "kg_read", "kg_write", "kg_edges", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",
     "document_of", "id_source", "decode_bbox",
     "source_document", "parse_document", "aparse_document",
     "measure_usage", "UsageTotals", "ModelUsage",
@@ -65,7 +71,7 @@ __all__ = [
     "check_tiling", "check_units", "check_extraction",
     # ING-4b: tuning + sources
     "IngestionTuning", "RecordTableRule", "IdentifierRule", "IngestSource", "TableMode",
-    "build_ingestion", "IngestionReport", "DocumentReport",
+    "build_ingestion", "IngestionPipeline", "DocumentHook", "IngestionReport", "DocumentReport",
     "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation",
     "table_rows", "TableRow",
 ]

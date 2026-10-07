@@ -6,7 +6,7 @@
 
 ### `EngineConfig(store: 'StoreConfig', models: 'dict[str, str]' = <factory>, embeddings: 'dict[str, str]' = <factory>, options: 'EngineOptions' = <factory>, pack: 'Optional[str]' = None) -> None`
 
-The product's view of the engine: the store connection, chosen models (by role alias), the embedding profile, and the `options` catalog. Defaults just work; override only to trade quality/cost/latency. Implementation details (ArcadeDB, BGE) never cross this boundary.
+The product's view of the engine: the store connection, chosen models (`models`: `ModelRole` value -> model alias), the embedding profile, the `options` catalog (generic `ingest` knobs + each pack's options under `packs`), and `pack`: the path to the domain pack `.ttl` whose KG types `open_workspace` creates (None = only the neutral engine types: Chunk, Entity, Relationship, Mentions, Span, Document, EmbeddedIn, AttachedTo). Defaults just work; override only to trade quality/cost/latency. Implementation details (ArcadeDB, BGE) never cross this boundary.
 
 ### `StoreConfig(host: 'str', port: 'str', user: 'str', password: 'str', backend: 'str' = 'arcadedb', protocol: 'str' = 'http') -> None`
 
@@ -24,6 +24,10 @@ The engine's generic ingest knobs, settable through config instead of environmen
 
 An opaque handle to a resolved engine workspace. Public surface: `model_id(role)`. The resolved store + embedder are engine-internal (`_store` / `_embedder`), used by the invokers -- NOT a product accessor.
 
+#### `WorkspaceHandle.model_id(self, role: 'ModelRole') -> 'str'`
+
+Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default.
+
 ### `Discovered(slug: 'str', kind: 'str', description: 'str', representative_queries: 'tuple[str, ...]', score: 'float') -> None`
 
 One ranked capability match from `discover` — enough for an agent to pick and invoke it by `slug`.
@@ -38,7 +42,7 @@ A typed KG edge to create between two nodes identified by (type, key_field, key)
 
 ### `UsageTotals(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0, by_model: 'dict[str, ModelUsage]' = <factory>, _lock: 'threading.Lock' = <factory>) -> None`
 
-The usage accumulated within one `usage_scope()`: top-level totals + a per-model breakdown.
+The usage accumulated within one `measure_usage()` block: top-level totals (calls, tokens, `cost_usd` for the calls whose cost is known, `calls_without_cost`, latency) + a per-model breakdown in `by_model`. Decision-model (Jev) calls and vision-OCR pages are counted too (OCR pages as calls without a cost).
 
 ### `ModelUsage(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0) -> None`
 
@@ -62,7 +66,7 @@ The extraction unit: consecutive spans grouped by the unit grouper. `text` is wh
 
 ### `UnitExtraction(*, nodes: list[rag_wright.store.seam.KgNode] = [], edges: list[rag_wright.store.seam.KgEdge] = []) -> None`
 
-What an extractor returns for one unit: typed KG nodes/edges in the pack's schema. Every node carries `span_id` (a span of the unit) and `confidence` (a `ConfidenceTag` value) as props (FR-S.4).
+What an extractor returns for one unit: typed KG nodes/edges in the pack's schema (types the pack `.ttl` declares). Provenance (FR-S.4, enforced by `check_extraction`): a fact node or edge carries `span_id` (a span of this unit) and `confidence` (a `ConfidenceTag` value) as props; nodes without a `span_id` are shared vocabulary (value or taxonomy nodes); a non-empty extraction must cite at least once.
 
 ### `IngestionContractError`
 
@@ -84,25 +88,41 @@ What counts as a record IDENTIFIER when linking an embedded file to a row: a tok
 
 One document to ingest: a file `path`, its `doc_id` (default: derived from the file name), how its tables are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are ingested.
 
+### `IngestionPipeline(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]', span_tagger: 'Optional[SpanTagger]', unit_grouper: 'Optional[UnitGrouper]', boundary_decider: 'Optional[BoundaryDecider]', writer: 'Optional[RecordWriter]', tuning: 'Optional[IngestionTuning]', embedder: 'Any', chunk_model: 'Optional[str]', progress: 'Callable[[str], Any]', document_hook: 'Optional[DocumentHook]' = None) -> 'None'`
+
+Built by `build_ingestion`; run with `await pipeline.aingest(ws, sources, cache_dir=...)`. Drives the shared `IngestionStages` per document (parse -> chunk -> segment -> tag -> index -> group -> extract -> write -> `document_hook` -> `Document` node), then ingests embedded files and PDF attachments the same way, as child documents linked to their parent.
+
+#### `IngestionPipeline.stages(self, ws: 'Any', *, cache_dir: 'Union[str, Path]') -> 'IngestionStages'`
+
+Advanced: the individual stage functions bound to a workspace (its store, ingest embedder and tuning), for a domain that drives the stages itself (the reference contract pipeline does). Most domains only need `aingest`.
+
+#### `IngestionPipeline.aingest(self, ws: 'Any', sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]') -> 'IngestionReport'`
+
+Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s; `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`.
+
 ### `IngestionReport(documents: 'list[DocumentReport]' = <factory>) -> None`
 
-IngestionReport(documents: 'list[DocumentReport]' = <factory>)
+The result of `IngestionPipeline.aingest`: one `DocumentReport` per document (embedded children included). `failed` counts the dead-lettered documents and `succeeded` the rest (properties).
 
 ### `DocumentReport(doc_id: 'str', parent_doc_id: 'Optional[str]' = None, chunks: 'int' = 0, spans: 'int' = 0, units: 'int' = 0, records: 'int' = 0, extraction_failures: 'list[dict]' = <factory>, span_failures: 'list[dict]' = <factory>, skipped_hidden_sheets: 'list[str]' = <factory>, embedded_skipped: 'list[str]' = <factory>, children: 'list[str]' = <factory>, links: 'dict[str, int]' = <factory>, unmapped_links: 'int' = 0, dead_letter: 'Optional[str]' = None) -> None`
 
-DocumentReport(doc_id: 'str', parent_doc_id: 'Optional[str]' = None, chunks: 'int' = 0, spans: 'int' = 0, units: 'int' = 0, records: 'int' = 0, extraction_failures: 'list[dict]' = <factory>, span_failures: 'list[dict]' = <factory>, skipped_hidden_sheets: 'list[str]' = <factory>, embedded_skipped: 'list[str]' = <factory>, children: 'list[str]' = <factory>, links: 'dict[str, int]' = <factory>, unmapped_links: 'int' = 0, dead_letter: 'Optional[str]' = None)
+What ingesting one document did. Counts: `chunks`, `spans` (indexed), `units` (extracted), `records` (nodes written). `extraction_failures` (`{unit, anchor, reason}`) / `span_failures` (`{span_id, reason}`): the units / spans whose extraction or indexing failed; the rest of the document still lands. `skipped_hidden_sheets`: hidden spreadsheet sheets left out (`IngestSource.include_hidden_sheets=False`). `children`: the ids of embedded files and PDF attachments ingested as child documents (`parent_doc_id` is set on theirs); `embedded_skipped`: embedded files that could not be ingested. `links`: `AttachedTo` record links written, by confidence; `unmapped_links`: links whose record row could not be found. `dead_letter`: why the whole document failed (None when it landed).
 
 ### `IngestionEvaluation(documents: 'list[DocumentEvaluation]' = <factory>, failures: 'list[str]' = <factory>, unlabelled_tables: 'list[str]' = <factory>) -> None`
 
-IngestionEvaluation(documents: 'list[DocumentEvaluation]' = <factory>, failures: 'list[str]' = <factory>, unlabelled_tables: 'list[str]' = <factory>)
+The result of `evaluate_ingestion`: per-document measures, the `failures` (each check that did not hold, by document) and `unlabelled_tables` (tables no `table_labels` pattern matched). `passed` (property) is True when there are no failures.
 
 ### `DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, error: 'Optional[str]' = None) -> None`
 
-DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, error: 'Optional[str]' = None)
+One sample document's structural measures. Segmentation: `tiles` (spans tile every chunk), `table_row_integrity` (share of table rows that are their own span), `layout_respect` (share of spans inside one layout item), `bare_heading_spans`. Grouping: `headings_start_units` (share of headings that start a unit), `tables_whole` (share of tables kept whole or split by the record/header rule), `furniture_in_units` (page furniture that leaked into units), `coverage` (share of content spans in some unit), `cap_ok` (every unit within `max_unit_chars`). `table_modes`: the mode chosen per table. `error`: why the document could not be evaluated.
 
 ### `TableRow(*, table_ref: str, sheet: Optional[str] = None, page: Optional[int] = None, row_index: int, columns: list[str], values: list[str]) -> None`
 
 ING-7: one data row of a parsed table, read from the parse's cell GRID (exact cell text, whitespace collapsed) -- whole even when the chunker split the table. `columns` is the table's first row as parsed; `row_index` is the 0-based grid row (data rows start at 1). Domain-neutral: what a column MEANS is the domain's decision.
+
+#### `TableRow.cell(self, column: 'str') -> 'Optional[str]'`
+
+The value under the first column named `column` (exact match), or None.
 
 ## Hook protocols
 
@@ -118,7 +138,7 @@ Optional: soft tags per span of one chunk, aligned to `spans`.
 
 ### `UnitGrouper: (spans: 'Sequence[TaggedSpan]', *, decider: 'Optional[BoundaryDecider]' = None) -> 'Awaitable[list[Unit]]'`
 
-A document's spans (in order, across chunks) -> extraction units. May drop spans (e.g. page furniture); a dropped span stays in the span index. `decider`, when set, adjudicates boundaries the grouper is unsure of.
+A document's spans (in order, across chunks) -> extraction units. May drop spans (e.g. page furniture); a dropped span stays in the span index. `decider` (a `BoundaryDecider`: candidate line texts -> "starts a new unit?" per text), when set, settles the boundaries the grouper's rules are unsure of.
 
 ### `Extractor: (unit: 'Unit', *, source_doc_id: 'str') -> 'Awaitable[UnitExtraction]'`
 
@@ -138,11 +158,19 @@ Optional: persist a document's extractions. The engine default writes them with 
 
 ### `TableMode = typing.Literal['auto', 'record', 'block']`
 
+### `DocumentHook = typing.Callable[[typing.Any, typing.Any, list], typing.Awaitable[typing.Any]]`
+
+## Constants
+
+### `NOT_NULL`
+
+`NOT_NULL`: the sentinel for a `kg_edges` filter value meaning `<field> IS NOT NULL` (instead of an equality/membership match), e.g. `edge_where={"dimension": NOT_NULL}`.
+
 ## Functions
 
 ### `open_workspace(config: 'EngineConfig', *, corpus: 'str', reset: 'bool' = False) -> 'WorkspaceHandle'`
 
-Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema. Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
+Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
 
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 
@@ -154,7 +182,7 @@ Invoke a model-kind capability by name (SYNCHRONOUSLY). Validated against the AR
 
 ### `ainvoke_model(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle', sem: 'asyncio.Semaphore | None' = None) -> 'Any'`
 
-Invoke a model-kind capability by name, ASYNCHRONOUSLY -- the async surface for model caps (the subgraph legs already have `ainvoke_subgraph`). A model impl is one of two shapes, and this routes each honestly: * SYNC (CPU-bound local inference -- a classifier/XGBoost fleet): run OFF the event loop in a worker thread (`asyncio.to_thread`), so a big batch never blocks the loop; * ASYNC (I/O-bound -- an LLM-backed cap calling OpenRouter or a local vLLM client): AWAITED directly, so the I/O concurrency is real (not a thread wrapping a blocking call). `sem` (an `asyncio.Semaphore`) bounds total in-flight work when a caller fans out a batch -- the same backpressure the ingestion pipeline applies via `adispatch_model`. Usage is the caller's `measure_usage()` scope (EP-API-5).
+Invoke a model-kind capability by name, ASYNCHRONOUSLY -- the async surface for model caps (the subgraph legs already have `ainvoke_subgraph`). A model impl is one of two shapes, and this routes each honestly: * SYNC (CPU-bound local inference -- a classifier/XGBoost fleet): run OFF the event loop in a worker thread (`asyncio.to_thread`), so a big batch never blocks the loop; * ASYNC (I/O-bound -- an LLM-backed cap calling OpenRouter or a local vLLM client): AWAITED directly, so the I/O concurrency is real (not a thread wrapping a blocking call). `sem` (an `asyncio.Semaphore`) bounds total in-flight work when a caller fans out a batch -- the same backpressure the ingestion pipeline applies. Usage is the caller's `measure_usage()` scope (EP-API-5).
 
 ### `capability_index() -> 'dict[str, dict]'`
 
@@ -170,11 +198,11 @@ Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equali
 
 ### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = ()) -> 'None'`
 
-Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_write`). `nodes`/`edges` are `KgNode`/`KgEdge` (from `rag_wright.store.seam`); the store encodes each field per its pack-declared type.
+Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_write`). `nodes`/`edges` are `KgNode`/`KgEdge` (from `rag_wright.api`); the store encodes each field per its pack-declared type. A node type the workspace's schema does not declare fails the write.
 
 ### `kg_edges(ws: 'WorkspaceHandle', from_type: 'Optional[str]' = None, *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None, direction: 'str' = 'out', edge_type: 'Optional[str]' = None, edge_where: 'Optional[dict]' = None, target_where: 'Optional[dict]' = None, select: 'dict') -> 'list[dict]'`
 
-Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out/in MATCH (by `where` equality/membership or a contract-scope `key_range`) or a direct edge scan; `select` projects `c.`/`e.`/`v.` expressions. The engine's relational/graph primitive on the API, so a domain's graph query never touches `ws._store`. (`NOT_NULL` for a presence filter is `rag_wright.store.seam.NOT_NULL`.)
+Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out/in MATCH (by `where` equality/membership or an id-prefix `key_range`) or a direct edge scan; `select` projects `c.`/`e.`/`v.` expressions. The engine's relational/graph primitive on the API, so a domain's graph query never touches `ws._store`. (`NOT_NULL` from `rag_wright.api` is the presence filter.)
 
 ### `entities_by_name(ws: 'WorkspaceHandle', name: 'str') -> 'list[dict]'`
 
@@ -182,11 +210,11 @@ Resolve an entity NAME to every entity node it matches: `[{entity_id, name, enti
 
 ### `span_positions(ws: 'WorkspaceHandle', document: 'str') -> 'list[dict]'`
 
-Every span of `document` with its position provenance (doc offsets, pages, DECODED bbox), ordered by document position. The engine MECHANISM behind a product's citation/highlight types -- the product wraps these rows into its own presentation type (e.g. `SpanLocation`).
+Every span of `document` with its position provenance, ordered by document position. Each row: `span_id`, `parent_chunk_id`, `span_index`, `text`, `primary_tag` (the span tagger's primary tag, "" if untagged), `document_id`, `doc_start` / `doc_end` (document-absolute offsets), `pages`, and `bbox` DECODED to a `(l, t, r, b)` tuple or None. The engine MECHANISM behind a product's citation/highlight types -- the product wraps these rows into its own presentation type (e.g. `SpanLocation`).
 
 ### `document_of(entity_id: 'str') -> 'str'`
 
-The source-document id embedded in a span/chunk/clause id (`<source_doc_id>:<idx>:<hash>` -> the first, delimiter-safe segment). Empty in -> empty out.
+The source-document id embedded in a chunk/span/unit id (`<source_doc_id>:<idx>:<hash>` -> the first, delimiter-safe segment). Empty in -> empty out.
 
 ### `id_source(requirement_id: 'str') -> 'str'`
 
@@ -214,11 +242,11 @@ Accumulate the model usage of every engine call made inside the block; read the 
 
 ### `register_capability(manifest: 'CapabilityManifest') -> 'None'`
 
-Register (or replace) one capability in the runtime ARD catalog. A product calls this for each of its domain capabilities (with an `impl_ref`); the invoker then resolves it by name with zero engine edits.
+Register (or replace) one capability in the runtime ARD catalog. A product calls this for each of its domain capabilities (with an `impl_ref`); the invoker then resolves it by name with zero engine edits. The catalog starts EMPTY: the engine's own capabilities (e.g. `jev_decision`, `generation`) are registered the same way when a product uses them (their manifests are `capabilities.manifests.engine_capabilities()`).
 
 ### `load_reference_pack() -> 'None'`
 
-Register the engine's reference pack into the runtime catalog -- the opt-in worked example (the engine's own test suite loads it; a downstream product does NOT, registering its own capabilities instead).
+Register the engine's reference pack into the runtime catalog -- the opt-in worked example: the contracts and compliance packs plus the engine capabilities they use (the engine's own test suite loads it; a downstream product does NOT, registering its own capabilities instead).
 
 ### `reference_pack() -> 'tuple[CapabilityManifest, ...]'`
 
@@ -238,11 +266,11 @@ Provenance (FR-S.4), wherever the facts live -- on nodes or on edges (ADR-0124, 
 
 ### `build_ingestion(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, boundary_decider: 'Optional[BoundaryDecider]' = None, writer: 'Optional[RecordWriter]' = None, tuning: 'Optional[IngestionTuning]' = None, embedder: 'Any' = None, chunk_model: 'Optional[str]' = None, progress: 'Callable[[str], Any]' = functools.partial(<built-in function print>, flush=True), document_hook: 'Optional[DocumentHook]' = None) -> 'IngestionPipeline'`
 
-The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section. `document_hook(ws, source_document, chunks)` runs once per document after its records are written (e.g. a domain's entity graph).
+The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section. `document_hook(ws, source_document, chunks)` is awaited once per document after its records are written (e.g. a domain's entity graph); its return value is ignored. `boundary_decider` (a `BoundaryDecider`: candidate line texts -> "starts a new unit?" per text) is handed to the unit grouper to settle the boundaries its rules are unsure of; None = the grouper's own rules only. Returns an `IngestionPipeline`; run it with `await pipeline.aingest(ws, sources, cache_dir=...)`.
 
 ### `evaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None) -> 'IngestionEvaluation'`
 
-Measure the ingestion hooks' structural fidelity on sample documents (see the module docstring).
+Measure the ingestion hooks' structural fidelity on YOUR sample documents, before trusting them. Runs parse, chunk, segment and group only (no store, no model calls) with the default hooks or the `segmenter` / `unit_grouper` you pass, under `tuning`. Checks: spans tile the text, table rows stay whole, spans respect layout items, no bare-heading spans, headings start units, tables stay whole (or split per row for a record table), no page furniture in units, full coverage, units within the cap. `table_labels` (`[{"pattern": <regex on the header row>, "label": "record" | "block"}]`, first match wins) also checks each table's mode. Returns an `IngestionEvaluation`; tune `IngestionTuning` until `passed`.
 
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 

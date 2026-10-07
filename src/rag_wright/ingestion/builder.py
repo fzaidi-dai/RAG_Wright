@@ -45,6 +45,14 @@ _MAX_CHILD_DEPTH = 2  # an embedded file inside an embedded file is ingested; de
 
 @dataclass
 class DocumentReport:
+    """What ingesting one document did. Counts: `chunks`, `spans` (indexed), `units` (extracted), `records` (nodes
+    written). `extraction_failures` (`{unit, anchor, reason}`) / `span_failures` (`{span_id, reason}`): the units /
+    spans whose extraction or indexing failed; the rest of the document still lands. `skipped_hidden_sheets`: hidden spreadsheet
+    sheets left out (`IngestSource.include_hidden_sheets=False`). `children`: the ids of embedded files and PDF
+    attachments ingested as child documents (`parent_doc_id` is set on theirs); `embedded_skipped`: embedded files
+    that could not be ingested. `links`: `AttachedTo` record links written, by confidence; `unmapped_links`: links
+    whose record row could not be found. `dead_letter`: why the whole document failed (None when it landed)."""
+
     doc_id: str
     parent_doc_id: Optional[str] = None
     chunks: int = 0
@@ -63,6 +71,9 @@ class DocumentReport:
 
 @dataclass
 class IngestionReport:
+    """The result of `IngestionPipeline.aingest`: one `DocumentReport` per document (embedded children included).
+    `failed` counts the dead-lettered documents and `succeeded` the rest (properties)."""
+
     documents: list[DocumentReport] = field(default_factory=list)
 
     @property
@@ -87,7 +98,8 @@ def _doc_id(path: str) -> str:
     return f"{stem}_{p.suffix.lstrip('.').lower()}" if p.suffix else stem
 
 
-DocumentHook = Callable[[Any, Any, list], Awaitable[Optional[dict]]]  # (ws, source_document, chunks) -> extras
+# (ws, source_document, chunks); awaited once per document after its records are written; its return value is ignored
+DocumentHook = Callable[[Any, Any, list], Awaitable[Any]]
 
 
 @dataclass
@@ -263,7 +275,9 @@ class IngestionStages:
 
 class IngestionPipeline:
     """Built by `build_ingestion`; run with `await pipeline.aingest(ws, sources, cache_dir=...)`. Drives the shared
-    `IngestionStages` per document, then ingests embedded children the same way."""
+    `IngestionStages` per document (parse -> chunk -> segment -> tag -> index -> group -> extract -> write ->
+    `document_hook` -> `Document` node), then ingests embedded files and PDF attachments the same way, as child
+    documents linked to their parent."""
 
     def __init__(self, extractor: Extractor, *, segmenter: Optional[Segmenter], span_tagger: Optional[SpanTagger],
                  unit_grouper: Optional[UnitGrouper], boundary_decider: Optional[BoundaryDecider],
@@ -279,7 +293,9 @@ class IngestionPipeline:
         self._document_hook = document_hook
 
     def stages(self, ws: Any, *, cache_dir: Union[str, Path]) -> IngestionStages:
-        """The stage functions bound to a workspace (its store, ingest embedder and tuning)."""
+        """Advanced: the individual stage functions bound to a workspace (its store, ingest embedder and tuning), for a
+        domain that drives the stages itself (the reference contract pipeline does). Most domains only need
+        `aingest`."""
         tuning = self._tuning or getattr(ws._config.options.ingest, "tuning", None) or IngestionTuning()
         if self._embedder is None:
             from rag_wright.capabilities.embedding_profiles import build_ingest_embedder
@@ -290,7 +306,11 @@ class IngestionPipeline:
 
     async def aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
                       cache_dir: Union[str, Path]) -> IngestionReport:
-        """Ingest every source (and its embedded children) into the workspace; returns the per-document report."""
+        """Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`).
+        `sources` are file paths or `IngestSource`s; `cache_dir` holds the content-hash-gated parse and chunk caches
+        (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to
+        `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised.
+        Returns the `IngestionReport`."""
         stages = self.stages(ws, cache_dir=cache_dir)
         items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
         report = IngestionReport()
@@ -432,8 +452,11 @@ def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = No
     """The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override
     any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch`
     object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section.
-    `document_hook(ws, source_document, chunks)` runs once per document after its records are written (e.g. a
-    domain's entity graph)."""
+    `document_hook(ws, source_document, chunks)` is awaited once per document after its records are written (e.g. a
+    domain's entity graph); its return value is ignored. `boundary_decider` (a `BoundaryDecider`: candidate line
+    texts -> "starts a new unit?" per text) is handed to the unit grouper to settle the boundaries its rules are
+    unsure of; None = the grouper's own rules only. Returns an `IngestionPipeline`; run it with
+    `await pipeline.aingest(ws, sources, cache_dir=...)`."""
     t = tuning or IngestionTuning()
     if t.extract_concurrency < 1 or t.document_concurrency < 1:
         raise ValueError("extract_concurrency and document_concurrency must be >= 1")

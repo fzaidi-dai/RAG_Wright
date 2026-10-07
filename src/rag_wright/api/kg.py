@@ -25,7 +25,8 @@ def kg_read(ws: WorkspaceHandle, node_type: str, *, where: Optional[dict] = None
 
 def kg_write(ws: WorkspaceHandle, nodes: list, edges: Any = ()) -> None:
     """Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_write`). `nodes`/`edges` are
-    `KgNode`/`KgEdge` (from `rag_wright.store.seam`); the store encodes each field per its pack-declared type."""
+    `KgNode`/`KgEdge` (from `rag_wright.api`); the store encodes each field per its pack-declared type. A node type
+    the workspace's schema does not declare fails the write."""
     ws._store.kg_write(nodes, edges)
 
 
@@ -34,9 +35,9 @@ def kg_edges(ws: WorkspaceHandle, from_type: Optional[str] = None, *, where: Opt
              edge_where: Optional[dict] = None, target_where: Optional[dict] = None,
              select: dict) -> list[dict]:
     """Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out/in MATCH (by `where`
-    equality/membership or a contract-scope `key_range`) or a direct edge scan; `select` projects `c.`/`e.`/`v.`
+    equality/membership or an id-prefix `key_range`) or a direct edge scan; `select` projects `c.`/`e.`/`v.`
     expressions. The engine's relational/graph primitive on the API, so a domain's graph query never touches
-    `ws._store`. (`NOT_NULL` for a presence filter is `rag_wright.store.seam.NOT_NULL`.)"""
+    `ws._store`. (`NOT_NULL` from `rag_wright.api` is the presence filter.)"""
     return ws._store.kg_edges(from_type, where=where, key_range=key_range, direction=direction,
                               edge_type=edge_type, edge_where=edge_where, target_where=target_where, select=select)
 
@@ -50,9 +51,11 @@ def entities_by_name(ws: WorkspaceHandle, name: str) -> list[dict]:
 
 
 def span_positions(ws: WorkspaceHandle, document: str) -> list[dict]:
-    """Every span of `document` with its position provenance (doc offsets, pages, DECODED bbox), ordered by document
-    position. The engine MECHANISM behind a product's citation/highlight types -- the product wraps these rows into
-    its own presentation type (e.g. `SpanLocation`)."""
+    """Every span of `document` with its position provenance, ordered by document position. Each row:
+    `span_id`, `parent_chunk_id`, `span_index`, `text`, `primary_tag` (the span tagger's primary tag, "" if untagged),
+    `document_id`, `doc_start` / `doc_end` (document-absolute offsets), `pages`, and `bbox` DECODED to a
+    `(l, t, r, b)` tuple or None. The engine MECHANISM behind a product's citation/highlight types -- the product
+    wraps these rows into its own presentation type (e.g. `SpanLocation`)."""
     from rag_wright.api.ids import decode_bbox
     from rag_wright.store.arcadedb import SPAN_TYPE
 

@@ -39,7 +39,9 @@ class ModelUsage:
 
 @dataclass
 class UsageTotals:
-    """The usage accumulated within one `usage_scope()`: top-level totals + a per-model breakdown."""
+    """The usage accumulated within one `measure_usage()` block: top-level totals (calls, tokens, `cost_usd` for the
+    calls whose cost is known, `calls_without_cost`, latency) + a per-model breakdown in `by_model`. Decision-model
+    (Jev) calls and vision-OCR pages are counted too (OCR pages as calls without a cost)."""
 
     calls: int = 0
     input_tokens: int = 0

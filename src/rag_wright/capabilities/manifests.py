@@ -266,7 +266,9 @@ MANIFEST_SPECS: dict[str, CapabilityManifest] = {}
 
 def register_capability(manifest: CapabilityManifest) -> None:
     """Register (or replace) one capability in the runtime ARD catalog. A product calls this for each of its
-    domain capabilities (with an `impl_ref`); the invoker then resolves it by name with zero engine edits."""
+    domain capabilities (with an `impl_ref`); the invoker then resolves it by name with zero engine edits. The catalog
+    starts EMPTY: the engine's own capabilities (e.g. `jev_decision`, `generation`) are registered the same way when a
+    product uses them (their manifests are `capabilities.manifests.engine_capabilities()`)."""
     MANIFEST_SPECS[manifest.slug] = manifest
 
 
@@ -298,8 +300,9 @@ def reference_pack() -> tuple[CapabilityManifest, ...]:
 
 
 def load_reference_pack() -> None:
-    """Register the engine's reference pack into the runtime catalog -- the opt-in worked example (the engine's own
-    test suite loads it; a downstream product does NOT, registering its own capabilities instead)."""
+    """Register the engine's reference pack into the runtime catalog -- the opt-in worked example: the contracts and
+    compliance packs plus the engine capabilities they use (the engine's own test suite loads it; a downstream
+    product does NOT, registering its own capabilities instead)."""
     load_pack(_REFERENCE_PACK_MODULES[-1])  # the compliance pack registers contracts first
 
 

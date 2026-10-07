@@ -8,7 +8,7 @@ from typing import Optional
 
 
 def document_of(entity_id: str) -> str:
-    """The source-document id embedded in a span/chunk/clause id (`<source_doc_id>:<idx>:<hash>` -> the first,
+    """The source-document id embedded in a chunk/span/unit id (`<source_doc_id>:<idx>:<hash>` -> the first,
     delimiter-safe segment). Empty in -> empty out."""
     from rag_wright.store.arcadedb import _doc_id_of
 

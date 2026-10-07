@@ -136,8 +136,10 @@ class Unit(BaseModel):
 
 
 class UnitExtraction(BaseModel):
-    """What an extractor returns for one unit: typed KG nodes/edges in the pack's schema. Every node carries
-    `span_id` (a span of the unit) and `confidence` (a `ConfidenceTag` value) as props (FR-S.4)."""
+    """What an extractor returns for one unit: typed KG nodes/edges in the pack's schema (types the pack `.ttl`
+    declares). Provenance (FR-S.4, enforced by `check_extraction`): a fact node or edge carries `span_id` (a span of
+    this unit) and `confidence` (a `ConfidenceTag` value) as props; nodes without a `span_id` are shared vocabulary
+    (value or taxonomy nodes); a non-empty extraction must cite at least once."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -166,7 +168,8 @@ BoundaryDecider = Callable[[list[str]], Awaitable[list[bool]]]
 
 class UnitGrouper(Protocol):
     """A document's spans (in order, across chunks) -> extraction units. May drop spans (e.g. page furniture); a
-    dropped span stays in the span index. `decider`, when set, adjudicates boundaries the grouper is unsure of."""
+    dropped span stays in the span index. `decider` (a `BoundaryDecider`: candidate line texts -> "starts a new
+    unit?" per text), when set, settles the boundaries the grouper's rules are unsure of."""
 
     def __call__(
         self, spans: Sequence[TaggedSpan], *, decider: Optional[BoundaryDecider] = None

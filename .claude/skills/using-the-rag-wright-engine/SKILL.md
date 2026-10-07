@@ -18,11 +18,13 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   flag it upstream — don't work around it here.
 - **The public surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the invokers
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`),
-  `kg_read`/`kg_write`/`kg_edges`/`entities_by_name`/`span_positions`, `measure_usage`,
+  `kg_read`/`kg_write`/`kg_edges` (with `NOT_NULL`)/`entities_by_name`/`span_positions`, `measure_usage`,
   `register_capability`/`load_reference_pack`/`reference_pack`, the document helpers
   (`parse_document`/`aparse_document`/`source_document`/`table_rows`, `decode_bbox`, `document_of`, `id_source`),
-  and the **ingestion surface**: `build_ingestion`, its hook contracts (`Segmenter`, `SpanTagger`, `UnitGrouper`,
-  `BoundaryDecider`, `Extractor`, `RecordWriter`, checked by `check_tiling`/`check_units`/`check_extraction`),
+  and the **ingestion surface**: `build_ingestion` (returns an `IngestionPipeline`; `await
+  pipeline.aingest(ws, sources, cache_dir=...)` returns an `IngestionReport`), its hook contracts (`Segmenter`,
+  `SpanTagger`, `UnitGrouper`, `BoundaryDecider`, `Extractor`, `RecordWriter`, `DocumentHook`, checked by
+  `check_tiling`/`check_units`/`check_extraction`),
   `IngestionTuning`, `IngestSource` (`table_mode`, `include_hidden_sheets`) and `evaluate_ingestion`. Nothing
   deeper (never `ArcadeDBStore`, `query_embedder`, or engine id formats), with today's known exceptions, tracked as
   engine gap G5: `CapabilityManifest`, `load_pack` and `engine_capabilities` come from

@@ -46,9 +46,10 @@ class WorkspaceHandle:
 
 
 def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False) -> WorkspaceHandle:
-    """Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema.
-    Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses
-    the cache."""
+    """Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema:
+    the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose
+    `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an
+    opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache."""
     sc = config.store
     cache_key = (sc.backend, sc.host, sc.port, corpus)
     if not reset and cache_key in _WORKSPACES:

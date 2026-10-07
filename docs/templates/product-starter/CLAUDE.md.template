@@ -38,9 +38,10 @@ engine — a separate repo that depends on the open-core engine, one way.
 - **The whole engine surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
   invokers, discovery (`capability_index`/`discover` — `discover(task, resources=ws)` embedding-ranks the catalog
   for an agent planning over the engine), `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack`,
-  and the ingestion surface (`build_ingestion`, `IngestionTuning`, `IngestSource`, `evaluate_ingestion`,
-  `table_rows`/`TableRow`, the hook contracts `Unit`/`UnitExtraction`/`KgNode`/`KgEdge` and the hook protocols, and
-  the checks `check_tiling`/`check_units`/`check_extraction`) — never engine internals (`ArcadeDBStore`,
+  and the ingestion surface (`build_ingestion` -> `IngestionPipeline.aingest` -> `IngestionReport`,
+  `IngestionTuning`, `IngestSource`, `evaluate_ingestion`, `table_rows`/`TableRow`, the hook contracts
+  `Unit`/`UnitExtraction`/`KgNode`/`KgEdge`, the hook protocols and `DocumentHook`, and the checks
+  `check_tiling`/`check_units`/`check_extraction`; `NOT_NULL` for `kg_edges` presence filters) — never engine internals (`ArcadeDBStore`,
   `query_embedder`, engine id formats). The product never touches the store directly.
 - **Current exceptions to "only `rag_wright.api`"** (engine gaps; import them from the named engine module and FLAG
   each use, do not work around them): `load_pack`, `engine_capabilities`, `CapabilityManifest`

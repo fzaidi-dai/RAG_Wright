@@ -17,12 +17,21 @@ OUT = Path(__file__).resolve().parent.parent / "docs" / "api" / "README.md"
 
 
 def _summary(obj: object) -> str:
+    """The whole docstring, each paragraph whitespace-collapsed (paragraph breaks kept)."""
     doc = inspect.getdoc(obj) or ""
     if not doc:
         return "_(no docstring)_"
-    # first paragraph, whitespace-collapsed
-    para = doc.split("\n\n", 1)[0]
-    return " ".join(para.split())
+    return "\n\n".join(" ".join(para.split()) for para in doc.split("\n\n"))
+
+
+def _own_methods(cls: type) -> list[tuple[str, object]]:
+    """The public methods a class defines itself (not inherited, not dataclass/pydantic machinery)."""
+    out = []
+    for mname, member in vars(cls).items():
+        if mname.startswith("_") or not inspect.isfunction(member):
+            continue
+        out.append((mname, member))
+    return out
 
 
 def _is_protocol(obj: object) -> bool:
@@ -53,13 +62,20 @@ def render() -> str:
     classes: list[str] = []
     protocols: list[str] = []
     aliases: list[str] = []
+    constants: list[str] = []
     functions: list[str] = []
     for name in api.__all__:
         obj = getattr(api, name)
-        if (not inspect.isclass(obj) and not callable(obj)) or getattr(obj, "__module__", "") == "typing":
+        if getattr(obj, "__module__", "") == "typing" or getattr(obj, "__origin__", None) is not None:
             aliases.append(f"### `{name} = {obj!r}`\n")  # a typing alias (Literal / Callable): show its definition
             continue
+        if not inspect.isclass(obj) and not callable(obj):
+            constants.append(f"### `{name}`\n\n{_summary(type(obj))}\n")  # a sentinel/constant: its type's doc
+            continue
         block = [f"### `{_signature(name, obj)}`", "", _summary(obj), ""]
+        if inspect.isclass(obj) and not _is_protocol(obj):
+            for mname, member in _own_methods(obj):
+                block += [f"#### `{name}.{mname}{inspect.signature(member)}`", "", _summary(member), ""]
         bucket = protocols if _is_protocol(obj) else classes if inspect.isclass(obj) else functions
         bucket.append("\n".join(block))
 
@@ -67,6 +83,8 @@ def render() -> str:
     lines += ["## Hook protocols", "", "Callables you pass to the engine; any function with this signature conforms.",
               ""] + protocols
     lines += ["## Type aliases", ""] + aliases
+    if constants:
+        lines += ["## Constants", ""] + constants
     lines += ["## Functions", ""] + functions
     return "\n".join(lines).rstrip() + "\n"
 

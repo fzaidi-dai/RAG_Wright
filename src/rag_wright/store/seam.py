@@ -18,7 +18,8 @@ from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
 
 
 class _NotNull:
-    """Sentinel for a `kg_edges` where-value meaning `<field> IS NOT NULL` (vs an equality/membership match)."""
+    """`NOT_NULL`: the sentinel for a `kg_edges` filter value meaning `<field> IS NOT NULL` (instead of an
+    equality/membership match), e.g. `edge_where={"dimension": NOT_NULL}`."""
 
     def __repr__(self) -> str:  # pragma: no cover - debug aid
         return "NOT_NULL"
