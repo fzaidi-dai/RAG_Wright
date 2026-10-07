@@ -107,5 +107,5 @@ See ADR-0028 (lexical judge), ADR-0033 (unified KG), ADR-0037 (ontology is the s
   residual lane never reuses records the other method produced.
 - **Live (Aimmune, 131 provisions):** 215 calls, all Jev, $0.013, 276 s, zero LLM calls -- vs 277 calls (276 LLM),
   $0.277, 459 s with the LLM judge + LLM residual. The judge kept/downgraded 92.6% of 363 semantic values the same way
-  as the LLM judge; the residual lane stored 95 values vs 41 (consistent with its higher measured recall).
+  as the LLM judge. Residual values: the committed lane (with the de-duplication and jurisdiction trimming added after that run) re-measured on the same 131 provisions stores 82 values (87 Jev calls, $0.009) vs 41 from the LLM; the live run itself, made before those fixes, stored 95 (duplicates and untrimmed jurisdictions included). More values is not by itself better: the held-out precision is 0.88, so part of the gap is errors (e.g. a cost share '100%' labelled a committed quantity).
 - Harnesses: `eval/semantic_judge_gold.py` (`--score-blind`), `eval/residual_decision_gold.py`; gold data local only.
