@@ -225,3 +225,32 @@ def test_a_document_with_no_text_is_ingested_empty_not_dead_lettered(tmp_path, n
     (rep,) = report.documents
     assert rep.dead_letter is None and rep.chunks == 0 and rep.spans == 0 and rep.units == 0
     assert any(n.type == "Document" and n.props["doc_id"] == "blank" for n in ws._store.nodes)
+
+
+def test_the_document_hook_runs_once_per_document_after_its_records(tmp_path):
+    calls = []
+
+    async def hook(ws, sd, chunks):
+        calls.append((sd.source_doc_id, len(chunks), len([n for n in ws._store.nodes if n.type == "Record"])))
+
+    ws = _ws()
+    pipe = build_ingestion(_record_extractor, embedder=_FakeEmbedder(), progress=lambda _l: None, document_hook=hook)
+    asyncio.run(pipe.aingest(ws, [str(FIXTURES / "textile_spec_sheet.md")], cache_dir=tmp_path))
+    assert len(calls) == 1 and calls[0][1] > 0 and calls[0][2] == 5  # after its 5 records were written
+
+
+def test_the_stages_take_a_text_only_document(tmp_path):
+    from rag_wright.api import source_document
+
+    ws = _ws()
+    pipe = build_ingestion(_record_extractor, embedder=_FakeEmbedder(), progress=lambda _l: None)
+    stages = pipe.stages(ws, cache_dir=tmp_path)
+    sd = source_document("plain", text="Gauge: 28G.\nStitch length: 2.85 mm.\nRemarks: none.")
+
+    async def run():
+        chunks = await stages.chunk(sd)
+        tagged = await stages.segment(sd, chunks)
+        return chunks, tagged, await stages.index(sd, tagged, chunks)
+
+    chunks, tagged, indexed = asyncio.run(run())
+    assert chunks and tagged and indexed["span_count"] == len(tagged) and not indexed["span_failures"]

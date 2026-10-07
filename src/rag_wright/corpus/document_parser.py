@@ -54,7 +54,7 @@ _OCR_PARSE_DEADLINE_S = 600.0
 
 def _default_document_parser() -> Any:
     """0009-WIRE2: the default parser for raw-document bytes is the TIERED OCR parser -- fast OCR, then a
-    scan-quality gate escalates only degraded pages to the VLM (default Gemma-4 via OpenRouter), and flags what
+    scan-quality gate escalates only degraded pages to the VLM (the VISION_OCR model profile), and flags what
     even the VLM cannot read. Graceful degrade when no VLM is configured. So BOTH ingestion pipelines and the MCP
     document tool get degraded-scan handling through this one chokepoint."""
     from rag_wright.capabilities.parsing import TieredOCRParser

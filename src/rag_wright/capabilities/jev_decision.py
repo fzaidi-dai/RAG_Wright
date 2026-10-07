@@ -12,6 +12,7 @@ It is I/O-bound (a network call), so it is an ASYNC `model` capability -- invoke
 from __future__ import annotations
 
 import os
+import time
 from typing import Any
 
 
@@ -25,6 +26,7 @@ async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - 
     import httpx
 
     from rag_wright.models.profiles import decision_profile
+    from rag_wright.models.usage import record_usage
 
     prof = decision_profile(inputs.get("model"))
     api_key = os.environ.get(prof.api_key_env)
@@ -32,7 +34,15 @@ async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - 
         raise RuntimeError(f"jev_decision requires {prof.api_key_env}")
     body = {"model": prof.served, "state": inputs["state"], "questions": inputs["questions"]}
     timeout = float(os.environ.get("RAG_JEV_TIMEOUT_S", str(prof.timeout_s)))
+    started = time.perf_counter()
     async with httpx.AsyncClient() as client:
         r = await client.post(prof.endpoint, headers={"Authorization": f"Bearer {api_key}"}, json=body, timeout=timeout)
         r.raise_for_status()
-        return r.json()
+        out = r.json()
+    # ING-4c: meter the call like any model call (the endpoint reports its own usage + cost), so a paid decision is
+    # never invisible to `measure_usage`; a response with no cost counts as uncosted, never as free.
+    usage = out.get("usage") or {} if isinstance(out, dict) else {}
+    record_usage(prof.model_id, input_tokens=int(usage.get("input_tokens") or 0),
+                 output_tokens=int(usage.get("output_tokens") or 0), cost=usage.get("cost"),
+                 latency_ms=(time.perf_counter() - started) * 1000)
+    return out

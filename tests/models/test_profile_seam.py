@@ -85,22 +85,12 @@ def test_unknown_model_gets_safe_default_profile():
 
 
 def test_every_role_defaults_to_single_product_llm():
-    # MS1-2 (ADR-0039): the product substrate is a SINGLE product LLM for EVERY role (OKF included -- it is not in
-    # the ingestion/query pipeline). Granite-4.1 was de-listed on OpenRouter (404); the product default moved to
-    # `ibm-granite/granite-4.2-8b` (granite-4.1-8b's successor) with reasoning-off + `provider:{sort:latency}`
-    # routing (ADR-0079). Gemma/DeepSeek-Pro stay dropped-but-registered for dev override.
-    # EXCEPTION (0009-VLM): VISION_OCR needs a VISION model, which the text-only product LLM is not -- it defaults
-    # to a vision model (Gemma-4), self-hostable so the data-sovereign posture holds.
+    # MS1-2 (ADR-0039): the product substrate is a SINGLE product LLM for EVERY role (OKF included). ADR-0100 made it
+    # Qwen3.8-27B; ING-4c (2026-10-07) folded VISION_OCR in too: the old Gemma-4 exception existed only because the
+    # previous product LLM (Granite) was text-only, and Qwen3.8-27B accepts images. One model to serve (ADR-0110:
+    # FP8 Qwen on one A100 at high concurrency) instead of two. Other models stay registered for dev override.
     for role in ModelRole:
-        if role is ModelRole.VISION_OCR:
-            continue
         assert profiles.model_for(role) == profiles._PRODUCT_LLM
-
-
-def test_vision_ocr_defaults_to_a_vision_model_not_granite():
-    # 0009-VLM: OCR of degraded scans needs vision; Granite-8B is text-only. Defaults to Gemma-4 (a vision model,
-    # self-hostable), swappable via RAG_MODEL_VISION_OCR -- the model id is provider-agnostic (OpenRouter or vLLM).
-    assert profiles.model_for(ModelRole.VISION_OCR) == "google/gemma-4-31b-it"
 
 
 def test_role_is_env_overridable(monkeypatch):

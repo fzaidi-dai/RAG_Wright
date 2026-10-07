@@ -1,5 +1,5 @@
-"""CHUNK-7 (ADR-0058, issue 0004): carry docling structure to the chunker. Proves `_parsed_for` uses the real
-docling parse when present (else the text fallback), and -- the A0004 close-out -- that a byte-source document
+"""CHUNK-7 (ADR-0058, issue 0004): carry docling structure to the chunker. Proves the ingestion stages use the
+real docling parse when present (else the text fallback; ported to `IngestionStages.parsed` in ING-4c), and -- the A0004 close-out -- that a byte-source document
 flows bytes -> parsed_source_document -> load_document -> the structural pass, which fires on the document's own
 headings with ZERO model calls. The markdown parse is real docling (light: no OCR/models for .md)."""
 
@@ -8,9 +8,9 @@ from __future__ import annotations
 from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, _validate_partition
 from rag_wright.corpus.document_parser import _HEADING_LABELS
+from rag_wright.ingestion.builder import IngestionStages
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
     SourceDocument,
-    _parsed_for,
     parsed_source_document,
 )
 
@@ -25,15 +25,19 @@ class _RaisingFallback:
         raise AssertionError("the model fallback should not run on a structured document")
 
 
-def test_parsed_for_uses_the_real_parse_when_present(tmp_path):
+def _stages(tmp_path):
+    return IngestionStages(None, extractor=None, cache_dir=tmp_path)
+
+
+def test_the_stages_use_the_real_parse_when_present(tmp_path):
     real = ParsedDocument(source_doc_id="x", content_hash="a" * 64, manifest_path="/does/not/matter")
     doc = SourceDocument(source_doc_id="x", text="body", parsed=real)
-    assert _parsed_for(doc, tmp_path) is real  # the document's own docling parse is used verbatim
+    assert _stages(tmp_path).parsed(doc) is real  # the document's own docling parse is used verbatim
 
 
-def test_parsed_for_falls_back_to_text_when_absent(tmp_path):
+def test_the_stages_fall_back_to_text_when_absent(tmp_path):
     doc = SourceDocument(source_doc_id="x", text="line one\nline two")  # no .parsed
-    parsed = _parsed_for(doc, tmp_path)
+    parsed = _stages(tmp_path).parsed(doc)
     assert isinstance(parsed, ParsedDocument) and parsed.source_doc_id == "x"
     loaded = load_document(parsed)
     assert [str(getattr(t, "label", "")) for t in loaded.texts] == ["text", "text"]  # text-only, no headings

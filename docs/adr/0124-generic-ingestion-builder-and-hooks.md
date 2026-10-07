@@ -169,3 +169,33 @@ writing to change one decision (engine gaps G3/G4).
   `eng:ColumnMapping` vocabulary is added until a real domain shows it is reusable.
 - Real data (local client workbooks): 8,812 of 8,812 cells identical to an independent reader (openpyxl, merged
   ranges resolved); in the builder, 162 of 162 one-row units carry exactly their own row.
+
+## ING-4c addendum (2026-10-07): the contract pipeline on the shared stages
+
+- **One set of stage functions, two drivers.** `IngestionStages` (`rag_wright.ingestion.builder`) holds the stages:
+  parse, chunk, segment (tiling check, whitespace-only spans dropped, page provenance, tagging), index, extract
+  (group, unit checks, table rows, concurrent extract + `check_extraction`), and write. `build_ingestion` drives them
+  directly; the reference pack's `contract_ingestion_pipeline` keeps its seven-node LangGraph (node names and state
+  keys unchanged, because RuleWright reads them) and calls the same stages inside its nodes. The contract-specific parts are
+  plain hooks in the reference pack: the legal segmenter, `function_span_tagger` (one batched classify call per
+  chunk), the provision grouper, the clause extractor (cached by chunk id, function, and template version), and
+  the clause KG writer (`clause_kg_graph`, idempotent via `already_written`).
+- **Provenance rule relaxed (approved):** any node or edge carrying a `span_id` must cite a span of its unit; any
+  `confidence` must be EXTRACTED, INFERRED, or AMBIGUOUS; a non-empty extraction must cite at least once. Nodes
+  without a span are shared vocabulary (e.g. a property value), not unsupported claims.
+- **Jev metered and cached.** The boundary decider's call records usage (`record_usage`), and `cached_decider`
+  caches decisions by decision model + span texts, so a re-run makes no decision call.
+- **VISION_OCR now defaults to the product LLM (Qwen3.8-27B).** Gemma-4 was the default only because the earlier
+  product LLM (Granite) was text-only. Qwen accepts images, and serving one model on one A100 (ADR-0110: FP8 Qwen,
+  high concurrency, large KV cache) is cheaper overall than serving two. OCR now resolves its endpoint, served id, and
+  free-text flags (reasoning off, provider pin) through the profile, so a self-hosted Modal server works too.
+  `_vlm_available` follows the profile, not an OpenRouter key. docling makes the OCR request itself, so the engine
+  now meters one uncosted call per OCR'd page; before this, OCR spend never showed up in `measure_usage`.
+- **Live parity (set A: 5 PDFs + 5 CUAD text contracts).** Rebuilt pipeline vs the pre-port reference, sharing
+  caches: 8 of 10 contracts identical record by record across every reference-owned node and edge type
+  (200 clauses, 958 spans, 128 property values, all `HAS_*`/`COVERS`/`EXCEPTS`/... edges), with **zero Qwen calls**
+  (6 Jev calls, $0.0004). The other 2 differ only because **Jev is not deterministic** (measured: 5 of 181 residue
+  answers changed across 3 identical calls) and the reference run predates the decision cache. Proven offline for
+  both: segmentation and tagging are identical (the residue batch hits the cache key), and flipping only the
+  differing Jev answers (1 for Aimmune, a page footer; 3 for ACCURAY, a date line and two table-of-contents
+  fragments) reproduces the reference's provisions exactly. The decision cache now makes re-ingests repeatable.

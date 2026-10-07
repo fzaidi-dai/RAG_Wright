@@ -248,10 +248,16 @@ def _render_gray_pages(source: Path, dpi: int = 200) -> dict:
 
 
 def _vlm_available() -> bool:
-    """The escalation VLM is usable only if an OpenRouter key is configured. Absent -> graceful degrade."""
-    import os
+    """The escalation VLM is usable only if the VISION_OCR profile's endpoint is configured (an OpenRouter key, or
+    a self-hosted server's base URL). Absent -> graceful degrade."""
+    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.models.seam import resolve_connection
 
-    return bool(os.environ.get("OPENROUTER_API_KEY"))
+    try:
+        conn = resolve_connection(model_for(ModelRole.VISION_OCR))
+    except KeyError:  # a self-hosted backend with no base URL set
+        return False
+    return bool(conn.api_key) or conn.backend == "ollama"
 
 
 def _log_unreadable(source: Path, pages: list[int], why: str) -> None:

@@ -44,24 +44,12 @@ class ContractKGStore:
         per assertion (grounded with a predicate IRI + provenance). Idempotent by the content-hash gate."""
         if self._already_written(record.clause_id):
             return
-        functions = [{"function": f.function, "confidence": f.confidence.value} for f in record.functions]
-        nodes = [KgNode(CLAUSE_TYPE, "clause_id", {
-            "clause_id": record.clause_id, "function": record.function, "folio_iri": record.folio_iri,
-            "span_id": record.span_id, "functions": functions})]
-        edges = []
-        for a in record.assertions:
-            edge_type = _DIM_EDGE_STR[a.dimension.value]
-            key = _property_value_key(a.dimension.value, a.value)
-            nodes.append(KgNode(PROPVALUE_TYPE, "value_key", {
-                "value_key": key, "dimension": a.dimension.value, "value": a.value,
-                "folio_iri": FOLIO_SUBJECT_IRI.get(a.value, "")}))
-            edges.append(KgEdge(edge_type, CLAUSE_TYPE, "clause_id", record.clause_id, PROPVALUE_TYPE, "value_key",
-                                key, {
-                                    "dimension": a.dimension.value, "predicate_iri": _edge_predicate_iri(edge_type),
-                                    "confidence": a.confidence.value, "span_id": a.span_id,
-                                    "chunk_id": str(a.provenance.chunk_id),
-                                    "source_doc_id": a.provenance.source_doc_id}))
+        nodes, edges = clause_kg_graph(record)
         self._store.kg_write(nodes, edges)
+
+    def already_written(self, clause_id: str) -> bool:
+        """ING-4c: the content-hash gate `write_clause_kg` applies, for a writer that builds the graph itself."""
+        return self._already_written(clause_id)
 
     def write_property_graph(self, record: ClausePropertyRecord) -> None:
         """Legacy flat property graph (ADR-0025/0026; superseded by `write_clause_kg`): the Clause node + shared
@@ -249,3 +237,27 @@ class ContractKGStore:
             )
             for r in spans
         ]
+
+
+def clause_kg_graph(record: ClausePropertyRecord) -> tuple[list[KgNode], list[KgEdge]]:
+    """KG-3 (ADR-0033): the Clause node + one shared PropertyValue node per (dimension, value) + one TYPED edge per
+    assertion (grounded with a predicate IRI + provenance) -- exactly what `write_clause_kg` writes. ING-4c: factored
+    out so the reference extractor can return a clause's graph as a `UnitExtraction`."""
+    functions = [{"function": f.function, "confidence": f.confidence.value} for f in record.functions]
+    nodes = [KgNode(CLAUSE_TYPE, "clause_id", {
+        "clause_id": record.clause_id, "function": record.function, "folio_iri": record.folio_iri,
+        "span_id": record.span_id, "functions": functions})]
+    edges = []
+    for a in record.assertions:
+        edge_type = _DIM_EDGE_STR[a.dimension.value]
+        key = _property_value_key(a.dimension.value, a.value)
+        nodes.append(KgNode(PROPVALUE_TYPE, "value_key", {
+            "value_key": key, "dimension": a.dimension.value, "value": a.value,
+            "folio_iri": FOLIO_SUBJECT_IRI.get(a.value, "")}))
+        edges.append(KgEdge(edge_type, CLAUSE_TYPE, "clause_id", record.clause_id, PROPVALUE_TYPE, "value_key",
+                            key, {
+                                "dimension": a.dimension.value, "predicate_iri": _edge_predicate_iri(edge_type),
+                                "confidence": a.confidence.value, "span_id": a.span_id,
+                                "chunk_id": str(a.provenance.chunk_id),
+                                "source_doc_id": a.provenance.source_doc_id}))
+    return nodes, edges

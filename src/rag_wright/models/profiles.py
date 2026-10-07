@@ -78,7 +78,7 @@ class ModelRole(str, Enum):
     # model. Defaults to the product LLM (unchanged behavior); set RAG_MODEL_FUNCTION_CLASSIFY to override.
     FUNCTION_CLASSIFY = "function_classify"
     # 0009-VLM: VLM-based OCR escalation for degraded scans (via docling ApiVlmOptions -> OpenRouter). Defaults to
-    # Gemma-4 (a vision model, unlike the Granite product LLM); set RAG_MODEL_VISION_OCR to swap the model.
+    # the product LLM (Qwen3.8-27B is a vision model); set RAG_MODEL_VISION_OCR to swap the model.
     VISION_OCR = "vision_ocr"
 
 
@@ -108,8 +108,9 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", _PRODUCT_LLM),
     ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", _PRODUCT_LLM),
     ModelRole.FUNCTION_CLASSIFY: ("RAG_MODEL_FUNCTION_CLASSIFY", _PRODUCT_LLM),
-    # 0009-VLM: defaults to Gemma-4 (a vision model), NOT the Granite product LLM -- OCR needs vision.
-    ModelRole.VISION_OCR: ("RAG_MODEL_VISION_OCR", DEFAULT_GENERAL),
+    # 0009-VLM: OCR needs vision. The Gemma-4 default existed only because the old product LLM (Granite) was
+    # text-only; Qwen3.8-27B accepts images, so ING-4c folds VISION_OCR into the one served model (ADR-0110).
+    ModelRole.VISION_OCR: ("RAG_MODEL_VISION_OCR", _PRODUCT_LLM),
 }
 
 # Registered profiles keyed by model id. A model without an entry falls back to the safe default

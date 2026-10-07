@@ -74,3 +74,31 @@ def jev_boundary_decider(resources: Any = None) -> Optional[BoundaryDecider]:
         return [float((answers.get(f"c{i}") or {}).get("noul", 0.0)) >= _THRESHOLD for i in range(len(texts))]
 
     return _decide
+
+
+def cached_decider(decider: Optional[BoundaryDecider], cache_dir: Any) -> Optional[BoundaryDecider]:
+    """ING-4c (FR-I.5): a residue decider whose answers are content-hash cached -- the same uncertain lines get the
+    same decisions on a re-ingest (repeatable boundaries, so downstream caches hit) and are never paid for twice.
+    Keyed by the decision model + the exact batch of candidate texts (the model reads them together). A failed call
+    is not cached (the caller degrades it as before). `decider=None` stays None."""
+    if decider is None:
+        return None
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from rag_wright.models.profiles import decision_profile
+
+    store = Path(cache_dir)
+
+    async def _cached(texts: list[str]) -> list[bool]:
+        key = hashlib.sha256(json.dumps([decision_profile().model_id, texts]).encode("utf-8")).hexdigest()[:32]
+        path = store / f"{key}.json"
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))
+        answers = await decider(texts)
+        store.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps([bool(a) for a in answers]), encoding="utf-8")
+        return answers
+
+    return _cached

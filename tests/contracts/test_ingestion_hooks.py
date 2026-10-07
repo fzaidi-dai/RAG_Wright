@@ -204,3 +204,44 @@ def test_span_kind_is_optional_and_closed():
     assert span.model_copy(update={"kind": "table_row"}).kind == "table_row"
     with pytest.raises(ValidationError):
         Span(span_id=f"{CHUNK}#0", parent_chunk_id=CHUNK, span_index=0, start=0, end=1, text="x", kind="row")
+
+
+# --- ING-4c: the relaxed provenance rule -- facts may live on EDGES; span-less nodes are shared vocabulary -------
+
+def _value_node(key="liability_cap=12_months") -> KgNode:
+    return KgNode("PropertyValue", "value_key", {"value_key": key, "value": "12_months"})
+
+
+def _fact_edge(span_id, confidence="EXTRACTED") -> KgEdge:
+    return KgEdge("HasCap", "Clause", "clause_id", "c1", "PropertyValue", "value_key", "liability_cap=12_months",
+                  {"span_id": span_id, "confidence": confidence})
+
+
+def test_a_cited_fact_edge_with_shared_vocabulary_nodes_passes():
+    unit = _unit()
+    clause = KgNode("Clause", "clause_id", {"clause_id": "c1", "span_id": unit.anchor.span_id})  # no confidence prop
+    check_extraction(unit, UnitExtraction(nodes=[clause, _value_node()], edges=[_fact_edge(unit.anchor.span_id)]))
+
+
+def test_an_extraction_with_no_citation_anywhere_fails():
+    with pytest.raises(IngestionContractError, match="no provenance"):
+        check_extraction(_unit(), UnitExtraction(nodes=[_value_node()]))
+
+
+def test_an_edge_citing_a_span_outside_the_unit_fails():
+    unit = _unit()
+    with pytest.raises(IngestionContractError, match="span_id"):
+        check_extraction(unit, UnitExtraction(nodes=[_value_node()], edges=[_fact_edge(f"{CHUNK}#2")]))
+
+
+def test_an_edge_with_an_unknown_confidence_fails():
+    unit = _unit()
+    with pytest.raises(IngestionContractError, match="confidence"):
+        check_extraction(unit, UnitExtraction(nodes=[_value_node()], edges=[_fact_edge(unit.anchor.span_id, "SURE")]))
+
+
+def test_tagged_span_primary_defaults_to_the_first_tag():
+    span = _good()[0]
+    assert TaggedSpan(span=span, tags=["a", "b"]).primary_tag == "a"
+    assert TaggedSpan(span=span, tags=[]).primary_tag == ""
+    assert TaggedSpan(span=span, tags=[], primary="NONE").primary_tag == "NONE"

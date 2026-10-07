@@ -34,6 +34,7 @@ KG-7 link is a clean join.
 from __future__ import annotations
 
 import asyncio
+import os
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional, Protocol, Sequence, TypedDict, runtime_checkable
 
@@ -41,7 +42,6 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 from pydantic import BaseModel
 
-from rag_wright.capabilities.parsing import ParsedDocument
 # EP-API-6b: the generic corpus-seam contract + docling-parse helpers moved to a DOMAIN-FREE module (so the engine
 # parse API does not import this contract pipeline). Re-exported here, unchanged, for this module's own importers.
 from rag_wright.capabilities.document_parse import (  # noqa: F401 (re-export)
@@ -50,6 +50,7 @@ from rag_wright.capabilities.document_parse import (  # noqa: F401 (re-export)
     aparsed_source_document,
     parsed_source_document,
 )
+from rag_wright.capabilities.document_parse import parsed_text_document as _parsed_from_text  # noqa: F401 - moved (ING-4c)
 from rag_wright.contracts.ingestion import BoundaryDecider, TaggedSpan, Unit
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
@@ -372,77 +373,6 @@ async def arun_corpus_ingestion(
         party_links=party_links, per_document=per_document, partial=partial)
 
 
-def _parsed_from_text(source_doc_id: str, text: str, parse_dir: Any):
-    """text -> a `ParsedDocument` (one TextItem per non-blank line), cached -- so the standard `chunk()` path
-    (which loads a real DoclingDocument) works from a text corpus. INGEST-REFACTOR: the shared version of the
-    per-script `_build_parsed`."""
-    import hashlib
-
-    from docling_core.types.doc.document import DoclingDocument
-    from docling_core.types.doc.labels import DocItemLabel
-
-    from rag_wright.capabilities.parsing import ParsedDocument
-
-    content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    manifest_path = parse_dir / f"{source_doc_id}.{content_hash[:16]}.json"
-    if not manifest_path.exists():
-        doc = DoclingDocument(name=source_doc_id)
-        for line in text.split("\n"):
-            if line.strip():
-                doc.add_text(label=DocItemLabel.TEXT, text=line)
-        doc.save_as_json(manifest_path)
-    return ParsedDocument(source_doc_id=source_doc_id, content_hash=content_hash, manifest_path=str(manifest_path))
-
-
-def _parsed_for(doc: SourceDocument, parse_dir: Any) -> ParsedDocument:
-    """CHUNK-7 (ADR-0058): the ParsedDocument the chunker chunks. Use the document's REAL docling parse
-    (`doc.parsed`, structure preserved) when a byte-source adapter provided one -- so the structural pass fires
-    on the document's own headings; otherwise fall back to a text-only parse of `doc.text` (genuinely
-    structureless input, which the chunker's tag-parse fallback handles). This is what carries docling structure
-    to the chunker."""
-    if doc.parsed is not None:
-        return doc.parsed
-    return _parsed_from_text(doc.source_doc_id, doc.text, parse_dir)
-
-
-def _attach_page_provenance(doc: SourceDocument, chunks: list, segments: list, parse_dir: Any) -> list:
-    """issue 0032 (CU-B5): enrich each segment's `OperativeSpan` with its source page(s) + best-effort bbox.
-
-    Builds a page<->char map once from the parsed document's per-item `prov` pages and the canonical text, then
-    looks up each span's canonical range (`chunk_doc_start + op.start/end`). Deterministic, no model call.
-    Best-effort by design: any failure, a parse with no page provenance (the text-only ingest leg), or a chunk
-    with no `doc_start` leaves the span's `pages` empty -- the honest 'no page' fallback, never a broken ingest."""
-    if not segments:
-        return segments
-    try:
-        from rag_wright.capabilities.parsing import load_document
-        from rag_wright.capabilities.rlm_chunking import canonical_document_text
-        from rag_wright.corpus.document_parser import content_items
-        from rag_wright.spans.page_map import build_page_offset_map, pages_for
-
-        page_map = build_page_offset_map(
-            content_items(load_document(_parsed_for(doc, parse_dir))), canonical_document_text(chunks))
-    except Exception:  # noqa: BLE001 - provenance is best-effort; never fail an ingest over a page lookup
-        return segments
-    if not page_map:
-        return segments
-    enriched: list = []
-    for (op, function, chunk_doc_start, scores) in segments:
-        if chunk_doc_start is None:
-            enriched.append((op, function, chunk_doc_start, scores))
-            continue
-        pages, bbox = pages_for(page_map, chunk_doc_start + op.start, chunk_doc_start + op.end)
-        enriched.append((op.model_copy(update={"pages": pages, "bbox": bbox}), function, chunk_doc_start, scores))
-    return enriched
-
-
-class _NoSummary:
-    """A no-op summarizer -- the ingest smoke targets the typed KG + entity graph, not chunk summaries."""
-
-    def summarize(self, text: str) -> str:  # noqa: ARG002
-        return ""
-
-
 def seed_party_cache(party_dir: Any, legacy_path: Any) -> int:
     """INGEST-REFACTOR (a): pre-populate the per-contract party cache from GP-1B's `dg_extracted_parties.json`
     (a `{raw_title: [party names]}` map) so a full ingest REUSES those ~482 extractions instead of re-calling
@@ -591,41 +521,30 @@ def _parties_extraction(names: list, doc: SourceDocument) -> list:
 
 
 
-async def _asegment_and_classify(chunks: list, classify_fn: Any, *, segment: Any = None,
-                                 max_concurrency: int | None = None) -> list:
-    """ASYNC-B2e (ADR-0057): the async twin of `_segment_and_classify` -- classify each chunk's spans via the
-    async classifier (`aclassify_spans`, true wall-clock deadline). Segmentation (`segment_clause`) is CPU/regex,
-    kept sync.
-
-    CLASSIFY-CONCURRENCY-1: chunks are classified CONCURRENTLY (`asyncio.gather`), not one-after-another -- the
-    earlier `for ch: await ...` serialized M chunks into M network round-trips for no reason (nothing depends on
-    chunk order). ONE shared semaphore, threaded into every `aclassify_spans`, bounds the TOTAL in-flight
-    sub-batch LLM calls across all chunks to a single deliberate knob (`CLASSIFY_CONCURRENCY`, default 8) -- it is
-    acquired only at the leaf call, so the outer gather cannot deadlock. `gather` preserves order, so the flattened
-    output is identical to the sequential version, only faster."""
-    import os
-
+def function_span_tagger(classify_fn: Any, *, max_concurrency: Optional[int], span_scores: Optional[dict] = None):
+    """The reference pack's `SpanTagger` (T55/SETFIT-SEG-1, ADR-0048): ONE batched classify call per chunk (the chunk
+    as context), each span tagged with its function soft tags (primary first; `NONE` when it has none). Calls across
+    chunks run concurrently, bounded by ONE shared semaphore (`max_concurrency`; None -> the CLASSIFY_CONCURRENCY env
+    knob, default 8).
+    `span_scores` (when given) receives each span's `FunctionScore` list for the extractor."""
     from rag_wright.contracts.function import NO_FUNCTION, primary_function
+    from rag_wright.contracts.ingestion import TaggedSpan
 
-    seg = segment
-    if seg is None:
-        from rag_wright.spans.segment import segment_clause
+    sem = asyncio.Semaphore(max_concurrency if max_concurrency is not None
+                            else int(os.environ.get("CLASSIFY_CONCURRENCY", "8")))
+    scores_out = span_scores if span_scores is not None else {}
 
-        seg = segment_clause
-    # segment (CPU/regex, sync) -> per-chunk operative spans, dropping empty chunks
-    per_chunk = [(ch, ops) for ch in chunks
-                 if (ops := [op for op in seg(ch.chunk_id, ch.text) if op.text.strip()])]
-    if not per_chunk:
-        return []
-    n = max_concurrency if max_concurrency is not None else int(os.environ.get("CLASSIFY_CONCURRENCY", "8"))
-    sem = asyncio.Semaphore(n)  # ONE shared bound on total in-flight classify calls (leaf-acquired -> no deadlock)
-    scores_by_chunk = await asyncio.gather(
-        *(classify_fn.aclassify_spans(ch.text, [op.text for op in ops], sem=sem) for ch, ops in per_chunk))
-    out: list = []
-    for (ch, ops), scores_per_span in zip(per_chunk, scores_by_chunk):  # gather preserves order -> stable output
-        for op, scores in zip(ops, scores_per_span):
-            out.append((op, primary_function(scores) or NO_FUNCTION, ch.doc_start, scores))
-    return out
+    async def tagger(chunk_text: str, spans: list) -> list:
+        if not spans:
+            return []
+        scores = await classify_fn.aclassify_spans(chunk_text, [s.text for s in spans], sem=sem)
+        out = []
+        for span, sc in zip(spans, scores):
+            scores_out[span.span_id] = sc
+            out.append(TaggedSpan(span=span, tags=[x.function for x in sc], primary=primary_function(sc) or NO_FUNCTION))
+        return out
+
+    return tagger
 
 
 def clause_extraction_jobs(segments: list, boundary_starts: list[bool] | None = None) -> list:
@@ -787,7 +706,7 @@ def aproduction_document_ingest(
     from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.capabilities.graph_extraction import aproduction_extract_fn
     from rag_wright.capabilities.graph_storage import to_graph
-    from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, achunk
+    from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer
     from rag_wright.contracts.contract_meta import ContractRecord
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.contracts.property import ClausePropertyRecord
@@ -799,7 +718,6 @@ def aproduction_document_ingest(
         CapabilityFunctionClassifier,
         capability_property_classifier_fn,
     )
-    from rag_wright.spans.segment import to_span_record
 
     parse_dir = Path(cache_dir) / "parsed"
     chunk_dir = Path(cache_dir) / "chunks"
@@ -820,7 +738,6 @@ def aproduction_document_ingest(
     # follow-up). None -> default (GENERAL role). A bare id or an ExtractionModel (unwrapped to its id).
     chunk_model_id = getattr(chunk_model, "model", chunk_model)
     discoverer = StructuralModelFallbackDiscoverer(chunk_model_id)
-    summarizer = _NoSummary()
     from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
     # caller-configurable ingest models (else backend/env defaults). A bare id -> an ExtractionModel; for the
     # graph/judge surfaces (which take a model-id string) an ExtractionModel is unwrapped to its `.model` id.
@@ -877,86 +794,91 @@ def aproduction_document_ingest(
             return await aextract_affiliations(text, model_id=graph_extract_id)
         return await aextract_affiliations(text)
 
+    # ING-4c (ADR-0124): the ENGINE's shared ingestion stages, configured with this reference pack's LEGAL hooks --
+    # one implementation of chunk / segment+tag / index / group+extract / write for every domain; this pipeline
+    # keeps its 7-node LangGraph wiring, node names and state keys (the product drives and streams them).
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore, clause_kg_graph
+    from rag_wright.contracts.function import NO_FUNCTION
+    from rag_wright.contracts.ingestion import IngestionTuning, UnitExtraction
+    from rag_wright.ingestion.builder import IngestionStages
+    from rag_wright.spans.boundary import cached_decider, jev_boundary_decider
+    from rag_wright.spans.segment import segment_clause
+
+    span_scores: dict[str, list] = {}           # span_id -> [FunctionScore] (primary first)
+    chunks_by_doc: dict[str, list] = {}
+    records_by_doc: dict[str, dict] = {}        # source_doc_id -> {unit index: ClausePropertyRecord}
+    failures_by_doc: dict[str, list] = {}       # source_doc_id -> PROD-3 clause failures
+    extractions_by_doc: dict[str, list] = {}
+    ckg = ContractKGStore(store)
+
+    def legal_segmenter(chunk_id: str, text: str, layout: Any) -> list:  # noqa: ARG001 - legal markers, not layout
+        return segment_clause(chunk_id, text)
+
+    function_tagger = function_span_tagger(classify_fn, max_concurrency=_classify_concurrency, span_scores=span_scores)
+
+    async def provision_grouper(tagged: list, *, decider: Any = None) -> list:
+        return await provision_units(tagged, decider=decider)
+
+    async def clause_extractor_hook(unit: Any, *, source_doc_id: str) -> UnitExtraction:
+        """One PROVISION -> its clause record (issue 0038), cached by provision content; a persistent failure is
+        recorded in the PROD-3 shape and the unit skipped."""
+        index, anchor, text = unit.index, unit.anchor, unit.text
+        function = unit.tags[0] if unit.tags else NO_FUNCTION
+        scores = span_scores.get(anchor.span_id, [])
+        # CLS-D soft-scoping: the anchor span's TOP-3 real function soft-tags scope the classifier lane.
+        functions = tuple(dict.fromkeys(
+            x.function for x in (scores or []) if x.function and x.function != NO_FUNCTION))[:3]
+        clause_cid = ChunkId.of(source_doc_id, index, text)
+        cache_file = clause_cache_dir / (hashlib.sha256(
+            f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
+        if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no re-call
+            record = ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
+        else:
+            record, reason = await _aextract_clause_with_retry(
+                clause_extractor, chunk_id=clause_cid, function=function, text=text,
+                span_id=anchor.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS, functions=functions)
+            if record is None:  # persistent failure -> PARTIAL, not cached, not silently dropped
+                failures_by_doc.setdefault(source_doc_id, []).append(
+                    {"span_id": anchor.span_id, "function": function, "reason": reason[:200]})
+                raise RuntimeError(f"clause extraction failed: {reason[:200]}")
+            cache_file.write_text(record.model_dump_json(), encoding="utf-8")
+        record = record.model_copy(update={"functions": scores})
+        records_by_doc.setdefault(source_doc_id, {})[index] = record
+        nodes, edges = clause_kg_graph(record)
+        return UnitExtraction(nodes=nodes, edges=edges)
+
+    async def clause_kg_writer(source_doc_id: str, extractions: list) -> None:
+        def _write() -> None:
+            for e in extractions:  # the write_clause_kg content-hash gate (idempotent re-ingest)
+                if not ckg.already_written(e.nodes[0].props["clause_id"]):
+                    store.kg_write(e.nodes, e.edges)
+
+        await asyncio.to_thread(_write)
+
+    stages = IngestionStages(
+        store, extractor=clause_extractor_hook, segmenter=legal_segmenter, span_tagger=function_tagger,
+        unit_grouper=provision_grouper,
+        boundary_decider=cached_decider(jev_boundary_decider(), Path(cache_dir) / "boundary_decisions"),
+        writer=clause_kg_writer, tuning=IngestionTuning(extract_concurrency=clause_concurrency), embedder=embedder,
+        chunk_model=chunk_model_id, cache_dir=cache_dir, discoverer=discoverer)
+
     async def chunk_fn(doc: SourceDocument) -> list:
-        parsed = _parsed_for(doc, parse_dir)  # CHUNK-7: real docling parse if provided, else a text-only parse
-        manifest = await achunk(parsed, summarizer=summarizer, cache_dir=chunk_dir, discoverer=discoverer)
-        return list(manifest.chunks)
+        chunks = await stages.chunk(doc)
+        chunks_by_doc[doc.source_doc_id] = chunks
+        return chunks
 
     async def segment_fn(doc: SourceDocument, chunks: list) -> list:
-        segments = await _asegment_and_classify(chunks, classify_fn, max_concurrency=_classify_concurrency)
-        # issue 0032 (CU-B5): attach source-page provenance to each span. Build a page<->char-offset map over the
-        # canonical text (from the parsed doc's per-item prov pages) and look up each span's [doc_start, doc_end).
-        # Deterministic, no model call; degrades to no pages when the parse carried no provenance (text-only leg).
-        return _attach_page_provenance(doc, chunks, segments, parse_dir)
+        return await stages.segment(doc, chunks)
 
     async def clauses_fn(doc: SourceDocument, segments: list) -> dict:
-        # issue 0038: a Clause is a PROVISION -- clause_extraction_jobs groups spans into provisions (numbered
-        # section, else chunk) and yields one job per provision (merged text + anchor span). Retrieval stays per
-        # span (index_fn unchanged). The function is a soft tag (ADR-0082), never a gate (issue 0036).
-        # Boundaries: deterministic-first, with a Jev decision-model fallback for the UNCERTAIN residue only
-        # (spans.boundary) -- flexible on new heading styles, degrades to deterministic with no decision model.
-        from rag_wright.spans.boundary import adecide_provision_starts, jev_boundary_decider
-
-        boundary_starts = await adecide_provision_starts(
-            [seg[0].text for seg in segments], decider=jev_boundary_decider())
-        jobs = clause_extraction_jobs(segments, boundary_starts=boundary_starts)
-        if not jobs:
-            return {"clause_records": [], "clause_failures": []}
-        failures: list[dict] = []
-        sem = asyncio.Semaphore(clause_concurrency)
-
-        from rag_wright.contracts.function import NO_FUNCTION as _NO_FUNCTION
-
-        async def _extract(job: Any) -> Any:
-            index, anchor_op, function, scores, text = job  # text = merged provision; anchor_op = citation anchor
-            # CLS-D soft-scoping: the anchor span's TOP-3 real function soft-tags scope the classifier lane (union
-            # of their dims) -- tolerant of the ~0.5 function accuracy, and kills the over-emission a classifier
-            # (which cannot abstain) causes when run unscoped. An untagged span -> () -> no scoping (every dim runs).
-            functions = tuple(dict.fromkeys(
-                s.function for s in (scores or []) if s.function and s.function != _NO_FUNCTION))[:3]
-            clause_cid = ChunkId.of(doc.source_doc_id, index, text)
-            cache_file = clause_cache_dir / (hashlib.sha256(
-                f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
-            if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no granite re-call
-                record = ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
-            else:
-                record, reason = await _aextract_clause_with_retry(
-                    clause_extractor, chunk_id=clause_cid, function=function, text=text,
-                    span_id=anchor_op.span_id, attempts=_CLAUSE_EXTRACT_ATTEMPTS, functions=functions)
-                if record is None:  # persistent failure -> record it (PARTIAL), do NOT cache, do NOT silently drop
-                    failures.append({"span_id": anchor_op.span_id, "function": function, "reason": reason[:200]})
-                    return None
-                cache_file.write_text(record.model_dump_json(), encoding="utf-8")
-            return record.model_copy(update={"functions": scores})
-
-        async def _bounded(job: Any) -> Any:
-            async with sem:  # backpressure (network-bound granite)
-                return await _extract(job)
-
-        results = [r for r in await asyncio.gather(*(_bounded(j) for j in jobs)) if r is not None]
-        return {"clause_records": results, "clause_failures": failures}
+        stage = await stages.extract(doc, segments)
+        extractions_by_doc[doc.source_doc_id] = stage.extractions
+        records = records_by_doc.pop(doc.source_doc_id, {})
+        return {"clause_records": [records[i] for i in sorted(records)],
+                "clause_failures": failures_by_doc.pop(doc.source_doc_id, [])}
 
     async def index_fn(doc: SourceDocument, segments: list) -> dict:
-        if not segments:
-            return {"span_count": 0, "span_failures": []}
-        dense_vecs, sparse_vecs = await asyncio.to_thread(
-            embedder.encode_batch, [op.text.strip() for op, _, _, _ in segments])
-
-        def _write_all() -> dict:
-            count = 0
-            failures: list[dict] = []
-            for (op, function, chunk_doc_start, scores), dense, sparse in zip(segments, dense_vecs, sparse_vecs):
-                try:
-                    store.upsert_span(to_span_record(
-                        op, contract_id=doc.source_doc_id, chunk_doc_start=chunk_doc_start,
-                        dense_vector=list(dense), sparse_vector=sparse, function=function,
-                        functions=[s.function for s in scores]))  # T55: top-k soft tags (primary-first)
-                    count += 1
-                except Exception as exc:  # noqa: BLE001 - a per-span write must not sink the KG, but is NOT swallowed
-                    failures.append({"span_id": op.span_id, "reason": repr(exc)})  # 0006-C: surfaced -> PARTIAL
-            return {"span_count": count, "span_failures": failures}
-
-        return await asyncio.to_thread(_write_all)
+        return await stages.index(doc, segments, chunks_by_doc.get(doc.source_doc_id, []))
 
     async def graph_fn(doc: SourceDocument, chunks: list) -> list:  # noqa: ARG001 - GP-1B is per-CONTRACT
         return await aper_contract_graph_extraction(
@@ -970,19 +892,19 @@ def aproduction_document_ingest(
                 disambiguate(extraction_results), extraction_results, resolver=registry)))  # registry IS an EntityResolver (DD-3)
 
     async def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
-        from rag_wright.capabilities.contract_kg_store import ContractKGStore  # DD-1b: clause KG + contract meta
-
-        ckg = ContractKGStore(store)
+        await stages.write(doc, extractions_by_doc.pop(doc.source_doc_id, []))
+        chunks_by_doc.pop(doc.source_doc_id, None)
 
         def _write() -> dict:
-            for record in clause_records:
-                ckg.write_clause_kg(record)
             nodes, edges = resolution
             store.write_graph(nodes, edges)
             ckg.upsert_contract(ContractRecord(
                 contract_id=doc.source_doc_id, name=doc.metadata.get("raw_title", ""),
                 source_doc_id=doc.source_doc_id,
                 content_hash=hashlib.sha256(doc.text.encode("utf-8")).hexdigest()))
+            stages.write_document_node(doc.source_doc_id, parent_id=None,
+                                       filename=doc.metadata.get("raw_title", "") or doc.source_doc_id,
+                                       media_type="", sha256=hashlib.sha256(doc.text.encode("utf-8")).hexdigest())
             return {"clauses": len(clause_records), "entities": len(nodes), "edges": len(edges)}
 
         return await asyncio.to_thread(_write)

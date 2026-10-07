@@ -117,3 +117,15 @@ def test_jev_decision_uses_profile_served_id_and_key_env(_stub_http):
     asyncio.run(jd.jev_decision(None, {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?",
                                                                          "criteria": {"true": "a", "false": "b"}}}}))
     assert _Client.captured["body"]["model"] == "typesafe/jev-1.13"  # resolved from the profile, not hardcoded
+
+
+async def test_a_jev_call_is_metered_like_any_model_call(_stub_http):
+    """ING-4c: the decisions endpoint returns its own `usage` (cost); it lands in `measure_usage` -- a paid call is
+    never invisible to the meter."""
+    from rag_wright.api import measure_usage
+
+    with measure_usage() as usage:
+        await jd.jev_decision(None, {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?",
+                                                                      "criteria": {"true": "a", "false": "b"}}}})
+    assert usage.calls == 1 and usage.cost_usd == pytest.approx(1e-5) and usage.calls_without_cost == 0
+    assert list(usage.by_model) == ["jev-1.13"]

@@ -274,3 +274,27 @@ async def aparsed_source_document(
         return await asyncio.to_thread(
             parsed_source_document, source_doc_id, name, data, cache_dir=cache_dir, metadata=metadata,
             include_hidden_sheets=include_hidden_sheets, tuning=tuning)
+
+
+def parsed_text_document(source_doc_id: str, text: str, parse_dir: Any):
+    """text -> a `ParsedDocument` (one TextItem per non-blank line), cached -- so the standard `chunk()` path
+    (which loads a real DoclingDocument) works from a text-only source. ING-4c: moved here from the contract
+    pipeline (generic mechanism; the contract pipeline re-exports it as `_parsed_from_text`)."""
+    import hashlib
+
+    from docling_core.types.doc.document import DoclingDocument
+    from docling_core.types.doc.labels import DocItemLabel
+
+    from rag_wright.capabilities.parsing import ParsedDocument
+
+    content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    parse_dir = Path(parse_dir)
+    parse_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = parse_dir / f"{source_doc_id}.{content_hash[:16]}.json"
+    if not manifest_path.exists():
+        doc = DoclingDocument(name=source_doc_id)
+        for line in text.split("\n"):
+            if line.strip():
+                doc.add_text(label=DocItemLabel.TEXT, text=line)
+        doc.save_as_json(manifest_path)
+    return ParsedDocument(source_doc_id=source_doc_id, content_hash=content_hash, manifest_path=str(manifest_path))

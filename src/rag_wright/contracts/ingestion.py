@@ -80,11 +80,17 @@ class Span(BaseModel):
 
 
 class TaggedSpan(BaseModel):
-    """A span with the optional span tagger's soft tags (primary first) and their scores."""
+    """A span with the optional span tagger's soft tags (primary first) and their scores. `primary` states the
+    primary tag explicitly when it is not simply the first tag (e.g. a placeholder for an untagged span)."""
 
     span: Span
     tags: list[str] = []
     scores: dict[str, float] = {}
+    primary: Optional[str] = None
+
+    @property
+    def primary_tag(self) -> str:
+        return self.primary if self.primary is not None else (self.tags[0] if self.tags else "")
 
 
 class TableRow(BaseModel):
@@ -221,15 +227,24 @@ _CONFIDENCE = {c.value for c in ConfidenceTag}
 
 
 def check_extraction(unit: Unit, extraction: UnitExtraction) -> None:
-    """Every record node must cite a span of its unit and carry a `ConfidenceTag` (FR-S.4)."""
+    """Provenance (FR-S.4), wherever the facts live -- on nodes or on edges (ADR-0124, ING-4c): every node or edge
+    that carries a `span_id` must cite a span of its unit, every `confidence` must be a `ConfidenceTag`, and a
+    non-empty extraction must cite at least once. Nodes without a `span_id` are shared vocabulary (value or taxonomy
+    nodes) and are allowed beside a cited fact."""
     members = {s.span_id for s in unit.spans}
-    for n in extraction.nodes:
-        if n.props.get("span_id") not in members:
-            raise IngestionContractError(f"{n.type} node: span_id {n.props.get('span_id')!r} is not a span of "
-                                         f"unit {unit.index}")
-        if n.props.get("confidence") not in _CONFIDENCE:
-            raise IngestionContractError(f"{n.type} node: confidence {n.props.get('confidence')!r} is not one of "
+    cited = False
+    for kind, element in [("node", n) for n in extraction.nodes] + [("edge", e) for e in extraction.edges]:
+        span_id, confidence = element.props.get("span_id"), element.props.get("confidence")
+        if span_id is not None:
+            if span_id not in members:
+                raise IngestionContractError(f"{element.type} {kind}: span_id {span_id!r} is not a span of "
+                                             f"unit {unit.index}")
+            cited = True
+        if confidence is not None and confidence not in _CONFIDENCE:
+            raise IngestionContractError(f"{element.type} {kind}: confidence {confidence!r} is not one of "
                                          f"{sorted(_CONFIDENCE)}")
+    if (extraction.nodes or extraction.edges) and not cited:
+        raise IngestionContractError(f"no provenance: no node or edge cites a span_id of unit {unit.index}")
 
 
 # --- ING-4b: tuning + sources -----------------------------------------------------------------------------------
