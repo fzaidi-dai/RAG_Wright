@@ -8,6 +8,7 @@ Adding a corpus = writing one adapter, never re-implementing the flow.
 
 from __future__ import annotations
 
+import pytest
 from langgraph.types import RetryPolicy
 
 from rag_wright.subgraphs.contract_ingestion_pipeline import (
@@ -298,3 +299,50 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     assert captured["graph_kw"] == {}  # party extraction falls back to its own default
     assert captured["judge_id"]  # judge falls back to model_for(STRUCTURED_REASONING), a non-empty id
     assert captured["chunk_model_id"] is None  # chunker falls back to model_for(GENERAL)
+
+
+# --- ING-3 (ADR-0124): the reference provision grouper is a UnitGrouper with EXACTLY the extraction jobs' units ---
+
+_CONTRACT = """MASTER SUPPLY AGREEMENT
+This Agreement is made between Acme Corp. ("Supplier") and Beta, Inc. ("Buyer").
+1. Definitions.
+1.1 "Products" means the yarn [Schedule A], incl. dyed lots; and
+1.2 "Term" means three (3) years.
+2. Supply
+Supplier shall deliver; Buyer shall pay within 30 days.
+(a) Late payments accrue 1.5% interest.
+Governing Law
+This Agreement is governed by the laws of New York.
+By: /s/ Jane Doe
+Name: Jane Doe
+"""
+
+
+@pytest.mark.parametrize("with_decider", [False, True])
+def test_provision_units_match_the_extraction_jobs(tmp_path, with_decider):
+    import asyncio
+
+    from rag_wright.api import TaggedSpan, check_units
+    from rag_wright.capabilities.parsing import load_document
+    from rag_wright.capabilities.rlm_chunking import StructuralBoundaryDiscoverer, chunk_texts
+    from rag_wright.spans.boundary import adecide_provision_starts
+    from rag_wright.spans.segment import segment_clause
+    from rag_wright.subgraphs.contract_ingestion_pipeline import _parsed_from_text, provision_units
+
+    doc = load_document(_parsed_from_text("msa", _CONTRACT, tmp_path))
+    ops = [op for k, c in enumerate(chunk_texts(doc, discoverer=StructuralBoundaryDiscoverer()))
+           for op in segment_clause(f"msa:{k}:h", c) if op.text.strip()]
+    tagged = [TaggedSpan(span=op, tags=["payment"] if "pay" in op.text else []) for op in ops]
+
+    async def decider(texts):
+        return [t.istitle() for t in texts]
+
+    d = decider if with_decider else None
+    units = asyncio.run(provision_units(tagged, decider=d))
+    starts = asyncio.run(adecide_provision_starts([op.text for op in ops], decider=d))
+    jobs = clause_extraction_jobs([(t.span, t.tags[0] if t.tags else "NONE", 0, t.scores) for t in tagged],
+                                  boundary_starts=starts)
+    check_units(ops, units)
+    assert [(u.index, u.anchor.span_id, u.text, u.tags) for u in units] == [
+        (i, op.span_id, text, [] if fn == "NONE" else [fn]) for i, op, fn, _sc, text in jobs]
+    assert len(units) >= 3

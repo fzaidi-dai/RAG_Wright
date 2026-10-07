@@ -30,6 +30,14 @@ LayoutKind = Literal[
 ]
 
 
+# What a span starts with: a layout kind, or `table_row` for a table row after the header. A span that opens with a
+# heading is `heading` (the heading joins the content it introduces).
+SpanKind = Literal[
+    "title", "heading", "paragraph", "list_item", "table", "table_row", "caption", "footnote",
+    "page_header", "page_footer", "code", "formula", "form", "other",
+]
+
+
 class LayoutItem(BaseModel):
     """One layout element of the parsed document that overlaps a chunk, in CHUNK-relative offsets."""
 
@@ -62,6 +70,7 @@ class Span(BaseModel):
     text: str  # text[start:end], raw (strip at use time)
     pages: list[int] = []  # the source page(s) the span overlaps (set at ingest)
     bbox: tuple[float, float, float, float] | None = None  # best-effort single-item box (l, t, r, b)
+    kind: Optional[SpanKind] = None  # set by the segmenter; None = plain text to a unit grouper (ING-3)
 
     @model_validator(mode="after")
     def _offsets(self) -> "Span":

@@ -60,3 +60,19 @@ writing to change one decision (engine gaps G3/G4).
 - `_is_bare_heading` (a domain-neutral text rule the generic chunker uses) moved from the legal `spans.segment`
   into `corpus.document_parser`; `rag_wright.ingestion` and `contracts.ingestion` are now import-linter sources that
   may not import the legal segmenter.
+
+## ING-3 addendum (2026-10-07): the default unit grouper
+
+- **`Span.kind`** (optional, closed `SpanKind`): what a span starts with, set by the segmenter (`table_row` for a
+  table row after the header; `heading` when the span opens with a heading). A span without it is plain text to a
+  grouper. Additive; no identifier or store change.
+- **`rag_wright.ingestion.group_units`** is the engine's default `UnitGrouper`: a heading starts a unit and owns its
+  content; a table (with the heading above it) is one unit, ended by the first non-row span; page furniture and
+  text-free spans are dropped; a chunk change ends a unit; an optional decider adjudicates heading-like plain lines
+  (one batched call, degrade to no split). Units are capped at **6,000 chars** (`DEFAULT_MAX_UNIT_CHARS`, measured:
+  ~90% of contract provisions are below it) and split at span boundaries; a split table's continuation units repeat
+  the header row in their text.
+- **The reference pack's grouper is `provision_units`** (the legal provision rules, the furniture filter, the Jev
+  decider), sharing one grouping function with `clause_extraction_jobs` so they cannot drift; parity 90/90
+  identical on 45 contracts with and without a decider. No cap on the reference grouper (behaviour unchanged).
+- Moving the legal grouping patterns themselves into the contract `.ttl` (ADR-0066) is tracked as ING-3b.

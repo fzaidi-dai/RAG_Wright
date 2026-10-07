@@ -99,6 +99,7 @@ def segment_layout(chunk_id: str, text: str, layout: Sequence[LayoutItem], *,
     tiny = [kind != "table_row" and _alnum(text[p:bounds[i]]) < min_alnum for i, (p, kind) in enumerate(pieces)]
     trailing = [all(tiny[i + 1:]) for i in range(len(pieces))]  # nothing but fragments after piece i
     cuts = [0]  # the first span starts at 0 (absorbing any leading whitespace)
+    kinds = [_first_kind(pieces, tiny)]  # ING-3: what each span starts with (`Span.kind`)
     for i in range(1, len(pieces)):
         p, kind = pieces[i]
         heading = kind in ("heading", "title")
@@ -110,6 +111,15 @@ def segment_layout(chunk_id: str, text: str, layout: Sequence[LayoutItem], *,
             continue  # a fragment (or a heading that ends the chunk) folds back into the previous span
         if p > cuts[-1]:
             cuts.append(p)
+            kinds.append(kind)
     cuts.append(len(text))
-    return [Span(span_id=f"{chunk_id}#{i}", parent_chunk_id=chunk_id, span_index=i, start=s, end=e, text=text[s:e])
+    return [Span(span_id=f"{chunk_id}#{i}", parent_chunk_id=chunk_id, span_index=i, start=s, end=e, text=text[s:e],
+                 kind=kinds[i])
             for i, (s, e) in enumerate(zip(cuts, cuts[1:]))]
+
+
+def _first_kind(pieces: list[tuple[int, str]], tiny: list[bool]) -> str | None:
+    """The kind of a chunk's first span: its first piece, or the next one when a fragment folded forward into it."""
+    if not pieces:
+        return None
+    return pieces[1][1] if len(pieces) > 1 and tiny[0] else pieces[0][1]

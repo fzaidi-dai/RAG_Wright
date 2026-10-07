@@ -132,3 +132,16 @@ def test_a_list_number_is_not_a_sentence_end(marker):
               LayoutItem(kind="paragraph", text=second, start=len(first) + 2, end=len(text))]
     assert [_norm(s.text) for s in segment_layout("c:0:h", text, layout)] == [
         "The terms survive.", f"{marker} Indemnity.", "Each party shall indemnify the other."]
+
+
+def test_spans_carry_their_kind():
+    """ING-3: each span records what it starts with, so a unit grouper reads structure off the spans."""
+    spans = _segment_doc("textile_test_report.md")
+    kinds = {_norm(s.text): s.kind for s in spans}
+    assert kinds["Summary The sample meets the dimensional stability requirement."] == "heading"
+    assert kinds["Results | Test | Method | Result | Requirement | Pass/Fail | |---|---|---|---|---|"] == "heading"
+    assert kinds["| Bursting strength | ASTM D3786 | 412 kPa | 350 kPa min. | Pass |"] == "table_row"
+    assert kinds["Keep the current knitting parameters."] == "list_item"
+    assert kinds["Fibre content claimed: 60% cotton / 40% polyester."] == "paragraph"
+    table = segment_layout("c:0:h", "| a | b |\n|---|---|\n| 1 | 2 |", [])
+    assert [s.kind for s in table] == ["table", "table_row"]

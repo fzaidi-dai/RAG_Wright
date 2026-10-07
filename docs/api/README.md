@@ -48,7 +48,7 @@ Per-model totals within a scope (`cost_usd` sums KNOWN per-call costs only).
 
 One layout element of the parsed document that overlaps a chunk, in CHUNK-relative offsets.
 
-### `Span(*, span_id: str, parent_chunk_id: str, parent_okf_path: str = '', span_index: int, start: int, end: int, text: str, pages: list[int] = [], bbox: tuple[float, float, float, float] | None = None) -> None`
+### `Span(*, span_id: str, parent_chunk_id: str, parent_okf_path: str = '', span_index: int, start: int, end: int, text: str, pages: list[int] = [], bbox: tuple[float, float, float, float] | None = None, kind: Optional[Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'table_row', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']] = None) -> None`
 
 One span: the smallest citeable unit, indexed for retrieval. It points back to its parent chunk; `span_id` is `<parent_chunk_id>#<span_index>` (identifier rule) and `start`/`end` are offsets into the chunk text.
 
@@ -95,6 +95,8 @@ Optional: persist a document's extractions. The engine default writes them with 
 ## Type aliases
 
 ### `LayoutKind = typing.Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']`
+
+### `SpanKind = typing.Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'table_row', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']`
 
 ### `BoundaryDecider = typing.Callable[[list[str]], typing.Awaitable[list[bool]]]`
 

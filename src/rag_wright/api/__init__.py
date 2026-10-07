@@ -26,6 +26,7 @@ from rag_wright.contracts.ingestion import (
     RecordWriter,
     Segmenter,
     Span,
+    SpanKind,
     SpanTagger,
     TaggedSpan,
     Unit,
@@ -50,7 +51,7 @@ __all__ = [
     "measure_usage", "UsageTotals", "ModelUsage",
     "register_capability", "load_reference_pack", "reference_pack",
     # ING-1 (ADR-0124): the ingestion hook contracts + the engine-enforced checks
-    "LayoutItem", "LayoutKind", "Span", "TaggedSpan", "Unit", "UnitExtraction", "IngestionContractError",
+    "LayoutItem", "LayoutKind", "Span", "SpanKind", "TaggedSpan", "Unit", "UnitExtraction", "IngestionContractError",
     "Segmenter", "SpanTagger", "UnitGrouper", "BoundaryDecider", "Extractor", "RecordWriter",
     "check_tiling", "check_units", "check_extraction",
 ]

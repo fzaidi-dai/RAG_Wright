@@ -196,3 +196,11 @@ def test_the_boundary_decider_contract_is_shared():
     from rag_wright.spans import boundary
 
     assert boundary.BoundaryDecider is BoundaryDecider
+
+
+def test_span_kind_is_optional_and_closed():
+    span = _good()[0]
+    assert span.kind is None  # spans from code that does not set it are plain text to a grouper
+    assert span.model_copy(update={"kind": "table_row"}).kind == "table_row"
+    with pytest.raises(ValidationError):
+        Span(span_id=f"{CHUNK}#0", parent_chunk_id=CHUNK, span_index=0, start=0, end=1, text="x", kind="row")

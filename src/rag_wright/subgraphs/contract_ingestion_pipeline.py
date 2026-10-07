@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import Any, Callable, Iterable, Optional, Protocol, TypedDict, runtime_checkable
+from typing import Any, Callable, Iterable, Optional, Protocol, Sequence, TypedDict, runtime_checkable
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
@@ -50,6 +50,7 @@ from rag_wright.capabilities.document_parse import (  # noqa: F401 (re-export)
     aparsed_source_document,
     parsed_source_document,
 )
+from rag_wright.contracts.ingestion import BoundaryDecider, TaggedSpan, Unit
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
 
@@ -645,6 +646,20 @@ def clause_extraction_jobs(segments: list, boundary_starts: list[bool] | None = 
     untagged provision is still extracted (function-independent extraction).
     """
     from rag_wright.contracts.function import NO_FUNCTION
+
+    jobs: list = []
+    for index, members in enumerate(_provision_members(segments, boundary_starts)):
+        anchor_op = members[0][0]
+        text = "\n".join(seg[0].text.strip() for seg in members)
+        function = next((fn for (_op, fn, _cds, _sc) in members if fn and fn != NO_FUNCTION), NO_FUNCTION)
+        scores = members[0][3]
+        jobs.append((index, anchor_op, function, scores, text))
+    return jobs
+
+
+def _provision_members(segments: list, boundary_starts: list[bool] | None = None) -> list[list]:
+    """The provisions of ordered `segments`, each as its EXTRACTABLE member segments (shared by
+    `clause_extraction_jobs` and the reference `provision_units` grouper, so the two cannot drift)."""
     from rag_wright.spans.segment import is_extractable_span, starts_new_provision
 
     # 1) group consecutive segments into provisions (boundary = chunk change OR a provision-heading span)
@@ -659,20 +674,31 @@ def clause_extraction_jobs(segments: list, boundary_starts: list[bool] | None = 
         else:
             groups.append([seg])
 
-    # 2) one job per provision, over its EXTRACTABLE spans only (furniture dropped; all-furniture -> no clause)
-    jobs: list = []
-    index = 0
+    # 2) each provision over its EXTRACTABLE spans only (furniture dropped; all-furniture -> no clause)
+    out = []
     for group in groups:
         members = [seg for seg in group if is_extractable_span(seg[0].text)]
-        if not members:
-            continue
-        anchor_op = members[0][0]
-        text = "\n".join(seg[0].text.strip() for seg in members)
+        if members:
+            out.append(members)
+    return out
+
+
+async def provision_units(spans: Sequence[TaggedSpan], *, decider: Optional[BoundaryDecider] = None) -> list[Unit]:
+    """ING-3 (ADR-0124): the reference CONTRACT pack's `UnitGrouper` -- spans grouped into contract PROVISIONS
+    (numbered sections / legal headings, the Jev residue `decider`, the legal furniture filter). Exactly the units
+    `clause_extraction_jobs` extracts today; no size cap (the reference behaviour is unchanged)."""
+    from rag_wright.contracts.function import NO_FUNCTION
+    from rag_wright.spans.boundary import adecide_provision_starts
+
+    segments = [(ts.span, ts.tags[0] if ts.tags else NO_FUNCTION, 0, ts.scores) for ts in spans]
+    starts = await adecide_provision_starts([ts.span.text for ts in spans], decider=decider)
+    units: list[Unit] = []
+    for members in _provision_members(segments, starts):
         function = next((fn for (_op, fn, _cds, _sc) in members if fn and fn != NO_FUNCTION), NO_FUNCTION)
-        scores = members[0][3]
-        jobs.append((index, anchor_op, function, scores, text))
-        index += 1
-    return jobs
+        units.append(Unit(index=len(units), anchor=members[0][0], spans=[m[0] for m in members],
+                          text="\n".join(m[0].text.strip() for m in members),
+                          tags=[] if function == NO_FUNCTION else [function]))
+    return units
 
 
 async def _aextract_clause_with_retry(
