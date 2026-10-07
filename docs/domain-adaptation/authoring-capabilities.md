@@ -58,8 +58,9 @@ register_capability(CapabilityManifest(
 ```
 
 `register_capability` places the manifest in the runtime ARD catalog (ship-empty) and imposes **no canonical-slug
-restriction** — use your domain's names. (`CANONICAL_CAPABILITY_SLUGS` is the *reference pack's* internal
-cross-spec join-key set, not a constraint on your domain.) Expose a capability over MCP by registering an
+restriction** — use your domain's names. (`canonical_capability_slugs()` -- the engine's generic slugs plus those each loaded pack adds with
+`register_canonical_slugs` -- is the cross-spec join-key set the internal registry checks, not a constraint on your
+domain. A pack loads through `load_pack("<module>")`; the reference pack is `rag_wright.reference.pack`.) Expose a capability over MCP by registering an
 `mcp_tool` surface.
 
 **Discovery.** Once registered, a product agent finds your capability two ways: `capability_index()` — the flat

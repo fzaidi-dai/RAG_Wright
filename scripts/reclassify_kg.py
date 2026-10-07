@@ -28,6 +28,7 @@ def main() -> None:
     os.environ.setdefault("RAG_SERVING", "openrouter")
     load_dotenv()
     from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore
     from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
     from rag_wright.spans.reclassify import ReclassDelta, reclassify_chunk
     from rag_wright.store.arcadedb import ArcadeDBStore, _str_array
@@ -274,7 +275,7 @@ def main() -> None:
                      "scores": [{"function": f.function, "confidence": f.confidence.value} for f in rc.new_scores]}
                     for rc in rcs]}, ensure_ascii=False))
             if write and flipped_spans:  # one batched mark-stale call (23 UPDATEs, not per-span)
-                staled += store.mark_span_properties_ambiguous(flipped_spans)
+                staled += ContractKGStore(store).mark_span_properties_ambiguous(flipped_spans)
             for line in ckpt_lines:  # checkpoint the batch ONLY after its writes + mark-stale applied
                 ck.write(line + "\n")
             ck.flush()

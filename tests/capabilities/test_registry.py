@@ -29,12 +29,14 @@ import json
 import re
 
 from rag_wright.capabilities.registry import (
-    CANONICAL_CAPABILITY_SLUGS,
+    canonical_capability_slugs,
     CapabilityRegistry,
     ManifestSkeleton,
     capability_urn,
 )
 from rag_wright.contracts.chunk import ChunkRecord
+
+CANONICAL_CAPABILITY_SLUGS = canonical_capability_slugs()  # engine + the reference pack (loaded by conftest)
 
 
 # --- internal registration (RAC-6) ----------------------------------------------------------
@@ -281,3 +283,16 @@ def test_write_manifest_rejects_a_foreign_publisher():
     assert not foreign.envelope.identifier.startswith(RAG_URN_PREFIX)
     with pytest.raises(ValueError, match="not one of ours"):
         write_manifest(foreign)
+
+
+def test_the_engine_knows_only_its_own_slugs_and_a_pack_adds_its_own():
+    # ING-8b: the engine's whitelist is its generic capabilities; the reference pack's slugs arrive when it loads
+    import subprocess
+    import sys
+
+    code = ("from rag_wright.capabilities.registry import canonical_capability_slugs, ENGINE_CAPABILITY_SLUGS as E\n"
+            "from rag_wright.capabilities.manifests import load_reference_pack\n"
+            "assert canonical_capability_slugs() == E and 'contract_ingestion_pipeline' not in E\n"
+            "load_reference_pack()\n"
+            "assert 'contract_ingestion_pipeline' in canonical_capability_slugs()\n")
+    assert subprocess.run([sys.executable, "-c", code], capture_output=True).returncode == 0

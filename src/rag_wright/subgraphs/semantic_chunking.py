@@ -59,7 +59,7 @@ from rag_wright.capabilities.rlm_chunking import (
 )
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter, raw_llm_span
-from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
+from rag_wright.subgraphs.scaffold import TransientExtraction
 
 
 class SemanticChunkingState(TypedDict, total=False):

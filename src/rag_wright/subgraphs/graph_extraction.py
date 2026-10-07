@@ -22,23 +22,22 @@ any list of extractors:
   GraphWright observability contract.
 - **merge**: `ExtractionResult.merge` combines mentions + clause/relationship facts, deterministically.
 
-`extractors` is injected (defaulting to `default_extractors()`), so the graph is hermetically testable with
+`extractors` is injected (required; a domain supplies its stack), so the graph is hermetically testable with
 stub extractors -- no live docling-graph / no network.
 """
 
 from __future__ import annotations
 
 import operator
-from typing import Annotated, Any, Optional, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from rag_wright.capabilities.graph_extraction import Extractor, default_extractors
-from rag_wright.contracts.extraction import ExtractionResult
+from rag_wright.contracts.extraction import ExtractionResult, Extractor
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, raw_llm_span
-from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction  # retryable-blip signal
+from rag_wright.subgraphs.scaffold import TransientExtraction  # retryable-blip signal
 
 
 class GraphExtractionState(TypedDict, total=False):
@@ -67,14 +66,13 @@ def _extractor_node(extractor: Extractor, max_attempts: int):
 
 
 def build_graph_extraction(
-    extractors: Optional[list[Extractor]] = None,
+    extractors: list[Extractor],
     *,
     retry_policy: Any = DEFAULT_RETRY,
 ):
-    """Compile the `graph_extraction` subgraph (per chunk). `extractors` is injected (defaulting to the live
-    hybrid stack). `retry_policy` is each extractor node's policy (overridable for fast tests)."""
-
-    extractors = extractors if extractors is not None else default_extractors()
+    """Compile the `graph_extraction` subgraph (per chunk) over the given `extractors` (a domain supplies its stack;
+    the reference contract pack's is `capabilities.graph_extraction.default_extractors()` -- ING-8b: no default
+    here). `retry_policy` is each extractor node's policy (overridable for fast tests)."""
     max_attempts = int(getattr(retry_policy, "max_attempts", 3))
 
     def merge(state: GraphExtractionState) -> GraphExtractionState:

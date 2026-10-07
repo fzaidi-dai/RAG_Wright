@@ -43,10 +43,10 @@ def test_a_configured_pack_adds_only_its_own_types():
 
 
 def test_the_reference_contract_schema_is_created_on_request():
-    from rag_wright.ontology.loader import reference_pack_ttl
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore
 
     store, cmds = _recording()
-    store.ensure_pack_schema(reference_pack_ttl())
+    ContractKGStore(store)  # the reference pack ensures its declared schema + its own typed property edges
     assert _CONTRACT_TYPES <= _created(cmds) and not _created(cmds) & _ENGINE_TYPES
 
 

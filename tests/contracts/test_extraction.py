@@ -18,11 +18,7 @@ from rag_wright.contracts.extraction import (
     run_extractors,
 )
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import (
-    ClauseCategory,
-    ClauseFact,
-    RelationshipFact,
-)
+from rag_wright.contracts.graph import RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 
 
@@ -34,7 +30,7 @@ def _cid(source="doc-1", index=0, content="body"):
 # is the future extractor that must slot in behind the same seam with no code change.
 
 
-class _ClauseStub:
+class _ClauseStub:  # the "ships first" extractor: entity mentions (the dead clause_facts field went, ING-8b)
     name = "clause-stub"
 
     def extract(self, chunk_id: ChunkId, text: str) -> ExtractionResult:
@@ -42,13 +38,6 @@ class _ClauseStub:
             chunk_id=chunk_id,
             entity_mentions=[EntityMention(text="Acme Corp", entity_type="Organization",
                                             confidence=ConfidenceTag.EXTRACTED)],
-            clause_facts=[
-                ClauseFact(
-                    category=ClauseCategory.GOVERNING_LAW,
-                    provenance=Provenance.of(chunk_id),
-                    confidence=ConfidenceTag.EXTRACTED,
-                )
-            ],
         )
 
 
@@ -89,7 +78,7 @@ def test_run_single_extractor_returns_its_facts():
     cid = _cid()
     result = run_extractors([_ClauseStub()], cid, "some text")
     assert result.chunk_id == cid
-    assert [f.category for f in result.clause_facts] == [ClauseCategory.GOVERNING_LAW]
+    assert [m.text for m in result.entity_mentions] == ["Acme Corp"]
     assert result.relationship_facts == []
 
 
@@ -98,7 +87,7 @@ def test_seam_is_load_bearing_second_extractor_added_without_code_change():
     # ExtractionResult are untouched. This is the OpenIE extension point proven load-bearing.
     cid = _cid()
     result = run_extractors([_ClauseStub(), _OpenIEStub()], cid, "some text")
-    assert len(result.clause_facts) == 1
+    assert len(result.entity_mentions) == 1
     assert len(result.relationship_facts) == 1
     assert result.relationship_facts[0].relationship_type == "Contracts With"
 
@@ -107,7 +96,7 @@ def test_empty_pipeline_returns_empty_result_anchored_to_chunk():
     cid = _cid()
     result = run_extractors([], cid, "text")
     assert result.chunk_id == cid
-    assert result.clause_facts == [] and result.relationship_facts == []
+    assert result.entity_mentions == [] and result.relationship_facts == []
 
 
 # --- ExtractionResult conforms to the ontology and is anchored to chunk_id (RAC-5, FR-I.4) ---
@@ -116,7 +105,7 @@ def test_empty_pipeline_returns_empty_result_anchored_to_chunk():
 def test_result_facts_conform_and_carry_chunk_id_and_confidence():
     cid = _cid()
     result = run_extractors([_ClauseStub(), _OpenIEStub()], cid, "text")
-    for fact in [*result.clause_facts, *result.relationship_facts]:
+    for fact in result.relationship_facts:
         assert fact.provenance.chunk_id == cid  # originating chunk_id (FR-I.4)
         assert fact.confidence in ConfidenceTag
 
@@ -127,9 +116,9 @@ def test_result_rejects_a_fact_anchored_to_a_different_chunk():
     with pytest.raises(ValidationError):
         ExtractionResult(
             chunk_id=cid,
-            clause_facts=[
-                ClauseFact(
-                    category=ClauseCategory.INSURANCE,
+            relationship_facts=[
+                RelationshipFact(
+                    source_ref="Acme Corp", relationship_type="Contracts With", target_ref="Beta LLC",
                     provenance=Provenance.of(other),  # points at a different chunk
                     confidence=ConfidenceTag.EXTRACTED,
                 )

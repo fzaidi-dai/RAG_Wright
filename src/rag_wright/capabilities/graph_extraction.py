@@ -33,7 +33,7 @@ from rag_wright.contracts.extraction import (
     run_extractors,
 )
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import RelationshipFact
+from rag_wright.contracts.graph import RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 # DD-5 (ADR-0066/0117): this is a CONTRACT-domain builder (reference pack). The engine contracts are
 # taxonomy-free; the reference pack's entity/edge values live in ontology/contract_taxonomy.

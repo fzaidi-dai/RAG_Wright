@@ -19,13 +19,39 @@ from rag_wright.store.arcadedb import (
     IS_EXCEPTION_TO_EDGE_TYPE,
     PROPERTY_EDGE_TYPE,
     PROPVALUE_TYPE,
-    TYPED_PROPERTY_EDGE_TYPES,
-    _DIM_EDGE_STR,
-    _edge_predicate_iri,
     _property_value_key,
+    _sql_str,
 )
+from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.ontology.loader import load_typed_edges, reference_pack_ttl
 from rag_wright.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH  # DD-5 contract edge names
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
+
+
+# KG-3 (ADR-0033) / ADR-0067 P5a: the reference pack's TYPED property-edge layer -- each property dimension maps to
+# its sanctioned typed edge (dimension -> KG edge type) + a predicate IRI, AUTHORITATIVE in contract_bridge.ttl
+# (`cbr:kgEdge` / `cbr:KgEdgeType`). Moved here from the generic store (ING-8b): a contract-pack concept.
+_DIM_EDGE_STR, _EDGE_PREDICATE_IRI = load_typed_edges(reference_pack_ttl())
+TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(sorted(set(_DIM_EDGE_STR.values())))
+
+
+def _edge_predicate_iri(edge_type: str) -> str:
+    """The predicate IRI stamped on a typed edge (ODRL for the deontic edges, the bridge IRI otherwise)."""
+    return _EDGE_PREDICATE_IRI[edge_type]
+
+
+def _stale_property_statements(span_ids: list[str]) -> list[str]:
+    """ADR-0048 Phase A mark-stale (pure): one `UPDATE ... SET confidence=AMBIGUOUS WHERE span_id IN (...) AND
+    confidence <> AMBIGUOUS` per typed property edge type, for the given spans. Separated from the DB call so the
+    SQL is unit-tested with no store. Empty span list -> no statements (the caller no-ops)."""
+    if not span_ids:
+        return []
+    id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
+    amb = _sql_str(ConfidenceTag.AMBIGUOUS.value)
+    return [
+        f"UPDATE {edge_type} SET confidence = {amb} WHERE span_id IN {id_list} AND confidence <> {amb}"
+        for edge_type in TYPED_PROPERTY_EDGE_TYPES
+    ]
 
 
 def _ensure_reference_schema(store) -> None:
@@ -34,11 +60,10 @@ def _ensure_reference_schema(store) -> None:
     ensure = getattr(store, "ensure_pack_schema", None)
     if not callable(ensure):
         return
-    from rag_wright.ontology.loader import reference_pack_ttl
-
     ttl = reference_pack_ttl()
     if ttl not in store.schema_packs():
         ensure(ttl)
+        store.ensure_edge_types(TYPED_PROPERTY_EDGE_TYPES)  # the pack's own typed property edges (ING-8b)
 
 
 class ContractKGStore:
@@ -156,6 +181,54 @@ class ContractKGStore:
             CLAUSE_TYPE, where={"clause_id": cap_clause_id}, direction="in",
             edge_type=IS_EXCEPTION_TO_EDGE_TYPE,
             select={"clause_id": "v.clause_id", "function": "v.function", "span_id": "v.span_id"})
+
+    # --- moved from the generic store (ING-8b): the typed clause KG's counts / clear / mark-stale ----------
+
+    def clause_kg_counts(self) -> dict[str, int]:
+        """Counts for the typed KG (introspection/tests): clauses, shared value nodes, and the total of the
+        typed property edges across all typed edge types."""
+        clauses = self._store._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
+        values = self._store._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
+        typed = 0
+        present = self._store.type_names()  # a DB populated before a schema extension lacks the newer edge types
+        for edge_type in TYPED_PROPERTY_EDGE_TYPES:
+            if edge_type not in present:
+                continue
+            rows = self._store._query(f"SELECT count(*) AS n FROM {edge_type}")
+            typed += int(rows[0]["n"]) if rows else 0
+        return {
+            "clauses": int(clauses[0]["n"]) if clauses else 0,
+            "property_values": int(values[0]["n"]) if values else 0,
+            "typed_edges": typed,
+        }
+
+    def clear_clause_kg(self) -> None:
+        """Delete the typed clause KG (all typed edges + the legacy flat edge + Clause + PropertyValue),
+        leaving the span index intact -- the KG-3 counterpart of `clear_property_graph` for a clean
+        re-extraction into the typed schema. Edges first (UNSAFE bypasses the edge-safety check)."""
+        present = self._store.type_names()  # skip edge types a pre-extension DB never created
+        for edge_type in (*TYPED_PROPERTY_EDGE_TYPES, PROPERTY_EDGE_TYPE):
+            if edge_type in present:
+                self._store._command(f"DELETE FROM {edge_type} UNSAFE")
+        self._store._command(f"DELETE FROM {CLAUSE_TYPE}")
+        self._store._command(f"DELETE FROM {PROPVALUE_TYPE}")
+
+    def mark_span_properties_ambiguous(self, span_ids: list[str]) -> int:
+        """ADR-0048 Phase A mark-stale: set `confidence = AMBIGUOUS` on every typed property edge of these spans.
+        A clause whose PRIMARY function flipped had its properties extracted for the OLD function, so they are
+        stale until Phase B re-extraction -- downgraded (kept but flagged) exactly as the ADR-0040 judges do, so
+        the soft-boost down-weights them meanwhile. Keyed by the ADR-0025 `edge.span_id`. Idempotent (skips
+        already-AMBIGUOUS). Returns the number of edges downgraded (best-effort from the driver's row count)."""
+        if not span_ids:
+            return 0
+        total = 0
+        for stmt in _stale_property_statements(span_ids):
+            res = self._store._command(stmt)
+            if isinstance(res, list):
+                for row in res:
+                    if isinstance(row, dict) and "count" in row:
+                        total += int(row["count"])
+        return total
 
     def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:
         """The typed (dimension, value) assertions on each span, joined via the ADR-0025 `edge.span_id`. Scans each

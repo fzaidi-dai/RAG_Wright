@@ -109,7 +109,7 @@ def main() -> None:
     store = ArcadeDBStore.from_env(database=DB, reset=False)
     store.ensure_schema()
     if FRESH:  # rebuild the typed graph from the top (spans, if any, are left intact)
-        store.clear_clause_kg()
+        ContractKGStore(store).clear_clause_kg()
         _progress(f"[clause-kg] FRESH: cleared the typed clause KG in {DB}")
 
     existing = {r["clause_id"] for r in store._query(f"SELECT clause_id FROM {CLAUSE_TYPE}")}
@@ -129,7 +129,7 @@ def main() -> None:
         max_concurrency=CONCURRENCY, progress_path=PROGRESS, label="[clause-kg]", every=1, echo=True,
     )
 
-    counts = store.clause_kg_counts()
+    counts = ContractKGStore(store).clause_kg_counts()
     rate = len(todo) / max(1e-9, time.perf_counter() - t0)
     print(f"\nDONE db={DB}  clauses_this_run={len(todo)}  assertions_this_run={sum(per)}  "
           f"errors={errors[0]}  rate={rate:.2f}/s", flush=True)

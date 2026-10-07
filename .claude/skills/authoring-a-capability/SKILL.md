@@ -38,8 +38,10 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
    representative_queries=(2-5…), tags=…, impl_ref=…)`. **The catalog ships EMPTY (EP-CORE-3):** call
    `register_capability(manifest)` at runtime to add it (a product registers its own; the engine's reference pack is
    opt-in via `load_reference_pack()`). `representative_queries` is the field ARD discovery ranks on — write real,
-   specific queries. For the ENGINE's reference pack, the manifest is committed in `manifests.py::_SPECS` and the
-   slug is in `CANONICAL_CAPABILITY_SLUGS`; a downstream product registers freely (its slugs need not be canonical).
+   specific queries. For the ENGINE's reference pack, the manifest is committed in `reference/pack.py::REFERENCE_SPECS` and
+   the slug in its `REFERENCE_CAPABILITY_SLUGS` (added to the registry by `register_canonical_slugs` when the pack loads);
+   a GENERIC engine capability's manifest is in `manifests.py::_ENGINE_SPECS` and its slug in
+   `registry.ENGINE_CAPABILITY_SLUGS`. A downstream product registers freely (its slugs need not be canonical).
    Publish to `~/.air/registry` (what GraphWright's store loads) with `uv run python scripts/publish_manifests.py`.
    Callable kinds get `ResponseBounds` (defaulted); `agent_skill` must NOT declare bounds (loaded, not called).
 4. **Invocable + MCP for free** — once registered with an `impl_ref`, the capability is callable as

@@ -60,58 +60,33 @@ _DEFAULT_OWNER = "dreamai.io"
 # invented name) — the same shared-vocabulary discipline as the ARD schema mirror. Adding a
 # capability updates both. FR-C.9 is a single slug (`generation`): reasoning, generation, and
 # vision-to-text are one capability, bound at whichever node needs them.
-CANONICAL_CAPABILITY_SLUGS: frozenset[str] = frozenset(
-    {
-        "graph_extraction",  # FR-C.6
-        "entity_disambiguation",  # FR-C.7 (canonicalize: normalize/reject/cluster; the T23b stage)
-        "entity_resolution",  # FR-C.7 (closed-world linking to EDGAR CIK)
-        "ontology_registry_derivation",  # FR-C.8 (foundation derivation: slug, but no ARD manifest)
-        "generation",  # FR-C.9 (grounded/cited/abstaining answer generation)
-        "vision_to_text",  # agent_skill: FR-C.9 single vision-language act (SKILL.md); split from generation (ADR-0014), SKILL-SPLIT
-        "rlm_chunking",  # FR-I.1 (applies the RLM skill; dynamic RLM discoverer -> agent_skill)
-        "rlm_synthesis",  # FR-Q.5 (applies the RLM skill)
-        "rlm_method",  # FR-C.10 (the shared RLM method skill, if registered)
-        "okf_compile",  # FR-K.1-K.4 (foundation derivation: slug, but no ARD manifest; T46)
-        "okf_navigate",  # FR-K.6 (query-discovered traversal: slug + ARD manifest; T50)
-        # --- CAP-REG-2: the built contract-KG capabilities ---
-        "typed_value_normalization",  # function: canonicalization + subsumption (KG-5a)
-        "extraction_grounding_judge",  # function: ADR-0028 lexical grounding gate
-        "extraction_semantic_judge",  # agent_skill: ADR-0040 Layer 3 verify-or-refute reading (SKILL.md); SKILL-SPLIT
-        "extraction_semantic_gate",  # function: applies the semantic-judge skill + AMBIGUOUS downgrade (deterministic)
-        "intra_document_scoped_query",  # function: intra-contract scoped KG serving (Leg A)
-        "clause_disambiguation",  # function: disambiguation by property (Leg A)
-        "clause_function_classification",  # model: LegalBERT function classifier (T56)
-        "clause_property_classification",  # model: the 29-dim best-of-both property classifier fleet (ADR-0115/0116, EP-RT-1)
-        "jev_decision",  # model: generic Jev System-1 typed-decision client (OpenRouter Decisions API), ADR-0119; async/IO-bound
-        "query_function_classification",  # agent_skill: taxonomy-constrained query->function (KG-5e)
-        # --- CAP-REG-3: the KG-primary retrieval core (packaged out of eval/kg_primary.py) ---
-        "span_relevance_judgment",  # agent_skill: per-span relevance VERDICT (span x condition -> relevant/not/uncertain); issue 0023, SKILL-SPLIT
-        # --- KG-7: the Party<->Contract unifying link over the one contract KG (ADR-0036) ---
-        "clause_exception_linking",  # function: IsExceptionTo edges (Uncapped -> Cap carve-out) by proximity (ADR-0044)
-        # --- LG-1/LG-2: hardened LangGraph subgraphs ---
-        "typed_clause_extraction",  # subgraph: extract -> adapt -> reground -> escalate -> [HITL] -> dead-letter
-        "query_constraint_extraction",  # subgraph: query-side typed constraint extraction (graceful-empty)
-        # --- LG-3: composite pipeline subgraphs (compose the component subgraphs + registered capabilities) ---
-        "relational_qa",  # subgraph: graph_query -> chunk_read -> generate_answer (entity question -> cited answer)
-        "intra_document_qa",  # subgraph: scoped KG query -> generate_answer (contract + question -> cited answer)
-        "typed_property_retrieval",  # subgraph: front-door + property_boosted_retrieval (Leg B, LEGB-SUBGRAPH). THE
-        #   corpus-wide function+property retrieval leg; retired the redundant cross_corpus_retrieval (inferior pool)
-        "contract_ingestion_pipeline",  # subgraph: generic corpus ingest (chunk->extract->resolve->write->link)
-        # --- Compliance module rung 1 (roadmap §13): the ad-compliance engine ---
-        "requirement_extraction",  # subgraph: extract(docling-graph, multi-call) -> adapt; regulatory section -> Requirement[] (CC-2, SKILL-SPLIT)
-        "requirement_adaptation",  # function: ExtractedRegulationSection -> validated Requirement[] (deterministic)
-        "claim_extraction",  # agent_skill: single LLM extraction act (ad -> ExtractedAd); SKILL-SPLIT
-        "claim_adaptation",  # function: ExtractedAd -> validated Claim[] (deterministic)
-        "compliance_judgment",  # agent_skill: single LLM judgment act ((claim, requirement) -> verdict); SKILL-SPLIT
-        "compliance_finding_assembly",  # function: raw verdict + inputs -> cited ComplianceFinding (deterministic)
-        "compliance_ingestion",  # subgraph: regulatory corpus -> Requirement KG (CC-5)
-        "compliance_check",  # subgraph: subject doc x requirements -> cited findings + gap matrix (CC-6)
-        "compliance_check_mcp",  # mcp_tool: the discoverable MCP-tool surface of compliance_check (MCP-PROTO)
-        "intra_document_qa_mcp",  # mcp_tool: the discoverable MCP-tool surface of intra_document_qa (MCP-PROTO B1)
-        "relational_qa_mcp",  # mcp_tool: the discoverable MCP-tool surface of relational_qa (MCP-PROTO B2)
-        "typed_property_retrieval_mcp",  # mcp_tool: the MCP-tool surface of typed_property_retrieval (MCP-PROTO B3)
-    }
-)
+# ING-8b: the ENGINE's canonical capability slugs (its generic capabilities). A PACK adds its own with
+# `register_canonical_slugs` when it loads (the reference contract/compliance pack does, in `reference.pack`), so
+# the whitelist keeps rejecting typos and invented names without the engine knowing any domain's capabilities.
+ENGINE_CAPABILITY_SLUGS: frozenset[str] = frozenset({
+    "entity_disambiguation",
+    "entity_resolution",
+    "generation",
+    "graph_extraction",
+    "jev_decision",
+    "ontology_registry_derivation",
+    "rlm_chunking",
+    "rlm_method",
+    "rlm_synthesis",
+    "span_relevance_judgment",
+    "vision_to_text",
+})
+_canonical_slugs: set[str] = set(ENGINE_CAPABILITY_SLUGS)
+
+
+def register_canonical_slugs(slugs) -> None:
+    """Add a pack's canonical capability slugs to the registration whitelist (idempotent)."""
+    _canonical_slugs.update(slugs)
+
+
+def canonical_capability_slugs() -> frozenset[str]:
+    """The current canonical capability slugs: the engine's plus those of every loaded pack."""
+    return frozenset(_canonical_slugs)
 
 
 def capability_urn(name: str) -> str:
@@ -210,10 +185,10 @@ class CapabilityRegistry:
     ) -> CapabilityRegistration:
         """Register a capability by name with its contract and (explicit) kind, emitting its ARD
         skeleton. Rejects a malformed name, an unknown kind, or a duplicate registration."""
-        if name not in CANONICAL_CAPABILITY_SLUGS:
+        if name not in _canonical_slugs:
             raise ValueError(
                 f"{name!r} is not a canonical capability slug (SPEC.md section 5, FR-C canonical "
-                f"slugs); register under the exact slug, one of {sorted(CANONICAL_CAPABILITY_SLUGS)}"
+                f"slugs, or a loaded pack's); register under the exact slug, one of {sorted(_canonical_slugs)}"
             )
         if kind not in MEDIA_TYPE_BY_KIND:
             raise ValueError(

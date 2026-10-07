@@ -181,7 +181,7 @@ async def ajudge_spans(
 def register_span_relevance_judgment(registry) -> None:
     """Register `span_relevance_judgment` as an AGENT_SKILL (issue 0023, ADR-0088): a single grounded LLM relevance
     judgement, authored as `skills/span_relevance_judgment/SKILL.md` and applied via the seam. Output =
-    `RelevanceVerdict`. Promoted to a canonical FR-C slug (`CANONICAL_CAPABILITY_SLUGS`), the same way every
+    `RelevanceVerdict`. Promoted to a canonical FR-C slug (`registry.ENGINE_CAPABILITY_SLUGS`), the same way every
     post-v0.1 capability (compliance module, KG-primary retrieval core) was added -- registry mirror + ADR."""
     registry.register(
         "span_relevance_judgment",

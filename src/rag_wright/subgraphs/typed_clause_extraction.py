@@ -42,8 +42,7 @@ RecordFn = Callable[[str, str], Optional[ClausePropertyRecord]]
 EscalateFn = Callable[[ClausePropertyRecord, str], bool]
 
 
-class TransientExtraction(Exception):
-    """A retryable extraction blip. Custom (not in LangGraph's default no-retry list) -> DEFAULT_RETRY retries."""
+from rag_wright.subgraphs.scaffold import TransientExtraction  # noqa: E402,F401 - generic since ING-8b; re-exported
 
 
 class ClauseExtractionState(TypedDict, total=False):

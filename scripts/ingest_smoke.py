@@ -42,6 +42,8 @@ def _prove_cache_reuse(cuad_path: Path, cache_dir: Path, limit: int) -> None:
 
 
 async def main() -> None:
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+
     load_dotenv()
     from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
     from rag_wright.store.arcadedb import ArcadeDBStore
@@ -58,7 +60,7 @@ async def main() -> None:
         cache_dir=Path("data/cache/ingest_smoke"), limit=limit)
 
     print(f"[smoke] REPORT: {report.model_dump()}", flush=True)
-    print(f"[smoke] clause KG: {store.clause_kg_counts()}", flush=True)
+    print(f"[smoke] clause KG: {ContractKGStore(store).clause_kg_counts()}", flush=True)
     print(f"[smoke] entity graph: {store.graph_counts()}", flush=True)
     print(f"[smoke] PARTY_TO edges connecting the two: {n}", flush=True)
 

@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 async def main() -> None:
     load_dotenv()
     from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
+    from rag_wright.capabilities.contract_kg_store import ContractKGStore
     from rag_wright.store.arcadedb import CONTRACT_TYPE, SPAN_TYPE, ArcadeDBStore
 
     db = os.environ.get("FULL_DB", "ragwright_cuad_full")
@@ -43,7 +44,7 @@ async def main() -> None:
             print(f"[full]   DEAD-LETTER {d.get('source_doc_id')}: {d.get('stage')}/{d.get('reason')}", flush=True)
 
     # Verify uniform coverage across every stage -- the point of CUAD-FULL-COVERAGE.
-    clause_kg = store.clause_kg_counts()
+    clause_kg = ContractKGStore(store).clause_kg_counts()
     graph = store.graph_counts()
     spans = store._query(f"SELECT count(*) AS n FROM {SPAN_TYPE}")[0]["n"]
     contracts = store._query(f"SELECT count(*) AS n FROM {CONTRACT_TYPE}")[0]["n"]

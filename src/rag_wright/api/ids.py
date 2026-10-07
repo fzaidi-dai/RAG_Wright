@@ -26,6 +26,6 @@ def id_source(requirement_id: str) -> str:
 def decode_bbox(raw: Optional[str]) -> Optional[tuple]:
     """Decode the engine's best-effort bounding box (stored as a JSON `[l,t,r,b]` string) to a `(l, t, r, b)` tuple,
     or None. The single canonical decoder (retires the product seam's copy)."""
-    from rag_wright.capabilities.highlight_serve import _decode_bbox
+    from rag_wright.contracts.span import decode_bbox as _decode
 
-    return _decode_bbox(raw)
+    return _decode(raw)

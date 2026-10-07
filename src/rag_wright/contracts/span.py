@@ -9,6 +9,7 @@ rerank stage. `span_id` embeds the parent (identifier rule).
 
 from __future__ import annotations
 
+import json
 import math
 
 from pydantic import BaseModel, field_validator, model_validator
@@ -117,3 +118,15 @@ def to_span_record(
         pages=list(op.pages),  # ALL pages the span overlaps (cross-page clause -> a list)
         bbox=op.bbox,  # best-effort single-item box
     )
+
+
+def decode_bbox(raw) -> tuple[float, float, float, float] | None:
+    """issue 0032: the store keeps a span's bbox as a JSON `[l,t,r,b]` string (best-effort); decode it to a
+    `(l, t, r, b)` tuple, or None. The single canonical decoder (generic since ING-8b)."""
+    if not raw:
+        return None
+    try:
+        vals = json.loads(raw) if isinstance(raw, str) else raw
+        return (float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3])) if vals else None
+    except (ValueError, TypeError, IndexError):
+        return None

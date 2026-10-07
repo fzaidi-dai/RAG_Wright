@@ -21,7 +21,7 @@ from typing import Protocol, runtime_checkable
 from pydantic import BaseModel, field_validator, model_validator
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.ontology import ClauseFact, RelationshipFact
+from rag_wright.contracts.graph import RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag
 
 
@@ -70,12 +70,11 @@ class ExtractionResult(BaseModel):
 
     chunk_id: ChunkId
     entity_mentions: list[EntityMention] = []
-    clause_facts: list[ClauseFact] = []
     relationship_facts: list[RelationshipFact] = []
 
     @model_validator(mode="after")
     def _facts_anchored_to_chunk(self) -> ExtractionResult:
-        for fact in (*self.clause_facts, *self.relationship_facts):
+        for fact in self.relationship_facts:
             if fact.provenance.chunk_id != self.chunk_id:
                 raise ValueError(
                     "every fact in an ExtractionResult must be anchored to the result's chunk_id "
@@ -96,7 +95,6 @@ class ExtractionResult(BaseModel):
         return cls(
             chunk_id=chunk_id,
             entity_mentions=[m for r in results for m in r.entity_mentions],
-            clause_facts=[f for r in results for f in r.clause_facts],
             relationship_facts=[f for r in results for f in r.relationship_facts],
         )
 

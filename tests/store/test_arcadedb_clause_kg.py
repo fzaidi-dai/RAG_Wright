@@ -14,12 +14,12 @@ from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.capabilities.contract_kg_store import ContractKGStore
-from rag_wright.store.arcadedb import (
+from rag_wright.capabilities.contract_kg_store import (  # moved from the generic store (ING-8b)
     TYPED_PROPERTY_EDGE_TYPES,
-    ArcadeDBStore,
     _edge_predicate_iri,
     _stale_property_statements,
 )
+from rag_wright.store.arcadedb import ArcadeDBStore
 
 
 @pytest.fixture(autouse=True)
@@ -102,7 +102,7 @@ def test_write_typed_kg_and_readback(store) -> None:
         (_D.CAP_QUANTUM, "12_months", ConfidenceTag.EXTRACTED),
     ])
     ContractKGStore(store).write_clause_kg(rec)
-    assert store.clause_kg_counts() == {"clauses": 1, "property_values": 4, "typed_edges": 4}
+    assert ContractKGStore(store).clause_kg_counts() == {"clauses": 1, "property_values": 4, "typed_edges": 4}
 
     got = ContractKGStore(store).clause_typed_edges(cid)
     by_dim = {r["dimension"]: r for r in got}
@@ -120,7 +120,7 @@ def test_write_is_idempotent(store) -> None:
     rec, _cid = _record("capB", "Cap On Liability", [(_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED)])
     ContractKGStore(store).write_clause_kg(rec)
     ContractKGStore(store).write_clause_kg(rec)  # content-hash gate -> no duplicate edges
-    assert store.clause_kg_counts() == {"clauses": 1, "property_values": 1, "typed_edges": 1}
+    assert ContractKGStore(store).clause_kg_counts() == {"clauses": 1, "property_values": 1, "typed_edges": 1}
 
 
 @pytest.mark.store
@@ -129,7 +129,7 @@ def test_shared_value_node_deduped_across_clauses(store) -> None:
     for seed in ("c1", "c2"):
         rec, _ = _record(seed, "Cap On Liability", [(_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED)])
         ContractKGStore(store).write_clause_kg(rec)
-    counts = store.clause_kg_counts()
+    counts = ContractKGStore(store).clause_kg_counts()
     assert counts["clauses"] == 2 and counts["property_values"] == 1 and counts["typed_edges"] == 2
 
 
@@ -137,8 +137,8 @@ def test_shared_value_node_deduped_across_clauses(store) -> None:
 def test_clear_clause_kg_empties_the_typed_graph(store) -> None:
     rec, _cid = _record("capC", "Cap On Liability", [(_D.CARVE_OUT, "fraud", ConfidenceTag.EXTRACTED)])
     ContractKGStore(store).write_clause_kg(rec)
-    store.clear_clause_kg()
-    assert store.clause_kg_counts() == {"clauses": 0, "property_values": 0, "typed_edges": 0}
+    ContractKGStore(store).clear_clause_kg()
+    assert ContractKGStore(store).clause_kg_counts() == {"clauses": 0, "property_values": 0, "typed_edges": 0}
 
 
 def test_span_properties_joins_typed_edges_by_span_id():

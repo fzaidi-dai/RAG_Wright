@@ -13,7 +13,8 @@ from rag_wright.contracts.function import FunctionConfidence, FunctionScore
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.store.arcadedb import ArcadeDBStore, _DIM_EDGE_STR
+from rag_wright.capabilities.contract_kg_store import _DIM_EDGE_STR  # moved from the store (ING-8b)
+from rag_wright.store.arcadedb import ArcadeDBStore
 
 
 @pytest.fixture(autouse=True)

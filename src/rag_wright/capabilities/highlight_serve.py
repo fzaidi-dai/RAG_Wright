@@ -16,12 +16,12 @@ hermetically; the field-extraction LLM calls run concurrently (the standing eval
 from __future__ import annotations
 
 import asyncio
-import json
 
 from pydantic import BaseModel
 
 from rag_wright.contracts.highlight import HighlightResult, HighlightSpan
 from rag_wright.contracts.query_intent import QueryIntent
+from rag_wright.contracts.span import decode_bbox
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 
@@ -38,15 +38,7 @@ class _Extracted(BaseModel):
     value: str | None = None
 
 
-def _decode_bbox(raw) -> tuple[float, float, float, float] | None:
-    """issue 0032: the store keeps bbox as a JSON `[l,t,r,b]` string (best-effort); decode to a tuple or None."""
-    if not raw:
-        return None
-    try:
-        vals = json.loads(raw) if isinstance(raw, str) else raw
-        return (float(vals[0]), float(vals[1]), float(vals[2]), float(vals[3])) if vals else None
-    except (ValueError, TypeError, IndexError):
-        return None
+_decode_bbox = decode_bbox  # generic since ING-8b (`contracts.span.decode_bbox`)
 
 
 def _to_span(row: dict, *, confidence: float, extracted_value: str | None = None) -> HighlightSpan:

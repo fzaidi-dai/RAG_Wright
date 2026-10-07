@@ -18,14 +18,15 @@ def test_de_domaining_import_contract_holds():
 
 def test_import_linter_actually_detects_a_violation():
     # RED proof (so the green above is not vacuous): a forbidden contract that is GENUINELY violated by the code
-    # -- store.arcadedb really does import ontology.loader (load_kg_schema) -- must be reported broken.
+    # -- the reference pack's contract_kg_store really does import store.arcadedb (a legitimate pack -> engine
+    # import; the old example, store.arcadedb -> ontology.loader, was removed in ING-8b) -- must be reported broken.
     report = create_report(UserOptions(
         session_options={"root_packages": ["rag_wright"]},
         contracts_options=[{
-            "name": "proof: store.arcadedb must not import ontology.loader (deliberately violated)",
+            "name": "proof: capabilities.contract_kg_store must not import store.arcadedb (deliberately violated)",
             "type": "forbidden",
-            "source_modules": ["rag_wright.store.arcadedb"],
-            "forbidden_modules": ["rag_wright.ontology.loader"],
+            "source_modules": ["rag_wright.capabilities.contract_kg_store"],
+            "forbidden_modules": ["rag_wright.store.arcadedb"],
         }],
     ))
     checks = report.get_contracts_and_checks()

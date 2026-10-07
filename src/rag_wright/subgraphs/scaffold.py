@@ -63,3 +63,8 @@ def dead_letter(reason: str, **fields: Any) -> dict:
     `fields` capture context (the offending id, the exception text, the node) for diagnosis.
     """
     return {"reason": reason, **fields}
+
+
+class TransientExtraction(Exception):
+    """A retryable extraction blip. Custom (not in LangGraph's default no-retry list) -> DEFAULT_RETRY retries.
+    (Generic: any extraction node raises it; moved here from the reference pack's typed clause extraction, ING-8b.)"""

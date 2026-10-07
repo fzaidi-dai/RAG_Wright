@@ -10,7 +10,9 @@ from __future__ import annotations
 from rag_wright.api import invoke as _invoke
 from rag_wright.capabilities.ard import MEDIA_TYPE_BY_KIND
 from rag_wright.capabilities.manifests import MANIFEST_SPECS
-from rag_wright.capabilities.registry import CANONICAL_CAPABILITY_SLUGS
+from rag_wright.capabilities.registry import canonical_capability_slugs
+
+CANONICAL_CAPABILITY_SLUGS = canonical_capability_slugs()  # engine + the reference pack (loaded by conftest)
 
 # Canonical slugs that are deliberately NOT ARD-published (reserved / internal-only; no CapabilityManifest).
 # Both are FR "foundation derivation" slugs -- a reserved name with no standalone invocation: okf_compile builds

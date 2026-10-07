@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from rag_wright.capabilities.remote_encoders import (
     RemoteBGEEmbedder,
-    RemoteLegalBertClassifier,
-    query_classifier,
     query_embedder,
     stack_url,
+)
+from rag_wright.spans.legalbert_classifier import (  # the reference pack's query-side classifier (ING-8b)
+    RemoteLegalBertClassifier,
+    query_classifier,
 )
 
 _URL = "https://stack.modal.run"

@@ -14,9 +14,11 @@ fakes and no model download; training/loading use the real `transformers` classe
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import torch
+
+from rag_wright.capabilities.remote_encoders import _post_json, stack_url
 
 
 class LegalBertFunctionClassifier:
@@ -81,3 +83,37 @@ def register_clause_function_classification(registry) -> None:
         kind="model",
         display_name="Clause function classification (LegalBERT)",
     )
+
+
+# --- the query-side legal function classifier (moved from capabilities.remote_encoders, ING-8b) ---
+
+class RemoteLegalBertClassifier:
+    """LegalBERT function classification via the A100 `/classify` endpoint. Matches
+    `LegalBertFunctionClassifier` (classify / classify_topk)."""
+
+    def __init__(self, base_url: str, *, post: Callable[..., dict] = _post_json) -> None:
+        self._url = base_url.rstrip("/") + "/classify"
+        self._post = post
+
+    def classify(self, texts: list[str], *, batch_size: int = 32) -> list[str]:
+        if not texts:
+            return []
+        return self._post(self._url, {"texts": list(texts)})["labels"]
+
+    def classify_topk(self, texts: list[str], *, k: int = 2, batch_size: int = 32) -> list[list[str]]:
+        if not texts:
+            return []
+        return self._post(self._url, {"texts": list(texts), "k": k})["topk"]
+
+
+def query_classifier(model_path: Any = None, *, post: Callable[..., dict] = _post_json) -> Any:
+    """The query-side function classifier: the remote A100 `/classify` adapter when `STACK_URL` is set, else
+    the local in-process `LegalBertFunctionClassifier` loaded from `model_path`."""
+    url = stack_url()
+    if url:
+        return RemoteLegalBertClassifier(url, post=post)
+    from pathlib import Path
+
+    from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
+
+    return LegalBertFunctionClassifier.load(Path(model_path or "data/models/legalbert_function"))
