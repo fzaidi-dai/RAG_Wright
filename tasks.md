@@ -3,13 +3,26 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ ACTIVE WORKSTREAM (2026-10-06): engine-prep — COMPLETE.** Readying the engine for a new product (package +
+> **⇒ RESUME / NEXT UP (2026-10-08, NEWEST): ingestion-hooks COMPLETE and RELEASED as `rag-wright` 0.2.0** (PyPI +
+> GitHub tag/release `0.2.0`, via release-please; `docs/releasing.md`). Ledger: **`docs/specs/ingestion-hooks/plan.md`**
+> (ADR-0124; ING-1..ING-9b, ING-8a..8e, ING-3b, ING-5, ING-CLEAN all done). Delivered: the generic `build_ingestion`
+> with hooks and domain-neutral defaults (`evaluate_ingestion`, `table_rows`, spreadsheets and embedded files / PDF
+> attachments as child documents); Jev for provision boundaries, the extraction judge and residual values; the neutral
+> default schema; the reference pack in `rag_wright.packs.{contracts,compliance}`; generic span fields
+> (`document_id` / `primary_tag` / `tags`, `scripts/migrate_span_fields.py` for old databases); domain methods off the
+> generic store; pack-authoring helpers on `rag_wright.api`; the segmentation vocabulary in `contract_bridge.ttl`; the
+> ArcadeDB write-conflict retry; the enforced doc-reference check; the `building-an-ingestion-capability` skill. Every
+> break: `docs/specs/ingestion-hooks/ing8-breaking-changes.md`. **Next (user gates): the RuleWright migration, in its own
+> repo, from `docs/specs/ingestion-hooks/rulewright-migration-0.2.0.md`; the TexWright build.** Open engine gaps:
+> `docs/domain-adaptation/_engine-gaps.md`. The blocks below are HISTORICAL (superseded).
+
+> **⇒ ACTIVE WORKSTREAM (2026-10-06, HISTORICAL — superseded by the 2026-10-08 block above): engine-prep — COMPLETE.** Readying the engine for a new product (package +
 > docs + archive + domain-adaptation) is done; spec + ledger at **`docs/specs/engine-prep/plan.md`** (all `PREP-*`
 > tasks done). The prior **engine-platform boundary** (engine API + capability runtime, ADR-0117) is at
 > `docs/specs/engine-platform/SPEC.md` + `TASKS.md`. This root ledger stays the authoritative record for everything
 > else.
 >
-> **RESUME / NEXT UP (2026-10-06, NEWEST): engine-prep plan COMPLETE — the engine is ready to install + build a
+> **RESUME / NEXT UP (2026-10-06): engine-prep plan COMPLETE — the engine is ready to install + build a
 > product on.** All six workstreams done (WS0 hygiene/archive · WS1 package-ready · WS2 core docs · WS3 generated
 > API ref · WS4 domain-adaptation guide + engine-gaps register · WS5 onboarding skill + product-starter templates +
 > the engine's own CLAUDE.md/playbook refresh), plus the **ADR-0122** bug-fix diversion (intra_document_qa restored
