@@ -199,3 +199,10 @@ writing to change one decision (engine gaps G3/G4).
   both: segmentation and tagging are identical (the residue batch hits the cache key), and flipping only the
   differing Jev answers (1 for Aimmune, a page footer; 3 for ACCURAY, a date line and two table-of-contents
   fragments) reproduces the reference's provisions exactly. The decision cache now makes re-ingests repeatable.
+- **Fix (found by the ING-4d live re-ingest).** The reference pack's clause-extraction cache was keyed by the
+  provision id (document, index, content hash) without its position. A document that repeats a provision verbatim
+  (Aimmune prints its press release twice) could therefore, once indices shift between runs, reuse the OTHER copy's
+  cached record; the provenance check rightly rejected it, but the clause then vanished silently (still counted in
+  `clause_records`, absent from `clause_failures`). Now `clause_cache_key` includes the anchor span (position), and
+  `settle_clause_results` drops a stage-rejected unit from `clause_records` and reports it in `clause_failures`
+  (PROD-3 shape). The key change invalidates existing clause caches once.

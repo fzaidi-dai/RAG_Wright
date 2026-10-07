@@ -620,6 +620,34 @@ async def provision_units(spans: Sequence[TaggedSpan], *, decider: Optional[Boun
     return units
 
 
+def clause_cache_key(clause_id: str, anchor_span_id: str, function: str, template_version: str) -> str:
+    """ING-4d: the clause-extraction cache key -- the provision's id (doc, index, content hash) AND its anchor span
+    (its position). Without the position, a provision repeated verbatim elsewhere in the document could, once the
+    indices shift between runs, reuse the OTHER copy's record -- which cites the other copy's span."""
+    import hashlib
+
+    return hashlib.sha256(f"{clause_id}|{anchor_span_id}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32]
+
+
+def settle_clause_results(records: dict, hook_failures: list[dict], stage: Any) -> tuple[list, list[dict]]:
+    """ING-4d: the reference pipeline's `(clause_records, clause_failures)` from the shared extract stage. A unit the
+    stage rejected (its extraction failed the contract check, e.g. provenance) is NOT counted as a record and IS
+    reported in the PROD-3 failure shape `{span_id, function, reason}`; an extractor failure the hook already
+    recorded is reported once."""
+    from rag_wright.contracts.function import NO_FUNCTION
+
+    units = {u.index: u for u in stage.units}
+    failed = {f["unit"] for f in stage.failures}
+    failures = list(hook_failures)
+    reported = {f["span_id"] for f in hook_failures}
+    for f in stage.failures:
+        if f["anchor"] not in reported:
+            unit = units.get(f["unit"])
+            failures.append({"span_id": f["anchor"], "function": (unit.tags[0] if unit and unit.tags else NO_FUNCTION),
+                             "reason": f["reason"][:200]})
+    return [records[i] for i in sorted(records) if i not in failed], failures
+
+
 async def _aextract_clause_with_retry(
     extractor: Any, *, chunk_id: Any, function: str, text: str, span_id: str, attempts: int,
     functions: tuple[str, ...] = ()
@@ -829,8 +857,8 @@ def aproduction_document_ingest(
         functions = tuple(dict.fromkeys(
             x.function for x in (scores or []) if x.function and x.function != NO_FUNCTION))[:3]
         clause_cid = ChunkId.of(source_doc_id, index, text)
-        cache_file = clause_cache_dir / (hashlib.sha256(
-            f"{clause_cid.value}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32] + ".json")
+        cache_file = clause_cache_dir / (clause_cache_key(clause_cid.value, anchor.span_id, function, template_version)
+                                         + ".json")
         if cache_file.exists():  # a prior SUCCESSFUL extraction -> reuse it, no re-call
             record = ClausePropertyRecord.model_validate_json(cache_file.read_text(encoding="utf-8"))
         else:
@@ -873,9 +901,9 @@ def aproduction_document_ingest(
     async def clauses_fn(doc: SourceDocument, segments: list) -> dict:
         stage = await stages.extract(doc, segments)
         extractions_by_doc[doc.source_doc_id] = stage.extractions
-        records = records_by_doc.pop(doc.source_doc_id, {})
-        return {"clause_records": [records[i] for i in sorted(records)],
-                "clause_failures": failures_by_doc.pop(doc.source_doc_id, [])}
+        records, failures = settle_clause_results(records_by_doc.pop(doc.source_doc_id, {}),
+                                                  failures_by_doc.pop(doc.source_doc_id, []), stage)
+        return {"clause_records": records, "clause_failures": failures}
 
     async def index_fn(doc: SourceDocument, segments: list) -> dict:
         return await stages.index(doc, segments, chunks_by_doc.get(doc.source_doc_id, []))

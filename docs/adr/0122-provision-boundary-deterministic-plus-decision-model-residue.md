@@ -58,3 +58,27 @@ contained the answer. Root-causing (verify-before-acting) found **three** real d
   short ambiguous residue, and the whole path degrades to deterministic when no decision model is present.
 - Follow-up worth considering (not required): a live `intra_document_qa` assertion that checks a **non-abstained,
   cited** answer, so a serve-path break like (C) fails CI instead of passing as "non-None".
+
+## ING-4d addendum (2026-10-07): the residue prompt defines a start by STRUCTURE
+
+- **Problem (measured).** Jev's answers on the residue flipped between identical calls (5 of 181 lines on one
+  contract), and voting did not help: the flipping lines sat at 0.47-0.56, genuinely undecided, because the question
+  was ambiguous. It asked whether a line "continues the previous provision's text" -- a topical question -- and never
+  said that page footers, table-of-contents lines or lead-in sentences are not starts. Shown each line's real
+  predecessor, Jev answered topically and called same-topic numbered headings ("13.2 Termination for Breach.")
+  "continues" (82% accuracy). `temperature`/`seed` are accepted by the API but do not make it repeatable.
+- **Decision.** `spans.boundary.residue_request` states a structural rubric ONCE in the state, then one minimal
+  `noul` question per line (the same full criteria on each): a line starts a section only when it opens its own
+  numbered section, subsection, article, schedule, exhibit, annex or appendix (a stray page number in front does
+  not matter), EVEN WHEN on the same topic; page furniture, table-of-contents lines, revision-history entries,
+  cross-references, lettered/roman list items, lead-in sentences and signature/name/date/address lines never do.
+  Lines are sent WITHOUT surrounding text. Worded for any long document; the examples are invented.
+- **Lettered sub-headings fold into their numbered parent** ("(b) Enforcement of Patents." stays in 9.4.2).
+  Measured: asking the model to split titled lettered sub-sections left them at 0.55-0.62 (one at 0.19) and pulled
+  label-style lead-ins up to 0.40-0.48 -- less accurate and less stable -- so the clear rule wins.
+- **The prompt is part of the decision-cache key**, so a changed prompt never reuses decisions made under the old one.
+- **Evidence** (`eval/boundary_residue_gold.py`; gold labels local only): 10 documents (9 contracts + 1 lab report),
+  461 scored lines -- 460/461 (99.8%) with zero flips across 3 calls each; the held-out 8 were labelled before any
+  prompt ran (today's prompt: 94.5% held-out, 96.2% tuning). The one miss is a stable borderline case
+  ("c. Payment . All amounts ...", an un-bracketed titled lettered sub-section, scored 0.61). Coverage is small (10
+  documents) -- re-run the gold harness when new document types arrive.
