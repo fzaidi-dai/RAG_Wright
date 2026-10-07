@@ -56,7 +56,7 @@ One span: the smallest citeable unit, indexed for retrieval. It points back to i
 
 A span with the optional span tagger's soft tags (primary first) and their scores.
 
-### `Unit(*, index: int, anchor: rag_wright.contracts.ingestion.Span, spans: list[rag_wright.contracts.ingestion.Span], text: str, tags: list[str] = []) -> None`
+### `Unit(*, index: int, anchor: rag_wright.contracts.ingestion.Span, spans: list[rag_wright.contracts.ingestion.Span], text: str, tags: list[str] = [], table_row: Optional[rag_wright.contracts.ingestion.TableRow] = None) -> None`
 
 The extraction unit: consecutive spans grouped by the unit grouper. `text` is what the extractor reads; `anchor` is the citation anchor for records read from it (a member span).
 
@@ -99,6 +99,10 @@ IngestionEvaluation(documents: 'list[DocumentEvaluation]' = <factory>, failures:
 ### `DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, error: 'Optional[str]' = None) -> None`
 
 DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, error: 'Optional[str]' = None)
+
+### `TableRow(*, table_ref: str, sheet: Optional[str] = None, page: Optional[int] = None, row_index: int, columns: list[str], values: list[str]) -> None`
+
+ING-7: one data row of a parsed table, read from the parse's cell GRID (exact cell text, whitespace collapsed) -- whole even when the chunker split the table. `columns` is the table's first row as parsed; `row_index` is the 0-based grid row (data rows start at 1). Domain-neutral: what a column MEANS is the domain's decision.
 
 ## Hook protocols
 
@@ -239,3 +243,7 @@ The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `Uni
 ### `evaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None) -> 'IngestionEvaluation'`
 
 Measure the ingestion hooks' structural fidelity on sample documents (see the module docstring).
+
+### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
+
+Every data row of every table in a parsed document (`parse_document` output), in document order.

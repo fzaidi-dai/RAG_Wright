@@ -87,6 +87,25 @@ class TaggedSpan(BaseModel):
     scores: dict[str, float] = {}
 
 
+class TableRow(BaseModel):
+    """ING-7: one data row of a parsed table, read from the parse's cell GRID (exact cell text, whitespace collapsed)
+    -- whole even when the chunker split the table. `columns` is the table's first row as parsed; `row_index` is the
+    0-based grid row (data rows start at 1). Domain-neutral: what a column MEANS is the domain's decision."""
+
+    model_config = {"frozen": True}
+
+    table_ref: str  # the parse's table self-ref
+    sheet: Optional[str] = None  # spreadsheet sheet name, when the table came from one
+    page: Optional[int] = None  # 1-based page, when the parse carried one
+    row_index: int
+    columns: list[str]
+    values: list[str]
+
+    def cell(self, column: str) -> Optional[str]:
+        """The value under the first column named `column` (exact match), or None."""
+        return self.values[self.columns.index(column)] if column in self.columns else None
+
+
 class Unit(BaseModel):
     """The extraction unit: consecutive spans grouped by the unit grouper. `text` is what the extractor reads;
     `anchor` is the citation anchor for records read from it (a member span)."""
@@ -96,6 +115,7 @@ class Unit(BaseModel):
     spans: list[Span]
     text: str
     tags: list[str] = []
+    table_row: Optional[TableRow] = None  # ING-7: set when the unit is ONE data row of a parsed table
 
     @model_validator(mode="after")
     def _integrity(self) -> "Unit":

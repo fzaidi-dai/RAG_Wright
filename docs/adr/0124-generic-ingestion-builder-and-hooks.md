@@ -154,3 +154,18 @@ writing to change one decision (engine gaps G3/G4).
   an EMPTY document -- its `Document` node and children recorded -- instead of being dead-lettered by the chunker
   ("no chunks produced"), which had silently dropped every attachment of such a document.
 - Live sweep: the 68 real PDFs (client + embedded reports) carry no attachments -- 0 found, 0 skipped, no errors.
+
+## ING-7 addendum (2026-10-07): the generic table-rows primitive (scope reduced on review)
+
+- **`table_rows(source_document)`** (`rag_wright.api`) returns every parsed table's data rows as exact cells
+  (`TableRow`: `columns`, `values`, `cell(name)`, table ref, sheet or page, 0-based grid row), read from the parse's
+  cell GRID -- so a table the chunker split across chunks still comes back whole, with its header; merged cells
+  arrive filled; tables of a skipped hidden sheet are left out. Works for CSV, spreadsheets and PDF tables.
+- Inside `build_ingestion`, a unit holding exactly ONE data row carries it (`Unit.table_row`), so a domain
+  extractor gets exact cells without re-parsing markdown. The row-to-span mapping now covers every table (not only
+  spreadsheets), using the same renderer the chunk text uses.
+- **Not in the engine (decided on review):** what a column MEANS, record types and column-to-property mappings
+  are the DOMAIN's own capabilities (e.g. TexWright's extractor + its `.ttl`), built in the product repo. No
+  `eng:ColumnMapping` vocabulary is added until a real domain shows it is reusable.
+- Real data (local client workbooks): 8,812 of 8,812 cells identical to an independent reader (openpyxl, merged
+  ranges resolved); in the builder, 162 of 162 one-row units carry exactly their own row.

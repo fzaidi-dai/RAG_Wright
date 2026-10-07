@@ -233,6 +233,8 @@ class IngestionPipeline:
         units = await grouper(tagged, decider=self._decider)
         check_units([t.span for t in tagged], units)
         rep.units = len(units)
+        row_spans = _row_spans(document, [t.span for t in tagged])
+        _attach_table_rows(document, units, row_spans)
 
         extractions = await self._extract(units, sd.source_doc_id, tuning, rep)
         if self._writer is not None:
@@ -242,7 +244,7 @@ class IngestionPipeline:
             edges = [ed for e in extractions for ed in e.edges]
             await asyncio.to_thread(ws._store.kg_write, nodes, edges)
         rep.records = sum(len(e.nodes) for e in extractions)
-        return _row_spans(document, [t.span for t in tagged]) if sd.embedded else {}
+        return row_spans
 
     async def _index(self, ws: Any, doc_id: str, tagged: list[TaggedSpan], doc_start: dict, rep: DocumentReport,
                      to_span_record: Any) -> None:
@@ -303,26 +305,41 @@ def _with_pages(document: Any, chunks: list, chunk: Any, spans: list[Span]) -> l
 
 
 def _row_spans(document: Any, spans: list[Span]) -> dict:
-    """(table self-ref, 0-based table row) -> the span holding that row, for a spreadsheet's tables (whose rows are
-    rendered compactly, one line each). A row is matched to the first unused span whose first line is that row."""
-    from rag_wright.corpus.document_parser import _compact_table_markdown, is_spreadsheet
+    """(table self-ref, 0-based grid row) -> the span holding that row. A table's chunk text renders one line per grid
+    row (header, a separator, then the data rows -- the same renderer `content_items` uses), so a row is matched to
+    the first unused span whose first table line is that row's rendered line."""
+    from rag_wright.corpus.document_parser import _table_content_text
+    from rag_wright.ingestion.tables import visible_tables
 
-    if not is_spreadsheet(document):
-        return {}
     by_line: dict[str, list[str]] = {}
     for s in spans:
         lines = [ln.strip() for ln in s.text.strip().split("\n") if ln.strip().startswith("|")]
         if lines:
             by_line.setdefault(lines[0], []).append(s.span_id)
     out: dict = {}
-    for table in getattr(document, "tables", []) or []:
-        lines = _compact_table_markdown(table).split("\n")
-        rows = [lines[0]] + lines[2:]  # drop the separator line: rows[i] = grid row i
+    for table in visible_tables(document):
+        lines = [ln.strip() for ln in _table_content_text(table, document).split("\n") if ln.strip().startswith("|")]
+        rows = lines[:1] + lines[2:]  # drop the separator line: rows[i] = grid row i
         for i, line in enumerate(rows):
-            ids = by_line.get(line.strip())
+            ids = by_line.get(line)
             if ids:
                 out[(table.self_ref, i)] = ids.pop(0)
     return out
+
+
+def _attach_table_rows(document: Any, units: list, row_spans: dict) -> None:
+    """ING-7: a unit holding exactly ONE data row of a parsed table carries that row (`Unit.table_row`, exact cells
+    from the grid)."""
+    from rag_wright.ingestion.tables import rows_of, visible_tables
+
+    span_row = {sid: key for key, sid in row_spans.items() if key[1] > 0}
+    if not span_row:
+        return
+    rows = {(r.table_ref, r.row_index): r for t in visible_tables(document) for r in rows_of(t, document)}
+    for unit in units:
+        keys = {span_row[s.span_id] for s in unit.spans if s.span_id in span_row}
+        if len(keys) == 1:
+            unit.table_row = rows.get(keys.pop())
 
 
 def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = None,

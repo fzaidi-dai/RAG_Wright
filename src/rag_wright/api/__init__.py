@@ -33,6 +33,7 @@ from rag_wright.contracts.ingestion import (
     SpanKind,
     SpanTagger,
     TableMode,
+    TableRow,
     TaggedSpan,
     Unit,
     UnitExtraction,
@@ -43,6 +44,7 @@ from rag_wright.contracts.ingestion import (
 )
 from rag_wright.ingestion.builder import DocumentReport, IngestionReport, build_ingestion
 from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, evaluate_ingestion
+from rag_wright.ingestion.tables import table_rows
 from rag_wright.store.seam import KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import entities_by_name, kg_edges, kg_read, kg_write, span_positions
@@ -65,4 +67,5 @@ __all__ = [
     "IngestionTuning", "RecordTableRule", "IdentifierRule", "IngestSource", "TableMode",
     "build_ingestion", "IngestionReport", "DocumentReport",
     "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation",
+    "table_rows", "TableRow",
 ]
