@@ -71,7 +71,10 @@ never a hardcoded provider flag. Override a role per workspace via `EngineConfig
   defaults to the one product LLM (Qwen3.8-27B, which accepts images), so a deployment serves a single model;
   OCR resolves its endpoint and flags through the same profile as every other call.
 - **Structured output** is client-side tag-parse (ADR-0045); any provider flags live in the profile.
-- **Decision models** (e.g. Jev) are reached through a `DecisionModelProfile`, selected by `RAG_DECISION_MODEL`.
+- **Decision models** (e.g. Jev) are reached through a `DecisionModelProfile`, selected by `RAG_DECISION_MODEL`. When
+  one is configured, the reference contract pipeline uses it for provision boundaries, the extraction judge, and the
+  numeric/open property values (no per-provision LLM call). `RAG_SEMANTIC_JUDGE=llm` / `RAG_RESIDUAL_EXTRACTOR=llm`
+  switch the judge / the residual values back to the LLM.
 
 ## Environment variables (reference)
 

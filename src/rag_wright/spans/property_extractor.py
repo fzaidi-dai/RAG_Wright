@@ -247,10 +247,13 @@ class HybridPropertyExtractor:
     Classifiers honor the device-agnostic serving seam (GPU-if-available-else-CPU); the LLM stays on the seam."""
 
     def __init__(self, registry=None, *, runnable=None, model_id: Optional[str] = None, retries: int = 3,
-                 classifier_fn=None) -> None:
+                 classifier_fn=None, residual=None) -> None:
         self._registry = registry
-        self._runnable = runnable or build_structured(
-            model_id or model_for(ModelRole.STRUCTURED_REASONING), PropertyExtraction)
+        # ING-9b: `residual` (a `DecisionResidualExtractor`) answers the residual dims with a decision model -- one
+        # call per provision, none without candidates -- in place of the LLM residual call (built only when needed).
+        self._residual = residual
+        self._runnable = runnable or (None if residual is not None else build_structured(
+            model_id or model_for(ModelRole.STRUCTURED_REASONING), PropertyExtraction))
         self._retries = retries
         # EP-RT-7: when set, the classifier LANE is obtained through the `clause_property_classification` capability
         # (the single production path) instead of this instance's local fleet -- `(text, functions) -> [{dimension,
@@ -322,6 +325,21 @@ class HybridPropertyExtractor:
                 continue
         return out
 
+    def _decided_assertions(self, prov: Provenance, values: list, span_id: str) -> list[PropertyAssertion]:
+        """ING-9b: the decision lane's `(dimension, value, probability)` -> residual-dim assertions (>= 0.7 EXTRACTED,
+        else INFERRED); anything outside `RESIDUAL_LLM_DIMS` is dropped, as for the LLM lane."""
+        residual, out = set(RESIDUAL_LLM_DIMS), []
+        for dim, value, prob in values:
+            try:
+                d = PropertyDimension(dim)
+                if d not in residual:
+                    continue
+                conf = ConfidenceTag.EXTRACTED if prob >= 0.7 else ConfidenceTag.INFERRED
+                out.append(PropertyAssertion(provenance=prov, confidence=conf, dimension=d, value=value, span_id=span_id))
+            except (ValueError, ValidationError):
+                continue
+        return out
+
     def _record(self, chunk_id: ChunkId, function: str, assertions: list[PropertyAssertion],
                 span_id: str = "") -> ClausePropertyRecord:
         # Carry the record-level operative-span anchor (ADR-0025) EVEN when property-less: Leg A rehydrates a
@@ -335,7 +353,10 @@ class HybridPropertyExtractor:
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
         assertions = self._classifier_lane(prov, text, span_id, functions)
-        extraction: Optional[PropertyExtraction] = None  # ONE residual call (the 7 numeric dims), always fires
+        if self._residual is not None:  # ING-9b: the decision lane (one call per provision, none without candidates)
+            assertions += self._decided_assertions(prov, self._residual.extract_values(text), span_id)
+            return self._record(chunk_id, function, assertions, span_id)
+        extraction: Optional[PropertyExtraction] = None  # ONE residual LLM call (the 7 numeric dims)
         for _ in range(self._retries):
             try:
                 extraction = self._runnable.invoke(residual_extraction_prompt(text))
@@ -353,6 +374,9 @@ class HybridPropertyExtractor:
         function = canonical_function(function) or function
         prov = Provenance.of(chunk_id)
         assertions = self._classifier_lane(prov, text, span_id, functions)
+        if self._residual is not None:  # ING-9b: the decision lane (one call per provision, none without candidates)
+            assertions += self._decided_assertions(prov, await self._residual.aextract_values(text), span_id)
+            return self._record(chunk_id, function, assertions, span_id)
         extraction: Optional[PropertyExtraction] = None
         for _ in range(self._retries):
             try:

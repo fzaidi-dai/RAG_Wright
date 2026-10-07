@@ -433,3 +433,31 @@ def load_template_fields(path: Path | str = _TTL_PATH):
                       if (exlist := g.value(node, _cbr("examples"))) is not None else ()),
         )))
     return [spec for _, spec in sorted(specs, key=lambda t: t[0])]
+
+
+@lru_cache(maxsize=4)
+def load_residual_role_criteria(path: str = str(_TTL_PATH)) -> dict[str, str]:
+    """ING-9b: `{role label -> cbr:decisionCriterion}` in `cbr:roleOrder` -- the answer options a decision model
+    chooses among for each residual candidate span (the residual dimensions plus `none`). Authored in the ttl."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    crit, order = URIRef(_CBR + "decisionCriterion"), URIRef(_CBR + "roleOrder")
+    rows = []
+    for role in g.subjects(RDF.type, URIRef(_CBR + "ResidualRole")):
+        label, c = g.value(role, SKOS.prefLabel), g.value(role, crit)
+        if label is not None and c is not None:
+            rows.append((int(g.value(role, order) or 0), str(label), str(c)))
+    return {label: c for _o, label, c in sorted(rows)}
+
+
+@lru_cache(maxsize=4)
+def load_residual_role_rubric(path: str = str(_TTL_PATH)) -> str:
+    """ING-9b: the instructions stated once before a provision's residual candidates (`cbr:residualRoleQuestion`)."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    v = g.value(URIRef(_CBR + "residualRoleQuestion"), URIRef(_CBR + "questionInstructions"))
+    return str(v) if v is not None else ""

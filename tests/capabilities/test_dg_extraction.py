@@ -18,6 +18,12 @@ from rag_wright.capabilities.dg_extraction import (
     edge,
 )
 
+@pytest.fixture(autouse=True)
+def _no_context_probe(monkeypatch):
+    # docling-graph probes the provider's /models endpoint for an unknown model's context window -- network, not here
+    monkeypatch.setattr("docling_graph.llm_clients.config._probe_openai_compatible_max_model_len", lambda *a: None)
+
+
 
 def test_entity_identity_markers():
     assert ContractParties.model_config["graph_id_fields"] == ["title"]

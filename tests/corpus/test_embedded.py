@@ -199,8 +199,11 @@ def test_a_pdf_without_attachments_has_none():
     assert extract_embedded("report.pdf", _pdf_with_attachments([])).found == 0
 
 
-def test_parse_document_surfaces_pdf_attachments_as_children(tmp_path):
+def test_parse_document_surfaces_pdf_attachments_as_children(tmp_path, monkeypatch):
     from rag_wright.api import parse_document
+
+    # the synthetic page has no text layer -> the scan gate would escalate it to the (paid) vision OCR model
+    monkeypatch.setattr("rag_wright.capabilities.parsing._vlm_available", lambda: False)
 
     pdf = tmp_path / "report.pdf"
     pdf.write_bytes(_pdf_with_attachments([("raw data.pdf", fake_pdf("raw"))]))

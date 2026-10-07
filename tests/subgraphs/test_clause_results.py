@@ -35,3 +35,21 @@ def test_an_extractor_failure_is_reported_once():
                             failures=[{"unit": 1, "anchor": "s1", "reason": "RuntimeError: clause extraction failed"}])
     kept, failures = settle_clause_results({0: "rec0"}, hook, stage)
     assert kept == ["rec0"] and failures == hook
+
+
+def test_the_cache_key_changes_when_the_extraction_method_changes():
+    # ING-9b: switching the judge or the residual lane (LLM <-> decision model) must not reuse records the old
+    # method produced -- the method is part of the template version the cache key carries.
+    from rag_wright.spans.residual_candidates import DecisionResidualExtractor
+    from rag_wright.spans.semantic_judge import DecisionJudge
+    from rag_wright.subgraphs.contract_ingestion_pipeline import extraction_method
+
+    async def _d(_inputs):
+        return {}
+
+    decision = extraction_method(DecisionJudge(_d), DecisionResidualExtractor(_d), judge_model=None, residual_model="m")
+    llm_judge = extraction_method(lambda *a: None, DecisionResidualExtractor(_d), judge_model="q", residual_model="m")
+    llm_residual = extraction_method(DecisionJudge(_d), None, judge_model=None, residual_model="m")
+    assert len({decision, llm_judge, llm_residual}) == 3
+    assert extraction_method(lambda *a: None, None, judge_model="q", residual_model="m") != \
+        extraction_method(lambda *a: None, None, judge_model="q2", residual_model="m")

@@ -4,12 +4,20 @@ Granite via Ollama. Hermetic (no LLM, no docling-graph pipeline run)."""
 
 from __future__ import annotations
 
+import pytest
+
 from rag_wright.capabilities.dg_extraction import (
     ExtractionModel,
     build_pipeline_config,
     ollama_model,
     openrouter_model,
 )
+
+@pytest.fixture(autouse=True)
+def _no_context_probe(monkeypatch):
+    # docling-graph probes the provider's /models endpoint for an unknown model's context window -- network, not here
+    monkeypatch.setattr("docling_graph.llm_clients.config._probe_openai_compatible_max_model_len", lambda *a: None)
+
 
 
 def test_openrouter_model_from_env(monkeypatch):

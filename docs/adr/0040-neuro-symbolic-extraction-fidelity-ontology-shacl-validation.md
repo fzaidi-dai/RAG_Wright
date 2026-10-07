@@ -80,3 +80,32 @@ Staged: **JUDGE-ONTOLOGY-1** (function→dimension applicability — the biggest
 **JUDGE-SEMANTIC** (narrowed LLM-semantic-judge), and **GROUNDING-OPENVALUED** (open-valued grounding coverage).
 See ADR-0028 (lexical judge), ADR-0033 (unified KG), ADR-0037 (ontology is the source of truth), memory
 [[property-grounding-judge]].
+
+## ING-9 / ING-9b addendum (2026-10-07): the judge and the residual dimensions on the decision model
+
+- **Layer-3 judge on Jev (ING-9).** `spans.semantic_judge.DecisionJudge` asks the decision model (`jev_decision`,
+  the default `jev-1.13` profile) to verify ALL of a provision's semantic values in ONE batched call (the SKILL's
+  strictness rule stated once, one `noul` per value; < 0.5 refutes -> AMBIGUOUS; any error leaves values untouched).
+  The default when a decision model is configured; an explicit `judge_model` or `RAG_SEMANTIC_JUDGE=llm` selects the
+  LLM judge. Measured on 192 judge cases hand-labelled blind to both judges (the classifier test sets' silver labels
+  agreed with careful labels only 64% of the time, so they were not used): Jev 95.3% vs the LLM judge 90.1%
+  (catches 149/154 unsupported values vs 138/154), calibrated scores, one call per provision instead of one per value.
+- **Residual dimensions on Jev (ING-9b).** The 7 numeric/open dimensions (cap amount, jurisdiction, time bound,
+  notice period, audit frequency, committed quantity, liquidated-damages trigger) were one LLM call per provision.
+  Now `spans.residual_candidates` proposes candidate spans deterministically (amounts, durations, dates,
+  frequencies, quantities, jurisdiction phrases, cap formulas, term references) and the decision model says what
+  each IS in its provision -- one `choice` per candidate among the roles authored in contract_bridge.ttl
+  (`cbr:ResidualRole` + `cbr:decisionCriterion`, ADR-0066), ONE call per provision and NONE without candidates.
+  Values are de-duplicated (a value restated in parentheses kept once, digits preferred; an overlapping phrase gives
+  way to the value it contains) and jurisdictions reduced to the place name. The LLM call remains only as the
+  fallback (no decision model, or `RAG_RESIDUAL_EXTRACTOR=llm`). Measured on set-A provisions hand-labelled before
+  scoring (held-out, value level, shipped code, live calls): recall 0.83 / precision 0.88 vs the LLM's 0.60 / 0.79.
+  Candidate coverage caps recall (the candidates cover 95% of the values the LLM produced). Known leftovers: a
+  jurisdiction phrase can run into a following name ('Singapore and Ability Computer'), and a regulation mention can
+  be labelled a jurisdiction ('California Escrow').
+- **The extraction method is part of the clause-cache key** (`extraction_method`), so switching the judge or the
+  residual lane never reuses records the other method produced.
+- **Live (Aimmune, 131 provisions):** 215 calls, all Jev, $0.013, 276 s, zero LLM calls -- vs 277 calls (276 LLM),
+  $0.277, 459 s with the LLM judge + LLM residual. The judge kept/downgraded 92.6% of 363 semantic values the same way
+  as the LLM judge; the residual lane stored 95 values vs 41 (consistent with its higher measured recall).
+- Harnesses: `eval/semantic_judge_gold.py` (`--score-blind`), `eval/residual_decision_gold.py`; gold data local only.

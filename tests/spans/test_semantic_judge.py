@@ -141,3 +141,84 @@ def test_registers_the_skill_and_the_gate_split():
     assert skill.kind == "agent_skill" and skill.contract is SemanticVerdict
     gate = reg.get("extraction_semantic_gate")
     assert gate.kind == "function" and gate.contract is ClausePropertyRecord
+
+
+# --- ING-9: the DECISION-MODEL (Jev) judge -- one batched call per provision, calibrated scores ------------------
+
+def test_the_decision_judge_request_states_the_rule_once_then_the_clause_and_each_property():
+    from rag_wright.spans.semantic_judge import judge_request
+
+    state, questions = judge_request("Only  Licensee\nshall indemnify.", [(_D.MUTUALITY, "mutual"),
+                                                                         (_D.PARTY_ASYMMETRY, "symmetric")])
+    rule, rest = state.split("\n\nClause:\n", 1)
+    assert "genuinely SUPPORTS" in rule and "silent" in rule  # the SKILL's strictness, stated once
+    clause, props = rest.split("\n\nProperties:\n", 1)
+    assert clause == "Only Licensee shall indemnify."
+    assert props.splitlines()[0].startswith("[0] mutuality = mutual (meaning: ")
+    assert list(questions) == ["p0", "p1"] and questions["p1"]["type"] == "noul"
+    assert questions["p0"]["criteria"] == questions["p1"]["criteria"]
+
+
+def _decision_judge(monkeypatch, scores=None, error=None):
+    import rag_wright.api as api
+    from rag_wright.spans import semantic_judge as sj
+
+    calls = []
+
+    async def fake_invoke(name, inputs, resources=None):
+        calls.append((name, inputs))
+        if error:
+            raise error
+        return {"answers": {f"p{i}": {"noul": s} for i, s in enumerate(scores)}}
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    monkeypatch.setattr(api, "ainvoke_model", fake_invoke)
+    monkeypatch.setattr(api, "capability_index", lambda: {"jev_decision": {}})
+    return sj.build_decision_judge(), calls
+
+
+def test_the_decision_judge_rules_on_every_semantic_value_in_one_call(monkeypatch):
+    import asyncio
+
+    from rag_wright.spans.semantic_judge import asemantic_judge
+
+    judge, calls = _decision_judge(monkeypatch, scores=[0.08, 0.93])
+    rec = asyncio.run(asemantic_judge(_record(
+        "Cap On Liability",
+        (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED),             # 0.08 -> refuted -> AMBIGUOUS
+        (_D.PARTY_ASYMMETRY, "symmetric", ConfidenceTag.INFERRED),     # 0.93 -> supported -> kept
+        (_D.CAP_BASIS, "fixed_fee", ConfidenceTag.AMBIGUOUS),          # already AMBIGUOUS -> not judged
+    ), "only Licensee shall indemnify Licensor", judge))
+    assert len(calls) == 1 and calls[0][0] == "jev_decision" and len(calls[0][1]["questions"]) == 2
+    by = {a.dimension: a.confidence for a in rec.assertions}
+    assert by[_D.MUTUALITY] == ConfidenceTag.AMBIGUOUS and by[_D.PARTY_ASYMMETRY] == ConfidenceTag.INFERRED
+
+
+def test_a_decision_judge_error_leaves_every_value_untouched(monkeypatch):
+    import asyncio
+
+    from rag_wright.spans.semantic_judge import asemantic_judge
+
+    judge, _ = _decision_judge(monkeypatch, error=RuntimeError("decisions API down"))
+    before = _record("Cap On Liability", (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED))
+    assert asyncio.run(asemantic_judge(before, "text", judge)) == before
+
+
+def test_the_default_judge_is_the_decision_model_when_one_is_configured(monkeypatch):
+    from rag_wright.spans.semantic_judge import DecisionJudge, select_asemantic_judge
+
+    _decision_judge(monkeypatch, scores=[])
+    monkeypatch.delenv("RAG_SEMANTIC_JUDGE", raising=False)
+    assert isinstance(select_asemantic_judge(None), DecisionJudge)
+    assert not isinstance(select_asemantic_judge("some/llm"), DecisionJudge)   # an explicit model -> the LLM judge
+    monkeypatch.setenv("RAG_SEMANTIC_JUDGE", "llm")
+    assert not isinstance(select_asemantic_judge(None), DecisionJudge)         # forced LLM judge
+
+
+def test_without_a_decision_model_the_judge_falls_back_to_the_llm_judge(monkeypatch):
+    from rag_wright.spans.semantic_judge import DecisionJudge, select_asemantic_judge
+
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.delenv("RAG_SEMANTIC_JUDGE", raising=False)
+    judge = select_asemantic_judge(None)
+    assert judge is not None and not isinstance(judge, DecisionJudge)

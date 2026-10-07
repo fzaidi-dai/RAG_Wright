@@ -629,6 +629,17 @@ def clause_cache_key(clause_id: str, anchor_span_id: str, function: str, templat
     return hashlib.sha256(f"{clause_id}|{anchor_span_id}|{function}|{template_version}".encode("utf-8")).hexdigest()[:32]
 
 
+def extraction_method(judge: Any, residual: Any, *, judge_model: Any, residual_model: Any) -> str:
+    """ING-9b: how clause records are produced -- the Layer-3 judge (decision model, or the LLM judge + its model)
+    and the residual lane (decision model, or the LLM + its model). Part of the clause cache's template version, so
+    switching either never reuses records the other method produced."""
+    from rag_wright.spans.semantic_judge import DecisionJudge
+
+    j = "decision" if isinstance(judge, DecisionJudge) else f"llm:{judge_model}"
+    r = "decision" if residual is not None else f"llm:{residual_model}"
+    return f"judge={j}|residual={r}"
+
+
 def settle_clause_results(records: dict, hook_failures: list[dict], stage: Any) -> tuple[list, list[dict]]:
     """ING-4d: the reference pipeline's `(clause_records, clause_failures)` from the shared extract stage. A unit the
     stage rejected (its extraction failed the contract check, e.g. provenance) is NOT counted as a record and IS
@@ -715,7 +726,9 @@ def aproduction_document_ingest(
         surface -- they share one model). A bare model-id string or an `ExtractionModel` (unwrapped to its id);
         `None` -> the default (granite, `RAG_GRAPH_EXTRACT_MODEL`).
       - `judge_model`: the ingest semantic-judge model (ADR-0040 Layer-3 gate) -- a model-id string or an
-        `ExtractionModel`; `None` -> `model_for(STRUCTURED_REASONING)`.
+        `ExtractionModel` selects the LLM judge; `None` -> the decision-model judge (Jev, one batched call per
+        provision, ING-9) when one is configured, else the LLM judge on `model_for(STRUCTURED_REASONING)`
+        (`RAG_SEMANTIC_JUDGE=llm` forces the LLM judge).
       - `chunk_model`: the chunker's boundary-refinement model -- structural boundaries are deterministic (zero
         calls); ONLY an over-cap section triggers a bounded per-section tag-parse call, and this is the model it
         uses. A model-id string or an `ExtractionModel`; `None` -> `model_for(GENERAL)`.
@@ -766,22 +779,27 @@ def aproduction_document_ingest(
     # follow-up). None -> default (GENERAL role). A bare id or an ExtractionModel (unwrapped to its id).
     chunk_model_id = getattr(chunk_model, "model", chunk_model)
     discoverer = StructuralModelFallbackDiscoverer(chunk_model_id)
-    from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
+    from rag_wright.spans.residual_candidates import select_residual_extractor
+    from rag_wright.spans.semantic_judge import select_asemantic_judge
     # caller-configurable ingest models (else backend/env defaults). A bare id -> an ExtractionModel; for the
     # graph/judge surfaces (which take a model-id string) an ExtractionModel is unwrapped to its `.model` id.
     clause_model = extract_model
     if isinstance(extract_model, str):
         clause_model = default_extraction_model("clause-extract", extract_model)
     graph_extract_id = getattr(graph_extract_model, "model", graph_extract_model)  # None or a bare model-id
-    judge_id = getattr(judge_model, "model", judge_model) or model_for(ModelRole.STRUCTURED_REASONING)
+    judge_id = getattr(judge_model, "model", judge_model)  # None -> the decision-model judge (ING-9)
     # CLS-D (ADR-0115): Step-3a property extraction is the classifier-first path -- the 29-dim best-of-both fleet,
     # ONE residual LLM call for the 7 numeric/open dims (`clause_model`). EP-RT-7: the classifier LANE is dispatched
     # through the `clause_property_classification` CAPABILITY (the single production path), never a second hand-built
     # fleet here; the residual LLM call + the ADR-0028/0040/Layer-3 judge gates compose around it (ClassifierPropertyExtractor).
+    judge = select_asemantic_judge(judge_id)
+    residual = select_residual_extractor()  # ING-9b: the residual dims on the decision model when configured
     clause_extractor = classifier_property_extractor(
         classifier_fn=capability_property_classifier_fn(),
-        model_id=getattr(clause_model, "model", clause_model),  # the residual 7-numeric structured call
-        asemantic_judge_fn=build_asemantic_judge_fn(judge_id))
+        model_id=getattr(clause_model, "model", clause_model),  # the residual 7-numeric structured call (LLM lane)
+        asemantic_judge_fn=judge, residual=residual)
+    method = extraction_method(judge, residual, judge_model=judge_id or model_for(ModelRole.STRUCTURED_REASONING),
+                               residual_model=getattr(clause_model, "model", clause_model))
     # party AND affiliation extraction share the graph-extract model (GP-1B); one arg drives both
     aextract_parties_fn = (aproduction_extract_fn(model_id=graph_extract_id) if graph_extract_id
                            else aproduction_extract_fn())
@@ -804,8 +822,8 @@ def aproduction_document_ingest(
 
             classify_fn = production_batch_clause_classifier(model_for(ModelRole.FUNCTION_CLASSIFY))
     embedder = embedder if embedder is not None else build_ingest_embedder(embedding_profile)
-    template_version = hashlib.sha256(
-        json.dumps(Clause.model_json_schema(), sort_keys=True).encode("utf-8")).hexdigest()[:12]
+    template_version = hashlib.sha256((json.dumps(Clause.model_json_schema(), sort_keys=True) + method)
+                                      .encode("utf-8")).hexdigest()[:12]  # ING-9b: + the extraction method
     _CLAUSE_EXTRACT_ATTEMPTS = 3  # clause_concurrency resolved above (EP-API-4a)
 
     async def _aparty_names(text: str) -> list:

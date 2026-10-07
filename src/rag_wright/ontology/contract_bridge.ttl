@@ -2683,3 +2683,34 @@ cbr:Organization a eng:EntityNodeType ; rdfs:label "Organization" .
 cbr:Person a eng:EntityNodeType ; rdfs:label "Person" .
 cbr:ContractsWith a eng:EntityRelationshipType ; rdfs:label "Contracts With" .
 cbr:AffiliateOf a eng:EntityRelationshipType ; rdfs:label "Affiliate Of" .
+
+# =============================================================================
+# ING-9b: the residual (numeric/open) property ROLES as typed-decision answer options. Deterministic candidate
+# spans are classified by a decision model (one `choice` per candidate, one call per provision); these are the
+# options and their criteria (ADR-0066: authored here, not in code). Measured on hand-labelled set-A provisions
+# (held-out: 91.8% candidate-role accuracy vs 83.0% for the LLM extraction it replaces).
+# =============================================================================
+cbr:decisionCriterion a owl:DatatypeProperty ; rdfs:range xsd:string ;
+    rdfs:comment "A one-line criterion for an answer option of a typed-decision question (ING-9b)." .
+cbr:roleOrder a owl:DatatypeProperty ; rdfs:range xsd:integer ;
+    rdfs:comment "The position of an answer option in its question (a stable order for the decision model)." .
+cbr:questionInstructions a owl:DatatypeProperty ; rdfs:range xsd:string .
+cbr:ResidualRole a owl:Class ; skos:prefLabel "Residual property role" ;
+    rdfs:comment "What a candidate span is in its provision: one of the residual (numeric/open) dimensions, or none." .
+cbr:residualRoleQuestion cbr:questionInstructions "Below is one provision from a document, followed by numbered candidate spans taken from it. For each candidate, decide what it is IN THIS PROVISION. Judge only what the provision says; a span that merely looks like a number or a date is 'none' unless the provision uses it in one of these roles." .
+cbr:role_cap_quantum a cbr:ResidualRole ; skos:prefLabel "cap_quantum" ; cbr:roleOrder 0 ;
+    cbr:decisionCriterion "the amount or formula that caps a party's liability (the most it can owe)" .
+cbr:role_jurisdiction a cbr:ResidualRole ; skos:prefLabel "jurisdiction" ; cbr:roleOrder 1 ;
+    cbr:decisionCriterion "the governing-law jurisdiction, or the place of the courts, venue or arbitration for disputes" .
+cbr:role_temporal_bound a cbr:ResidualRole ; skos:prefLabel "temporal_bound" ; cbr:roleOrder 2 ;
+    cbr:decisionCriterion "a duration, period, deadline or end date that bounds an obligation, a right or the agreement itself (e.g. 'within sixty (60) days', 'for three (3) years', 'until February 28, 2004', 'during the term of this Agreement'), and that is NOT an advance-notice requirement" .
+cbr:role_notice_period a cbr:ResidualRole ; skos:prefLabel "notice_period" ; cbr:roleOrder 3 ;
+    cbr:decisionCriterion "how much advance notice one party must give the other, e.g. the 'thirty (30) days' in 'upon thirty (30) days' prior written notice' or 'at least 60 days before the end of the term'; every advance-notice duration is a notice period, never a temporal bound" .
+cbr:role_audit_frequency a cbr:ResidualRole ; skos:prefLabel "audit_frequency" ; cbr:roleOrder 4 ;
+    cbr:decisionCriterion "how often an AUDIT or INSPECTION may be carried out (not how often reports, payments or updates are made)" .
+cbr:role_commitment_quantum a cbr:ResidualRole ; skos:prefLabel "commitment_quantum" ; cbr:roleOrder 5 ;
+    cbr:decisionCriterion "a committed, minimum or maximum quantity, volume or amount to buy, sell, supply or pay, including the rows of a committed purchase or supply volume table" .
+cbr:role_ld_trigger a cbr:ResidualRole ; skos:prefLabel "ld_trigger" ; cbr:roleOrder 6 ;
+    cbr:decisionCriterion "ONLY when this provision imposes liquidated damages: the event or breach that triggers them; an amount or percentage is never a trigger" .
+cbr:role_none a cbr:ResidualRole ; skos:prefLabel "none" ; cbr:roleOrder 7 ;
+    cbr:decisionCriterion "none of these: a section number or heading, a signing or effective date or the date of a past event, an address, a price or rate, a cost or revenue share, how often reports, payments or updates are made, a vague timing word (at all times, thereafter, promptly), the NAME of a period (such as 'Initial Term' or 'the last Calendar Year of the Term') when the span only names it rather than bounding something, or a fragment that is not itself a value" .

@@ -262,7 +262,7 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
         pass
 
     def _fake_classifier(*, registry=None, model_id=None, semantic_judge_fn=None, asemantic_judge_fn=None,
-                         classifier_fn=None):
+                         classifier_fn=None, residual=None):
         captured.update(model_id=model_id, classifier_fn=classifier_fn)
         return object()  # dummy extractor; let wiring continue to the party-extraction call
 
@@ -291,13 +291,16 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     assert captured["chunk_model_id"] == "chunk/model-c"                # chunker boundary-refinement model
 
     captured.clear()
+    # ING-9: with no judge_model the default judge is the DECISION model when one is configured (covered in
+    # tests/spans/test_semantic_judge.py); pin "none configured" so this asserts the LLM fallback deterministically
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     with pytest.raises(_StopHere):
         pipe.aproduction_document_ingest(
             store=object(), cache_dir=str(tmp_path), registry=object(), embedder=object())
     # no args -> backend/env defaults preserved (existing callers unaffected)
     assert captured["model_id"] is None
     assert captured["graph_kw"] == {}  # party extraction falls back to its own default
-    assert captured["judge_id"]  # judge falls back to model_for(STRUCTURED_REASONING), a non-empty id
+    assert captured["judge_id"]  # no decision model -> the LLM judge on model_for(STRUCTURED_REASONING)
     assert captured["chunk_model_id"] is None  # chunker falls back to model_for(GENERAL)
 
 

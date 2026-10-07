@@ -23,6 +23,7 @@ is a READING with no surface form (`mutuality=mutual` vs `unilateral`, `favorabi
 from __future__ import annotations
 
 import asyncio
+import os
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -117,6 +118,77 @@ def build_asemantic_judge_fn(model_id: str, *, structured_factory=build_tag_stru
     return ajudge
 
 
+# --- ING-9: the DECISION-MODEL judge (Jev) -- the same verify-or-refute reading, one batched call per provision ----
+# Measured (ADR-0040 ING-9 addendum) on 192 hand-labelled judge cases, blind to both judges: Jev 95.3% vs the LLM
+# judge 90.1% (catches 149/154 unsupported values vs 138/154), calibrated scores, one call per provision instead of
+# one per value, ~60x cheaper. The rule is the SKILL's strictness, stated once; the per-value meaning is the gloss.
+_DECISION_RUBRIC = (
+    "Below is one clause from a document, followed by numbered properties that were extracted from it. For each "
+    "property, decide whether a careful reading of THIS clause genuinely SUPPORTS it.\n\n"
+    "Be strict. Mere plausibility is not support: that a reading is possible is not enough, the clause must "
+    "actually bear it. If the clause is silent on what the property asserts, it is not supported. Do not import "
+    "world knowledge or the usual drafting of such clauses; judge only this clause.")
+_DECISION_CRITERIA = {"true": "this clause genuinely supports the property",
+                      "false": "the clause does not support the property, contradicts it, or is silent on it"}
+_DECISION_THRESHOLD = 0.5
+
+
+def judge_request(text: str, props: list[tuple[PropertyDimension, str]]) -> tuple[str, dict]:
+    """ING-9: the decision-model request for one clause -- `(state, questions)`: the strictness rule once, the clause
+    (whitespace flattened), then each `dimension = value (meaning: ...)`; one `noul` question per property."""
+    items = "\n".join(f"[{i}] {d.value} = {v} (meaning: {_DIMENSION_GLOSS.get(d, d.value)})"
+                      for i, (d, v) in enumerate(props))
+    state = f"{_DECISION_RUBRIC}\n\nClause:\n{' '.join(text.split())}\n\nProperties:\n{items}"
+    return state, {f"p{i}": {"type": "noul", "instructions": f"Property [{i}]", "criteria": dict(_DECISION_CRITERIA)}
+                   for i in range(len(props))}
+
+
+class DecisionJudge:
+    """ING-9: the Layer-3 judge on a typed-DECISION model (`jev_decision`, through the engine invoker): ALL of a
+    provision's semantic values in ONE call. A value scoring below 0.5 is refuted. Any error -> no verdicts (every
+    value left untouched -- never downgrade on a judge failure)."""
+
+    def __init__(self, ainvoke: Any, *, model: Optional[str] = None, resources: Any = None) -> None:
+        self._ainvoke, self._model, self._resources = ainvoke, model, resources
+
+    async def ajudge_batch(self, targets: list, text: str) -> list[Optional[SemanticVerdict]]:
+        state, questions = judge_request(text, [(a.dimension, a.value) for a in targets])
+        inputs = {"state": state, "questions": questions, **({"model": self._model} if self._model else {})}
+        try:
+            out = await self._ainvoke("jev_decision", inputs, resources=self._resources)
+            answers = out.get("answers", {}) if isinstance(out, dict) else {}
+            scores = [(answers.get(f"p{i}") or {}).get("noul") for i in range(len(targets))]
+        except Exception:  # noqa: BLE001 - a decision-model blip must not change any value
+            return [None] * len(targets)
+        return [None if s is None else SemanticVerdict(supported=float(s) >= _DECISION_THRESHOLD,
+                                                       reason=f"decision score {float(s):.2f}") for s in scores]
+
+
+def build_decision_judge(resources: Any = None) -> Optional[DecisionJudge]:
+    """The decision-model judge, or None when no decision model is configured/registered (same availability rule as
+    the boundary decider)."""
+    from rag_wright.api import ainvoke_model, capability_index
+    from rag_wright.models.profiles import decision_profile
+
+    model = os.environ.get("RAG_DECISION_MODEL")
+    if not os.environ.get(decision_profile(model).api_key_env) or "jev_decision" not in capability_index():
+        return None
+    return DecisionJudge(ainvoke_model, model=model, resources=resources)
+
+
+def select_asemantic_judge(judge_model: Any = None, *, resources: Any = None) -> Any:
+    """ING-9: the ingest Layer-3 judge. Default: the decision-model judge when one is available; an explicit
+    `judge_model`, or `RAG_SEMANTIC_JUDGE=llm`, selects the LLM judge (`build_asemantic_judge_fn`), as does the absence
+    of a decision model (`model_for(STRUCTURED_REASONING)` when no model is named)."""
+    from rag_wright.models.profiles import ModelRole, model_for
+
+    if judge_model is None and os.environ.get("RAG_SEMANTIC_JUDGE", "decision") != "llm":
+        judge = build_decision_judge(resources)
+        if judge is not None:
+            return judge
+    return build_asemantic_judge_fn(judge_model or model_for(ModelRole.STRUCTURED_REASONING))
+
+
 def semantic_judge(
     record: ClausePropertyRecord, text: str, judge_fn: JudgeFn, *, max_concurrency: int = 8
 ) -> ClausePropertyRecord:
@@ -164,6 +236,8 @@ async def asemantic_judge(
     targets = _semantic_targets(record)
     if not targets:
         return record
+    if hasattr(ajudge_fn, "ajudge_batch"):  # ING-9: a batched judge rules on all of the provision's values at once
+        return _apply_verdicts(record, targets, await ajudge_fn.ajudge_batch(targets, text))
     sem = asyncio.Semaphore(max_concurrency)
 
     async def _one(a: Any) -> Any:
