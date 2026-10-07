@@ -44,8 +44,8 @@ here so the engine is demoable out of the box — your product brings its own do
   code holds mechanism only.
 - **Model-neutral.** Model access is a profile seam — OpenRouter by default, self-hosted open models (vLLM)
   supported — never a hardcoded provider.
-- **Typed, provenance-first, test-driven.** Ships with `py.typed`; every answer carries citations; every capability
-  has an eval.
+- **Typed, provenance-first, test-driven.** Ships with `py.typed`; every answer carries citations; capabilities are
+  built eval-first (the evaluation harnesses are in `eval/`).
 
 ## Documentation — start here
 
@@ -67,14 +67,16 @@ The whole doc set is under [`docs/`](docs/). Pick your path:
 uv add rag-wright
 ```
 
-This installs the latest PyPI release (0.1.0). The generic ingestion builder and the neutral default schema landed
-after 0.1.0; until the next release, depend on the engine from git or a local path to get them (see
-[`docs/installation.md`](docs/installation.md)).
+This installs the latest PyPI release (0.1.0). The generic ingestion builder, the neutral default schema and the
+move of the reference pack to `rag_wright.packs` landed after 0.1.0; until the next release, depend on the engine
+from git or a local path to get them (see [`docs/installation.md`](docs/installation.md)). Code written against
+0.1.0 migrates with the
+[breaking-changes record](docs/specs/ingestion-hooks/ing8-breaking-changes.md).
 
 Runtime prerequisites: **ArcadeDB** (the store — run it locally with Docker, see
 [`docs/installation.md`](docs/installation.md)); **a model provider** (an OpenRouter key by default, or a self-hosted
-endpoint); and, only for NER, the optional extra `uv pip install 'rag-wright[ner]'` + `uv run python -m spacy
-download en_core_web_sm`.
+endpoint); and, only for NER (named entity recognition), the optional extra `uv add 'rag-wright[ner]'` +
+`uv run python -m spacy download en_core_web_sm`.
 
 ## Quickstart (shape)
 

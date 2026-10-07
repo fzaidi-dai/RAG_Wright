@@ -33,14 +33,14 @@ Worked precedent in this engine:
 | | Contracts (decomposed) | Compliance (the CIC arc) |
 |---|---|---|
 | Unit boundaries | deterministic (section numbering / headings) + a decision-model residue decider (one batched `noul` call for the uncertain lines; ADR-0122) | deterministic operative-rule spans + one `jev_decision` call per span for the operative gate (the default `extraction_backend="jev"`) |
-| Closed-vocab tags | the 21-dim / 29-dim classifier fleet | deontic cue-rule + actor / claim-types in that same per-span Jev call (applicability left empty) |
-| Open / numeric field | deterministic candidate spans + one Jev `choice` call per provision with candidates (none without); the LLM only as fallback (`RAG_RESIDUAL_EXTRACTOR=llm`). Value recall / precision 0.83 / 0.88 vs the LLM's 0.60 / 0.79 | evidence standard left empty on the Jev backend; the `"docling"` fallback keeps one LLM extraction per section |
+| Closed-vocab tags | the 21-dim / 29-dim classifier fleet | deontic cue-rule + actor / claim-types in that same per-span Jev call |
+| Open / numeric field | deterministic candidate spans + one Jev `choice` call per provision with candidates (none without); the LLM only as fallback (`RAG_RESIDUAL_EXTRACTOR=llm`). Value recall / precision 0.83 / 0.88 vs the LLM's 0.60 / 0.79 | applicability + evidence standard: one gated residual LLM call, only for a rule with a conditional or evidence cue (most skip it); the `"docling"` fallback keeps one LLM extraction per section |
 | Extraction judge | the Layer-3 judge on Jev: one batched call per provision, 95.3% vs the LLM judge's 90.1% (192 blind hand-labelled cases); `RAG_SEMANTIC_JUDGE=llm` opts out | (none) |
 | Text of the record | verbatim span | verbatim span (was a paraphrase) |
 | Structure / graph extraction | once per document (parties), keep the LLM | once per document, keep the LLM |
 
-Cost shape (live, 131 provisions of one contract): 215 Jev calls, 0 LLM calls, $0.013, against 277 LLM calls and
-$0.277 on the LLM path. One batched call per unit is the shape to aim for.
+Cost shape (live, 131 provisions of one contract): 215 Jev calls, 0 LLM calls, $0.013, against 277 calls (276 of them
+LLM) and $0.277 on the LLM path (ADR-0040, ING-9 / ING-9b addendum). One batched call per unit is the shape to aim for.
 
 The pattern is domain-independent. What changes per domain is the vocabulary and the document structure — which is
 exactly what the phases below make you look at.
@@ -153,8 +153,8 @@ Produce a decomposition plan, not prose:
 
 ## Hand-off (what to do with the opportunities)
 
-- **Deterministic rule / cue-rule / span-split** → plain code inside the ingestion subgraph. NOT a capability; it is
-  mechanism, and the knowledge it reads lives in the `.ttl`.
+- **Deterministic rule / cue-rule / span-split** → plain code in an ingestion hook (`Segmenter`, `UnitGrouper`,
+  `SpanTagger`, passed to `build_ingestion`). NOT a capability; it is mechanism, and the knowledge it reads lives in the `.ttl`.
 - **System-1 decision model (NO training)** → for a closed-set decision (yes/no, choice, score), A/B a decision
   model — **Jev** (managed, OpenRouter Decisions API, zero/few-shot, calibrated) or **Laya** (open, fine-tuned) —
   BEFORE committing to a trained classifier. It often wins when data is scarce or label-ambiguous, or when you need

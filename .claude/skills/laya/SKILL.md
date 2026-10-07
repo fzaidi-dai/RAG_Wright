@@ -82,13 +82,15 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
   goes in TRAIN only; val/test stay gold.
 
 ## Fine-tune — single T4, RLCD, calibration built in
-- `python research/scripts/finetune_single_device.py --data <train.jsonl> --model-dir <english-base> --output-dir <out> --epochs 4` (reproduces the 2×T4 notebook without DDP; CPU/one-GPU).
+- From the cloned laya repo (`~/work/laya`, its own uv project, not this engine's env): `uv run python research/scripts/finetune_single_device.py --data <train.jsonl> --model-dir <english-base> --output-dir <out> --epochs 4` (reproduces the 2×T4 notebook without DDP; CPU/one-GPU; flags: `--data`, `--model-dir`, `--output-dir`, `--device`, `--epochs`, `--seed`). Inside the Modal image the harness runs the copied script with the container's own `python`.
 - Runs on **one 16 GB GPU (T4)** — ~1–2 h for large data, minutes for our small dims. RLCD = soft-CE + GRPO-style
   policy gradient on proper scoring rules. Calibration (one temperature per type) is fitted inside the run on a
   held-out slice; **argmax/accuracy unchanged, only confidence moves** — always fit before gating on confidence.
-- **OOM knob (hit this):** ModernBERT-large (~400M) OOMs a T4/L4 at the default `batch_size=16, max_seq=256`. Clauses
-  are short → set `--batch-size 8 --max-seq 128` (the script/notebook also enables gradient checkpointing). That fit
-  comfortably.
+- **OOM knobs:** ModernBERT-large (~400M) is tight on a 16 GB T4/L4. The single-device script has NO batch or
+  sequence flags: it fixes `micro_batch = 8`, `max_tokens_per_batch = 4096`, `max_len = 1024` and `head_max_len = 256`
+  in code, and turns on gradient checkpointing on CUDA. Our short-clause dims ran with it unchanged. If a run still
+  OOMs, lower those values in a copy of the script, or use the repo's `laya_finetune_typed_decisions_mps.py` (under notebooks/), which
+  takes `--micro-batch` and `--grad-accum`.
 - **Run preflight FIRST — see the [[setfit]] "Run preflight & monitoring" section.** It is framework-agnostic and
   applies to Laya exactly as to SetFit, including when you GENERATE the Laya JSONL labels with a teacher: resolve
   the model from the engine (never a hardcoded/stale id; bulk teacher labeling on Modal Qwen, not OpenRouter), load

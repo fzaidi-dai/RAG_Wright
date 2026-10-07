@@ -29,7 +29,7 @@ Tracing never breaks a model call: every langfuse touch degrades to a no-op on e
 |---|---|---|
 | `models.seam.astream_text` (LangChain streaming) | answer generation, query understanding, query constraint extraction, the LLM fallbacks of the reference ingest (the LLM function classifier, the residual clause-value call) | `astream_text` |
 | `models.seam.build_structured` (forced structured output, `.ainvoke`/`.invoke`) | the relevance judge (`span-relevance`), the compliance judge, and every other forced-schema caller (issue 0025) | `build_structured` |
-| docling-graph litellm client (`capabilities.dg_extraction`) | party / clause extraction on the legacy path | `litellm` |
+| docling-graph litellm client (`packs.contracts.capabilities.dg_extraction`, contracts pack) | party extraction, and clause extraction on the legacy path | `litellm` |
 
 ### Fields (the contract)
 
@@ -78,7 +78,7 @@ not (for example a self-hosted vLLM endpoint), add a price row to the deployment
 
 ## Coverage & caveats
 
-- Covered: `astream_text` (the dominant path) + the docling-graph litellm path. Any remaining direct
+- Covered: `astream_text` (the dominant path), `build_structured`, and the docling-graph litellm path. Any remaining direct
   `build_model(...).invoke` caller is not yet instrumented (add the same `record_generation` pattern if one is
   found).
 - **Not emitted to Langfuse:** decision-model (Jev) calls (`jev_decision`: the reference ingest's provision

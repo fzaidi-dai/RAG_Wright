@@ -52,7 +52,7 @@ Newer measurements (ingestion, ADR-0122 / ADR-0040 ING-9/9b): the provision-boun
 (99.8%) with zero flips across 3 calls; the extraction judge on Jev 95.3% vs the LLM judge's 90.1% (192 blind
 hand-labelled cases); residual values (deterministic candidates + a Jev role choice) value-level recall 0.83 /
 precision 0.88 vs the LLM's 0.60 / 0.79. Live, one contract's 131 provisions took 215 Jev calls and 0 LLM calls
-for $0.013 (the LLM path: 277 calls, $0.277).
+for $0.013 (the LLM path: 277 calls, 276 of them LLM, $0.277).
 
 **Unstable answers mean an ambiguous question.** Jev flipped 5/181 answers across identical calls, all at scores
 0.47-0.56; temperature/seed did not help and majority voting barely helped. Rewriting the question did: state the
@@ -230,7 +230,7 @@ order before you fan out any bulk job.
    and you tail the file / Monitor-loop it (never pipe a live run through `grep`/`tail`; never a run whose only
    output is at the end — it is unmonitorable). Report progress back in X/N form. This is how errors are caught
    early instead of after an hour.
-5. **Checkpoint + registry + adopt-only-if-better** (ADR-0030, and Phase 5 below): snapshot before retrain, version
+5. **Checkpoint + registry + adopt-only-if-better** (ADR-0030, and Phase 5 above): snapshot before retrain, version
    every run with a data fingerprint, load-don't-retrain. **Read metrics from the result artifact (JSON), not
    stdout.**
 

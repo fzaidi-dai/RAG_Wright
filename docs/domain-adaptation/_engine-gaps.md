@@ -16,8 +16,10 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   building blocks are not exported from `rag_wright.api`: `build_graph_extraction`
   (`rag_wright.subgraphs.graph_extraction`), `disambiguate` (`rag_wright.capabilities.disambiguation`),
   `resolve_entities` (`rag_wright.capabilities.entity_resolution`) and `GraphWriter`
-  (`rag_wright.capabilities.graph_storage`). `GraphWriter` also takes the store itself, which a product only reaches
-  through the workspace's internal store. `entity_resolution` and `entity_disambiguation` remain internal pipeline
+  (`rag_wright.capabilities.graph_storage`), with the contracts they take (`ExtractionResult` / `EntityMention` in
+  `rag_wright.contracts.extraction`, `ChunkId` / `EntityId` in `rag_wright.contracts.identifiers`) and the registry
+  (`EntityRegistry` / `RegistryRecord` in `rag_wright.ontology.registry`). `GraphWriter` also takes the store
+  itself, which a product only reaches through the workspace's internal store. `entity_resolution` and `entity_disambiguation` remain internal pipeline
   steps (ADR-0118, EP-CORE-1b-iii), not invocable by name.
 - **Proposed:** export the entity-graph building blocks (or one helper that runs them over a workspace) from
   `rag_wright.api`, and/or a resolver/registry hook on `EngineConfig`. (Entity resolution itself is already
@@ -44,7 +46,7 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 ### G6: A domain's decision-model boundary decider has no cache or repeatability
 - **Where:** `build_ingestion(boundary_decider=)` takes any async decider, but the decision cache
   (`cached_decider`) and the Jev-backed residue decider (`jev_boundary_decider`, `residue_request`) live only in the
-  reference pack.
+  reference pack (`rag_wright.packs.contracts.spans.boundary`).
 - **Impact:** a domain that adjudicates its boundary residue with the decision model (Jev) pays for every call again
   on a re-ingest, and its boundaries can change between runs (Jev is not repeatable call to call).
 - **Proposed:** a generic `cached_decider` in the engine (keyed by the decision model, the prompt and the batch).
@@ -90,6 +92,28 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   engine code edit, or mutating the module-level dict from product code (an engine internal).
 - **Proposed:** a public way to register a `DecisionModelProfile` (on `EngineConfig`, or an `rag_wright.api` helper).
 
+### G13: Entity disambiguation is tuned for contract parties and not injectable
+- **Where:** `rag_wright.capabilities.disambiguation.disambiguate` normalizes and rejects mentions with
+  `rag_wright.corpus.canonicalize` (and `GraphWriter` keys unlinked nodes by the same normalizer): legal-form suffixes
+  (`Inc.`, `LLC`, `GmbH`, `N.A.`, ...) are stripped, contract role phrases (`the buyer`, `collectively`, ...) and a
+  fixed list of role and broad words (`buyer`, `seller`, `licensor`, `customer`, `supplier`, `services`, `global`,
+  ...) are rejected as entities on their own. Its only parameter is `coreference_resolvers`. The generic
+  `RegistryRecord` also carries a `ticker` field (the reference domain's SEC alias).
+- **Impact:** a new domain's entity names are normalized and filtered by contract-party rules it cannot replace (a
+  mention that is exactly `Customer` or `Supplier` is dropped); this is domain knowledge in Python (ADR-0066).
+- **Proposed:** inject the normalizer and the reject rules (as `EntityRegistry(normalize=)` already is), with the
+  current rules moved to the contracts pack as its own; generic aliases instead of `ticker`.
+- Surfaced: ING-5 doc audit.
+
+### G14: ARD publication is not on `rag_wright.api`
+- **Where:** a product registers its capabilities through `rag_wright.api` (`register_capability`, `load_pack`), but
+  writing a capability's ARD manifest (`urn:air`) is `rag_wright.capabilities.manifests.publish` / `publish_all`,
+  which are not exported. `publish` requires the slug in `canonical_capability_slugs()`.
+- **Impact:** ARD registration is part of every capability's definition of done, but a product reaches it only
+  through an engine module.
+- **Proposed:** export `publish` (with a target root) from `rag_wright.api`.
+- Surfaced: ING-5 doc audit.
+
 ## Resolved during engine-prep (for the record)
 
 - **spaCy is an optional runtime asset**, not a hard/direct-URL dependency — the publish blocker is gone
@@ -116,4 +140,5 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 ## Prerequisites a domain provides (not engine gaps)
 
 - **ArcadeDB** (the store), **a model provider** (OpenRouter or self-hosted vLLM), and — only for the NER path —
-  the spaCy model (`uv pip install 'rag-wright[ner]'` + `spacy download`). See [installation](../installation.md).
+  the spaCy model (`uv pip install 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`). See
+  [installation](../installation.md).

@@ -25,7 +25,8 @@ example, not the product.
 A product configures the engine once and opens a workspace:
 
 - **`EngineConfig`** — the whole view of the engine: a `StoreConfig` (how to reach ArcadeDB), model aliases by role,
-  the embedding profile, ingest options (`EngineOptions` / `IngestOptions`), and `pack` (the path to a domain
+  the embedding profile, the options catalog (`EngineOptions`: the generic ingest knobs in `IngestOptions`, plus
+  each domain pack's own options under `EngineOptions.packs`, keyed by pack name), and `pack` (the path to a domain
   `.ttl`; `None` means no domain pack: only the neutral engine schema -- the vertex types `Chunk`, `Entity`, `Span`,
   `Document` and the edge types `Relationship`, `Mentions`, `EmbeddedIn`, `AttachedTo`. The reference contract
   pipeline ensures its own pack schema when it runs).
@@ -48,7 +49,7 @@ A **capability** is a named, discoverable unit of work (ARD = Agentic Resource D
 | `agent_skill` | authored SKILL.md knowledge loaded into an agent | loaded, not called |
 | `mcp_tool` | a capability exposed over MCP | served by an MCP server |
 
-Two things matter for a new domain:
+Three things matter for a new domain:
 
 - **Invocable-by-name vs composed-by-import.** A capability with an `impl_ref` ("module:attr" pointing at a
   `(resources, inputs) -> result` factory) is invoked **by name** through the engine — zero engine edits. Capabilities
@@ -106,8 +107,9 @@ report = await pipeline.aingest(ws, sources, cache_dir="cache/")
   extractor on each unit concurrently, write, and record one `Document` node per document. Embedded files and PDF
   attachments are ingested through the same pipeline as child documents, linked with `EmbeddedIn` (child to parent)
   and `AttachedTo` (child to the table-row span it belongs to). Every hook's output is checked against its contract.
-- **The domain supplies the `extractor`** (a `Unit` in, a `UnitExtraction` of typed `KgNode`/`KgEdge` records out,
-  each carrying a `span_id` and a `confidence`). Every other hook is optional: the default segmenter follows the
+- **The domain supplies the `extractor`** (a `Unit` in, a `UnitExtraction` of typed `KgNode`/`KgEdge` records out;
+  each fact node or edge carries a `span_id` from that unit and a `confidence`, while a node without a `span_id` is
+  shared vocabulary such as a value or taxonomy node). Every other hook is optional: the default segmenter follows the
   docling layout, the default unit grouper is structural (headings start units, record tables become one unit per
   row), and the default writer uses `kg_write`. `document_hook(ws, source_document, chunks)` runs once per document
   after its records are written (for example, a domain's entity graph).

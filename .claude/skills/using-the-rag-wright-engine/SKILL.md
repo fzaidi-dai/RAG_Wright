@@ -70,8 +70,8 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
 
 1. **Configure** — construct `EngineConfig` (+ your domain `.ttl` via `pack=`) and `open_workspace(config, corpus=…)`.
    With `pack=None` the workspace gets only the neutral schema (`Chunk`, `Entity`, `Relationship`, `Mentions`,
-   `Span`, `Document`, `EmbeddedIn`, `AttachedTo`); your pack's types exist only if you pass `pack=` (a pack can
-   also create them on use with the store's `ensure_pack_schema`).
+   `Span`, `Document`, `EmbeddedIn`, `AttachedTo`); your pack's types exist only if you pass `pack=` (the path to your
+   `.ttl`; `open_workspace` then creates the types it declares).
 2. **Author the `.ttl` pack** — your closed value sets, KG schema (`eng:` vocabulary), SHACL constraints, SKOS
    synonyms. Knowledge in the `.ttl`, never in Python (ADR-0066). → `ontology-authoring.md`.
 3. **Build + register capabilities** — compose the engine's generic primitives by import; register YOUR domain
@@ -81,8 +81,10 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
 5. **Ingest the corpus** → the populated KG. `pipeline = build_ingestion(your_extractor, ...your hooks,
    tuning=IngestionTuning(...))`, then `await pipeline.aingest(ws, sources, cache_dir=...)`. Tune the hooks with
    `evaluate_ingestion` on your own sample documents before a full run. Embedded files and PDF attachments are
-   ingested as child documents; spreadsheets give one unit per record row (`IngestSource.table_mode`). See
-   ADR-0124 and `docs/api/`. **Entity resolution**: run your entity graph and resolver in
+   ingested as child documents; a database-style table (spreadsheet, CSV or PDF) gives one unit per record
+   row while forms stay whole (decided per table; override per source with `IngestSource.table_mode`), and
+   `table_rows` returns the exact cells. See the `building-an-ingestion-capability` skill, ADR-0124 and
+   `docs/api/`. **Entity resolution**: run your entity graph and resolver in
    `build_ingestion(document_hook=...)`, which runs once per document after its records are written; a
    first-class resolver config is still engine gap G1. → `kg-construction.md`, `entity-resolution.md`.
 6. **Build the product seam** — your thin layer over the engine API + registered caps (tenancy, orchestration,
@@ -90,8 +92,9 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
 
 **Using the decision model (Jev).** Register `jev_decision` (from `engine_capabilities()`) and set
 `OPENROUTER_API_KEY` (`RAG_DECISION_MODEL` overrides the default profile `jev-1.13`). Without both, the reference
-pack's decision paths silently fall back (to deterministic rules or the LLM), and your own
-`ainvoke_model("jev_decision", ...)` raises `KeyError`. Check both before trusting a run's numbers.
+pack's decision paths silently fall back (to deterministic rules or the LLM); your own
+`ainvoke_model("jev_decision", ...)` raises `KeyError` when it is not registered and `RuntimeError` when the key is
+unset. Check both before trusting a run's numbers.
 
 Read the engine's **reference pack** (`load_reference_pack()`) as a worked template — but the contract/compliance
 domain is only an example; your pack and capabilities are your own.
@@ -111,7 +114,8 @@ engine PR:
 
 ## Engine skills to use
 
-`creating-evals` (eval-first), `classifier-opportunity-analysis` → `setfit`/`laya` (build a decision),
+`creating-evals` (eval-first), `building-an-ingestion-capability` (your ingestion hooks),
+`classifier-opportunity-analysis` → `setfit`/`laya` (build a decision),
 `authoring-a-capability` (register a cap), `qwen-vllm-modal` (bulk teacher-labeling substrate). Pull these (and the
 Addy-Osmani spec-driven/TDD/planning skills) into your repo via your setup step, as the product template does.
 

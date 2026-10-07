@@ -61,7 +61,7 @@ _DEFAULT_OWNER = "dreamai.io"
 # capability updates both. FR-C.9 is a single slug (`generation`): reasoning, generation, and
 # vision-to-text are one capability, bound at whichever node needs them.
 # ING-8b: the ENGINE's canonical capability slugs (its generic capabilities). A PACK adds its own with
-# `register_canonical_slugs` when it loads (the reference contract/compliance pack does, in `reference.pack`), so
+# `register_canonical_slugs` when it loads (the reference packs do, in `rag_wright.packs.contracts.pack` / `rag_wright.packs.compliance.pack`), so
 # the whitelist keeps rejecting typos and invented names without the engine knowing any domain's capabilities.
 ENGINE_CAPABILITY_SLUGS: frozenset[str] = frozenset({
     "entity_disambiguation",

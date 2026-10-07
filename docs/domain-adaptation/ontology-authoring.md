@@ -42,8 +42,9 @@ ex:LinkedTo a eng:EntityRelationshipType ; rdfs:label "Linked To" .
 - **Declare every type your extractor writes.** The store does not create types on write, so a `kg_write` to an
   undeclared vertex or edge type fails.
 - **Record vertices carry provenance.** Declare `span_id:STRING` and `confidence:STRING` on each record type: the
-  engine's `check_extraction` requires each extraction to cite a span of its unit (`span_id`), and any `confidence`
-  must be a `ConfidenceTag` (`EXTRACTED`, `INFERRED` or `AMBIGUOUS`) ([KG construction](kg-construction.md)).
+  engine's `check_extraction` requires every `span_id` to be a span of the unit, a non-empty extraction to cite at
+  least once, and any `confidence` to be a `ConfidenceTag` (`EXTRACTED`, `INFERRED` or `AMBIGUOUS`)
+  ([KG construction](kg-construction.md)).
 - **`eng:EntityNodeType` / `eng:EntityRelationshipType` are optional.** Only the reference pack's loader and code
   generator read them; the engine's `EntityNode.entity_type` and `RelationshipFact.relationship_type` are opaque
   strings your domain names (`rag_wright.contracts.graph`).
@@ -110,7 +111,8 @@ cfg = EngineConfig(store=StoreConfig(...), pack="packs/mydomain.ttl")   # None =
 ws = open_workspace(cfg, corpus="mydomain")   # ensure_schema() creates your declared vertex/edge types
 ```
 
-The engine reads only the schema vocabulary (the vertex and edge declarations). Your capabilities read your own
+`EngineConfig.pack` takes one `.ttl`; there is no public way yet to add a second pack's schema to a workspace
+(engine gap G9). The engine reads only the schema vocabulary (the vertex and edge declarations). Your capabilities read your own
 value sets, shapes, mappings and criteria (with `rdflib` / `pyshacl`), as the reference pack does for its packs
 (its loader, `rag_wright.packs.contracts.ontology.loader`, is reference-pack code). Changing the domain = editing the `.ttl`.
 
@@ -126,6 +128,8 @@ not by moving truth into Python. Validate the pack itself with SHACL (`pyshacl`)
 
 The reference pack's bridges are the complete example of every section above:
 `rag_wright/packs/contracts/ontology/contract_bridge.ttl` (vertex/edge declarations, value sets, SHACL shapes, SKOS roll-ups —
-grounded in external standards *as that domain's choice*, not an engine requirement), `compliance_bridge.ttl`, and
+grounded in external standards *as that domain's choice*, not an engine requirement), `compliance_bridge.ttl` (its
+`cmp:RequirementNode` is a compact `eng:KgVertexType` example: the `Requirement` type, created by
+`ensure_pack_schema` when the compliance pack's `ComplianceStore` is constructed), and
 the domain pack `rag_wright/packs/compliance/ontology/packs/ftc_16cfr255.ttl`. Next: [KG construction](kg-construction.md)
 populates the schema this pack declares; [entity resolution](entity-resolution.md) canonicalizes the entity-graph types.

@@ -42,7 +42,8 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 
 - **Product → Engine, one way.** You consume the engine through `rag_wright.api`; you never fork it or touch the
   store directly. One set of helpers is not on `rag_wright.api` yet (the
-  entity-resolution building blocks); the templates list it as an engine gap to flag. The contract/compliance
+  entity-resolution building blocks, their contracts and the entity registry); the templates list it as an engine
+  gap to flag. The contract/compliance
   **reference pack** is the engine's worked example — a template, never your domain.
 - The engine's documentation lives in the engine repo (not the wheel): concepts, architecture, installation,
   configuration, quickstart, the domain-adaptation guide, reference pack, and the generated API reference. Read it

@@ -1,7 +1,8 @@
 # RAG_Wright engine — architecture overview (current state)
 
-Date: 2026-09-05; sections 3, 4, 6, 7 and 8 updated as of 2026-10-07 (shared ingestion stages, ADR-0124; the
-classifier-first clause extraction with the Jev decision model; the neutral default schema; one product LLM).
+Date: 2026-09-05; sections 2 to 8 updated as of 2026-10-07 (shared ingestion stages, ADR-0124; the
+classifier-first clause extraction with the Jev decision model; the neutral default schema; one product LLM; the
+reference pack under `rag_wright.packs` with its own store extensions, ING-8).
 A brief, grounded picture of how the engine works *right now*: the ingestion and query
 pipelines (contracts + compliance), the role of the ontologies, how the knowledge graph (KG) is populated and
 searched, how tag-parse works, the model defaults, and which registry capabilities are actually wired.
@@ -95,13 +96,14 @@ front-end; the output is the requirement side the compliance check scores agains
 `store/arcadedb.py`. One ArcadeDB database holds:
 - **Graph**: `Clause` property records + `PropertyValue` nodes with typed property edges, `Contract` metadata,
   entities (parties) linked by `Relationship` edges typed `CONTRACTS_WITH` / `AFFILIATE_OF` (`PARTY_TO` was
-  retired, ADR-0091), clause-to-clause `IsExceptionTo` edges, and one `Document` node per ingested document (child
-  documents linked by `EmbeddedIn` / `AttachedTo`).
+  retired, ADR-0091), clause-to-clause `IsExceptionTo` edges, the compliance pack's `Requirement` nodes, and one
+  `Document` node per ingested document (child documents linked by `EmbeddedIn` / `AttachedTo`).
 - **Schema:** a new database gets only the neutral engine types (`Chunk`, `Entity`, `Span`, `Document`,
-  `Relationship`, `Mentions`, `EmbeddedIn`, `AttachedTo`); the contract types are ensured by `ContractKGStore` from
-  `contract_bridge.ttl` on first use.
-- **Hybrid index** on `Chunk` and `Span`: a **dense** `LSM_VECTOR` (HNSW) over the BGE-M3 summary vector **and**
-  a **sparse** `LSM_SPARSE_VECTOR` over the full-text vector.
+  `Relationship`, `Mentions`, `EmbeddedIn`, `AttachedTo`). The pack types are created by the packs' store
+  extensions when constructed: `ContractKGStore` from `contract_bridge.ttl` (plus the typed property edges) and
+  `ComplianceStore` (`Requirement`) from `compliance_bridge.ttl`. `ArcadeDBStore` itself names no domain type.
+- **Hybrid index** on `Chunk` and `Span`: a **dense** `LSM_VECTOR` (HNSW) BGE-M3 vector (over the chunk summary for
+  `Chunk`, the span text for `Span`) **and** a **sparse** `LSM_SPARSE_VECTOR` over the full text.
 
 ```mermaid
 flowchart LR
@@ -116,9 +118,11 @@ flowchart LR
 ```
 
 Population: `ContractKGStore.write_clause_kg` (clause assertions) and `ContractKGStore.upsert_contract` (the
-reference pack's contract store), `write_graph` (entities + edges), `upsert_span`, and the generic `kg_write`
-(typed `KgNode`/`KgEdge` records, what `build_ingestion`'s default writer uses). Search: `hybrid_search` / `span_hybrid_search` (dense+sparse fuse + boost + rerank) and
-`graph_neighbors` / `_query` for structural traversal. No claim without a citation (FR-Q.6).
+reference pack's contract store), `ComplianceStore.write_requirements` (the compliance pack's store), and on the
+generic `ArcadeDBStore`: `write_graph` (entities + edges), `upsert_span`, and `kg_write` (typed `KgNode`/`KgEdge`
+records, what `build_ingestion`'s default writer uses). Search: `hybrid_search` / `span_hybrid_search` (dense+sparse
+fuse + boost + rerank), `spans_by_document` / `all_spans_by_document` for a document's spans, and `graph_neighbors` /
+`_query` for structural traversal. No claim without a citation (FR-Q.6).
 
 ---
 

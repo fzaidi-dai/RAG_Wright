@@ -13,7 +13,7 @@ config = EngineConfig(
     store=StoreConfig(host="localhost", port="2480", user="root", password="<DEV_PASSWORD>"),
     models={},                         # ModelRole value -> model alias override (empty = engine defaults)
     embeddings={"text": "bge-m3"},     # embedding profile -> supported embedder
-    options=EngineOptions(),           # the knobs catalog (ingest today)
+    options=EngineOptions(),           # the knobs catalog: generic ingest knobs + each pack's options
     pack=None,                         # path to a domain .ttl; None = no domain pack (neutral engine schema)
 )
 ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the backend DB name
@@ -24,7 +24,7 @@ ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the ba
 | `store` | `StoreConfig` | — (required) | how to reach the store |
 | `models` | `dict[str,str]` | `{}` | override the model for a `ModelRole` (e.g. `{"general": "ibm-granite/granite-4.2-8b"}`) |
 | `embeddings` | `dict[str,str]` | `{"text": "bge-m3"}` | the embedding profile → supported embedder |
-| `options` | `EngineOptions` | defaults | the options catalog (ingest knobs today) |
+| `options` | `EngineOptions` | defaults | the options catalog: `ingest` (an `IngestOptions`) and `packs` (each domain pack's options, keyed by pack name) |
 | `pack` | `str \| None` | `None` | path to the domain `.ttl` pack, whose types are created on top of the engine's; `None` = the neutral engine schema only (`Chunk`, `Entity`, `Span`, `Document` vertices; `Relationship`, `Mentions`, `EmbeddedIn`, `AttachedTo` edges). The reference contract pipeline ensures its own pack schema on first use. |
 
 `open_workspace(config, *, corpus, reset=False)` resolves and caches a workspace and ensures the schema. `corpus`
@@ -53,13 +53,14 @@ pack reads its entry and falls back to its defaults when it is absent.
 | `tuning` | `IngestionTuning` | — | the structural thresholds of the generic ingestion hooks (unit size cap, record-table rule, identifier rule, extraction and document concurrency). `build_ingestion` uses its own `tuning=` argument, else this, else the defaults. Tune it from `evaluate_ingestion` runs on your own samples. |
 
 The reference contracts pack reads `EngineOptions.packs["contracts"]`, a `ContractIngestOptions`
-(`rag_wright.packs.contracts.options`). Every field defaults to `None` = the pack's env/default:
+(`rag_wright.packs.contracts.options`); any other type under `"contracts"` raises a `TypeError`. Every field defaults
+to `None` = the pack's env/default:
 
 | `ContractIngestOptions` field | type | env fallback | meaning |
 |---|---|---|---|
 | `classify_concurrency` | `int` | `CLASSIFY_CONCURRENCY` | function-classify parallelism |
-| `clause_concurrency` | `int` | `CLAUSE_CONCURRENCY` | clause-extraction parallelism |
-| `affiliations` | `bool` | `RAG_INGEST_AFFILIATIONS` | run affiliation extraction |
+| `clause_concurrency` | `int` | `CLAUSE_CONCURRENCY` (default 8) | clause-extraction parallelism |
+| `affiliations` | `bool` | `RAG_INGEST_AFFILIATIONS` (default on; `0` turns it off) | run affiliation extraction |
 | `function_classifier` | `str` | `RAG_FUNCTION_CLASSIFIER` | `"setfit"` (default, the trained SetFit ensemble) \| `"llm"` |
 
 ```python
@@ -75,8 +76,9 @@ Models are chosen by **role** (`ModelRole`) and resolved to a concrete model by 
 never a hardcoded provider flag. Override a role per workspace via `EngineConfig.models`, or globally via env.
 
 - **Serving backend** — `RAG_SERVING` selects `openrouter` (default) or `vllm` (self-hosted). For vLLM set
-  `VLLM_BASE_URL` and `VLLM_API_KEY`; for OpenRouter set `OPENROUTER_API_KEY` (optionally
-  `OPENROUTER_PROVIDER`/`OPENROUTER_SORT`/`OPENROUTER_PROVIDER_ORDER` for provider routing).
+  `VLLM_BASE_URL` and `VLLM_API_KEY`; for OpenRouter set `OPENROUTER_API_KEY` (optionally `OPENROUTER_PROVIDER`, a
+  comma-separated provider list, with `OPENROUTER_ALLOW_FALLBACKS` to allow routing beyond it; the contracts pack's
+  docling-graph extraction reads its own `OPENROUTER_PROVIDER_ORDER` / `OPENROUTER_SORT`).
 - **Roles** (`ModelRole`): `STRUCTURED_REASONING` (extraction/grading/synthesis), `STRUCTURED_REASONING_SECONDARY`
   (the same call class, a selectable fallback), `GENERAL` (reasoning/generation/vision, the local-deployment
   default), `SUMMARIZATION` (chunking/summarization), `OKF_ENRICHMENT` (OKF signpost classify + description),
@@ -100,8 +102,8 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 
 | variable | purpose |
 |---|---|
-| `ARCADEDB_HOST` / `ARCADEDB_PORT` / `ARCADEDB_USER` / `ARCADEDB_PASSWORD` / `ARCADEDB_DATABASE` / `ARCADEDB_PROTOCOL` | store connection (the `StoreConfig` fallback) |
-| `OPENROUTER_API_KEY` / `OPENROUTER_BASE_URL` / `OPENROUTER_PROVIDER` / `OPENROUTER_SORT` / `OPENROUTER_PROVIDER_ORDER` / `OPENROUTER_ALLOW_FALLBACKS` | OpenRouter access + provider routing |
+| `ARCADEDB_HOST` / `ARCADEDB_PORT` / `ARCADEDB_USER` / `ARCADEDB_PASSWORD` / `ARCADEDB_DATABASE` / `ARCADEDB_PROTOCOL` | store connection for non-API callers (`ArcadeDBStore.from_env`, the scripts); `open_workspace` reads only `StoreConfig` |
+| `OPENROUTER_API_KEY` / `OPENROUTER_BASE_URL` / `OPENROUTER_PROVIDER` / `OPENROUTER_ALLOW_FALLBACKS` | OpenRouter access + provider routing (`OPENROUTER_SORT` / `OPENROUTER_PROVIDER_ORDER`: the contracts pack's docling-graph extraction only) |
 | `RAG_SERVING` / `VLLM_BASE_URL` / `VLLM_API_KEY` / `STACK_URL` | serving backend (openrouter \| vllm) + self-hosted endpoint |
 | `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_GENERAL`, `RAG_MODEL_VISION_OCR`) / `RAG_MODEL_ALL` / `RAG_GRAPH_EXTRACT_MODEL` / `RAG_DECISION_MODEL` | model overrides (one role / all roles / graph extraction / decision-model profile) |
 | `RAG_SEMANTIC_JUDGE` / `RAG_RESIDUAL_EXTRACTOR` | set to `llm` to move the reference pipeline's extraction judge / residual property values off the decision model |
@@ -110,7 +112,7 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `RAG_STRUCTURED_TIMEOUT_S` / `RAG_JEV_TIMEOUT_S` / `RAG_JUDGE_TIMEOUT_S` / `RAG_RELEVANCE_TIMEOUT_S` | call timeouts (raise for reasoning-ON bulk work) |
 | `RAG_SPACY_MODEL` | the spaCy model name for the optional NER extra |
 | `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs |
-| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `RAG_TRACE_LEVEL` | observability (tracing/usage) |
+| `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` / `RAG_TRACE_LEVEL` | observability (Langfuse tracing; see [`OBSERVABILITY.md`](OBSERVABILITY.md)) |
 
 Secrets belong only in a gitignored `.env`. See [`installation.md`](installation.md) for the minimal set and
 [`concepts.md`](concepts.md) for the seams in context.

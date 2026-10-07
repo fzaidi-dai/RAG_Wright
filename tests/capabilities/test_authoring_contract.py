@@ -58,3 +58,22 @@ def test_every_invoker_adapter_is_a_canonical_slug_with_matching_manifest_kind()
         assert name in MANIFEST_SPECS, f"adapter {name!r} has no ARD manifest"
         assert MANIFEST_SPECS[name].kind == kind, (
             f"adapter {name!r} dispatched as {kind!r} but its manifest declares {MANIFEST_SPECS[name].kind!r}")
+
+
+def test_every_registered_impl_ref_resolves_to_a_callable():
+    # ING-5: the kind check above reads the kind from the same manifest, so it cannot catch a broken `impl_ref`;
+    # this resolves each one (`module:attr`) the way the invoker will
+    from rag_wright.capabilities.invoke import capability_impl
+
+    broken = []
+    for slug, manifest in MANIFEST_SPECS.items():
+        if not manifest.impl_ref:
+            continue
+        try:
+            impl = capability_impl(slug)
+        except Exception as exc:  # noqa: BLE001 - report every broken ref, not the first
+            broken.append(f"{slug}: {manifest.impl_ref} -> {type(exc).__name__}: {exc}")
+            continue
+        if not callable(impl):
+            broken.append(f"{slug}: {manifest.impl_ref} is not callable")
+    assert not broken, "\n".join(broken)

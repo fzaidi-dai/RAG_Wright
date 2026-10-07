@@ -31,16 +31,16 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 | `capabilities/` | the capability catalog + ARD runtime — `CapabilityManifest`, `registry`, `manifests`, the adapter-free `invoke` client; plus the generic primitives (graph query, retrieval core, embedding, disambiguation, entity resolution, the decision model) | **yes** |
 | `ingestion/` | the generic ingestion mechanism (ADR-0124): `build_ingestion` + the shared `IngestionStages`, the default layout segmenter and structural unit grouper, `table_rows`, `evaluate_ingestion` | **yes** |
 | `subgraphs/` | the generic LangGraph scaffolding (`scaffold.py`), semantic chunking, graph extraction and observability; domain graphs live in their pack | **yes** |
-| `models/` | the model-profile seam: `ModelRole`, `profiles`, `seam`, `tag_structured`, usage/tracing | yes |
-| `store/` | the single ArcadeDB store behind the seam: `arcadedb`, `seam` (`KgNode`/`KgEdge`), `chunk_text` | generic subset **yes** |
+| `models/` | the model-profile seam: `ModelRole`, `profiles`, `seam`, `tag_structured`, usage/tracing | **yes** |
+| `store/` | the single ArcadeDB store behind the seam: `arcadedb` (only the engine types and generic reads/writes; a pack's own store methods live in the pack, e.g. `ContractKGStore`, `ComplianceStore`), `seam` (`KgNode`/`KgEdge`/`NOT_NULL`), `chunk_text` | **yes** |
 | `ontology/` | the generic pack-schema reader (`pack_schema`) and the `EntityRegistry` derivation (`registry`) | **yes** |
 | `spans/` | `page_map` (page/bbox positions of spans) | **yes** |
 | `contracts/` | Pydantic contracts + the shared identifiers (`chunk_id`, `entity_id`) + the ingestion hook contracts | **yes** |
-| `packs/` | the REFERENCE PACK, as two domain packs (ING-8c): `packs.contracts` (segmentation, the clause classifier fleet, judges, the boundary decider, the contract KG store and the ingestion/retrieval/QA graphs, its ontology and loaders, the CUAD/EDGAR corpus adapters, its MCP servers) and `packs.compliance` (requirement and claim extraction, compliance judgment and checking, its ontology and regulation packs, its MCP server), each with a `pack.py` (manifests, canonical slugs, `register()`); compliance builds on contracts. `packs.reference_seam` is a worked product seam over both | reference pack (domain) |
+| `packs/` | the REFERENCE PACK, as two domain packs (ING-8c): `packs.contracts` (segmentation, the clause classifier fleet, judges, the boundary decider, the contract KG store (`ContractKGStore`) and the ingestion/retrieval/QA graphs, its ontology and loaders, the CUAD/EDGAR corpus adapters, its MCP servers) and `packs.compliance` (requirement and claim extraction, compliance judgment and checking, its `ComplianceStore`, its ontology and regulation packs, its MCP server), each with a `pack.py` (manifests, canonical slugs, `register()`); compliance builds on contracts. `packs.reference_seam` is a worked product seam over both | reference pack (domain) |
 | `corpus/` | the generic document parser, embedded-file extraction, canonicalization and HTTP helpers | **yes** |
 | `skills/` | authored `SKILL.md` content for the generic capabilities (a pack keeps its own under `packs/<pack>/skills/`) | **yes** |
-| `okf/` | the OKF bundle-compile path | — |
-| `util/` | shared capability-agnostic utilities | yes |
+| `okf/` | the OKF (Open Knowledge Format) bundle-compile path | **yes** |
+| `util/` | shared capability-agnostic utilities | **yes** |
 
 ### The domain-free rule (enforced)
 

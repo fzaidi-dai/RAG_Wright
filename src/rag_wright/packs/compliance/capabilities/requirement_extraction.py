@@ -130,7 +130,8 @@ async def ajev_extract_regulation_section(
     spans; ONE Jev call per span (routed through the capability layer, `jev_decision`) decides operative-gate +
     actor + claim_types; deontic_type is the cue-rule; requirement_text is the verbatim span. Drops spans the Jev
     operative gate rejects. Thresholds default from the decision-model profile (`op_threshold`/`multilabel`),
-    overridable here. applicability/evidence_standard are left empty here (see note)."""
+    overridable here. applicability/evidence_standard come from one gated residual LLM call, made only for a rule
+    whose text carries a conditional or evidence cue (`_needs_residual`); otherwise they stay empty."""
     from rag_wright.capabilities.invoke import capability_impl
     from rag_wright.models.profiles import decision_profile
 

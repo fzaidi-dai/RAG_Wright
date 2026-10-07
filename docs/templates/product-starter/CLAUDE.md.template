@@ -7,7 +7,7 @@ engine — a separate repo that depends on the open-core engine, one way.
 > **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}` (where
 > the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it — `uv add rag-wright`, a path dep, or git),
 > `{{STACK}}` (your backend/frontend/model/infra choices), the grounding-lane paths, the `{{SPEC}}`/`{{PLAN}}`/
-> `{{TASKS}}` scheme, and `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill, if any). The generic core
+> `{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme, and `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill, if any). The generic core
 > below — the boundary, grounding discipline, skills, working loop, memory, version control, boundaries — stays as
 > written.
 
@@ -37,7 +37,8 @@ engine — a separate repo that depends on the open-core engine, one way.
   it and make that change in the engine repo (`{{ENGINE_PATH}}`), where the engine's own CLAUDE.md governs.
 - **The whole engine surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
   invokers, discovery (`capability_index`/`discover` — `discover(task, resources=ws)` embedding-ranks the catalog
-  for an agent planning over the engine), `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack`,
+  for an agent planning over the engine), `kg_read`/`kg_write`/`kg_edges`/`measure_usage`,
+  `register_capability`/`load_reference_pack`,
   and the ingestion surface (`build_ingestion` -> `IngestionPipeline.aingest` -> `IngestionReport`,
   `IngestionTuning`, `IngestSource`, `evaluate_ingestion`, `table_rows`/`TableRow`, the hook contracts
   `Unit`/`UnitExtraction`/`KgNode`/`KgEdge`, the hook protocols and `DocumentHook`, and the checks
@@ -47,7 +48,9 @@ engine — a separate repo that depends on the open-core engine, one way.
   `register_canonical_slugs`, `canonical_capability_slugs`.
 - **Current exception to "only `rag_wright.api`"** (an engine gap; import from the named engine module and FLAG each
   use, do not work around it): the entity-resolution building blocks (`build_graph_extraction`, `disambiguate`,
-  `resolve_entities`, `GraphWriter`). See the engine's `docs/domain-adaptation/_engine-gaps.md` (G1).
+  `resolve_entities`, `GraphWriter`), their contracts (`ExtractionResult`, `EntityMention`, `ChunkId`, `EntityId`)
+  and the entity registry (`EntityRegistry`, `RegistryRecord`). See the engine's
+  `docs/domain-adaptation/_engine-gaps.md` (G1).
 - **Your domain is a `.ttl` pack + capabilities, authored HERE against the engine** (the engine is
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.
@@ -85,6 +88,7 @@ relevant one.** Skills are workflows — follow their steps and verification, do
 |---|---|
 | Using / calling the engine | **`using-the-rag-wright-engine`** |
 | Authoring a domain `.ttl` / KG / ER / capability | the engine's domain-adaptation guide + **`authoring-a-capability`** |
+| Building the domain's ingestion (`build_ingestion` hooks) | **`building-an-ingestion-capability`** |
 | Writing a capability's eval (do it first, TDD) | **`creating-evals`** |
 | Deciding rule vs classifier vs decision-model vs LLM | **`classifier-opportunity-analysis`** → **`setfit`** / **`laya`** |
 | Bulk teacher-labeling for training data | **`qwen-vllm-modal`** |
@@ -98,7 +102,8 @@ relevant one.** Skills are workflows — follow their steps and verification, do
 | Requirements are vague | `interview-me`, then `idea-refine` |
 | UI work (if any) | `{{PROJECT_FRONTEND_SKILL}}` + `frontend-ui-engineering` |
 
-The engine-authored skills (`using-the-rag-wright-engine`, `authoring-a-capability`, `creating-evals`,
+The engine-authored skills (`using-the-rag-wright-engine`, `authoring-a-capability`,
+`building-an-ingestion-capability`, `creating-evals`,
 `classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`) ship in the engine repo's `.claude/skills/`;
 the generic ones are the shared (Addy Osmani) set. The one-time setup links both into this repo's `.claude/skills/`
 (see the playbook).

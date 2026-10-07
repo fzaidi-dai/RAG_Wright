@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import json
 import os
+import random
+import time
 from typing import Any, Iterable, Optional
 
 from arcadedb_python import DatabaseDao, SyncClient
@@ -58,6 +60,27 @@ _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 # ADR-0067 P5b: the domain vertex UNIQUE id indexes (Clause/PropertyValue/Contract) are pack-declared
 # (cbr:uniqueIndexOn) and built by the generic ensure_schema loop, not hardcoded here.
+
+
+# ArcadeDB answers concurrent writes to the same page with a `ConcurrentModificationException` and asks the client to
+# retry; the failed command or transaction is rolled back whole, so a bounded retry with jittered backoff is safe
+# (found by the ING-5 doc audit: unretried, concurrent ingestion silently lost spans and records).
+_CONFLICT_RETRIES = 10
+
+
+def _is_retryable_conflict(exc: BaseException) -> bool:
+    msg = str(exc)
+    return "ConcurrentModificationException" in msg or "Concurrent modification on page" in msg
+
+
+def _retry_on_conflict(fn, *args, **kwargs):
+    for attempt in range(_CONFLICT_RETRIES):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:  # noqa: BLE001 - only the retryable conflict is retried; anything else re-raises
+            if attempt == _CONFLICT_RETRIES - 1 or not _is_retryable_conflict(exc):
+                raise
+            time.sleep(min(0.5, 0.01 * 2 ** attempt) + random.uniform(0, 0.01))
 
 
 def _sql_str(value: str) -> str:
@@ -538,7 +561,7 @@ class ArcadeDBStore:
                 stmt += " SET " + ", ".join(f"{k} = {_kg_sql(v)}" for k, v in e.props.items())
             statements.append(stmt)
         if statements:
-            self._db.execute_transaction(statements)
+            _retry_on_conflict(self._db.execute_transaction, statements)
 
     def kg_ensure_edges(self, edges) -> int:
         """ING-4b (see `Store.kg_ensure_edges`): create each typed edge only if no edge of its type already joins
@@ -782,7 +805,7 @@ class ArcadeDBStore:
                 f" confidence = {_sql_str(edge.confidence)}, {_edge_provenance_assignments(edge.chunk_id)}"
             )
         if statements:
-            self._db.execute_transaction(statements)
+            _retry_on_conflict(self._db.execute_transaction, statements)
 
     def _mentions_edge_exists(self, chunk_id: str, node_key: str) -> bool:
         """True iff a `Mentions` edge already connects this chunk to this entity (issue 0029 idempotence).
@@ -956,7 +979,7 @@ class ArcadeDBStore:
     # --- internals ------------------------------------------------------------------------------
 
     def _command(self, sql: str) -> Any:
-        return self._db.query("sql", sql, is_command=True)
+        return _retry_on_conflict(self._db.query, "sql", sql, is_command=True)
 
     def _query(self, sql: str) -> list[dict]:
         result = self._db.query("sql", sql)

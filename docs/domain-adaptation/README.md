@@ -14,8 +14,9 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 1. **Install the engine.** `uv add rag-wright` (or a path/git dep pre-publish), plus ArcadeDB and a model provider.
    → [Installation](../installation.md).
 
-2. **Configure the engine.** Construct an `EngineConfig` (store, model roles, embedding profile, ingest options)
-   and `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name; tenancy is
+2. **Configure the engine.** Construct an `EngineConfig` (store, model roles, embedding profile, and the options
+   catalog: the generic ingest `tuning`, plus your pack's own options under `EngineOptions.packs`) and
+   `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name; tenancy is
    product-side. → [Configuration](../configuration.md).
 
 3. **Author the domain `.ttl` pack.** The domain KNOWLEDGE — closed value sets, the KG schema, SHACL constraints,
@@ -28,7 +29,7 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 4. **Build and register the domain capabilities.** Ingestion is no longer hand-composed: the engine's
    `build_ingestion` owns the pipeline, and your domain supplies an **extractor** plus any optional hooks
    (segmenter, span tagger, unit grouper, boundary decider, writer, a per-document hook)
-   → [KG construction](kg-construction.md). Your query graphs, domain functions, and skills **compose the engine's
+   → [KG construction](kg-construction.md) and the `building-an-ingestion-capability` skill. Your query graphs, domain functions, and skills **compose the engine's
    generic primitives by direct import** (hybrid search, graph query, fusion, embedding, parsing, chunking,
    reranking) and register only your OWN domain graphs/models/skills via `register_capability(manifest)` with an
    `impl_ref`, invocable (and MCP-exposable) with zero engine edits. Package them as a pack module that exposes
@@ -79,5 +80,5 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 - [Ontology authoring](ontology-authoring.md) · [KG construction](kg-construction.md) ·
   [Entity resolution](entity-resolution.md) · [Authoring capabilities](authoring-capabilities.md) ·
   [Classification & decision models](classification-and-decision-models.md)
-- Skills (coding-agent playbooks): `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya`,
-  `authoring-a-capability`.
+- Skills (coding-agent playbooks): `building-an-ingestion-capability`, `creating-evals`,
+  `classifier-opportunity-analysis`, `setfit`, `laya`, `authoring-a-capability`.

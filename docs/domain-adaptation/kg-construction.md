@@ -20,6 +20,7 @@ pipeline = build_ingestion(
     tuning=None,               # IngestionTuning; else EngineConfig.options.ingest.tuning; else the defaults
     document_hook=None,        # async (ws, source_document, chunks), once per document after its records are written
                                #          (e.g. an entity graph); its return value is not used
+    embedder=None,             # default: the workspace's ingest embedder (an object with encode_batch)
 )
 report = await pipeline.aingest(ws, ["a.pdf", IngestSource(path="b.xlsx", table_mode="record")], cache_dir="cache/")
 ```
@@ -140,6 +141,7 @@ ask-first change.
 
 Write your extractor (and any hook you want to swap) against the contracts in `rag_wright.api` (`Unit`,
 `UnitExtraction`, `KgNode`, `KgEdge`, the hook protocols), test it with the `check_*` functions, measure the
-structure with `evaluate_ingestion`, and write its eval first (the `creating-evals` skill). If other capabilities
+structure with `evaluate_ingestion`, and write its eval first (the `creating-evals` skill). The
+`building-an-ingestion-capability` skill is the step-by-step playbook for this page. If other capabilities
 should invoke your ingestion by name, wrap it as a `subgraph` capability and register it
 ([authoring capabilities](authoring-capabilities.md)). Then: [entity resolution](entity-resolution.md).

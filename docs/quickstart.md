@@ -30,7 +30,8 @@ load_reference_pack()
 
 Everything is imported from `rag_wright.api`. `corpus` is the backend database name; `reset=True` gives a fresh DB.
 A new database gets only the neutral engine schema (`Chunk`, `Entity`, `Span`, `Document` and their edges); the
-contract pipeline creates its own types (`Clause`, `Contract`, the typed property edges, ...) the first time it runs.
+contract pipeline's store (`ContractKGStore`) creates the pack's own types (`Clause`, `Contract`, `PropertyValue`, the
+typed property edges, ...) the first time the pipeline runs.
 
 ```python
 from rag_wright.api import EngineConfig, StoreConfig, open_workspace
@@ -75,8 +76,9 @@ clauses = kg_read(ws, "Clause", fields=["clause_id", "function"])
 
 ### 5. Ask a question — get a cited answer
 
-Scoped to the ingested document; the answer is grounded in the retrieved clauses and **cited by `span_id`** (or the
-capability abstains rather than guess):
+Scoped to the ingested document; the answer is grounded in the retrieved clauses and **cited by clause id** (each
+clause is one provision; its id is `<document>:<provision index>:<content hash>`, and the clause's `span_id` anchors
+it to the source text). If the evidence does not support an answer, the capability abstains rather than guess:
 
 ```python
 out = await ainvoke_subgraph(
@@ -91,7 +93,7 @@ Expected (grounded + cited):
 ```
 The aggregate liability for either party is capped at the total fees paid by the Customer to the Provider in the
 twelve (12) months preceding the claim, with the exception of breaches of confidentiality.
-cited spans: ['ACME_MSA:0:…#4']
+cited clauses: ['ACME_MSA:2:…']
 ```
 
 For corpus-wide retrieval (not scoped to one document), use `typed_property_retrieval` with `{"query": "…"}`, which

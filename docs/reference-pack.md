@@ -47,14 +47,19 @@ worked-example facades are `packs.compliance.invokers` and the product-seam exam
 
 ## Its schema is not in the default
 
-The contract types (`Clause`, `Contract`, `PropertyValue`, the typed property edges, ...) are **not** in the engine's
-default schema: a new workspace has only the neutral types. The pack's contract store (`ContractKGStore`) ensures
-the pack schema from `contract_bridge.ttl` (plus the typed property edge types) the first time the reference
-pipeline or its readers use it. To read those node types directly (for example `kg_read(ws, "Clause", ...)`) in a
+The contract types (`Clause`, `Contract`, `PropertyValue`, the typed property edges, ...) and the compliance
+`Requirement` type are **not** in the engine's default schema: a new workspace has only the neutral types. Each pack
+keeps its domain store methods off the generic store, in a store extension that wraps it and ensures its schema on
+construction: `ContractKGStore` (`rag_wright.packs.contracts.capabilities.contract_kg_store`) creates the schema
+declared in `contract_bridge.ttl` plus the typed property edge types, and `ComplianceStore`
+(`rag_wright.packs.compliance.capabilities.compliance_store`) creates the `Requirement` type declared in
+`compliance_bridge.ttl`. The reference pipelines and readers construct them, so the schema appears the first time
+they run. To read those node types directly (for example `kg_read(ws, "Clause", ...)`) in a
 fresh process before anything has used the contract store, open the workspace with the pack's ontology as its pack,
 which creates `Clause`, `Contract` and `PropertyValue` and their structural edges:
 
 ```python
+from rag_wright.api import EngineConfig
 from rag_wright.packs.contracts.ontology.loader import reference_pack_ttl   # path of the reference contract ontology
 config = EngineConfig(store=..., pack=reference_pack_ttl())
 ```

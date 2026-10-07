@@ -6,7 +6,7 @@ product depends on the engine one-way (Product → Engine) and hand-builds its o
 orchestration compiler, is PARKED per engine ADR-0052).
 
 > **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}`,
-> `{{ENGINE_DEP}}`, `{{STACK}}`, the `{{SPEC}}`/`{{PLAN}}`/`{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme,
+> `{{ENGINE_DEP}}`, `{{ENGINE_FLOOR}}`, `{{STACK}}`, the `{{SPEC}}`/`{{PLAN}}`/`{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme,
 > the grounding-lane paths, and `{{PROJECT_FRONTEND_SKILL}}`. The boundary, skills, phases, per-task loop,
 > grounding discipline, and memory/commit rules stay as written. Companion to this repo's `CLAUDE.md`.
 
@@ -33,8 +33,8 @@ and the user loops. The **RAG_Wright ENGINE** (open-core) owns the capabilities,
 servers, ARD, and the ontology machinery. Dependency is strict and one-way: **Product → Engine.** Never modify the
 engine from this repo; flag needed engine changes and make them in the engine project. The product consumes the
 engine **only through `rag_wright.api`** and never touches the store (ArcadeDB) directly. (The current exception is an
-engine gap, listed in the engine's `docs/domain-adaptation/_engine-gaps.md`: the entity-resolution building blocks;
-flag each use.) Your domain is a `.ttl`
+engine gap, listed in the engine's `docs/domain-adaptation/_engine-gaps.md`: the entity-resolution building blocks,
+their contracts and the entity registry; flag each use.) Your domain is a `.ttl`
 pack + capabilities authored here against the engine; the contract/compliance **reference pack** is only the
 engine's worked example — a template, never your domain.
 
@@ -48,6 +48,7 @@ engine's worked example — a template, never your domain.
 |---|---|
 | **using-the-rag-wright-engine** | The engine-usage playbook: install, grounding lanes, follow the build sequence |
 | **authoring-a-capability** | Register a domain capability (the four surfaces + definition of done) |
+| **building-an-ingestion-capability** | Build the domain's ingestion with `build_ingestion` (the extractor + optional hooks) |
 | **creating-evals** | Write a capability's eval FIRST (TDD) |
 | **classifier-opportunity-analysis** → **setfit** / **laya** | Find + build a classifier / System-1 decision model |
 | **qwen-vllm-modal** | The flat-GPU substrate for bulk teacher-labeling |

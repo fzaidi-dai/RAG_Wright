@@ -17,9 +17,9 @@ provider** (OpenRouter or a self-hosted open-model endpoint). Configuration is c
 uv add rag-wright
 ```
 
-That installs the latest PyPI release (0.1.0). Work merged after it (for example the generic `build_ingestion` builder
-and the neutral default schema) is on `main` until the next batched release ([`releasing.md`](releasing.md)); to use
-it now, or to develop the engine and a product side by side, depend on it by path or git instead:
+That installs the latest PyPI release (0.1.0). Work merged after it (for example the generic `build_ingestion`
+builder, the neutral default schema, and the reference pack's move to `rag_wright.packs`) is on `main` until the next
+batched release ([`releasing.md`](releasing.md)); to use it now, or to develop the engine and a product side by side, depend on it by path or git instead:
 
 ```toml
 # pyproject.toml of the product
@@ -41,9 +41,10 @@ to reach the network (mock the call, or mark the test). The live markers, declar
 
 ### Optional extras
 
-- **`rag-wright[ner]`** — spaCy NER. The library is the extra; the model is a runtime download (it is not on PyPI):
+- **`rag-wright[ner]`** — spaCy NER (named entity recognition). The library is the extra; the model is a runtime
+  download (it is not on PyPI):
   ```sh
-  uv pip install 'rag-wright[ner]'
+  uv add 'rag-wright[ner]'                         # in a product; working on the engine itself: uv sync --extra ner
   uv run python -m spacy download en_core_web_sm   # configurable via RAG_SPACY_MODEL
   ```
 - **`rag-wright[ocr-bench]`** — the OCR-benchmark extras (`mlx-vlm`, `ocrmac`, `onnxruntime`, `scikit-image`).
@@ -58,13 +59,16 @@ docker run -d --name arcadedb-ragwright \
   -p 2480:2480 -p 2424:2424 \
   -v "$PWD/data/arcadedb:/home/arcadedb/databases" \
   -e JAVA_OPTS="-Darcadedb.server.rootPassword=<DEV_PASSWORD> -Darcadedb.server.mode=development" \
+  -e ARCADEDB_OPTS_MEMORY="-Xms2G -Xmx6G" \
   arcadedata/arcadedb:26.7.1
 ```
 
 - Port **2480** is the HTTP API the client uses (2424 is the binary protocol). Data persists under the gitignored
   `data/arcadedb/`.
-- **JVM heap is the capacity cap.** For a large corpus raise it via `JAVA_OPTS` (e.g. `-Xmx6g`); an under-sized
-  heap triggers a read-lock crash (OOM) on a full ingest.
+- **JVM heap is the capacity cap.** It is set by the container's `ARCADEDB_OPTS_MEMORY` (read at container start,
+  so changing it means recreating the container). The image's default 2 GB ran out of memory part-way through the
+  510-contract CUAD knowledge graph; `-Xmx6G` above holds it. Raise it for a larger corpus. An under-sized heap shows up as a read-lock error mid-write (an out-of-memory error, OOM, in
+  `docker logs`) on a full ingest.
 - Verify it is up:
   ```bash
   curl -s -u root:<DEV_PASSWORD> http://localhost:2480/api/v1/databases
@@ -88,6 +92,20 @@ OPENROUTER_API_KEY=sk-or-...
 
 To serve open models yourself instead, set `RAG_SERVING=vllm` with `VLLM_BASE_URL` + `VLLM_API_KEY` (see
 [`configuration.md`](configuration.md)).
+
+## Upgrading a database from an earlier engine version
+
+`open_workspace` (through `ensure_schema`) refuses a database whose `Span` type still has the old field names
+(`contract_id`, `function`, `functions`; renamed to `document_id`, `primary_tag`, `tags`) and raises a `RuntimeError`
+naming the fix. Migrate each such database once, in place (it connects with the `ARCADEDB_*` settings in `.env`; it
+is idempotent and streams `X/N` progress):
+
+```sh
+uv run python -u scripts/migrate_span_fields.py <database>
+```
+
+Every other breaking change since 0.1.0, with the exact change a consumer makes, is in
+[`specs/ingestion-hooks/ing8-breaking-changes.md`](specs/ingestion-hooks/ing8-breaking-changes.md).
 
 ## Verify
 

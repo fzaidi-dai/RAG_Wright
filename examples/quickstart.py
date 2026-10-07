@@ -94,7 +94,7 @@ async def main() -> None:
     answer = out["answer"]
     print("\n=== ANSWER ===")
     print(answer.answer)
-    print("cited spans:", answer.citations)
+    print("cited clauses:", answer.citations)
     print(f"\n=== USAGE === {usage.calls} model call(s), ${usage.cost_usd:.4f}")
 
 

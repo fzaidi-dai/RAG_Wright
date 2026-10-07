@@ -1,7 +1,8 @@
 # Ingesting a new corpus into the contract KG
 
 The repeatable process for pointing the pipeline at a new corpus and getting a populated, connected KG. This is
-the draft recipe that **SKILL-corpus-ingest** will formalize into a `SKILL.md`.
+the recipe behind the contracts pack's `corpus_ingest` skill
+(`src/rag_wright/packs/contracts/skills/corpus_ingest/SKILL.md`).
 
 The design that makes this cheap: a single **contract ingestion pipeline** (LG-3d, `contract_ingestion_pipeline`,
 built on the engine's shared ingestion stages) plus a thin per-corpus **`CorpusAdapter`**. Adding a corpus is one adapter — never a re-implemented
@@ -23,11 +24,16 @@ Implement `documents() -> Iterable[SourceDocument]`. It owns everything corpus-s
 implementation.
 
 ### 2. Point the entity registry at the corpus's parties
-Extend the EDGAR verified registry (`build_verified_registry`) for the corpus's public companies, or accept
+Extend the EDGAR verified registry (`build_verified_registry` in
+`rag_wright.packs.contracts.capabilities.dg_extraction`) for the corpus's public companies, or accept
 `UNLINKED` / `PRIVATE` for parties not in the registry (the honest closed-world gap).
 
 ### 3. Run it
 ```python
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
+    aproduction_document_ingest, arun_corpus_ingestion)
+
 report = await arun_corpus_ingestion(
     YourAdapter(path),
     aproduction_document_ingest(store, cache_dir=..., registry=...),
@@ -58,7 +64,9 @@ ontology pack, a classifier for your own taxonomy, and possibly a different enti
 [KG construction](domain-adaptation/kg-construction.md).
 
 ## Honest caveats
-- **`extract_parties` latency** (INGEST-GRAPH-LATENCY): add a per-call timeout before running a large corpus.
+- **Party extraction latency** (INGEST-GRAPH-LATENCY): the async party extraction (`aextract_parties`) is bounded by
+  the model seam's wall-clock deadline (180 s per logical call), so a stalled call is cancelled rather than hanging
+  the run; the graph step retries, and a document that keeps failing is dead-lettered while the run goes on.
 - **Extraction cost/idempotence**: clause extraction is cached per provision, keyed by the clause id (document,
   index, content hash) + the anchor span + the function + the template version, which includes the extraction
   method (decision-model or LLM judge and residual lane). Re-runs and template or method changes re-extract only

@@ -68,6 +68,12 @@ class CapabilityManifest:
     # it invocable with zero engine edits. None for non-invokable kinds (function/agent_skill/mcp_tool) + reserved.
     impl_ref: Optional[str] = None
 
+    def __post_init__(self) -> None:
+        # ING-5: fail where the manifest is written; `author()` would otherwise drop the bounds silently
+        if self.response_bounds is not None and self.kind not in CALLABLE_KINDS:
+            raise ValueError(f"{self.slug!r}: response_bounds apply only to callable kinds "
+                             f"({', '.join(sorted(CALLABLE_KINDS))}); a {self.kind} is loaded, not called")
+
 
 # One entry per capability, added at that capability's task. T15 registers the shared RLM method
 # skill; the two RLM capabilities (rlm_chunking T17, rlm_synthesis T28) will `require` it.
@@ -313,7 +319,9 @@ def author(slug: str) -> RegistryEntry:
                        "or load the pack that provides it (load_pack)")
     spec = MANIFEST_SPECS[slug]
     if slug not in canonical_capability_slugs():
-        raise ValueError(f"{slug!r} is not a canonical capability slug (SPEC.md section 5)")
+        raise ValueError(f"{slug!r} is not a canonical capability slug, so it cannot be published to ARD: add it with "
+                         "register_canonical_slugs([...]) in your pack's register() before publishing "
+                         "(canonical_capability_slugs() lists the current set)")
 
     # callable kinds must declare response bounds; agent_skill is loaded, not called (carries none).
     bounds = (spec.response_bounds or ResponseBounds()) if spec.kind in CALLABLE_KINDS else None
