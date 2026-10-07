@@ -11,13 +11,55 @@ which now re-exports these for its existing importers.)
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Optional
+from pathlib import Path
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel
 
 from rag_wright.capabilities.parsing import ParsedDocument
+from rag_wright.contracts.provenance import ConfidenceTag
 
 _INGEST_PARSE_DEADLINE_S = 600.0  # per-document parse ceiling (a degraded multi-page doc escalated to the VLM)
+
+
+class ChildAnchor(BaseModel):
+    """ING-6: where an embedded child sits in its parent. For a spreadsheet, also the parsed TABLE (`table_ref`, a
+    docling self-ref) and 0-based `table_row` the anchor cell falls in -- the record the child belongs to."""
+
+    sheet: Optional[str] = None
+    cell: Optional[str] = None
+    row: Optional[int] = None
+    col: Optional[int] = None
+    paragraph: Optional[int] = None
+    slide: Optional[int] = None
+    table_ref: Optional[str] = None
+    table_row: Optional[int] = None
+
+
+class RecordLink(BaseModel):
+    """ING-6: a record (parsed table row) an embedded child belongs to, with how sure we are (FR-S.4). `basis` is
+    `anchor` (the row its icon sits on) or `content` (the row's identifiers appear in the child); `evidence` lists
+    the identifier tokens that matched (empty for a position-only link)."""
+
+    table_ref: str
+    table_row: int
+    confidence: ConfidenceTag
+    basis: Literal["anchor", "content"]
+    evidence: list[str] = []
+
+
+class EmbeddedChild(BaseModel):
+    """ING-6: a file embedded in the parent (e.g. a lab-report PDF in a spreadsheet cell), extracted to the parse
+    cache as its own document. `doc_id` = `<parent_id>.emb.<sha12>`; `filename` is the original name (metadata
+    only); `path` is the stored copy (never in the source folder)."""
+
+    doc_id: str
+    path: str
+    filename: Optional[str] = None
+    media_type: str
+    sha256: str
+    anchors: list[ChildAnchor] = []
+    links: list[RecordLink] = []  # the record(s) it belongs to; empty = no record found (still a child document)
 
 
 class SourceDocument(BaseModel):
@@ -36,6 +78,9 @@ class SourceDocument(BaseModel):
     ocr_unreadable_pages: list[int] = []
     # ING-4a: hidden spreadsheet sheets NOT ingested because the caller chose to skip them (reported, never silent).
     skipped_hidden_sheets: list[str] = []
+    # ING-6: files embedded in the parent package, extracted as child documents, and those that could not be.
+    embedded: list[EmbeddedChild] = []
+    embedded_skipped: list[str] = []
 
 
 def _hidden_sheets(document: Any) -> list:
@@ -100,10 +145,113 @@ def parsed_source_document(
         document.save_as_json(manifest_path)
         unreadable = list(tiered.report.unreadable_pages)
         ocr_sidecar.write_text(json.dumps(unreadable))
+    embedded, embedded_skipped = _extract_children(
+        source_doc_id, name, data, document, cache_dir / f"{source_doc_id}.{content_hash[:16]}.embedded")
     return SourceDocument(
         source_doc_id=source_doc_id, text=document_to_text(document), parsed=parsed, metadata=metadata or {},
         ocr_unreadable_pages=unreadable,
-        skipped_hidden_sheets=[] if include_hidden_sheets else [g.name for g in _hidden_sheets(document)])
+        skipped_hidden_sheets=[] if include_hidden_sheets else [g.name for g in _hidden_sheets(document)],
+        embedded=embedded, embedded_skipped=embedded_skipped)
+
+
+_MEDIA_SUFFIX = {
+    "application/pdf": ".pdf", "image/png": ".png", "image/jpeg": ".jpg",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ".xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": ".pptx",
+}
+
+
+def _table_at(document: Any, sheet: Optional[str], row: Optional[int], col: Optional[int]) -> tuple:
+    """ING-6: the parsed table (self-ref) on `sheet` whose sheet-coordinate box holds cell (row, col), and the
+    0-based table row -- docling records a spreadsheet table's position in cells (`prov[0].bbox`)."""
+    if sheet is None or row is None or col is None:
+        return None, None
+    for group in getattr(document, "groups", []) or []:
+        if getattr(group.label, "value", group.label) != "sheet" or group.name != sheet:
+            continue
+        for ref in group.children:
+            item = ref.resolve(document)
+            if getattr(item.label, "value", item.label) != "table" or not item.prov:
+                continue
+            box = item.prov[0].bbox
+            if box.l <= col < box.r and box.t <= row < box.b:
+                return item.self_ref, row - int(box.t)
+    return None, None
+
+
+def _extract_children(source_doc_id: str, name: str, data: bytes, document: Any, store: Any) -> tuple[list, list]:
+    """ING-6: extract the package's embedded files into `store` (content-addressed, so a re-parse writes nothing
+    new and identical files are stored once) and describe them as `EmbeddedChild`ren with resolved anchors."""
+    from rag_wright.corpus.embedded import extract_embedded, file_text
+
+    found = extract_embedded(name, data)
+    children = []
+    for f in found.files:
+        suffix = _MEDIA_SUFFIX.get(f.media_type) or (Path(f.filename).suffix if f.filename else "") or ".bin"
+        path = store / f"{f.sha256[:12]}{suffix}"
+        if not path.exists():
+            store.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(f.data)
+        anchors = []
+        for a in f.anchors:
+            table_ref, table_row = _table_at(document, a.sheet, a.row, a.col)
+            anchors.append(ChildAnchor(sheet=a.sheet, cell=a.cell, row=a.row, col=a.col, paragraph=a.paragraph,
+                                       slide=a.slide, table_ref=table_ref, table_row=table_row))
+        children.append(EmbeddedChild(doc_id=f"{source_doc_id}.emb.{f.sha256[:12]}", path=str(path),
+                                      filename=f.filename, media_type=f.media_type, sha256=f.sha256, anchors=anchors))
+    _link_records(document, children, [f"{file_text(f.data, f.media_type)} {f.filename or ''}" for f in found.files])
+    return children, list(found.skipped)
+
+
+def _link_records(document: Any, children: list, texts: list[str]) -> None:
+    """ING-6: attach each child's record links. Its anchor row is VERIFIED (EXTRACTED) when one of the row's
+    identifiers appears in the child, and the record's other rows sharing that identifier follow (INFERRED).
+    Otherwise every row whose identifiers the child mentions, anywhere in the workbook, is a candidate: one
+    identifier set -> INFERRED, several -> AMBIGUOUS. With no evidence, a child alone in its cell keeps a
+    position-only INFERRED link; a STACKED one (several children in one cell) gets none -- it stays a child
+    document, its anchor kept as provenance. Identifiers are tokens rare in the tables and among the files."""
+    from collections import Counter
+
+    from rag_wright.corpus.embedded import MAX_ID_FILES, MAX_ID_ROWS, candidate_tokens
+
+    rows = [(t.self_ref, i, candidate_tokens(" ".join(c.text for c in r)))
+            for t in getattr(document, "tables", []) or [] for i, r in enumerate(t.data.grid[1:], 1)]
+    if not rows or not children:
+        return
+    child_tokens = [candidate_tokens(t) for t in texts]
+    row_df = Counter(tok for _ref, _i, toks in rows for tok in toks)
+    file_df = Counter(tok for toks in child_tokens for tok in toks)
+
+    def ids(toks: set) -> set:
+        return {t for t in toks if row_df[t] <= MAX_ID_ROWS and file_df[t] <= MAX_ID_FILES}
+
+    per_cell = Counter((a.sheet, a.cell) for c in children for a in c.anchors if a.cell)
+    for child, toks in zip(children, child_tokens):
+        links: dict[tuple, RecordLink] = {}
+        verified: set = set()
+        for a in child.anchors:
+            own = next((rt for ref, i, rt in rows if ref == a.table_ref and i == a.table_row), None)
+            hit = ids(own) & toks if own is not None else set()
+            if hit:
+                verified |= hit
+                links[(a.table_ref, a.table_row)] = RecordLink(table_ref=a.table_ref, table_row=a.table_row,
+                                                               confidence=ConfidenceTag.EXTRACTED, basis="anchor",
+                                                               evidence=sorted(hit))
+        matches = {(ref, i): ids(rt) & toks for ref, i, rt in rows if ids(rt) & toks}
+        if verified:
+            matches = {k: v for k, v in matches.items() if v & verified}
+        sets = {frozenset(v) for v in matches.values()}
+        confidence = ConfidenceTag.INFERRED if verified or len(sets) == 1 else ConfidenceTag.AMBIGUOUS
+        for (ref, i), hit in matches.items():
+            links.setdefault((ref, i), RecordLink(table_ref=ref, table_row=i, confidence=confidence, basis="content",
+                                                  evidence=sorted(hit)))
+        if not links:
+            for a in child.anchors:
+                if a.table_ref is not None and per_cell[(a.sheet, a.cell)] == 1:
+                    links[(a.table_ref, a.table_row)] = RecordLink(table_ref=a.table_ref, table_row=a.table_row,
+                                                                   confidence=ConfidenceTag.INFERRED, basis="anchor")
+        child.links = sorted(links.values(), key=lambda lk: (lk.table_ref, lk.table_row))
 
 
 async def aparsed_source_document(

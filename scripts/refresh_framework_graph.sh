@@ -19,7 +19,7 @@ cd "$(git rev-parse --show-toplevel)"
 # schema-driven KG extractor GP-1B adopted and KG-0..KG-6 lean on heavily — `template from-ontology`,
 # the extraction runners, the model seam; ground its API first-class alongside the `kg-extraction-recipe`
 # Skill + live CLI, so nothing is guessed). modal_proto (low-level gRPC stubs) is excluded as noise.
-PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters langfuse"
+PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters langfuse olefile"
 SP="$(uv run python -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
 STAGE="$HOME/.graphify/rag-wright-framework/src"
 OUT="graphify-out/framework/graph.json"
@@ -27,7 +27,10 @@ OUT="graphify-out/framework/graph.json"
 echo "[framework] site-packages: $SP"
 rm -rf "$STAGE"; mkdir -p "$STAGE"
 
+N_PKGS=$(echo $PKGS | wc -w | tr -d ' '); i=0
+echo "[framework] staging N=$N_PKGS packages"
 for pkg in $PKGS; do
+  i=$((i + 1)); echo "[framework] stage $i/$N_PKGS $pkg"
   if [ ! -d "$SP/$pkg" ]; then
     echo "[framework] WARNING: $pkg not found in site-packages -> skipped"
     continue

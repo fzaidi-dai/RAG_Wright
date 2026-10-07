@@ -42,6 +42,7 @@ dependencies = [
     "langgraph>=1.2.11",
     "laya>=0.3.22",
     "mcp>=1.28.1",
+    "olefile>=0.47",
     "pillow>=12.3.0",
     "pydantic>=2.0",
     "pyshacl>=0.40.1",

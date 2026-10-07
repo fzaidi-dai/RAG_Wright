@@ -93,3 +93,25 @@ writing to change one decision (engine gaps G3/G4).
   small record tables kept whole are a diagnostic (harmless).
 - Known limit: a record table larger than one chunk even when compact is split mid-table by the chunker; ING-7's
   tabular extractor reads records from the parsed table grid, not chunk text.
+
+## ING-6 addendum (2026-10-07): embedded files become linked child documents
+
+- **Extraction** (`rag_wright.corpus.embedded`, generic over xlsx/xlsm/docx/docm/pptx/pptm): every part under
+  `*/embeddings/` is one object. OLE objects are unwrapped (`olefile`, added as a dependency): a Windows Packager
+  object yields the file and its display name -- the sender's local path stored beside it is discarded -- and an
+  OLE-wrapped PDF/Office file yields its `CONTENTS`/`Package` stream; embedded package parts are taken as-is. Each
+  file carries its anchor (sheet + cell + row/col, paragraph, or slide). Identical files are one child with all
+  anchors; unextractable objects are reported in `SourceDocument.embedded_skipped` (never silent).
+- **Storage + identity**: content-addressed beside the parse cache (`<cache>/<parent>.<hash>.embedded/<sha12>.<ext>`),
+  never the source folder; child id `<parent_id>.emb.<sha12>`; the original filename is metadata.
+- **Record links** (`EmbeddedChild.links`, FR-S.4 confidence): the anchor row is VERIFIED (EXTRACTED) when one of its
+  identifiers appears in the child (PDF text layer via pypdfium2, plus the filename); otherwise the child is placed
+  by content on the rows, anywhere in the workbook, whose identifiers it mentions (one record -> INFERRED, several
+  -> AMBIGUOUS); with no evidence, a child alone in its cell keeps a position-only INFERRED link and a STACKED one
+  (several children in one cell) gets none -- it remains a child document with its anchor as provenance. An
+  identifier is a whole token (4+ chars, contains a digit) rare in the tables (<= 3 rows) AND among the files
+  (<= 3), so a standard number or a year is never evidence; substring matching was rejected (it matched inside
+  phone and report numbers).
+- Eval (local client workbook): 66 objects -> 64 children + 2 duplicates, 0 skipped; every row holding children has
+  a verified link (31/31); every single-child cell verified (18/18); 10 placed by content, 22 unplaced (each names
+  a sample absent from the workbook), 0 ambiguous.
