@@ -146,3 +146,35 @@ def test_real_scanned_filing_ocrs_to_text(tmp_path):
     text = load_document(parsed).export_to_markdown()
 
     assert len(text.strip()) > 50  # OCR produced machine-readable text from the image-only PDF
+
+
+def test_docling_models_load_once_per_thread_not_once_per_document(monkeypatch):
+    """Building a DocumentConverter loads docling's layout/OCR models (seconds). It is built once per THREAD and reused
+    across documents -- never once per document -- and never shared across threads (docling locks only pipeline
+    initialisation, not concurrent conversion through one pipeline)."""
+    import threading
+
+    import docling.document_converter as dc
+
+    from rag_wright.capabilities import parsing
+
+    built = []
+
+    class _Counting:
+        def __init__(self, *a, **kw):
+            built.append(threading.get_ident())
+
+        def convert(self, source, **kw):
+            return type("R", (), {"document": f"doc:{source}"})()
+
+    monkeypatch.setattr(dc, "DocumentConverter", _Counting)
+
+    def work():
+        for i in range(3):  # three documents, each through a NEW parser (as parsed_source_document does)
+            assert parsing.DoclingParser().convert(Path(f"d{i}.pdf")) == f"doc:d{i}.pdf"
+
+    for _ in range(2):  # two worker threads
+        t = threading.Thread(target=work)
+        t.start()
+        t.join()
+    assert len(built) == 2  # one converter per thread (3 documents each), not one per document

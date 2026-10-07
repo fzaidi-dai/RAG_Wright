@@ -17,6 +17,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
+import threading
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -58,22 +59,34 @@ class ParsedDocument(BaseModel):
         return v
 
 
-class DoclingParser:
-    """The real parser: Docling's `DocumentConverter`. Constructed lazily so importing the capability
-    (and the hermetic tests) does not load Docling's models."""
+_THREAD = threading.local()
 
-    def __init__(self) -> None:
+
+def _thread_converter():
+    """The calling thread's Docling `DocumentConverter`, built on first use and REUSED for every later document.
+    Building one loads Docling's layout + OCR models (seconds); doing that per document made a bulk parse pay the
+    load every time. Per THREAD, not process-wide: Docling locks only pipeline initialisation, not concurrent
+    conversion through one pipeline, so a converter is never shared across threads (`to_thread` workers each
+    keep their own)."""
+    converter = getattr(_THREAD, "converter", None)
+    if converter is None:
         from docling.document_converter import DocumentConverter
 
-        self._converter = DocumentConverter()
+        converter = _THREAD.converter = DocumentConverter()
+    return converter
+
+
+class DoclingParser:
+    """The real parser: Docling's `DocumentConverter` (the calling thread's, reused across documents). Built
+    lazily so importing the capability (and the hermetic tests) does not load Docling's models."""
 
     def convert(self, source: Path) -> DoclingDocument:
-        return self._converter.convert(source).document
+        return _thread_converter().convert(source).document
 
     def parse_range(self, source: Path, page_range: tuple[int, int]) -> DoclingDocument:
         """PARSE-3: parse only pages `page_range` (1-based, inclusive) -- lets the tiered path fast-parse the
         born-digital pages and VLM only the degraded ones, then concatenate, instead of VLM-ing the whole doc."""
-        return self._converter.convert(source, page_range=page_range).document
+        return _thread_converter().convert(source, page_range=page_range).document
 
 
 class TieredOCRReport(BaseModel):
