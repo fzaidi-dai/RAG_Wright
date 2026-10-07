@@ -7,7 +7,7 @@ skill; this page is the orientation.
 
 ## The manifest
 
-Each capability is declared by a frozen `CapabilityManifest` (`rag_wright.capabilities.manifests`):
+Each capability is declared by a frozen `CapabilityManifest` (`rag_wright.api`):
 
 | field | meaning |
 |---|---|
@@ -44,8 +44,7 @@ invocable-by-name; the rest are composed/loaded/served.
 ## Registering
 
 ```python
-from rag_wright.api import register_capability
-from rag_wright.capabilities.manifests import CapabilityManifest
+from rag_wright.api import CapabilityManifest, register_capability
 
 register_capability(CapabilityManifest(
     slug="my_domain_retrieval",                 # YOUR slug — no canonical-slug restriction on this path
@@ -58,25 +57,19 @@ register_capability(CapabilityManifest(
 # now invocable: await ainvoke_subgraph("my_domain_retrieval", {...}, resources=ws)
 ```
 
-`CapabilityManifest` is imported from `rag_wright.capabilities.manifests`; it is not re-exported from
-`rag_wright.api` yet (engine gap G5).
-
 `register_capability` places the manifest in the runtime ARD catalog (ship-empty) and imposes **no canonical-slug
 restriction** — use your domain's names. (`canonical_capability_slugs()` -- the engine's generic slugs plus those each loaded pack adds with
 `register_canonical_slugs` -- is the cross-spec join-key set the internal registry checks, not a constraint on your
 domain.) Expose a capability over MCP by registering an `mcp_tool` surface.
 
 **Packaging your capabilities as a pack.** Put your manifests in one module that exposes `register()`, and load it
-with `load_pack("<your module>")` (`rag_wright.capabilities.manifests.load_pack`, not exported from
-`rag_wright.api` yet, engine gap G5). `register()` calls `register_canonical_slugs(...)` for your slugs
-(`rag_wright.capabilities.registry`), then `register_capability(m)` for each manifest. The reference pack is the
+with `load_pack("<your module>")` (from `rag_wright.api`). `register()` calls `register_canonical_slugs(...)` for
+your slugs, then `register_capability(m)` for each manifest. The reference pack is the
 example: `load_reference_pack()` is `load_pack("rag_wright.packs.compliance.pack")` (the compliance pack registers the contracts pack it builds on first).
 
 ```python
 # my_product/caps/pack.py
-from rag_wright.api import register_capability
-from rag_wright.capabilities.manifests import engine_capabilities
-from rag_wright.capabilities.registry import register_canonical_slugs
+from rag_wright.api import engine_capabilities, register_canonical_slugs, register_capability
 
 MY_SPECS = (...)  # your CapabilityManifest objects
 

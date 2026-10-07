@@ -36,13 +36,10 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   reads on `ComplianceStore`, and the span reads are per document (`spans_by_document`, `all_spans_by_document`).
 - Surfaced: PREP-4.1 audit.
 
-### G5: Pack and manifest helpers are not on `rag_wright.api`
-- **Where:** `load_pack`, `engine_capabilities` and `CapabilityManifest` live in `rag_wright.capabilities.manifests`;
-  `register_canonical_slugs` and `canonical_capability_slugs` in `rag_wright.capabilities.registry`. None is
-  re-exported from `rag_wright.api`.
-- **Impact:** a product that registers capabilities or loads its own pack must import `rag_wright.capabilities.*`,
-  which contradicts the product-starter rule "consume the engine only through `rag_wright.api`".
-- **Proposed:** re-export them from `rag_wright.api` (as PREP-1.5 did for `register_capability`).
+### G5: Pack and manifest helpers are not on `rag_wright.api` (closed)
+- `CapabilityManifest`, `load_pack`, `engine_capabilities`, `register_canonical_slugs` and
+  `canonical_capability_slugs` are re-exported from `rag_wright.api` (2026-10-07; the same objects as their
+  `rag_wright.capabilities.*` homes).
 
 ### G6: A domain's decision-model boundary decider has no cache or repeatability
 - **Where:** `build_ingestion(boundary_decider=)` takes any async decider, but the decision cache

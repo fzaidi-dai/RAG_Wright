@@ -7,7 +7,7 @@ import os
 
 import pytest
 
-from rag_wright.api import decode_bbox, document_of, id_source, kg_read, kg_write, span_positions
+from rag_wright.api import decode_bbox, document_of, kg_read, kg_write, span_positions
 from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 
@@ -57,10 +57,6 @@ def test_document_of_is_the_first_id_segment():
     assert document_of("") == ""
 
 
-def test_id_source_is_the_requirement_source_segment():
-    assert id_source("FTC-16CFR255:255.5:abcd1234") == "FTC-16CFR255"
-
-
 def test_decode_bbox_handles_json_and_none():
     assert decode_bbox("[0.1, 0.2, 0.3, 0.4]") == (0.1, 0.2, 0.3, 0.4)
     assert decode_bbox(None) is None
@@ -72,7 +68,7 @@ def test_decode_bbox_handles_json_and_none():
 @pytest.mark.store
 def test_kg_access_and_span_positions_live():
     from rag_wright.api import EngineConfig, StoreConfig, open_workspace
-    from rag_wright.store.seam import KgNode
+    from rag_wright.api import KgNode
 
     cfg = EngineConfig(store=StoreConfig(
         host=os.environ["ARCADEDB_HOST"], port=os.environ["ARCADEDB_PORT"],
@@ -87,5 +83,5 @@ def test_kg_access_and_span_positions_live():
         "confidence": "EXTRACTED", "pages": [1], "bbox": None})])
     rows = kg_read(ws, "Requirement", fields=["requirement_id", "source"], where={"source": "FTC"})
     assert rows and rows[0]["requirement_id"] == "FTC:255.1:h"
-    assert id_source(rows[0]["requirement_id"]) == "FTC"
+    assert ComplianceStore.policy_of_requirement(rows[0]["requirement_id"]) == "FTC"  # the pack's id parser
     assert span_positions(ws, "no-such-doc") == []  # no spans ingested -> empty, but the path ran end-to-end

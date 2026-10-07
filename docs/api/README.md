@@ -48,6 +48,10 @@ The usage accumulated within one `measure_usage()` block: top-level totals (call
 
 Per-model totals within a scope (`cost_usd` sums KNOWN per-call costs only).
 
+### `CapabilityManifest(slug: 'str', kind: 'EntryKind', display_name: 'str', description: 'str', representative_queries: 'tuple[str, ...]', tags: 'tuple[str, ...]' = (), requires: 'tuple[str, ...]' = (), skill_runtime: 'Optional[SkillRuntime]' = None, golden_eval_ref: 'Optional[str]' = None, response_bounds: 'Optional[ResponseBounds]' = None, capability_interface: 'Optional[CapabilityInterface]' = None, impl_ref: 'Optional[str]' = None) -> None`
+
+The committed ARD authoring data for one capability (what registration cannot derive).
+
 ### `LayoutItem(*, kind: Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other'], text: str, start: int, end: int, level: Optional[int] = None, pages: list[int] = []) -> None`
 
 One layout element of the parsed document that overlaps a chunk, in CHUNK-relative offsets.
@@ -216,10 +220,6 @@ Every span of `document` with its position provenance, ordered by document posit
 
 The source-document id embedded in a chunk/span/unit id (`<source_doc_id>:<idx>:<hash>` -> the first, delimiter-safe segment). Empty in -> empty out.
 
-### `id_source(requirement_id: 'str') -> 'str'`
-
-The source/policy of a Requirement id (`<source>:<section>:<hash>` -> the first segment; `source` is delimiter-safe via `canonical_source_doc_id`, so this is the same first-segment rule as `document_of`).
-
 ### `decode_bbox(raw: 'Optional[str]') -> 'Optional[tuple]'`
 
 Decode the engine's best-effort bounding box (stored as a JSON `[l,t,r,b]` string) to a `(l, t, r, b)` tuple, or None. The single canonical decoder (retires the product seam's copy).
@@ -251,6 +251,22 @@ Register the engine's reference pack into the runtime catalog -- the opt-in work
 ### `reference_pack() -> 'tuple[CapabilityManifest, ...]'`
 
 The engine's committed REFERENCE PACK: the engine capabilities it uses + the contract/compliance worked example's manifests (`rag_wright.packs.contracts.pack` + `rag_wright.packs.compliance.pack`). Opt-in.
+
+### `load_pack(module_name: 'str') -> 'None'`
+
+ING-8b: load a capability PACK by module name -- the module's `register()` adds its canonical slugs and registers its manifests (+ any engine capabilities it builds on). A product's own pack plugs in the same way.
+
+### `engine_capabilities() -> 'tuple[CapabilityManifest, ...]'`
+
+ING-8b: the manifests of the engine's GENERIC capabilities (generation, the RLM skills, vision-to-text, the decision model, span relevance judgment). Opt-in, like every capability: the engine ships an empty catalog.
+
+### `register_canonical_slugs(slugs) -> 'None'`
+
+Add a pack's canonical capability slugs to the registration whitelist (idempotent).
+
+### `canonical_capability_slugs() -> 'frozenset[str]'`
+
+The current canonical capability slugs: the engine's plus those of every loaded pack.
 
 ### `check_tiling(chunk_id: 'str', text: 'str', spans: 'Sequence[Span]') -> 'None'`
 

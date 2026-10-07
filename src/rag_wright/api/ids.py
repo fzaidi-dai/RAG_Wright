@@ -15,14 +15,6 @@ def document_of(entity_id: str) -> str:
     return _doc_id_of(entity_id)
 
 
-def id_source(requirement_id: str) -> str:
-    """The source/policy of a Requirement id (`<source>:<section>:<hash>` -> the first segment; `source` is
-    delimiter-safe via `canonical_source_doc_id`, so this is the same first-segment rule as `document_of`)."""
-    from rag_wright.store.arcadedb import _doc_id_of
-
-    return _doc_id_of(requirement_id)
-
-
 def decode_bbox(raw: Optional[str]) -> Optional[tuple]:
     """Decode the engine's best-effort bounding box (stored as a JSON `[l,t,r,b]` string) to a `(l, t, r, b)` tuple,
     or None. The single canonical decoder (retires the product seam's copy)."""

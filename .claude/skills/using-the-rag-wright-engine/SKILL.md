@@ -20,15 +20,15 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`),
   `kg_read`/`kg_write`/`kg_edges` (with `NOT_NULL`)/`entities_by_name`/`span_positions`, `measure_usage`,
   `register_capability`/`load_reference_pack`/`reference_pack`, the document helpers
-  (`parse_document`/`aparse_document`/`source_document`/`table_rows`, `decode_bbox`, `document_of`, `id_source`),
+  (`parse_document`/`aparse_document`/`source_document`/`table_rows`, `decode_bbox`, `document_of`),
   and the **ingestion surface**: `build_ingestion` (returns an `IngestionPipeline`; `await
   pipeline.aingest(ws, sources, cache_dir=...)` returns an `IngestionReport`), its hook contracts (`Segmenter`,
   `SpanTagger`, `UnitGrouper`, `BoundaryDecider`, `Extractor`, `RecordWriter`, `DocumentHook`, checked by
   `check_tiling`/`check_units`/`check_extraction`),
   `IngestionTuning`, `IngestSource` (`table_mode`, `include_hidden_sheets`) and `evaluate_ingestion`. Nothing
-  deeper (never `ArcadeDBStore`, `query_embedder`, or engine id formats), with today's known exceptions, tracked as
-  engine gap G5: `CapabilityManifest`, `load_pack` and `engine_capabilities` come from
-  `rag_wright.capabilities.manifests`, and `register_canonical_slugs` from `rag_wright.capabilities.registry`.
+  deeper (never `ArcadeDBStore`, `query_embedder`, or engine id formats). The pack-authoring helpers are on the API
+  too (`CapabilityManifest`, `load_pack`, `engine_capabilities`, `register_canonical_slugs`,
+  `canonical_capability_slugs`); the one remaining exception is the entity-resolution building blocks (gap G1).
   The generated `docs/api/` lists the full surface. To **plan** over the engine for a task, `discover(task, resources=ws)`
   returns the best-matching capabilities (embedding-ranked); then invoke the top ones by slug.
 
@@ -118,7 +118,7 @@ Addy-Osmani spec-driven/TDD/planning skills) into your repo via your setup step,
 ## Anti-patterns
 
 - Calling an engine API without grounding it against the `engine` lane first.
-- Importing engine internals instead of `rag_wright.api` (beyond the named G5 exceptions); forking or editing the
+- Importing engine internals instead of `rag_wright.api` (beyond the named G1 exception); forking or editing the
   engine.
 - Treating the contract/compliance reference pack as the engine's purpose, or copying its vocabulary into your
   domain instead of authoring your own `.ttl`.

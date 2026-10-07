@@ -241,3 +241,11 @@ construction.
 
 `ingested_citations` / `requirement_sources` now read through the generic `kg_read(distinct=...)`. Existing compliance
 databases need no migration: the `Requirement` type and its properties are unchanged.
+
+## API cleanup after ING-8 (2026-10-07)
+
+| Before | After |
+|---|---|
+| `rag_wright.api.id_source(requirement_id)` | removed: it was the compliance pack's requirement-id parser on the generic API. Use `ComplianceStore.policy_of_requirement(requirement_id)` (`rag_wright.packs.compliance.capabilities.compliance_store`), or the generic `document_of(id)` (same first-segment rule) |
+| `CapabilityManifest`, `load_pack`, `engine_capabilities` from `rag_wright.capabilities.manifests`; `register_canonical_slugs`, `canonical_capability_slugs` from `rag_wright.capabilities.registry` | also exported from `rag_wright.api` (same objects; the old paths still work) |
+| `KgNode` / `KgEdge` / `NOT_NULL` from `rag_wright.store.seam`; `IngestionPipeline` / `DocumentHook` from `rag_wright.ingestion.builder` | also exported from `rag_wright.api` |
