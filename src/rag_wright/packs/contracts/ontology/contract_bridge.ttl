@@ -2714,3 +2714,28 @@ cbr:role_ld_trigger a cbr:ResidualRole ; skos:prefLabel "ld_trigger" ; cbr:roleO
     cbr:decisionCriterion "ONLY when this provision imposes liquidated damages: the event or breach that triggers them; an amount or percentage is never a trigger" .
 cbr:role_none a cbr:ResidualRole ; skos:prefLabel "none" ; cbr:roleOrder 7 ;
     cbr:decisionCriterion "none of these: a section number or heading, a signing or effective date or the date of a past event, an address, a price or rate, a cost or revenue share, how often reports, payments or updates are made, a vague timing word (at all times, thereafter, promptly), the NAME of a period (such as 'Initial Term' or 'the last Calendar Year of the Term') when the span only names it rather than bounding something, or a fragment that is not itself a value" .
+
+# =============================================================================
+# ING-3b (ADR-0066): the contract pack's SEGMENTATION vocabulary. Domain knowledge the provision segmenter, the
+# provision grouper and the furniture filter read (`packs.contracts.spans.segment`); the regex STRUCTURE around these
+# words (enumeration markers, depth-capped section numbers, table-of-contents leaders) is mechanism and stays in code.
+# =============================================================================
+cbr:SegmentationVocabulary a owl:Class ;
+    rdfs:comment "The words and symbols that drive contract provision segmentation and grouping." .
+cbr:nonTerminalAbbreviation a owl:DatatypeProperty ; rdfs:domain cbr:SegmentationVocabulary ; rdfs:range xsd:string ;
+    rdfs:comment "An abbreviation (lower-case, no trailing dot) whose trailing '.' does not end a provision." .
+cbr:sectionWord a owl:DatatypeProperty ; rdfs:domain cbr:SegmentationVocabulary ; rdfs:range xsd:string ;
+    rdfs:comment "A word (optionally followed by '.') that prefixes a section number in a heading: 'Section 8', 'Art. 2'." .
+cbr:sectionSymbol a owl:DatatypeProperty ; rdfs:domain cbr:SegmentationVocabulary ; rdfs:range xsd:string ;
+    rdfs:comment "A symbol that prefixes a section number in a heading: '§3'." .
+cbr:furnitureLabel a owl:DatatypeProperty ; rdfs:domain cbr:SegmentationVocabulary ; rdfs:range xsd:string ;
+    rdfs:comment "A signature-, execution- or notice-block label: a line opening with it and a ':' is page furniture, not a provision." .
+
+cbr:segmentationVocabulary a cbr:SegmentationVocabulary ;
+    cbr:nonTerminalAbbreviation "inc", "corp", "co", "ltd", "llc", "llp", "plc", "no", "nos", "art", "sec", "secs",
+        "para", "paras", "cf", "vs", "v", "mr", "mrs", "ms", "dr", "st", "ave", "etc", "al", "viz", "e.g", "i.e",
+        "u.s", "u.s.c" ;
+    cbr:sectionWord "section", "article", "clause", "sec", "art" ;
+    cbr:sectionSymbol "§" ;
+    cbr:furnitureLabel "by", "name", "title", "attest", "witness", "its", "date", "signature", "attention", "attn",
+        "facsimile", "fax", "email", "e-mail", "telephone", "tel", "phone" .

@@ -24,14 +24,22 @@ import re
 from rag_wright.contracts.ingestion import Span
 from rag_wright.corpus.document_parser import _LEADING_ENUM, _is_bare_heading  # generic text rules (ADR-0124)
 from rag_wright.contracts.span import to_span_record  # noqa: F401 - re-exported (moved, ING-4b)
+from rag_wright.packs.contracts.ontology.loader import load_segmentation_vocab
+
+# ING-3b (ADR-0066): the segmentation VOCABULARY (abbreviations, section words/symbols, furniture labels) is declared
+# in contract_bridge.ttl (`cbr:segmentationVocabulary`); the regex structure around it below is mechanism.
+_VOCAB = load_segmentation_vocab()
+
+
+def _alternation(words) -> str:
+    """A regex alternation over vocabulary words, longest first (deterministic; a longer word wins a shared prefix)."""
+    return "|".join(re.escape(w) for w in sorted(words, key=lambda w: (-len(w), w)))
+
 
 DEFAULT_MIN_CHARS = 25  # a span whose stripped text is shorter folds into its neighbour (a bare heading/marker)
 
-# Abbreviations whose trailing '.' does not end a provision (lower-cased, no trailing dot).
-_ABBREV = {
-    "inc", "corp", "co", "ltd", "llc", "llp", "plc", "no", "nos", "art", "sec", "secs", "para", "paras",
-    "cf", "vs", "v", "mr", "mrs", "ms", "dr", "st", "ave", "etc", "al", "viz", "e.g", "i.e", "u.s", "u.s.c",
-}
+# Abbreviations whose trailing '.' does not end a provision (lower-cased, no trailing dot): `cbr:nonTerminalAbbreviation`.
+_ABBREV = set(_VOCAB["abbreviations"])
 
 # An enumeration marker opening a provision: (a) (iv) (12) a) 12) 1. 12.1 12.1.1 §  -- captured as group 1.
 _ENUM = re.compile(
@@ -86,9 +94,7 @@ _WORD_RE = re.compile(r"[A-Za-z]{2,}")
 # provision that merely mentions the word (e.g. "By signing below, the parties agree ..." and "All notices shall
 # be sent to the following address:" both start with other words, so neither matches). issue 0036 adds the notice
 # contacts; a bare street/city address line has no such label and stays recall-first (kept -> a thin clause).
-_FURNITURE_LINE = re.compile(
-    r"^\s*(?:by|name|title|attest|witness|its|date|signature"
-    r"|attention|attn|facsimile|fax|e-?mail|telephone|tel|phone)\s*:", re.IGNORECASE)
+_FURNITURE_LINE = re.compile(rf"^\s*(?:{_alternation(_VOCAB['furniture_labels'])})\s*:", re.IGNORECASE)  # cbr:furnitureLabel
 # A table-of-contents entry: a dotted leader (>=3 dots, optionally spaced) running to a trailing page number.
 # High-precision furniture; a decimal like "Section 3.1" or "(see Section 3.1)." has no long leader-to-page run.
 _TOC_LEADER = re.compile(r"(?:\.\s*){3,}\d+\s*$")
@@ -126,7 +132,9 @@ _SECTION_START = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2})?\)?\.\s")
 # A section-WORD prefix ('Section 8', 'Article 2', 'Clause 12', 'Sec.'/'Art.', '§3') before a number -- the dominant
 # contract heading style. Stripped so the depth-capped number rule above decides exactly as for a bare '8.'. The
 # digit lookahead means a prose line like 'Section hereof shall mean ...' is left untouched (not a start).
-_SECTION_WORD = re.compile(r"^(?:§\s*|(?:section|article|clause|sec|art)\.?\s+)(?=\(?\d)", re.IGNORECASE)
+_SECTION_WORD = re.compile(  # cbr:sectionSymbol / cbr:sectionWord
+    rf"^(?:(?:{_alternation(_VOCAB['section_symbols'])})\s*|(?:{_alternation(_VOCAB['section_words'])})\.?\s+)(?=\(?\d)",
+    re.IGNORECASE)
 # The number FOLLOWING a section word (depth-capped to two levels; trailing '.'/')' optional, since the section
 # word already signals a heading): 'Section 8.' and 'Clause 12 Governing Law' both start a provision.
 _SECTION_NUM = re.compile(r"^\(?\d{1,2}(?:\.\d{1,2})?\)?[.)]?(?:\s|$)")

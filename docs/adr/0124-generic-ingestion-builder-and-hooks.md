@@ -75,7 +75,8 @@ writing to change one decision (engine gaps G3/G4).
 - **The reference pack's grouper is `provision_units`** (the legal provision rules, the furniture filter, the Jev
   decider), sharing one grouping function with `clause_extraction_jobs` so they cannot drift; parity 90/90
   identical on 45 contracts with and without a decider. No cap on the reference grouper (behaviour unchanged).
-- Moving the legal grouping patterns themselves into the contract `.ttl` (ADR-0066) is tracked as ING-3b.
+- Moving the legal grouping patterns themselves into the contract `.ttl` (ADR-0066) is tracked as ING-3b (done; see
+  the ING-3b addendum).
 
 ## ING-4a addendum (2026-10-07): spreadsheet content
 
@@ -239,3 +240,16 @@ writing to change one decision (engine gaps G3/G4).
   `ComplianceStore`. Pack stores ensure their schema on construction. The span reads are per document
   (`spans_by_document`, `all_spans_by_document`).
 - **Verified.** Full suite and the 54 live store tests green; a live Aimmune re-ingest is record-identical to ING-8d.
+
+## ING-3b addendum (2026-10-08): the contract segmentation vocabulary lives in the pack `.ttl`
+
+- **Decision.** The contracts pack's segmentation VOCABULARY is declared in `contract_bridge.ttl`
+  (`cbr:segmentationVocabulary`: `cbr:nonTerminalAbbreviation`, `cbr:sectionWord`, `cbr:sectionSymbol`,
+  `cbr:furnitureLabel`) and read by `load_segmentation_vocab`; `packs.contracts.spans.segment` builds its patterns from
+  it (alternations longest-first). The regex STRUCTURE (enumeration markers, depth-capped section numbers,
+  table-of-contents leaders) stays in code as mechanism. The generic engine segmenter's own abbreviation list is
+  language mechanism of the engine default, not the pack's knowledge, and is unchanged.
+- **Verified.** Byte-identical: the segmentation, provision-start and furniture decisions over 45 CUAD contracts
+  (7,297 blocks, 14,059 spans) fingerprint identically before and after; a live Aimmune re-ingest is record-identical
+  to ING-8e. `tests/spans/test_segmentation_vocab.py` locks the vocabulary and checks the built patterns decide as the
+  original literals did.

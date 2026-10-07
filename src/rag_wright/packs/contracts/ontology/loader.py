@@ -245,6 +245,21 @@ def load_residual_role_criteria(path: str = str(_TTL_PATH)) -> dict[str, str]:
 
 
 @lru_cache(maxsize=4)
+@lru_cache(maxsize=4)
+def load_segmentation_vocab(path: str = str(_TTL_PATH)) -> dict[str, frozenset[str]]:
+    """ING-3b (ADR-0066): the segmentation vocabulary declared on `cbr:segmentationVocabulary` -- keys
+    `abbreviations` (`cbr:nonTerminalAbbreviation`), `section_words` (`cbr:sectionWord`), `section_symbols`
+    (`cbr:sectionSymbol`) and `furniture_labels` (`cbr:furnitureLabel`). Cached per path."""
+    from rdflib import URIRef
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    node = URIRef(_CBR + "segmentationVocabulary")
+    keys = {"abbreviations": "nonTerminalAbbreviation", "section_words": "sectionWord",
+            "section_symbols": "sectionSymbol", "furniture_labels": "furnitureLabel"}
+    return {k: frozenset(str(v) for v in g.objects(node, URIRef(_CBR + prop))) for k, prop in keys.items()}
+
+
 def load_residual_role_rubric(path: str = str(_TTL_PATH)) -> str:
     """ING-9b: the instructions stated once before a provision's residual candidates (`cbr:residualRoleQuestion`)."""
     from rdflib import URIRef

@@ -4,8 +4,8 @@ The DreamAI recipe for building a spec-driven project with Claude Code, followin
 
 > **Current active workstream (2026-10-07): ingestion hooks** (ADR-0124): a generic, domain-neutral ingestion
 > builder (`build_ingestion`) with domain hooks, a neutral default schema, and the reference pack gathered into its
-> own packages (`rag_wright.packs.contracts` / `rag_wright.packs.compliance`, ING-8). Still open: ING-3b (the legal
-> grouping patterns into the contract `.ttl`), ING-5 (the documentation audit) and ING-CLEAN (scratch databases).
+> own packages (`rag_wright.packs.contracts` / `rag_wright.packs.compliance`, ING-8). Still open: ING-CLEAN (dropping
+> the redundant scratch and test databases).
 > Driven by **`docs/specs/ingestion-hooks/plan.md`** (`ING-*`); follow that plan for current work. The preceding
 > **engine-prep** workstream (`docs/specs/engine-prep/plan.md`, `PREP-*`) is closed: it packaged and documented the
 > engine. The **engine-platform boundary** (engine API + capability runtime + de-domaining, ADR-0117) landed the
