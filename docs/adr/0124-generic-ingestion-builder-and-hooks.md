@@ -76,3 +76,20 @@ writing to change one decision (engine gaps G3/G4).
   decider), sharing one grouping function with `clause_extraction_jobs` so they cannot drift; parity 90/90
   identical on 45 contracts with and without a decider. No cap on the reference grouper (behaviour unchanged).
 - Moving the legal grouping patterns themselves into the contract `.ttl` (ADR-0066) is tracked as ING-3b.
+
+## ING-4a addendum (2026-10-07): spreadsheet content
+
+- **Hidden sheets are ingested by default.** A spreadsheet's hidden worksheets (docling's INVISIBLE layer) are moved
+  into the body at parse; `parse_document(..., include_hidden_sheets=False)` skips them and lists them in
+  `SourceDocument.skipped_hidden_sheets` (never silent). The choice is part of the parse cache key; a pre-ING-4a
+  spreadsheet cache is normalized on load. Client evidence: a hidden sheet held the R&D trial log.
+- **Spreadsheet tables render compact** (no column padding; was up to ~80% spaces, and pushed a 65-row sheet over
+  the chunk cap). Non-spreadsheet table text is unchanged (contract parity 10/10 byte-identical).
+- **Database-style tables group one record per row** in `group_units`: a real header (3+ named columns, an unnamed
+  index column allowed, 80%+ distinct after a merged cell's repeat across adjacent columns counts once) and either a
+  serial first column or 8+ columns. Each row unit carries the header in its text; the header span joins the first
+  row. Forms, key-value tables and criteria matrices stay one unit. Eval: 414 hand-labelled tables (client forms,
+  database workbook, 64 embedded lab reports, a public report) -- zero forms split, every wide record table split;
+  small record tables kept whole are a diagnostic (harmless).
+- Known limit: a record table larger than one chunk even when compact is split mid-table by the chunker; ING-7's
+  tabular extractor reads records from the parsed table grid, not chunk text.

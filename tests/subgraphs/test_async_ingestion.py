@@ -232,14 +232,16 @@ async def test_aparsed_source_document_is_the_async_bounded_twin(monkeypatch):
 
     seen = {}
 
-    def _stub(sid, name, data, *, cache_dir, metadata=None):
-        seen.update(sid=sid, name=name, data=data, cache_dir=cache_dir, metadata=metadata)
+    def _stub(sid, name, data, *, cache_dir, metadata=None, include_hidden_sheets):
+        seen.update(sid=sid, name=name, data=data, cache_dir=cache_dir, metadata=metadata,
+                    hidden=include_hidden_sheets)
         return SourceDocument(source_doc_id=sid, text="parsed", metadata=metadata or {})
 
     monkeypatch.setattr(cip, "parsed_source_document", _stub)
     sd = await cip.aparsed_source_document("D1", "d.pdf", b"%PDF", cache_dir="/tmp/x", metadata={"a": 1})
     assert isinstance(sd, SourceDocument) and sd.source_doc_id == "D1" and sd.text == "parsed"   # returns SourceDocument
-    assert seen == {"sid": "D1", "name": "d.pdf", "data": b"%PDF", "cache_dir": "/tmp/x", "metadata": {"a": 1}}
+    assert seen == {"sid": "D1", "name": "d.pdf", "data": b"%PDF", "cache_dir": "/tmp/x", "metadata": {"a": 1},
+                    "hidden": True}
 
 
 async def test_aparsed_source_document_is_wall_clock_bounded(monkeypatch):
@@ -247,7 +249,7 @@ async def test_aparsed_source_document_is_wall_clock_bounded(monkeypatch):
 
     import rag_wright.capabilities.document_parse as cip
 
-    def _slow(sid, name, data, *, cache_dir, metadata=None):
+    def _slow(sid, name, data, *, cache_dir, metadata=None, include_hidden_sheets=True):
         time.sleep(0.5)  # a hung OCR/VLM escalation
         return SourceDocument(source_doc_id=sid, text="x")
 

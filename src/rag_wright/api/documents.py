@@ -18,22 +18,27 @@ def source_document(document_id: str, *, text: str) -> Any:
     return SourceDocument(source_doc_id=document_id, text=text)
 
 
-def parse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dict | None = None) -> Any:
+def parse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dict | None = None,
+                   include_hidden_sheets: bool = True) -> Any:
     """Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_dir`) into a
     structure-bearing `SourceDocument` -- `.parsed` carries the `DoclingDocument` so the chunker's structural pass
     fires on real headings, and `.text` holds the flattened text. This is the PDF/DOCX/HTML/MD ingest entry point
     of the engine API; pass the result as the `document` input of `contract_ingestion_pipeline`. The docling parse
-    blocks; use `aparse_document` on an event loop."""
+    blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless
+    `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`)."""
     from rag_wright.capabilities.document_parse import parsed_source_document
 
     p = Path(path)
-    return parsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata)
+    return parsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata,
+                                  include_hidden_sheets=include_hidden_sheets)
 
 
-async def aparse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dict | None = None) -> Any:
+async def aparse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dict | None = None,
+                          include_hidden_sheets: bool = True) -> Any:
     """The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the docling parse off the event loop
     so a hand-built async ingest can parse a document into a structure-bearing `SourceDocument` without blocking."""
     from rag_wright.capabilities.document_parse import aparsed_source_document
 
     p = Path(path)
-    return await aparsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata)
+    return await aparsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata,
+                                         include_hidden_sheets=include_hidden_sheets)

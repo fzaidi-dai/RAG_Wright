@@ -122,10 +122,37 @@ class ContentItem:
 
 def _table_content_text(item: Any, doc: Any) -> str:
     """A TABLE item -> its atomic markdown (issue 0014), caption prefixed when docling captured one. The markdown
-    keeps the header row with the data rows, so the fee/payment schedule retrieves as a unit."""
+    keeps the header row with the data rows, so the fee/payment schedule retrieves as a unit. ING-4a: a spreadsheet's
+    table is rendered COMPACT (no column padding -- docling pads every cell to its column's widest, which made a
+    database sheet ~80% spaces); other sources keep docling's rendering unchanged."""
     caption = (item.caption_text(doc) or "").strip()
-    body = (item.export_to_markdown(doc) or "").strip()
+    body = (_compact_table_markdown(item) if is_spreadsheet(doc) else (item.export_to_markdown(doc) or "")).strip()
     return f"{caption}\n\n{body}".strip() if caption else body
+
+
+# ING-4a: the spreadsheet formats (by the parse's recorded origin)
+_SPREADSHEET_MIMETYPES = frozenset({
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "text/csv",
+})
+
+
+def is_spreadsheet(doc: Any) -> bool:
+    """Whether a parsed document came from a spreadsheet (by `document.origin.mimetype`)."""
+    return getattr(getattr(doc, "origin", None), "mimetype", None) in _SPREADSHEET_MIMETYPES
+
+
+def _compact_table_markdown(item: Any) -> str:
+    """A table as compact markdown: one `| a | b |` line per row (cell whitespace collapsed, `|` escaped), the first
+    row as the header followed by a `|---|` separator."""
+    rows = [[" ".join((cell.text or "").split()).replace("|", "\\|") for cell in row] for row in item.data.grid]
+    if not rows:
+        return ""
+    lines = ["| " + " | ".join(r) + " |" for r in rows]
+    lines.insert(1, "|" + "---|" * len(rows[0]))
+    return "\n".join(lines)
 
 
 def _picture_content_text(item: Any, doc: Any) -> str:
