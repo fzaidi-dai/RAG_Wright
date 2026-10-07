@@ -19,7 +19,7 @@ cd "$(git rev-parse --show-toplevel)"
 # schema-driven KG extractor GP-1B adopted and KG-0..KG-6 lean on heavily — `template from-ontology`,
 # the extraction runners, the model seam; ground its API first-class alongside the `kg-extraction-recipe`
 # Skill + live CLI, so nothing is guessed). modal_proto (low-level gRPC stubs) is excluded as noise.
-PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters langfuse olefile"
+PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters langfuse olefile pypdfium2"
 SP="$(uv run python -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
 STAGE="$HOME/.graphify/rag-wright-framework/src"
 OUT="graphify-out/framework/graph.json"

@@ -1,4 +1,5 @@
-"""ING-6 (ADR-0124): extract files embedded in Office Open XML packages, so they become CHILD documents.
+"""ING-6/6b (ADR-0124): extract files embedded in Office Open XML packages -- and files ATTACHED to a PDF (ING-6b,
+no anchor: a parent-document link only) -- so they become CHILD documents.
 
 Generic over spreadsheets, word-processing documents and presentations (`.xlsx`/`.xlsm`/`.docx`/`.docm`/`.pptx`/
 `.pptm`): every part under `*/embeddings/` is one embedded object. An OLE object is unwrapped to its payload -- a
@@ -204,9 +205,61 @@ def _natural(part: str) -> list:
     return [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", part)]
 
 
+def _is_empty_flate(payload: bytes) -> bool:
+    """pdfium returns an EMPTY attachment as the raw FlateDecode encoding of nothing (8 bytes) instead of b''."""
+    import zlib
+
+    if len(payload) > 16:
+        return False
+    try:
+        return zlib.decompress(payload) == b""
+    except zlib.error:
+        return False
+
+
+def _pdf_attachments(data: bytes) -> EmbeddedExtraction:
+    """ING-6b: the files attached to a PDF (its embedded-files name tree). An attachment has no position in the
+    page content, so it carries no anchor -- the child links to the parent document only."""
+    import pypdfium2
+
+    out = EmbeddedExtraction()
+    by_hash: dict[str, EmbeddedFile] = {}
+    try:
+        pdf = pypdfium2.PdfDocument(data)
+    except Exception as exc:  # noqa: BLE001 - an unreadable PDF has no attachments we can list; say so
+        out.skipped.append(f"attachments: {type(exc).__name__}: {exc}")
+        return out
+    try:
+        for i in range(pdf.count_attachments()):
+            out.found += 1
+            name = f"attachment {i}"
+            try:
+                att = pdf.get_attachment(i)
+                name = att.get_name() or name
+                payload = bytes(att.get_data())
+            except Exception as exc:  # noqa: BLE001 - one unreadable attachment is reported, the rest extracted
+                out.skipped.append(f"{name}: {type(exc).__name__}: {exc}")
+                continue
+            if not payload or _is_empty_flate(payload):
+                out.skipped.append(f"{name}: empty attachment")
+                continue
+            sha = hashlib.sha256(payload).hexdigest()
+            if sha in by_hash:
+                out.duplicates += 1
+                continue
+            by_hash[sha] = EmbeddedFile(data=payload, filename=PureWindowsPath(name).name,
+                                        media_type=_media_type(payload), sha256=sha)
+    finally:
+        pdf.close()
+    out.files = list(by_hash.values())
+    return out
+
+
 def extract_embedded(name: str, data: bytes) -> EmbeddedExtraction:
-    """The files embedded in an Office Open XML package (empty for any other source)."""
+    """The files embedded in an Office Open XML package, or attached to a PDF (empty for any other source)."""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext == "pdf" or data.startswith(b"%PDF"):
+        return _pdf_attachments(data)
     if ext not in _PACKAGE_EXTS or not zipfile.is_zipfile(io.BytesIO(data)):
         return EmbeddedExtraction()
     out = EmbeddedExtraction()

@@ -183,3 +183,45 @@ def test_files_with_the_same_name_but_different_types_get_distinct_ids(tmp_path)
     ids = sorted(d.doc_id for d in report.documents)
     assert len(set(ids)) == 2 and all(d.dead_letter is None for d in report.documents), ids
     assert len({n.props["doc_id"] for n in ws._store.nodes if n.type == "Document"}) == 2
+
+
+@pytest.fixture
+def no_vlm(monkeypatch):
+    """A blank page goes through tiered OCR; keep it local (never a real VLM call from a unit test)."""
+    monkeypatch.setattr("rag_wright.capabilities.parsing._vlm_available", lambda: False)
+
+
+def test_a_pdf_attachment_is_ingested_as_a_child(tmp_path, no_vlm):
+    import io
+
+    import pypdfium2
+
+    doc = pypdfium2.PdfDocument.new()
+    doc.new_page(200, 200)
+    doc.new_attachment("results.docx").set_data(_report_docx(tmp_path, "att.docx", "Bursting strength 412 kPa."))
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    pdf = tmp_path / "cover.pdf"
+    pdf.write_bytes(buf.getvalue())
+    ws = _ws()
+    report, _ = _run(ws, [IngestSource(path=str(pdf), doc_id="cover")], tmp_path)
+    parent = next(d for d in report.documents if d.doc_id == "cover")
+    (child_id,) = parent.children
+    assert any(e.type == "EmbeddedIn" and e.from_key == child_id and e.to_key == "cover" for e in ws._store.ensured)
+    assert not any(e.type == "AttachedTo" for e in ws._store.ensured)  # no table row to attach to
+
+
+def test_a_document_with_no_text_is_ingested_empty_not_dead_lettered(tmp_path, no_vlm):
+    import pypdfium2
+
+    doc = pypdfium2.PdfDocument.new()
+    doc.new_page(200, 200)  # a blank page: nothing to chunk
+    pdf = tmp_path / "blank.pdf"
+    doc.save(str(pdf))
+    doc.close()
+    ws = _ws()
+    report, _ = _run(ws, [IngestSource(path=str(pdf), doc_id="blank")], tmp_path)
+    (rep,) = report.documents
+    assert rep.dead_letter is None and rep.chunks == 0 and rep.spans == 0 and rep.units == 0
+    assert any(n.type == "Document" and n.props["doc_id"] == "blank" for n in ws._store.nodes)

@@ -141,3 +141,16 @@ writing to change one decision (engine gaps G3/G4).
   dead-lettered, 6,743 spans, 1,319 records, 64 `EmbeddedIn`, 83 `AttachedTo` with their evidence on the attached
   row; a second run leaves every count unchanged.
 - Deferred to ING-4c: an optional entity-graph hook (the reference pack's party extraction + entity resolution).
+
+## ING-6b addendum (2026-10-07): PDF attachments, and empty documents
+
+- **Files attached to a PDF** (its embedded-files tree) are extracted like ING-6 embeds -- content-addressed,
+  `<parent>.emb.<sha12>`, duplicates merged, unreadable or empty ones reported (pdfium returns an empty attachment
+  as the 8-byte Flate encoding of nothing; that is treated as empty). An attachment has no position in the page
+  content, so it carries no anchor: the child gets an `EmbeddedIn` edge to its parent document and no `AttachedTo`.
+- **`pypdfium2` is now a declared dependency** (`>=5.11`; it was only transitive via docling while the engine
+  already called it for link-evidence text) and is in the framework grounding index.
+- **A document with no text** (a blank or unreadable cover page, a sheet holding only attachments) is ingested as
+  an EMPTY document -- its `Document` node and children recorded -- instead of being dead-lettered by the chunker
+  ("no chunks produced"), which had silently dropped every attachment of such a document.
+- Live sweep: the 68 real PDFs (client + embedded reports) carry no attachments -- 0 found, 0 skipped, no errors.

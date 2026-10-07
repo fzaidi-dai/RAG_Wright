@@ -156,3 +156,54 @@ def test_a_token_common_to_many_rows_is_not_evidence(tmp_path):
     kids = _parse(tmp_path, [(3, 1, "oleObject1.bin", packager("SDP 3101 report.pdf", fake_pdf("1"))),
                              (3, 1, "oleObject2.bin", packager("EN 17092 summary.pdf", fake_pdf("s")))])
     assert kids["EN 17092 summary.pdf"].links == []
+
+
+# --- ING-6b: files attached to a PDF are child documents too (no cell anchor: parent-document link only) ---------
+
+def _pdf_with_attachments(files: list[tuple[str, bytes]]) -> bytes:
+    import pypdfium2
+
+    doc = pypdfium2.PdfDocument.new()
+    doc.new_page(200, 200)
+    for name, data in files:
+        doc.new_attachment(name).set_data(data)
+    buf = io.BytesIO()
+    doc.save(buf)
+    doc.close()
+    return buf.getvalue()
+
+
+def test_pdf_attachments_are_extracted_without_an_anchor():
+    pdf = _pdf_with_attachments([("results.docx", _docx_bytes()), ("raw data.pdf", fake_pdf("raw"))])
+    out = extract_embedded("report.pdf", pdf)
+    assert out.found == 2 and out.skipped == []
+    by_name = {f.filename: f for f in out.files}
+    assert set(by_name) == {"results.docx", "raw data.pdf"}
+    assert by_name["raw data.pdf"].media_type == "application/pdf" and by_name["raw data.pdf"].data == fake_pdf("raw")
+    assert by_name["results.docx"].media_type.endswith("wordprocessingml.document")
+    assert all(f.anchors == [] for f in out.files)
+
+
+def test_identical_pdf_attachments_are_one_file():
+    pdf = _pdf_with_attachments([("a.pdf", fake_pdf("x")), ("copy of a.pdf", fake_pdf("x"))])
+    out = extract_embedded("report.pdf", pdf)
+    assert len(out.files) == 1 and out.found == 2 and out.duplicates == 1
+
+
+def test_an_empty_pdf_attachment_is_reported():
+    out = extract_embedded("report.pdf", _pdf_with_attachments([("empty.txt", b"")]))
+    assert out.files == [] and out.found == 1 and "empty.txt" in out.skipped[0]
+
+
+def test_a_pdf_without_attachments_has_none():
+    assert extract_embedded("report.pdf", _pdf_with_attachments([])).found == 0
+
+
+def test_parse_document_surfaces_pdf_attachments_as_children(tmp_path):
+    from rag_wright.api import parse_document
+
+    pdf = tmp_path / "report.pdf"
+    pdf.write_bytes(_pdf_with_attachments([("raw data.pdf", fake_pdf("raw"))]))
+    (child,) = parse_document("rep", pdf, cache_dir=tmp_path / "cache").embedded
+    assert child.doc_id == f"rep.emb.{hashlib.sha256(fake_pdf('raw')).hexdigest()[:12]}"
+    assert child.filename == "raw data.pdf" and child.anchors == [] and child.links == []

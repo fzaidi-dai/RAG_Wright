@@ -200,14 +200,18 @@ class IngestionPipeline:
         from rag_wright.capabilities.parsing import load_document
         from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, achunk
         from rag_wright.contracts.span import to_span_record
+        from rag_wright.corpus.document_parser import content_items
         from rag_wright.ingestion.group import group_units
         from rag_wright.ingestion.layout import chunk_layouts
         from rag_wright.ingestion.segment import segment_layout
 
+        document = load_document(sd.parsed)
+        if not any((it.text or "").strip() for it in content_items(document)):
+            return {}  # no text (a blank or unreadable page, a sheet holding only attachments): an EMPTY document,
+            #            still recorded with its children -- never dead-lettered for having nothing to chunk
         manifest = await achunk(sd.parsed, summarizer=_NoSummary(), cache_dir=cache / "chunks",
                                 discoverer=StructuralModelFallbackDiscoverer(self._chunk_model))
         chunks = list(manifest.chunks)
-        document = load_document(sd.parsed)
         layouts = chunk_layouts(document, [c.text for c in chunks])
         segment = self._segmenter or functools.partial(segment_layout, tuning=tuning)
         per_chunk: list[tuple[Any, list[Span]]] = []
