@@ -136,6 +136,8 @@ source_modules = [
     "rag_wright.capabilities.disambiguation",
     "rag_wright.capabilities.entity_resolution",
     "rag_wright.capabilities.graph_storage",
+    "rag_wright.contracts.ingestion",  # ING-1/2 (ADR-0124): the generic ingestion hooks + defaults
+    "rag_wright.ingestion",
 ]
 forbidden_modules = [
     "rag_wright.corpus.edgar",
@@ -154,4 +156,6 @@ forbidden_modules = [
     "rag_wright.subgraphs.compliance_ingestion",
     "rag_wright.subgraphs.relational_qa",
     "rag_wright.subgraphs.intra_document_qa",
+    "rag_wright.spans.segment",  # the reference pack's LEGAL segmenter / provision rules (ADR-0124)
+    "rag_wright.spans.boundary",
 ]

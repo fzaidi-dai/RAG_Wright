@@ -48,3 +48,17 @@ async def test_aparse_document_bytes_is_wall_clock_bounded():
     slow = _FakeParser("PARSED", delay=0.5)
     with pytest.raises(TimeoutError):
         await aparse_document_bytes("x.pdf", b"%PDF", parser=slow, deadline_s=0.02)
+
+
+def test_a_macro_enabled_workbook_parses_as_xlsx():
+    """ING-2: `.xlsm` is the same Office Open XML workbook as `.xlsx` (plus a macro part docling never runs), but
+    docling only routes `.xlsx` to its spreadsheet backend -- so the bytes are handed over under `.xlsx`."""
+    seen = []
+
+    class _Rec(_FakeParser):
+        def convert(self, source):
+            seen.append(source.suffix)
+            return super().convert(source)
+
+    parse_document_bytes("process_form.xlsm", b"PK", parser=_Rec())
+    assert seen == [".xlsx"]

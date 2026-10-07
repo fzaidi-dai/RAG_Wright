@@ -36,8 +36,8 @@ from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.corpus.document_parser import _HEADING_LABELS  # the single docling heading-label authority (ADR-0058)
 from rag_wright.corpus.document_parser import content_items  # issue 0014: reading-order body (text+tables+pictures)
+from rag_wright.corpus.document_parser import _is_bare_heading  # the single bare-heading text authority (0006-B)
 from rag_wright.models.tag_structured import build_tag_structured
-from rag_wright.spans.segment import _is_bare_heading  # the single bare-heading text authority (0006-B)
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured

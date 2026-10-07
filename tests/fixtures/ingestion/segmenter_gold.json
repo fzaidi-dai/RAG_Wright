@@ -1,0 +1,37 @@
+{
+  "_comment": "ING-2 hand gold for the synthetic textile fixtures (authored, no client data). Expected spans per document, in order, after normalization (whitespace runs -> one space, stripped; a markdown separator row's dash runs -> '---'). Rules: a heading joins the span that follows it; a table's header row + separator row is one span, then one span per data row; a list item is one span; prose splits into sentences, never after a common abbreviation (e.g., i.e., vs., approx., No., dia., Req.) or at a decimal.",
+  "textile_spec_sheet.md": [
+    "Fabric Specification Sheet Spec No.: FS-2041-B",
+    "Customer: Northwind Apparel (ref. PO 77-1043)",
+    "Date: 2026-03-14",
+    "Construction Fabric structure: single jersey, 1x1 lycra plated.",
+    "The fabric is knitted on a 30\" dia. machine at 28 gauge; the stitch length is approx. 2.85 mm.",
+    "Lycra is fed on every feeder (i.e. full plating), not alternate feeders.",
+    "| Parameter | Proposed | Actual | |---|---|---|",
+    "| Machine dia. | 30\" | 30\" |",
+    "| Gauge | 28G | 28G |",
+    "| Stitch length | 2.85 mm | 2.9 mm |",
+    "| Lycra % | 5 | 4.8 |",
+    "Composition 95% cotton (combed, 40s Ne)",
+    "5% elastane [Lycra 20D]",
+    "Yarn supplier: e.g. Vardhman or equivalent",
+    "Finishing route Heat-setting at 190 °C, speed 18 m/min.",
+    "Washing (soft flow), pH 5.5-6.0.",
+    "Drying, then compacting to finished width.",
+    "Remarks: Req. finished GSM 180 ± 5; finished width 68\"."
+  ],
+  "textile_test_report.md": [
+    "Test Report TR-0398 Sample: knitted T-shirt, style 107-208, colour navy.",
+    "Fibre content claimed: 60% cotton / 40% polyester.",
+    "Summary The sample meets the dimensional stability requirement.",
+    "It does not meet the colour fastness to laundering requirement (grade 3 vs. required 4).",
+    "Bursting strength was 412 kPa, i.e. above the 350 kPa minimum.",
+    "Results | Test | Method | Result | Requirement | Pass/Fail | |---|---|---|---|---|",
+    "| Dimensional stability | AATCC 135 | -3.1% length | max. -5% | Pass |",
+    "| Colour fastness to laundering | ISO 105-C06:2010 | Grade 3 | Grade 4 | Fail |",
+    "| Bursting strength | ASTM D3786 | 412 kPa | 350 kPa min. | Pass |",
+    "Recommendations Re-dye with a reactive dye recipe and re-test to ISO 105-C06.",
+    "Keep the current knitting parameters.",
+    "Tested by: Lab No. 2, approved 2026-04-02."
+  ]
+}

@@ -23,6 +23,26 @@ from docling_core.types.doc.labels import DocItemLabel
 
 # Labels that START a new section (a real heading), vs PAGE_HEADER which is running page furniture (ignored).
 _HEADING_LABELS = frozenset({DocItemLabel.SECTION_HEADER, DocItemLabel.TITLE, DocItemLabel.FIELD_HEADING})
+
+# ING-2 (ADR-0124): domain-neutral heading-TEXT rules, shared by the generic chunker and the reference segmenter.
+# A leading enumeration marker ('9.', '(a)', '12.1', '§') stripped before deciding whether a line is a bare heading.
+_LEADING_ENUM = re.compile(r"^\s*(?:\(?[\dA-Za-z]{1,4}\s*[.)]|\d+(?:\.\d+){0,3}\.?|§+)\s+")
+
+
+def _is_bare_heading(text: str) -> bool:
+    """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
+    sentence terminator. It must fold INTO its body, never stand alone: a standalone heading gets classified as
+    a clause pointing at a bare heading, which pollutes evidence and can hide the real clause (issue 0006). A
+    genuine short provision carries an operative sentence (terminal '.'/';'/':'), so it is NOT a heading."""
+    t = text.strip()
+    if not t or len(t) > 60:
+        return False
+    rest = _LEADING_ENUM.sub("", t, count=1)  # drop a leading '9.' / '(a)' / '12.1' enumeration marker
+    if not rest or not rest[0].isupper():  # a heading's title starts capitalised
+        return False
+    return not re.search(r"[.;:]", rest)  # a bare title has no sentence punctuation; a provision does
+
+
 _TEXT_EXTS = frozenset({"txt", "md", "text"})
 
 
@@ -42,11 +62,17 @@ def _default_document_parser() -> Any:
     return TieredOCRParser()
 
 
+# ING-2: extensions docling has no backend entry for, mapped to the format they are. A macro-enabled workbook
+# (`.xlsm`) is the same Office Open XML package as `.xlsx`; its macro part is never executed.
+_EXT_ALIASES = {"xlsm": "xlsx"}
+
+
 def parse_document_bytes(name: str, data: bytes, *, parser: Any = None) -> Any:
     """Parse raw document BYTES into a `DoclingDocument`. `.txt`/`.md` bytes are wrapped directly; binary docs
     (PDF/DOCX/HTML) go through docling. `parser` defaults to the tiered OCR parser (0009-WIRE2), injectable for
     tests. `name` supplies the file extension docling needs to pick a backend."""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    ext = _EXT_ALIASES.get(ext, ext)
     parser = parser or _default_document_parser()
     # docling reads a file path, not raw bytes -> write to a temp file preserving the extension for backend choice
     suffix = f".{ext}" if ext else ".txt"
@@ -208,6 +234,15 @@ def _node_text(node: Any) -> str:
     return text
 
 
+def _line_oriented(doc: Any) -> bool:
+    """ING-2: whether the parse's text items are visual LINES (so DEFRAG-1 must rejoin wrapped ones): a PDF or a
+    scanned image, or a document with no recorded origin (the engine's one-item-per-line text fallback). A
+    markdown/DOCX/HTML/spreadsheet parse already yields whole paragraphs and form fields -- merging those would glue
+    separate fields ('Spec No.: ...', 'Customer: ...') into one paragraph."""
+    mimetype = getattr(getattr(doc, "origin", None), "mimetype", None)
+    return mimetype is None or mimetype == "application/pdf" or mimetype.startswith("image/")
+
+
 def content_items(doc: Any) -> list[ContentItem]:
     """A parsed document -> its READING-ORDER chunkable content items (issue 0014). Walks `iterate_items` over the
     BODY and FURNITURE layers (so everything in `document.texts`, incl. page furniture, is covered), mapping each
@@ -243,7 +278,8 @@ def content_items(doc: Any) -> list[ContentItem]:
         page, bbox = _prov_page_bbox(node)
         items.append(ContentItem(label=label, level=getattr(node, "level", None), text=text,
                                  page=page, bbox=bbox))
-    items = _merge_wrapped_lines(items)  # DEFRAG-1: rejoin per-line items into whole-clause paragraphs
+    if _line_oriented(doc):  # ING-2: only a LINE-oriented source has wrapped lines to rejoin
+        items = _merge_wrapped_lines(items)  # DEFRAG-1: rejoin per-line items into whole-clause paragraphs
     for text_item in getattr(doc, "texts", None) or []:  # coverage backstop: never drop a `.texts` item
         if id(text_item) not in seen:
             items.append(_text_item(text_item))

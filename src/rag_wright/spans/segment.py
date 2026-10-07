@@ -22,6 +22,7 @@ from __future__ import annotations
 import re
 
 from rag_wright.contracts.ingestion import Span
+from rag_wright.corpus.document_parser import _LEADING_ENUM, _is_bare_heading  # generic text rules (ADR-0124)
 from rag_wright.contracts.span import SpanRecord
 
 DEFAULT_MIN_CHARS = 25  # a span whose stripped text is shorter folds into its neighbour (a bare heading/marker)
@@ -44,8 +45,6 @@ _ENUM = re.compile(
 # A sentence/list terminator followed by whitespace + start of a new provision.
 _TERM = re.compile(r"[.;:]\s+(?=[A-Z\"'(])")
 
-# 0006-B: a leading enumeration marker to strip before deciding if a span is a bare HEADING ('9.', '(a)', '12.1').
-_LEADING_ENUM = re.compile(r"^\s*(?:\(?[\dA-Za-z]{1,4}\s*[.)]|\d+(?:\.\d+){0,3}\.?|§+)\s+")
 
 # issue 0014: a markdown TABLE row (a line whose first non-space character is a pipe). A run of >=2 such lines is
 # a table block, kept as ONE atomic operative span -- the rows are meaningless without the header row, so a fee
@@ -185,20 +184,6 @@ def _heading_candidate(text: str) -> bool:
     if _LEADING_ENUM.match(t):
         return True  # an enumerated lead-in the deterministic rules did not confidently start
     return not (re.search(r"\.\s", t) or t.endswith("."))  # short + capitalized + NOT a full sentence -> a heading candidate
-
-
-def _is_bare_heading(text: str) -> bool:
-    """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
-    sentence terminator. It must fold INTO its body, never stand alone: a standalone heading gets classified as
-    a clause pointing at a bare heading, which pollutes evidence and can hide the real clause (issue 0006). A
-    genuine short provision carries an operative sentence (terminal '.'/';'/':'), so it is NOT a heading."""
-    t = text.strip()
-    if not t or len(t) > 60:
-        return False
-    rest = _LEADING_ENUM.sub("", t, count=1)  # drop a leading '9.' / '(a)' / '12.1' enumeration marker
-    if not rest or not rest[0].isupper():  # a heading's title starts capitalised
-        return False
-    return not re.search(r"[.;:]", rest)  # a bare title has no sentence punctuation; a provision does
 
 
 # ING-1 (ADR-0124): the span contract is the engine's generic `Span`; this legal segmenter is one implementation

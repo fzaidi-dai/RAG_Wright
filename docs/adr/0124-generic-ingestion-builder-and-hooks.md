@@ -41,3 +41,22 @@ writing to change one decision (engine gaps G3/G4).
 - `OperativeSpan` is now an alias of the generic `Span` (its OKF locator became optional), and `BoundaryDecider` is
   one shared contract, so the reference implementations satisfy the hooks by construction.
 - The identifier schemes (`chunk_id`, `span_id`, `entity_id`) are unchanged.
+
+## ING-2 addendum (2026-10-07): the default segmenter
+
+- **`rag_wright.ingestion.segment_layout`** is the engine's default `Segmenter`: layout-driven (the parse's items,
+  projected onto chunk offsets by `chunk_layouts`; `text_layout` for uncovered text and text-only sources) plus
+  domain-neutral NLP sentence rules. A **table yields one span per row** (header + separator together) for precise
+  citations; the unit grouper (ING-3) keeps a table whole for extraction. Headings join the following span (or the
+  previous one when they end the chunk); a tiny fragment folds back (forward only when it opens the chunk); a list
+  number never ends a sentence. No legal rules; the reference pack keeps `segment_clause`.
+- **DEFRAG-1 (wrapped-line rejoin) runs only for line-oriented sources** (PDF, scanned image, or no recorded origin,
+  i.e. the one-item-per-line text fallback), decided by `document.origin.mimetype`. Markdown/DOCX/HTML/spreadsheet
+  items are already paragraphs or form fields and are no longer glued together. Contract parity verified
+  byte-identical (5 PDFs + 5 CUAD text contracts: items, chunks, legal spans).
+- **`.xlsm` parses as `.xlsx`** (same Office Open XML package; macros never run). Spreadsheet sources are the
+  recommended path for spreadsheet-born forms: the Excel parse recovers every form grid as a table, where the PDF
+  export loses some to loose cells.
+- `_is_bare_heading` (a domain-neutral text rule the generic chunker uses) moved from the legal `spans.segment`
+  into `corpus.document_parser`; `rag_wright.ingestion` and `contracts.ingestion` are now import-linter sources that
+  may not import the legal segmenter.

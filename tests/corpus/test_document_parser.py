@@ -3,6 +3,8 @@ on BOTH the contract and compliance sides. Hermetic: a fake DoclingDocument (duc
 
 from __future__ import annotations
 
+import pytest
+
 from docling_core.types.doc.labels import DocItemLabel
 
 from rag_wright.corpus.document_parser import content_items, document_to_sections, document_to_text
@@ -258,6 +260,33 @@ def test_content_items_keeps_real_paragraph_breaks():
     ])
     assert len(content_items(doc)) == 2
 
+
+class _OriginDoc(_FakeDoc):
+    def __init__(self, items, mimetype):
+        super().__init__(items)
+        self.origin = type("Origin", (), {"mimetype": mimetype})()
+
+
+_FIELDS = [_Item(DocItemLabel.TEXT, "Spec No.: FS-2041-B"),
+           _Item(DocItemLabel.TEXT, "Customer: Northwind Apparel"),
+           _Item(DocItemLabel.TEXT, "Date: 2026-03-14")]
+
+
+@pytest.mark.parametrize("mimetype", [
+    "text/markdown", "text/html",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+])
+def test_content_items_does_not_merge_a_paragraph_format(mimetype):
+    # ING-2: DEFRAG-1 rejoins wrapped LINES. A markdown/DOCX/HTML/sheet item is already a whole paragraph (or a
+    # form field), so 'Spec No.: FS-2041-B' / 'Customer: ...' must stay separate items.
+    assert [it.text for it in content_items(_OriginDoc(_FIELDS, mimetype))] == [
+        "Spec No.: FS-2041-B", "Customer: Northwind Apparel", "Date: 2026-03-14"]
+
+
+@pytest.mark.parametrize("mimetype", ["application/pdf", "image/png"])
+def test_content_items_still_merges_lines_of_a_pdf_or_scan(mimetype):
+    assert len(content_items(_OriginDoc(_FIELDS, mimetype))) == 1  # line-oriented: wrapped lines rejoin
 
 def test_content_items_de_hyphenates_a_wrapped_word():
     doc = _FakeDoc([
