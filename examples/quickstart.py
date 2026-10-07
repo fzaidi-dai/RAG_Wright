@@ -8,6 +8,9 @@ Prerequisites (see docs/installation.md):
 
 Run from the repo root:
     uv run python examples/quickstart.py
+
+This ingests through the reference contract pipeline. A non-contract domain calls `build_ingestion(extractor)` and
+`.aingest(ws, paths, cache_dir=...)` instead (docs/concepts.md, docs/domain-adaptation/kg-construction.md).
 """
 
 from __future__ import annotations
@@ -62,8 +65,13 @@ async def main() -> None:
             protocol=os.environ.get("ARCADEDB_PROTOCOL", "http"),
         )
     )
-    ws = open_workspace(config, corpus="quickstart_demo", reset=True)  # fresh demo DB each run
+    # fresh demo DB each run; it starts with the neutral engine schema, and the contract pipeline creates its own
+    # types (Clause, Contract, the typed property edges) on first use.
+    ws = open_workspace(config, corpus="quickstart_demo", reset=True)
 
+    # The usage below includes decision-model (Jev) calls: with OPENROUTER_API_KEY set and the reference pack loaded,
+    # the pipeline uses Jev for uncertain provision boundaries, the extraction judge and the numeric/open property
+    # values (no per-provision LLM call).
     with measure_usage() as usage:
         # 1) Ingest: chunk -> segment -> classify -> extract -> embed -> write the typed clause KG.
         doc = source_document("ACME_MSA", text=CONTRACT)

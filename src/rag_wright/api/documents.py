@@ -11,8 +11,9 @@ from typing import Any
 
 
 def source_document(document_id: str, *, text: str) -> Any:
-    """A text-only `SourceDocument` (`source_doc_id`, `text`) to pass as the `document` input of the
-    `contract_ingestion_pipeline` capability. The id should be a canonical, delimiter-safe source-doc id."""
+    """A text-only `SourceDocument` (`source_doc_id`, `text`) to pass as the `document` input of an ingestion
+    capability that takes one (the reference pack's `contract_ingestion_pipeline`). `build_ingestion` reads files
+    itself and does not take a `SourceDocument`. The id should be a canonical, delimiter-safe source-doc id."""
     from rag_wright.capabilities.document_parse import SourceDocument
 
     return SourceDocument(source_doc_id=document_id, text=text)
@@ -22,8 +23,9 @@ def parse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dic
                    include_hidden_sheets: bool = True, tuning: Any = None) -> Any:
     """Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_dir`) into a
     structure-bearing `SourceDocument` -- `.parsed` carries the `DoclingDocument` so the chunker's structural pass
-    fires on real headings, and `.text` holds the flattened text. This is the PDF/DOCX/HTML/MD ingest entry point
-    of the engine API; pass the result as the `document` input of `contract_ingestion_pipeline`. The docling parse
+    fires on real headings, and `.text` holds the flattened text. Pass the result as the `document` input of an
+    ingestion capability that takes one (the reference pack's `contract_ingestion_pipeline`), or to `table_rows`;
+    `build_ingestion` parses its source paths itself through the same cached parse. The docling parse
     blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless
     `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`). Files embedded in an Office package are
     extracted as `.embedded` children linked to their records (`tuning.identifier` sets the identifier rule)."""

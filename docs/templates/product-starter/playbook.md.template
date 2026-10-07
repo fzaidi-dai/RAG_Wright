@@ -32,7 +32,9 @@ This repo is the **PRODUCT**: UI/UX, the product tool surface, orchestration, da
 and the user loops. The **RAG_Wright ENGINE** (open-core) owns the capabilities, ingestion/query pipelines, MCP
 servers, ARD, and the ontology machinery. Dependency is strict and one-way: **Product → Engine.** Never modify the
 engine from this repo; flag needed engine changes and make them in the engine project. The product consumes the
-engine **only through `rag_wright.api`** and never touches the store (ArcadeDB) directly. Your domain is a `.ttl`
+engine **only through `rag_wright.api`** and never touches the store (ArcadeDB) directly. (Current exceptions are
+engine gaps, listed in the engine's `docs/domain-adaptation/_engine-gaps.md`: the pack/manifest helpers and the
+entity-resolution building blocks; flag each use.) Your domain is a `.ttl`
 pack + capabilities authored here against the engine; the contract/compliance **reference pack** is only the
 engine's worked example — a template, never your domain.
 
@@ -45,7 +47,7 @@ engine's worked example — a template, never your domain.
 | Skill | Role |
 |---|---|
 | **using-the-rag-wright-engine** | The engine-usage playbook: install, grounding lanes, follow the build sequence |
-| **authoring-a-capability** | Register a domain capability (the five surfaces + definition of done) |
+| **authoring-a-capability** | Register a domain capability (the four surfaces + definition of done) |
 | **creating-evals** | Write a capability's eval FIRST (TDD) |
 | **classifier-opportunity-analysis** → **setfit** / **laya** | Find + build a classifier / System-1 decision model |
 | **qwen-vllm-modal** | The flat-GPU substrate for bulk teacher-labeling |

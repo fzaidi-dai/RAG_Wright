@@ -1,8 +1,9 @@
 # Authoring capabilities
 
 A **capability** is a named, discoverable unit of work (ARD). Your domain registers its own capabilities; the engine
-invokes them by name with **zero engine edits**. The full step-by-step workflow (the five surfaces, the definition
-of done, the conformance guardrail) is the **`authoring-a-capability`** skill — this page is the orientation.
+invokes them by name with **zero engine edits**. The full step-by-step workflow (the four surfaces, plus an
+optional bespoke MCP server; the definition of done; the conformance guardrail) is the **`authoring-a-capability`**
+skill; this page is the orientation.
 
 ## The manifest
 
@@ -57,11 +58,38 @@ register_capability(CapabilityManifest(
 # now invocable: await ainvoke_subgraph("my_domain_retrieval", {...}, resources=ws)
 ```
 
+`CapabilityManifest` is imported from `rag_wright.capabilities.manifests`; it is not re-exported from
+`rag_wright.api` yet (engine gap G5).
+
 `register_capability` places the manifest in the runtime ARD catalog (ship-empty) and imposes **no canonical-slug
 restriction** — use your domain's names. (`canonical_capability_slugs()` -- the engine's generic slugs plus those each loaded pack adds with
 `register_canonical_slugs` -- is the cross-spec join-key set the internal registry checks, not a constraint on your
-domain. A pack loads through `load_pack("<module>")`; the reference pack is `rag_wright.reference.pack`.) Expose a capability over MCP by registering an
-`mcp_tool` surface.
+domain.) Expose a capability over MCP by registering an `mcp_tool` surface.
+
+**Packaging your capabilities as a pack.** Put your manifests in one module that exposes `register()`, and load it
+with `load_pack("<your module>")` (`rag_wright.capabilities.manifests.load_pack`, not exported from
+`rag_wright.api` yet, engine gap G5). `register()` calls `register_canonical_slugs(...)` for your slugs
+(`rag_wright.capabilities.registry`), then `register_capability(m)` for each manifest. The reference pack is the
+example: `load_reference_pack()` is `load_pack("rag_wright.reference.pack")`.
+
+```python
+# my_product/caps/pack.py
+from rag_wright.api import register_capability
+from rag_wright.capabilities.manifests import engine_capabilities
+from rag_wright.capabilities.registry import register_canonical_slugs
+
+MY_SPECS = (...)  # your CapabilityManifest objects
+
+def register() -> None:
+    register_canonical_slugs({m.slug for m in MY_SPECS})
+    for m in (*engine_capabilities(), *MY_SPECS):   # include the engine capabilities you use
+        register_capability(m)
+```
+
+**Engine capabilities are opt-in too.** The engine's generic capabilities (`jev_decision`, `generation`,
+`vision_to_text`, `span_relevance_judgment`, and the RLM skills) are not in the empty catalog. Register them with
+`for m in engine_capabilities(): register_capability(m)` (or from your pack's `register()`, as above);
+otherwise `ainvoke_model("jev_decision", ...)` raises `KeyError` (unknown capability).
 
 **Discovery.** Once registered, a product agent finds your capability two ways: `capability_index()` — the flat
 `{slug: {kind, description}}` listing (what exists) — or **`discover(task, resources=ws)`** — embedding-ranked

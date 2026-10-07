@@ -16,8 +16,10 @@ contract below is the SAME for every kind; only the implementation differs. Capa
 functions/models; a product invokes a capability by name through `rag_wright.api`.
 
 **Ground every call before writing it** (CLAUDE.md library rule). The authoritative sources this skill summarizes:
-`capabilities/registry.py` (the canonical-slug set + `CapabilityRegistry.register`), `capabilities/manifests.py`
-(`CapabilityManifest` + `_SPECS`/`MANIFEST_SPECS`), `capabilities/ard.py` (`EntryKind`, `MEDIA_TYPE_BY_KIND`,
+`capabilities/registry.py` (the canonical-slug set, `register_canonical_slugs`, the internal
+`CapabilityRegistry.register`), `capabilities/manifests.py` (`CapabilityManifest`; `_ENGINE_SPECS`, the engine's
+7 generic manifests returned by `engine_capabilities()`; `MANIFEST_SPECS`, the runtime catalog; `register_capability`,
+`load_pack(module)`), the reference pack's manifests (`REFERENCE_SPECS` in `rag_wright.reference.pack`), `capabilities/ard.py` (`EntryKind`, `MEDIA_TYPE_BY_KIND`,
 `CALLABLE_KINDS`), `scripts/publish_manifests.py`, `api/invoke.py` + `capabilities/invoke.py::capability_impl` (the adapter-free impl_ref invoker + drift guard),
 `api/mcp.py` (generic MCP exposure). The guardrail test is `tests/capabilities/test_authoring_contract.py`.
 
@@ -41,8 +43,16 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
    specific queries. For the ENGINE's reference pack, the manifest is committed in `reference/pack.py::REFERENCE_SPECS` and
    the slug in its `REFERENCE_CAPABILITY_SLUGS` (added to the registry by `register_canonical_slugs` when the pack loads);
    a GENERIC engine capability's manifest is in `manifests.py::_ENGINE_SPECS` and its slug in
-   `registry.ENGINE_CAPABILITY_SLUGS`. A downstream product registers freely (its slugs need not be canonical).
-   Publish to `~/.air/registry` (what GraphWright's store loads) with `uv run python scripts/publish_manifests.py`.
+   `registry.ENGINE_CAPABILITY_SLUGS`. Engine capabilities (`jev_decision`, `generation`, ...) are NOT in the
+   catalog until registered too: register them from `engine_capabilities()` when your pack uses them.
+   **Packs:** a pack is a module exposing `register()`, which calls `register_canonical_slugs(...)` for its slugs and
+   then `register_capability(m)` per manifest (plus any engine capabilities it builds on); load it with
+   `load_pack("<module>")`. `load_reference_pack()` is just `load_pack("rag_wright.reference.pack")`.
+   A downstream product can register without touching the canonical set (`register_capability` does not check
+   slugs), BUT `manifests.author()` rejects a non-canonical slug, so a product that publishes ARD JSON must call
+   `register_canonical_slugs` for its slugs first.
+   Publish to `~/.air/registry` with `uv run python scripts/publish_manifests.py`; that script publishes only the
+   engine's reference pack (it calls `load_reference_pack()`), so a product publishes its own with `publish_all`.
    Callable kinds get `ResponseBounds` (defaulted); `agent_skill` must NOT declare bounds (loaded, not called).
 4. **Invocable + MCP for free** — once registered with an `impl_ref`, the capability is callable as
    `ainvoke_subgraph(slug, inputs, resources=ws)` / `invoke_model(slug, inputs, resources=ws)` — the invoker resolves
@@ -59,7 +69,9 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 - **Home:** `subgraphs/<slug>.py`. A `production_<slug>(*, store, ...) -> CompiledGraph` builder: `g = StateGraph(_State)`,
   add nodes/edges with `START`/`END`, `return g.compile()`. Nodes call functions/models (compose).
 - **Invoke:** the co-located `async def ainvoke(resources, inputs)` factory (impl_ref target) builds + awaits the graph.
-- Retry/dead-letter come from the graph scaffold, not the invoker. The output contract is the registered `contract`.
+- Retry/dead-letter come from the graph scaffold, not the invoker. `CapabilityManifest` has no contract field (only
+  the internal `CapabilityRegistry.register(contract=...)` takes one); where the typed I/O must be declared, set
+  `capability_interface` on the manifest.
 
 ### function — a plain, typed callable
 - **Home:** `capabilities/<slug>.py`. A deterministic or model-backed callable with a Pydantic in/out contract.
@@ -67,9 +79,10 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
   subgraphs, not invoked standalone through the API. Still register + manifest it.
 
 ### model — a trained checkpoint behind a seam
-- **Home:** `spans/` or `capabilities/` wrapping the checkpoint (e.g. the SetFit clause classifier; the 29-dim
-  property fleet via `spans/property_extractor.py`). Load the checkpoint ONCE and cache it (the fleet is heavy) —
-  see `spans/model_capabilities.py::_dim_registry`.
+- **Home:** a GENERIC engine model capability lives in `capabilities/` (e.g. `capabilities/jev_decision.py`); a
+  domain model (e.g. the reference pack's SetFit clause classifier and 29-dim property fleet) lives with its pack,
+  in the reference pack (`rag_wright.reference`) for the engine's worked example, or in your product repo. Load the
+  checkpoint ONCE and cache it (the fleet is heavy).
 - Serve behind the existing seam/adapter so nothing upstream changes (to FIND where a model cap belongs, use the
   `classifier-opportunity-analysis` skill; to BUILD/train + checkpoint + serve it, the `setfit` skill). The impl_ref
   factory is `def <slug>(resources, inputs)` for a SYNC impl (CPU-bound local inference — a classifier/XGBoost
@@ -91,18 +104,27 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 ## Verify (the guardrail)
 
 Run `uv run pytest tests/capabilities/test_authoring_contract.py tests/capabilities/test_manifests.py
-tests/capabilities/test_registry.py` after authoring. It pins the contract this skill teaches: no manifest under a
+tests/capabilities/test_registry.py tests/arch/test_import_contracts.py` after authoring. It pins the contract this skill teaches: no manifest under a
 non-canonical slug; the reserved-without-manifest set is a fixed allowlist (so adding a slug but forgetting its
 manifest FAILS here); every manifest kind is a real ARD kind; every invokable cap's impl_ref resolves to a callable whose
 manifest declares the matching kind. If you deliberately add a reserved/internal slug (no manifest), add it to
 `_RESERVED_WITHOUT_MANIFEST` with a one-line reason.
 
+**The import boundary (engine repo).** `pyproject.toml` `[tool.importlinter]` lists the GENERIC engine modules
+(`source_modules`) that must never import the reference pack (`forbidden_modules`). A new generic module goes in
+`source_modules`; a new reference-pack module goes in `forbidden_modules`. `tests/arch/test_import_contracts.py`
+enforces it.
+
+**The network guard.** `tests/conftest.py` fails any test that resolves a non-local host unless it carries a live
+marker (`model`, `store`, `parse`, `embed`, `rerank`, `ner`, `fleet`). Mock model and HTTP calls in unit tests, or
+mark the test live.
+
 ## Common mistakes
 
 - Adding the slug but forgetting the manifest (slug becomes silently un-discoverable) — the guardrail catches it.
 - An impl_ref factory that reaches env/globals instead of the `WorkspaceHandle` — breaks multi-workspace use; build
-  everything from `h`.
-- A non-lazy import at the top of an adapter — inflates the light index / `import rag_wright.api`; import inside
-  the adapter body.
-- Declaring `response_bounds` on an `agent_skill`, or omitting the output `contract` on registration.
+  everything from `resources`.
+- A heavy import at the top of an impl_ref factory module that something light imports (a pack's `register()`
+  module, `rag_wright.api`): it inflates the light index; import inside the factory body.
+- Declaring `response_bounds` on an `agent_skill`.
 - Inventing a kind. If a capability fits none of the five, flag it — do not force-fit.

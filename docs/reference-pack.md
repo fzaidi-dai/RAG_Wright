@@ -20,14 +20,17 @@ is registered until you ask — a fresh install stays domain-neutral.
 
 ## What's in it
 
-**36 capabilities**, across two reference domains plus generic primitives:
+**36 capabilities**: 29 reference-pack capabilities across two reference domains, plus the 7 generic engine
+capabilities the pack builds on (`rlm_method`, `rlm_chunking`, `rlm_synthesis`, `generation`, `vision_to_text`,
+`span_relevance_judgment`, and the `jev_decision` decision model; listed by `engine_capabilities()` and registered
+along with the pack):
 
 | kind | count | examples |
 |---|---|---|
-| `subgraph` | 9 | `contract_ingestion_pipeline`, `intra_document_qa`, `typed_property_retrieval`, `relational_qa`, `compliance_ingestion`, `compliance_check` |
-| `function` | 9 | `typed_clause_extraction`, `typed_value_normalization`, `extraction_grounding_judge`, `clause_exception_linking`, `query_constraint_extraction` |
-| `model` | 3 | `clause_function_classification`, `clause_property_classification` (SetFit fleet), `jev_decision` (typed-decision model) |
-| `agent_skill` | 11 | `rlm_method`, `rlm_chunking`, `rlm_synthesis`, `generation`, `vision_to_text`, `requirement_extraction`, `claim_extraction`, `compliance_judgment` |
+| `subgraph` | 9 | `contract_ingestion_pipeline`, `intra_document_qa`, `typed_property_retrieval`, `relational_qa`, `typed_clause_extraction`, `query_constraint_extraction`, `requirement_extraction`, `compliance_ingestion`, `compliance_check` |
+| `function` | 9 | `typed_value_normalization`, `extraction_grounding_judge`, `extraction_semantic_gate`, `clause_exception_linking`, `clause_disambiguation` |
+| `model` | 3 | `clause_function_classification` (SetFit ensemble), `clause_property_classification` (a 29-dimension SetFit/Laya fleet), `jev_decision` (engine typed-decision model) |
+| `agent_skill` | 11 | `rlm_method`, `rlm_chunking`, `rlm_synthesis`, `generation`, `vision_to_text`, `span_relevance_judgment`, `extraction_semantic_judge`, `claim_extraction`, `compliance_judgment` |
 | `mcp_tool` | 4 | `compliance_check_mcp`, `intra_document_qa_mcp`, `relational_qa_mcp`, `typed_property_retrieval_mcp` |
 
 Two reference domains over the shared store: **contract** (ingestion → the clause KG + hybrid index → scoped QA,
@@ -36,8 +39,24 @@ checking a subject's claims against them), plus generic RLM / generation / OKF p
 surfaces.
 
 The domain **knowledge** lives in the ontology bridges, not in code (ADR-0066): `ontology/contract_bridge.ttl`,
-`ontology/compliance_bridge.ttl`, and the domain pack `ontology/packs/ftc_16cfr255.ttl`. Thin worked-example
-facades live under `rag_wright/reference/`.
+`ontology/compliance_bridge.ttl`, and the domain pack `ontology/packs/ftc_16cfr255.ttl`. The pack's manifests
+(`REFERENCE_SPECS`), its canonical slugs and its `register()` live in `rag_wright.reference.pack`
+(`load_reference_pack()` is `load_pack("rag_wright.reference.pack")`); thin worked-example facades live alongside
+it in `rag_wright.reference`.
+
+## Its schema is not in the default
+
+The contract types (`Clause`, `Contract`, `PropertyValue`, the typed property edges, ...) are **not** in the engine's
+default schema: a new workspace has only the neutral types. The pack's contract store (`ContractKGStore`) ensures
+the pack schema from `contract_bridge.ttl` (plus the typed property edge types) the first time the reference
+pipeline or its readers use it. To read those node types directly (for example `kg_read(ws, "Clause", ...)`) in a
+fresh process before anything has used the contract store, open the workspace with the pack's ontology as its pack,
+which creates `Clause`, `Contract` and `PropertyValue` and their structural edges:
+
+```python
+from rag_wright.ontology.loader import reference_pack_ttl   # path of the reference contract ontology
+config = EngineConfig(store=..., pack=reference_pack_ttl())
+```
 
 ## Invocable by name (9 of 36)
 
@@ -55,9 +74,13 @@ A new domain mirrors the pattern, swapping the vocabulary and document shape:
 
 - the **ontology bridges** show how to declare closed value sets, the KG schema, SHACL constraints, and mappings —
   copy the shape, change the domain ([ontology authoring](domain-adaptation/ontology-authoring.md));
-- `contract_ingestion_pipeline` shows an ingestion graph composing the generic primitives (parse → chunk → segment
-  → classify → extract → embed → write); your domain supplies its own graph over the same primitives
-  ([KG construction](domain-adaptation/kg-construction.md));
+- `contract_ingestion_pipeline` shows the engine's shared ingestion stages driven with legal hooks: a legal
+  segmenter, a clause-function span tagger, a provision grouper with a decision-model boundary decider, the clause
+  extractor and its writer. Your domain does not build a graph for this: it calls `build_ingestion(extractor, ...)`
+  with its own extractor and overrides only the hooks it needs (the defaults are a docling-layout segmenter and a
+  structural unit grouper), then checks the result with `evaluate_ingestion`
+  ([concepts](concepts.md#ingestion-the-engines-pipeline-the-domains-extractor-adr-0124),
+  [KG construction](domain-adaptation/kg-construction.md));
 - `clause_property_classification` / `jev_decision` show a trained classifier and a System-1 decision model wired as
   `model` capabilities ([classification & decision models](domain-adaptation/classification-and-decision-models.md));
 - `intra_document_qa` / `typed_property_retrieval` / `relational_qa` show cited retrieval/QA legs to adapt.

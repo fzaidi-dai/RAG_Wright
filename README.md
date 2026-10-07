@@ -33,6 +33,13 @@ here so the engine is demoable out of the box — your product brings its own do
   resolution, reasoning/generation and more are registered capabilities invoked by name through one API — and
   **discoverable by task** (`discover`), so an agent can plan over them. The engine ships with an **empty
   catalog**; you register your domain's capabilities (or opt into the reference pack).
+- **Generic, hook-based ingestion.** `build_ingestion(extractor, ...)` runs the engine's own pipeline (parse, chunk,
+  segment, index, group into units, write) around your domain's extractor; every other step has a default you can
+  override. It reads PDF, Office (Word, PowerPoint) and spreadsheets (including hidden sheets and row-per-record
+  tables), ingests embedded files and PDF attachments as linked child documents, and comes with a structural
+  evaluation (`evaluate_ingestion`) to tune it on your own samples.
+- **A neutral default schema.** A new workspace gets only the engine's types (`Chunk`, `Entity`, `Span`, `Document`
+  and their edges); a domain's types come from its pack.
 - **Knowledge in the ontology.** Closed vocabularies, schema, SHACL constraints and mappings live in a `.ttl` pack;
   code holds mechanism only.
 - **Model-neutral.** Model access is a profile seam — OpenRouter by default, self-hosted open models (vLLM)
@@ -60,6 +67,10 @@ The whole doc set is under [`docs/`](docs/). Pick your path:
 uv add rag-wright
 ```
 
+This installs the latest PyPI release (0.1.0). The generic ingestion builder and the neutral default schema landed
+after 0.1.0; until the next release, depend on the engine from git or a local path to get them (see
+[`docs/installation.md`](docs/installation.md)).
+
 Runtime prerequisites: **ArcadeDB** (the store — run it locally with Docker, see
 [`docs/installation.md`](docs/installation.md)); **a model provider** (an OpenRouter key by default, or a self-hosted
 endpoint); and, only for NER, the optional extra `uv pip install 'rag-wright[ner]'` + `uv run python -m spacy
@@ -79,6 +90,7 @@ load_reference_pack()  # opt in to the contract/compliance worked example (the e
 config = EngineConfig(store=StoreConfig(host="localhost", port="2480", user="root", password="<arcadedb-password>"))
 ws = open_workspace(config, corpus="demo")  # corpus = the backend DB name
 
+# assumes ACME_MSA was already ingested (the ingest step is in docs/quickstart.md)
 async def main():
     out = await ainvoke_subgraph(
         "intra_document_qa", {"contract_id": "ACME_MSA", "question": "What is the liability cap?"}, resources=ws)
@@ -89,8 +101,8 @@ asyncio.run(main())
 
 ## Status
 
-Alpha, and not yet on PyPI — install from source or a git/path dependency for now. The bundled reference pack is a
-worked example, not the product; restrictively-licensed evaluation corpora (CUAD/ACORD) are not shipped.
+Alpha. Releases are published to PyPI (0.1.0 is the latest); newer engine work is on `main` until the next batched
+release. The bundled reference pack is a worked example, not the product; restrictively-licensed evaluation corpora (CUAD/ACORD) are not shipped.
 
 ## Development
 
@@ -106,14 +118,19 @@ uv sync && uv run pytest && uv run ruff check .
 src/rag_wright/
   api/           the stable, domain-agnostic public surface (import everything from here)
   capabilities/  the capability catalog + ARD runtime (manifests, registry, the invoker)
+  ingestion/     the generic ingestion builder (build_ingestion), default segmenter/grouper, table rows, eval
+  contracts/     Pydantic contracts + the shared identifiers (chunk_id, entity_id) and the ingestion hook contracts
   subgraphs/     the composite LangGraph pipelines (domain graphs; e.g. the reference pack's)
   models/        the model-profile seam (OpenRouter default / self-hosted open models)
-  ontology/      the .ttl packs + entity-registry derivation (knowledge lives here)
+  ontology/      the .ttl packs + pack schema + entity-registry derivation (knowledge lives here)
   store/         the single ArcadeDB store behind the query seam
-  spans/         operative-span segmentation + the classifier fleet
-  reference/     the reference-pack facades (the worked example)
+  spans/         the reference pack's legal segmentation + classifier fleet (page_map is generic)
+  reference/     the reference-pack registration (pack.py) + facades (the worked example)
+  corpus/        document parsing + embedded-file extraction, and the reference corpus adapters (EDGAR, CUAD)
+  okf/           the OKF (Open Knowledge Format) bundle-compile path
   mcp/           MCP tool surfaces over registered capabilities
   skills/        authored capability SKILL.md content
+  util/          shared, capability-agnostic utilities
 docs/            documentation (docs/archive/ holds superseded/historical material)
 ```
 

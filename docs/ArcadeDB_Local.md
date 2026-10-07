@@ -35,6 +35,17 @@ uv run pytest -m store        # runs the live ArcadeDB tests
 uv run pytest                 # default suite skips them (hermetic)
 ```
 
+The default suite is not just skipped but guarded: `tests/conftest.py` fails any test that is not marked live and
+tries to reach the network. The live markers (declared in `pyproject.toml`) are `model`, `store`, `parse`, `embed`,
+`rerank`, `ner` and `fleet`.
+
+## What a new database contains
+
+`open_workspace` (or `ensure_schema`) gives a new database only the neutral engine schema: the vertex types `Chunk`,
+`Entity`, `Span` and `Document`, the edge types `Relationship`, `Mentions`, `EmbeddedIn` and `AttachedTo`, and their
+id and vector indexes. A domain's types come from its pack (`EngineConfig(pack=...)`); the reference contract
+pipeline creates `Clause`, `Contract`, `PropertyValue` and its typed edges the first time it runs.
+
 ## Stop / reset
 
 ```bash

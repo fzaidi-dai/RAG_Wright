@@ -257,8 +257,10 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
 
 # EP-CORE-3 (ADR-0118): the engine ships an EMPTY ARD catalog. `MANIFEST_SPECS` is the runtime registry the
 # DEVELOPER populates with their product's capabilities (via `register_capability`); the invoker + `capability_impl`
-# read it live. The committed `_SPECS` above is the ENGINE's REFERENCE PACK (the contract/compliance worked example,
-# kept in the engine repo per ADR-0052) -- it is OPT-IN, registered only by an explicit `load_reference_pack()`.
+# read it live. The committed `_ENGINE_SPECS` above are the engine's GENERIC capabilities (`engine_capabilities()`);
+# the REFERENCE PACK's manifests (the contract/compliance worked example, kept in the engine repo per ADR-0052) are
+# `REFERENCE_SPECS` in `rag_wright.reference.pack`. Both are OPT-IN: nothing is registered until a pack is loaded
+# (`load_pack(module)`, e.g. `load_reference_pack()`) or `register_capability` is called.
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {}
 
 
@@ -302,7 +304,8 @@ def load_reference_pack() -> None:
 def author(slug: str) -> RegistryEntry:
     """Author a capability's committed spec into a complete, validated `RegistryEntry`."""
     if slug not in MANIFEST_SPECS:
-        raise KeyError(f"no ARD manifest spec for {slug!r}; add one in capabilities/manifests.py")
+        raise KeyError(f"no ARD manifest registered for {slug!r}; register one with register_capability() "
+                       "or load the pack that provides it (load_pack)")
     spec = MANIFEST_SPECS[slug]
     if slug not in canonical_capability_slugs():
         raise ValueError(f"{slug!r} is not a canonical capability slug (SPEC.md section 5)")

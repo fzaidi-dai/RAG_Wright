@@ -48,6 +48,17 @@ often not the best. A **System-1 decision model** returns a CALIBRATED typed ans
   logistic head is overconfident, so a confidence-routed hybrid couldn't be rescued (ADR-0119);
 - **low-to-moderate volume** where there's no reason to host a local model (~$0.00002/call for a managed one).
 
+Newer measurements (ingestion, ADR-0122 / ADR-0040 ING-9/9b): the provision-boundary residue on Jev 460/461
+(99.8%) with zero flips across 3 calls; the extraction judge on Jev 95.3% vs the LLM judge's 90.1% (192 blind
+hand-labelled cases); residual values (deterministic candidates + a Jev role choice) value-level recall 0.83 /
+precision 0.88 vs the LLM's 0.60 / 0.79. Live, one contract's 131 provisions took 215 Jev calls and 0 LLM calls
+for $0.013 (the LLM path: 277 calls, $0.277).
+
+**Unstable answers mean an ambiguous question.** Jev flipped 5/181 answers across identical calls, all at scores
+0.47-0.56; temperature/seed did not help and majority voting barely helped. Rewriting the question did: state the
+rubric ONCE in the `state`, phrase each criterion structurally (what the line IS, not what it might mean), and
+pass the lines to decide without their surrounding text. Measure repeatability (the `creating-evals` skill).
+
 **Prefer a trained classifier** when: high volume where per-call API cost compounds AND you have a large labeled
 corpus (the contract Step-3a fleet, ADR-0115/0116); on-prem-only with no managed API (then fine-tune **Laya**, the
 open decision model — the `laya` skill); or the decision needs features a prompt can't express.
@@ -150,8 +161,8 @@ Apply in this order; stop when the per-class bar is met.
   seam/adapter** so nothing upstream (contracts, APIs) changes.
 - **Register it as a capability — do not stop at a loose seam.** A trained classifier becomes a `kind="model"`
   capability: an `impl_ref` factory `def <slug>(resources, inputs)` over the cached checkpoint, registered in ARD
-  and invoked BY NAME through the engine (`invoke_model` / `ainvoke_model`, `dispatch_model` / `adispatch_model`) —
-  routed THROUGH the capability layer, never hand-constructed around it. The full registration + invocation
+  and invoked BY NAME through the engine (`invoke_model` / `ainvoke_model`; from an ingestion hook,
+  `ainvoke_model(slug, inputs, resources=ws)`) — routed THROUGH the capability layer, never hand-constructed around it. The full registration + invocation
   contract (the DoD) is the **`authoring-a-capability`** skill; follow its `model` section. (Upstream, the
   **`classifier-opportunity-analysis`** skill is where you decide a classifier belongs here at all.)
 - **Train/serve version parity — the single biggest operational trap (verified this session).** A model saved by a
@@ -201,8 +212,8 @@ after the 21-classifier runs — each one cost real time and each is avoidable w
 order before you fan out any bulk job.
 
 1. **Resolve the model from the engine, never hardcode a model id.** A hardcoded id rots: `ibm-granite/granite-4.1-8b`
-   now 404s on OpenRouter ("No endpoints found"). Use the engine resolver (`default_extraction_model()` / the
-   model-profile seam) so the id and backend come from config, and **confirm it with a one-call smoke before any
+   now 404s on OpenRouter ("No endpoints found"). Use the engine resolver (`models.profiles.model_for(ModelRole.<ROLE>)`,
+   or `ws.model_id(role)` on a workspace; the model-profile seam) so the id and backend come from config, and **confirm it with a one-call smoke before any
    bulk run**. Bulk teacher labeling runs on **self-hosted Qwen on Modal** (`qwen-vllm-modal` skill + ADR-0110), NOT
    OpenRouter (flat-GPU = the warn-before-bulk rule); reasoning ON for label fidelity; client concurrency ≤16; raise
    the structured timeout for reasoning-ON bulk; `modal app stop` when done.

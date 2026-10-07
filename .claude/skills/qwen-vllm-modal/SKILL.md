@@ -14,9 +14,9 @@ This skill is the operational checklist that ties them together.
 
 ## The LOCKED production config (ADR-0110) — do not re-litigate
 **Config B: `Qwen/Qwen3.8-27B-FP8` weights + `--kv-cache-dtype fp8`, on 1× A100-80GB, TP=1, `--max-model-len 16384`, `--gpu-memory-utilization 0.95`.**
-- Config B (FP8 weights) is the **locked deploy** — 52× concurrency @16K, ~23% higher throughput, ~27 GB weights;
+- Config B (FP8 weights) is the **locked deploy** — 52.71× concurrency @16K (ADR-0110 rounds it to 53×), ~23% higher throughput, ~27 GB weights;
   accuracy measured **identical to bf16** on the real compliance workload (no FP8 penalty).
-- **Config A** (`Qwen/Qwen3.8-27B`, **bf16 weights** + FP8 KV) is the **documented FALLBACK only** — 25× concurrency,
+- **Config A** (`Qwen/Qwen3.8-27B`, **bf16 weights** + FP8 KV) is the **documented FALLBACK only** — 25.47× concurrency,
   "zero weight-loss" — use it *only* if a later clean check ever shows an FP8-weight regression. Don't default to A.
 - If anyone (including a future you) says "config A is production" — **check ADR-0110 first**; the ADR locks **B**.
 - Served-model-name is `Qwen/Qwen3.8-27B` (what the engine profile `qwen3.8-27b-modal` asks for), even though the
@@ -33,6 +33,14 @@ MODAL_IMAGE_BUILDER_VERSION=2025.06 \
 Then wire the engine: `.env` `VLLM_BASE_URL=https://<workspace>--rw-qwen3-modal-serve.modal.run/v1`,
 `VLLM_API_KEY=rw-vllm-dev-key`; the profile `qwen3.8-27b-modal` routes there. **Stop billing when done:**
 `uv run --no-sync modal app stop rw-qwen3-modal --yes` (A100 is expensive).
+
+**The engine does NOT reach Modal by default.** Every role's default is `_PRODUCT_LLM = "qwen3.8-27b-modal-or"`,
+the same model routed through OpenRouter (the Modal cold start is unsolved). To send calls to the Modal server, set
+`RAG_MODEL_ALL=qwen3.8-27b-modal` (all roles), a per-role `RAG_MODEL_<ROLE>`, or `EngineConfig.models`. For bulk
+closed-vocab labeling, the reasoning-off profile `qwen3.8-27b-modal-nothink` exists (opt-in; see the reasoning
+caveat below). `VISION_OCR` now defaults to the product LLM too, but image inputs through the Modal vLLM server are
+UNVERIFIED (the serve script passes no multimodal flags): confirm an image call works before pointing
+`RAG_MODEL_VISION_OCR` at Modal.
 
 ## Image-build gotchas (the painful iterations — all fixed)
 Building a fresh vLLM image on a clean Modal account exposed a chain of failures. **The reliable fix is to base off

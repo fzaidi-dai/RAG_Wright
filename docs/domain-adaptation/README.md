@@ -21,12 +21,18 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 3. **Author the domain `.ttl` pack.** The domain KNOWLEDGE — closed value sets, the KG schema, SHACL constraints,
    mappings — lives in the ontology, declaratively, never in Python (ADR-0066). It co-evolves with step 4 (it
    drives the capabilities: classifiers classify into its vocab, extraction targets its schema, the query graphs
-   are parameterized by it). → [Ontology authoring](ontology-authoring.md).
+   are parameterized by it). Point the engine at it with `EngineConfig(pack="<your>.ttl")`: opening the workspace
+   creates the vertex and edge types the pack declares. `pack=None` gives the neutral engine schema only.
+   → [Ontology authoring](ontology-authoring.md).
 
-4. **Build and register the domain capabilities.** Your ingestion + query GRAPHS, domain functions, and
-   skills. They **compose the engine's generic primitives by direct import** (hybrid search, graph query, fusion,
-   embedding, parsing, chunking, reranking) and register only your OWN domain graphs/models/skills via
-   `register_capability(manifest)` with an `impl_ref` — invocable (and MCP-exposable) with zero engine edits.
+4. **Build and register the domain capabilities.** Ingestion is no longer hand-composed: the engine's
+   `build_ingestion` owns the pipeline, and your domain supplies an **extractor** plus any optional hooks
+   (segmenter, span tagger, unit grouper, boundary decider, writer, a per-document hook)
+   → [KG construction](kg-construction.md). Your query graphs, domain functions, and skills **compose the engine's
+   generic primitives by direct import** (hybrid search, graph query, fusion, embedding, parsing, chunking,
+   reranking) and register only your OWN domain graphs/models/skills via `register_capability(manifest)` with an
+   `impl_ref`, invocable (and MCP-exposable) with zero engine edits. Package them as a pack module that exposes
+   `register()` and load it with `load_pack("<your module>")`.
    → [Authoring capabilities](authoring-capabilities.md).
 
 5. **Write each capability's EVAL first (TDD).** As soon as a capability is *defined* (contract + acceptance),
@@ -35,10 +41,14 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
    training data IS its eval). → the **`creating-evals`** skill. Do this per capability, interleaved with building
    — not as a later phase.
 
-6. **Ingest the corpus → populate the KG.** Run the ingestion capability over your corpus (PDF via
-   `api.parse_document`, or already-text via `api.source_document`): parse → chunk → segment → extract → embed →
-   write. Most query capabilities READ this populated KG, so it comes first.
-   → [KG construction](kg-construction.md). Entities are canonicalized here →
+6. **Ingest the corpus → populate the KG.** Build the pipeline with `build_ingestion(extractor, ...)` and run
+   `await pipeline.aingest(ws, sources, cache_dir=...)` over your files (paths, or `IngestSource` for a per-source
+   id, table mode or hidden-sheet choice). Per document the order is: parse, chunk, segment (and tag), index (embed
+   the spans), group into units, extract, write, your `document_hook`, then a `Document` node; embedded files and
+   PDF attachments follow as child documents. Before a full run, check the structure on your own samples with
+   `evaluate_ingestion` and tune `IngestionTuning`. For spreadsheets and other tables, `table_rows` gives exact
+   cells. Most query capabilities READ this populated KG, so it comes first.
+   → [KG construction](kg-construction.md). Entities are canonicalized in your `document_hook` →
    [Entity resolution](entity-resolution.md).
 
 7. **(If needed) train classifiers, then adopt them behind the seam.** Classifiers bootstrap from an initial
@@ -61,6 +71,8 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 - **Reference pack** = the ENGINE's contract/compliance worked example, opt-in via `load_reference_pack()` — read it
   as a template ([reference-pack](../reference-pack.md)).
 - The engine ships an **empty ARD catalog**; a fresh install registers nothing until you (or the reference pack) do.
+  That includes the engine's own generic capabilities (`jev_decision`, `generation`, ...): register the ones you use
+  from `engine_capabilities()` ([authoring capabilities](authoring-capabilities.md)).
 
 ## Companions
 

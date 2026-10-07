@@ -17,7 +17,9 @@ provider** (OpenRouter or a self-hosted open-model endpoint). Configuration is c
 uv add rag-wright
 ```
 
-For a product repo that pins the engine before it is published to an index, depend on it by path or git instead:
+That installs the latest PyPI release (0.1.0). Work merged after it (for example the generic `build_ingestion` builder
+and the neutral default schema) is on `main` until the next batched release ([`releasing.md`](releasing.md)); to use
+it now, or to develop the engine and a product side by side, depend on it by path or git instead:
 
 ```toml
 # pyproject.toml of the product
@@ -32,6 +34,10 @@ uv sync                 # create the environment from pyproject.toml + uv.lock
 uv run pytest           # hermetic suite (store/model/parse tests are opt-in markers)
 uv run ruff check .     # lint
 ```
+
+The default suite is hermetic and enforces it: `tests/conftest.py` fails any test that is not marked live and tries
+to reach the network (mock the call, or mark the test). The live markers, declared in `pyproject.toml`, are `model`,
+`store`, `parse`, `embed`, `rerank`, `ner` and `fleet`; run one with `uv run pytest -m <marker>`.
 
 ### Optional extras
 
@@ -91,3 +97,5 @@ document, and get a cited answer. Store-backed tests are opt-in:
 ```sh
 uv run pytest -m store        # runs the live ArcadeDB tests
 ```
+
+A non-live test that reaches the network fails by design (see "Working on the engine itself" above).

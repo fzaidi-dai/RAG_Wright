@@ -13,6 +13,9 @@ import socket
 import pytest
 
 os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")  # litellm's bundled price table, not a GitHub fetch
+# Cached Hugging Face models (docling layout, tokenizers) load without a hub freshness check. The hub reads this at
+# import, so it is set here; a live run that must download a model first sets HF_HUB_OFFLINE=0.
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
 
 from rag_wright.capabilities.manifests import load_reference_pack  # noqa: E402 - after the litellm env default
 

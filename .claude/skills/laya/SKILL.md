@@ -20,8 +20,24 @@ be fine-tuned. Measured (RAG_Wright CIC-1c, ADR-0119): on the operative-rule gat
 trained SetFit capped ~0.82 and fine-tuned Laya reached ~0.70–0.74. So: **for a closed-set decision, A/B Jev
 (zero-shot, instant) first**; reach for Laya when a **managed API is unacceptable** (on-prem / data-residency) and
 you can fine-tune. In RAG_Wright a decision model is wired as a `kind="model"` capability (`jev_decision`) behind a
-`DecisionModelProfile` (model id / endpoint / thresholds in config, swappable Jev ↔ Laya) — see `setfit` Phase 0.5 +
+`DecisionModelProfile` (model id / endpoint / thresholds in config) — see `setfit` Phase 0.5 +
 `authoring-a-capability`. The decision questions/criteria live in the `.ttl` (ADR-0066), not the capability.
+
+**Swapping Jev for Laya is config, but not free.** `DECISION_PROFILES` has only Jev entries (`jev-1.13`, the
+default, and `jev-latest`). A Laya swap needs (1) a server that speaks the Decisions API (POST
+`{model, state, questions}`, return `{answers: {<id>: {type, noul|choice|score}}}`), and (2) a `DecisionModelProfile`
+entry in `DECISION_PROFILES` with its `endpoint`, `served_model_id` and `api_key_env` (an unknown id falls back to
+the OpenRouter endpoint). Then select it with `RAG_DECISION_MODEL=<profile id>`;
+`RAG_JEV_TIMEOUT_S` overrides the request timeout.
+
+**Batch the questions.** One call carries one `state` and many keyed questions, so ask everything about a unit in
+ONE call (the reference pack judges all of a provision's values, and labels all of its residual candidates, in one
+call each). That is the cost shape: one call per unit, not per value.
+
+**Repeatability.** Answers near the threshold can flip across identical calls (Jev: 5/181 flips, all at scores
+0.47-0.56; temperature/seed did not help, majority voting barely helped). Fix the ambiguous question instead: state
+the rubric once, use structural criteria, pass the items without surrounding text. Re-measure flips on any Laya
+server you swap in.
 
 ## When to use Laya (vs SetFit)
 - A closed-vocab value **plateaus below the bar with EVERY encoder backbone you try** (we ruled it out with

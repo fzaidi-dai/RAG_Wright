@@ -40,12 +40,13 @@ def _signature(name: str, obj: object) -> str:
         return name
 
 
-def main() -> None:
+def render() -> str:
+    """The reference's full text, from the live `rag_wright.api.__all__` (the drift test compares it to the file)."""
     lines: list[str] = [
         "# API reference — `rag_wright.api`",
         "",
         "> **Generated** from the live `rag_wright.api.__all__` by `scripts/build_api_docs.py` — do not edit by "
-        "hand. Regenerate with `bash scripts/build_api_docs.sh`; CI diffs it, so it cannot drift. The whole public "
+        "hand. Regenerate with `bash scripts/build_api_docs.sh`; the test suite fails if it drifts (`tests/arch/test_api_docs_current.py`). The whole public "
         "surface is imported from `rag_wright.api`.",
         "",
     ]
@@ -67,8 +68,12 @@ def main() -> None:
               ""] + protocols
     lines += ["## Type aliases", ""] + aliases
     lines += ["## Functions", ""] + functions
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    OUT.write_text(render(), encoding="utf-8")
     print(f"wrote {OUT} ({len(api.__all__)} public symbols)")
 
 

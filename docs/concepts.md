@@ -26,8 +26,9 @@ A product configures the engine once and opens a workspace:
 
 - **`EngineConfig`** — the whole view of the engine: a `StoreConfig` (how to reach ArcadeDB), model aliases by role,
   the embedding profile, ingest options (`EngineOptions` / `IngestOptions`), and `pack` (the path to a domain
-  `.ttl`; `None` means no domain pack: only the neutral engine schema -- Chunk, Entity, Span, Document and their
-  edges. The reference contract pipeline ensures its own pack schema when it runs).
+  `.ttl`; `None` means no domain pack: only the neutral engine schema -- the vertex types `Chunk`, `Entity`, `Span`,
+  `Document` and the edge types `Relationship`, `Mentions`, `EmbeddedIn`, `AttachedTo`. The reference contract
+  pipeline ensures its own pack schema when it runs).
 - **`open_workspace(config, *, corpus, reset=False) -> WorkspaceHandle`** — resolves and caches a workspace and
   ensures the schema. `corpus` is the backend database name (tenancy is the product's concern). The returned
   `WorkspaceHandle` is opaque: the store and embedder are private; you pass the handle to the invokers and the KG
@@ -56,6 +57,13 @@ Two things matter for a new domain:
 - **The catalog ships empty.** The runtime ARD catalog (`MANIFEST_SPECS`) is empty on install. A product populates
   it with `register_capability(manifest)`; the reference pack is opt-in via `load_reference_pack()`. The invoker
   resolves `impl_ref` lazily — there is no central adapter table.
+- **Packs and canonical slugs.** A registration is accepted only for a canonical slug. The engine's own generic
+  capabilities (generation, the RLM skills, vision-to-text, the `jev_decision` decision model, span relevance
+  judgment) are listed by `engine_capabilities()`; a pack adds its own slugs with `register_canonical_slugs(...)`
+  (the current set is `canonical_capability_slugs()`). A capability pack is a module that exposes `register()`, and
+  `load_pack("<module>")` imports it and calls `register()`; `load_reference_pack()` is just
+  `load_pack("rag_wright.reference.pack")`. These helpers live in `rag_wright.capabilities.manifests` and
+  `rag_wright.capabilities.registry` and are not yet exported from `rag_wright.api` (an engine gap).
 
 Discovery is `capability_index()` (the flat `slug → kind + description` listing) or `discover(task, resources=ws)`
 (embedding-ranked selection over the live catalog, for an agent planning over the engine). Authoring one is the
@@ -83,6 +91,37 @@ mappings/synonyms. **Code holds mechanism only** (the pipeline, the router, the 
 new pack, not an engine edit — load it with `EngineConfig(pack=…)`. When a generated artifact must carry concerns
 the ontology can't express (e.g. prompt engineering), the source of truth stays the ontology and the overlay is
 *generated* from it with CI-enforced zero drift — never hand-edited into code.
+
+## Ingestion: the engine's pipeline, the domain's extractor (ADR-0124)
+
+A new domain does not write an ingestion pipeline; it passes hooks to the engine's:
+
+```python
+pipeline = build_ingestion(extractor, segmenter=None, span_tagger=None, unit_grouper=None,
+                           boundary_decider=None, writer=None, tuning=None, document_hook=None)
+report = await pipeline.aingest(ws, sources, cache_dir="cache/")
+```
+
+- **The engine owns the mechanism:** parse (PDF, Office, spreadsheets incl. hidden sheets), chunk, segment each chunk
+  into spans that tile it, index the spans (dense + sparse), group spans into extraction **units**, run the
+  extractor on each unit concurrently, write, and record one `Document` node per document. Embedded files and PDF
+  attachments are ingested through the same pipeline as child documents, linked with `EmbeddedIn` (child to parent)
+  and `AttachedTo` (child to the table-row span it belongs to). Every hook's output is checked against its contract.
+- **The domain supplies the `extractor`** (a `Unit` in, a `UnitExtraction` of typed `KgNode`/`KgEdge` records out,
+  each carrying a `span_id` and a `confidence`). Every other hook is optional: the default segmenter follows the
+  docling layout, the default unit grouper is structural (headings start units, record tables become one unit per
+  row), and the default writer uses `kg_write`. `document_hook(ws, source_document, chunks)` runs once per document
+  after its records are written (for example, a domain's entity graph).
+- **Inputs and tuning.** `sources` are paths or `IngestSource` objects (a per-document `doc_id`, `table_mode` of
+  `auto`/`record`/`block`, `include_hidden_sheets`). Every structural threshold is in `IngestionTuning`; set it from
+  `evaluate_ingestion(sources, cache_dir=...)`, which scores tiling, layout respect, table-row integrity and coverage
+  on your own samples without any model call. `table_rows(source_document)` reads a parsed table's rows from the
+  cell grid, whole even when the chunker split the table.
+
+The reference contract pipeline (`contract_ingestion_pipeline`) drives these same stages with legal hooks. Hook signatures are in the
+[API reference](api/README.md) ("Hook protocols"); the decision record is
+[ADR-0124](adr/0124-generic-ingestion-builder-and-hooks.md); the new-domain walkthrough is
+[KG construction](domain-adaptation/kg-construction.md).
 
 ## The knowledge graph
 

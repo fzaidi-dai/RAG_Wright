@@ -3,8 +3,8 @@
 The repeatable process for pointing the pipeline at a new corpus and getting a populated, connected KG. This is
 the draft recipe that **SKILL-corpus-ingest** will formalize into a `SKILL.md`.
 
-The design that makes this cheap: a single **generic ingestion pipeline** (LG-3d, `contract_ingestion_pipeline`)
-plus a thin per-corpus **`CorpusAdapter`**. Adding a corpus is one adapter — never a re-implemented
+The design that makes this cheap: a single **contract ingestion pipeline** (LG-3d, `contract_ingestion_pipeline`,
+built on the engine's shared ingestion stages) plus a thin per-corpus **`CorpusAdapter`**. Adding a corpus is one adapter — never a re-implemented
 `ingest_xyz()`. See ADR-0033 (unified KG), HYG-1 (canonical identity), ADR-0037 (the clause template is
 authoritative code), and `src/rag_wright/subgraphs/contract_ingestion_pipeline.py`.
 
@@ -19,7 +19,8 @@ Implement `documents() -> Iterable[SourceDocument]`. It owns everything corpus-s
   clauses, spans, entities, and contracts share one id scheme and auto-connect;
 - optionally attach corpus metadata on `SourceDocument.metadata` (e.g. annotated parties, pre-segmented spans).
 
-`CuadAdapter` (in `contract_ingestion_pipeline.py`) is the reference implementation.
+`CuadAdapter` (in `corpus/cuad_ingestion.py`, with its driver `arun_cuad_ingestion`) is the reference
+implementation.
 
 ### 2. Point the entity registry at the corpus's parties
 Extend the EDGAR verified registry (`build_verified_registry`) for the corpus's public companies, or accept
@@ -27,30 +28,38 @@ Extend the EDGAR verified registry (`build_verified_registry`) for the corpus's 
 
 ### 3. Run it
 ```python
-report = run_corpus_ingestion(
+report = await arun_corpus_ingestion(
     YourAdapter(path),
-    production_document_ingest(store, cache_dir=..., registry=...),
-    link_fn=lambda: len(party_clause_linking(store).links),
+    aproduction_document_ingest(store, cache_dir=..., registry=...),
+    is_done=lambda doc: store.contract_by_id(doc.source_doc_id) is not None,   # optional resume-skip
 )
 ```
-The generic pipeline does the rest, per document:
-`chunk (semantic_chunking) → segment → LegalBERT function-classify → clause-extract ∥ graph-extract →
-entity_resolution → write (clause KG + entity graph)`, then `party_clause_linking` (KG-7) runs once to connect
-parties to clauses. A bad document dead-letters and is skipped; the run streams `X/N` progress.
+Both are async (the sync `run_corpus_ingestion` / `production_document_ingest` and the KG-7 `party_clause_linking`
+step no longer exist; the party-to-clause link was retired with the `PartyTo` edge, ADR-0091). The generic
+pipeline does the rest, per document:
+`chunk → segment (legal segmenter + SetFit function soft-tags) → group into provisions (uncertain boundaries to the
+decision model) → clause-extract ∥ index spans ∥ graph-extract → entity_resolution → write (clause KG + entity
+graph + Contract and Document nodes)`. A bad document dead-letters and is skipped; the run streams `X/N` progress.
 
 ### Reused unchanged (no edits)
-The clause extraction template (contract domain model), the LegalBERT function classifier (contract taxonomy),
-the pipeline, the canonical identity scheme, the KG-7 link. **No `ingest_xyz()`, no template edit, no retrain.**
+The clause extraction template (contract domain model), the SetFit function classifier (contract taxonomy; the
+default, `RAG_FUNCTION_CLASSIFIER=llm` reverts to the LLM classifier), the property classifier fleet, the pipeline,
+the canonical identity scheme. **No `ingest_xyz()`, no template edit, no retrain.**
 
-## A new *domain* (non-contract) — the bigger lift
-The pipeline *structure* stays; the capabilities it binds change:
-- a **new extraction template** (bootstrap a fresh `.py` from a new ontology, then hand-maintain it — ADR-0037);
-- a **retrained/replaced function classifier** (new taxonomy);
-- possibly a different entity registry.
+## A new *domain* (non-contract)
+Do not adapt this contract pipeline. Use the engine's generic builder (ADR-0124): `build_ingestion(extractor, ...)`
+from `rag_wright.api`, then `.aingest(ws, sources, cache_dir=...)`. The engine owns parse, chunk, segment, index,
+group and write (with docling-layout segmentation and structural unit grouping as defaults); your domain supplies
+the `extractor` (a unit in, typed `KgNode`/`KgEdge` records out) and overrides only the hooks it needs (segmenter,
+span tagger, unit grouper, boundary decider, writer, `document_hook`). Check the defaults on your own sample files
+with `evaluate_ingestion(sources, cache_dir=...)` and tune them through `IngestionTuning`. You may still need a new
+ontology pack, a classifier for your own taxonomy, and possibly a different entity registry. See
+[concepts](concepts.md#ingestion-the-engines-pipeline-the-domains-extractor-adr-0124) and
+[KG construction](domain-adaptation/kg-construction.md).
 
-## Honest caveats (phase-2 work, not yet wired)
-- The **span/embedding retrieval index** is not in the generic `write` yet (INGEST-REFACTOR phase 2). A new
-  corpus currently gets the typed KG + entity graph + link, but not the dense/sparse retrieval index.
+## Honest caveats
 - **`extract_parties` latency** (INGEST-GRAPH-LATENCY): add a per-call timeout before running a large corpus.
-- **Extraction cost/idempotence**: clause extraction is cached per span (keyed by clause id + template-schema
-  version), so re-runs and template changes re-extract only what they must.
+- **Extraction cost/idempotence**: clause extraction is cached per provision, keyed by the clause id (document,
+  index, content hash) + the anchor span + the function + the template version, which includes the extraction
+  method (decision-model or LLM judge and residual lane). Re-runs and template or method changes re-extract only
+  what they must. Boundary decisions are cached too.

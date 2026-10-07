@@ -18,9 +18,16 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   flag it upstream — don't work around it here.
 - **The public surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the invokers
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`),
-  `kg_read`/`kg_write`/`kg_edges`/`entities_by_name`, `measure_usage`, and
-  `register_capability`/`load_reference_pack`/`reference_pack` — nothing deeper (never `ArcadeDBStore`,
-  `query_embedder`, or engine id formats). To **plan** over the engine for a task, `discover(task, resources=ws)`
+  `kg_read`/`kg_write`/`kg_edges`/`entities_by_name`/`span_positions`, `measure_usage`,
+  `register_capability`/`load_reference_pack`/`reference_pack`, the document helpers
+  (`parse_document`/`aparse_document`/`source_document`/`table_rows`, `decode_bbox`, `document_of`, `id_source`),
+  and the **ingestion surface**: `build_ingestion`, its hook contracts (`Segmenter`, `SpanTagger`, `UnitGrouper`,
+  `BoundaryDecider`, `Extractor`, `RecordWriter`, checked by `check_tiling`/`check_units`/`check_extraction`),
+  `IngestionTuning`, `IngestSource` (`table_mode`, `include_hidden_sheets`) and `evaluate_ingestion`. Nothing
+  deeper (never `ArcadeDBStore`, `query_embedder`, or engine id formats), with today's known exceptions, tracked as
+  engine gap G5: `CapabilityManifest`, `load_pack` and `engine_capabilities` come from
+  `rag_wright.capabilities.manifests`, and `register_canonical_slugs` from `rag_wright.capabilities.registry`.
+  The generated `docs/api/` lists the full surface. To **plan** over the engine for a task, `discover(task, resources=ws)`
   returns the best-matching capabilities (embedding-ranked); then invoke the top ones by slug.
 
 ## 1. Install
@@ -30,7 +37,7 @@ uv add rag-wright                       # or a path/git dep pre-publish (see the
 ```
 
 Stand up the runtime prerequisites you provide: ArcadeDB (the store), a model provider (OpenRouter or self-hosted
-vLLM), and — only for NER — `uv pip install 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`.
+vLLM), and — only for NER — `uv add 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`.
 Read the engine's **installation** + **configuration** docs for the exact `.env` and `EngineConfig` fields.
 
 ## 2. Ground before you write (graphify)
@@ -60,16 +67,29 @@ plus **Quickstart**, **Reference pack**, and the generated **API reference** (`d
 Work the domain-adaptation guide, grounding each engine call (step 2) and writing each capability's eval first:
 
 1. **Configure** — construct `EngineConfig` (+ your domain `.ttl` via `pack=`) and `open_workspace(config, corpus=…)`.
+   With `pack=None` the workspace gets only the neutral schema (`Chunk`, `Entity`, `Relationship`, `Mentions`,
+   `Span`, `Document`, `EmbeddedIn`, `AttachedTo`); your pack's types exist only if you pass `pack=` (a pack can
+   also create them on use with the store's `ensure_pack_schema`).
 2. **Author the `.ttl` pack** — your closed value sets, KG schema (`eng:` vocabulary), SHACL constraints, SKOS
    synonyms. Knowledge in the `.ttl`, never in Python (ADR-0066). → `ontology-authoring.md`.
 3. **Build + register capabilities** — compose the engine's generic primitives by import; register YOUR domain
    graphs/models/skills via `register_capability(manifest)` with an `impl_ref`. → `authoring-capabilities.md`.
 4. **Write each capability's eval first (TDD)** → the `creating-evals` skill; A/B rule vs classifier vs decision
    model vs LLM on it → `classifier-opportunity-analysis`, `setfit`, `laya`.
-5. **Ingest the corpus** → the populated KG; **entity resolution** wires your resolver in your ingestion graph
-   (no public seam yet — see the engine-gaps register). → `kg-construction.md`, `entity-resolution.md`.
+5. **Ingest the corpus** → the populated KG. `pipeline = build_ingestion(your_extractor, ...your hooks,
+   tuning=IngestionTuning(...))`, then `await pipeline.aingest(ws, sources, cache_dir=...)`. Tune the hooks with
+   `evaluate_ingestion` on your own sample documents before a full run. Embedded files and PDF attachments are
+   ingested as child documents; spreadsheets give one unit per record row (`IngestSource.table_mode`). See
+   ADR-0124 and `docs/api/`. **Entity resolution**: run your entity graph and resolver in
+   `build_ingestion(document_hook=...)`, which runs once per document after its records are written; a
+   first-class resolver config is still engine gap G1. → `kg-construction.md`, `entity-resolution.md`.
 6. **Build the product seam** — your thin layer over the engine API + registered caps (tenancy, orchestration,
    the product tool surface). Wrap `open_workspace`/the invokers/`kg_read`/`measure_usage`.
+
+**Using the decision model (Jev).** Register `jev_decision` (from `engine_capabilities()`) and set
+`OPENROUTER_API_KEY` (`RAG_DECISION_MODEL` overrides the default profile `jev-1.13`). Without both, the reference
+pack's decision paths silently fall back (to deterministic rules or the LLM), and your own
+`ainvoke_model("jev_decision", ...)` raises `KeyError`. Check both before trusting a run's numbers.
 
 Read the engine's **reference pack** (`load_reference_pack()`) as a worked template — but the contract/compliance
 domain is only an example; your pack and capabilities are your own.
@@ -96,7 +116,8 @@ Addy-Osmani spec-driven/TDD/planning skills) into your repo via your setup step,
 ## Anti-patterns
 
 - Calling an engine API without grounding it against the `engine` lane first.
-- Importing engine internals instead of `rag_wright.api`; forking or editing the engine.
+- Importing engine internals instead of `rag_wright.api` (beyond the named G5 exceptions); forking or editing the
+  engine.
 - Treating the contract/compliance reference pack as the engine's purpose, or copying its vocabulary into your
   domain instead of authoring your own `.ttl`.
 - Hand-constructing a capability's logic instead of invoking it by name through the invoker.

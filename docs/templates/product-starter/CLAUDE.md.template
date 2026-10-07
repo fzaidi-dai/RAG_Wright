@@ -37,9 +37,16 @@ engine — a separate repo that depends on the open-core engine, one way.
   it and make that change in the engine repo (`{{ENGINE_PATH}}`), where the engine's own CLAUDE.md governs.
 - **The whole engine surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
   invokers, discovery (`capability_index`/`discover` — `discover(task, resources=ws)` embedding-ranks the catalog
-  for an agent planning over the engine), `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack` —
-  never engine internals (`ArcadeDBStore`, `query_embedder`, engine id formats). The product never touches the
-  store directly.
+  for an agent planning over the engine), `kg_read`/`measure_usage`, `register_capability`/`load_reference_pack`,
+  and the ingestion surface (`build_ingestion`, `IngestionTuning`, `IngestSource`, `evaluate_ingestion`,
+  `table_rows`/`TableRow`, the hook contracts `Unit`/`UnitExtraction`/`KgNode`/`KgEdge` and the hook protocols, and
+  the checks `check_tiling`/`check_units`/`check_extraction`) — never engine internals (`ArcadeDBStore`,
+  `query_embedder`, engine id formats). The product never touches the store directly.
+- **Current exceptions to "only `rag_wright.api`"** (engine gaps; import them from the named engine module and FLAG
+  each use, do not work around them): `load_pack`, `engine_capabilities`, `CapabilityManifest`
+  (`rag_wright.capabilities.manifests`) and `register_canonical_slugs` (`rag_wright.capabilities.registry`); the
+  entity-resolution building blocks (`build_graph_extraction`, `disambiguate`, `resolve_entities`, `GraphWriter`).
+  See the engine's `docs/domain-adaptation/_engine-gaps.md` (G1, G5).
 - **Your domain is a `.ttl` pack + capabilities, authored HERE against the engine** (the engine is
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.

@@ -29,6 +29,8 @@ load_reference_pack()
 ### 2. Configure and open a workspace
 
 Everything is imported from `rag_wright.api`. `corpus` is the backend database name; `reset=True` gives a fresh DB.
+A new database gets only the neutral engine schema (`Chunk`, `Entity`, `Span`, `Document` and their edges); the
+contract pipeline creates its own types (`Clause`, `Contract`, the typed property edges, ...) the first time it runs.
 
 ```python
 from rag_wright.api import EngineConfig, StoreConfig, open_workspace
@@ -42,6 +44,13 @@ ws = open_workspace(config, corpus="quickstart_demo", reset=True)
 
 `source_document` makes a text-only document (use `parse_document` for a PDF). The ingestion subgraph runs the
 whole front-end — chunk → segment → classify → extract → embed → write the typed clause KG.
+
+With `OPENROUTER_API_KEY` set and the reference pack loaded (step 1 registers the `jev_decision` capability), the
+pipeline uses the Jev decision model for the uncertain provision boundaries, the extraction judge and the
+numeric/open property values, so there is no per-provision LLM call; clause functions and the closed-vocabulary
+property values come from locally run trained classifiers (SetFit, and a 29-dimension SetFit/Laya fleet). The usage you measure therefore includes Jev calls (see
+[`configuration.md`](configuration.md#models-and-the-model-profile-seam) to switch the judge or the residual values
+back to the LLM).
 
 ```python
 from rag_wright.api import source_document, ainvoke_subgraph
@@ -99,8 +108,14 @@ with measure_usage() as usage:
 print(usage.calls, usage.cost_usd)
 ```
 
+The counts include decision-model (Jev) calls and any scanned-page OCR (one uncosted call per page, counted in
+`calls_without_cost`); `usage.by_model` breaks them down per model.
+
 ## Next
 
 - [Concepts](concepts.md) and [Architecture](architecture.md) — the model and the structure.
 - [Configuration](configuration.md) — every `EngineConfig` field and the model-profile seam.
 - [Building a new domain](domain-adaptation/) — author your own `.ttl` pack and capabilities instead of the reference pack.
+- Ingesting a non-contract domain: call `build_ingestion(your_extractor)` and `.aingest(ws, paths, cache_dir=...)`
+  instead of the contract pipeline (see [Concepts](concepts.md#ingestion-the-engines-pipeline-the-domains-extractor-adr-0124)
+  and [KG construction](domain-adaptation/kg-construction.md)).

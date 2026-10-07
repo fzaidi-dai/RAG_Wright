@@ -2,13 +2,16 @@
 
 The DreamAI recipe for building a spec-driven project with Claude Code, following spec-driven development, test-driven development, contracts-first, and library-grounded coding. Filled for RAG_Wright: the parameters below are set, and the body applies as written. RAG_Wright is the reusable **engine/platform** (open-core candidate) of the Hybrid RAG system; the user-facing **product** is a separate repo that depends on it, and GraphWright (the orchestration compiler) is PARKED (ADR-0052).
 
-> **Current active workstream (2026-10-06): engine-prep** — ready the engine for a new product (package + docs +
-> archive + domain-adaptation). Driven by **`docs/specs/engine-prep/plan.md`** (`PREP-*`); follow that plan for
-> current work. The preceding **engine-platform boundary** (engine API + capability runtime + de-domaining,
-> ADR-0117) landed the public API; its spec/ledger (`docs/specs/engine-platform/SPEC.md` + `TASKS.md`) remain the
-> reference for that surface. The consolidated doc set is under `docs/` (`concepts`, `architecture`, `installation`,
-> `configuration`, `quickstart`, `reference-pack`, `api/`, and the `domain-adaptation/` guide); historical docs are
-> in `docs/archive/`; the ADR index is `docs/adr/README.md`; product-starter templates are
+> **Current active workstream (2026-10-07): ingestion hooks** (ADR-0124): a generic, domain-neutral ingestion
+> builder (`build_ingestion`) with domain hooks, a neutral default schema, and (still open) the reference pack
+> gathered into its own package.
+> Driven by **`docs/specs/ingestion-hooks/plan.md`** (`ING-*`); follow that plan for current work. The preceding
+> **engine-prep** workstream (`docs/specs/engine-prep/plan.md`, `PREP-*`) is closed: it packaged and documented the
+> engine. The **engine-platform boundary** (engine API + capability runtime + de-domaining, ADR-0117) landed the
+> public API; its spec/ledger (`docs/specs/engine-platform/SPEC.md` + `TASKS.md`) remain the reference for that
+> surface. The consolidated doc set is under `docs/` (`concepts`, `architecture`, `installation`, `configuration`,
+> `quickstart`, `reference-pack`, `api/`, and the `domain-adaptation/` guide); historical docs are in
+> `docs/archive/`; the ADR index is `docs/adr/README.md`; product-starter templates are
 > `docs/templates/product-starter/`.
 
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
@@ -26,7 +29,7 @@ The DreamAI recipe for building a spec-driven project with Claude Code, followin
 | `Graphify` | default: Graphify | The code-and-docs index the agent must consult |
 | `docling, the ArcadeDB client, the embedding and reranker clients, the OpenRouter client, the MCP server framework, and the extraction libraries` | the fast-moving libraries the agent must not hallucinate | The framework graph contents. Leave empty if nothing needs indexing |
 | Arch rules | the spec's always-in-force constraints, each with its spec reference | The architecture rules in CLAUDE.md (section 3) |
-| `OpenRouter by default (Gemma 4 class for reasoning/generation/vision/RLM; smaller for chunking/summarization; larger for quality-sensitive extraction), local open-model deployment supported; structured-output via the model-profile seam` | the model or model ladder and gateway, if any | The model rule in CLAUDE.md |
+| `One product LLM for every role, including vision OCR (Qwen3.8-27B, via OpenRouter by default or self-hosted vLLM, selected through the model profile), plus the Jev typed-decision model; structured-output via the model-profile seam` | the model or model ladder and gateway, if any | The model rule in CLAUDE.md |
 | `project structure in section 10; requirements FR-S, FR-C, FR-I, FR-Q` | where the folder-structure section is, and the requirement scheme (for example FR, AC, NFR) | So steps and prompts cite the spec correctly |
 | `the ArcadeDB data directory, MinIO/object-store artifacts, parsed-document and embedding caches, evaluation outputs, and model caches` | generated files to ignore beyond `.env` and the environment | The `.gitignore` (section 2) |
 | `the registered capability contracts each capability is registered under` | what the contracts also serve as downstream, if anything | The contracts phase (section 4) |
@@ -40,7 +43,7 @@ The DreamAI recipe for building a spec-driven project with Claude Code, followin
 - Index tool: Graphify.
 - Core libs: `docling`, the ArcadeDB Python client, the BGE-M3 and BGE-reranker clients, the OpenRouter client, the MCP server framework, and the NER/OpenIE extraction libraries, indexed as one framework graph.
 - Arch rules: one ArcadeDB store for both index and graph (FR-S.1); identifier schemes fixed before building (FR-S.2, FR-S.3); provenance and confidence on everything, no claim without a citation (FR-S.4, FR-Q.6); deterministic capabilities testably deterministic and content-hash gated (FR-I.1, FR-I.5); the RLM skill is authored SKILL.md content, not a build-tool feature (FR-C.10); model-neutral via OpenRouter with structured output through the model-profile seam (tech stack); the graph is the relationship layer only (section 8); register each capability under its FR-C name.
-- Model access: OpenRouter by default (Gemma 4 class for reasoning, generation, vision-to-text, and RLM; a smaller model for chunking and summarization; a larger model for quality-sensitive extraction), local open-model deployment supported; structured-output calls through the model-profile seam.
+- Model access: one product LLM for every role, including reasoning, generation, vision-to-text, RLM and vision OCR (Qwen3.8-27B, profile `qwen3.8-27b-modal-or`, served through OpenRouter by default; self-hosted vLLM supported), chosen through the model profile and overridable per role; plus the Jev typed-decision model (`jev_decision`, ADR-0119) for calibrated closed-set decisions; structured-output calls through the model-profile seam.
 - Spec coords: project structure in section 10; requirements FR-S, FR-C, FR-I, FR-Q.
 - Data artifacts: the ArcadeDB data directory, MinIO or object-store artifacts, parsed-document and embedding caches, evaluation outputs, and model caches.
 - Contract use: the Pydantic contracts (ontology, extraction contracts, shared identifiers) are the capability contracts each capability is registered under.
@@ -81,7 +84,7 @@ Contracts-first is folded into the TDD skill rather than added as a separate ski
 1. Place the spec at ``RAG_Capability_Spec.md`` in the repo root (or `docs/`).
 2. Initialize git with a `.gitignore` covering `.env`, the environment, caches, and `the ArcadeDB data directory, MinIO/object-store artifacts, parsed-document and embedding caches, evaluation outputs, and model caches`.
 3. Create the environment and declare dependencies per `Python with uv, pytest, and Pydantic`. For the default Python stack: `uv venv`, then `uv add` (not requirements.txt), and use uv for everything from here on (`uv add`, `uv sync`, `uv run`); commit `uv.lock`.
-4. Create `CLAUDE.md` with the standing rules in section 3, with the standing architecture rules and `OpenRouter by default (Gemma 4 class for reasoning/generation/vision/RLM; smaller for chunking/summarization; larger for quality-sensitive extraction), local open-model deployment supported; structured-output via the model-profile seam` filled in.
+4. Create `CLAUDE.md` with the standing rules in section 3, with the standing architecture rules and `One product LLM for every role, including vision OCR (Qwen3.8-27B, via OpenRouter by default or self-hosted vLLM, selected through the model profile), plus the Jev typed-decision model; structured-output via the model-profile seam` filled in.
 5. Install the skills above into the Claude Code skills directory.
 6. Install `Graphify` and build two separate graphs:
    - `framework` graph: point it at the installed source and docs for `docling, the ArcadeDB client, the embedding and reranker clients, the OpenRouter client, the MCP server framework, and the extraction libraries`, scoped to the modules actually used, not whole monorepos. Index them as one graph so cross-package relationships stay traversable. Skip this graph if `docling, the ArcadeDB client, the embedding and reranker clients, the OpenRouter client, the MCP server framework, and the extraction libraries` is empty.
@@ -99,7 +102,7 @@ Contracts-first is folded into the TDD skill rather than added as a separate ski
   unspecified, ask, do not assume.
 - Architecture rules from the spec, always in force:
   the standing architecture rules (see CLAUDE.md section 3 / 'Standing architecture rules')
-- Model access: OpenRouter by default (Gemma 4 class for reasoning/generation/vision/RLM; smaller for chunking/summarization; larger for quality-sensitive extraction), local open-model deployment supported; structured-output via the model-profile seam
+- Model access: One product LLM for every role, including vision OCR (Qwen3.8-27B, via OpenRouter by default or self-hosted vLLM, selected through the model profile), plus the Jev typed-decision model; structured-output via the model-profile seam
 - Use the project stack consistently (Python with uv, pytest, and Pydantic). For the default Python stack: use uv,
   not pip, for environment, dependencies, and commands (uv venv, uv add, uv sync, uv run);
   dependencies in pyproject.toml; commit uv.lock; this supersedes any pip reference.

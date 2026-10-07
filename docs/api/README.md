@@ -1,6 +1,6 @@
 # API reference — `rag_wright.api`
 
-> **Generated** from the live `rag_wright.api.__all__` by `scripts/build_api_docs.py` — do not edit by hand. Regenerate with `bash scripts/build_api_docs.sh`; CI diffs it, so it cannot drift. The whole public surface is imported from `rag_wright.api`.
+> **Generated** from the live `rag_wright.api.__all__` by `scripts/build_api_docs.py` — do not edit by hand. Regenerate with `bash scripts/build_api_docs.sh`; the test suite fails if it drifts (`tests/arch/test_api_docs_current.py`). The whole public surface is imported from `rag_wright.api`.
 
 ## Types
 
@@ -52,9 +52,9 @@ One layout element of the parsed document that overlaps a chunk, in CHUNK-relati
 
 One span: the smallest citeable unit, indexed for retrieval. It points back to its parent chunk; `span_id` is `<parent_chunk_id>#<span_index>` (identifier rule) and `start`/`end` are offsets into the chunk text.
 
-### `TaggedSpan(*, span: rag_wright.contracts.ingestion.Span, tags: list[str] = [], scores: dict[str, float] = {}) -> None`
+### `TaggedSpan(*, span: rag_wright.contracts.ingestion.Span, tags: list[str] = [], scores: dict[str, float] = {}, primary: Optional[str] = None) -> None`
 
-A span with the optional span tagger's soft tags (primary first) and their scores.
+A span with the optional span tagger's soft tags (primary first) and their scores. `primary` states the primary tag explicitly when it is not simply the first tag (e.g. a placeholder for an untagged span).
 
 ### `Unit(*, index: int, anchor: rag_wright.contracts.ingestion.Span, spans: list[rag_wright.contracts.ingestion.Span], text: str, tags: list[str] = [], table_row: Optional[rag_wright.contracts.ingestion.TableRow] = None) -> None`
 
@@ -198,11 +198,11 @@ Decode the engine's best-effort bounding box (stored as a JSON `[l,t,r,b]` strin
 
 ### `source_document(document_id: 'str', *, text: 'str') -> 'Any'`
 
-A text-only `SourceDocument` (`source_doc_id`, `text`) to pass as the `document` input of the `contract_ingestion_pipeline` capability. The id should be a canonical, delimiter-safe source-doc id.
+A text-only `SourceDocument` (`source_doc_id`, `text`) to pass as the `document` input of an ingestion capability that takes one (the reference pack's `contract_ingestion_pipeline`). `build_ingestion` reads files itself and does not take a `SourceDocument`. The id should be a canonical, delimiter-safe source-doc id.
 
 ### `parse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
-Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_dir`) into a structure-bearing `SourceDocument` -- `.parsed` carries the `DoclingDocument` so the chunker's structural pass fires on real headings, and `.text` holds the flattened text. This is the PDF/DOCX/HTML/MD ingest entry point of the engine API; pass the result as the `document` input of `contract_ingestion_pipeline`. The docling parse blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`). Files embedded in an Office package are extracted as `.embedded` children linked to their records (`tuning.identifier` sets the identifier rule).
+Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_dir`) into a structure-bearing `SourceDocument` -- `.parsed` carries the `DoclingDocument` so the chunker's structural pass fires on real headings, and `.text` holds the flattened text. Pass the result as the `document` input of an ingestion capability that takes one (the reference pack's `contract_ingestion_pipeline`), or to `table_rows`; `build_ingestion` parses its source paths itself through the same cached parse. The docling parse blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`). Files embedded in an Office package are extracted as `.embedded` children linked to their records (`tuning.identifier` sets the identifier rule).
 
 ### `aparse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
@@ -222,7 +222,7 @@ Register the engine's reference pack into the runtime catalog -- the opt-in work
 
 ### `reference_pack() -> 'tuple[CapabilityManifest, ...]'`
 
-The engine's committed REFERENCE PACK manifests (the contract/compliance worked example). Opt-in.
+The engine's committed REFERENCE PACK: the engine capabilities it uses + the contract/compliance worked example's manifests (`rag_wright.reference.pack`). Opt-in.
 
 ### `check_tiling(chunk_id: 'str', text: 'str', spans: 'Sequence[Span]') -> 'None'`
 
@@ -234,11 +234,11 @@ A grouper's units must use known spans, each at most once, in document order, in
 
 ### `check_extraction(unit: 'Unit', extraction: 'UnitExtraction') -> 'None'`
 
-Every record node must cite a span of its unit and carry a `ConfidenceTag` (FR-S.4).
+Provenance (FR-S.4), wherever the facts live -- on nodes or on edges (ADR-0124, ING-4c): every node or edge that carries a `span_id` must cite a span of its unit, every `confidence` must be a `ConfidenceTag`, and a non-empty extraction must cite at least once. Nodes without a `span_id` are shared vocabulary (value or taxonomy nodes) and are allowed beside a cited fact.
 
-### `build_ingestion(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, boundary_decider: 'Optional[BoundaryDecider]' = None, writer: 'Optional[RecordWriter]' = None, tuning: 'Optional[IngestionTuning]' = None, embedder: 'Any' = None, chunk_model: 'Optional[str]' = None, progress: 'Callable[[str], Any]' = functools.partial(<built-in function print>, flush=True)) -> 'IngestionPipeline'`
+### `build_ingestion(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, boundary_decider: 'Optional[BoundaryDecider]' = None, writer: 'Optional[RecordWriter]' = None, tuning: 'Optional[IngestionTuning]' = None, embedder: 'Any' = None, chunk_model: 'Optional[str]' = None, progress: 'Callable[[str], Any]' = functools.partial(<built-in function print>, flush=True), document_hook: 'Optional[DocumentHook]' = None) -> 'IngestionPipeline'`
 
-The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section.
+The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section. `document_hook(ws, source_document, chunks)` runs once per document after its records are written (e.g. a domain's entity graph).
 
 ### `evaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None) -> 'IngestionEvaluation'`
 

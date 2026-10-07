@@ -32,11 +32,15 @@ Worked precedent in this engine:
 
 | | Contracts (decomposed) | Compliance (the CIC arc) |
 |---|---|---|
-| Unit boundaries | deterministic (section numbering / headings) + a soft type classifier | deterministic sub-section split + a span-level operative-cue gate |
-| Closed-vocab tags | the 21-dim / 29-dim classifier fleet | deontic cue-rule + actor / claim-type / applicability classifiers |
-| Open / numeric field | 1 residual LLM call / provision (7 fields) | 1 residual LLM call / section (evidence standard) |
+| Unit boundaries | deterministic (section numbering / headings) + a decision-model residue decider (one batched `noul` call for the uncertain lines; ADR-0122) | deterministic operative-rule spans + one `jev_decision` call per span for the operative gate (the default `extraction_backend="jev"`) |
+| Closed-vocab tags | the 21-dim / 29-dim classifier fleet | deontic cue-rule + actor / claim-types in that same per-span Jev call (applicability left empty) |
+| Open / numeric field | deterministic candidate spans + one Jev `choice` call per provision with candidates (none without); the LLM only as fallback (`RAG_RESIDUAL_EXTRACTOR=llm`). Value recall / precision 0.83 / 0.88 vs the LLM's 0.60 / 0.79 | evidence standard left empty on the Jev backend; the `"docling"` fallback keeps one LLM extraction per section |
+| Extraction judge | the Layer-3 judge on Jev: one batched call per provision, 95.3% vs the LLM judge's 90.1% (192 blind hand-labelled cases); `RAG_SEMANTIC_JUDGE=llm` opts out | (none) |
 | Text of the record | verbatim span | verbatim span (was a paraphrase) |
 | Structure / graph extraction | once per document (parties), keep the LLM | once per document, keep the LLM |
+
+Cost shape (live, 131 provisions of one contract): 215 Jev calls, 0 LLM calls, $0.013, against 277 LLM calls and
+$0.277 on the LLM path. One batched call per unit is the shape to aim for.
 
 The pattern is domain-independent. What changes per domain is the vocabulary and the document structure — which is
 exactly what the phases below make you look at.
@@ -78,10 +82,14 @@ and most robust first):
 5. **Verbatim vs generated text** — if the record just needs the unit's text, extract the **verbatim span**
    (deterministic) rather than a generated paraphrase. Drops a generative LLM step and is more faithful for
    citation. Keep a paraphrase only if a human-readable restatement is a real requirement.
-6. **Open / numeric / free-text / synthesis** — no closed set → keep the LLM, but reduce it to **one residual call
-   per unit** carrying only the fields that genuinely need it.
-7. **Pair / entailment** — rerank a candidate against a query, or a judge verdict over a (subject, rule) pair → a
-   **cross-encoder / NLI classifier** is a candidate (a verdict over a closed label set IS a classification). Often
+6. **Open / numeric / free-text / synthesis**: no closed set. Often still not LLM work: **propose candidates
+   deterministically** (the numbers, amounts, durations in the unit), then a **decision model labels each
+   candidate's role** in one batched call per unit. Author the roles and their one-line criteria in the pack `.ttl`
+   (the reference pack's `cbr:ResidualRole` + `cbr:decisionCriterion`). Keep the LLM, as **one residual call per
+   unit**, only for values no candidate generator can propose.
+7. **Pair / entailment / verdict**: rerank a candidate against a query, or a judge verdict over a (subject, rule)
+   pair → a **decision model** is a strong candidate (a verdict over a closed label set IS a classification), then
+   a **cross-encoder / NLI classifier**. The ingestion extraction judge moved to a decision model (ING-9). Often
    query-time; see Phase D.
 
 ## Phase C — What to look for in the documents themselves
@@ -138,7 +146,9 @@ Produce a decomposition plan, not prose:
 3. Separate an **ingestion bucket** (do first) from a **query-time bucket** (decide case by case; often live with
    the LLM).
 4. Note the **ttl + per-pack** generality (what transfers, what each pack re-trains).
-5. Exclude anything that is not actually a per-unit cost (once-per-document structure extraction) and anything
+5. **Map each decision onto an ingestion hook** (`build_ingestion`, ADR-0124): a boundary decision →
+   `BoundaryDecider` / `UnitGrouper`; closed-vocab tags → `SpanTagger`; residual values and the judge → `Extractor`.
+6. Exclude anything that is not actually a per-unit cost (once-per-document structure extraction) and anything
    already settled (a decision an existing cue-rule covers).
 
 ## Hand-off (what to do with the opportunities)
@@ -151,12 +161,15 @@ Produce a decomposition plan, not prose:
   calibrated uncertainty to route/gate (measured: RAG_Wright CIC-1c — Jev zero-shot 0.92 vs a trained SetFit 0.82;
   ADR-0119). See `setfit` Phase 0.5 (the decision-vs-train A/B) and the `laya` skill; wire it as a `jev_decision`-style
   model capability with a `DecisionModelProfile`. **Evaluate this first; it may remove the need to train at all.**
+  The decision path runs only when `jev_decision` is registered (from `engine_capabilities()`) AND
+  `OPENROUTER_API_KEY` is set; otherwise the reference pack's decision paths degrade silently (to the deterministic
+  rule or the LLM), so check both before reading a number.
 - **Trained classifier** → build it with the **`setfit`** skill (framing, symmetric leakage-safe eval, per-class
   floor, soft-tag/top-k, rare-class curation, checkpointing). Serve the teacher / bulk-labeler with **`qwen-vllm-modal`**.
   Then register it as a capability with **`authoring-a-capability`**: a `kind="model"` capability with an
   `impl_ref` factory `def <slug>(resources, inputs)` over a cached checkpoint, invoked by name through the engine
-  API (`invoke_model` / `ainvoke_model`) and the pipeline (`dispatch_model` / `adispatch_model`) — **routed THROUGH
-  the capability layer, never hand-constructed around it.** A model impl may be sync (a classifier / XGBoost — run
+  API: from your ingestion hook, call `ainvoke_model(slug, inputs, resources=ws)`, **routed THROUGH the
+  capability layer, never hand-constructed around it.** A model impl may be sync (a classifier / XGBoost — run
   off-loop by `ainvoke_model`) or async (an LLM-backed cap — awaited by `ainvoke_model`).
 
 ## Anti-patterns (from the real sessions — do not repeat)

@@ -20,7 +20,7 @@ data you build for a classifier/decision model IS an eval** (a labeled gold set 
 first also gives you the data design for free.
 
 ## When to use
-- **Starting a new domain**: the FIRST build step after capabilities are defined (build-sequence step 4.5) — write
+- **Starting a new domain**: the FIRST build step after capabilities are defined (step 5 of the domain-adaptation guide, `docs/domain-adaptation/README.md`) — write
   each capability's eval before/while you implement it.
 - Adding or changing a capability, or tuning a threshold/prompt/model.
 - **A/B-ing alternatives** on one capability (a deterministic rule vs a trained classifier vs a System-1 decision
@@ -40,6 +40,15 @@ first also gives you the data design for free.
   ~0.82 — diagnose the gold before blaming the model). If you have no human expert yet, a documented rubric + a
   two-pass consensus is
   the honest proxy — say so.
+- **Validate silver against a small BLIND hand-labelled sample before treating it as gold.** Label the sample
+  without seeing any model output, then measure silver-vs-hand agreement. If it is low, the hand-labelled sample IS
+  the gold. (ING-9: silver judge labels derived from classifier test sets agreed only 64% with hand labels; the
+  decision rested on 192 blind hand-labelled cases. Pattern: `eval/semantic_judge_gold.py --score-blind`.)
+- **Separate a tuning set from a held-out set.** Label the held-out set BEFORE any prompt runs on it, tune only on
+  the tuning set, and report both numbers (ADR-0122 boundary residue prompt: 94.5% held-out vs 96.2% tuning). A
+  number measured only on the set you tuned on is not a result.
+- **Gold stays local when the corpus is restrictively licensed** (CUAD/ACORD-derived gold lives under the
+  gitignored `data/eval/`); commit the builder and the scorer, never the data.
 
 ## 2. Pick the metric by capability KIND, and split GATE vs DIAGNOSTIC
 Always set ONE pass/fail **gate** (from the acceptance criterion) and report **diagnostics** alongside (never gate
@@ -60,7 +69,17 @@ on a diagnostic).
   measure over several runs.
 - **Judgment / compliance verdicts**: report PRECISION and RECALL of the actionable class (e.g. violation)
   SEPARATELY (alert-fatigue vs missed), and break out by provenance (real vs constructed). Pattern:
-  `scripts/eval_compliance_gold.py`.
+  `scripts/eval_compliance_gold.py`. For a judge that accepts or refutes other outputs, report the **error-catch
+  rate** (wrong outputs refuted), the **false-refute rate** (correct outputs refuted) and **calibration** (do its
+  scores mean what they say), not one accuracy number. Pattern: `eval/semantic_judge_gold.py` (ING-9: decision
+  model 95.3% vs LLM 90.1% on 192 blind hand-labelled cases).
+- **Candidate-then-choose pipelines** (a generator proposes, a model picks): measure the generator's **coverage**
+  separately, because it caps recall (ING-9b residual values: candidate coverage 95%; value-level recall 0.83 /
+  precision 0.88 vs the LLM's 0.60 / 0.79. Pattern: `eval/residual_decision_gold.py`). **Count is not accuracy**:
+  emitting more values is not a win without precision.
+- **Ingestion structure**: `evaluate_ingestion` (in `rag_wright.api`) is the packaged structural eval of the
+  ingestion hooks (tiling, table-row integrity, layout respect, coverage) on your own sample documents. Gate
+  patterns: `eval/segmenter_eval.py`, `eval/unit_grouper_eval.py`.
 
 ## 3. Build the gold cheaply (without faking it)
 - **Silver bootstrapping**: a higher-capability teacher (LLM, or a decision model) labels candidate items; CURATE
@@ -74,13 +93,26 @@ on a diagnostic).
 ## 4. Make it an executable, isolated harness
 - **Isolate the capability under test**: inject it (a seam / `extract_override` / an injected `retrieve`) so the
   eval measures ONE capability, not the whole pipeline. Invoke production code THROUGH the capability layer
-  (`ainvoke_subgraph`/`ainvoke_model`), never a hand-built copy.
+  (`ainvoke_subgraph`/`ainvoke_model`), never a hand-built copy. Score the **shipped request** (the exact
+  prompt/question builder production uses, e.g. `judge_request`), not a copy of it re-typed in the eval.
+- **Repeatability for non-deterministic models.** Run each case several times on identical input; report how many
+  answers flip and how far the scores sit from the threshold. Flips cluster near the threshold and usually mean
+  the QUESTION is ambiguous: fix the question, do not vote it away (Jev flipped 5/181 answers at scores 0.47-0.56;
+  temperature/seed did not help, majority voting barely helped, rewriting the ambiguous question did. The ADR-0122
+  boundary residue prompt went from 94-96% with flips to 460/461, zero flips across 3 calls). Pattern:
+  `eval/boundary_residue_gold.py`.
+- **Cache keys include the prompt and the method.** Any decision or extraction cache must key on the prompt text
+  and the method (decision model vs LLM, and which model), so an eval never reuses outputs a different prompt or
+  method produced (ADR-0122 ING-4d / ADR-0040 ING-9b: the residue decision cache and the clause cache).
 - **Score from a RESULT ARTIFACT (JSON), not stdout scraping** (scraping truncates and silently drops rows).
 - **Parallelize** model/LLM calls (async + semaphore) — same cost, far less wall-clock; order-preserving so it
   stays deterministic.
 - **Env-selected** so the SAME harness runs local (dev) or on Modal (full corpus + GPU).
 - **Pre-flight paid bulk** (>~50 paid calls): print the exact count + cost and wait (`warn-before-bulk` rule).
 - Stream `X/N` progress + actively monitor any run over ~30s (never launch-and-forget).
+- **Hermetic tests never touch the network**: `tests/conftest.py` fails a test that resolves a non-local host unless
+  it carries a live marker (`model`, `store`, ...). Live evals run as `uv run python -u eval/<name>.py` (outside
+  pytest) or carry a live marker.
 
 ## 5. Langfuse — optional eval automation (we already use it for tracing)
 Langfuse has a first-class eval stack we are NOT yet using (we use it only for spans/usage today): a **Dataset**
