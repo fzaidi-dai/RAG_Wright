@@ -210,3 +210,58 @@ def check_extraction(unit: Unit, extraction: UnitExtraction) -> None:
         if n.props.get("confidence") not in _CONFIDENCE:
             raise IngestionContractError(f"{n.type} node: confidence {n.props.get('confidence')!r} is not one of "
                                          f"{sorted(_CONFIDENCE)}")
+
+
+# --- ING-4b: tuning + sources -----------------------------------------------------------------------------------
+
+TableMode = Literal["auto", "record", "block"]
+
+
+class RecordTableRule(BaseModel):
+    """When `auto` treats a table as a DATABASE (one unit per row): a header of `min_header_cols`+ named columns,
+    `distinct_ratio`+ of them distinct (a merged cell's adjacent repeats count once), and either a serial first
+    column in `serial_ratio`+ of the rows or `min_cols`+ columns."""
+
+    model_config = {"frozen": True}
+
+    min_header_cols: int = 3
+    distinct_ratio: float = 0.8
+    serial_ratio: float = 0.8
+    min_cols: int = 8
+
+
+class IdentifierRule(BaseModel):
+    """What counts as a record IDENTIFIER when linking an embedded file to a row: a token (4+ chars, contains a
+    digit) on at most `max_rows` table rows and in at most `max_files` embedded files."""
+
+    model_config = {"frozen": True}
+
+    max_rows: int = 3
+    max_files: int = 3
+
+
+class IngestionTuning(BaseModel):
+    """Every structural threshold of the default ingestion hooks, in one place (defaults = the evaluated values).
+    Mechanism tuning, not domain knowledge (ADR-0066): set it from `evaluate_ingestion` runs on your own samples."""
+
+    model_config = {"frozen": True}
+
+    max_unit_chars: int = 6000  # unit cap; a split table's continuation units repeat the header row
+    min_fragment_alnum: int = 2  # a span with fewer letters/digits folds into a neighbour
+    record_table: RecordTableRule = RecordTableRule()
+    identifier: IdentifierRule = IdentifierRule()
+    extract_concurrency: int = 8  # in-flight extractor calls per run (network-bound extractors)
+    document_concurrency: int = 2  # documents ingested at once
+
+
+class IngestSource(BaseModel):
+    """One document to ingest: a file `path`, its `doc_id` (default: derived from the file name), how its tables
+    are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet
+    sheets are ingested."""
+
+    model_config = {"frozen": True}
+
+    path: str
+    doc_id: Optional[str] = None
+    table_mode: TableMode = "auto"
+    include_hidden_sheets: bool = True

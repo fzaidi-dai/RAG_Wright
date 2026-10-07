@@ -22,9 +22,9 @@ def test_source_document_stays_text_only():
 def test_parse_document_plumbs_path_into_the_byte_builder(monkeypatch, tmp_path):
     seen = {}
 
-    def _stub(source_doc_id, name, data, *, cache_dir, metadata=None, include_hidden_sheets):
+    def _stub(source_doc_id, name, data, *, cache_dir, metadata=None, include_hidden_sheets, tuning):
         seen.update(id=source_doc_id, name=name, data=data, cache_dir=str(cache_dir), metadata=metadata,
-                    hidden=include_hidden_sheets)
+                    hidden=include_hidden_sheets, tuning=tuning)
         from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
         return SourceDocument(source_doc_id=source_doc_id, text="x")
 
@@ -37,13 +37,14 @@ def test_parse_document_plumbs_path_into_the_byte_builder(monkeypatch, tmp_path)
     assert seen["data"] == b"%PDF-1.4 bytes" and seen["metadata"] == {"tier": "gold"}
     assert seen["cache_dir"].endswith("cache")
     assert seen["hidden"] is True  # ING-4a: hidden spreadsheet sheets are ingested by default
+    assert seen["tuning"] is None  # ING-4b: default tuning unless one is passed
 
 
 def test_aparse_document_plumbs_path_into_the_async_byte_builder(monkeypatch, tmp_path):
     seen = {}
 
-    async def _astub(source_doc_id, name, data, *, cache_dir, metadata=None, include_hidden_sheets):
-        seen.update(id=source_doc_id, name=name, data=data, hidden=include_hidden_sheets)
+    async def _astub(source_doc_id, name, data, *, cache_dir, metadata=None, include_hidden_sheets, tuning):
+        seen.update(id=source_doc_id, name=name, data=data, hidden=include_hidden_sheets, tuning=tuning)
         from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
         return SourceDocument(source_doc_id=source_doc_id, text="x")
 
@@ -51,9 +52,12 @@ def test_aparse_document_plumbs_path_into_the_async_byte_builder(monkeypatch, tm
         "rag_wright.capabilities.document_parse.aparsed_source_document", _astub)
     pdf = tmp_path / "doc.pdf"
     pdf.write_bytes(b"%PDF-1.4 async")
-    asyncio.run(aparse_document("DOC", pdf, cache_dir=tmp_path / "cache", include_hidden_sheets=False))
+    from rag_wright.api import IngestionTuning
+
+    tuning = IngestionTuning(max_unit_chars=1000)
+    asyncio.run(aparse_document("DOC", pdf, cache_dir=tmp_path / "cache", include_hidden_sheets=False, tuning=tuning))
     assert seen["id"] == "DOC" and seen["name"] == "doc.pdf" and seen["data"] == b"%PDF-1.4 async"
-    assert seen["hidden"] is False  # the skip choice reaches the builder
+    assert seen["hidden"] is False and seen["tuning"] is tuning  # both choices reach the builder
 
 
 # --- live: a real docling parse through the API (born-digital fixture -> offline, no VLM/OpenRouter) ---

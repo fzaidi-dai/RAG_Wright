@@ -107,7 +107,7 @@ def _include_hidden_sheets(document: Any) -> bool:
 
 def parsed_source_document(
     source_doc_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: Optional[dict] = None,
-    include_hidden_sheets: bool = True,
+    include_hidden_sheets: bool = True, tuning: Optional[Any] = None,
 ) -> SourceDocument:
     """Build a STRUCTURE-BEARING `SourceDocument` from raw document BYTES (PDF/DOCX/HTML/MD): docling-parse ONCE
     (content-hash gated + cached), carry the `DoclingDocument` on `.parsed` (so the chunker's structural pass
@@ -146,7 +146,8 @@ def parsed_source_document(
         unreadable = list(tiered.report.unreadable_pages)
         ocr_sidecar.write_text(json.dumps(unreadable))
     embedded, embedded_skipped = _extract_children(
-        source_doc_id, name, data, document, cache_dir / f"{source_doc_id}.{content_hash[:16]}.embedded")
+        source_doc_id, name, data, document, cache_dir / f"{source_doc_id}.{content_hash[:16]}.embedded",
+        identifier=getattr(tuning, "identifier", None))
     return SourceDocument(
         source_doc_id=source_doc_id, text=document_to_text(document), parsed=parsed, metadata=metadata or {},
         ocr_unreadable_pages=unreadable,
@@ -180,7 +181,8 @@ def _table_at(document: Any, sheet: Optional[str], row: Optional[int], col: Opti
     return None, None
 
 
-def _extract_children(source_doc_id: str, name: str, data: bytes, document: Any, store: Any) -> tuple[list, list]:
+def _extract_children(source_doc_id: str, name: str, data: bytes, document: Any, store: Any, *,
+                      identifier: Optional[Any] = None) -> tuple[list, list]:
     """ING-6: extract the package's embedded files into `store` (content-addressed, so a re-parse writes nothing
     new and identical files are stored once) and describe them as `EmbeddedChild`ren with resolved anchors."""
     from rag_wright.corpus.embedded import extract_embedded, file_text
@@ -200,11 +202,12 @@ def _extract_children(source_doc_id: str, name: str, data: bytes, document: Any,
                                        slide=a.slide, table_ref=table_ref, table_row=table_row))
         children.append(EmbeddedChild(doc_id=f"{source_doc_id}.emb.{f.sha256[:12]}", path=str(path),
                                       filename=f.filename, media_type=f.media_type, sha256=f.sha256, anchors=anchors))
-    _link_records(document, children, [f"{file_text(f.data, f.media_type)} {f.filename or ''}" for f in found.files])
+    _link_records(document, children, [f"{file_text(f.data, f.media_type)} {f.filename or ''}" for f in found.files],
+                  identifier=identifier)
     return children, list(found.skipped)
 
 
-def _link_records(document: Any, children: list, texts: list[str]) -> None:
+def _link_records(document: Any, children: list, texts: list[str], *, identifier: Optional[Any] = None) -> None:
     """ING-6: attach each child's record links. Its anchor row is VERIFIED (EXTRACTED) when one of the row's
     identifiers appears in the child, and the record's other rows sharing that identifier follow (INFERRED).
     Otherwise every row whose identifiers the child mentions, anywhere in the workbook, is a candidate: one
@@ -213,7 +216,10 @@ def _link_records(document: Any, children: list, texts: list[str]) -> None:
     document, its anchor kept as provenance. Identifiers are tokens rare in the tables and among the files."""
     from collections import Counter
 
-    from rag_wright.corpus.embedded import MAX_ID_FILES, MAX_ID_ROWS, candidate_tokens
+    from rag_wright.contracts.ingestion import IdentifierRule
+    from rag_wright.corpus.embedded import candidate_tokens
+
+    rule = identifier or IdentifierRule()
 
     rows = [(t.self_ref, i, candidate_tokens(" ".join(c.text for c in r)))
             for t in getattr(document, "tables", []) or [] for i, r in enumerate(t.data.grid[1:], 1)]
@@ -224,7 +230,7 @@ def _link_records(document: Any, children: list, texts: list[str]) -> None:
     file_df = Counter(tok for toks in child_tokens for tok in toks)
 
     def ids(toks: set) -> set:
-        return {t for t in toks if row_df[t] <= MAX_ID_ROWS and file_df[t] <= MAX_ID_FILES}
+        return {t for t in toks if row_df[t] <= rule.max_rows and file_df[t] <= rule.max_files}
 
     per_cell = Counter((a.sheet, a.cell) for c in children for a in c.anchors if a.cell)
     for child, toks in zip(children, child_tokens):
@@ -256,7 +262,7 @@ def _link_records(document: Any, children: list, texts: list[str]) -> None:
 
 async def aparsed_source_document(
     source_doc_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: Optional[dict] = None,
-    deadline_s: float = _INGEST_PARSE_DEADLINE_S, include_hidden_sheets: bool = True,
+    deadline_s: float = _INGEST_PARSE_DEADLINE_S, include_hidden_sheets: bool = True, tuning: Optional[Any] = None,
 ) -> SourceDocument:
     """The ASYNC, deadline-bounded twin of `parsed_source_document` (ADR-0057) -- STABLE PUBLIC API. Runs the sync
     build (docling parse + the tiered OCR/VLM escalation, the slowest call in the pipeline) OFF the event loop
@@ -267,4 +273,4 @@ async def aparsed_source_document(
     async with asyncio.timeout(deadline_s):
         return await asyncio.to_thread(
             parsed_source_document, source_doc_id, name, data, cache_dir=cache_dir, metadata=metadata,
-            include_hidden_sheets=include_hidden_sheets)
+            include_hidden_sheets=include_hidden_sheets, tuning=tuning)

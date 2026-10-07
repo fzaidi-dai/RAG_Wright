@@ -17,9 +17,9 @@ the hook (the reference contract pack passes its legal `segment_clause`).
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from typing import Optional, Sequence
 
-from rag_wright.contracts.ingestion import LayoutItem, Span
+from rag_wright.contracts.ingestion import IngestionTuning, LayoutItem, Span
 from rag_wright.ingestion.layout import text_layout
 
 DEFAULT_MIN_ALNUM = 2
@@ -81,10 +81,13 @@ def _alnum(s: str) -> int:
 
 
 def segment_layout(chunk_id: str, text: str, layout: Sequence[LayoutItem], *,
-                   min_alnum: int = DEFAULT_MIN_ALNUM) -> list[Span]:
-    """Segment one chunk into spans (the engine's default `Segmenter`)."""
+                   min_alnum: Optional[int] = None, tuning: Optional[IngestionTuning] = None) -> list[Span]:
+    """Segment one chunk into spans (the engine's default `Segmenter`). The fragment floor is `min_alnum`, else
+    `tuning.min_fragment_alnum`, else the default."""
     if not text:
         return []
+    if min_alnum is None:
+        min_alnum = tuning.min_fragment_alnum if tuning is not None else DEFAULT_MIN_ALNUM
     # 1) pieces: (start, kind) -- where each span may begin
     pieces: list[tuple[int, str]] = []
     for it in _covering_layout(text, layout):

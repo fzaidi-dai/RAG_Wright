@@ -232,7 +232,7 @@ async def test_aparsed_source_document_is_the_async_bounded_twin(monkeypatch):
 
     seen = {}
 
-    def _stub(sid, name, data, *, cache_dir, metadata=None, include_hidden_sheets):
+    def _stub(sid, name, data, *, cache_dir, metadata=None, include_hidden_sheets, tuning):
         seen.update(sid=sid, name=name, data=data, cache_dir=cache_dir, metadata=metadata,
                     hidden=include_hidden_sheets)
         return SourceDocument(source_doc_id=sid, text="parsed", metadata=metadata or {})
@@ -249,7 +249,7 @@ async def test_aparsed_source_document_is_wall_clock_bounded(monkeypatch):
 
     import rag_wright.capabilities.document_parse as cip
 
-    def _slow(sid, name, data, *, cache_dir, metadata=None, include_hidden_sheets=True):
+    def _slow(sid, name, data, *, cache_dir, metadata=None, include_hidden_sheets=True, tuning=None):
         time.sleep(0.5)  # a hung OCR/VLM escalation
         return SourceDocument(source_doc_id=sid, text="x")
 

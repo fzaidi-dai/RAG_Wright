@@ -115,3 +115,29 @@ writing to change one decision (engine gaps G3/G4).
 - Eval (local client workbook): 66 objects -> 64 children + 2 duplicates, 0 skipped; every row holding children has
   a verified link (31/31); every single-child cell verified (18/18); 10 placed by content, 22 unplaced (each names
   a sample absent from the workbook), 0 ambiguous.
+
+## ING-4b addendum (2026-10-07): the public builder, tuning, and the packaged eval
+
+- **`build_ingestion(extractor, ...)` -> `pipeline.aingest(ws, sources, cache_dir=...)`** (in `rag_wright.api`): the
+  engine owns parse (hidden sheets, embedded children), chunk, layout, segment, tag, span indexing, grouping,
+  concurrent extraction, writing, a `Document` node per document, X/N progress (`[ingest] i/N`, per child `j/M`), and
+  dead-lettering. Every hook output is checked (`check_tiling`/`check_units`/`check_extraction`); a failed unit is
+  recorded and skipped, a failed document dead-lettered, the run goes on (`IngestionReport` / `DocumentReport`).
+- **Embedded children** are ingested through the same pipeline; the store gains always-on generic types
+  (approved schema addition): `Document` (doc_id UNIQUE, parent_doc_id, filename, media_type, sha256),
+  `EmbeddedIn` (child -> parent, first-anchor position) and `AttachedTo` (child -> the record-row `Span`, with the
+  ING-6 `confidence` / `basis` / `evidence`). Edges are written with the new idempotent `Store.kg_ensure_edges`
+  (create-if-absent, else update props; `outV()`/`inV()` endpoint match, verified live), so a re-ingest never
+  duplicates. Derived document ids include the file type (`Report_v3_xlsm`), so a PDF export and its spreadsheet
+  original never collide.
+- **`IngestionTuning`** (unit cap, fragment floor, `RecordTableRule`, `IdentifierRule`, extract/document
+  concurrency) is settable on the builder or via `EngineConfig.options.ingest.tuning`; `IngestSource.table_mode`
+  (`auto`/`record`/`block`) overrides the per-table decision for a source. `to_span_record` moved to
+  `rag_wright.contracts.span` (re-exported from `spans.segment`) so the generic path never imports the legal module.
+- **`evaluate_ingestion(sources, ...)`**: the packaged structural eval (parse + deterministic chunk + segment +
+  group; no model, no store) a developer runs on their own samples, with optional table labels, returning
+  `passed` / `failures`.
+- Live (local client data, `eval/ingestion_live_smoke.py`): 9 files + 64 embedded reports -> 73/73 ingested, 0
+  dead-lettered, 6,743 spans, 1,319 records, 64 `EmbeddedIn`, 83 `AttachedTo` with their evidence on the attached
+  row; a second run leaves every count unchanged.
+- Deferred to ING-4c: an optional entity-graph hook (the reference pack's party extraction + entity resolution).

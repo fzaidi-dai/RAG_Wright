@@ -12,7 +12,7 @@ ArcadeDB's SQL dialect. Write-side and query-side methods are added by the tasks
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Protocol, runtime_checkable
+from typing import Iterable, Optional, Protocol, runtime_checkable
 
 from rag_wright.contracts.chunk import ChunkRecord, MetadataValue
 
@@ -211,3 +211,8 @@ class Store(Protocol):
         """Upsert typed `nodes` (by each node's `key_field`) then create typed `edges` (FROM/TO by node key), ALL in
         ONE transaction, nodes first so endpoints exist. The caller passes DOMAIN-NATIVE values; the store owns all
         wire encoding, driven by each node type's pack-declared property storage type. Empty input is a no-op."""
+
+    def kg_ensure_edges(self, edges: "Iterable[KgEdge]") -> int:
+        """ING-4b: write typed edges IDEMPOTENTLY -- create an edge only when none of its type already joins the
+        same two endpoints, otherwise update that edge's props in place. Returns the number created."""
+        ...

@@ -20,14 +20,19 @@ from rag_wright.api.discover import Discovered, discover
 from rag_wright.contracts.ingestion import (
     BoundaryDecider,
     Extractor,
+    IdentifierRule,
     IngestionContractError,
+    IngestionTuning,
+    IngestSource,
     LayoutItem,
     LayoutKind,
+    RecordTableRule,
     RecordWriter,
     Segmenter,
     Span,
     SpanKind,
     SpanTagger,
+    TableMode,
     TaggedSpan,
     Unit,
     UnitExtraction,
@@ -36,6 +41,8 @@ from rag_wright.contracts.ingestion import (
     check_tiling,
     check_units,
 )
+from rag_wright.ingestion.builder import DocumentReport, IngestionReport, build_ingestion
+from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, evaluate_ingestion
 from rag_wright.store.seam import KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import entities_by_name, kg_edges, kg_read, kg_write, span_positions
@@ -54,4 +61,8 @@ __all__ = [
     "LayoutItem", "LayoutKind", "Span", "SpanKind", "TaggedSpan", "Unit", "UnitExtraction", "IngestionContractError",
     "Segmenter", "SpanTagger", "UnitGrouper", "BoundaryDecider", "Extractor", "RecordWriter",
     "check_tiling", "check_units", "check_extraction",
+    # ING-4b: tuning + sources
+    "IngestionTuning", "RecordTableRule", "IdentifierRule", "IngestSource", "TableMode",
+    "build_ingestion", "IngestionReport", "DocumentReport",
+    "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation",
 ]

@@ -75,6 +75,9 @@ CONTRACT_TYPE = "Contract"  # CU-B3 (ADR-0029): contract-level metadata (the CUA
 # (issue 0028 / ADR-0091: the `PartyTo` edge was retired -- written on every ingest, read by nothing; party->clause
 #  is reached via CONTRACTS_WITH provenance + the contract-scoped clause KG.)
 IS_EXCEPTION_TO_EDGE_TYPE = "IsExceptionTo"  # ADR-0044: exception clause (Uncapped) -> the Cap clause it excepts
+DOCUMENT_TYPE = "Document"  # ING-4b (ADR-0124): one node per ingested document, incl. embedded children
+EMBEDDED_IN_EDGE_TYPE = "EmbeddedIn"  # ING-4b: child Document -> parent Document (position as provenance)
+ATTACHED_TO_EDGE_TYPE = "AttachedTo"  # ING-4b: child Document -> the record-row Span it belongs to (+ confidence)
 REQUIREMENT_TYPE = "Requirement"  # CC-5 (compliance §13): a deontic regulatory rule (its own DB, ragwright_compliance)
 
 # Expected index names follow ArcadeDB's `Type[prop]` / `Type[p1,p2]` convention.
@@ -83,6 +86,7 @@ _SPARSE_INDEX = f"{CHUNK_TYPE}[sparse_indices,sparse_weights]"
 _CHUNK_ID_INDEX = f"{CHUNK_TYPE}[chunk_id]"
 _ENTITY_ID_INDEX = f"{ENTITY_TYPE}[entity_id]"
 _SPAN_ID_INDEX = f"{SPAN_TYPE}[span_id]"
+_DOCUMENT_ID_INDEX = f"{DOCUMENT_TYPE}[doc_id]"
 _SPAN_DENSE_INDEX = f"{SPAN_TYPE}[dense]"
 _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 # ADR-0067 P5b: the domain vertex UNIQUE id indexes (Clause/PropertyValue/Contract) are pack-declared
@@ -314,6 +318,13 @@ class ArcadeDBStore:
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.doc_end INTEGER")  # CU-B2: exclusive (citation)
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.pages ARRAY_OF_INTEGERS")  # issue 0032: source page(s)
             self._command(f"CREATE PROPERTY {SPAN_TYPE}.bbox STRING")  # issue 0032: best-effort [l,t,r,b] JSON
+        if DOCUMENT_TYPE not in types:  # ING-4b (ADR-0124): the generic document node + its link edges
+            self._command(f"CREATE VERTEX TYPE {DOCUMENT_TYPE}")
+            for prop in ("doc_id", "parent_doc_id", "filename", "media_type", "sha256"):
+                self._command(f"CREATE PROPERTY {DOCUMENT_TYPE}.{prop} STRING")
+        for edge in (EMBEDDED_IN_EDGE_TYPE, ATTACHED_TO_EDGE_TYPE):
+            if edge not in types:
+                self._command(f"CREATE EDGE TYPE {edge}")
         # ADR-0067 P5b: the DOMAIN vertex types (Clause / PropertyValue / Contract) + structural edges
         # (HasProperty / IsExceptionTo) are declared in the pack ttl (load_kg_schema); the engine creates
         # whatever the pack declares, so a new domain ships its own node schema without editing this method.
@@ -331,6 +342,8 @@ class ArcadeDBStore:
         indexes = self.index_names()
         if _CHUNK_ID_INDEX not in indexes:
             self._command(f"CREATE INDEX ON {CHUNK_TYPE} (chunk_id) UNIQUE")
+        if _DOCUMENT_ID_INDEX not in indexes:
+            self._command(f"CREATE INDEX ON {DOCUMENT_TYPE} (doc_id) UNIQUE")
         if _DENSE_INDEX not in indexes:
             self._command(
                 f"CREATE INDEX ON {CHUNK_TYPE} (dense) LSM_VECTOR "
@@ -537,6 +550,28 @@ class ArcadeDBStore:
             statements.append(stmt)
         if statements:
             self._db.execute_transaction(statements)
+
+    def kg_ensure_edges(self, edges) -> int:
+        """ING-4b (see `Store.kg_ensure_edges`): create each typed edge only if no edge of its type already joins
+        the same two endpoints; an existing one has its props UPDATED in place (a re-ingest never duplicates an
+        edge, and a changed link confidence lands). Endpoint keys are matched with `outV()`/`inV()` (a bare
+        `out.<prop>` projects NULL on this ArcadeDB, issue 0029). Returns the number of edges created."""
+        created = 0
+        for e in edges:
+            where = (f" WHERE outV().{e.from_key_field} = {_kg_sql(e.from_key)}"
+                     f" AND inV().{e.to_key_field} = {_kg_sql(e.to_key)}")
+            rows = self._query(f"SELECT count(*) AS c FROM {e.type}{where}")
+            props = ", ".join(f"{k} = {_kg_sql(v)}" for k, v in e.props.items())
+            if rows and (rows[0].get("c") or 0) > 0:
+                if props:
+                    self._command(f"UPDATE {e.type} SET {props}{where}")
+                continue
+            stmt = (f"CREATE EDGE {e.type}"
+                    f" FROM (SELECT FROM {e.from_type} WHERE {e.from_key_field} = {_kg_sql(e.from_key)})"
+                    f" TO (SELECT FROM {e.to_type} WHERE {e.to_key_field} = {_kg_sql(e.to_key)})")
+            self._command(stmt + (f" SET {props}" if props else ""))
+            created += 1
+        return created
 
     # --- operative-span write/search (FR-R, ADR-0025) -------------------------------------------
 

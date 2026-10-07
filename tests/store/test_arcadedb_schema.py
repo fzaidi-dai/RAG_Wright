@@ -140,6 +140,9 @@ class _InMemoryStore:
         # EP-REF-1a seam conformance: the stub holds no graph, so every traversal is empty.
         return []
 
+    def kg_ensure_edges(self, edges):  # ING-4b seam conformance: idempotent edge write (no-op stub)
+        return 0
+
 
 def test_stub_binds_the_store_seam():
     stub = _InMemoryStore()
@@ -187,6 +190,32 @@ def test_ensure_schema_creates_dense_and_sparse_hybrid_indexes(arcadedb_store):
     assert "chunk_id" in arcadedb_store.property_names("Entity")
     # the sparse leg is stored as two parallel arrays (ArcadeDB LSM_SPARSE_VECTOR requirement)
     assert {"sparse_indices", "sparse_weights", "dense"} <= arcadedb_store.property_names("Chunk")
+
+
+@pytest.mark.store
+def test_ensure_schema_creates_the_generic_document_types(arcadedb_store):
+    """ING-4b (ADR-0124): always-on Document vertex + EmbeddedIn / AttachedTo edges, Document.doc_id unique."""
+    arcadedb_store.ensure_schema()
+    assert {"Document", "EmbeddedIn", "AttachedTo"} <= arcadedb_store.type_names()
+    assert "Document[doc_id]" in arcadedb_store.index_names()
+
+
+@pytest.mark.store
+def test_kg_ensure_edges_creates_once_and_updates_in_place(arcadedb_store):
+    from rag_wright.store.seam import KgEdge, KgNode
+
+    arcadedb_store.ensure_schema()
+    arcadedb_store.kg_write([KgNode("Document", "doc_id", {"doc_id": "wb"}),
+                             KgNode("Document", "doc_id", {"doc_id": "wb.emb.abc"})])
+
+    def edge(conf):
+        return KgEdge("EmbeddedIn", "Document", "doc_id", "wb.emb.abc", "Document", "doc_id", "wb",
+                      {"cell": "R2", "confidence": conf})
+
+    assert arcadedb_store.kg_ensure_edges([edge("INFERRED")]) == 1
+    assert arcadedb_store.kg_ensure_edges([edge("EXTRACTED")]) == 0  # re-ingest: no duplicate, props updated
+    rows = arcadedb_store.kg_edges(edge_type="EmbeddedIn", select={"conf": "confidence"})
+    assert rows == [{"conf": "EXTRACTED"}]
 
 
 @pytest.mark.store

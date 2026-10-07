@@ -233,8 +233,6 @@ def extract_embedded(name: str, data: bytes) -> EmbeddedExtraction:
 
 # --- ING-6 record links: which record (table row) an embedded file belongs to -----------------------------------
 
-MAX_ID_ROWS = 3   # an identifier names few records: a token on more rows (a standard, a status) is not one
-MAX_ID_FILES = 3  # ...and few files: a token in many embedded files (a year, a lab's own code) is not one either
 _ALNUM = re.compile(r"[a-z0-9]+")
 
 

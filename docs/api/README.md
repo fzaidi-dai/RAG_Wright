@@ -16,7 +16,7 @@ How to reach the KG/retrieval store. `backend` selects the implementation (only 
 
 The engine's options catalog. Ingest knobs today; retrieval / reranking / chunking groups are added here as they are promoted off environment variables.
 
-### `IngestOptions(classify_concurrency: 'Optional[int]' = None, clause_concurrency: 'Optional[int]' = None, affiliations: 'Optional[bool]' = None, function_classifier: 'Optional[str]' = None, list_model: 'Optional[str]' = None, clause_samples: 'Optional[int]' = None) -> None`
+### `IngestOptions(classify_concurrency: 'Optional[int]' = None, clause_concurrency: 'Optional[int]' = None, affiliations: 'Optional[bool]' = None, function_classifier: 'Optional[str]' = None, list_model: 'Optional[str]' = None, clause_samples: 'Optional[int]' = None, tuning: 'Optional[IngestionTuning]' = None) -> None`
 
 Ingest-time knobs, settable through config instead of environment variables (EP-API-4a). Every field defaults to `None` = "use the engine default", so the engine's existing env fallback is preserved (a non-API caller is unaffected) and an API caller that leaves these unset gets today's behavior exactly. Set a field to override.
 
@@ -68,6 +68,38 @@ What an extractor returns for one unit: typed KG nodes/edges in the pack's schem
 
 A hook's output broke the ingestion contract (tiling, unit integrity, or record provenance).
 
+### `IngestionTuning(*, max_unit_chars: int = 6000, min_fragment_alnum: int = 2, record_table: rag_wright.contracts.ingestion.RecordTableRule = RecordTableRule(min_header_cols=3, distinct_ratio=0.8, serial_ratio=0.8, min_cols=8), identifier: rag_wright.contracts.ingestion.IdentifierRule = IdentifierRule(max_rows=3, max_files=3), extract_concurrency: int = 8, document_concurrency: int = 2) -> None`
+
+Every structural threshold of the default ingestion hooks, in one place (defaults = the evaluated values). Mechanism tuning, not domain knowledge (ADR-0066): set it from `evaluate_ingestion` runs on your own samples.
+
+### `RecordTableRule(*, min_header_cols: int = 3, distinct_ratio: float = 0.8, serial_ratio: float = 0.8, min_cols: int = 8) -> None`
+
+When `auto` treats a table as a DATABASE (one unit per row): a header of `min_header_cols`+ named columns, `distinct_ratio`+ of them distinct (a merged cell's adjacent repeats count once), and either a serial first column in `serial_ratio`+ of the rows or `min_cols`+ columns.
+
+### `IdentifierRule(*, max_rows: int = 3, max_files: int = 3) -> None`
+
+What counts as a record IDENTIFIER when linking an embedded file to a row: a token (4+ chars, contains a digit) on at most `max_rows` table rows and in at most `max_files` embedded files.
+
+### `IngestSource(*, path: str, doc_id: Optional[str] = None, table_mode: Literal['auto', 'record', 'block'] = 'auto', include_hidden_sheets: bool = True) -> None`
+
+One document to ingest: a file `path`, its `doc_id` (default: derived from the file name), how its tables are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are ingested.
+
+### `IngestionReport(documents: 'list[DocumentReport]' = <factory>) -> None`
+
+IngestionReport(documents: 'list[DocumentReport]' = <factory>)
+
+### `DocumentReport(doc_id: 'str', parent_doc_id: 'Optional[str]' = None, chunks: 'int' = 0, spans: 'int' = 0, units: 'int' = 0, records: 'int' = 0, extraction_failures: 'list[dict]' = <factory>, span_failures: 'list[dict]' = <factory>, skipped_hidden_sheets: 'list[str]' = <factory>, embedded_skipped: 'list[str]' = <factory>, children: 'list[str]' = <factory>, links: 'dict[str, int]' = <factory>, unmapped_links: 'int' = 0, dead_letter: 'Optional[str]' = None) -> None`
+
+DocumentReport(doc_id: 'str', parent_doc_id: 'Optional[str]' = None, chunks: 'int' = 0, spans: 'int' = 0, units: 'int' = 0, records: 'int' = 0, extraction_failures: 'list[dict]' = <factory>, span_failures: 'list[dict]' = <factory>, skipped_hidden_sheets: 'list[str]' = <factory>, embedded_skipped: 'list[str]' = <factory>, children: 'list[str]' = <factory>, links: 'dict[str, int]' = <factory>, unmapped_links: 'int' = 0, dead_letter: 'Optional[str]' = None)
+
+### `IngestionEvaluation(documents: 'list[DocumentEvaluation]' = <factory>, failures: 'list[str]' = <factory>, unlabelled_tables: 'list[str]' = <factory>) -> None`
+
+IngestionEvaluation(documents: 'list[DocumentEvaluation]' = <factory>, failures: 'list[str]' = <factory>, unlabelled_tables: 'list[str]' = <factory>)
+
+### `DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, error: 'Optional[str]' = None) -> None`
+
+DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, error: 'Optional[str]' = None)
+
 ## Hook protocols
 
 Callables you pass to the engine; any function with this signature conforms.
@@ -99,6 +131,8 @@ Optional: persist a document's extractions. The engine default writes them with 
 ### `SpanKind = typing.Literal['title', 'heading', 'paragraph', 'list_item', 'table', 'table_row', 'caption', 'footnote', 'page_header', 'page_footer', 'code', 'formula', 'form', 'other']`
 
 ### `BoundaryDecider = typing.Callable[[list[str]], typing.Awaitable[list[bool]]]`
+
+### `TableMode = typing.Literal['auto', 'record', 'block']`
 
 ## Functions
 
@@ -162,11 +196,11 @@ Decode the engine's best-effort bounding box (stored as a JSON `[l,t,r,b]` strin
 
 A text-only `SourceDocument` (`source_doc_id`, `text`) to pass as the `document` input of the `contract_ingestion_pipeline` capability. The id should be a canonical, delimiter-safe source-doc id.
 
-### `parse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True) -> 'Any'`
+### `parse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
-Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_dir`) into a structure-bearing `SourceDocument` -- `.parsed` carries the `DoclingDocument` so the chunker's structural pass fires on real headings, and `.text` holds the flattened text. This is the PDF/DOCX/HTML/MD ingest entry point of the engine API; pass the result as the `document` input of `contract_ingestion_pipeline`. The docling parse blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`).
+Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_dir`) into a structure-bearing `SourceDocument` -- `.parsed` carries the `DoclingDocument` so the chunker's structural pass fires on real headings, and `.text` holds the flattened text. This is the PDF/DOCX/HTML/MD ingest entry point of the engine API; pass the result as the `document` input of `contract_ingestion_pipeline`. The docling parse blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`). Files embedded in an Office package are extracted as `.embedded` children linked to their records (`tuning.identifier` sets the identifier rule).
 
-### `aparse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True) -> 'Any'`
+### `aparse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
 The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the docling parse off the event loop so a hand-built async ingest can parse a document into a structure-bearing `SourceDocument` without blocking.
 
@@ -197,3 +231,11 @@ A grouper's units must use known spans, each at most once, in document order, in
 ### `check_extraction(unit: 'Unit', extraction: 'UnitExtraction') -> 'None'`
 
 Every record node must cite a span of its unit and carry a `ConfidenceTag` (FR-S.4).
+
+### `build_ingestion(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, boundary_decider: 'Optional[BoundaryDecider]' = None, writer: 'Optional[RecordWriter]' = None, tuning: 'Optional[IngestionTuning]' = None, embedder: 'Any' = None, chunk_model: 'Optional[str]' = None, progress: 'Callable[[str], Any]' = functools.partial(<built-in function print>, flush=True)) -> 'IngestionPipeline'`
+
+The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section.
+
+### `evaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None) -> 'IngestionEvaluation'`
+
+Measure the ingestion hooks' structural fidelity on sample documents (see the module docstring).

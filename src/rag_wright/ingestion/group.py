@@ -22,14 +22,21 @@ from __future__ import annotations
 import re
 from typing import Optional, Sequence
 
-from rag_wright.contracts.ingestion import BoundaryDecider, Span, TaggedSpan, Unit
+from rag_wright.contracts.ingestion import (
+    BoundaryDecider,
+    IngestionTuning,
+    RecordTableRule,
+    Span,
+    TableMode,
+    TaggedSpan,
+    Unit,
+)
 from rag_wright.corpus.document_parser import _is_bare_heading
 
-DEFAULT_MAX_UNIT_CHARS = 6000  # ~1,500 tokens; leaves ~90% of contract-provision-sized units unsplit (ING-3)
+DEFAULT_MAX_UNIT_CHARS = IngestionTuning().max_unit_chars  # ~1,500 tokens; ~90% of contract provisions fit (ING-3)
 
 _FURNITURE = {"page_header", "page_footer"}
 _STARTS = {"heading", "title", "table"}
-_RECORD_MIN_COLS = 8  # a header this wide is a database, even without a serial column
 _CELL_SPLIT = re.compile(r"(?<!\\)\|")
 
 
@@ -61,7 +68,7 @@ def _cells(line: str) -> list[str]:
     return [c.strip() for c in _CELL_SPLIT.split(line.strip().strip("|"))]
 
 
-def _is_record_table(group: list[TaggedSpan]) -> bool:
+def _is_record_table(group: list[TaggedSpan], rule: RecordTableRule) -> bool:
     """A database-style table: a real header -- 3+ named columns (an unnamed first, index, column allowed), 80%+ of
     them distinct once a merged cell's name repeated across ADJACENT columns counts once -- and either a serial
     first column (in 80%+ of rows) or 8+ columns. A form's header is one section title repeated across the row, so
@@ -71,10 +78,11 @@ def _is_record_table(group: list[TaggedSpan]) -> bool:
     header = _cells(header_line)
     named = header[1:] if header and not header[0] else header
     names = [h.lower() for i, h in enumerate(named) if i == 0 or h.lower() != named[i - 1].lower()]
-    if len(rows) < 2 or len(names) < 3 or not all(names) or len(set(names)) < 0.8 * len(names):
+    if (len(rows) < 2 or len(names) < rule.min_header_cols or not all(names)
+            or len(set(names)) < rule.distinct_ratio * len(names)):
         return False
     serial = sum(_cells(r)[0].replace(".", "").isdigit() for r in rows) / len(rows)
-    return serial >= 0.8 or len(header) >= _RECORD_MIN_COLS
+    return serial >= rule.serial_ratio or len(header) >= rule.min_cols
 
 
 def _record_parts(group: list[TaggedSpan]) -> list[tuple[list[TaggedSpan], str]]:
@@ -105,8 +113,13 @@ def _cap(group: list[TaggedSpan], max_chars: int) -> list[tuple[list[TaggedSpan]
 
 
 async def group_units(spans: Sequence[TaggedSpan], *, decider: Optional[BoundaryDecider] = None,
-                      max_chars: int = DEFAULT_MAX_UNIT_CHARS) -> list[Unit]:
-    """Group a document's spans (in order) into extraction units (the engine's default `UnitGrouper`)."""
+                      max_chars: Optional[int] = None, tuning: Optional[IngestionTuning] = None,
+                      table_mode: TableMode = "auto") -> list[Unit]:
+    """Group a document's spans (in order) into extraction units (the engine's default `UnitGrouper`). Thresholds
+    come from `tuning` (`max_chars` overrides its unit cap); `table_mode` forces every table to one unit per row
+    (`record`) or to one unit (`block`) instead of deciding per table (`auto`)."""
+    tuning = tuning or IngestionTuning()
+    max_chars = max_chars if max_chars is not None else tuning.max_unit_chars
     kept = [ts for ts in spans if ts.span.kind not in _FURNITURE and _alnum(ts.span.text) >= 2]
     decided = await _decided_starts([ts.span for ts in kept], decider)
     groups: list[list[TaggedSpan]] = []
@@ -121,7 +134,10 @@ async def group_units(spans: Sequence[TaggedSpan], *, decider: Optional[Boundary
             groups[-1].append(ts)
     units: list[Unit] = []
     for group in groups:
-        parts = _record_parts(group) if _is_record_table(group) else _cap(group, max_chars)
+        has_rows = any(ts.span.kind == "table_row" for ts in group)
+        record = has_rows and (table_mode == "record" or (table_mode == "auto"
+                                                          and _is_record_table(group, tuning.record_table)))
+        parts = _record_parts(group) if record else _cap(group, max_chars)
         for members, prefix in parts:
             tags = list(dict.fromkeys(t for ts in members for t in ts.tags))
             units.append(Unit(index=len(units), anchor=members[0].span, spans=[ts.span for ts in members],

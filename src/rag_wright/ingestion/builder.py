@@ -1,0 +1,340 @@
+"""ING-4b (ADR-0124): `build_ingestion` -- the engine's generic ingestion pipeline around a domain's hooks.
+
+The engine owns the mechanism: parse (hidden sheets, embedded children), chunk, layout, segment, tag, index the spans
+(embed + store), group into units, extract records concurrently, write, record a `Document` node per document, and
+ingest embedded children through the same pipeline with `EmbeddedIn` / `AttachedTo` edges (ING-6 link confidence).
+Every hook's output is held to its contract (`check_tiling` / `check_units` / `check_extraction`); a unit whose
+extraction fails is recorded and skipped, a document that fails is dead-lettered, and the run goes on. Progress is
+streamed as `[ingest] i/N ...` lines.
+
+A domain passes only its `extractor`; every other hook has an engine default (ING-2/3/4a). Thresholds come from
+`IngestionTuning` (the builder's, else `EngineConfig.options.ingest.tuning`, else the defaults).
+"""
+from __future__ import annotations
+
+import asyncio
+import functools
+import hashlib
+import mimetypes
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Optional, Sequence, Union
+
+from rag_wright.contracts.ingestion import (
+    BoundaryDecider,
+    Extractor,
+    IngestionTuning,
+    IngestSource,
+    RecordWriter,
+    Segmenter,
+    Span,
+    SpanTagger,
+    TaggedSpan,
+    UnitExtraction,
+    UnitGrouper,
+    check_extraction,
+    check_tiling,
+    check_units,
+)
+from rag_wright.store.seam import KgEdge, KgNode
+
+_DOC_ID = re.compile(r"[^A-Za-z0-9._-]+")
+_MAX_CHILD_DEPTH = 2  # an embedded file inside an embedded file is ingested; deeper nesting is reported, not walked
+
+
+@dataclass
+class DocumentReport:
+    doc_id: str
+    parent_doc_id: Optional[str] = None
+    chunks: int = 0
+    spans: int = 0
+    units: int = 0
+    records: int = 0
+    extraction_failures: list[dict] = field(default_factory=list)
+    span_failures: list[dict] = field(default_factory=list)
+    skipped_hidden_sheets: list[str] = field(default_factory=list)
+    embedded_skipped: list[str] = field(default_factory=list)
+    children: list[str] = field(default_factory=list)
+    links: dict[str, int] = field(default_factory=dict)  # AttachedTo edges written, by confidence
+    unmapped_links: int = 0  # record links whose row span could not be found
+    dead_letter: Optional[str] = None
+
+
+@dataclass
+class IngestionReport:
+    documents: list[DocumentReport] = field(default_factory=list)
+
+    @property
+    def failed(self) -> int:
+        return sum(d.dead_letter is not None for d in self.documents)
+
+    @property
+    def succeeded(self) -> int:
+        return len(self.documents) - self.failed
+
+
+class _NoSummary:
+    def summarize(self, text: str) -> str:  # noqa: ARG002 - chunk summaries are not part of the generic path
+        return ""
+
+
+def _doc_id(path: str) -> str:
+    """A document id from the file name INCLUDING its type, so a PDF export and its spreadsheet original (same name)
+    never collide: `Report v3.xlsm` -> `Report_v3_xlsm`."""
+    p = Path(path)
+    stem = _DOC_ID.sub("_", p.stem).strip("_")[:80] or "document"
+    return f"{stem}_{p.suffix.lstrip('.').lower()}" if p.suffix else stem
+
+
+class IngestionPipeline:
+    """Built by `build_ingestion`; run with `await pipeline.aingest(ws, sources, cache_dir=...)`."""
+
+    def __init__(self, extractor: Extractor, *, segmenter: Optional[Segmenter], span_tagger: Optional[SpanTagger],
+                 unit_grouper: Optional[UnitGrouper], boundary_decider: Optional[BoundaryDecider],
+                 writer: Optional[RecordWriter], tuning: Optional[IngestionTuning], embedder: Any,
+                 chunk_model: Optional[str], progress: Callable[[str], Any]) -> None:
+        self._extractor = extractor
+        self._segmenter = segmenter
+        self._tagger = span_tagger
+        self._grouper = unit_grouper
+        self._decider = boundary_decider
+        self._writer = writer
+        self._tuning = tuning
+        self._embedder = embedder
+        self._chunk_model = chunk_model
+        self._progress = progress
+
+    async def aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
+                      cache_dir: Union[str, Path]) -> IngestionReport:
+        """Ingest every source (and its embedded children) into the workspace; returns the per-document report."""
+        tuning = self._tuning or getattr(ws._config.options.ingest, "tuning", None) or IngestionTuning()
+        if self._embedder is None:
+            from rag_wright.capabilities.embedding_profiles import build_ingest_embedder
+
+            self._embedder = build_ingest_embedder(ws._config.embeddings.get("text", "bge-m3"))
+        items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
+        cache = Path(cache_dir)
+        report = IngestionReport()
+        sem = asyncio.Semaphore(tuning.document_concurrency)
+        done = 0
+        self._progress(f"[ingest] start N={len(items)}")
+
+        async def one(src: IngestSource) -> None:
+            nonlocal done
+            async with sem:
+                docs = await self._ingest_file(ws, Path(src.path), src.doc_id or _doc_id(src.path), src, tuning,
+                                               cache, parent_id=None, child=None, depth=0)
+            report.documents.extend(docs)
+            done += 1
+            top = docs[0]
+            self._progress(f"[ingest] {done}/{len(items)} {top.doc_id} "
+                           + (f"DEAD-LETTER: {top.dead_letter}" if top.dead_letter else
+                              f"spans={top.spans} units={top.units} records={top.records} "
+                              f"children={len(top.children)} failures={len(top.extraction_failures)}"))
+
+        await asyncio.gather(*(one(s) for s in items))
+        self._progress(f"[ingest] done {report.succeeded} ok, {report.failed} dead-lettered")
+        return report
+
+    async def _ingest_file(self, ws: Any, path: Path, doc_id: str, src: IngestSource, tuning: IngestionTuning,
+                           cache: Path, *, parent_id: Optional[str], child: Optional[Any],
+                           depth: int) -> list[DocumentReport]:
+        """Ingest one file (`child` = its `EmbeddedChild` record when it was extracted from `parent_id`), then its
+        own embedded children."""
+        from rag_wright.api.documents import aparse_document
+
+        rep = DocumentReport(doc_id=doc_id, parent_doc_id=parent_id)
+        try:
+            sd = await aparse_document(doc_id, path, cache_dir=cache / "parsed",
+                                       include_hidden_sheets=src.include_hidden_sheets, tuning=tuning)
+            rep.skipped_hidden_sheets = list(sd.skipped_hidden_sheets)
+            rep.embedded_skipped = list(sd.embedded_skipped)
+            row_spans = await self._ingest_document(ws, sd, src, tuning, cache, rep)
+            await asyncio.to_thread(ws._store.kg_write, [KgNode("Document", "doc_id", {
+                "doc_id": doc_id, "parent_doc_id": parent_id or "",
+                "filename": (child.filename if child is not None else None) or path.name,
+                "media_type": child.media_type if child is not None else (mimetypes.guess_type(path.name)[0] or ""),
+                "sha256": child.sha256 if child is not None else hashlib.sha256(path.read_bytes()).hexdigest()})])
+        except Exception as exc:  # noqa: BLE001 - one bad document is dead-lettered, never the whole run
+            rep.dead_letter = f"{type(exc).__name__}: {exc}"
+            return [rep]
+        reports = [rep]
+        for j, emb in enumerate(sd.embedded, 1):
+            if depth + 1 > _MAX_CHILD_DEPTH:
+                rep.embedded_skipped.append(f"{emb.doc_id}: nested deeper than {_MAX_CHILD_DEPTH}")
+                continue
+            emb_src = IngestSource(path=emb.path, doc_id=emb.doc_id, table_mode=src.table_mode,
+                                   include_hidden_sheets=src.include_hidden_sheets)
+            kids = await self._ingest_file(ws, Path(emb.path), emb.doc_id, emb_src, tuning, cache,
+                                           parent_id=doc_id, child=emb, depth=depth + 1)
+            reports.extend(kids)
+            if kids[0].dead_letter is None:
+                rep.children.append(emb.doc_id)
+                await asyncio.to_thread(self._write_child_links, ws, doc_id, emb, row_spans, rep)
+            self._progress(f"[ingest]   {doc_id} child {j}/{len(sd.embedded)} {emb.filename or emb.doc_id} "
+                           + (f"DEAD-LETTER: {kids[0].dead_letter}" if kids[0].dead_letter else
+                              f"spans={kids[0].spans} units={kids[0].units}"))
+        return reports
+
+    def _write_child_links(self, ws: Any, parent_id: str, child: Any, row_spans: dict, rep: DocumentReport) -> None:
+        """The child's `EmbeddedIn` edge (its first anchor's position) and an `AttachedTo` edge per record link."""
+        first = child.anchors[0] if child.anchors else None
+        position = {k: v for k, v in (first.model_dump() if first else {}).items()
+                    if v is not None and k not in ("table_ref", "table_row")}
+        edges = [KgEdge("EmbeddedIn", "Document", "doc_id", child.doc_id, "Document", "doc_id", parent_id,
+                        {**position, "anchors": len(child.anchors)})]
+        for link in child.links:
+            span_id = row_spans.get((link.table_ref, link.table_row))
+            if span_id is None:
+                rep.unmapped_links += 1
+                continue
+            edges.append(KgEdge("AttachedTo", "Document", "doc_id", child.doc_id, "Span", "span_id", span_id,
+                                {"confidence": link.confidence.value, "basis": link.basis,
+                                 "evidence": " ".join(link.evidence)}))
+            rep.links[link.confidence.value] = rep.links.get(link.confidence.value, 0) + 1
+        ws._store.kg_ensure_edges(edges)
+
+    async def _ingest_document(self, ws: Any, sd: Any, src: IngestSource, tuning: IngestionTuning, cache: Path,
+                               rep: DocumentReport) -> dict:
+        from rag_wright.capabilities.parsing import load_document
+        from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, achunk
+        from rag_wright.contracts.span import to_span_record
+        from rag_wright.ingestion.group import group_units
+        from rag_wright.ingestion.layout import chunk_layouts
+        from rag_wright.ingestion.segment import segment_layout
+
+        manifest = await achunk(sd.parsed, summarizer=_NoSummary(), cache_dir=cache / "chunks",
+                                discoverer=StructuralModelFallbackDiscoverer(self._chunk_model))
+        chunks = list(manifest.chunks)
+        document = load_document(sd.parsed)
+        layouts = chunk_layouts(document, [c.text for c in chunks])
+        segment = self._segmenter or functools.partial(segment_layout, tuning=tuning)
+        per_chunk: list[tuple[Any, list[Span]]] = []
+        for chunk, layout in zip(chunks, layouts):
+            spans = [s for s in segment(chunk.chunk_id, chunk.text, layout)]
+            check_tiling(chunk.chunk_id, chunk.text, spans)
+            per_chunk.append((chunk, _with_pages(document, chunks, chunk, spans)))
+        rep.chunks = len(chunks)
+
+        if self._tagger is not None:
+            tagged_lists = await asyncio.gather(*(self._tagger(c.text, ss) for c, ss in per_chunk))
+        else:
+            tagged_lists = [[TaggedSpan(span=s) for s in ss] for _c, ss in per_chunk]
+        tagged = [t for ts in tagged_lists for t in ts]
+        doc_start = {c.chunk_id: (c.doc_start or 0) for c, _ss in per_chunk}
+        await self._index(ws, sd.source_doc_id, tagged, doc_start, rep, to_span_record)
+
+        grouper = self._grouper or functools.partial(group_units, tuning=tuning, table_mode=src.table_mode)
+        units = await grouper(tagged, decider=self._decider)
+        check_units([t.span for t in tagged], units)
+        rep.units = len(units)
+
+        extractions = await self._extract(units, sd.source_doc_id, tuning, rep)
+        if self._writer is not None:
+            await self._writer(sd.source_doc_id, extractions)
+        else:
+            nodes = [n for e in extractions for n in e.nodes]
+            edges = [ed for e in extractions for ed in e.edges]
+            await asyncio.to_thread(ws._store.kg_write, nodes, edges)
+        rep.records = sum(len(e.nodes) for e in extractions)
+        return _row_spans(document, [t.span for t in tagged]) if sd.embedded else {}
+
+    async def _index(self, ws: Any, doc_id: str, tagged: list[TaggedSpan], doc_start: dict, rep: DocumentReport,
+                     to_span_record: Any) -> None:
+        if not tagged:
+            return
+        dense, sparse = await asyncio.to_thread(self._embedder.encode_batch, [t.span.text.strip() for t in tagged])
+
+        def write() -> None:
+            for t, d, sp in zip(tagged, dense, sparse):
+                try:
+                    ws._store.upsert_span(to_span_record(
+                        t.span, contract_id=doc_id, chunk_doc_start=doc_start[t.span.parent_chunk_id],
+                        dense_vector=list(d), sparse_vector=sp, function=t.tags[0] if t.tags else "",
+                        functions=list(t.tags)))
+                    rep.spans += 1
+                except Exception as exc:  # noqa: BLE001 - a failed span write is reported, not swallowed
+                    rep.span_failures.append({"span_id": t.span.span_id, "reason": repr(exc)})
+
+        await asyncio.to_thread(write)
+
+    async def _extract(self, units: list, doc_id: str, tuning: IngestionTuning,
+                       rep: DocumentReport) -> list[UnitExtraction]:
+        sem = asyncio.Semaphore(tuning.extract_concurrency)
+
+        async def one(unit: Any) -> Optional[UnitExtraction]:
+            async with sem:
+                try:
+                    extraction = await self._extractor(unit, source_doc_id=doc_id)
+                    check_extraction(unit, extraction)
+                    return extraction
+                except Exception as exc:  # noqa: BLE001 - a failed unit is recorded and skipped
+                    rep.extraction_failures.append({"unit": unit.index, "anchor": unit.anchor.span_id,
+                                                    "reason": f"{type(exc).__name__}: {exc}"[:300]})
+                    return None
+
+        return [e for e in await asyncio.gather(*(one(u) for u in units)) if e is not None]
+
+
+def _with_pages(document: Any, chunks: list, chunk: Any, spans: list[Span]) -> list[Span]:
+    """Best-effort page/bbox provenance for each span (issue 0032); unchanged when the parse carries no pages."""
+    if chunk.doc_start is None:
+        return spans
+    try:
+        from rag_wright.capabilities.rlm_chunking import canonical_document_text
+        from rag_wright.corpus.document_parser import content_items
+        from rag_wright.spans.page_map import build_page_offset_map, pages_for
+
+        page_map = build_page_offset_map(content_items(document), canonical_document_text(chunks))
+    except Exception:  # noqa: BLE001 - provenance is best-effort
+        return spans
+    if not page_map:
+        return spans
+    out = []
+    for s in spans:
+        pages, bbox = pages_for(page_map, chunk.doc_start + s.start, chunk.doc_start + s.end)
+        out.append(s.model_copy(update={"pages": pages, "bbox": bbox}))
+    return out
+
+
+def _row_spans(document: Any, spans: list[Span]) -> dict:
+    """(table self-ref, 0-based table row) -> the span holding that row, for a spreadsheet's tables (whose rows are
+    rendered compactly, one line each). A row is matched to the first unused span whose first line is that row."""
+    from rag_wright.corpus.document_parser import _compact_table_markdown, is_spreadsheet
+
+    if not is_spreadsheet(document):
+        return {}
+    by_line: dict[str, list[str]] = {}
+    for s in spans:
+        lines = [ln.strip() for ln in s.text.strip().split("\n") if ln.strip().startswith("|")]
+        if lines:
+            by_line.setdefault(lines[0], []).append(s.span_id)
+    out: dict = {}
+    for table in getattr(document, "tables", []) or []:
+        lines = _compact_table_markdown(table).split("\n")
+        rows = [lines[0]] + lines[2:]  # drop the separator line: rows[i] = grid row i
+        for i, line in enumerate(rows):
+            ids = by_line.get(line.strip())
+            if ids:
+                out[(table.self_ref, i)] = ids.pop(0)
+    return out
+
+
+def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = None,
+                    span_tagger: Optional[SpanTagger] = None, unit_grouper: Optional[UnitGrouper] = None,
+                    boundary_decider: Optional[BoundaryDecider] = None, writer: Optional[RecordWriter] = None,
+                    tuning: Optional[IngestionTuning] = None, embedder: Any = None, chunk_model: Optional[str] = None,
+                    progress: Callable[[str], Any] = functools.partial(print, flush=True)) -> IngestionPipeline:
+    """The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override
+    any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch`
+    object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section."""
+    t = tuning or IngestionTuning()
+    if t.extract_concurrency < 1 or t.document_concurrency < 1:
+        raise ValueError("extract_concurrency and document_concurrency must be >= 1")
+    return IngestionPipeline(extractor, segmenter=segmenter, span_tagger=span_tagger, unit_grouper=unit_grouper,
+                             boundary_decider=boundary_decider, writer=writer, tuning=tuning, embedder=embedder,
+                             chunk_model=chunk_model, progress=progress)
+
+
+__all__ = ["build_ingestion", "IngestionPipeline", "IngestionReport", "DocumentReport"]

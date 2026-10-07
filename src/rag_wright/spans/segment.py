@@ -23,7 +23,7 @@ import re
 
 from rag_wright.contracts.ingestion import Span
 from rag_wright.corpus.document_parser import _LEADING_ENUM, _is_bare_heading  # generic text rules (ADR-0124)
-from rag_wright.contracts.span import SpanRecord
+from rag_wright.contracts.span import to_span_record  # noqa: F401 - re-exported (moved, ING-4b)
 
 DEFAULT_MIN_CHARS = 25  # a span whose stripped text is shorter folds into its neighbour (a bare heading/marker)
 
@@ -274,43 +274,3 @@ def segment_clause(
         )
         for i, (s, e) in enumerate(ranges)
     ]
-
-
-def to_span_record(
-    op: OperativeSpan,
-    *,
-    contract_id: str,
-    chunk_doc_start: int,
-    dense_vector: list[float],
-    sparse_vector: dict[int, float],
-    function: str = "",
-    functions: list[str] | None = None,
-    parent_okf_path: str | None = None,
-) -> SpanRecord:
-    """CU-B2 (ADR-0029): OperativeSpan -> SpanRecord with DOCUMENT-ABSOLUTE offsets.
-
-    Composes `doc_start = chunk_doc_start + op.start`, `doc_end = chunk_doc_start + op.end` (the span's
-    clause-relative offsets shifted by the parent chunk's offset in the canonical document text, CU-B1). The
-    RAW span text (`op.text = body[start:end]`) is stored -- NOT stripped -- so the citation invariant
-    `canonical_document_text[doc_start:doc_end] == span.text` holds byte-faithfully. The caller may embed over
-    `op.text.strip()`; the stored text stays raw for the highlight.
-    """
-    return SpanRecord(
-        span_id=op.span_id,
-        parent_chunk_id=op.parent_chunk_id,
-        parent_okf_path=op.parent_okf_path if parent_okf_path is None else parent_okf_path,
-        span_index=op.span_index,
-        text=op.text,
-        function=function,
-        functions=list(functions) if functions else ([function] if function else []),
-        dense_vector=dense_vector,
-        sparse_vector=sparse_vector,
-        contract_id=contract_id,
-        doc_start=chunk_doc_start + op.start,
-        doc_end=chunk_doc_start + op.end,
-        page=(op.pages[0] if op.pages else None),  # issue 0032: FIRST page for the singular highlight field
-        pages=list(op.pages),  # ALL pages the span overlaps (cross-page clause -> a list)
-        bbox=op.bbox,  # best-effort single-item box
-    )
-
-

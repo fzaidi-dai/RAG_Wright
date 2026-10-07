@@ -7,6 +7,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Optional
 
+from rag_wright.contracts.ingestion import IngestionTuning
+
 
 @dataclass(frozen=True)
 class StoreConfig:
@@ -33,6 +35,7 @@ class IngestOptions:
     function_classifier: Optional[str] = None      # "setfit" | "llm" (was RAG_FUNCTION_CLASSIFIER)
     list_model: Optional[str] = None               # secondary list-union model, "off" to disable (was RAG_INGEST_LIST_MODEL)
     clause_samples: Optional[int] = None           # multi-sample count for the list union (was RAG_INGEST_CLAUSE_SAMPLES)
+    tuning: Optional[IngestionTuning] = None     # ING-4b: the generic ingestion thresholds (build_ingestion default)
 
 
 @dataclass(frozen=True)
