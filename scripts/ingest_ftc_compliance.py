@@ -19,9 +19,9 @@ from dotenv import load_dotenv
 
 async def main() -> None:
     load_dotenv()
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
-    from rag_wright.subgraphs.compliance_ingestion import run_compliance_ingestion
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import run_compliance_ingestion
 
     db = os.environ.get("COMPLIANCE_DB", "ragwright_compliance")
     reset = os.environ.get("RESET", "1") == "1"  # RESET=0 to resume onto an existing partial DB

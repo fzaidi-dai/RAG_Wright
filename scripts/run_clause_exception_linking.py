@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 
-from rag_wright.capabilities.clause_exception_linking import clause_exception_linking
+from rag_wright.packs.contracts.capabilities.clause_exception_linking import clause_exception_linking
 from rag_wright.store.arcadedb import IS_EXCEPTION_TO_EDGE_TYPE, ArcadeDBStore
 
 

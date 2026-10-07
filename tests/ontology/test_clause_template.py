@@ -3,7 +3,7 @@
 These tests pin the *contract* the KG-2 extractor will populate: the Pydantic template compiled
 (deterministically, zero-LLM) from `contract_bridge.ttl` via `docling-graph template from-ontology`.
 The load-bearing invariant is that the template's closed vocabularies stay in lockstep with
-`contracts/property.py::CLOSED_VOCAB` -- the extractor and the query-decomposer must share exactly one
+`packs/contracts/schemas/property.py::CLOSED_VOCAB` -- the extractor and the query-decomposer must share exactly one
 vocabulary (CLAUDE.md standing rule / ADR-0026). If someone edits the ontology and the two drift, this
 test fails.
 """
@@ -15,10 +15,10 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from rag_wright.contracts.property import CLOSED_VOCAB, PropertyDimension
-from rag_wright.ontology import clause_template as t
+from rag_wright.packs.contracts.schemas.property import CLOSED_VOCAB, PropertyDimension
+from rag_wright.packs.contracts.ontology import clause_template as t
 
-_TTL = Path(__file__).resolve().parents[2] / "src/rag_wright/ontology/contract_bridge.ttl"
+_TTL = Path(__file__).resolve().parents[2] / "src/rag_wright/packs/contracts/ontology/contract_bridge.ttl"
 
 # Template enum  ->  the PropertyDimension whose CLOSED_VOCAB it must equal (minus the OTHER escape).
 # CapBasis is the one intentional divergence: OWL individuals cannot reuse the value "other" without

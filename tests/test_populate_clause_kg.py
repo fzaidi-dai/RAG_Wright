@@ -5,7 +5,7 @@ from __future__ import annotations
 import threading
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from scripts.populate_clause_kg import extract_and_write
 

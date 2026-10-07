@@ -10,13 +10,13 @@ empty-list path, `run_requirement_extraction` invoke convenience, and registrati
 
 from __future__ import annotations
 
-from rag_wright.capabilities.requirement_extraction import (
+from rag_wright.packs.compliance.capabilities.requirement_extraction import (
     ExtractedRegulationSection,
     ExtractedRequirement,
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.compliance import DeonticType, Requirement
-from rag_wright.subgraphs.requirement_extraction import (
+from rag_wright.packs.compliance.schemas.compliance import DeonticType, Requirement
+from rag_wright.packs.compliance.subgraphs.requirement_extraction import (
     build_requirement_extraction,
     register_requirement_extraction,
     run_requirement_extraction,
@@ -113,7 +113,7 @@ async def test_run_stamps_section_page_provenance_onto_each_requirement():
     assert len(reqs) == 2
     assert all(r.pages == [7, 8] and r.bbox == (1.0, 2.0, 3.0, 4.0) for r in reqs)  # both carry the section's prov
     # id is content-derived, unchanged by pages
-    from rag_wright.contracts.compliance import Requirement
+    from rag_wright.packs.compliance.schemas.compliance import Requirement
     assert reqs[0].requirement_id == Requirement.make_id("ClientPolicy", "10.5", "Retain records six years.")
 
 

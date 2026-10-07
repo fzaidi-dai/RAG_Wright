@@ -34,7 +34,7 @@ from eval.listwise_rerank import Ranking, _listwise_prompt
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import profile_for
 from rag_wright.models.seam import build_model
-from rag_wright.spans.property_extractor import SeamPropertyExtractor
+from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
 from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
 from rag_wright.util.concurrent import map_concurrent
 

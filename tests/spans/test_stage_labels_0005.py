@@ -5,19 +5,19 @@ via the seam) that logged the bare model id; the path-B docling-graph stage carr
 
 from __future__ import annotations
 
-from rag_wright.contracts.property import PropertyDimension
+from rag_wright.packs.contracts.schemas.property import PropertyDimension
 
 
 def test_batch_clause_classifier_labels_its_free_text_call():
     # issue 0005 route (b): the batched classifier now runs CLIENT-SIDE tag-parse; its runnable carries the stage
-    from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
+    from rag_wright.packs.contracts.spans.clause_function_classifier import production_batch_clause_classifier
 
     clf = production_batch_clause_classifier("granite")
     assert clf._runnable._label == "clause_function_classifier.classify_spans"  # the prime suspect names itself
 
 
 def test_per_clause_classifier_labels_its_free_text_call():
-    from rag_wright.spans.clause_function_classifier import production_llm_clause_classifier
+    from rag_wright.packs.contracts.spans.clause_function_classifier import production_llm_clause_classifier
 
     clf = production_llm_clause_classifier("granite")
     assert clf._runnable._label == "clause_function_classifier.classify"
@@ -34,7 +34,7 @@ async def test_semantic_judge_labels_its_structured_call():
         captured["label"] = kw.get("label")
         return _Runnable()
 
-    from rag_wright.spans.semantic_judge import build_asemantic_judge_fn
+    from rag_wright.packs.contracts.spans.semantic_judge import build_asemantic_judge_fn
 
     ajudge = build_asemantic_judge_fn("granite", structured_factory=factory)
     await ajudge(next(iter(PropertyDimension)), "some-value", "some clause text")

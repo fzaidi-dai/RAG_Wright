@@ -38,11 +38,11 @@ async def main() -> int:
     load_dotenv()
     os.environ.setdefault("RAG_SERVING", "openrouter")
 
-    from rag_wright.capabilities.contract_kg_serve import contract_clause_index
-    from rag_wright.capabilities.dg_extraction import build_verified_registry
+    from rag_wright.packs.contracts.capabilities.contract_kg_serve import contract_clause_index
+    from rag_wright.packs.contracts.capabilities.dg_extraction import build_verified_registry
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.contract_ingestion_pipeline import aparsed_source_document, aproduction_document_ingest
-    from rag_wright.subgraphs.intra_document_qa import production_intra_document_qa, rehydrate_clause_texts
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import aparsed_source_document, aproduction_document_ingest
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import production_intra_document_qa, rehydrate_clause_texts
 
     db = os.environ.get("ISSUE0014_DB", "ragwright_issue0014")
     doc_id = "table-bearing-contract"
@@ -73,7 +73,7 @@ async def main() -> int:
     # the served, rehydrated evidence pool. Before the fix it was never chunked/indexed, so no served clause
     # carried it; after, its atomic table span is a served clause whose rehydrated text holds the figure.
     log("[smoke] 4/4 (a) retrieval-layer proof: the table span reaches the served evidence pool")
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
     served = contract_clause_index(ContractKGStore(store), doc_id, include_untyped=True)
     texts = rehydrate_clause_texts(store, doc_id, served)
     table_clauses = [c for c in served if "48,000" in (texts.get(c.clause_id) or "")]

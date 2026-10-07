@@ -6,7 +6,7 @@ the parsers are pure; the runnable's stream is monkeypatched."""
 from __future__ import annotations
 
 import rag_wright.models.seam as seam
-from rag_wright.spans.clause_function_classifier import (
+from rag_wright.packs.contracts.spans.clause_function_classifier import (
     _TagClassifierRunnable,
     parse_batch_span_tags,
     parse_clause_function_tags,

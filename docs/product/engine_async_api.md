@@ -96,7 +96,7 @@ union; the per-kind keys remain for back-compat. `report.per_document` lists wha
 entry with the engine helper instead of comparing loss keys yourself — one definition, no drift:
 
 ```python
-from rag_wright.subgraphs.contract_ingestion_pipeline import build_partial_entry   # STABLE public helper
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import build_partial_entry   # STABLE public helper
 
 entry = build_partial_entry(doc_id, out.get("clause_failures"), out.get("span_failures"))  # None if complete
 if entry is not None:
@@ -115,7 +115,7 @@ kind-tagged list (rather than summing known per-kind fields) keeps surfacing los
 `parsed_source_document` builds. Its async, deadline-bounded twin is:
 
 ```python
-from rag_wright.subgraphs.contract_ingestion_pipeline import aparsed_source_document
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import aparsed_source_document
 
 sd = await aparsed_source_document(source_doc_id, name, data, *, cache_dir, metadata=None, deadline_s=600)
 ```

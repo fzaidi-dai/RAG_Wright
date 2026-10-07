@@ -15,9 +15,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from rag_wright.capabilities.requirement_extraction import operative_rule_spans
-from rag_wright.subgraphs.compliance_ingestion import is_operative
-from rag_wright.spans.segment import segment_clause
+from rag_wright.packs.compliance.capabilities.requirement_extraction import operative_rule_spans
+from rag_wright.packs.compliance.subgraphs.compliance_ingestion import is_operative
+from rag_wright.packs.contracts.spans.segment import segment_clause
 
 D = Path("data/compliance/cic1_labels")
 CODE_ACCORD = Path("/private/tmp/claude-501/-Users-farhan-work-RAG-Wright/46292cd1-831b-4882-9a22-4954123663a0/scratchpad/CODE-ACCORD/annotated_data/entities/all.csv")

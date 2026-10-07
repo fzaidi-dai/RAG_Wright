@@ -28,12 +28,12 @@ from dotenv import load_dotenv
 async def main() -> None:
     load_dotenv()
     os.environ.setdefault("ARCADEDB_DATABASE", "ragwright_compliance")
-    from rag_wright.capabilities.claim_extraction import claim_extraction
-    from rag_wright.capabilities.compliance_judgment import build_compliance_judge_fn
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.compliance.capabilities.claim_extraction import claim_extraction
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import build_compliance_judge_fn
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.compliance_check import _requirement_from_row, build_compliance_check
+    from rag_wright.packs.compliance.subgraphs.compliance_check import _requirement_from_row, build_compliance_check
 
     store = ArcadeDBStore.from_env(database="ragwright_compliance")
     reqs = [_requirement_from_row(r) for r in store.all_requirements()

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import torch
 
-from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
+from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
 
 
 class _FakeEnc(dict):

@@ -32,7 +32,7 @@ class _PoisonGraph:
 
     def invoke(self, state):
         if state["document"].source_doc_id == self._poison:
-            from rag_wright.capabilities.dg_extraction import ExtractionFailed
+            from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionFailed
 
             raise ExtractionFailed("party", "FORCED failure (2d validation): simulated extraction crash")
         return self._g.invoke(state)
@@ -45,11 +45,11 @@ def main() -> None:
     os.environ.setdefault("OPENROUTER_PROVIDER", "coreweave/bf16")
     os.environ.setdefault("OPENROUTER_ALLOW_FALLBACKS", "true")
 
-    from rag_wright.capabilities.dg_extraction import build_verified_registry
-    from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
+    from rag_wright.packs.contracts.capabilities.dg_extraction import build_verified_registry
+    from rag_wright.packs.contracts.corpus.gcs_ingestion import production_gcs_adapter
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.async_ingestion import JobStore, submit_ingestion
-    from rag_wright.subgraphs.contract_ingestion_pipeline import aproduction_document_ingest
+    from rag_wright.packs.contracts.subgraphs.async_ingestion import JobStore, submit_ingestion
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import aproduction_document_ingest
 
     db = os.environ.get("PROD1_DB", "ragwright_prod1_async")
     bucket = "dreamai-pocs-ragwright-ingest"

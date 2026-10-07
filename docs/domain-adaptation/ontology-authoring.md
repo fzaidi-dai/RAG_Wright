@@ -112,7 +112,7 @@ ws = open_workspace(cfg, corpus="mydomain")   # ensure_schema() creates your dec
 
 The engine reads only the schema vocabulary (the vertex and edge declarations). Your capabilities read your own
 value sets, shapes, mappings and criteria (with `rdflib` / `pyshacl`), as the reference pack does for its packs
-(its loader, `rag_wright.ontology.loader`, is reference-pack code). Changing the domain = editing the `.ttl`.
+(its loader, `rag_wright.packs.contracts.ontology.loader`, is reference-pack code). Changing the domain = editing the `.ttl`.
 
 ## Source of truth + no drift (ADR-0066)
 
@@ -125,7 +125,7 @@ not by moving truth into Python. Validate the pack itself with SHACL (`pyshacl`)
 ## Worked example
 
 The reference pack's bridges are the complete example of every section above:
-`rag_wright/ontology/contract_bridge.ttl` (vertex/edge declarations, value sets, SHACL shapes, SKOS roll-ups —
+`rag_wright/packs/contracts/ontology/contract_bridge.ttl` (vertex/edge declarations, value sets, SHACL shapes, SKOS roll-ups —
 grounded in external standards *as that domain's choice*, not an engine requirement), `compliance_bridge.ttl`, and
-the domain pack `rag_wright/ontology/packs/ftc_16cfr255.ttl`. Next: [KG construction](kg-construction.md)
+the domain pack `rag_wright/packs/compliance/ontology/packs/ftc_16cfr255.ttl`. Next: [KG construction](kg-construction.md)
 populates the schema this pack declares; [entity resolution](entity-resolution.md) canonicalizes the entity-graph types.

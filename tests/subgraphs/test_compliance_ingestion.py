@@ -14,13 +14,13 @@ from pathlib import Path
 import pytest
 
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.subgraphs.compliance_ingestion import (
+from rag_wright.packs.compliance.subgraphs.compliance_ingestion import (
     RegulationAdapter,
     build_compliance_ingest,
     register_compliance_ingestion,
     run_compliance_ingestion,
 )
-from rag_wright.subgraphs.contract_ingestion_pipeline import IngestionReport, SourceDocument
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import IngestionReport, SourceDocument
 
 
 def _sections_file(tmp_path: Path) -> Path:
@@ -155,7 +155,7 @@ def test_adapter_skips_definitions_sections(tmp_path):
 
 def test_is_operative_is_a_deontic_cue_gate():
     # P3c (Gap 1): operative iff the text carries a deontic CUE (from the ttl), with word boundaries.
-    from rag_wright.subgraphs.compliance_ingestion import is_operative
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import is_operative
 
     assert is_operative("The advertiser must disclose the connection.")       # obligation cue
     assert is_operative("An endorser may not conceal a paid relationship.")   # prohibition cue
@@ -183,7 +183,7 @@ def test_adapter_gates_by_deontic_cue_not_heading(tmp_path):
 
 
 def test_document_regulation_adapter_splits_a_parsed_doc_into_section_documents():
-    from rag_wright.subgraphs.compliance_ingestion import DocumentRegulationAdapter
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import DocumentRegulationAdapter
 
     # inject the docling parse result (hermetic): a policy doc split into sections at its headings
     def _sections_fn(name, data):
@@ -202,7 +202,7 @@ def test_document_regulation_adapter_splits_a_parsed_doc_into_section_documents(
 
 
 def test_document_regulation_adapter_skips_empty_sections():
-    from rag_wright.subgraphs.compliance_ingestion import DocumentRegulationAdapter
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import DocumentRegulationAdapter
 
     adapter = DocumentRegulationAdapter(
         "p.pdf", b"x", "src",
@@ -213,7 +213,7 @@ def test_document_regulation_adapter_skips_empty_sections():
 
 async def test_run_compliance_document_ingestion_parses_a_doc_and_writes_requirements():
     # DOCPARSE-1 PROD-2 Phase-2: a customer's OWN policy DOCUMENT -> DocumentRegulationAdapter -> the SAME pipeline
-    from rag_wright.subgraphs.compliance_ingestion import run_compliance_document_ingestion
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import run_compliance_document_ingestion
 
     store = _FakeStore()
 
@@ -253,7 +253,7 @@ async def test_failed_section_dead_letters_instead_of_writing_zero_requirements(
 
 
 async def test_run_requirement_extraction_raise_on_failure_surfaces_the_dead_letter():
-    from rag_wright.subgraphs.requirement_extraction import (
+    from rag_wright.packs.compliance.subgraphs.requirement_extraction import (
         RequirementExtractionFailed,
         run_requirement_extraction,
     )
@@ -273,8 +273,8 @@ async def test_run_requirement_extraction_raise_on_failure_surfaces_the_dead_let
 def test_submit_compliance_ingestion_is_async_and_dead_letters_a_failed_section(tmp_path):
     import time
 
-    from rag_wright.subgraphs.async_ingestion import JobStore
-    from rag_wright.subgraphs.compliance_ingestion import RegulationAdapter, submit_compliance_ingestion
+    from rag_wright.packs.contracts.subgraphs.async_ingestion import JobStore
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import RegulationAdapter, submit_compliance_ingestion
 
     store = _FakeStore()
     store.database = "ragwright_compliance_test"

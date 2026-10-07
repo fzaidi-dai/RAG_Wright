@@ -9,7 +9,7 @@ import json
 
 import pytest
 
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 
 # --- pure clause-type taxonomy (no store) -------------------------------------------------------
@@ -77,7 +77,7 @@ def store():
 def test_span_locations_roundtrip_live(store):
     from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
     from rag_wright.contracts.identifiers import ChunkId
-    from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+    from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
     from rag_wright.contracts.provenance import ConfidenceTag, Provenance
     from rag_wright.contracts.span import SpanRecord
 

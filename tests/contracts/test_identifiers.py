@@ -111,7 +111,7 @@ def test_chunk_id_content_hash_normalized_to_lowercase():
 
 # --- EntityId: an opaque non-empty canonical id (FR-S.3, DD-4, ADR-0067/0117) ----------------
 # The engine is domain-agnostic: the id's FORMAT is the resolver/pack's concern (the SEC pack
-# shapes a 10-digit CIK in corpus/edgar.normalize_cik), so the contract's only invariant is a
+# shapes a 10-digit CIK in packs/contracts/corpus/edgar.normalize_cik), so the contract's only invariant is a
 # non-empty string. Any present, non-blank id is accepted, whatever the domain's scheme.
 
 

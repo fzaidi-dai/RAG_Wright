@@ -9,8 +9,8 @@ from __future__ import annotations
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.types import RetryPolicy
 
-from rag_wright.contracts.property import ClausePropertyRecord
-from rag_wright.subgraphs.typed_clause_extraction import (
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord
+from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import (
     TransientExtraction,
     build_typed_clause_extraction,
 )
@@ -108,7 +108,7 @@ def test_human_gate_interrupts_on_low_confidence():
 
 def test_registers_as_a_subgraph():
     from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.subgraphs.typed_clause_extraction import register_typed_clause_extraction
+    from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import register_typed_clause_extraction
 
     reg = CapabilityRegistry()
     register_typed_clause_extraction(reg)

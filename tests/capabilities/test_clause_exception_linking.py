@@ -7,7 +7,7 @@ carve-out). The link is INFERRED.
 
 from __future__ import annotations
 
-from rag_wright.capabilities.clause_exception_linking import (
+from rag_wright.packs.contracts.capabilities.clause_exception_linking import (
     ClauseExceptionLinkResult,
     clause_exception_linking,
     derive_exception_links,

@@ -5,9 +5,9 @@ from __future__ import annotations
 
 import json
 
-import rag_wright.capabilities.dg_extraction as dg
-from rag_wright.capabilities.graph_extraction import aproduction_extract_fn
-from rag_wright.subgraphs.contract_ingestion_pipeline import (
+import rag_wright.packs.contracts.capabilities.dg_extraction as dg
+from rag_wright.packs.contracts.capabilities.graph_extraction import aproduction_extract_fn
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
     SourceDocument,
     aper_contract_graph_extraction,
 )
@@ -107,8 +107,8 @@ async def test_aproduction_extract_fn_awaits_aextract_parties(monkeypatch):
 
 # --- PARTIAL-CAUSE-1: a TRANSIENT ExtractionFailed is retried and recovers (not lost) -----------
 
-from rag_wright.capabilities.dg_extraction import ExtractionFailed  # noqa: E402
-from rag_wright.subgraphs.contract_ingestion_pipeline import _aextract_clause_with_retry  # noqa: E402
+from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionFailed  # noqa: E402
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import _aextract_clause_with_retry  # noqa: E402
 
 
 class _FlakyExtractor:

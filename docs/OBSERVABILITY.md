@@ -90,5 +90,5 @@ not (for example a self-hosted vLLM endpoint), add a price row to the deployment
   LLM (no decision model, or `RAG_SEMANTIC_JUDGE=llm` / `RAG_RESIDUAL_EXTRACTOR=llm`), **per-provision** calls
   (the residual values call and the judge; small, times the number of provisions). With the decision model, the
   per-provision work is Jev calls, which appear only in `measure_usage()`.
-- Reference: `models/tracing.py` (emitter), `models/seam.py::astream_text`, `capabilities/dg_extraction.py`
-  (litellm path), `subgraphs/contract_ingestion_pipeline.py::arun_corpus_ingestion` (correlation).
+- Reference: `models/tracing.py` (emitter), `models/seam.py::astream_text`, `packs/contracts/capabilities/dg_extraction.py`
+  (litellm path), `packs/contracts/subgraphs/contract_ingestion_pipeline.py::arun_corpus_ingestion` (correlation).

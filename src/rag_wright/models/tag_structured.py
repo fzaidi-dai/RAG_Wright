@@ -17,7 +17,7 @@ the flat ingest judges (extraction_semantic_judge -> SemanticVerdict), AND the i
 (Clause with its nested bounded_by/caps/governed_by + the `excepts` list; ContractParties with `parties`), which
 TAGPARSE-INGEST-1 routes off docling-graph's server-side json_object onto this path. The ingest clause-function
 classifier (nested `list[SpanFunctions]` / `list[RawScore]`) still uses its OWN bespoke free-text tags + client-
-side parse in `spans/clause_function_classifier.py`, not this generic parser (issue 0005), and is unchanged.
+side parse in `packs/contracts/spans/clause_function_classifier.py`, not this generic parser (issue 0005), and is unchanged.
 """
 
 from __future__ import annotations

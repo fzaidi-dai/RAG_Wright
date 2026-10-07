@@ -31,11 +31,11 @@ from dotenv import load_dotenv
 
 async def main() -> None:
     load_dotenv()
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.compliance_check import production_compliance_check
+    from rag_wright.packs.compliance.subgraphs.compliance_check import production_compliance_check
 
     gold = json.loads(Path("data/compliance/gold_cases/manifest.json").read_text())["cases"]
     store = ArcadeDBStore.from_env(database="ragwright_compliance")

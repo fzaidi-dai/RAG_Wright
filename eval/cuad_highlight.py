@@ -26,11 +26,11 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from rag_wright.capabilities.highlight_serve import serve_highlight
-from rag_wright.contracts.function import canonical_function
-from rag_wright.contracts.ontology import ClauseCategory
-from rag_wright.contracts.query_intent import QueryIntent
-from rag_wright.spans.cuad_labels import parse_cuad
+from rag_wright.packs.contracts.capabilities.highlight_serve import serve_highlight
+from rag_wright.packs.contracts.schemas.function import canonical_function
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory
+from rag_wright.packs.contracts.schemas.query_intent import QueryIntent
+from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
 
 CUAD = Path("data/cuad/extracted/CUAD_v1/CUAD_v1.json")
 DB = "ragwright_cuad"

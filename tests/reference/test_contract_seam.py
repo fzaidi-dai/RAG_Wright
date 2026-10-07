@@ -10,8 +10,8 @@ import os
 
 import pytest
 
-import rag_wright.reference.contract_seam as seam_mod
-from rag_wright.reference.contract_seam import ContractComplianceSeam
+import rag_wright.packs.reference_seam as seam_mod
+from rag_wright.packs.reference_seam import ContractComplianceSeam
 
 
 # --- hermetic: each method composes the right engine call ---------------------------------------
@@ -86,9 +86,9 @@ def _cfg():
 
 @pytest.mark.store
 def test_reference_seam_read_legs_live():
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
     from rag_wright.contracts.identifiers import ChunkId
-    from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+    from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
     from rag_wright.contracts.provenance import ConfidenceTag, Provenance
     from rag_wright.store.seam import GraphEdge, GraphNode
 

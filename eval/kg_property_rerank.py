@@ -24,11 +24,11 @@ from dotenv import load_dotenv
 from eval.acord import load_corpus, load_test_queries
 from eval.acord_retrieval import ndcg_at_k
 from eval.harness import recall_at_k
-from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
 from rag_wright.capabilities.reranking import BGEReranker
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.value_match import constraint_match_count
-from rag_wright.spans.property_extractor import SeamPropertyExtractor
+from rag_wright.packs.contracts.schemas.value_match import constraint_match_count
+from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
 from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
 from rag_wright.util.concurrent import map_concurrent
 

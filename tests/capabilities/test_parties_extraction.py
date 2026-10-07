@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from rag_wright.capabilities.disambiguation import disambiguate
 from rag_wright.capabilities.entity_resolution import resolve_entities
-from rag_wright.capabilities.graph_extraction import parties_to_extraction
+from rag_wright.packs.contracts.capabilities.graph_extraction import parties_to_extraction
 from rag_wright.capabilities.graph_storage import to_graph
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.corpus.edgar import normalize_cik
+from rag_wright.packs.contracts.corpus.edgar import normalize_cik
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 
 _CID = ChunkId.of("Acme_v_Beta_Agreement", 0, "parties")

@@ -120,17 +120,17 @@ src/rag_wright/
   capabilities/  the capability catalog + ARD runtime (manifests, registry, the invoker)
   ingestion/     the generic ingestion builder (build_ingestion), default segmenter/grouper, table rows, eval
   contracts/     Pydantic contracts + the shared identifiers (chunk_id, entity_id) and the ingestion hook contracts
-  subgraphs/     the composite LangGraph pipelines (domain graphs; e.g. the reference pack's)
+  subgraphs/     the generic LangGraph scaffolding, semantic chunking and graph extraction
   models/        the model-profile seam (OpenRouter default / self-hosted open models)
-  ontology/      the .ttl packs + pack schema + entity-registry derivation (knowledge lives here)
+  ontology/      the generic pack-schema reader + entity-registry derivation
   store/         the single ArcadeDB store behind the query seam
-  spans/         the reference pack's legal segmentation + classifier fleet (page_map is generic)
-  reference/     the reference-pack registration (pack.py) + facades (the worked example)
-  corpus/        document parsing + embedded-file extraction, and the reference corpus adapters (EDGAR, CUAD)
+  spans/         page_map (page and bounding-box positions of spans)
+  corpus/        document parsing + embedded-file extraction
   okf/           the OKF (Open Knowledge Format) bundle-compile path
-  mcp/           MCP tool surfaces over registered capabilities
-  skills/        authored capability SKILL.md content
+  skills/        authored SKILL.md content for the generic capabilities
   util/          shared, capability-agnostic utilities
+  packs/         the reference pack: packs/contracts (contract domain) and packs/compliance (built on it),
+                 each with its pack.py, ontology (.ttl), capabilities, graphs, skills and MCP servers
 docs/            documentation (docs/archive/ holds superseded/historical material)
 ```
 

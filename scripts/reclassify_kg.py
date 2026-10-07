@@ -28,9 +28,9 @@ def main() -> None:
     os.environ.setdefault("RAG_SERVING", "openrouter")
     load_dotenv()
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore
-    from rag_wright.spans.clause_function_classifier import production_batch_clause_classifier
-    from rag_wright.spans.reclassify import ReclassDelta, reclassify_chunk
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
+    from rag_wright.packs.contracts.spans.clause_function_classifier import production_batch_clause_classifier
+    from rag_wright.packs.contracts.spans.reclassify import ReclassDelta, reclassify_chunk
     from rag_wright.store.arcadedb import ArcadeDBStore, _str_array
     from rag_wright.util.concurrent import map_concurrent
 
@@ -84,7 +84,7 @@ def main() -> None:
     if os.environ.get("DEBUG") == "1":
         from collections import Counter
 
-        from rag_wright.spans.clause_function_classifier import categorize_raw
+        from rag_wright.packs.contracts.spans.clause_function_classifier import categorize_raw
 
         tmo = float(os.environ.get("TIMEOUT_S", "90"))
         log(f"[reclassify][debug] categorizing verdicts over {len(chunk_ids)} chunks (conc={conc}) ...")
@@ -191,8 +191,8 @@ def main() -> None:
 
     from pathlib import Path
 
-    from rag_wright.contracts.function import NO_FUNCTION, FunctionConfidence, FunctionScore
-    from rag_wright.spans.reclassify import ClauseReclass
+    from rag_wright.packs.contracts.schemas.function import NO_FUNCTION, FunctionConfidence, FunctionScore
+    from rag_wright.packs.contracts.spans.reclassify import ClauseReclass
 
     ckpt_dir = Path("data/eval/taxonomy_gaps")
     ckpt_dir.mkdir(parents=True, exist_ok=True)

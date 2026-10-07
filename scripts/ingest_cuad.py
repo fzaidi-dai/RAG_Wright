@@ -32,7 +32,7 @@ from docling_core.types.doc.document import DoclingDocument
 from docling_core.types.doc.labels import DocItemLabel
 from dotenv import load_dotenv
 
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.capabilities.embedding import BGEM3Embedder
 from rag_wright.capabilities.parsing import ParsedDocument
 from rag_wright.capabilities.rlm_chunking import (
@@ -40,14 +40,14 @@ from rag_wright.capabilities.rlm_chunking import (
     canonical_document_text,
     chunk,
 )
-from rag_wright.contracts.contract_meta import ContractRecord
-from rag_wright.contracts.function import canonical_function
+from rag_wright.packs.contracts.schemas.contract_meta import ContractRecord
+from rag_wright.packs.contracts.schemas.function import canonical_function
 from rag_wright.contracts.identifiers import canonical_source_doc_id
-from rag_wright.spans.cuad_labels import parse_cuad
-from rag_wright.spans.function_families import RARE_TARGETS
-from rag_wright.spans.hybrid_classifier import HybridFunctionClassifier
-from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
-from rag_wright.spans.segment import segment_clause, to_span_record
+from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
+from rag_wright.packs.contracts.spans.function_families import RARE_TARGETS
+from rag_wright.packs.contracts.spans.hybrid_classifier import HybridFunctionClassifier
+from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
+from rag_wright.packs.contracts.spans.segment import segment_clause, to_span_record
 
 CUAD = Path("data/cuad/extracted/CUAD_v1/CUAD_v1.json")
 MODEL_PATH = Path("data/models/legalbert_function")

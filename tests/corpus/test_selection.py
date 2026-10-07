@@ -7,7 +7,7 @@ are deliberately included (the raw material for relational/multi-hop eval, T10),
 reproducible, and the manifest records the criteria and coverage stats.
 """
 
-from rag_wright.corpus.selection import (
+from rag_wright.packs.contracts.corpus.selection import (
     ContractMeta,
     SelectionCriteria,
     select_subset,

@@ -38,9 +38,9 @@ Two standing principles shape everything:
 
 | file | role |
 |---|---|
-| `ontology/contract_bridge.ttl` | contract clause KG: classes, dimensions, closed value sets, SHACL shapes, field "look-for" definitions (FOLIO + ODRL + PROV-O bridge) |
-| `ontology/compliance_bridge.ttl` | compliance/requirements schema (deontic types, actors, scope) |
-| `ontology/packs/ftc_16cfr255.ttl` | a **domain pack** — FTC 16 CFR 255 (endorsement) requirements. New customer domains are new `.ttl` packs, not engine edits |
+| `packs/contracts/ontology/contract_bridge.ttl` | contract clause KG: classes, dimensions, closed value sets, SHACL shapes, field "look-for" definitions (FOLIO + ODRL + PROV-O bridge) |
+| `packs/compliance/ontology/compliance_bridge.ttl` | compliance/requirements schema (deontic types, actors, scope) |
+| `packs/compliance/ontology/packs/ftc_16cfr255.ttl` | a **domain pack** — FTC 16 CFR 255 (endorsement) requirements. New customer domains are new `.ttl` packs, not engine edits |
 
 The ttl is generated into Python (`scripts/generate_contract_python.py` → `_generated_vocab.py`,
 `_generated_template_meta.py`) with CI enforcing zero drift (ADR-0066 Rule 2). The extraction template's field
@@ -84,7 +84,7 @@ flowchart TD
   `AMBIGUOUS` (kept, down-weighted); the symbolic gate flags intra-clause contradictions (function-independent).
 
 ### Compliance ingestion
-`subgraphs/compliance_ingestion.py` + `requirement_extraction.py` ingest a regulation/policy into typed
+`packs/compliance/subgraphs/compliance_ingestion.py` + `requirement_extraction.py` ingest a regulation/policy into typed
 **requirements** (deontic type / actor / scope), guided by the compliance ontology + pack. Same parse→segment
 front-end; the output is the requirement side the compliance check scores against.
 
@@ -141,10 +141,10 @@ flowchart TD
 
 | capability | subgraph | what it does |
 |---|---|---|
-| `intra_document_qa` | `subgraphs/intra_document_qa.py` | scoped retrieval within one contract → answer generation with citations |
-| `typed_property_retrieval` | `subgraphs/typed_property_retrieval.py` | whole-index BGE pool + property boost + rerank (function is a soft boost, not a filter — ADR-0047) |
-| `relational_qa` | `subgraphs/relational_qa.py` | builds the answer from graph structure (parties/edges) |
-| `compliance_check` | `subgraphs/compliance_check.py` | extract the subject's claims → match against typed requirements (deontic-aware) → cited verdict |
+| `intra_document_qa` | `packs/contracts/subgraphs/intra_document_qa.py` | scoped retrieval within one contract → answer generation with citations |
+| `typed_property_retrieval` | `packs/contracts/subgraphs/typed_property_retrieval.py` | whole-index BGE pool + property boost + rerank (function is a soft boost, not a filter — ADR-0047) |
+| `relational_qa` | `packs/contracts/subgraphs/relational_qa.py` | builds the answer from graph structure (parties/edges) |
+| `compliance_check` | `packs/compliance/subgraphs/compliance_check.py` | extract the subject's claims → match against typed requirements (deontic-aware) → cited verdict |
 
 ---
 

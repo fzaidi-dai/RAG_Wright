@@ -9,8 +9,8 @@ import json
 from pathlib import Path
 
 from rag_wright.contracts.identifiers import canonical_source_doc_id
-from rag_wright.corpus.cuad_ingestion import CuadAdapter
-from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
+from rag_wright.packs.contracts.corpus.cuad_ingestion import CuadAdapter
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import SourceDocument
 
 
 def _cuad_file(tmp_path: Path) -> Path:

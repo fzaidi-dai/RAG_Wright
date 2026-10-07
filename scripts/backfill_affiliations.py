@@ -35,10 +35,10 @@ def log(msg: str) -> None:
 async def _run(cache_dir: str, database: str, vset_path: str | None) -> None:
     from docling_core.types.doc.document import DoclingDocument
 
-    from rag_wright.capabilities.dg_extraction import build_verified_registry
+    from rag_wright.packs.contracts.capabilities.dg_extraction import build_verified_registry
     from rag_wright.capabilities.disambiguation import disambiguate
     from rag_wright.capabilities.entity_resolution import resolve_entities
-    from rag_wright.capabilities.graph_extraction import aextract_affiliations, affiliations_to_extraction
+    from rag_wright.packs.contracts.capabilities.graph_extraction import aextract_affiliations, affiliations_to_extraction
     from rag_wright.capabilities.graph_storage import to_graph
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.ontology.registry import EntityRegistry

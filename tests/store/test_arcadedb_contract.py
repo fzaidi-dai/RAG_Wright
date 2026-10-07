@@ -6,9 +6,9 @@ import json
 
 import pytest
 
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
-from rag_wright.contracts.contract_meta import ContractRecord
+from rag_wright.packs.contracts.schemas.contract_meta import ContractRecord
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.arcadedb import ArcadeDBStore
 

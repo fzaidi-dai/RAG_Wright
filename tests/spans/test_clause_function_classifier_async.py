@@ -5,7 +5,7 @@ sub-batches via asyncio.gather.
 from __future__ import annotations
 
 from rag_wright.models.seam import ModelCallTimeout
-from rag_wright.spans.clause_function_classifier import (
+from rag_wright.packs.contracts.spans.clause_function_classifier import (
     BatchSpanClassification,
     LlmBatchClauseClassifier,
     RawScore,

@@ -12,9 +12,9 @@ import pytest
 from pydantic import ValidationError
 
 from rag_wright.contracts.identifiers import ChunkId, EntityId
-from rag_wright.contracts.ontology import ClauseCategory, ClauseFact, EntityNode, RelationshipFact
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory, ClauseFact, EntityNode, RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.ontology import contract_taxonomy as T
+from rag_wright.packs.contracts.ontology import contract_taxonomy as T
 
 
 def _prov(source="doc-1"):
@@ -51,7 +51,7 @@ def test_clause_category_includes_known_cuad_categories():
 
 
 def test_engine_contracts_no_longer_export_the_hardcoded_taxonomy_enums():
-    import rag_wright.contracts.ontology as onto
+    import rag_wright.packs.contracts.schemas.ontology as onto
     assert not hasattr(onto, "EntityType") and not hasattr(onto, "RelationshipType")
 
 

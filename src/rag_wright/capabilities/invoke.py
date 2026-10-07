@@ -7,7 +7,7 @@ developer registering a capability with an `impl_ref` makes it invocable with ze
 metadata-only (ADR-0003): the registry holds a string pointer, never a callable; this module does the import.
 
 Lives at the capabilities layer so BOTH the engine API invoker (`api/invoke.py`) and the ingestion pipeline's model
-dispatch (`spans/model_capabilities.py`) resolve the same way."""
+dispatch (`packs/contracts/spans/model_capabilities.py`) resolve the same way."""
 from __future__ import annotations
 
 from importlib import import_module

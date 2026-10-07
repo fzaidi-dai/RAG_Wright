@@ -3,13 +3,13 @@ docling-graph extraction act is injected (aextract_fn), so no LLM/model call."""
 
 from __future__ import annotations
 
-from rag_wright.capabilities.assertion_extraction import (
+from rag_wright.packs.compliance.capabilities.assertion_extraction import (
     ExtractedAssertion,
     ExtractedAssertions,
     aassertion_extraction,
     to_facts,
 )
-from rag_wright.contracts.compliance import Claim
+from rag_wright.packs.compliance.schemas.compliance import Claim
 
 
 def test_to_facts_adapts_verbatim_assertions_and_skips_blank():
@@ -29,7 +29,7 @@ def test_to_facts_adapts_verbatim_assertions_and_skips_blank():
 def test_to_facts_carries_actor_as_a_scope_constraint():
     # DEON-5: an extracted actor rides as a dimension-agnostic Constraint("actor", ...) on the fact's scope;
     # no actor -> empty scope. CheckableFact stays dimension-agnostic (no typed actor field).
-    from rag_wright.contracts.compliance import Constraint
+    from rag_wright.packs.compliance.schemas.compliance import Constraint
 
     ex = ExtractedAssertions(subject="s", assertions=[
         ExtractedAssertion(assertion_text="Dr. Miller endorses the product warmly.", actor="Endorser"),
@@ -41,7 +41,7 @@ def test_to_facts_carries_actor_as_a_scope_constraint():
 
 
 def test_checkable_fact_scope_defaults_empty():
-    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
 
     assert CheckableFact(fact_id="f", source_doc="d", assertion_text="x").scope == []
 

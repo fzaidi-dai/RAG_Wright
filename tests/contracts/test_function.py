@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from rag_wright.contracts.function import (
+from rag_wright.packs.contracts.schemas.function import (
     FUNCTION_LABEL_SET,
     FUNCTION_LABELS,
     ExtendedFunction,
@@ -15,7 +15,7 @@ from rag_wright.contracts.function import (
     canonical_function,
     primary_function,
 )
-from rag_wright.contracts.ontology import ClauseCategory
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory
 
 
 def test_function_labels_are_cuad_41_plus_3_extensions_plus_8_taxonomy_gaps():

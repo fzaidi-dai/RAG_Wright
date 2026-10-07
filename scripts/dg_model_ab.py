@@ -21,9 +21,9 @@ from dotenv import load_dotenv
 
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")
 
-from rag_wright.capabilities.dg_extraction import extract_parties, ollama_model, openrouter_model
+from rag_wright.packs.contracts.capabilities.dg_extraction import extract_parties, ollama_model, openrouter_model
 from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.spans.cuad_labels import parse_cuad
+from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
 
 CUAD = Path("data/cuad/extracted/CUAD_v1.json")
 N = int(os.environ.get("N", "12"))

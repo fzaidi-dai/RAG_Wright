@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import PropertyDimension
+from rag_wright.packs.contracts.schemas.property import PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.spans.property_extractor import (
+from rag_wright.packs.contracts.spans.property_extractor import (
     ExtractedProperty,
     PropertyExtraction,
     SeamPropertyExtractor,
@@ -96,7 +96,7 @@ def test_property_less_record_carries_span_id():
     operative-span anchor (`span_id`, ADR-0025), so Leg A (`intra_document_qa`) can rehydrate its text and cite it.
     Before the fix, `HybridPropertyExtractor._record` dropped the record-level span_id -> a property-less clause had
     no citable text -> `rehydrate_clause_texts` omitted it -> the serve step returned no clauses -> abstain."""
-    from rag_wright.spans.property_extractor import HybridPropertyExtractor
+    from rag_wright.packs.contracts.spans.property_extractor import HybridPropertyExtractor
 
     class _NoResidual:  # the residual LLM lane returns nothing -> no assertions at all
         def invoke(self, _prompt):

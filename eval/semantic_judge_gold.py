@@ -34,9 +34,9 @@ async def run(judge: str, concurrency: int) -> None:
 
     load_dotenv(ROOT / ".env")
     from rag_wright.api import ainvoke_model, load_reference_pack
-    from rag_wright.contracts.property import PropertyDimension
+    from rag_wright.packs.contracts.schemas.property import PropertyDimension
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.spans.semantic_judge import build_asemantic_judge_fn, judge_request
+    from rag_wright.packs.contracts.spans.semantic_judge import build_asemantic_judge_fn, judge_request
 
     load_reference_pack()
     items = json.loads((DATA / "cases.json").read_text())

@@ -6,9 +6,9 @@ import pytest
 from pydantic import ValidationError
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
-from rag_wright.contracts.contract_meta import ContractRecord
-from rag_wright.contracts.highlight import HighlightResult, HighlightSpan
-from rag_wright.contracts.query_intent import QueryIntent
+from rag_wright.packs.contracts.schemas.contract_meta import ContractRecord
+from rag_wright.packs.contracts.schemas.highlight import HighlightResult, HighlightSpan
+from rag_wright.packs.contracts.schemas.query_intent import QueryIntent
 from rag_wright.contracts.span import SpanRecord
 
 

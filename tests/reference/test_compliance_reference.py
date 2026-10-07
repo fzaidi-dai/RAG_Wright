@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-import rag_wright.reference.compliance as ref
+import rag_wright.packs.compliance.invokers as ref
 from rag_wright.capabilities.invoke import capability_impl
-from rag_wright.subgraphs import compliance_check as cc
-from rag_wright.subgraphs import compliance_ingestion as ci
+from rag_wright.packs.compliance.subgraphs import compliance_check as cc
+from rag_wright.packs.compliance.subgraphs import compliance_ingestion as ci
 
 
 # --- hermetic: the caps resolve + the factories dispatch + the wrappers invoke by name ----------
@@ -127,8 +127,8 @@ def _sections_file(tmp_path: Path) -> Path:
 @pytest.mark.model
 async def test_compliance_reference_leg_end_to_end_live(tmp_path):
     from rag_wright.api import open_workspace
-    from rag_wright.capabilities.compliance_store import ComplianceStore
-    from rag_wright.contracts.compliance import ComplianceReport
+    from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
 
     ws = open_workspace(_cfg(), corpus="ragwright_ref_compliance_live", reset=True)
     source = "DEMO POLICY"

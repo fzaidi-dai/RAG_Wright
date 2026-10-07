@@ -48,9 +48,9 @@ async def _main() -> None:
 
     # 1. spawn the three query-leg MCP servers over stdio (demo fns -> no infra in the TOOLS)
     client = MultiServerMCPClient({
-        "intra_document_qa": _server("rag_wright.mcp.intra_document_qa_server"),
-        "relational_qa": _server("rag_wright.mcp.relational_qa_server"),
-        "typed_property_retrieval": _server("rag_wright.mcp.typed_property_retrieval_server"),
+        "intra_document_qa": _server("rag_wright.packs.contracts.mcp.intra_document_qa_server"),
+        "relational_qa": _server("rag_wright.packs.contracts.mcp.relational_qa_server"),
+        "typed_property_retrieval": _server("rag_wright.packs.contracts.mcp.typed_property_retrieval_server"),
     })
     tools = await client.get_tools()
     print(f"[agent-demo] MCP tools discovered: {[t.name for t in tools]}", flush=True)

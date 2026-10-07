@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
-from rag_wright.capabilities.contract_kg_serve import (
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_serve import (
     aggregate_by_property,
     clauses_of_function,
     contract_clause_index,
@@ -17,7 +17,7 @@ from rag_wright.capabilities.contract_kg_serve import (
     grounded_only,
 )
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 
 _CID = "ACME_2020_MSA"

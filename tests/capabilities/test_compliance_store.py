@@ -9,8 +9,8 @@ import json
 
 import pytest
 
-from rag_wright.capabilities.compliance_store import ComplianceStore
-from rag_wright.contracts.compliance import DeonticType, Requirement
+from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
+from rag_wright.packs.compliance.schemas.compliance import DeonticType, Requirement
 
 
 # --- pure helpers (no store) --------------------------------------------------------------------

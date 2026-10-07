@@ -37,12 +37,12 @@ def main() -> None:
     load_dotenv()
     from langchain_openai import ChatOpenAI
 
-    from rag_wright.capabilities.dg_extraction import ExtractionModel, extract_clause
+    from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionModel, extract_clause
     from rag_wright.contracts.identifiers import ChunkId
-    from rag_wright.contracts.property import CLOSED_VOCAB
+    from rag_wright.packs.contracts.schemas.property import CLOSED_VOCAB
     from rag_wright.contracts.provenance import ConfidenceTag
-    from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
-    from rag_wright.spans.semantic_judge import (
+    from rag_wright.packs.contracts.spans.clause_kg_extractor import DGClausePropertyExtractor
+    from rag_wright.packs.contracts.spans.semantic_judge import (
         SEMANTIC_DIMENSIONS,
         build_semantic_judge_fn,
         semantic_judge,

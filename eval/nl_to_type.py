@@ -30,8 +30,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from rag_wright.capabilities.query_understanding import understand_query
-from rag_wright.contracts.function import FUNCTION_LABELS
+from rag_wright.packs.contracts.capabilities.query_understanding import understand_query
+from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
 

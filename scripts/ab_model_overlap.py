@@ -12,7 +12,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from rag_wright.contracts.function import canonical_function
+from rag_wright.packs.contracts.schemas.function import canonical_function
 from scripts.train_legalbert_function import build_holdout_spans
 
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")

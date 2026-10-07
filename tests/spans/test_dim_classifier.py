@@ -3,8 +3,8 @@ model downloads); the real-model fidelity check (SetFit + laya loaders on real c
 
 from __future__ import annotations
 
-from rag_wright.contracts.property import PropertyDimension as D
-from rag_wright.spans.dim_classifier import DimClassifier, DimClassifierRegistry, auto_device
+from rag_wright.packs.contracts.schemas.property import PropertyDimension as D
+from rag_wright.packs.contracts.spans.dim_classifier import DimClassifier, DimClassifierRegistry, auto_device
 
 
 class _StubDim:

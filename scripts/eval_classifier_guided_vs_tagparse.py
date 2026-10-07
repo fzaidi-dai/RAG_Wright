@@ -90,10 +90,10 @@ async def main() -> None:
 
     from dotenv import load_dotenv
     load_dotenv()
-    from rag_wright.contracts.function import FUNCTION_LABELS
+    from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.models.seam import build_structured
-    from rag_wright.spans.clause_function_classifier import (
+    from rag_wright.packs.contracts.spans.clause_function_classifier import (
         _CLAUSE_TAG_INSTRUCTIONS,
         _PROMPT,
         ClauseFunctionClassification,

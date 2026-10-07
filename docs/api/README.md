@@ -222,7 +222,7 @@ Register the engine's reference pack into the runtime catalog -- the opt-in work
 
 ### `reference_pack() -> 'tuple[CapabilityManifest, ...]'`
 
-The engine's committed REFERENCE PACK: the engine capabilities it uses + the contract/compliance worked example's manifests (`rag_wright.reference.pack`). Opt-in.
+The engine's committed REFERENCE PACK: the engine capabilities it uses + the contract/compliance worked example's manifests (`rag_wright.packs.contracts.pack` + `rag_wright.packs.compliance.pack`). Opt-in.
 
 ### `check_tiling(chunk_id: 'str', text: 'str', spans: 'Sequence[Span]') -> 'None'`
 

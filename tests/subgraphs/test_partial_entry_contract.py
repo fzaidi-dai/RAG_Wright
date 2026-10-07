@@ -16,7 +16,7 @@ from __future__ import annotations
 import inspect
 
 # the stable, public import path -- do not move without a versioned decision (integrators import from here)
-from rag_wright.subgraphs.contract_ingestion_pipeline import build_partial_entry
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import build_partial_entry
 
 
 def test_signature_is_stable():

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rag_wright.contracts.function_routing import build_cooccurrence, route_functions
+from rag_wright.packs.contracts.schemas.function_routing import build_cooccurrence, route_functions
 
 
 def test_cooccurrence_counts_once_per_clause_dimension_function():

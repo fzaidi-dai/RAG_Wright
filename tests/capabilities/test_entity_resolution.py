@@ -19,7 +19,7 @@ from rag_wright.capabilities.entity_resolution import (
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId, EntityId
-from rag_wright.contracts.ontology import RelationshipFact
+from rag_wright.packs.contracts.schemas.ontology import RelationshipFact
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 from rag_wright.ontology.registry import EntityRegistry, EntityResolver, RegistryRecord
 
@@ -168,7 +168,7 @@ def test_resolve_entities_uses_any_injected_resolver_not_just_the_registry():
 
 def test_sec_corpus_resolves_via_the_injected_cik_resolver():
     # acceptance: the SEC pack's EDGAR-CIK resolver (build_edgar_registry) is injected unchanged
-    from rag_wright.corpus.edgar import build_edgar_registry
+    from rag_wright.packs.contracts.corpus.edgar import build_edgar_registry
 
     sec = build_edgar_registry([{"cik_str": 320193, "title": "Apple Inc.", "ticker": "AAPL"}])
     clusters = _disambig(_cluster("apple inc", "Apple Inc."))

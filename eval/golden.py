@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 
-from rag_wright.contracts.ontology import ClauseCategory as C
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory as C
 
 from eval.harness import Archetype, GoldenQuestion
 

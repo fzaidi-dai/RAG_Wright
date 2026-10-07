@@ -91,8 +91,8 @@ def _score(texts, layouts, max_chars: int) -> dict:
 
 def _reference_units(texts) -> int:
     from rag_wright.api import TaggedSpan
-    from rag_wright.spans.segment import segment_clause
-    from rag_wright.subgraphs.contract_ingestion_pipeline import provision_units
+    from rag_wright.packs.contracts.spans.segment import segment_clause
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import provision_units
 
     ops = [op for k, c in enumerate(texts) for op in segment_clause(f"eval:{k}:h", c) if op.text.strip()]
     return len(asyncio.run(provision_units([TaggedSpan(span=op) for op in ops])))

@@ -10,7 +10,7 @@ from fastmcp import Client
 
 from rag_wright.capabilities.answer_generator import GeneratedAnswer
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.mcp.relational_qa_server import (
+from rag_wright.packs.contracts.mcp.relational_qa_server import (
     build_relational_qa_mcp,
     demo_qa_fn,
     register_relational_qa_mcp,

@@ -43,7 +43,7 @@ def test_a_configured_pack_adds_only_its_own_types():
 
 
 def test_the_reference_contract_schema_is_created_on_request():
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
     store, cmds = _recording()
     ContractKGStore(store)  # the reference pack ensures its declared schema + its own typed property edges
@@ -60,7 +60,7 @@ def test_known_document_ids_are_the_ingested_document_nodes():
 
 
 def test_the_reference_pack_ensures_its_own_schema_once_per_store():
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
     store, cmds = _recording()
     ContractKGStore(store)
@@ -71,7 +71,7 @@ def test_the_reference_pack_ensures_its_own_schema_once_per_store():
 
 
 def test_property_encoding_follows_the_packs_the_store_has():
-    from rag_wright.ontology.loader import reference_pack_ttl
+    from rag_wright.packs.contracts.ontology.loader import reference_pack_ttl
 
     store, _ = _recording()
     assert store._property_types("Clause") == {}  # neutral: no contract types to encode by

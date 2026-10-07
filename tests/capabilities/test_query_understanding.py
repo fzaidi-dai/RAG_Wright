@@ -7,8 +7,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from rag_wright.capabilities.query_understanding import _RawIntent, understand_query
-from rag_wright.contracts.function import canonical_function
+from rag_wright.packs.contracts.capabilities.query_understanding import _RawIntent, understand_query
+from rag_wright.packs.contracts.schemas.function import canonical_function
 
 
 def _reason_factory():

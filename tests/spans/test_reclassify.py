@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from rag_wright.contracts.function import NO_FUNCTION, FunctionConfidence, FunctionScore
-from rag_wright.spans.reclassify import ReclassDelta, reclassify_chunk
+from rag_wright.packs.contracts.schemas.function import NO_FUNCTION, FunctionConfidence, FunctionScore
+from rag_wright.packs.contracts.spans.reclassify import ReclassDelta, reclassify_chunk
 
 
 def _fs(f, c=FunctionConfidence.HIGH):

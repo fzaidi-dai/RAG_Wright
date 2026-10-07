@@ -2,8 +2,8 @@
 
 import pytest
 
-from rag_wright.corpus import cuad
-from rag_wright.corpus.cuad import is_scanned_by_chars, party_entities
+from rag_wright.packs.contracts.corpus import cuad
+from rag_wright.packs.contracts.corpus.cuad import is_scanned_by_chars, party_entities
 
 
 def test_party_entities_keeps_companies_and_drops_role_labels():

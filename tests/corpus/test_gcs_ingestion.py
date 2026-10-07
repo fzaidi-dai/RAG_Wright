@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.corpus.gcs_ingestion import GcsCorpusAdapter
-from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
+from rag_wright.packs.contracts.corpus.gcs_ingestion import GcsCorpusAdapter
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import SourceDocument
 
 
 class _FakeBlob:
@@ -79,7 +79,7 @@ def test_non_text_blob_defers_to_a_pending_document_via_parse_doc():
     # incl. OCR/VLM escalation -- is DEFERRED so the async ingest runs it concurrently + bounded, not upfront).
     # Its `parse` thunk routes through parse_doc (structure-preserving `.parsed`); the gcs metadata rides along.
     from rag_wright.capabilities.parsing import ParsedDocument
-    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import PendingDocument
 
     seen = {}
 
@@ -99,7 +99,7 @@ def test_non_text_blob_defers_to_a_pending_document_via_parse_doc():
 
 def test_parse_doc_is_preferred_over_parse_bytes_when_both_set():
     from rag_wright.capabilities.parsing import ParsedDocument
-    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import PendingDocument
 
     def parse_doc(sid, name, data):
         return SourceDocument(source_doc_id=sid, text="structured",

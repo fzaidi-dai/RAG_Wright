@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rag_wright.capabilities.query_function_classifier import (
+from rag_wright.packs.contracts.capabilities.query_function_classifier import (
     _FunctionChoice,
     classify_query_functions,
 )

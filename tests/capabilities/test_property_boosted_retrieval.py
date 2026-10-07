@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from rag_wright.contracts.value_match import constraint_match_count  # injected matcher (EP-CORE-1b)
-from rag_wright.capabilities.property_boosted_retrieval import RankedSpan, property_boosted_retrieval
+from rag_wright.packs.contracts.schemas.value_match import constraint_match_count  # injected matcher (EP-CORE-1b)
+from rag_wright.packs.contracts.capabilities.property_boosted_retrieval import RankedSpan, property_boosted_retrieval
 
 
 class _FakeStore:

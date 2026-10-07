@@ -62,7 +62,7 @@ Two things matter for a new domain:
   judgment) are listed by `engine_capabilities()`; a pack adds its own slugs with `register_canonical_slugs(...)`
   (the current set is `canonical_capability_slugs()`). A capability pack is a module that exposes `register()`, and
   `load_pack("<module>")` imports it and calls `register()`; `load_reference_pack()` is just
-  `load_pack("rag_wright.reference.pack")`. These helpers live in `rag_wright.capabilities.manifests` and
+  `load_pack("rag_wright.packs.compliance.pack")` (the compliance pack registers the contracts pack it builds on first). These helpers live in `rag_wright.capabilities.manifests` and
   `rag_wright.capabilities.registry` and are not yet exported from `rag_wright.api` (an engine gap).
 
 Discovery is `capability_index()` (the flat `slug → kind + description` listing) or `discover(task, resources=ws)`

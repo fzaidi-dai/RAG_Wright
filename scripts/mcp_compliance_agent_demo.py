@@ -6,7 +6,7 @@ instead of embedding the compliance_check subgraph and shuttling its intermediat
 coordination saving.
 
 Wiring (all grounded against the installed libs + the cloned FastMCP AST graph):
-  - the MCP server (`rag_wright.mcp.compliance_server`) is spawned over stdio by langchain-mcp-adapters'
+  - the MCP server (`rag_wright.packs.compliance.mcp.compliance_server`) is spawned over stdio by langchain-mcp-adapters'
     MultiServerMCPClient (RAG_MCP_DEMO=1 -> the no-infra demo checker, so the TOOL needs no ArcadeDB/LLM);
   - `client.get_tools()` adapts the MCP tool into a LangChain tool;
   - `create_deep_agent(model, tools=[...])` (deepagents) gets it as a tool; the agent's driving model is the
@@ -42,7 +42,7 @@ async def _main() -> None:
         "compliance": {
             "transport": "stdio",
             "command": sys.executable,
-            "args": ["-m", "rag_wright.mcp.compliance_server"],
+            "args": ["-m", "rag_wright.packs.compliance.mcp.compliance_server"],
             "env": server_env,
         }
     })

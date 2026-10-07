@@ -58,9 +58,9 @@ def _pick_contract(store, function: str) -> str | None:
 
 def _build_evidence(store, contract_id: str, function: str):
     """Fixed evidence for one query: target-function clauses + their ADR-0044 carve-outs, rehydrated."""
-    from rag_wright.capabilities.contract_kg_serve import clauses_of_function
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
-    from rag_wright.subgraphs.intra_document_qa import (
+    from rag_wright.packs.contracts.capabilities.contract_kg_serve import clauses_of_function
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import (
         _clause_to_evidence,
         attach_exception_links,
         rehydrate_clause_texts,

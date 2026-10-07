@@ -12,8 +12,8 @@ from __future__ import annotations
 from langgraph.types import RetryPolicy
 
 from rag_wright.capabilities.answer_generator import GeneratedAnswer
-from rag_wright.capabilities.contract_kg_serve import CitedClause, CitedProperty
-from rag_wright.subgraphs.intra_document_qa import build_intra_document_qa
+from rag_wright.packs.contracts.capabilities.contract_kg_serve import CitedClause, CitedProperty
+from rag_wright.packs.contracts.subgraphs.intra_document_qa import build_intra_document_qa
 
 _FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)
 
@@ -150,7 +150,7 @@ async def test_transient_serve_retries_then_degrades_to_empty_and_abstains():
 
 def test_registers_as_a_subgraph():
     from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.subgraphs.intra_document_qa import register_intra_document_qa
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import register_intra_document_qa
 
     reg = CapabilityRegistry()
     register_intra_document_qa(reg)
@@ -172,7 +172,7 @@ class _FakeSpanStore:
 
 
 def test_property_less_clause_rehydrates_from_its_own_span_id_not_a_bare_label():
-    from rag_wright.subgraphs.intra_document_qa import rehydrate_clause_texts
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import rehydrate_clause_texts
 
     spans = [{"span_id": "S#3", "text": "Liability is uncapped for IP indemnity.", "function": "Uncapped Liability"}]
     clause = CitedClause(contract_id="C", clause_id="C:3:h", function="Uncapped Liability",
@@ -182,7 +182,7 @@ def test_property_less_clause_rehydrates_from_its_own_span_id_not_a_bare_label()
 
 
 def test_property_bearing_clause_uses_its_property_span_ids_over_the_clause_span_id():
-    from rag_wright.subgraphs.intra_document_qa import rehydrate_clause_texts
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import rehydrate_clause_texts
 
     spans = [{"span_id": "S#1", "text": "Cap at the fees paid.", "function": "Cap On Liability"}]
     clause = CitedClause(
@@ -193,7 +193,7 @@ def test_property_bearing_clause_uses_its_property_span_ids_over_the_clause_span
 
 
 def test_legacy_clause_with_no_span_link_is_omitted_and_falls_back_to_the_label():
-    from rag_wright.subgraphs.intra_document_qa import rehydrate_clause_texts
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import rehydrate_clause_texts
 
     clause = CitedClause(contract_id="C", clause_id="C:2:h", function="Governing Law", span_id="", properties=[])
     texts = rehydrate_clause_texts(_FakeSpanStore([]), "C", [clause])
@@ -204,7 +204,7 @@ def test_legacy_clause_with_no_span_link_is_omitted_and_falls_back_to_the_label(
 
 
 def test_attach_exception_links_pulls_a_caps_carveouts_as_inferred_exceptions():
-    from rag_wright.subgraphs.intra_document_qa import attach_exception_links
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import attach_exception_links
 
     cap = CitedClause(contract_id="C", clause_id="C:5:h", function="Cap On Liability", span_id="s5")
     seen = {}
@@ -220,7 +220,7 @@ def test_attach_exception_links_pulls_a_caps_carveouts_as_inferred_exceptions():
 
 
 def test_attach_marks_an_already_served_uncapped_clause_and_does_not_duplicate():
-    from rag_wright.subgraphs.intra_document_qa import attach_exception_links
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import attach_exception_links
 
     cap = CitedClause(contract_id="C", clause_id="C:5:h", function="Cap On Liability", span_id="s5")
     unc = CitedClause(contract_id="C", clause_id="C:6:h", function="Uncapped Liability", span_id="s6")
@@ -235,7 +235,7 @@ def test_clause_evidence_is_span_text_without_the_function_label():
     # engine issue 0002 / ADR-0054: the KG function label is generation-only and is NOT placed in the evidence
     # text (it was the source of the auto-tag paraphrase leak; the SKILL judges by actual text, not the label).
     # Evidence is the clause's real span text -- no "[auto-tag: ...]" prefix and no asserted "Function: ..." one.
-    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import _clause_to_evidence
 
     c = CitedClause(contract_id="C", clause_id="C:7:h", function="Cap On Liability", span_id="s7")
     ev = _clause_to_evidence(c, "the Company shall not be liable for acts of God")
@@ -249,7 +249,7 @@ def test_clause_evidence_properties_are_out_of_band_not_in_the_text():
     # syntax the model paraphrased into prose). The span text is the whole text; the structured facts ride
     # out-of-band on EvidenceItem.properties (code-generated {dimension, value}), so narration is structurally
     # impossible -- the generator never sees "cap_quantum" or "=".
-    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import _clause_to_evidence
 
     c = CitedClause(contract_id="C", clause_id="C:7:h", function="Cap On Liability", span_id="s7",
                     properties=[CitedProperty(dimension="cap_quantum", value="12_months", edge_type="HAS",
@@ -264,7 +264,7 @@ def test_clause_evidence_properties_are_out_of_band_not_in_the_text():
 def test_clause_evidence_facts_only_is_humanized_and_out_of_band():
     # facts-only path (no span text): the facts are the only content, so they must stay citable -- but as
     # reader-safe natural text (no [dim=value] syntax), with the structured form still out-of-band (issue 0011).
-    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import _clause_to_evidence
 
     c = CitedClause(contract_id="C", clause_id="C:8:h", function="Cap On Liability", span_id="s8",
                     properties=[CitedProperty(dimension="cap_quantum", value="$500,000", edge_type="HAS",
@@ -278,14 +278,14 @@ def test_clause_evidence_facts_only_is_humanized_and_out_of_band():
 
 def test_clause_evidence_contentless_returns_none():
     # no span text and no facts -> nothing citable -> dropped (returns None).
-    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import _clause_to_evidence
 
     c = CitedClause(contract_id="C", clause_id="C:9:h", function="Governing Law", span_id="s9")
     assert _clause_to_evidence(c, None) is None
 
 
 def test_exception_clause_evidence_is_framed_and_tagged_inferred():
-    from rag_wright.subgraphs.intra_document_qa import _clause_to_evidence
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import _clause_to_evidence
 
     exc = CitedClause(contract_id="C", clause_id="C:6:h", function="Uncapped Liability",
                       span_id="s6", exception_of="C:5:h")
@@ -300,7 +300,7 @@ def test_exception_clause_evidence_is_framed_and_tagged_inferred():
 def test_production_defaults_answer_model_via_answer_model_for(monkeypatch):
     """production_intra_document_qa with no injected answer_model builds it through answer_model_for, so a
     client_side_structured model (self-hosted Gemma) automatically gets the free-text tag-parse path."""
-    from rag_wright.subgraphs import intra_document_qa as idq
+    from rag_wright.packs.contracts.subgraphs import intra_document_qa as idq
 
     seen = {}
 
@@ -319,9 +319,9 @@ async def test_production_serves_whole_contract_not_function_narrowed(monkeypatc
     """ADR-0047: production `serve` uses `contract_clause_index` (the WHOLE contract) and never the
     `clauses_of_function` narrowing / the query function classifier -- a mislabel can't hide the real clause."""
     from rag_wright.capabilities import answer_generator as ag
-    from rag_wright.capabilities import contract_kg_serve as cks
+    from rag_wright.packs.contracts.capabilities import contract_kg_serve as cks
     from rag_wright.capabilities.answer_generator import GeneratedAnswer
-    from rag_wright.subgraphs import intra_document_qa as idq
+    from rag_wright.packs.contracts.subgraphs import intra_document_qa as idq
 
     calls = {"whole": 0, "by_function": 0}
 
@@ -359,9 +359,9 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
     and serves only the top-K (bounded evidence) -- mislabel-robust (ranks by meaning) AND avoids dumping the
     whole 100-clause contract into generation."""
     from rag_wright.capabilities import answer_generator as ag
-    from rag_wright.capabilities import contract_kg_serve as cks
+    from rag_wright.packs.contracts.capabilities import contract_kg_serve as cks
     from rag_wright.capabilities.answer_generator import GeneratedAnswer
-    from rag_wright.subgraphs import intra_document_qa as idq
+    from rag_wright.packs.contracts.subgraphs import intra_document_qa as idq
 
     n, k = 20, 5
     clauses = [CitedClause(contract_id="c1", clause_id=f"c1:{i}:h", function="F",

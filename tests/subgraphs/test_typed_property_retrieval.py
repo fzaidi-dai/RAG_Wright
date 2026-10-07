@@ -8,9 +8,9 @@ from __future__ import annotations
 
 from langgraph.types import RetryPolicy
 
-from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
+from rag_wright.packs.contracts.capabilities.property_boosted_retrieval import RankedSpan
 from rag_wright.capabilities.span_relevance_judgment import RelevanceVerdict
-from rag_wright.subgraphs.typed_property_retrieval import (
+from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import (
     TypedPropertyRetrieval,
     aquery_constraints,
     build_typed_property_retrieval,
@@ -151,7 +151,7 @@ def _tagparse_stub(clause):
 
 
 async def test_aquery_constraints_maps_a_tagparsed_clause_to_dim_value_pairs():
-    from rag_wright.ontology.clause_template import CapBasis, CapConstraint, Clause
+    from rag_wright.packs.contracts.ontology.clause_template import CapBasis, CapConstraint, Clause
 
     clause = Clause(caps=CapConstraint(cap_basis=CapBasis.MULTIPLE_OF_FEES))
     cons = await aquery_constraints("cap at a multiple of fees", "qwen/qwen3.8-27b",
@@ -167,7 +167,7 @@ async def test_aquery_constraints_degrades_to_empty_on_parse_failure():
 
 
 async def test_aquery_constraints_empty_clause_yields_no_constraints():
-    from rag_wright.ontology.clause_template import Clause
+    from rag_wright.packs.contracts.ontology.clause_template import Clause
 
     cons = await aquery_constraints("hello", "qwen/qwen3.8-27b", structured_factory=_tagparse_stub(Clause()))
     assert cons == set()  # a query mentioning no property -> empty (all fields defaulted/absent)
@@ -182,7 +182,7 @@ async def test_invoke_time_documents_threads_to_retrieve():
 
 
 async def test_documents_absent_falls_back_to_the_build_time_default():
-    from rag_wright.subgraphs.typed_property_retrieval import _UNSET_DOCUMENTS
+    from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import _UNSET_DOCUMENTS
 
     seams, _, seen = _seams(constraints=set(), results=[_span("s1")])
     await _run(seams)  # no `documents` key in the invoke state
@@ -199,7 +199,7 @@ async def test_unknown_document_raises_and_is_not_degraded_to_empty():
     import pytest
 
     from rag_wright.capabilities.document_scope import UnknownDocumentError
-    from rag_wright.subgraphs.typed_property_retrieval import build_typed_property_retrieval
+    from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import build_typed_property_retrieval
 
     async def constraints_fn(query):
         return set()
@@ -217,7 +217,7 @@ async def test_production_retrieve_resolves_invoke_over_default_and_validates(mo
     import pytest
 
     from rag_wright.capabilities.document_scope import UnknownDocumentError
-    from rag_wright.subgraphs import typed_property_retrieval as tpr
+    from rag_wright.packs.contracts.subgraphs import typed_property_retrieval as tpr
 
     seen: dict = {}
 
@@ -226,7 +226,7 @@ async def test_production_retrieve_resolves_invoke_over_default_and_validates(mo
             return {"docA", "docB"}  # docC / ghost are unknown
 
     # property_boosted_retrieval is imported INSIDE the function from its source module -> patch there
-    monkeypatch.setattr("rag_wright.capabilities.property_boosted_retrieval.property_boosted_retrieval",
+    monkeypatch.setattr("rag_wright.packs.contracts.capabilities.property_boosted_retrieval.property_boosted_retrieval",
                         lambda *a, **k: seen.update(documents=k.get("documents")) or [])
 
     async def _no_constraints(query, model_id):

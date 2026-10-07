@@ -6,7 +6,7 @@ the draft recipe that **SKILL-corpus-ingest** will formalize into a `SKILL.md`.
 The design that makes this cheap: a single **contract ingestion pipeline** (LG-3d, `contract_ingestion_pipeline`,
 built on the engine's shared ingestion stages) plus a thin per-corpus **`CorpusAdapter`**. Adding a corpus is one adapter — never a re-implemented
 `ingest_xyz()`. See ADR-0033 (unified KG), HYG-1 (canonical identity), ADR-0037 (the clause template is
-authoritative code), and `src/rag_wright/subgraphs/contract_ingestion_pipeline.py`.
+authoritative code), and `src/rag_wright/packs/contracts/subgraphs/contract_ingestion_pipeline.py`.
 
 ## A new *contract* corpus (the common case) — 3 steps
 
@@ -19,7 +19,7 @@ Implement `documents() -> Iterable[SourceDocument]`. It owns everything corpus-s
   clauses, spans, entities, and contracts share one id scheme and auto-connect;
 - optionally attach corpus metadata on `SourceDocument.metadata` (e.g. annotated parties, pre-segmented spans).
 
-`CuadAdapter` (in `corpus/cuad_ingestion.py`, with its driver `arun_cuad_ingestion`) is the reference
+`CuadAdapter` (in `packs/contracts/corpus/cuad_ingestion.py`, with its driver `arun_cuad_ingestion`) is the reference
 implementation.
 
 ### 2. Point the entity registry at the corpus's parties

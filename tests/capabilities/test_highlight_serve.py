@@ -4,8 +4,8 @@ no LLM, no network, no store."""
 
 from __future__ import annotations
 
-from rag_wright.capabilities.highlight_serve import _Extracted, serve_highlight
-from rag_wright.contracts.query_intent import QueryIntent
+from rag_wright.packs.contracts.capabilities.highlight_serve import _Extracted, serve_highlight
+from rag_wright.packs.contracts.schemas.query_intent import QueryIntent
 
 
 def _row(span_id, function, text, doc_start, doc_end, dense=None):

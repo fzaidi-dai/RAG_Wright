@@ -6,14 +6,14 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.capabilities.dg_extraction import default_extraction_model
+from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
 from rag_wright.models import profiles
 from rag_wright.capabilities.rlm_chunking import SingleCallBoundaryDiscoverer
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.ontology.clause_template import Clause, Mutuality
-from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
-from rag_wright.spans.semantic_judge import SemanticVerdict
+from rag_wright.packs.contracts.ontology.clause_template import Clause, Mutuality
+from rag_wright.packs.contracts.spans.clause_kg_extractor import DGClausePropertyExtractor
+from rag_wright.packs.contracts.spans.semantic_judge import SemanticVerdict
 
 _D = "mutuality"
 

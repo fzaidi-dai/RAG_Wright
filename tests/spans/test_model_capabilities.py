@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import asyncio
 
-from rag_wright.spans import model_capabilities as mc
+from rag_wright.packs.contracts.spans import model_capabilities as mc
 
 
 def test_function_classifier_shim_routes_through_the_capability(monkeypatch):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from rag_wright.contracts.value_match import constraint_match_count, satisfied_values, value_satisfies
+from rag_wright.packs.contracts.schemas.value_match import constraint_match_count, satisfied_values, value_satisfies
 
 
 def test_subsumption_specific_satisfies_broader():

@@ -8,7 +8,7 @@ CC-2, which use "auto"). An off-vocab claim_type is kept but marked AMBIGUOUS; a
 
 from __future__ import annotations
 
-from rag_wright.capabilities.claim_extraction import (
+from rag_wright.packs.compliance.capabilities.claim_extraction import (
     ExtractedAd,
     ExtractedClaim,
     claim_extraction,
@@ -17,7 +17,7 @@ from rag_wright.capabilities.claim_extraction import (
     to_claims,
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.compliance import Claim, ClaimType
+from rag_wright.packs.compliance.schemas.compliance import Claim, ClaimType
 from rag_wright.contracts.provenance import ConfidenceTag
 
 
@@ -102,7 +102,7 @@ def test_extraction_none_yields_empty_list():
 
 
 async def test_aclaim_extraction_awaits_the_async_seam_then_adapts():
-    from rag_wright.capabilities.claim_extraction import aclaim_extraction
+    from rag_wright.packs.compliance.capabilities.claim_extraction import aclaim_extraction
 
     captured = {}
 
@@ -118,7 +118,7 @@ async def test_aclaim_extraction_awaits_the_async_seam_then_adapts():
 
 
 async def test_aclaim_extraction_none_yields_empty_list():
-    from rag_wright.capabilities.claim_extraction import aclaim_extraction
+    from rag_wright.packs.compliance.capabilities.claim_extraction import aclaim_extraction
 
     async def _none(*a, **k):
         return None
@@ -144,7 +144,7 @@ def test_skill_folder_has_the_method_and_the_schema_asset():
     # a Skill is a folder: SKILL.md (the method) + the co-located schema asset (template.py)
     from pathlib import Path
 
-    import rag_wright.skills.claim_extraction as skill_pkg
+    import rag_wright.packs.compliance.skills.claim_extraction as skill_pkg
     folder = Path(skill_pkg.__file__).parent
     assert (folder / "SKILL.md").exists() and (folder / "template.py").exists()
     method = (folder / "SKILL.md").read_text(encoding="utf-8")

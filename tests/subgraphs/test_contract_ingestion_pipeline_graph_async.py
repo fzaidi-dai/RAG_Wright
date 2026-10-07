@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from langgraph.types import RetryPolicy
 
-from rag_wright.subgraphs.contract_ingestion_pipeline import (
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
     abuild_document_ingest,
@@ -51,7 +51,7 @@ def _astub_stages(*, fail_chunk_for=frozenset(), fail_graph_for=frozenset(), fai
     async def graph_fn(doc, _chunks):
         calls["graph"].append(doc.source_doc_id)
         if doc.source_doc_id in fail_graph_for:
-            from rag_wright.capabilities.dg_extraction import ExtractionFailed
+            from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionFailed
 
             raise ExtractionFailed("party", "Invalid JSON response: Unterminated string")
         return [f"extraction::{doc.source_doc_id}"]
@@ -212,7 +212,7 @@ async def test_ocr_unreadable_pages_surface_as_an_ocr_partial():
 
 async def test_arun_parses_a_pending_document():
     # 0009-ASYNC-INGEST: the sequential driver parses a deferred (PendingDocument) inside the loop, off-loop.
-    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import PendingDocument
 
     class _PendingAdapter:
         def documents(self):

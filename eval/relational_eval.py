@@ -20,7 +20,7 @@ from typing import Any
 from eval.harness import recall_at_k
 from eval.multihop import RelationalQuestion
 from rag_wright.capabilities.graph_query import graph_query
-from rag_wright.ontology.contract_taxonomy import CONTRACTS_WITH
+from rag_wright.packs.contracts.ontology.contract_taxonomy import CONTRACTS_WITH
 
 _K = 50  # set-valued answers: k covers the full neighbor set (reachability, not ranking)
 

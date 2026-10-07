@@ -44,8 +44,8 @@ def main() -> None:
     load_dotenv()
     from langchain_openai import ChatOpenAI
 
-    from rag_wright.contracts.property import PropertyDimension
-    from rag_wright.spans.semantic_judge import build_semantic_judge_fn
+    from rag_wright.packs.contracts.schemas.property import PropertyDimension
+    from rag_wright.packs.contracts.spans.semantic_judge import build_semantic_judge_fn
 
     vbase = os.environ["VLLM_URL"].rstrip("/") + "/v1"
     vkey = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")

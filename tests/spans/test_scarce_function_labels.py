@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from rag_wright.contracts.function import FUNCTION_LABELS
-from rag_wright.spans.scarce_function_labels import (
+from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS
+from rag_wright.packs.contracts.spans.scarce_function_labels import (
     NONE_LABEL,
     SCARCE_KEYWORDS,
     SeamScarceConfirmer,

@@ -7,7 +7,7 @@ structure is split (enumeration, sentences) while abbreviations and section refe
 
 from __future__ import annotations
 
-from rag_wright.spans.segment import (
+from rag_wright.packs.contracts.spans.segment import (
     DEFAULT_MIN_CHARS,
     OperativeSpan,
     _table_block_ranges,
@@ -229,7 +229,7 @@ def test_tightening_does_not_drop_provisions_that_mention_contact_or_dots():
 
 def test_to_span_record_carries_pages_and_bbox_from_op():
     from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
-    from rag_wright.spans.segment import to_span_record
+    from rag_wright.packs.contracts.spans.segment import to_span_record
 
     op = OperativeSpan(span_id="docA:0:h#0", parent_chunk_id="docA:0:h", parent_okf_path="", span_index=0,
                        start=0, end=12, text="A clause .", pages=[7, 8], bbox=(1.0, 2.0, 3.0, 4.0))
@@ -243,7 +243,7 @@ def test_to_span_record_carries_pages_and_bbox_from_op():
 
 def test_to_span_record_no_pages_leaves_page_none():
     from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
-    from rag_wright.spans.segment import to_span_record
+    from rag_wright.packs.contracts.spans.segment import to_span_record
 
     op = OperativeSpan(span_id="docA:0:h#0", parent_chunk_id="docA:0:h", parent_okf_path="", span_index=0,
                        start=0, end=5, text="clause")
@@ -257,25 +257,25 @@ def test_to_span_record_no_pages_leaves_page_none():
 def test_section_word_prefixed_headings_start_a_provision():
     """The dominant contract heading style is 'Section N'/'Article N'/'Clause N'/'§N' -- not a bare leading digit.
     These collapsed into one provision before (quickstart abstained); they must now start a provision."""
-    from rag_wright.spans.segment import starts_new_provision
+    from rag_wright.packs.contracts.spans.segment import starts_new_provision
     for t in ["Section 8. Limitation of Liability.", "Article 2. Term and Termination.",
               "§ 3. Fees", "Sec. 4. Notices", "Clause 12 Governing Law"]:
         assert starts_new_provision(t), t
 
 
 def test_section_word_without_a_following_number_is_not_a_start():
-    from rag_wright.spans.segment import starts_new_provision
+    from rag_wright.packs.contracts.spans.segment import starts_new_provision
     assert not starts_new_provision("Section hereof shall mean the provisions of this agreement and its exhibits")
 
 
 def test_bare_leading_number_still_starts_a_provision():  # regression
-    from rag_wright.spans.segment import starts_new_provision
+    from rag_wright.packs.contracts.spans.segment import starts_new_provision
     assert starts_new_provision("8. Limitation of Liability shall apply.")
     assert starts_new_provision("2.1. Sub-provision text follows here.")
 
 
 def test_provision_boundary_verdict_is_three_way():
-    from rag_wright.spans.segment import provision_boundary_verdict
+    from rag_wright.packs.contracts.spans.segment import provision_boundary_verdict
     assert provision_boundary_verdict("Section 8. Limitation of Liability.") == "start"      # deterministic start
     assert provision_boundary_verdict("the parties agree to indemnify each other for any losses") == "continue"
     assert provision_boundary_verdict("Limitation of Liability:") == "uncertain"      # colon heading -> ask the model

@@ -19,7 +19,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
-from rag_wright.contracts.ontology import ClauseCategory
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory
 
 
 class Archetype(str, Enum):

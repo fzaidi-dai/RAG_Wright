@@ -22,9 +22,9 @@ def log(m: str) -> None:
 async def main() -> None:
     load_dotenv("/Users/farhan/work/RAG_Wright/.env")
     os.environ.setdefault("RAG_SERVING", "openrouter")
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
-    from rag_wright.subgraphs.compliance_ingestion import run_compliance_ingestion
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import run_compliance_ingestion
 
     sections = Path(os.environ.get("SECTIONS", "data/compliance/ftc_16cfr233/ftc_16cfr233.sections.json"))
     source = os.environ.get("SOURCE", "FTC 16 CFR 233")

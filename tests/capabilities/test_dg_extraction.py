@@ -9,7 +9,7 @@ import logging
 import pytest
 from pydantic import BaseModel
 
-from rag_wright.capabilities.dg_extraction import (
+from rag_wright.packs.contracts.capabilities.dg_extraction import (
     ContractParties,
     ExtractionFailed,
     ExtractionModel,
@@ -77,7 +77,7 @@ def _model_stub():
 
 
 def test_build_pipeline_config_gleaning_defaults_on_and_can_be_disabled():
-    from rag_wright.capabilities.dg_extraction import build_pipeline_config
+    from rag_wright.packs.contracts.capabilities.dg_extraction import build_pipeline_config
 
     on = build_pipeline_config("/tmp/x.md", _model_stub())                    # default: ingestion behavior
     off = build_pipeline_config("/tmp/x.md", _model_stub(), gleaning=False)   # query leg
@@ -104,7 +104,7 @@ def test_capture_is_empty_on_a_clean_run_and_detaches_after():
 
 def test_extract_parties_raises_extractionfailed_when_docling_logs_an_error(monkeypatch):
     # docling-graph LOGS a failure then returns an EMPTY ctx (swallows it); we must RAISE, not return None
-    import rag_wright.capabilities.dg_extraction as dg
+    import rag_wright.packs.contracts.capabilities.dg_extraction as dg
 
     class _Ctx:
         extracted_models: list = []
@@ -122,7 +122,7 @@ def test_extract_parties_raises_extractionfailed_when_docling_logs_an_error(monk
 
 def test_extract_parties_returns_none_on_a_genuine_clean_empty(monkeypatch):
     # no error logged + no models -> a genuine empty extraction, NOT a failure -> return None (not raise)
-    import rag_wright.capabilities.dg_extraction as dg
+    import rag_wright.packs.contracts.capabilities.dg_extraction as dg
 
     class _Ctx:
         extracted_models: list = []
@@ -135,7 +135,7 @@ def test_extract_parties_returns_none_on_a_genuine_clean_empty(monkeypatch):
 # --- EXEC-1: extraction runs on a dedicated, env-sized executor (not the CPU-derived to_thread default) ---
 
 def test_extraction_executor_is_a_singleton_sized_by_env(monkeypatch):
-    import rag_wright.capabilities.dg_extraction as dg
+    import rag_wright.packs.contracts.capabilities.dg_extraction as dg
 
     monkeypatch.setenv("RAG_EXTRACT_WORKERS", "20")
     monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)  # reset the lazy singleton so the env is read
@@ -155,7 +155,7 @@ async def test_aextract_parties_runs_beyond_the_default_cpu_pool_ceiling(monkeyp
     import threading
     import time
 
-    import rag_wright.capabilities.dg_extraction as dg
+    import rag_wright.packs.contracts.capabilities.dg_extraction as dg
 
     monkeypatch.setenv("RAG_EXTRACT_WORKERS", "24")
     monkeypatch.setattr(dg, "_EXTRACTION_EXECUTOR", None)

@@ -26,7 +26,7 @@ from eval.acord import load_corpus, load_test_queries
 from eval.harness import recall_at_k
 from rag_wright.capabilities.reranking import BGEReranker
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.spans.property_extractor import SeamPropertyExtractor
+from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
 from rag_wright.store.arcadedb import SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
 from rag_wright.util.concurrent import map_concurrent
 

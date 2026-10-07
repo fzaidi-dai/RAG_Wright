@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from rag_wright.spans.function_families import route_family
-from rag_wright.spans.hybrid_classifier import HybridFunctionClassifier
+from rag_wright.packs.contracts.spans.function_families import route_family
+from rag_wright.packs.contracts.spans.hybrid_classifier import HybridFunctionClassifier
 
 
 # --- route-family map -----------------------------------------------------------------------------

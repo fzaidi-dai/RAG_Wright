@@ -6,7 +6,7 @@ no network).
 
 from __future__ import annotations
 
-from rag_wright.spans.new_function_labels import (
+from rag_wright.packs.contracts.spans.new_function_labels import (
     NewFunctionConfirmer,
     NewFunctionTag,
     keyword_candidates,

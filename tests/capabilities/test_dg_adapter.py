@@ -6,14 +6,14 @@ Hermetic (fixture extracted models + fixture verified set; no docling-graph pipe
 
 from __future__ import annotations
 
-from rag_wright.capabilities.dg_extraction import (
+from rag_wright.packs.contracts.capabilities.dg_extraction import (
     ContractParties,
     Party,
     build_verified_registry,
     resolve_extracted,
 )
 from rag_wright.capabilities.graph_storage import to_graph
-from rag_wright.corpus.edgar import normalize_cik
+from rag_wright.packs.contracts.corpus.edgar import normalize_cik
 
 
 def _vset():

@@ -206,3 +206,16 @@ writing to change one decision (engine gaps G3/G4).
   `clause_records`, absent from `clause_failures`). Now `clause_cache_key` includes the anchor span (position), and
   `settle_clause_results` drops a stage-rejected unit from `clause_records` and reports it in `clause_failures`
   (PROD-3 shape). The key change invalidates existing clause caches once.
+
+## ING-8c addendum (2026-10-07): the reference pack lives in `rag_wright.packs`
+
+- **Decision.** The reference pack is two domain packs, `rag_wright.packs.contracts` and `rag_wright.packs.compliance`
+  (compliance is built on contracts and registers it first). Module paths mirror the old subpackages; a pack's own
+  Pydantic contracts live under `schemas`. Each pack keeps its ontology (`.ttl`), skills and data files next to its
+  code, and has a `pack.py` (manifests, canonical slugs, `register()`). No re-export shims: the old paths are gone,
+  consistent with the ING-8 "no transition defaults, no dual reads" rule; the product migrates from
+  `docs/specs/ingestion-hooks/ing8-breaking-changes.md`.
+- **Enforced.** Two import-linter contracts: nothing outside `rag_wright.packs` imports a pack (the generic engine is
+  every other package), and `packs.contracts` never imports `packs.compliance`.
+- **Verified.** Full suite green; a live Aimmune re-ingest is record-identical to ING-8b (131 clauses, 105 property
+  values, 700 spans).

@@ -17,7 +17,7 @@ class EntityNode(BaseModel):
     No facts and no confidence: entity nodes are canonical (resolved against the registry, FR-C.7), not
     extracted facts. DD-5 (ADR-0066/0117): `entity_type` is an OPAQUE string the domain names -- the engine
     does not constrain the taxonomy. The reference contract pack's value set lives in
-    `ontology/contract_taxonomy.py` (e.g. "Organization"/"Person"); a new domain names its own.
+    `packs/contracts/ontology/contract_taxonomy.py` (e.g. "Organization"/"Person"); a new domain names its own.
     """
 
     entity_id: EntityId
@@ -36,7 +36,7 @@ class RelationshipFact(GraphFact):
 
     `relationship_type` is an OPAQUE domain string (DD-5, ADR-0066/0117): the engine does not constrain the
     edge taxonomy; the caller (a domain graph) names it, and the reference contract pack's value set lives in
-    `ontology/contract_taxonomy.py` (e.g. "Contracts With"/"Affiliate Of"). The agreement a co-party fact
+    `packs/contracts/ontology/contract_taxonomy.py` (e.g. "Contracts With"/"Affiliate Of"). The agreement a co-party fact
     derives from is its provenance's source document (`provenance.source_doc_id`); because every `GraphFact`
     requires provenance, that reference is always present, which makes shared-party multi-hop questions
     answerable from the graph.

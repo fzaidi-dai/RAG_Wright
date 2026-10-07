@@ -12,8 +12,9 @@ import pkgutil
 
 import pytest
 
-import rag_wright.mcp
-from rag_wright.mcp.session_store import (
+import rag_wright.packs.compliance.mcp
+import rag_wright.packs.contracts.mcp
+from rag_wright.packs.contracts.mcp.session_store import (
     FORBIDDEN_TENANT_ARGS,
     assert_no_tenant_arguments,
     resolve_request_store,
@@ -31,18 +32,24 @@ async def _stub(*_a, **_k):  # a runner stub for any injected fn -- never CALLED
 
 
 def _discover_servers():
-    """Every `rag_wright.mcp.*_server` module and its `build_*_mcp` builders, discovered -- not listed. Each
-    server MUST expose at least one builder (else the guard could not check it, which is itself a failure)."""
+    """Every `*_server` module in each pack's `mcp` package (ING-8c: the servers live in the contracts and the
+    compliance packs) and its `build_*_mcp` builders, discovered -- not listed. Each server MUST expose at least
+    one builder (else the guard could not check it, which is itself a failure)."""
     found = []
-    for info in pkgutil.iter_modules(rag_wright.mcp.__path__):
-        if not info.name.endswith("_server"):
-            continue
-        module = importlib.import_module(f"rag_wright.mcp.{info.name}")
-        builders = [getattr(module, n) for n in dir(module)
-                    if n.startswith("build_") and n.endswith("_mcp") and inspect.isfunction(getattr(module, n))]
-        assert builders, f"{info.name} exposes no build_*_mcp -- the tenant guard cannot check it"
-        found.append((info.name, builders))
+    for pkg in (rag_wright.packs.contracts.mcp, rag_wright.packs.compliance.mcp):
+        for info in pkgutil.iter_modules(pkg.__path__):
+            if info.name.endswith("_server"):
+                found.append((info.name, _builders(importlib.import_module(f"{pkg.__name__}.{info.name}"))))
     return found
+
+
+def _builders(module):
+    """A server module's `build_*_mcp` builders (at least one, or the guard cannot check it)."""
+    name = module.__name__.rsplit(".", 1)[-1]
+    builders = [getattr(module, n) for n in dir(module)
+                if n.startswith("build_") and n.endswith("_mcp") and inspect.isfunction(getattr(module, n))]
+    assert builders, f"{name} exposes no build_*_mcp -- the tenant guard cannot check it"
+    return builders
 
 
 def _build_with_stubs(builder):

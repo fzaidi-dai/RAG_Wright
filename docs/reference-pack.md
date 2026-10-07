@@ -38,11 +38,12 @@ typed-property retrieval, relational QA) and **compliance** (FTC 16 CFR 255 endo
 checking a subject's claims against them), plus generic RLM / generation / OKF primitives and four MCP tool
 surfaces.
 
-The domain **knowledge** lives in the ontology bridges, not in code (ADR-0066): `ontology/contract_bridge.ttl`,
-`ontology/compliance_bridge.ttl`, and the domain pack `ontology/packs/ftc_16cfr255.ttl`. The pack's manifests
-(`REFERENCE_SPECS`), its canonical slugs and its `register()` live in `rag_wright.reference.pack`
-(`load_reference_pack()` is `load_pack("rag_wright.reference.pack")`); thin worked-example facades live alongside
-it in `rag_wright.reference`.
+The domain **knowledge** lives in the ontology bridges, not in code (ADR-0066): `packs/contracts/ontology/contract_bridge.ttl`,
+`packs/compliance/ontology/compliance_bridge.ttl`, and the domain pack `packs/compliance/ontology/packs/ftc_16cfr255.ttl`. The reference pack is
+two domain packs under `rag_wright.packs` (ING-8c): `packs.contracts` and `packs.compliance`, which builds on it. Each
+has a `pack.py` holding its manifests (`CONTRACT_SPECS` / `COMPLIANCE_SPECS`), its canonical slugs and its
+`register()`; `load_reference_pack()` is `load_pack("rag_wright.packs.compliance.pack")` (the compliance pack registers the contracts pack it builds on first). The thin
+worked-example facades are `packs.compliance.invokers` and the product-seam example `packs.reference_seam`.
 
 ## Its schema is not in the default
 
@@ -54,7 +55,7 @@ fresh process before anything has used the contract store, open the workspace wi
 which creates `Clause`, `Contract` and `PropertyValue` and their structural edges:
 
 ```python
-from rag_wright.ontology.loader import reference_pack_ttl   # path of the reference contract ontology
+from rag_wright.packs.contracts.ontology.loader import reference_pack_ttl   # path of the reference contract ontology
 config = EngineConfig(store=..., pack=reference_pack_ttl())
 ```
 

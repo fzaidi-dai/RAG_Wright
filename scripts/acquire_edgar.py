@@ -21,7 +21,7 @@ from pathlib import Path
 
 import requests
 
-from rag_wright.corpus.edgar import UNRESOLVED_NOTE, propose_matches
+from rag_wright.packs.contracts.corpus.edgar import UNRESOLVED_NOTE, propose_matches
 from rag_wright.corpus.http import DiskCache, RateLimiter, ThrottledCachingFetcher
 
 ROOT = Path("data")

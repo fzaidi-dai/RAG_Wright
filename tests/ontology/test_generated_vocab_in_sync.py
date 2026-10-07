@@ -8,13 +8,13 @@ then `uv run python scripts/generate_contract_python.py`.
 
 from __future__ import annotations
 
-from rag_wright.ontology.codegen import VOCAB_MODULE_PATH, render_vocab_module
+from rag_wright.packs.contracts.ontology.codegen import VOCAB_MODULE_PATH, render_vocab_module
 
 
 def test_generated_vocab_matches_a_fresh_render_from_the_ttl() -> None:
     committed = VOCAB_MODULE_PATH.read_text(encoding="utf-8")
     assert committed == render_vocab_module(), (
-        "src/rag_wright/ontology/_generated_vocab.py is STALE or hand-edited -- regenerate it from the ttl: "
+        "src/rag_wright/packs/contracts/ontology/_generated_vocab.py is STALE or hand-edited -- regenerate it from the ttl: "
         "uv run python scripts/generate_contract_python.py")
 
 

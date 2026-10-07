@@ -89,6 +89,6 @@ are imported from engine modules rather than `rag_wright.api`.
 ## Reference example
 
 The reference pack populates the registry with SEC EDGAR entities and resolves parties to their CIK — that EDGAR/
-CIK choice is **the reference domain's**, not an engine assumption. The reference pack (`rag_wright.reference`)
+CIK choice is **the reference domain's**, not an engine assumption. The reference pack (`rag_wright.packs.contracts`)
 runs extraction, disambiguation and resolution inside its own contract pipeline; read it as an example.
 Next: [authoring capabilities](authoring-capabilities.md).

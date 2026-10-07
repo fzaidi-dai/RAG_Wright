@@ -124,7 +124,7 @@ The generic *mechanism* goes to the engine; only the domain *vocabulary/wrapper*
   description from the ARD manifest, handler dispatching through the engine invoker over the bound workspace, output
   in a uniform `{"result": <json>}` envelope. `serve_capability_mcp(slug, *, resources, transport="stdio")` serves it.
   The tool takes an opaque `inputs` dict (the capability's own input contract). Use this for zero-boilerplate MCP
-  exposure of a capability or a new-domain graph; the 4 bespoke Tier-1 servers in `rag_wright/mcp/` remain for
+  exposure of a capability or a new-domain graph; the 4 bespoke Tier-1 servers in `rag_wright/packs/contracts/mcp/` remain for
   curated, typed tool signatures. The product owns tenant→corpus routing (build one server per workspace).
 - **Done (EP-API-6):** **PDF/docling ingest entry point** — `engine.parse_document(id, path, *, cache_dir, metadata=None)`
   (sync) / `engine.aparse_document(...)` (async) run the engine's real docling parse and return a structure-bearing
@@ -219,7 +219,7 @@ replacing the lifted functions with engine calls. Match the reference seam's sha
 - Documents: `parse_document_text`, `build_source_document`, `text_source_document` → `api.parse_document`/`aparse_document`/`source_document`.
 - Legs (hand-built graphs): `build_contract_ingest`+`invoke_contract_ingest`, `build_contract_qa`+`invoke_contract_qa`, `build_corpus_retrieval`+`invoke_corpus_retrieval`, `ingest_corpus` (driver) → `ainvoke_subgraph("contract_ingestion_pipeline" / "intra_document_qa" / "typed_property_retrieval")`.
 - Contract reads/vocab: `party_counterparties`, `party_affiliates`, `contract_terms`, `span_locations`, `canonical_clause_type`, `clause_type_vocabulary`, and the `SpanLocation` type → `ContractKGStore` facades + the engine `SpanLocation` contract.
-- Compliance reads/legs: `requirements_for`, `requirement_locations`, `curated_requirement_count`, `policy_of_requirement`, `gated_pairs`, the `RequirementLocation` type, `invoke_policy_ingest`, `invoke_compliance_check`, `invoke_compliance_document_check` → `ComplianceStore` facades + `rag_wright/reference/compliance.py` wrappers.
+- Compliance reads/legs: `requirements_for`, `requirement_locations`, `curated_requirement_count`, `policy_of_requirement`, `gated_pairs`, the `RequirementLocation` type, `invoke_policy_ingest`, `invoke_compliance_check`, `invoke_compliance_document_check` → `ComplianceStore` facades + `rag_wright/packs/compliance/invokers.py` wrappers.
 - Query-side helpers (lift, thin glue): `understand_question` → the `query_understanding` capability; `generate_answer` → the `answer_generator` capability; `find_party` → `api.entities_by_name`.
 - Config/model/env + usage/ids: `export_engine_env`, `build_compliance_store`, `judge_model_id`, `build_compliance_model`, `answer_model` → `EngineConfig` (model-by-alias) + `open_workspace`; `measure_usage`, `decode_bbox`, `document_of`, `contract_exists` → the API equivalents.
 
@@ -236,7 +236,7 @@ replacing the lifted functions with engine calls. Match the reference seam's sha
   the product CI.
 
 ## Changelog
-- 2026-10-04 — EP-REF-1d: reference seam `rag_wright/reference/contract_seam.py` + the generic
+- 2026-10-04 — EP-REF-1d: reference seam `rag_wright/packs/reference_seam.py` + the generic
   `seam-adaptation-guide.md`; added the "EP-SEAM-3 — what lifts vs. stays" enumeration above. Engine side of the
   seam migration complete; EP-SEAM-3 is the RuleWright refactor to match.
 - 2026-10-02 — first draft (after EP-API-1 + EP-API-2).

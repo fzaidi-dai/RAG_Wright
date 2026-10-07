@@ -14,7 +14,7 @@ import httpx
 from dotenv import load_dotenv
 
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")
-from rag_wright.ontology.loader import load_actor_synonyms  # noqa: E402
+from rag_wright.packs.compliance.ontology.loader import load_actor_synonyms  # noqa: E402
 
 ENDPOINT = "https://openrouter.ai/api/alpha/decisions"
 MODEL = "typesafe/jev-1.13"

@@ -11,7 +11,7 @@ from __future__ import annotations
 import pytest
 from langgraph.types import RetryPolicy
 
-from rag_wright.subgraphs.contract_ingestion_pipeline import (
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
     clause_extraction_jobs,
@@ -24,7 +24,7 @@ _FAST_RETRY = RetryPolicy(max_attempts=2, initial_interval=0.0)
 
 
 def _span(text: str, span_index: int = 0, chunk: str = "chunk"):
-    from rag_wright.spans.segment import OperativeSpan
+    from rag_wright.packs.contracts.spans.segment import OperativeSpan
 
     return OperativeSpan(
         span_id=f"{chunk}#{span_index}", parent_chunk_id=chunk, parent_okf_path="p",
@@ -52,7 +52,7 @@ def test_numbered_sections_group_into_one_job_each():
 def test_deep_numbered_list_items_fold_into_their_provision():
     # issue 0039: a section number is DEPTH-CAPPED at two levels. '10.5.' starts a provision; the deeper
     # '10.5.1.' / '10.5.1.1.' are list items WITHIN it and fold in (0038's own rule), not their own clauses.
-    from rag_wright.spans.segment import starts_new_provision
+    from rag_wright.packs.contracts.spans.segment import starts_new_provision
     assert starts_new_provision("10.5. Obligations on Termination. Upon expiry the Supplier shall:") is True
     assert starts_new_provision("10.5.1. return all Confidential Information within thirty days") is False
     assert starts_new_provision("10.5.1.1. including all copies and derivatives thereof") is False
@@ -70,7 +70,7 @@ def test_deep_numbered_list_items_fold_into_their_provision():
 
 def test_untagged_provision_still_becomes_a_job():
     # issue 0036 preserved: an untagged (function=NONE) provision is still extracted (function-independent).
-    from rag_wright.contracts.function import NO_FUNCTION
+    from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
 
     segments = [(_span("3.1. Term. Neither party shall be liable for indirect damages.", 0), NO_FUNCTION, 0, [])]
     jobs = clause_extraction_jobs(segments)
@@ -102,7 +102,7 @@ def test_unnumbered_standalone_heading_splits_but_folded_heading_degrades_to_chu
     # graceful degradation, middle tier: an un-numbered STANDALONE heading (no terminal punctuation) starts a
     # provision; a heading-less run (or a heading folded into its body) stays one chunk-level provision. Either
     # way the floor holds -- never one clause per sentence.
-    from rag_wright.spans.segment import starts_new_provision
+    from rag_wright.packs.contracts.spans.segment import starts_new_provision
     assert starts_new_provision("Governing Law") is True          # standalone Title-case heading -> boundary
     assert starts_new_provision("CONFIDENTIALITY") is True         # standalone ALL-CAPS heading -> boundary
     assert starts_new_provision("Each party shall keep the other's information confidential.") is False
@@ -147,7 +147,7 @@ def test_furniture_is_dropped_and_an_all_furniture_provision_yields_no_clause():
 
 def test_registers_as_a_subgraph():
     from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.subgraphs.contract_ingestion_pipeline import register_contract_ingestion_pipeline
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import register_contract_ingestion_pipeline
 
     reg = CapabilityRegistry()
     register_contract_ingestion_pipeline(reg)
@@ -254,7 +254,7 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     params and no longer apply to it."""
     import pytest
 
-    from rag_wright.subgraphs import contract_ingestion_pipeline as pipe
+    from rag_wright.packs.contracts.subgraphs import contract_ingestion_pipeline as pipe
 
     captured: dict = {}
 
@@ -271,11 +271,11 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
         raise _StopHere  # party extraction is the last model wiring -> stop before the network-y rest
 
     # the flip: clause extractor is classifier_property_extractor over the loaded fleet -> stub both (no heavy load)
-    monkeypatch.setattr("rag_wright.spans.clause_kg_extractor.classifier_property_extractor", _fake_classifier)
-    monkeypatch.setattr("rag_wright.spans.dim_classifier.load_dim_registry", lambda **kw: object())
-    monkeypatch.setattr("rag_wright.spans.semantic_judge.build_asemantic_judge_fn",
+    monkeypatch.setattr("rag_wright.packs.contracts.spans.clause_kg_extractor.classifier_property_extractor", _fake_classifier)
+    monkeypatch.setattr("rag_wright.packs.contracts.spans.dim_classifier.load_dim_registry", lambda **kw: object())
+    monkeypatch.setattr("rag_wright.packs.contracts.spans.semantic_judge.build_asemantic_judge_fn",
                         lambda mid: captured.update(judge_id=mid) or (lambda *a, **k: None))
-    monkeypatch.setattr("rag_wright.capabilities.graph_extraction.aproduction_extract_fn", _fake_party)
+    monkeypatch.setattr("rag_wright.packs.contracts.capabilities.graph_extraction.aproduction_extract_fn", _fake_party)
     monkeypatch.setattr("rag_wright.capabilities.rlm_chunking.StructuralModelFallbackDiscoverer",
                         lambda model_id=None, **kw: captured.update(chunk_model_id=model_id))
 
@@ -328,9 +328,9 @@ def test_provision_units_match_the_extraction_jobs(tmp_path, with_decider):
     from rag_wright.api import TaggedSpan, check_units
     from rag_wright.capabilities.parsing import load_document
     from rag_wright.capabilities.rlm_chunking import StructuralBoundaryDiscoverer, chunk_texts
-    from rag_wright.spans.boundary import adecide_provision_starts
-    from rag_wright.spans.segment import segment_clause
-    from rag_wright.subgraphs.contract_ingestion_pipeline import _parsed_from_text, provision_units
+    from rag_wright.packs.contracts.spans.boundary import adecide_provision_starts
+    from rag_wright.packs.contracts.spans.segment import segment_clause
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import _parsed_from_text, provision_units
 
     doc = load_document(_parsed_from_text("msa", _CONTRACT, tmp_path))
     ops = [op for k, c in enumerate(chunk_texts(doc, discoverer=StructuralBoundaryDiscoverer()))

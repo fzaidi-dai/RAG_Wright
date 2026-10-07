@@ -16,7 +16,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from rag_wright.contracts.function_routing import build_cooccurrence
+from rag_wright.packs.contracts.schemas.function_routing import build_cooccurrence
 from rag_wright.store.arcadedb import CLAUSE_TYPE, ArcadeDBStore
 
 CUAD_DB = os.environ.get("CUAD_DB", "ragwright_cuad")

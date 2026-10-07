@@ -6,14 +6,14 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.models import tag_structured as ts
-from rag_wright.ontology.clause_template import Clause, Mutuality
-from rag_wright.spans.tag_clause_extractor import (
+from rag_wright.packs.contracts.ontology.clause_template import Clause, Mutuality
+from rag_wright.packs.contracts.spans.tag_clause_extractor import (
     CLAUSE_GROUPS,
     _combine_group,
     _group_has_list,
     atag_extract_clause,
 )
-import rag_wright.spans.tag_clause_extractor as tce
+import rag_wright.packs.contracts.spans.tag_clause_extractor as tce
 
 
 def test_combine_group_unions_list_fields_and_prefers_informative_scalars():

@@ -19,7 +19,7 @@ from rdflib.namespace import RDF, RDFS
 from rag_wright.store.arcadedb import _TYPED_DIMENSION_EDGE, _edge_predicate_iri
 
 CBR = Namespace("https://ragwright.local/ontology/contract-bridge#")
-TTL = Path(__file__).parents[1] / "src" / "rag_wright" / "ontology" / "contract_bridge.ttl"
+TTL = Path(__file__).parents[1] / "src" / "rag_wright" / "packs" / "contracts" / "ontology" / "contract_bridge.ttl"
 
 
 def build_augmentation() -> Graph:

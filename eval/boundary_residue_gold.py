@@ -42,7 +42,7 @@ async def main(repeats: int, concurrency: int, only: list[str] | None = None) ->
     from dotenv import load_dotenv
 
     from rag_wright.api import ainvoke_model, load_reference_pack
-    from rag_wright.spans.boundary import _THRESHOLD, residue_request
+    from rag_wright.packs.contracts.spans.boundary import _THRESHOLD, residue_request
 
     load_dotenv(ROOT / ".env")
     load_reference_pack()

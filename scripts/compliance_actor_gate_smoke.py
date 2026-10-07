@@ -31,11 +31,11 @@ async def main() -> int:
     os.environ.setdefault("RAG_SERVING", "openrouter")
 
     from rag_wright.capabilities.embedding import BGEM3Embedder
-    from rag_wright.contracts.compliance import CheckableFact, Constraint, DeonticType, Requirement
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint, DeonticType, Requirement
     from rag_wright.contracts.provenance import ConfidenceTag
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
-    from rag_wright.subgraphs.compliance_check import production_generic_compliance_check
+    from rag_wright.packs.compliance.subgraphs.compliance_check import production_generic_compliance_check
 
     db = os.environ.get("COMPLIANCE_DB", "ragwright_issue0013")
     log(f"[smoke] 1/4 fresh ArcadeDB {db!r} + write the 3-rule policy")

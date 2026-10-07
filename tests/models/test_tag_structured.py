@@ -169,7 +169,7 @@ def test_nested_and_flat_coexist():
 def test_real_ingestion_contracts_are_now_tag_parseable():
     # the actual reason for 1a: Clause (nested bounded_by/caps/governed_by + list excepts) and ContractParties
     # (parties: list[Party]) must emit + round-trip through tags without NotImplementedError.
-    from rag_wright.capabilities.dg_extraction import ContractParties
+    from rag_wright.packs.contracts.capabilities.dg_extraction import ContractParties
 
     instr = tag_instructions(ContractParties)  # must not raise
     assert "<parties>" in instr and "<item>" in instr and "<name>" in instr

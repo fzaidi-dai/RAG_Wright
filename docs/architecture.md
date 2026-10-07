@@ -28,31 +28,27 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 | package | responsibility | domain-free? |
 |---|---|---|
 | `api/` | the stable, domain-agnostic public surface: config, workspace, invokers, KG accessors, ids, usage | **yes** (in the enforced source set) |
-| `capabilities/` | the capability catalog + ARD runtime — `CapabilityManifest`, `registry`, `manifests`, the adapter-free `invoke` client; plus the generic primitives (graph query, retrieval core, embedding, disambiguation, entity resolution) | generic parts **yes**; reference-pack caps are domain |
+| `capabilities/` | the capability catalog + ARD runtime — `CapabilityManifest`, `registry`, `manifests`, the adapter-free `invoke` client; plus the generic primitives (graph query, retrieval core, embedding, disambiguation, entity resolution, the decision model) | **yes** |
 | `ingestion/` | the generic ingestion mechanism (ADR-0124): `build_ingestion` + the shared `IngestionStages`, the default layout segmenter and structural unit grouper, `table_rows`, `evaluate_ingestion` | **yes** |
-| `subgraphs/` | the composite LangGraph pipelines, built on `scaffold.py` (the reference pack's ingestion/retrieval/QA graphs live here; a new domain adds its own) | generic scaffolding **yes**; **domain graphs** are reference pack |
+| `subgraphs/` | the generic LangGraph scaffolding (`scaffold.py`), semantic chunking, graph extraction and observability; domain graphs live in their pack | **yes** |
 | `models/` | the model-profile seam: `ModelRole`, `profiles`, `seam`, `tag_structured`, usage/tracing | yes |
 | `store/` | the single ArcadeDB store behind the seam: `arcadedb`, `seam` (`KgNode`/`KgEdge`), `chunk_text` | generic subset **yes** |
-| `ontology/` | the `.ttl` packs + loaders + the `EntityRegistry` derivation (knowledge lives here) | `pack_schema` and `registry` **yes**; `loader`, the contract taxonomy and the clause template are reference pack |
-| `spans/` | the reference pack's legal segmentation, clause classifier fleet, judges and boundary decider | reference pack, except `page_map` (**yes**) |
-| `contracts/` | Pydantic contracts + the shared identifiers (`chunk_id`, `entity_id`) + the ingestion hook contracts | generic subset yes; `compliance`/`contract_meta`/`property` etc. are reference pack |
-| `reference/` | the reference pack's registration (`pack.py`: its manifests and canonical slugs) + facades (thin worked-example wrappers over the API) | reference pack |
-| `corpus/` | the generic document parser and embedded-file extraction, plus reference corpus adapters (EDGAR, CUAD) | parser/embedded/canonicalize/http **yes**; adapters are reference pack |
-| `mcp/` | MCP tool surfaces over registered capabilities | — |
-| `skills/` | authored capability `SKILL.md` content | — |
+| `ontology/` | the generic pack-schema reader (`pack_schema`) and the `EntityRegistry` derivation (`registry`) | **yes** |
+| `spans/` | `page_map` (page/bbox positions of spans) | **yes** |
+| `contracts/` | Pydantic contracts + the shared identifiers (`chunk_id`, `entity_id`) + the ingestion hook contracts | **yes** |
+| `packs/` | the REFERENCE PACK, as two domain packs (ING-8c): `packs.contracts` (segmentation, the clause classifier fleet, judges, the boundary decider, the contract KG store and the ingestion/retrieval/QA graphs, its ontology and loaders, the CUAD/EDGAR corpus adapters, its MCP servers) and `packs.compliance` (requirement and claim extraction, compliance judgment and checking, its ontology and regulation packs, its MCP server), each with a `pack.py` (manifests, canonical slugs, `register()`); compliance builds on contracts. `packs.reference_seam` is a worked product seam over both | reference pack (domain) |
+| `corpus/` | the generic document parser, embedded-file extraction, canonicalization and HTTP helpers | **yes** |
+| `skills/` | authored `SKILL.md` content for the generic capabilities (a pack keeps its own under `packs/<pack>/skills/`) | **yes** |
 | `okf/` | the OKF bundle-compile path | — |
 | `util/` | shared capability-agnostic utilities | yes |
 
 ### The domain-free rule (enforced)
 
-The **generic engine foundation** — every generic module: the `api` layer, `store`, `ingestion`, `models`, the
-generic contracts, `ontology.pack_schema`/`ontology.registry`, the generic capabilities (the ARD runtime and
-invoker, parsing, chunking, embedding, hybrid search, reranking, graph query, retrieval core, disambiguation, entity
-resolution, the decision model, and more), the generic subgraph scaffolding, the generic `corpus` parser modules
-and `spans.page_map` — **must not import any part of the reference contract/compliance pack**. Since ING-8b the
-forbidden list is the whole reference pack (its `spans` modules, domain subgraphs, contract/compliance
-capabilities and contracts, ontology loader and taxonomy, and `rag_wright.reference`). This is a `forbidden`
-import-linter contract in `pyproject.toml` (`[tool.importlinter]`), run inside the normal test suite as a pytest
+The **generic engine** — every package outside `rag_wright.packs` (`api`, `capabilities`, `contracts`, `corpus`,
+`ingestion`, `models`, `okf`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) — **must not import any
+domain pack** (`rag_wright.packs`). A second contract keeps the packs layered: `packs.contracts` must not import
+`packs.compliance`, which is built on it. Both are `forbidden`
+import-linter contracts in `pyproject.toml` (`[tool.importlinter]`), run inside the normal test suite as a pytest
 test (`tests/arch/test_import_contracts.py`); a re-coupling import fails the build. The reference pack's own
 modules (its domain graphs and stores) are the importers, not the imported: they are *allowed* to import the
 generic engine, because a domain pipeline is domain-shaped by construction. This is the primitives-vs-domain

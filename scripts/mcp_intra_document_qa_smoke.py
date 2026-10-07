@@ -41,7 +41,7 @@ async def _main() -> None:
     }
     client = Client({"mcpServers": {"intra_document_qa": {
         "command": sys.executable,
-        "args": ["-m", "rag_wright.mcp.intra_document_qa_server"],
+        "args": ["-m", "rag_wright.packs.contracts.mcp.intra_document_qa_server"],
         "env": server_env,
     }}})
 

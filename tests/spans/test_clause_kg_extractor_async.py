@@ -4,11 +4,11 @@ semantic judge (`asemantic_judge` / `build_asemantic_judge_fn`). Hermetic -- inj
 from __future__ import annotations
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import PropertyDimension
+from rag_wright.packs.contracts.schemas.property import PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.ontology import clause_template as ct
-from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
-from rag_wright.spans.semantic_judge import SemanticVerdict, asemantic_judge, build_asemantic_judge_fn
+from rag_wright.packs.contracts.ontology import clause_template as ct
+from rag_wright.packs.contracts.spans.clause_kg_extractor import DGClausePropertyExtractor
+from rag_wright.packs.contracts.spans.semantic_judge import SemanticVerdict, asemantic_judge, build_asemantic_judge_fn
 
 _CID = ChunkId.of("contract-x", 0, "cap clause text")
 

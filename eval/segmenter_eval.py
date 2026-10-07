@@ -80,7 +80,7 @@ def _chunked(path: Path):
 
 def _segmenters():
     from rag_wright.ingestion import segment_layout
-    from rag_wright.spans.segment import segment_clause
+    from rag_wright.packs.contracts.spans.segment import segment_clause
 
     return {"generic": segment_layout, "segment_clause": lambda cid, text, layout: segment_clause(cid, text)}
 

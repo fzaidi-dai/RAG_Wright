@@ -3,7 +3,7 @@ non-API caller is unaffected); an explicit config value overrides. `classify_con
 segment leaf owns its env fallback)."""
 from __future__ import annotations
 
-from rag_wright.subgraphs.contract_ingestion_pipeline import _resolve_ingest_knobs
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import _resolve_ingest_knobs
 
 
 def test_defaults_fall_back_to_the_engine_defaults(monkeypatch):

@@ -25,7 +25,7 @@ def test_import_linter_actually_detects_a_violation():
         contracts_options=[{
             "name": "proof: capabilities.contract_kg_store must not import store.arcadedb (deliberately violated)",
             "type": "forbidden",
-            "source_modules": ["rag_wright.capabilities.contract_kg_store"],
+            "source_modules": ["rag_wright.packs.contracts.capabilities.contract_kg_store"],
             "forbidden_modules": ["rag_wright.store.arcadedb"],
         }],
     ))

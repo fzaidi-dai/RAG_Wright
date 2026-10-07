@@ -10,12 +10,12 @@ graph from fragmenting.
 
 
 from rag_wright.contracts.identifiers import EntityId
-from rag_wright.contracts.ontology import ClauseCategory
-from rag_wright.ontology.derive import (
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory
+from rag_wright.packs.contracts.ontology.derive import (
     clause_category_columns,
     reconcile_clause_categories,
 )
-from rag_wright.corpus.edgar import build_edgar_registry
+from rag_wright.packs.contracts.corpus.edgar import build_edgar_registry
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 
 

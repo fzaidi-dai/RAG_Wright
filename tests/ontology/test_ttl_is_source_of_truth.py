@@ -10,9 +10,9 @@ functions, and the value rollups.
 
 from __future__ import annotations
 
-from rag_wright.contracts.property import CLOSED_VOCAB
-from rag_wright.contracts.value_match import VALUE_ROLLUP
-from rag_wright.ontology.loader import load_contract_ontology
+from rag_wright.packs.contracts.schemas.property import CLOSED_VOCAB
+from rag_wright.packs.contracts.schemas.value_match import VALUE_ROLLUP
+from rag_wright.packs.contracts.ontology.loader import load_contract_ontology
 
 # ADR-0066 P2 note: the applicability / cardinality / deontic-polarity constants were DELETED from
 # symbolic_validation.py -- those now live ONLY in the ttl and are exercised (ttl-sourced) by

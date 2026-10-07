@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM
-from rag_wright.spans.segment import segment_clause, to_span_record
+from rag_wright.packs.contracts.spans.segment import segment_clause, to_span_record
 
 
 def _dense() -> list[float]:

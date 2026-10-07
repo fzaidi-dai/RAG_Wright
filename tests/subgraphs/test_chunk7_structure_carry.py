@@ -9,7 +9,7 @@ from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, _validate_partition
 from rag_wright.corpus.document_parser import _HEADING_LABELS
 from rag_wright.ingestion.builder import IngestionStages
-from rag_wright.subgraphs.contract_ingestion_pipeline import (
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
     SourceDocument,
     parsed_source_document,
 )

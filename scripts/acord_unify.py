@@ -101,13 +101,13 @@ def cmd_ingest() -> None:
 
     load_dotenv()
     from rag_wright.capabilities.embedding import BGEM3Embedder, _resolve_device
-    from rag_wright.contracts.function import canonical_function
+    from rag_wright.packs.contracts.schemas.function import canonical_function
     from rag_wright.contracts.identifiers import ChunkId
     from rag_wright.models.profiles import ModelRole, model_for
-    from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
-    from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
-    from rag_wright.spans.segment import segment_clause, to_span_record
-    from rag_wright.spans.semantic_judge import build_semantic_judge_fn
+    from rag_wright.packs.contracts.spans.clause_kg_extractor import granite_clause_extractor
+    from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
+    from rag_wright.packs.contracts.spans.segment import segment_clause, to_span_record
+    from rag_wright.packs.contracts.spans.semantic_judge import build_semantic_judge_fn
     from rag_wright.store.arcadedb import ArcadeDBStore
     from rag_wright.util.concurrent import map_concurrent
 

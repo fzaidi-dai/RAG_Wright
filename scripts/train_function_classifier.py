@@ -20,8 +20,8 @@ from pathlib import Path
 from FlagEmbedding import BGEM3FlagModel
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
-from rag_wright.spans.cuad_labels import label_operative_spans, parse_cuad
-from rag_wright.spans.function_classifier import NONE_LABEL, FunctionClassifier
+from rag_wright.packs.contracts.spans.cuad_labels import label_operative_spans, parse_cuad
+from rag_wright.packs.contracts.spans.function_classifier import NONE_LABEL, FunctionClassifier
 
 CUAD = Path("data/cuad/extracted/CUAD_v1.json")
 MODEL_OUT = Path("data/models/function_clf.joblib")  # regenerable cache

@@ -10,15 +10,15 @@ import asyncio
 
 from fastmcp import Client
 
-from rag_wright.capabilities.property_boosted_retrieval import RankedSpan
+from rag_wright.packs.contracts.capabilities.property_boosted_retrieval import RankedSpan
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.capabilities.span_relevance_judgment import RelevanceVerdict
-from rag_wright.mcp.typed_property_retrieval_server import (
+from rag_wright.packs.contracts.mcp.typed_property_retrieval_server import (
     build_typed_property_retrieval_mcp,
     demo_retrieval_fn,
     register_typed_property_retrieval_mcp,
 )
-from rag_wright.subgraphs.typed_property_retrieval import TypedPropertyRetrieval
+from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import TypedPropertyRetrieval
 
 
 def _call(mcp, args: dict):
@@ -62,7 +62,7 @@ def test_retrieval_fn_is_injectable_no_store_or_encoders_needed():
     async def stub(store, query: str) -> TypedPropertyRetrieval:  # issue 0035: store-parametric
         seen["query"] = query
         seen["store"] = store
-        from rag_wright.subgraphs.typed_property_retrieval import JudgedSpan
+        from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import JudgedSpan
         return TypedPropertyRetrieval(query=query, results=[JudgedSpan(
             span=RankedSpan(
                 span_id="K:5:cafe01", text="liability capped at 2x fees", function="Cap On Liability",

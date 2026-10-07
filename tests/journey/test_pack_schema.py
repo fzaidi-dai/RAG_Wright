@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from rag_wright.api import EngineConfig, StoreConfig, kg_read, kg_write, open_workspace
-from rag_wright.ontology.loader import load_kg_schema
+from rag_wright.packs.contracts.ontology.loader import load_kg_schema
 from rag_wright.store.seam import KgEdge, KgNode
 
 _PACK = str(Path(__file__).with_name("incidents_pack.ttl"))

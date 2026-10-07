@@ -16,7 +16,7 @@ from rag_wright.capabilities.retrieval_core import (
     dense_rank_tiebreak,
     typed_constraint_match_rank,
 )
-from rag_wright.contracts.value_match import constraint_match_count  # the DOMAIN matcher, injected (EP-CORE-1b)
+from rag_wright.packs.contracts.schemas.value_match import constraint_match_count  # the DOMAIN matcher, injected (EP-CORE-1b)
 
 # --- candidate_routing: the union combiner + pool lookup -------------------------------------------------
 

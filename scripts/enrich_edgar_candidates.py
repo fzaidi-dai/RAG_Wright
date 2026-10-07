@@ -19,7 +19,7 @@ from pathlib import Path
 
 import requests
 
-from rag_wright.corpus.edgar import parse_browse_edgar_ciks, parse_submissions_evidence
+from rag_wright.packs.contracts.corpus.edgar import parse_browse_edgar_ciks, parse_submissions_evidence
 from rag_wright.corpus.http import DiskCache, RateLimiter, ThrottledCachingFetcher
 
 SET = Path("data/edgar/verification_set.json")

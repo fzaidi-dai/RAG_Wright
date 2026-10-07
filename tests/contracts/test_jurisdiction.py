@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.contracts.jurisdiction import canonicalize_jurisdiction as canon
+from rag_wright.packs.contracts.schemas.jurisdiction import canonicalize_jurisdiction as canon
 
 
 @pytest.mark.parametrize("surface", [

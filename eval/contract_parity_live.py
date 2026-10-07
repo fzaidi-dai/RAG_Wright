@@ -77,7 +77,7 @@ class JevVariance(Exception):
 
 def _guard_provisions(variance: dict) -> None:
     """Wrap the reference pack's grouper: compare the unit anchors with A's clause anchors BEFORE extraction."""
-    import rag_wright.subgraphs.contract_ingestion_pipeline as cip
+    import rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline as cip
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     ref = ArcadeDBStore.from_env(database=DB["reference"])

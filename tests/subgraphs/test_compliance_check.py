@@ -8,9 +8,9 @@ degrade-to-empty on failure, never crash; conservative default. Hermetic: all se
 
 from __future__ import annotations
 
-from rag_wright.capabilities.compliance_judgment import JudgeVerdict
+from rag_wright.packs.compliance.capabilities.compliance_judgment import JudgeVerdict
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.compliance import (
+from rag_wright.packs.compliance.schemas.compliance import (
     Claim,
     ClaimType,
     ComplianceReport,
@@ -19,7 +19,7 @@ from rag_wright.contracts.compliance import (
     Requirement,
     Verdict,
 )
-from rag_wright.subgraphs.compliance_check import (
+from rag_wright.packs.compliance.subgraphs.compliance_check import (
     applies_to,
     build_compliance_check,
     register_compliance_check,
@@ -122,7 +122,7 @@ async def test_ad_level_disclosures_reach_the_judge():
 def test_requirement_from_row_round_trips_page_provenance():
     # issue 0043: a stored Requirement row's pages/bbox come back on the Requirement, so a finding cites the policy
     # page. bbox is a JSON string in the row (best-effort); absent -> None (never fabricated).
-    from rag_wright.subgraphs.compliance_check import _requirement_from_row
+    from rag_wright.packs.compliance.subgraphs.compliance_check import _requirement_from_row
 
     base = dict(requirement_id="p:10.5:h", source="ClientPolicy", citation="§ 10.5", deontic_type="obligation",
                 actor="advertiser", requirement_text="Retain records six years.", applicability_json="[]",
@@ -138,7 +138,7 @@ def test_requirement_from_row_round_trips_page_provenance():
 def test_obligation_bundle_keeps_signals_off_the_citation_and_flags_assembled():
     # issue 0044: the DEON-8 signal line must NOT land in assertion_text (which becomes the citation); it rides in
     # `document_signals`, and the top-N bundle is flagged `assembled` so a consumer won't render it as one verbatim.
-    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_obligation_pairs_fn
 
     class _Emb:
         def encode_dense(self, t):
@@ -177,8 +177,8 @@ def test_registers_as_a_subgraph():
 
 # --- CC-8: semantic narrowing (content top-k + always-include context + dedup) -------------------
 
-from rag_wright.contracts.compliance import RuleScope  # noqa: E402
-from rag_wright.subgraphs.compliance_check import build_select_fn, rule_scope_of  # noqa: E402
+from rag_wright.packs.compliance.schemas.compliance import RuleScope  # noqa: E402
+from rag_wright.packs.compliance.subgraphs.compliance_check import build_select_fn, rule_scope_of  # noqa: E402
 
 
 def test_rule_scope_context_for_disclosure_else_content():
@@ -256,8 +256,8 @@ async def test_compliance_check_uses_select_fn_when_provided():
 
 def test_semantic_select_without_applicability_filter_keeps_all_then_ranks():
     # filter_applicability=False -> no claim_type pre-filter (a generic CheckableFact has none), pure BGE ranking
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import build_select_fn
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_select_fn
 
     class _Emb:  # deterministic DISTINCT 2-D vectors so the two reqs are not near-duplicates (dedup)
         def encode_dense(self, text):
@@ -272,8 +272,8 @@ def test_semantic_select_without_applicability_filter_keeps_all_then_ranks():
 
 async def test_run_generic_compliance_verdict_produces_a_cited_report_without_ontology():
     # end-to-end hermetic: a non-advertising subject + requirements with EMPTY applicability -> a verdict + findings
-    from rag_wright.capabilities.compliance_judgment import JudgeVerdict
-    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import JudgeVerdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
     class _Store:
         def all_requirements(self):
@@ -290,7 +290,7 @@ async def test_run_generic_compliance_verdict_produces_a_cited_report_without_on
     async def _judge(fact, requirement):  # domain-agnostic ASYNC judge stub -> a verdict on text
         return JudgeVerdict(verdict="violation", rationale="not recorded", confidence=0.9)
 
-    import rag_wright.capabilities.compliance_judgment as cj
+    import rag_wright.packs.compliance.capabilities.compliance_judgment as cj
     orig = cj.build_ageneric_judge_fn
     cj.build_ageneric_judge_fn = lambda model_id: _judge  # inject the stub async judge (source of the local import)
     try:
@@ -309,8 +309,8 @@ async def test_run_generic_compliance_verdict_produces_a_cited_report_without_on
 
 
 def test_constraint_applies_is_dimension_agnostic_and_recall_first():
-    from rag_wright.contracts.compliance import Constraint
-    from rag_wright.subgraphs.compliance_check import constraint_applies
+    from rag_wright.packs.compliance.schemas.compliance import Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import constraint_applies
 
     C = Constraint
     # requirement constrains a dimension; subject matches on it -> applies
@@ -336,8 +336,8 @@ def test_constraint_applies_is_dimension_agnostic_and_recall_first():
 
 
 def test_build_select_fn_constraint_scope_mode_routes_by_generic_matching():
-    from rag_wright.contracts.compliance import Constraint
-    from rag_wright.subgraphs.compliance_check import build_select_fn
+    from rag_wright.packs.compliance.schemas.compliance import Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_select_fn
 
     class _Emb:
         def encode_dense(self, text):
@@ -349,7 +349,7 @@ def test_build_select_fn_constraint_scope_mode_routes_by_generic_matching():
     r_large = _req("B", text="rule for large employers")
     r_large = r_large.model_copy(update={"applicability_scope": [Constraint(dimension="employer_size", value="large")]})
 
-    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
     subject = CheckableFact(fact_id="f0", source_doc="s", assertion_text="a small employer scenario")
     # the domain's subject-scope producer (data, not compliance_check code): this subject is a "small" employer
     def scope_fn(_s):
@@ -394,7 +394,7 @@ class _Emb1:
 
 def _inject_generic_violation_judge():
     """Patch the generic judge to a stub that flags every requirement as a violation; returns a restore fn."""
-    import rag_wright.capabilities.compliance_judgment as cj
+    import rag_wright.packs.compliance.capabilities.compliance_judgment as cj
 
     async def _judge(fact, requirement):
         return JudgeVerdict(verdict="violation", rationale="stub", confidence=0.9)
@@ -410,7 +410,7 @@ def _stub_sentence_extractor():
     newlines and drops short fragments (headings), mimicking a real extractor's clean per-assertion output."""
     import re
 
-    from rag_wright.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
+    from rag_wright.packs.compliance.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
 
     async def _extract(text, model, *, template, **kw):
         parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\n+", text or "") if len(p.strip()) > 15]
@@ -424,7 +424,7 @@ def _actor_sentence_extractor(actor_map: dict):
     actor gate has real per-assertion scope in a hermetic run (no model)."""
     import re
 
-    from rag_wright.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
+    from rag_wright.packs.compliance.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
 
     async def _extract(text, model, *, template, **kw):
         parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+|\n+", text or "") if len(p.strip()) > 15]
@@ -463,7 +463,7 @@ def _doc_of(*items):
 
 
 def _req_obj(deontic, citation="§ 1", confidence="EXTRACTED", text="a rule here"):
-    from rag_wright.contracts.compliance import DeonticType, Requirement
+    from rag_wright.packs.compliance.schemas.compliance import DeonticType, Requirement
     from rag_wright.contracts.provenance import ConfidenceTag
     return Requirement(requirement_id=f"r:{citation}:{deontic}", source="p", citation=citation,
                        deontic_type=DeonticType(deontic), actor="party", requirement_text=text,
@@ -473,7 +473,7 @@ def _req_obj(deontic, citation="§ 1", confidence="EXTRACTED", text="a rule here
 def test_deontic_route_from_type_confidence_and_override():
     # DEON-1: the route comes from the deontic TYPE (any policy), with a curated FTC override and an
     # ambiguous-confidence recall-first case -- NOT from matching FTC section numbers.
-    from rag_wright.subgraphs.compliance_check import DeonticRoute, deontic_route
+    from rag_wright.packs.compliance.subgraphs.compliance_check import DeonticRoute, deontic_route
 
     assert deontic_route(_req_obj("obligation")) is DeonticRoute.OBLIGATION
     assert deontic_route(_req_obj("prohibition")) is DeonticRoute.PROHIBITION
@@ -488,7 +488,7 @@ async def test_deontic_split_obligation_once_prohibition_per_assertion_permissio
     # DEON-1 (the 0012 fix): a mixed-deontic customer policy (§1/§2/§3) over a 2-assertion doc.
     # obligation -> judged ONCE (document fact); prohibition -> per-assertion (x2); permission -> EXCLUDED.
     # Total 3 findings, NOT 2 assertions x 3 rules = 6.
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([
         _row("p", "§ 1", "The endorser must disclose any material connection.", deontic="obligation"),
@@ -514,8 +514,8 @@ def test_actor_matches_recall_first_and_ontology_disjoint(monkeypatch):
     # DISJOINT (a different cmp:roleDomain). A synonym still normalizes; a generic/absent role never gates; two
     # different-but-overlapping ADVERTISING roles (advertiser vs seller/endorser) NOW match (the silent-drop fix);
     # an UNMODELLED role is compatible; only a CROSS-DOMAIN role (a labor 'employer' vs an ad role) is excluded.
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.subgraphs.compliance_check import actor_matches, canonical_actor, roles_disjoint
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.subgraphs.compliance_check import actor_matches, canonical_actor, roles_disjoint
 
     assert canonical_actor("Manufacturer") == "advertiser"                     # synonym -> canonical
     assert canonical_actor("distributor") == "distributor"                     # unknown role kept as-is
@@ -540,9 +540,9 @@ def test_prohibition_recall_first_actor_gate(monkeypatch):
     # ADR-0068 (issue 0013): the per-assertion prohibition actor gate is recall-first. Two OVERLAPPING advertising
     # roles (an advertiser pricing rule vs a SELLER assertion) are NO LONGER dropped -- the exact silent-recall
     # hole 0013 reported. A CROSS-DOMAIN rule (a labor 'employer' rule) IS still excluded from an ad assertion.
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.contracts.compliance import CheckableFact, Constraint
-    from rag_wright.subgraphs.compliance_check import build_select_fn
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_select_fn
 
     advertiser_rule = _req_obj("prohibition", citation="§ A",
                                text="An advertiser must not describe a price as a discount.").model_copy(
@@ -570,9 +570,9 @@ def test_obligation_actor_gate_skips_only_cross_domain(monkeypatch):
     # ADR-0068 (issue 0013): the DEON-7 obligation actor gate is recall-first. An obligation whose actor OVERLAPS a
     # document actor (endorser vs an advertiser/seller doc, same domain) is now JUDGED, not skipped; only a
     # CROSS-DOMAIN obligation (a labor 'employer' duty) is skipped for an advertising document.
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.contracts.compliance import CheckableFact, Constraint
-    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_obligation_pairs_fn
 
     make = build_obligation_pairs_fn(_Emb1())
     advertiser_doc = [CheckableFact(fact_id="f", source_doc="d", assertion_text="advertiser",
@@ -592,9 +592,9 @@ def test_actor_gated_pairs_reports_disjoint_drops(monkeypatch):
     # ADR-0068 (issue 0013): the ACTOR gate is never silent -- `_actor_gated_pairs` reports every (assertion|
     # document, rule) pair it skipped, with its citation + scope + the disjoint actor. Empty is the recall-first
     # norm (an advertising rule vs an advertising subject gates nothing).
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.contracts.compliance import CheckableFact, Constraint
-    from rag_wright.subgraphs.compliance_check import _actor_gated_pairs
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import _actor_gated_pairs
 
     monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
     employer_ob = _req_obj("obligation", citation="§ L", text="An employer must post a notice.").model_copy(
@@ -621,9 +621,9 @@ async def test_report_surfaces_actor_gated_pairs(monkeypatch):
     # ADR-0068 (issue 0013): the gated pairs reach ComplianceReport.gated_pairs through the graph -- a cross-domain
     # labor obligation dropped for an advertising subject is REPORTED (honest coverage), while the overlapping
     # advertiser-vs-seller pricing rule is JUDGED, not gated.
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.contracts.compliance import CheckableFact, Constraint
-    from rag_wright.subgraphs.compliance_check import (
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import (
         build_compliance_check, build_obligation_pairs_fn, build_select_fn)
 
     monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})
@@ -657,8 +657,8 @@ async def test_report_surfaces_actor_gated_pairs(monkeypatch):
 
 def test_subject_scope_aggregates_and_dedups_actor_constraints():
     # DEON-5: the document SubjectScope is the deduped union of the facts' scope constraints.
-    from rag_wright.contracts.compliance import CheckableFact, Constraint
-    from rag_wright.subgraphs.compliance_check import subject_scope
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact, Constraint
+    from rag_wright.packs.compliance.subgraphs.compliance_check import subject_scope
 
     facts = [
         CheckableFact(fact_id="f0", source_doc="d", assertion_text="a",
@@ -678,8 +678,8 @@ def test_subject_scope_aggregates_and_dedups_actor_constraints():
 def test_obligation_pairs_are_bounded_and_relevance_ranked():
     # DEON-2: an obligation is judged over the TOP-N most-relevant passages up to a char budget -- NOT the whole
     # document. A discriminating embedder ranks the connection sentence first; the bound caps the evidence.
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_obligation_pairs_fn
 
     emb = _FakeEmbedder({"material connection": [0, 0, 1], "disclose": [0, 0, 1],  # obligation + the relevant claim
                          "cures": [1, 0, 0], "price": [0, 1, 0]})
@@ -701,8 +701,8 @@ def test_obligation_pairs_are_bounded_and_relevance_ranked():
 
 
 def test_obligation_evidence_respects_the_char_budget():
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_obligation_pairs_fn
 
     claims = [CheckableFact(fact_id=f"f{i}", source_doc="d", assertion_text="x" * 100) for i in range(10)]
     ob = _req_obj("obligation", citation="§ D")
@@ -719,7 +719,7 @@ def test_customer_section_claim_type_scope_narrows():
     # claim_type scope is LOAD-BEARING -- it NARROWS (a pricing-scoped rule does not apply to a health claim);
     # an empty scope is recall-first (applies to all). The FTC override still WINS for a pinned FTC section, so
     # a noisy granite claim_type can neither narrow a context section nor rescue §255.0.
-    from rag_wright.subgraphs.compliance_check import applicable_claim_types
+    from rag_wright.packs.compliance.subgraphs.compliance_check import applicable_claim_types
 
     pricing_rule = _req(section="policy.7", scope=("pricing",), text="Price claims must state the base price.")
     assert applies_to(pricing_rule, _claim(ctype=ClaimType.PRICING)) is True
@@ -733,8 +733,8 @@ def test_customer_section_claim_type_scope_narrows():
 def test_to_claims_populates_actor_scope():
     # DEON-8 Part B: an ad Claim surfaces its ROLE actor as a Constraint on `.scope` (mirroring the generic
     # `to_facts`), so the obligation actor gate (DEON-7) works on the ad path too. The typed `.actor` is kept.
-    from rag_wright.capabilities.claim_extraction import to_claims
-    from rag_wright.skills.claim_extraction.template import ExtractedAd, ExtractedClaim
+    from rag_wright.packs.compliance.capabilities.claim_extraction import to_claims
+    from rag_wright.packs.compliance.skills.claim_extraction.template import ExtractedAd, ExtractedClaim
 
     ad = ExtractedAd(subject="s", claims=[
         ExtractedClaim(assertion_text="Dr. Miller recommends it.", claim_type="endorsement", actor="Endorser")])
@@ -747,8 +747,8 @@ async def test_ad_judge_frames_obligations_and_tolerates_a_bundle():
     # DEON-8 Part B: the ADVERTISING judge (a) appends the OBLIGATION deontic framing (parity with the generic
     # judge) and (b) tolerates a plain CheckableFact evidence BUNDLE (no claim_type) -- rendering no per-claim
     # CLAIM SIGNALS instead of crashing on the missing attribute.
-    from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn
-    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import build_acompliance_judge_fn
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
 
     prompts: list[str] = []
 
@@ -772,7 +772,7 @@ def test_obligation_bundle_carries_ad_disclosures():
     # DEON-8 Part B (Option 1): an obligation judged ONCE must still see a disclosure made ANYWHERE in the ad.
     # issue 0044: the union now rides in `document_signals` (judge-only), NOT in `assertion_text` -- so the judge
     # still sees it but it never surfaces as the finding's citation. getattr-tolerant: a generic fact carries none.
-    from rag_wright.subgraphs.compliance_check import build_obligation_pairs_fn
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_obligation_pairs_fn
 
     claims = [
         _claim(text="Two shades whiter in a week.", ctype=ClaimType.ENDORSEMENT, disc=["#ad", "paid partnership"]),
@@ -789,8 +789,8 @@ def test_obligation_bundle_carries_ad_disclosures():
 async def test_ad_path_splits_obligations_once_with_an_embedder():
     # DEON-8 Part B: production_compliance_check wires the deontic split on the AD path too (when an embedder is
     # given) -- an obligation judged ONCE, a prohibition per-assertion -- parity with the generic path.
-    import rag_wright.capabilities.compliance_judgment as cj
-    from rag_wright.subgraphs.compliance_check import production_compliance_check
+    import rag_wright.packs.compliance.capabilities.compliance_judgment as cj
+    from rag_wright.packs.compliance.subgraphs.compliance_check import production_compliance_check
 
     async def _judge(fact, req):
         return JudgeVerdict(verdict="violation", rationale="", confidence=0.9)
@@ -825,8 +825,8 @@ def test_defense_linker_links_same_source_actor_compatible_permission(monkeypatc
     # DEON-9 + ADR-0068: within a policy SOURCE, an actor-COMPATIBLE PERMISSION is linked as a defense to an O/F
     # rule -- recall-first, so a same-DOMAIN role (an endorser permission vs an advertiser rule) now qualifies; only
     # a CROSS-DOMAIN permission (a labor role) and a different-source permission are NOT; a permission gets none.
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.subgraphs.compliance_check import build_defense_linker
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.subgraphs.compliance_check import build_defense_linker
 
     proh = _req_obj("prohibition", citation="§ 1",
                     text="An advertiser must not make a health claim.").model_copy(update={"actor": "advertiser"})
@@ -853,8 +853,8 @@ def test_defense_linker_links_same_source_actor_compatible_permission(monkeypatc
 
 async def test_defense_framing_reaches_generic_and_ad_judges():
     # DEON-9: a requirement carrying linked defenses renders an EXCEPTIONS/DEFENSES block in BOTH judges.
-    from rag_wright.capabilities.compliance_judgment import build_acompliance_judge_fn, build_ageneric_judge_fn
-    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import build_acompliance_judge_fn, build_ageneric_judge_fn
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
 
     prompts: list[str] = []
 
@@ -876,7 +876,7 @@ async def test_defense_framing_reaches_generic_and_ad_judges():
 async def test_permission_defense_is_linked_and_reaches_the_judge():
     # DEON-9 wiring: build_compliance_check with a defense_linker attaches the linked permission to the
     # prohibition's requirement, so the judge sees it; the permission itself is EXCLUDED from violation-judging.
-    from rag_wright.subgraphs.compliance_check import (
+    from rag_wright.packs.compliance.subgraphs.compliance_check import (
         build_compliance_check,
         build_defense_linker,
         build_obligation_pairs_fn,
@@ -919,9 +919,9 @@ async def test_deon_phase2_combined_routing_gating_and_cost(monkeypatch):
     #      compatible with the same-domain endorser sentence AND the two actor-less sentences) + carries §4
     #   §4 permission(advertiser) -- EXCLUDED from judging, linked as a defense to §3
     # Total judge calls = 4 (the RELEVANT pairs), NOT assertions x rules = 3 x 4 = 12.
-    import rag_wright.capabilities.compliance_judgment as cj
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    import rag_wright.packs.compliance.capabilities.compliance_judgment as cj
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     monkeypatch.setattr(cc, "_ROLE_DOMAINS", {**cc._ROLE_DOMAINS, "employer": "labor"})  # employer -> cross-domain
     calls: list = []
@@ -967,7 +967,7 @@ async def test_deon_phase2_combined_routing_gating_and_cost(monkeypatch):
 async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
     # SEG-7a: run_subject_compliance_verdict now chunks -> extracts VERBATIM assertions -> attaches locators ->
     # judges. Injected doc + stub extractor (hermetic, no model/parse). Findings cite each assertion's § locator.
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     doc = _text_doc("Our product cures arthritis fast. It also reverses aging completely.",
                     heading="4. Advertising")
@@ -987,7 +987,7 @@ async def test_subject_verdict_runs_the_semantic_pipeline_with_locators():
 async def test_subject_verdict_cites_bullet_locator():
     # SEG-8: a list-item assertion cites "§ {section} · bullet {n}" end-to-end through the verdict (SEG-1 render
     # + SEG-4 list_item detection composed). Injected doc (a section + a bullet) + stub extractor.
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     doc = _doc_of(("section_header", "5. Guarantees"),
                   ("list_item", "We guarantee a full refund within thirty days for any reason."))
@@ -1003,7 +1003,7 @@ async def test_subject_verdict_cites_bullet_locator():
 
 
 async def test_run_generic_compliance_verdict_scopes_to_named_sources():
-    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "P1 rule: a party must record injuries."),
                                _row("p2", "§ 2", "P2 rule: a party must disclose connections.")])
@@ -1020,7 +1020,7 @@ async def test_run_generic_compliance_verdict_scopes_to_named_sources():
 
 
 async def test_unknown_source_raises_unknown_compliance_source_error():
-    from rag_wright.subgraphs.compliance_check import (
+    from rag_wright.packs.compliance.subgraphs.compliance_check import (
         UnknownComplianceSourceError,
         run_generic_compliance_verdict,
     )
@@ -1035,7 +1035,7 @@ async def test_unknown_source_raises_unknown_compliance_source_error():
 
 async def test_empty_sources_scopes_to_nothing_no_findings():
     # `[]` = scope to no policy -> zero requirements -> no findings (product maps this to not_checked). NOT an error.
-    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "P1 rule.")])
     cj, orig = _inject_generic_violation_judge()
@@ -1050,7 +1050,7 @@ async def test_empty_sources_scopes_to_nothing_no_findings():
 
 async def test_sources_none_does_not_consult_requirement_sources():
     # back-compat: sources=None must NOT call requirement_sources() -> a store without it still works
-    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
     class _NoValidateStore:
         def all_requirements(self, sources=None):
@@ -1071,7 +1071,7 @@ async def test_sources_none_does_not_consult_requirement_sources():
 
 async def test_run_compliance_document_verdict_checks_each_section():
     # SEG-7a: an uploaded document -> semantic pipeline -> assertions cite their § section locator.
-    from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_compliance_document_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
     doc = _doc_of(("section_header", "1. Endorsement"),
@@ -1094,7 +1094,7 @@ async def test_run_compliance_document_verdict_checks_each_section():
 
 async def test_document_verdict_headingless_doc_has_no_section_locator():
     # SEG-7a: a headingless (flat) uploaded doc -> assertions with NO § locator (honest, not degraded).
-    from rag_wright.subgraphs.compliance_check import run_compliance_document_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_compliance_document_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
     doc = _text_doc("One flat paragraph, no headings at all present here.")
@@ -1111,7 +1111,7 @@ async def test_document_verdict_headingless_doc_has_no_section_locator():
 
 async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
     # 0007 integration: the document path honours `sources` and raises on an unknown one, like the text path
-    from rag_wright.subgraphs.compliance_check import UnknownComplianceSourceError, run_compliance_document_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import UnknownComplianceSourceError, run_compliance_document_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
     with pytest.raises(UnknownComplianceSourceError):
@@ -1123,7 +1123,7 @@ async def test_document_verdict_scopes_by_sources_and_errors_on_unknown():
 
 async def test_run_subject_compliance_verdict_upload_mode_cites_section_and_sentence():
     # SEG-7a: the unified front-end, upload mode -> per-assertion findings citing "§ {section}".
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must disclose material connections.")])
     doc = _doc_of(("section_header", "2.1 Endorsement"),
@@ -1145,7 +1145,7 @@ async def test_run_subject_compliance_verdict_upload_mode_cites_section_and_sent
 
 async def test_run_subject_compliance_verdict_text_mode_no_locator():
     # SEG-7a: paste mode -> the semantic pipeline over a structureless doc -> NO spurious "§".
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive claims.")])
     doc = _text_doc("Our new supplement cures arthritis in just two weeks. "
@@ -1163,7 +1163,7 @@ async def test_run_subject_compliance_verdict_text_mode_no_locator():
 
 
 async def test_run_subject_compliance_verdict_requires_an_input():
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "rule")])
     with pytest.raises(ValueError):
@@ -1174,7 +1174,7 @@ async def test_run_subject_compliance_verdict_requires_an_input():
 async def test_run_generic_compliance_verdict_cites_each_assertion():
     # SEG-7a: the generic text path parses the paste through docling and runs the SAME semantic pipeline ->
     # a finding per checkable assertion, each citing its own verbatim span, NO § (structureless paste).
-    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
     store = _MultiPolicyStore([_row("p1", "§ 1", "A party must not make deceptive or unsubstantiated claims.")])
     paste = ("Our new supplement cures arthritis in just two weeks of use. "
@@ -1208,8 +1208,8 @@ def _seg4_doc():
 def test_attach_structural_locators_maps_assertions_to_section_and_element():
     # SEG-4: each verbatim assertion is matched to its docling item -> section + element_kind + ¶/bullet ordinal,
     # so locator() renders "§ N ¶M" / "§ N · bullet M". Ordinals count per-kind, reset per section.
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import attach_structural_locators
 
     def _f(t):
         return CheckableFact(fact_id=CheckableFact.make_id("d", 0, t), source_doc="d", assertion_text=t)
@@ -1230,8 +1230,8 @@ def test_attach_merges_soft_wrapped_lines_so_paragraph_ordinals_are_correct():
     # paragraph, so the NEXT real paragraph is ¶2 (not ¶3), and the whole wrapped text is one ¶.
     from types import SimpleNamespace
 
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import attach_structural_locators
 
     doc = SimpleNamespace(texts=[
         SimpleNamespace(text="4. Claims", label="section_header", level=1),
@@ -1256,8 +1256,8 @@ def test_attach_locates_assertion_that_spans_soft_wrapped_items():
     # spanning the wrap must still be located (concatenation-based match), not dropped.
     from types import SimpleNamespace
 
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import attach_structural_locators
 
     doc = SimpleNamespace(texts=[
         SimpleNamespace(text="4. Claims", label="section_header", level=1),
@@ -1274,8 +1274,8 @@ def test_attach_flat_doc_has_no_section_locator():
     # SEG-4 / decision 5: a headingless (flat) document -> no section -> no "§" (honest, not degraded).
     from types import SimpleNamespace
 
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import attach_structural_locators
 
     doc = SimpleNamespace(texts=[SimpleNamespace(text="A flat claim with no heading at all here.", label="text",
                                                  level=None)])
@@ -1286,8 +1286,8 @@ def test_attach_flat_doc_has_no_section_locator():
 
 def test_attach_unmatched_assertion_stays_unlocated():
     # a paraphrased/absent assertion matches no item -> stays unlocated (still citable by its text).
-    from rag_wright.contracts.compliance import CheckableFact
-    from rag_wright.subgraphs.compliance_check import attach_structural_locators
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
+    from rag_wright.packs.compliance.subgraphs.compliance_check import attach_structural_locators
 
     f = CheckableFact(fact_id="f0", source_doc="d", assertion_text="This exact text is not in the document.")
     attach_structural_locators([f], _seg4_doc())
@@ -1297,8 +1297,8 @@ def test_attach_unmatched_assertion_stays_unlocated():
 async def test_aextract_subject_facts_runs_per_chunk_with_unique_ids():
     # SEG-3: extract checkable assertions from each subject CHUNK (concurrently) -> CheckableFacts, re-indexed
     # globally so fact_ids are unique across chunks. Domain-neutral (no claim_type). Injected extractor.
-    from rag_wright.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
-    from rag_wright.subgraphs.compliance_check import aextract_subject_facts
+    from rag_wright.packs.compliance.capabilities.assertion_extraction import ExtractedAssertion, ExtractedAssertions
+    from rag_wright.packs.compliance.subgraphs.compliance_check import aextract_subject_facts
 
     async def _stub(text, model, *, template, **kw):  # one assertion per chunk = the chunk text
         return ExtractedAssertions(subject="s", assertions=[ExtractedAssertion(assertion_text=text.strip())])
@@ -1316,7 +1316,7 @@ async def test_subject_chunks_uses_the_shared_chunker_seam():
     from types import SimpleNamespace
 
     from rag_wright.capabilities.rlm_chunking import BoundarySpan
-    from rag_wright.subgraphs.compliance_check import subject_chunks
+    from rag_wright.packs.compliance.subgraphs.compliance_check import subject_chunks
 
     class _Disc:
         def __init__(self):
@@ -1339,8 +1339,8 @@ async def test_subject_chunks_uses_the_shared_chunker_seam():
 async def test_aextract_ad_claims_extracts_per_chunk_typed_tail_preserved():
     # SEG-7b: the advertising extractor runs PER CHUNK, re-indexed for unique ids; the typed-Claim tail
     # (claim_type) is preserved. The structural locator is attached separately (SEG-4), not here.
-    from rag_wright.contracts.compliance import Claim, ClaimType
-    from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
+    from rag_wright.packs.compliance.schemas.compliance import Claim, ClaimType
+    from rag_wright.packs.compliance.subgraphs.compliance_check import _aextract_ad_claims
 
     async def fake_aclaim(text, *, model, source_doc, **kw):  # one claim per chunk
         return [Claim(fact_id=Claim.make_id(source_doc, 0, text), source_doc=source_doc,
@@ -1356,9 +1356,9 @@ async def test_aextract_ad_claims_extracts_per_chunk_typed_tail_preserved():
 async def test_aextract_ad_claims_retries_a_transient_extraction_failure():
     # PARTIAL-CAUSE-1 parity: the ad path extracts claims OUTSIDE the retry graph. A TRANSIENT docling blip
     # (ExtractionFailed on empty content / rate-limit) must be retried and recover, not crash the check.
-    from rag_wright.capabilities.dg_extraction import ExtractionFailed
-    from rag_wright.contracts.compliance import Claim, ClaimType
-    from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
+    from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionFailed
+    from rag_wright.packs.compliance.schemas.compliance import Claim, ClaimType
+    from rag_wright.packs.compliance.subgraphs.compliance_check import _aextract_ad_claims
 
     calls = {"n": 0}
 
@@ -1377,8 +1377,8 @@ async def test_aextract_ad_claims_reraises_a_persistent_failure():
     # a PERSISTENT failure surfaces loudly after retries -- a chunk's claims are never silently dropped.
     import pytest
 
-    from rag_wright.capabilities.dg_extraction import ExtractionFailed
-    from rag_wright.subgraphs.compliance_check import _aextract_ad_claims
+    from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionFailed
+    from rag_wright.packs.compliance.subgraphs.compliance_check import _aextract_ad_claims
 
     async def always_fails(text, *, model, source_doc, **kw):
         raise ExtractionFailed("claim", "persistent extraction error")
@@ -1390,8 +1390,8 @@ async def test_aextract_ad_claims_reraises_a_persistent_failure():
 async def test_ad_path_upload_cites_section_locators(monkeypatch):
     # SEG-7b: run_ad_compliance_check runs the SEMANTIC front-end (parse -> chunk -> per-chunk Claim extraction ->
     # attach locators -> judge). An uploaded ad's typed claims cite their "§ {section}" locator.
-    import rag_wright.subgraphs.compliance_check as cc
-    from rag_wright.contracts.compliance import Claim, ClaimType
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
+    from rag_wright.packs.compliance.schemas.compliance import Claim, ClaimType
 
     async def fake_aclaim(text, *, model, source_doc, **kw):  # extract the verbatim sentences of the chunk
         import re
@@ -1400,7 +1400,7 @@ async def test_ad_path_upload_cites_section_locators(monkeypatch):
                       assertion_text=s, claim_type=ClaimType.HEALTH) for i, s in enumerate(sents)]
 
     # the ad judge stub (build_acompliance_judge_fn) -- async, like the real one
-    import rag_wright.capabilities.compliance_judgment as cj
+    import rag_wright.packs.compliance.capabilities.compliance_judgment as cj
 
     async def _ad_judge(claim, req):
         return JudgeVerdict(verdict="violation", rationale="x", confidence=0.9)
@@ -1423,7 +1423,7 @@ async def test_ad_path_upload_cites_section_locators(monkeypatch):
 async def test_unified_multi_section_document_maps_each_sentence_to_its_section():
     # UNIFY-E (arc gate): a genuine MULTI-section subject -> each sentence cites ITS OWN "§ {section}", so the
     # cross-section mapping is correct (not just 1-2 sections). Numeric locators come from the section ids.
-    from rag_wright.subgraphs.compliance_check import run_subject_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_subject_compliance_verdict
 
     store = _MultiPolicyStore([
         _row("p1", "§ A", "An advertisement must not claim a product cures a disease."),
@@ -1457,7 +1457,7 @@ async def test_unified_multi_section_document_maps_each_sentence_to_its_section(
 def test_compliance_report_has_ocr_unreadable_pages_field():
     # SEG-6: the report carries which pages the tiered OCR could not read, so a verdict is never silently based on
     # half-read text (the ENG-1 principle, compliance side).
-    from rag_wright.contracts.compliance import ComplianceReport
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
 
     assert ComplianceReport(source_doc="d").ocr_unreadable_pages == []                 # default empty
     assert ComplianceReport(source_doc="d", ocr_unreadable_pages=[3, 4]).ocr_unreadable_pages == [3, 4]
@@ -1465,7 +1465,7 @@ def test_compliance_report_has_ocr_unreadable_pages_field():
 
 async def test_subject_verdict_propagates_ocr_unreadable_pages(monkeypatch):
     # SEG-6/SEG-7a: the OCR PARTIAL (unreadable pages) from the parse reaches the ComplianceReport.
-    import rag_wright.subgraphs.compliance_check as cc
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
 
     async def _fake_parse(**kw):  # parse -> (docling doc, unreadable pages)
         return _text_doc("The subject makes a checkable claim here today."), [3, 4]
@@ -1484,7 +1484,7 @@ async def test_subject_verdict_propagates_ocr_unreadable_pages(monkeypatch):
 
 async def test_paste_and_upload_reach_the_same_producer(monkeypatch):
     # SEG-7a: paste (text mode) AND upload (doc mode) both flow through the SAME semantic_subject_facts producer.
-    import rag_wright.subgraphs.compliance_check as cc
+    import rag_wright.packs.compliance.subgraphs.compliance_check as cc
 
     seen: list[int] = []
     real = cc.semantic_subject_facts

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.contracts.compliance import DeonticType, Requirement
+from rag_wright.packs.compliance.schemas.compliance import DeonticType, Requirement
 from rag_wright.store.arcadedb import ArcadeDBStore
 
 _TEST_DB = "ragwright_test_req_sources"
@@ -82,7 +82,7 @@ def store():
 
 @pytest.mark.store
 def test_source_filter_roundtrip_live(store):
-    from rag_wright.capabilities.compliance_store import ComplianceStore
+    from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
     ComplianceStore(store).write_requirements(  # DD-1b: writes moved to the compliance store extension
         [_req("p1", 0), _req("p1", 1), _req("p2", 0), _req("p2", 1), _req("p2", 2), _req("p3", 0)])

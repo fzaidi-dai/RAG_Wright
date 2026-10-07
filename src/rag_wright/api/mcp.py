@@ -6,7 +6,7 @@ manifest, and its handler dispatches through the engine invoker (`ainvoke_subgra
 workspace. This is the zero-boilerplate path: a new-domain product (or a new engine capability) gets a discoverable
 MCP tool for free, the moment the capability is in the ARD catalog.
 
-The four hand-written servers in `rag_wright/mcp/` stay: they offer a CURATED, typed tool signature + description for
+The four hand-written servers in `rag_wright/packs/contracts/mcp/` stay: they offer a CURATED, typed tool signature + description for
 the Tier-1 legs. This generic adapter is the complement -- it takes a single opaque `inputs` dict (the capability's
 own input contract, dispatched straight to the invoker) rather than a per-capability typed signature, because the
 ARD manifest carries no JSON input schema to derive one from.

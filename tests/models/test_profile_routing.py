@@ -67,7 +67,7 @@ def test_build_model_uses_the_resolved_connection(monkeypatch):
 
 
 def test_default_extraction_model_routes_via_profile():
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
 
     m = default_extraction_model("clause-extract", "qwen3.8-27b-modal")
     assert m.provider == "hosted_vllm" and m.model == "Qwen/Qwen3.8-27B"

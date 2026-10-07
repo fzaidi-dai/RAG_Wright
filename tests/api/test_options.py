@@ -31,7 +31,7 @@ def test_ingest_adapter_threads_the_options_into_the_pipeline(monkeypatch):
         return _FakeGraph()
 
     monkeypatch.setattr(
-        "rag_wright.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest", _fake_ingest)
+        "rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest", _fake_ingest)
     cfg = EngineConfig(store=_store_cfg(), options=EngineOptions(ingest=IngestOptions(
         classify_concurrency=4, clause_concurrency=5, affiliations=False, function_classifier="llm",
         list_model="off", clause_samples=3)))
@@ -54,7 +54,7 @@ def test_ingest_adapter_passes_the_configured_embedding_profile(monkeypatch):
             return {}
 
     monkeypatch.setattr(
-        "rag_wright.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest",
+        "rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest",
         lambda store, **kw: captured.update(kw) or _FakeGraph())
     cfg = EngineConfig(store=_store_cfg(), embeddings={"text": "my-profile"})
     ws = WorkspaceHandle(store=object(), config=cfg, corpus="c")
@@ -72,7 +72,7 @@ def test_unset_options_pass_none_so_the_pipeline_keeps_its_defaults(monkeypatch)
             return {}
 
     monkeypatch.setattr(
-        "rag_wright.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest",
+        "rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline.aproduction_document_ingest",
         lambda store, **kw: captured.update(kw) or _FakeGraph())
     ws = WorkspaceHandle(store=object(), config=EngineConfig(store=_store_cfg()), corpus="c")
 

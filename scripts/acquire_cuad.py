@@ -19,12 +19,12 @@ import zipfile
 from pathlib import Path
 
 from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
-from rag_wright.corpus.cuad import (
+from rag_wright.packs.contracts.corpus.cuad import (
     RASTER_DPI,
     load_contract_metadata,
     rasterize_to_image_pdf,
 )
-from rag_wright.corpus.selection import (
+from rag_wright.packs.contracts.corpus.selection import (
     ContractMeta,
     SelectionCriteria,
     SubsetManifest,

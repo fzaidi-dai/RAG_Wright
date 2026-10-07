@@ -34,14 +34,14 @@ import torch
 from dotenv import load_dotenv
 
 from eval.acord import load_corpus
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 from rag_wright.capabilities.embedding import BGEM3Embedder
 from rag_wright.contracts.identifiers import ChunkId, canonical_source_doc_id
 from rag_wright.contracts.span import SpanRecord
-from rag_wright.spans.function_classifier import NONE_LABEL
-from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
-from rag_wright.spans.property_extractor import SeamPropertyExtractor
-from rag_wright.spans.segment import segment_clause
+from rag_wright.packs.contracts.spans.function_classifier import NONE_LABEL
+from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
+from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
+from rag_wright.packs.contracts.spans.segment import segment_clause
 from rag_wright.util.concurrent import map_concurrent
 
 MODEL_PATH = Path("data/models/legalbert_function")
@@ -150,7 +150,7 @@ def main() -> None:
     # lock (one store client); extraction stays concurrent.
     from rag_wright.store.arcadedb import CLAUSE_TYPE
 
-    from rag_wright.spans.property_grounding import needs_escalation, reground
+    from rag_wright.packs.contracts.spans.property_grounding import needs_escalation, reground
 
     if FRESH:  # start property extraction over from the top, keeping the (expensive) span index
         store.clear_property_graph()

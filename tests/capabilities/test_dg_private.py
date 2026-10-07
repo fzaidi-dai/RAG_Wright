@@ -5,14 +5,14 @@ stop scoring 0 in the relational eval. Hermetic."""
 
 from __future__ import annotations
 
-from rag_wright.capabilities.dg_extraction import (
+from rag_wright.packs.contracts.capabilities.dg_extraction import (
     ContractParties,
     Party,
     build_private_map,
     build_verified_registry,
     resolve_extracted,
 )
-from rag_wright.corpus.edgar import normalize_cik, normalize_name
+from rag_wright.packs.contracts.corpus.edgar import normalize_cik, normalize_name
 
 
 def _vset():

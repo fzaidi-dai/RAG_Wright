@@ -55,7 +55,7 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 ### G7: No generic reader for decision criteria authored in a pack `.ttl`
 - **Where:** the reference pack authors its decision options and criteria in the ontology (`cbr:ResidualRole` +
   `cbr:decisionCriterion` + `cbr:roleOrder`, `cmp:decisionCriterion`), but the reader
-  (`load_residual_role_criteria`) is in the reference loader `rag_wright.ontology.loader`, which generic code may
+  (`load_residual_role_criteria`) is in the reference loader `rag_wright.packs.contracts.ontology.loader`, which generic code may
   not import.
 - **Impact:** a domain writes its own small `rdflib` reader for its criteria.
 - **Proposed:** a generic reader in `ontology.pack_schema` (or similar) over an engine-namespaced criterion

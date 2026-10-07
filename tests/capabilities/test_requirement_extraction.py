@@ -2,7 +2,7 @@
 
 `requirement_extraction` is a SUBGRAPH (its `auto/dense` extraction is multi-LLM-call; extract -> adapt is a
 deterministic workflow) -- the subgraph itself is tested in `tests/subgraphs/test_requirement_extraction.py`.
-This file covers the subgraph's two co-located pieces that live in `capabilities/requirement_extraction.py`:
+This file covers the subgraph's two co-located pieces that live in `packs/compliance/capabilities/requirement_extraction.py`:
 
 - the extraction ACT (`extract_regulation_section`) -- the docling-graph seam is stubbed (`extract_fn`), so no LLM;
 - the `requirement_adaptation` FUNCTION (`to_requirements`) -- deterministic vocab coercion / off-vocab handling.
@@ -14,7 +14,7 @@ downgrades to AMBIGUOUS; an off-vocab claim_type is dropped.
 from __future__ import annotations
 
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.capabilities.requirement_extraction import (
+from rag_wright.packs.compliance.capabilities.requirement_extraction import (
     ExtractedRegulationSection,
     ExtractedRequirement,
     extract_regulation_section,
@@ -22,7 +22,7 @@ from rag_wright.capabilities.requirement_extraction import (
     register_requirement_adaptation,
     to_requirements,
 )
-from rag_wright.contracts.compliance import DeonticType, Requirement
+from rag_wright.packs.compliance.schemas.compliance import DeonticType, Requirement
 from rag_wright.contracts.provenance import ConfidenceTag
 
 
@@ -177,7 +177,7 @@ import os  # noqa: E402
 
 import pytest  # noqa: E402
 
-from rag_wright.capabilities.requirement_extraction import ajev_extract_regulation_section  # noqa: E402
+from rag_wright.packs.compliance.capabilities.requirement_extraction import ajev_extract_regulation_section  # noqa: E402
 
 _CT = ["efficacy", "comparative", "pricing", "health", "environmental", "endorsement", "performance", "guarantee"]
 
@@ -236,7 +236,7 @@ def test_ajev_extract_live():
 async def test_ajev_gated_residual_open_fields(monkeypatch):
     # ADR-0119: the residual open-field extraction runs ONLY for rules with a conditional/evidence cue.
     import rag_wright.capabilities.invoke as inv
-    import rag_wright.capabilities.requirement_extraction as rex
+    import rag_wright.packs.compliance.capabilities.requirement_extraction as rex
     calls = []
 
     async def keep(resources, inputs):

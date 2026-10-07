@@ -10,9 +10,9 @@ hybrid + spied module-level gates, so no model, no checkpoints, no network.
 from __future__ import annotations
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord
-from rag_wright.spans import clause_kg_extractor as cke
-from rag_wright.spans.clause_kg_extractor import ClassifierPropertyExtractor, classifier_property_extractor
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord
+from rag_wright.packs.contracts.spans import clause_kg_extractor as cke
+from rag_wright.packs.contracts.spans.clause_kg_extractor import ClassifierPropertyExtractor, classifier_property_extractor
 
 CK = ChunkId(source_doc_id="C1", chunk_index=0, content_hash="0" * 64)
 
@@ -88,8 +88,8 @@ async def test_aextract_applies_gates_and_async_judge(monkeypatch):
 
 def test_factory_wraps_an_injected_registry_over_the_hybrid(monkeypatch):
     # classifier_property_extractor is what the pipeline calls; injecting a registry avoids live checkpoints
-    from rag_wright.spans.dim_classifier import DimClassifierRegistry
-    from rag_wright.spans.property_extractor import HybridPropertyExtractor
+    from rag_wright.packs.contracts.spans.dim_classifier import DimClassifierRegistry
+    from rag_wright.packs.contracts.spans.property_extractor import HybridPropertyExtractor
 
     ex = classifier_property_extractor(registry=DimClassifierRegistry({}), runnable=object())
     assert isinstance(ex, ClassifierPropertyExtractor)

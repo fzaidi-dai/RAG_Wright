@@ -14,10 +14,10 @@ Hermetic: stub classifiers + stub runnable, no model, no network.
 from __future__ import annotations
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import PropertyDimension as D
+from rag_wright.packs.contracts.schemas.property import PropertyDimension as D
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.spans.dim_classifier import DimClassifierRegistry
-from rag_wright.spans.property_extractor import (
+from rag_wright.packs.contracts.spans.dim_classifier import DimClassifierRegistry
+from rag_wright.packs.contracts.spans.property_extractor import (
     ACCEPT_WEAK_DIMS,
     RESIDUAL_LLM_DIMS,
     ExtractedProperty,

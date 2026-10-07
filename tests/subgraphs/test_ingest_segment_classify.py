@@ -8,9 +8,9 @@ import asyncio
 
 from rag_wright.api import Span, source_document
 from rag_wright.capabilities.rlm_chunking import Chunk
-from rag_wright.contracts.function import NO_FUNCTION, FunctionConfidence, FunctionScore
+from rag_wright.packs.contracts.schemas.function import NO_FUNCTION, FunctionConfidence, FunctionScore
 from rag_wright.ingestion.builder import IngestionStages
-from rag_wright.subgraphs.contract_ingestion_pipeline import function_span_tagger
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import function_span_tagger
 
 
 def _fs(function, conf=FunctionConfidence.HIGH):

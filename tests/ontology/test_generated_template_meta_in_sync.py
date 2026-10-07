@@ -8,7 +8,7 @@ the template's knowledge can never silently diverge from the ttl (Rule 2/3). Fix
 
 from __future__ import annotations
 
-from rag_wright.ontology.codegen import TEMPLATE_META_MODULE_PATH, render_template_meta_module
+from rag_wright.packs.contracts.ontology.codegen import TEMPLATE_META_MODULE_PATH, render_template_meta_module
 
 
 def test_generated_template_meta_matches_a_fresh_render_from_the_ttl() -> None:

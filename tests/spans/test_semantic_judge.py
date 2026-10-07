@@ -6,15 +6,15 @@ from __future__ import annotations
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import (
+from rag_wright.packs.contracts.schemas.property import (
     CLOSED_VOCAB,
     ClausePropertyRecord,
     PropertyAssertion,
     PropertyDimension,
 )
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.spans.property_grounding import GROUNDING_CUES
-from rag_wright.spans.semantic_judge import (
+from rag_wright.packs.contracts.spans.property_grounding import GROUNDING_CUES
+from rag_wright.packs.contracts.spans.semantic_judge import (
     SEMANTIC_DIMENSIONS,
     SemanticVerdict,
     build_semantic_judge_fn,
@@ -146,7 +146,7 @@ def test_registers_the_skill_and_the_gate_split():
 # --- ING-9: the DECISION-MODEL (Jev) judge -- one batched call per provision, calibrated scores ------------------
 
 def test_the_decision_judge_request_states_the_rule_once_then_the_clause_and_each_property():
-    from rag_wright.spans.semantic_judge import judge_request
+    from rag_wright.packs.contracts.spans.semantic_judge import judge_request
 
     state, questions = judge_request("Only  Licensee\nshall indemnify.", [(_D.MUTUALITY, "mutual"),
                                                                          (_D.PARTY_ASYMMETRY, "symmetric")])
@@ -161,7 +161,7 @@ def test_the_decision_judge_request_states_the_rule_once_then_the_clause_and_eac
 
 def _decision_judge(monkeypatch, scores=None, error=None):
     import rag_wright.api as api
-    from rag_wright.spans import semantic_judge as sj
+    from rag_wright.packs.contracts.spans import semantic_judge as sj
 
     calls = []
 
@@ -180,7 +180,7 @@ def _decision_judge(monkeypatch, scores=None, error=None):
 def test_the_decision_judge_rules_on_every_semantic_value_in_one_call(monkeypatch):
     import asyncio
 
-    from rag_wright.spans.semantic_judge import asemantic_judge
+    from rag_wright.packs.contracts.spans.semantic_judge import asemantic_judge
 
     judge, calls = _decision_judge(monkeypatch, scores=[0.08, 0.93])
     rec = asyncio.run(asemantic_judge(_record(
@@ -197,7 +197,7 @@ def test_the_decision_judge_rules_on_every_semantic_value_in_one_call(monkeypatc
 def test_a_decision_judge_error_leaves_every_value_untouched(monkeypatch):
     import asyncio
 
-    from rag_wright.spans.semantic_judge import asemantic_judge
+    from rag_wright.packs.contracts.spans.semantic_judge import asemantic_judge
 
     judge, _ = _decision_judge(monkeypatch, error=RuntimeError("decisions API down"))
     before = _record("Cap On Liability", (_D.MUTUALITY, "mutual", ConfidenceTag.EXTRACTED))
@@ -205,7 +205,7 @@ def test_a_decision_judge_error_leaves_every_value_untouched(monkeypatch):
 
 
 def test_the_default_judge_is_the_decision_model_when_one_is_configured(monkeypatch):
-    from rag_wright.spans.semantic_judge import DecisionJudge, select_asemantic_judge
+    from rag_wright.packs.contracts.spans.semantic_judge import DecisionJudge, select_asemantic_judge
 
     _decision_judge(monkeypatch, scores=[])
     monkeypatch.delenv("RAG_SEMANTIC_JUDGE", raising=False)
@@ -216,7 +216,7 @@ def test_the_default_judge_is_the_decision_model_when_one_is_configured(monkeypa
 
 
 def test_without_a_decision_model_the_judge_falls_back_to_the_llm_judge(monkeypatch):
-    from rag_wright.spans.semantic_judge import DecisionJudge, select_asemantic_judge
+    from rag_wright.packs.contracts.spans.semantic_judge import DecisionJudge, select_asemantic_judge
 
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.delenv("RAG_SEMANTIC_JUDGE", raising=False)

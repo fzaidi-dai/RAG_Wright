@@ -9,7 +9,7 @@ human-gated. Hermetic: the judge call is stubbed (`judge_fn`), no LLM.
 
 from __future__ import annotations
 
-from rag_wright.capabilities.compliance_judgment import (
+from rag_wright.packs.compliance.capabilities.compliance_judgment import (
     JudgeVerdict,
     ajudge_pairs,
     assemble_finding,
@@ -21,7 +21,7 @@ from rag_wright.capabilities.compliance_judgment import (
     register_compliance_judgment,
 )
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.compliance import (
+from rag_wright.packs.compliance.schemas.compliance import (
     CheckableFact,
     Claim,
     ClaimType,
@@ -95,7 +95,7 @@ def test_citations_are_taken_from_the_inputs():
 
 def test_document_signals_reach_the_judge_but_never_the_citation():
     # issue 0044: DEON-8 scaffolding is judge-only. _base_tail shows it to the judge; the citation stays doc text.
-    from rag_wright.capabilities.compliance_judgment import _base_tail
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import _base_tail
 
     fact = CheckableFact(
         fact_id="ad:0:x", source_doc="ad", assertion_text="Our supplement cures arthritis in two weeks.",
@@ -112,7 +112,7 @@ def test_document_signals_reach_the_judge_but_never_the_citation():
 
 def test_a_plain_fact_carries_no_signals_and_base_tail_is_unchanged():
     # the generic path: no document_signals -> _base_tail appends nothing, citation is verbatim.
-    from rag_wright.capabilities.compliance_judgment import _base_tail
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import _base_tail
 
     fact = CheckableFact(fact_id="d:0:y", source_doc="d", assertion_text="The firm retains records for six years.")
     tail = _base_tail(fact, _req())
@@ -281,7 +281,7 @@ def test_assemble_finding_citation_unchanged_when_no_section():
 
 def test_skill_method_loads_from_the_skill_md():
     # the SKILL.md is the authored method; it teaches the three verdicts + the ad-text-only constraint
-    from rag_wright.capabilities.compliance_judgment import judgment_method
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import judgment_method
     method = judgment_method()
     assert "needs_review" in method and "only the ad text" in method.lower()
     assert not method.startswith("---")  # frontmatter stripped
@@ -290,7 +290,7 @@ def test_skill_method_loads_from_the_skill_md():
 def test_judge_pairs_timeout_becomes_conservative_needs_review(monkeypatch):
     # a judge that hangs past the deadline -> map_concurrent times out -> a needs_review finding (never a hang)
     import time
-    from rag_wright.contracts.compliance import Verdict
+    from rag_wright.packs.compliance.schemas.compliance import Verdict
 
     def slow_judge(claim, req):
         time.sleep(1.5)
@@ -306,7 +306,7 @@ def test_judge_pairs_timeout_becomes_conservative_needs_review(monkeypatch):
 
 
 def test_generic_judgment_method_is_domain_neutral():
-    from rag_wright.capabilities.compliance_judgment import generic_judgment_method
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import generic_judgment_method
 
     body = generic_judgment_method().lower()
     assert body  # loads
@@ -317,14 +317,14 @@ def test_generic_judgment_method_is_domain_neutral():
 
 
 def test_advertising_judgment_method_still_carries_ftc_doctrine():
-    from rag_wright.capabilities.compliance_judgment import judgment_method
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import judgment_method
 
     body = judgment_method().lower()
     assert "ad text" in body and "disclosure" in body  # advertising doctrine preserved (unchanged)
 
 
 def test_generic_judge_uses_the_generic_method_advertising_uses_the_ad_method():
-    from rag_wright.capabilities.compliance_judgment import build_compliance_judge_fn, build_generic_judge_fn
+    from rag_wright.packs.compliance.capabilities.compliance_judgment import build_compliance_judge_fn, build_generic_judge_fn
 
     seen = {}
 
@@ -343,7 +343,7 @@ def test_generic_judge_uses_the_generic_method_advertising_uses_the_ad_method():
             return _R()
 
     req = _req(actor="employer")  # neutral actor -> the only advertising terms would come from the SKILL/enrichment
-    from rag_wright.contracts.compliance import CheckableFact
+    from rag_wright.packs.compliance.schemas.compliance import CheckableFact
     fact = CheckableFact(fact_id="f0", source_doc="s", assertion_text="the subject did X")
     build_generic_judge_fn("m", structured_factory=_Factory("generic"))(fact, req)
     build_compliance_judge_fn("m", structured_factory=_Factory("ad"))(_claim(), req)

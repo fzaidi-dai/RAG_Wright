@@ -25,9 +25,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from rag_wright.spans.cuad_labels import label_operative_spans, parse_cuad
-from rag_wright.spans.function_classifier import NONE_LABEL
-from rag_wright.spans.new_function_labels import (
+from rag_wright.packs.contracts.spans.cuad_labels import label_operative_spans, parse_cuad
+from rag_wright.packs.contracts.spans.function_classifier import NONE_LABEL
+from rag_wright.packs.contracts.spans.new_function_labels import (
     NewFunctionTag,
     SeamNewFunctionConfirmer,
     keyword_candidates,

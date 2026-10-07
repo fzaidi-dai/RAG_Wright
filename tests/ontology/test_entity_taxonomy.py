@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import inspect
 
-from rag_wright.ontology import contract_taxonomy as T
-from rag_wright.ontology.loader import load_contract_ontology
+from rag_wright.packs.contracts.ontology import contract_taxonomy as T
+from rag_wright.packs.contracts.ontology.loader import load_contract_ontology
 
 
 def test_loader_reads_the_entity_taxonomy_from_the_ttl():

@@ -118,7 +118,7 @@ class EntityId(BaseModel):
 
     The engine is domain-agnostic (DD-4, ADR-0067/0117), so the FORMAT of a canonical id is owned by
     the resolver / domain pack, NOT by this contract. The SEC pack resolves to a 10-digit zero-padded
-    EDGAR Central Index Key (CIK), e.g. ``"0000320193"`` (shaped in ``corpus/edgar.normalize_cik``); a
+    EDGAR Central Index Key (CIK), e.g. ``"0000320193"`` (shaped in ``packs/contracts/corpus/edgar.normalize_cik``); a
     generic pack uses an exact-normalized surface-form key; another domain uses its own scheme. This
     contract's only invariant is therefore the domain-neutral one: a non-empty string. That is still a
     real invariant -- every downstream holder of an `EntityId` can trust it is a present, non-blank id --
@@ -136,7 +136,7 @@ class EntityId(BaseModel):
         if not isinstance(v, str) or not v.strip():
             raise ValueError(
                 "EntityId.value must be a non-empty string. The canonical-id FORMAT is owned by the "
-                "resolver / domain pack (e.g. corpus/edgar.normalize_cik for SEC CIKs), not this contract."
+                "resolver / domain pack (e.g. packs/contracts/corpus/edgar.normalize_cik for SEC CIKs), not this contract."
             )
         return v
 
@@ -145,7 +145,7 @@ class EntityId(BaseModel):
         """Build an `EntityId` from an already-canonical id string.
 
         This does not normalize or format-check beyond non-emptiness; shaping the raw domain form into
-        the canonical id is the resolver / domain pack's job (e.g. `corpus/edgar.normalize_cik`).
+        the canonical id is the resolver / domain pack's job (e.g. `packs/contracts/corpus/edgar.normalize_cik`).
         """
         return cls(value=value)
 

@@ -7,7 +7,7 @@ from rag_wright.capabilities.remote_encoders import (
     query_embedder,
     stack_url,
 )
-from rag_wright.spans.legalbert_classifier import (  # the reference pack's query-side classifier (ING-8b)
+from rag_wright.packs.contracts.spans.legalbert_classifier import (  # the reference pack's query-side classifier (ING-8b)
     RemoteLegalBertClassifier,
     query_classifier,
 )

@@ -53,7 +53,7 @@ def main() -> None:
     os.environ.setdefault("RAG_SERVING", "openrouter")
     os.environ.pop("OPENROUTER_PROVIDER", None)
     load_dotenv()
-    from rag_wright.contracts.function import FUNCTION_LABELS, canonical_function
+    from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS, canonical_function
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.models.seam import build_structured
 

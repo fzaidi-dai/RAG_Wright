@@ -30,9 +30,9 @@ load_dotenv("/Users/farhan/work/RAG_Wright/.env")  # preflight #2: explicit path
 
 from pydantic import BaseModel, Field  # noqa: E402
 
-from rag_wright.capabilities.requirement_extraction import operative_rule_spans  # noqa: E402
+from rag_wright.packs.compliance.capabilities.requirement_extraction import operative_rule_spans  # noqa: E402
 from rag_wright.models.seam import build_structured  # noqa: E402
-from rag_wright.subgraphs.compliance_ingestion import is_operative  # noqa: E402
+from rag_wright.packs.compliance.subgraphs.compliance_ingestion import is_operative  # noqa: E402
 
 MODEL_ID = "qwen3.8-27b-modal"  # preflight #1: the engine PROFILE (Modal vLLM backend), not a served id string
 

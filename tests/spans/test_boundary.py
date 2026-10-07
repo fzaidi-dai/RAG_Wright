@@ -2,7 +2,7 @@
 (spans.boundary). Hermetic: an injected fake decider, so no model and no network."""
 from __future__ import annotations
 
-from rag_wright.spans.boundary import adecide_provision_starts
+from rag_wright.packs.contracts.spans.boundary import adecide_provision_starts
 
 _TEXTS = [
     "Section 8. Limitation of Liability.",                       # deterministic START
@@ -40,7 +40,7 @@ async def test_decider_error_degrades_to_deterministic():
 def test_the_decision_cache_asks_once_per_batch(tmp_path):
     import asyncio
 
-    from rag_wright.spans.boundary import cached_decider
+    from rag_wright.packs.contracts.spans.boundary import cached_decider
 
     calls = []
 
@@ -60,7 +60,7 @@ def test_a_failed_decision_is_not_cached(tmp_path):
 
     import pytest
 
-    from rag_wright.spans.boundary import cached_decider
+    from rag_wright.packs.contracts.spans.boundary import cached_decider
 
     state = {"fail": True}
 
@@ -77,7 +77,7 @@ def test_a_failed_decision_is_not_cached(tmp_path):
 
 
 def test_no_decider_stays_no_decider(tmp_path):
-    from rag_wright.spans.boundary import cached_decider
+    from rag_wright.packs.contracts.spans.boundary import cached_decider
 
     assert cached_decider(None, tmp_path) is None
 
@@ -85,7 +85,7 @@ def test_no_decider_stays_no_decider(tmp_path):
 # --- ING-4d: the residue request -- a STRUCTURAL rubric stated once, one minimal question per line ---------------
 
 def test_the_rubric_is_stated_once_then_one_line_per_item():
-    from rag_wright.spans.boundary import residue_request
+    from rag_wright.packs.contracts.spans.boundary import residue_request
 
     state, questions = residue_request(["  7.2 Delivery.\n", "Source: ACME CORP, 8-K, 1/1/2020"])
     rubric, body = state.split("\n\n[0]", 1)
@@ -98,7 +98,7 @@ def test_the_rubric_is_stated_once_then_one_line_per_item():
 def test_the_rubric_defines_a_start_by_structure_not_topic():
     # The measured failure modes (ING-4d): same-topic numbered siblings judged "continues", and furniture / lead-ins /
     # TOC lines judged "starts". The rubric must say both, and stay domain-neutral (any long document).
-    from rag_wright.spans.boundary import residue_request
+    from rag_wright.packs.contracts.spans.boundary import residue_request
 
     rubric = residue_request(["x"])[0].lower()
     assert "even when" in rubric and "same topic" in rubric
@@ -114,7 +114,7 @@ def test_the_rubric_defines_a_start_by_structure_not_topic():
 
 async def test_the_jev_decider_sends_the_request_and_thresholds_the_scores(monkeypatch):
     import rag_wright.api as api
-    from rag_wright.spans import boundary
+    from rag_wright.packs.contracts.spans import boundary
 
     sent: dict = {}
 
@@ -134,7 +134,7 @@ async def test_the_jev_decider_sends_the_request_and_thresholds_the_scores(monke
 def test_a_new_rubric_does_not_reuse_decisions_cached_under_the_old_one(tmp_path, monkeypatch):
     import asyncio
 
-    from rag_wright.spans import boundary
+    from rag_wright.packs.contracts.spans import boundary
 
     calls = []
 

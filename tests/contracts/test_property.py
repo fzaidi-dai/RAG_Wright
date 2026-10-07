@@ -10,7 +10,7 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import (
+from rag_wright.packs.contracts.schemas.property import (
     CLOSED_VOCAB,
     FOLIO_CLAUSE_IRI,
     FOLIO_SUBJECT_IRI,
@@ -94,8 +94,8 @@ def test_folio_maps_cover_extensions_and_align_only_where_a_home_exists():
 
 def test_clause_property_record_carries_multi_label_functions_additively():
     # ADR-0048: `functions` (multi-label + confidence) is additive; defaults empty; `function` stays the primary.
-    from rag_wright.contracts.function import FunctionConfidence, FunctionScore
-    from rag_wright.contracts.property import ClausePropertyRecord
+    from rag_wright.packs.contracts.schemas.function import FunctionConfidence, FunctionScore
+    from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord
 
     rec = ClausePropertyRecord(clause_id="c:0:h", function="Cap On Liability")
     assert rec.functions == []  # legacy / single-label default

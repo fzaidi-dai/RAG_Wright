@@ -19,7 +19,7 @@ functions/models; a product invokes a capability by name through `rag_wright.api
 `capabilities/registry.py` (the canonical-slug set, `register_canonical_slugs`, the internal
 `CapabilityRegistry.register`), `capabilities/manifests.py` (`CapabilityManifest`; `_ENGINE_SPECS`, the engine's
 7 generic manifests returned by `engine_capabilities()`; `MANIFEST_SPECS`, the runtime catalog; `register_capability`,
-`load_pack(module)`), the reference pack's manifests (`REFERENCE_SPECS` in `rag_wright.reference.pack`), `capabilities/ard.py` (`EntryKind`, `MEDIA_TYPE_BY_KIND`,
+`load_pack(module)`), the reference pack's manifests (`CONTRACT_SPECS` / `COMPLIANCE_SPECS` in `rag_wright.packs.{contracts,compliance}.pack`), `capabilities/ard.py` (`EntryKind`, `MEDIA_TYPE_BY_KIND`,
 `CALLABLE_KINDS`), `scripts/publish_manifests.py`, `api/invoke.py` + `capabilities/invoke.py::capability_impl` (the adapter-free impl_ref invoker + drift guard),
 `api/mcp.py` (generic MCP exposure). The guardrail test is `tests/capabilities/test_authoring_contract.py`.
 
@@ -40,14 +40,14 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
    representative_queries=(2-5…), tags=…, impl_ref=…)`. **The catalog ships EMPTY (EP-CORE-3):** call
    `register_capability(manifest)` at runtime to add it (a product registers its own; the engine's reference pack is
    opt-in via `load_reference_pack()`). `representative_queries` is the field ARD discovery ranks on — write real,
-   specific queries. For the ENGINE's reference pack, the manifest is committed in `reference/pack.py::REFERENCE_SPECS` and
-   the slug in its `REFERENCE_CAPABILITY_SLUGS` (added to the registry by `register_canonical_slugs` when the pack loads);
+   specific queries. For the ENGINE's reference pack, the manifest is committed in its pack's `pack.py` (`CONTRACT_SPECS` / `COMPLIANCE_SPECS`) and
+   the slug in its `*_CAPABILITY_SLUGS` (added to the registry by `register_canonical_slugs` when the pack loads);
    a GENERIC engine capability's manifest is in `manifests.py::_ENGINE_SPECS` and its slug in
    `registry.ENGINE_CAPABILITY_SLUGS`. Engine capabilities (`jev_decision`, `generation`, ...) are NOT in the
    catalog until registered too: register them from `engine_capabilities()` when your pack uses them.
    **Packs:** a pack is a module exposing `register()`, which calls `register_canonical_slugs(...)` for its slugs and
    then `register_capability(m)` per manifest (plus any engine capabilities it builds on); load it with
-   `load_pack("<module>")`. `load_reference_pack()` is just `load_pack("rag_wright.reference.pack")`.
+   `load_pack("<module>")`. `load_reference_pack()` is just `load_pack("rag_wright.packs.compliance.pack")` (compliance registers contracts first).
    A downstream product can register without touching the canonical set (`register_capability` does not check
    slugs), BUT `manifests.author()` rejects a non-canonical slug, so a product that publishes ARD JSON must call
    `register_canonical_slugs` for its slugs first.
@@ -81,7 +81,7 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 ### model — a trained checkpoint behind a seam
 - **Home:** a GENERIC engine model capability lives in `capabilities/` (e.g. `capabilities/jev_decision.py`); a
   domain model (e.g. the reference pack's SetFit clause classifier and 29-dim property fleet) lives with its pack,
-  in the reference pack (`rag_wright.reference`) for the engine's worked example, or in your product repo. Load the
+  in the reference pack (`rag_wright.packs.contracts`) for the engine's worked example, or in your product repo. Load the
   checkpoint ONCE and cache it (the fleet is heavy).
 - Serve behind the existing seam/adapter so nothing upstream changes (to FIND where a model cap belongs, use the
   `classifier-opportunity-analysis` skill; to BUILD/train + checkpoint + serve it, the `setfit` skill). The impl_ref

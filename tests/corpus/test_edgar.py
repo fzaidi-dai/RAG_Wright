@@ -10,7 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from rag_wright.contracts.identifiers import EntityId
-from rag_wright.corpus.edgar import (
+from rag_wright.packs.contracts.corpus.edgar import (
     MatchStatus,
     normalize_cik,
     propose_matches,
@@ -82,7 +82,7 @@ def test_t7_never_emits_a_verified_status():
 
 # --- loose token-overlap candidates (T10 verification prep): evidence, not a bare CIK ---------
 
-from rag_wright.corpus.edgar import LooseCandidate, loose_cik_candidates  # noqa: E402
+from rag_wright.packs.contracts.corpus.edgar import LooseCandidate, loose_cik_candidates  # noqa: E402
 
 _TICKERS_LOOSE = [
     {"cik_str": 70858, "ticker": "BAC", "title": "BANK OF AMERICA CORP /DE/"},
@@ -115,7 +115,7 @@ def test_loose_common_token_collision_is_visible_in_evidence():
 
 # --- grounded EDGAR lookup parsers (T10 Task 2) ----------------------------------------------
 
-from rag_wright.corpus.edgar import (  # noqa: E402
+from rag_wright.packs.contracts.corpus.edgar import (  # noqa: E402
     EdgarEvidence,
     parse_browse_edgar_ciks,
     parse_submissions_evidence,

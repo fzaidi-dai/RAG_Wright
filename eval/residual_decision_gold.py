@@ -31,8 +31,8 @@ def log(msg: str) -> None:
 
 
 def build() -> None:
-    import rag_wright.capabilities.contract_kg_store as k
-    from rag_wright.spans.property_extractor import RESIDUAL_LLM_DIMS
+    import rag_wright.packs.contracts.capabilities.contract_kg_store as k
+    from rag_wright.packs.contracts.spans.property_extractor import RESIDUAL_LLM_DIMS
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     s = ArcadeDBStore.from_env(database="rw_scratch_contract_ref")
@@ -68,7 +68,7 @@ def build() -> None:
 
 async def run(concurrency: int) -> None:
     from rag_wright.api import load_reference_pack
-    from rag_wright.spans.residual_candidates import candidates, select_residual_extractor
+    from rag_wright.packs.contracts.spans.residual_candidates import candidates, select_residual_extractor
 
     load_reference_pack()
     lane = select_residual_extractor()
@@ -92,7 +92,7 @@ async def run(concurrency: int) -> None:
 
 
 def score() -> None:
-    from rag_wright.spans.residual_candidates import candidates
+    from rag_wright.packs.contracts.spans.residual_candidates import candidates
 
     P = {p["clause_id"]: p for p in json.loads((DATA / "setA_provisions.json").read_text())}
     D = {r["clause_id"]: r["values"] for r in json.loads((DATA / "setA_decision.json").read_text())}

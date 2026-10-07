@@ -70,7 +70,7 @@ domain.) Expose a capability over MCP by registering an `mcp_tool` surface.
 with `load_pack("<your module>")` (`rag_wright.capabilities.manifests.load_pack`, not exported from
 `rag_wright.api` yet, engine gap G5). `register()` calls `register_canonical_slugs(...)` for your slugs
 (`rag_wright.capabilities.registry`), then `register_capability(m)` for each manifest. The reference pack is the
-example: `load_reference_pack()` is `load_pack("rag_wright.reference.pack")`.
+example: `load_reference_pack()` is `load_pack("rag_wright.packs.compliance.pack")` (the compliance pack registers the contracts pack it builds on first).
 
 ```python
 # my_product/caps/pack.py

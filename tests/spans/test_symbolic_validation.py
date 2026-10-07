@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from rag_wright.contracts.function import FUNCTION_LABEL_SET
+from rag_wright.packs.contracts.schemas.function import FUNCTION_LABEL_SET
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.ontology.loader import load_contract_ontology
-from rag_wright.spans.symbolic_validation import flagged_dimensions, symbolic_validate
+from rag_wright.packs.contracts.ontology.loader import load_contract_ontology
+from rag_wright.packs.contracts.spans.symbolic_validation import flagged_dimensions, symbolic_validate
 
 _D = PropertyDimension
 _PROV = Provenance.of(ChunkId.of("doc", 0, "clause body"))
@@ -33,7 +33,7 @@ def test_the_map_covers_exactly_the_function_taxonomy():
 def test_the_8_taxonomy_gap_types_are_modeled_with_existing_dims():
     # ADR-0049 (1): the 8 taxonomy-gap clause types are modeled (not permissive), each with its existing-dimension
     # applicability -- now asserted against the ttl.
-    from rag_wright.contracts.function import TaxonomyGapFunction
+    from rag_wright.packs.contracts.schemas.function import TaxonomyGapFunction
 
     for f in TaxonomyGapFunction:
         assert f.value in _APPLICABLE, f"{f.value} must be modeled"

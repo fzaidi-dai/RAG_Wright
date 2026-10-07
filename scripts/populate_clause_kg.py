@@ -32,10 +32,10 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
-from rag_wright.capabilities.dg_extraction import extract_clause, ollama_model, openrouter_model
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.dg_extraction import extract_clause, ollama_model, openrouter_model
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
+from rag_wright.packs.contracts.spans.clause_kg_extractor import DGClausePropertyExtractor
 from rag_wright.util.concurrent import map_concurrent
 
 # Cache: the (clause_id, function, text[, span_id]) handoff. Default = the ACORD T58a cache; override with

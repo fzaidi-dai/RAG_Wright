@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")
 
-from rag_wright.capabilities.dg_extraction import (
+from rag_wright.packs.contracts.capabilities.dg_extraction import (
     ContractParties,
     Party,
     build_private_map,
@@ -33,7 +33,7 @@ from rag_wright.capabilities.dg_extraction import (
     resolve_extracted,
 )
 from rag_wright.capabilities.graph_storage import to_graph
-from rag_wright.spans.cuad_labels import parse_cuad
+from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
 
 CUAD = Path("data/cuad/extracted/CUAD_v1.json")
 VSET = Path("data/edgar/verification_set.json")

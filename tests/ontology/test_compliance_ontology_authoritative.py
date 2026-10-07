@@ -8,8 +8,8 @@ the enforcement.
 
 from __future__ import annotations
 
-from rag_wright.contracts.compliance import ClaimType, DeonticType, RuleScope, Severity, Verdict
-from rag_wright.ontology.loader import (
+from rag_wright.packs.compliance.schemas.compliance import ClaimType, DeonticType, RuleScope, Severity, Verdict
+from rag_wright.packs.compliance.ontology.loader import (
     deontic_type_of,
     load_actor_synonyms,
     load_compliance_vocab,
@@ -69,8 +69,10 @@ def test_actor_synonyms_are_authoritative_in_the_ttl() -> None:
 def test_decision_criteria_are_authoritative_in_the_ttl() -> None:
     # ADR-0119: the Jev decision knowledge (claim-type + actor criteria, operative rubric) is loaded from the ttl,
     # not hardcoded in the capability. A ttl edit that drops a criterion is caught here.
-    from rag_wright.ontology.loader import (
-        load_actor_role_criteria, load_claim_type_criteria, load_operative_rubric,
+    from rag_wright.packs.compliance.ontology.loader import (
+        load_actor_role_criteria,
+        load_claim_type_criteria,
+        load_operative_rubric,
     )
     ct = load_claim_type_criteria()
     assert set(ct) == {m.value for m in ClaimType} and all(ct.values())  # every ClaimType has a criterion
@@ -83,7 +85,7 @@ def test_decision_criteria_are_authoritative_in_the_ttl() -> None:
 def test_ftc_domain_pack_section_overrides() -> None:
     # ADR-0066 P4b: the FTC section overrides (DEON-1 rule scope + DEON-8 applicable claim types) load from the
     # domain pack (packs/ftc_16cfr255.ttl), not Python literals.
-    from rag_wright.ontology.loader import load_section_overrides
+    from rag_wright.packs.compliance.ontology.loader import load_section_overrides
 
     rule_scope, claim_types = load_section_overrides()
     assert rule_scope == {"255.4": "context", "255.5": "context"}

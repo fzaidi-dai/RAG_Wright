@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.subgraphs.query_constraint_extraction import build_query_constraint_extraction
-from rag_wright.subgraphs.typed_clause_extraction import TransientExtraction
+from rag_wright.packs.contracts.subgraphs.query_constraint_extraction import build_query_constraint_extraction
+from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction
 
 
 def _record_with_one_constraint() -> ClausePropertyRecord:
@@ -40,7 +40,7 @@ def test_none_result_degrades_to_empty():
 
 def test_registers_as_a_subgraph():
     from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.subgraphs.query_constraint_extraction import register_query_constraint_extraction
+    from rag_wright.packs.contracts.subgraphs.query_constraint_extraction import register_query_constraint_extraction
 
     reg = CapabilityRegistry()
     register_query_constraint_extraction(reg)

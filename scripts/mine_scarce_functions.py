@@ -24,8 +24,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from rag_wright.spans.cuad_labels import label_operative_spans, parse_cuad
-from rag_wright.spans.scarce_function_labels import NONE_LABEL, SeamScarceConfirmer, scarce_candidates
+from rag_wright.packs.contracts.spans.cuad_labels import label_operative_spans, parse_cuad
+from rag_wright.packs.contracts.spans.scarce_function_labels import NONE_LABEL, SeamScarceConfirmer, scarce_candidates
 from rag_wright.util.concurrent import map_concurrent
 
 load_dotenv("/Users/farhan/work/RAG_Wright/.env")

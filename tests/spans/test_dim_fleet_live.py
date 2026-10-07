@@ -21,7 +21,7 @@ from pathlib import Path
 import pytest
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.spans.property_extractor import (
+from rag_wright.packs.contracts.spans.property_extractor import (
     HybridPropertyExtractor,
     Provenance,
     PropertyDimension as PD,
@@ -29,7 +29,7 @@ from rag_wright.spans.property_extractor import (
 )
 
 _MODELS_DIR = Path(os.getenv("RAG_DIM_MODELS_DIR", "data/models"))
-_FLEET_CFG = Path(__file__).resolve().parents[2] / "src" / "rag_wright" / "spans" / "dim_fleet.json"
+_FLEET_CFG = Path(__file__).resolve().parents[2] / "src" / "rag_wright" / "packs" / "contracts" / "spans" / "dim_fleet.json"
 
 
 def _fleet_present() -> bool:
@@ -110,7 +110,7 @@ def _cid(i: int) -> ChunkId:
 
 @pytest.fixture(scope="module")
 def extractor():
-    from rag_wright.spans.dim_classifier import load_dim_registry
+    from rag_wright.packs.contracts.spans.dim_classifier import load_dim_registry
 
     reg = load_dim_registry()
     assert len(reg.dims) == 29, f"expected the full 29-dim fleet, got {len(reg.dims)}"

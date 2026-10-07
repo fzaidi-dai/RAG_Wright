@@ -5,7 +5,7 @@ keeps the text and graph legs separate, and the CUAD builder produces questions 
 archetypes (skipping absent categories). The archetype map covers all 41 categories.
 """
 
-from rag_wright.contracts.ontology import ClauseCategory
+from rag_wright.packs.contracts.schemas.ontology import ClauseCategory
 
 from eval.golden import ARCHETYPE_BY_CATEGORY, build_golden
 from eval.harness import Archetype, GoldenQuestion, evaluate, recall_at_k

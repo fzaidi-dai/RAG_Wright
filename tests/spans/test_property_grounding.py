@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.spans.property_grounding import (
+from rag_wright.packs.contracts.spans.property_grounding import (
     is_grounded,
     needs_escalation,
     reground,

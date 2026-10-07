@@ -24,7 +24,7 @@ load_dotenv("/Users/farhan/work/RAG_Wright/.env")
 from pydantic import BaseModel, Field  # noqa: E402
 
 from rag_wright.models.seam import build_structured  # noqa: E402
-from rag_wright.ontology.loader import deontic_type_of  # noqa: E402
+from rag_wright.packs.compliance.ontology.loader import deontic_type_of  # noqa: E402
 
 MODEL_ID = "qwen3.8-27b-modal"
 OUT = Path("data/compliance/cic1_labels/generated.jsonl")

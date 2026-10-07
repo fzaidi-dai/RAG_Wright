@@ -7,14 +7,14 @@ import time
 
 import pytest
 
-from rag_wright.subgraphs.async_ingestion import (
+from rag_wright.packs.contracts.subgraphs.async_ingestion import (
     IngestionJob,
     JobStatus,
     JobStore,
     run_job,
     submit_ingestion,
 )
-from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import SourceDocument
 
 
 def _job(**kw) -> IngestionJob:
@@ -187,7 +187,7 @@ def test_run_job_per_document_crash_dead_letters_that_doc_not_the_whole_job(tmp_
 # --- 0009-ASYNC-INGEST: deferred parse runs off-loop, bounded, concurrent ------------------------
 
 async def test_aparse_pending_parses_off_loop_and_merges_metadata():
-    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument, aparse_pending
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import PendingDocument, aparse_pending
 
     def _parse():
         return SourceDocument(source_doc_id="C1", text="parsed", metadata={"a": 1})
@@ -201,7 +201,7 @@ async def test_aparse_pending_is_wall_clock_bounded():
 
     import pytest
 
-    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument, aparse_pending
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import PendingDocument, aparse_pending
 
     def _slow():
         time.sleep(0.5)  # a hung OCR/VLM escalation
@@ -213,7 +213,7 @@ async def test_aparse_pending_is_wall_clock_bounded():
 
 def test_run_job_parses_pending_documents(tmp_path):
     # the job path parses deferred docs itself (concurrently) instead of upfront
-    from rag_wright.subgraphs.contract_ingestion_pipeline import PendingDocument
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import PendingDocument
 
     store = JobStore(tmp_path)
     store.create(_job(job_id="jp"))

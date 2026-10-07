@@ -5,7 +5,7 @@ DOMAIN-FREE on purpose. It uses only the generic docling parser (`capabilities.p
 extraction (`corpus.document_parser`) -- nothing contract/clause/edgar -- so the engine's public parse API
 (`api.parse_document`) depends on THIS, not on the contract ingestion pipeline (which would drag the whole
 contract reference pack into any caller just to parse a PDF). A byte-source corpus adapter for ANY domain builds
-a structure-bearing `SourceDocument` the same way. (Relocated out of `subgraphs/contract_ingestion_pipeline`,
+a structure-bearing `SourceDocument` the same way. (Relocated out of `packs/contracts/subgraphs/contract_ingestion_pipeline`,
 which now re-exports these for its existing importers.)
 """
 from __future__ import annotations

@@ -259,7 +259,7 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
 # DEVELOPER populates with their product's capabilities (via `register_capability`); the invoker + `capability_impl`
 # read it live. The committed `_ENGINE_SPECS` above are the engine's GENERIC capabilities (`engine_capabilities()`);
 # the REFERENCE PACK's manifests (the contract/compliance worked example, kept in the engine repo per ADR-0052) are
-# `REFERENCE_SPECS` in `rag_wright.reference.pack`. Both are OPT-IN: nothing is registered until a pack is loaded
+# `CONTRACT_SPECS` / `COMPLIANCE_SPECS` in `rag_wright.packs.{contracts,compliance}.pack`. Both are OPT-IN: nothing is registered until a pack is loaded
 # (`load_pack(module)`, e.g. `load_reference_pack()`) or `register_capability` is called.
 MANIFEST_SPECS: dict[str, CapabilityManifest] = {}
 
@@ -276,7 +276,8 @@ def engine_capabilities() -> tuple[CapabilityManifest, ...]:
     return _ENGINE_SPECS
 
 
-_REFERENCE_PACK_MODULE = "rag_wright.reference.pack"
+# ING-8c: the reference pack is two domain packs; compliance builds on (and registers) contracts.
+_REFERENCE_PACK_MODULES = ("rag_wright.packs.contracts.pack", "rag_wright.packs.compliance.pack")
 
 
 def load_pack(module_name: str) -> None:
@@ -289,16 +290,17 @@ def load_pack(module_name: str) -> None:
 
 def reference_pack() -> tuple[CapabilityManifest, ...]:
     """The engine's committed REFERENCE PACK: the engine capabilities it uses + the contract/compliance worked
-    example's manifests (`rag_wright.reference.pack`). Opt-in."""
+    example's manifests (`rag_wright.packs.contracts.pack` + `rag_wright.packs.compliance.pack`). Opt-in."""
     import importlib
 
-    return _ENGINE_SPECS + importlib.import_module(_REFERENCE_PACK_MODULE).REFERENCE_SPECS
+    contracts, compliance = (importlib.import_module(m) for m in _REFERENCE_PACK_MODULES)
+    return _ENGINE_SPECS + contracts.CONTRACT_SPECS + compliance.COMPLIANCE_SPECS
 
 
 def load_reference_pack() -> None:
     """Register the engine's reference pack into the runtime catalog -- the opt-in worked example (the engine's own
     test suite loads it; a downstream product does NOT, registering its own capabilities instead)."""
-    load_pack(_REFERENCE_PACK_MODULE)
+    load_pack(_REFERENCE_PACK_MODULES[-1])  # the compliance pack registers contracts first
 
 
 def author(slug: str) -> RegistryEntry:

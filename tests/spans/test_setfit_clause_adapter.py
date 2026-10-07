@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from rag_wright.contracts.function import FunctionConfidence, FunctionScore, canonical_function
+from rag_wright.packs.contracts.schemas.function import FunctionConfidence, FunctionScore, canonical_function
 
 _ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_clause"))
 _HAVE = (_ROOT / "cap128b_legalbert" / "model_head.pkl").exists()
@@ -21,7 +21,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="module")
 def clf():
-    from rag_wright.spans.clause_function_classifier import production_setfit_clause_classifier
+    from rag_wright.packs.contracts.spans.clause_function_classifier import production_setfit_clause_classifier
 
     return production_setfit_clause_classifier()
 

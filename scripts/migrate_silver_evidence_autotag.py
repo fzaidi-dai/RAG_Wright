@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from rag_wright.contracts.function import FUNCTION_LABELS
+from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS
 
 _PATH = Path("tests/fixtures/leg_a_silver/evidence_snapshot.json")
 _EXC = "[Exception to the liability cap (inferred)] "  # ADR-0044 frame, kept verbatim

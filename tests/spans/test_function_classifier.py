@@ -9,13 +9,13 @@ from __future__ import annotations
 
 import json
 
-from rag_wright.spans.cuad_labels import (
+from rag_wright.packs.contracts.spans.cuad_labels import (
     CuadAnswer,
     CuadContract,
     label_operative_spans,
     parse_cuad,
 )
-from rag_wright.spans.function_classifier import NONE_LABEL, FunctionClassifier
+from rag_wright.packs.contracts.spans.function_classifier import NONE_LABEL, FunctionClassifier
 
 
 class _StubEmbedder:

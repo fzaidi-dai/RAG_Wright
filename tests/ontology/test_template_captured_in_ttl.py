@@ -9,8 +9,8 @@ can never silently diverge. To fix a failure BEFORE P1b-2: edit the template, th
 
 from __future__ import annotations
 
-from rag_wright.ontology.loader import load_template_fields
-from rag_wright.ontology.template_introspect import introspect_template_fields
+from rag_wright.packs.contracts.ontology.loader import load_template_fields
+from rag_wright.packs.contracts.ontology.template_introspect import introspect_template_fields
 
 
 def test_ttl_captures_every_template_field_faithfully() -> None:

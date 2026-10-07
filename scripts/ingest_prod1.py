@@ -40,10 +40,10 @@ async def main() -> None:
         with open(inc_file) as f:
             include = frozenset(ln.strip() for ln in f if ln.strip())
 
-    from rag_wright.capabilities.dg_extraction import build_verified_registry
-    from rag_wright.corpus.gcs_ingestion import production_gcs_adapter
+    from rag_wright.packs.contracts.capabilities.dg_extraction import build_verified_registry
+    from rag_wright.packs.contracts.corpus.gcs_ingestion import production_gcs_adapter
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.contract_ingestion_pipeline import (
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
         aproduction_document_ingest,
         arun_corpus_ingestion,
     )

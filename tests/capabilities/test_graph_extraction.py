@@ -10,7 +10,7 @@ from __future__ import annotations
 import threading
 import time
 
-from rag_wright.capabilities.graph_extraction import (
+from rag_wright.packs.contracts.capabilities.graph_extraction import (
     DoclingGraphExtractor,
     extract_chunks_sync,
     parties_to_extraction,
@@ -125,7 +125,7 @@ def test_parties_to_extraction_shared_fact_shape():
 
 
 def test_affiliations_to_extraction_emits_both_org_mentions_and_an_affiliate_of_edge():
-    from rag_wright.capabilities.graph_extraction import affiliations_to_extraction
+    from rag_wright.packs.contracts.capabilities.graph_extraction import affiliations_to_extraction
 
     er = affiliations_to_extraction(_CID, [("Acme Holdings Ltd", "Acme Corp"), ("", "X"), ("Y", "Y")])
     # both orgs become ORGANIZATION mentions (endpoints must resolve to nodes); empty + self pairs dropped
@@ -137,7 +137,7 @@ def test_affiliations_to_extraction_emits_both_org_mentions_and_an_affiliate_of_
 
 
 async def test_aextract_affiliations_pre_filter_skips_the_llm_when_no_cue():
-    from rag_wright.capabilities import graph_extraction as gx
+    from rag_wright.packs.contracts.capabilities import graph_extraction as gx
 
     called = {"n": 0}
 
@@ -151,7 +151,7 @@ async def test_aextract_affiliations_pre_filter_skips_the_llm_when_no_cue():
 
 
 async def test_aextract_affiliations_parses_pairs_on_a_cue_hit(monkeypatch):
-    from rag_wright.capabilities import graph_extraction as gx
+    from rag_wright.packs.contracts.capabilities import graph_extraction as gx
     from rag_wright.models import tag_structured
 
     class _R:
@@ -166,7 +166,7 @@ async def test_aextract_affiliations_parses_pairs_on_a_cue_hit(monkeypatch):
 
 
 async def test_aextract_affiliations_degrades_to_empty_on_parse_failure(monkeypatch):
-    from rag_wright.capabilities import graph_extraction as gx
+    from rag_wright.packs.contracts.capabilities import graph_extraction as gx
     from rag_wright.models import tag_structured
 
     class _R:

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
 
 # --- hermetic: party_counterparties / party_affiliates route the right DD-5 edge name -----------
@@ -102,7 +102,7 @@ def test_counterparties_and_affiliates_separate_on_a_live_graph(store):
 @pytest.mark.store
 def test_contract_terms_reads_the_clause_kg_live(store):
     from rag_wright.contracts.identifiers import ChunkId
-    from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+    from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
     from rag_wright.contracts.provenance import ConfidenceTag, Provenance
 
     cid = ChunkId.of("K", 0, "K body")
@@ -122,7 +122,7 @@ def test_contract_kg_store_delegates_all_spans_by_contract():
     """Regression (intra_document_qa abstained for EVERY document): `contract_clause_index(..., include_untyped=True)`
     calls `store.all_spans_by_contract`, but the serve store is a ContractKGStore. It delegates `clauses_in_contract`
     yet was missing `all_spans_by_contract`, so serve raised AttributeError -> (caught) -> empty clauses -> abstain."""
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
     class _Raw:
         def all_spans_by_contract(self, contract_id):

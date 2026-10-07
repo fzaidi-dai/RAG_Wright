@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 from rag_wright.corpus.canonicalize import cluster_entities, is_entity, normalize_entity_name
-from rag_wright.corpus.edgar import loose_cik_candidates
+from rag_wright.packs.contracts.corpus.edgar import loose_cik_candidates
 
 DATA = Path("data")
 META_CACHE = DATA / "cuad" / "metadata_cache.json"

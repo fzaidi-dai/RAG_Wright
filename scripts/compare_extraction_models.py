@@ -19,8 +19,8 @@ import torch
 from dotenv import load_dotenv
 
 from eval.acord import load_corpus, load_test_queries
-from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
-from rag_wright.spans.property_extractor import SeamPropertyExtractor
+from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
+from rag_wright.packs.contracts.spans.property_extractor import SeamPropertyExtractor
 from rag_wright.util.concurrent import map_concurrent
 
 MODEL_PATH = Path("data/models/legalbert_function")

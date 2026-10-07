@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from rag_wright.subgraphs.contract_ingestion_pipeline import clause_cache_key, settle_clause_results
+from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import clause_cache_key, settle_clause_results
 
 
 def test_the_same_text_at_the_same_index_but_another_position_is_a_different_cache_entry():
@@ -40,9 +40,9 @@ def test_an_extractor_failure_is_reported_once():
 def test_the_cache_key_changes_when_the_extraction_method_changes():
     # ING-9b: switching the judge or the residual lane (LLM <-> decision model) must not reuse records the old
     # method produced -- the method is part of the template version the cache key carries.
-    from rag_wright.spans.residual_candidates import DecisionResidualExtractor
-    from rag_wright.spans.semantic_judge import DecisionJudge
-    from rag_wright.subgraphs.contract_ingestion_pipeline import extraction_method
+    from rag_wright.packs.contracts.spans.residual_candidates import DecisionResidualExtractor
+    from rag_wright.packs.contracts.spans.semantic_judge import DecisionJudge
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import extraction_method
 
     async def _d(_inputs):
         return {}

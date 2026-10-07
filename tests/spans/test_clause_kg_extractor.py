@@ -9,10 +9,10 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import CLOSED_VOCAB, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import CLOSED_VOCAB, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.ontology import clause_template as ct
-from rag_wright.spans.clause_kg_extractor import (
+from rag_wright.packs.contracts.ontology import clause_template as ct
+from rag_wright.packs.contracts.spans.clause_kg_extractor import (
     DGClausePropertyExtractor,
     clause_to_record,
 )
@@ -121,8 +121,8 @@ def test_query_constraint_record_uses_the_no_function_sentinel() -> None:
     # A3 bug fix: a QUERY has no clause function, so the query-constraint path builds a ClausePropertyRecord with
     # the NO_FUNCTION sentinel. function="" used to fail ClausePropertyRecord validation -> the query-constraint
     # extraction ERRORED -> the whole cross_corpus leg degraded to empty constraints (every span match=0.0).
-    from rag_wright.contracts.function import NO_FUNCTION
-    from rag_wright.spans.clause_kg_extractor import clause_to_record
+    from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
+    from rag_wright.packs.contracts.spans.clause_kg_extractor import clause_to_record
 
     clause = ct.Clause(
         document_reference="q", caps=ct.CapConstraint(cap_basis=ct.CapBasis.MULTIPLE_OF_FEES, cap_operator="eq"))
@@ -218,7 +218,7 @@ def test_none_extraction_yields_empty_valid_record() -> None:
 @pytest.mark.model
 def test_live_granite_extracts_a_cap_clause() -> None:
     """Live smoke: real granite-4.2-8b on a mutual liability cap -> plausible typed properties."""
-    from rag_wright.spans.clause_kg_extractor import granite_clause_extractor
+    from rag_wright.packs.contracts.spans.clause_kg_extractor import granite_clause_extractor
 
     text = (
         "Except in the case of fraud or gross negligence, in no event shall either party's aggregate "

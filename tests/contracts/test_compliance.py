@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from rag_wright.contracts.compliance import (
+from rag_wright.packs.compliance.schemas.compliance import (
     BRIDGE_TTL_PATH,
     Claim,
     ClaimType,
@@ -153,7 +153,7 @@ def test_compliance_bridge_ttl_parses_and_declares_the_schema():
 
 
 def test_compliance_report_ad_level_verdict_threshold():
-    from rag_wright.contracts.compliance import ComplianceReport, Verdict
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport, Verdict
     # >=2 violation findings -> hard VIOLATION
     assert ComplianceReport(source_doc="a", summary={"violation": 2, "needs_review": 5}).verdict is Verdict.VIOLATION
     # a LONE violation finding among many -> escalate, not hard-flag

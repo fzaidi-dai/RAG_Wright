@@ -31,11 +31,11 @@ from dotenv import load_dotenv
 from eval.acord import load_corpus, load_test_queries
 from eval.acord_retrieval import ndcg_at_k
 from eval.harness import recall_at_k
-from rag_wright.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
-from rag_wright.capabilities.dg_extraction import extract_clause, openrouter_model
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore  # EP-REF-1a-ii: typed reads via the domain store
+from rag_wright.packs.contracts.capabilities.dg_extraction import extract_clause, openrouter_model
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.value_match import constraint_match_count
-from rag_wright.spans.clause_kg_extractor import clause_to_record
+from rag_wright.packs.contracts.schemas.value_match import constraint_match_count
+from rag_wright.packs.contracts.spans.clause_kg_extractor import clause_to_record
 from rag_wright.store.arcadedb import CLAUSE_TYPE, SPAN_TYPE, ArcadeDBStore, _sql_str, _str_array
 from rag_wright.util.concurrent import map_concurrent
 
@@ -144,7 +144,7 @@ def query_functions(queries) -> dict[str, list]:
                 cache[r["text"]] = r["functions"]
     todo = [q for q in queries if q.text not in cache]
     if todo:
-        from rag_wright.capabilities.query_function_classifier import classify_query_functions
+        from rag_wright.packs.contracts.capabilities.query_function_classifier import classify_query_functions
 
         def _cls(q):
             return classify_query_functions(q.text, LLM_FUNCTION_MODEL, k=LLM_K)
@@ -193,7 +193,7 @@ def main() -> None:
     qfuncs: dict[str, list] = {}   # query_id -> top-K predicted functions
     clause_fn: dict[str, set] = {}  # clause_id -> its span function tag(s), for the hybrid type-boost
     if MODE in ("classifier", "hybrid", "union", "llm_union"):
-        from rag_wright.spans.legalbert_classifier import LegalBertFunctionClassifier
+        from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
 
         clf = LegalBertFunctionClassifier.load(FUNCTION_MODEL, device=_device())
         tops = clf.classify_topk([q.text for q in queries], k=(2 if MODE == "hybrid" else FUNCTION_TOPK))
@@ -206,7 +206,7 @@ def main() -> None:
     # KG-5e lever d: route each query to functions from its granite DIMENSIONS via the held-out prior
     route_of: dict[str, list] = {}
     if MODE in ("route", "union"):
-        from rag_wright.contracts.function_routing import route_functions
+        from rag_wright.packs.contracts.schemas.function_routing import route_functions
 
         cooc = json.loads(ROUTE_MAP.read_text(encoding="utf-8"))
         for q in queries:

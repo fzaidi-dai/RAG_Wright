@@ -32,9 +32,9 @@ def _warm(url: str, key: str, timeout: int = 600) -> None:
 
 def main() -> None:
     load_dotenv()
-    from rag_wright.capabilities.dg_extraction import ExtractionModel, extract_clause, openrouter_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import ExtractionModel, extract_clause, openrouter_model
     from rag_wright.contracts.identifiers import ChunkId
-    from rag_wright.spans.clause_kg_extractor import DGClausePropertyExtractor
+    from rag_wright.packs.contracts.spans.clause_kg_extractor import DGClausePropertyExtractor
     from rag_wright.util.concurrent import map_concurrent
 
     vllm_base = os.environ["VLLM_URL"].rstrip("/") + "/v1"

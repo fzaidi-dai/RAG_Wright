@@ -11,10 +11,10 @@ from __future__ import annotations
 import pytest
 
 from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
+from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord, PropertyAssertion, PropertyDimension
 from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.capabilities.contract_kg_store import ContractKGStore
-from rag_wright.capabilities.contract_kg_store import (  # moved from the generic store (ING-8b)
+from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
+from rag_wright.packs.contracts.capabilities.contract_kg_store import (  # moved from the generic store (ING-8b)
     TYPED_PROPERTY_EDGE_TYPES,
     _edge_predicate_iri,
     _stale_property_statements,
@@ -26,14 +26,14 @@ from rag_wright.store.arcadedb import ArcadeDBStore
 def _no_reference_schema_ddl(monkeypatch):
     # ING-8a: these tests capture the WRITE statements over stub stores; the reference pack's schema check (its own
     # DDL, covered in tests/store/test_neutral_schema.py) is not what they test
-    from rag_wright.ontology.loader import reference_pack_ttl
+    from rag_wright.packs.contracts.ontology.loader import reference_pack_ttl
 
     def _has_reference_pack(store):  # the stub HAS the pack's schema (so encodes by its types); no DDL issued
         if hasattr(store, "__dict__"):
             store._ensured_packs = [reference_pack_ttl()]
             store._prop_types_cache = None
 
-    monkeypatch.setattr("rag_wright.capabilities.contract_kg_store._ensure_reference_schema", _has_reference_pack)
+    monkeypatch.setattr("rag_wright.packs.contracts.capabilities.contract_kg_store._ensure_reference_schema", _has_reference_pack)
 
 _D = PropertyDimension
 _TEST_DB = "ragwright_test_clause_kg"

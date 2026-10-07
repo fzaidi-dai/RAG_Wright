@@ -23,12 +23,12 @@ def log(m: str) -> None:
 async def main() -> None:
     load_dotenv()
     os.environ.setdefault("RAG_SERVING", "openrouter")
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import REQUIREMENT_TYPE, ArcadeDBStore
-    from rag_wright.subgraphs.compliance_check import run_generic_compliance_verdict
-    from rag_wright.subgraphs.compliance_ingestion import run_compliance_document_ingestion
+    from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
+    from rag_wright.packs.compliance.subgraphs.compliance_ingestion import run_compliance_document_ingestion
 
     root = Path("eval/compliance_demo")
     policy = Path(os.environ.get("POLICY", root / "policy" / "community_conduct_policy.md"))

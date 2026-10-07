@@ -30,7 +30,7 @@ async def validate_leg_a() -> None:
     """A1: intra_document_qa -- (contract_id, question) -> cited GeneratedAnswer, all on the Modal stack."""
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.intra_document_qa import production_intra_document_qa
+    from rag_wright.packs.contracts.subgraphs.intra_document_qa import production_intra_document_qa
 
     store = ArcadeDBStore.from_env(database="ragwright_cuad_full")
     llm_id = model_for(ModelRole.GENERAL)  # the configured GENERAL model (self-hosted Gemma, OpenRouter, ...)
@@ -62,7 +62,7 @@ async def validate_leg_c_rel() -> None:
     from rag_wright.capabilities.answer_generator import SeamAnswerModel
     from rag_wright.models.profiles import ModelRole, model_for
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.relational_qa import production_relational_qa
+    from rag_wright.packs.contracts.subgraphs.relational_qa import production_relational_qa
 
     store = ArcadeDBStore.from_env(database="ragwright_cuad_full")
     row = store._query("SELECT entity_id, name FROM Entity WHERE both('Relationship').size() > 0 LIMIT 1")
@@ -85,10 +85,10 @@ async def validate_leg_c_rel() -> None:
 async def validate_leg_b() -> None:
     """Leg B: typed_property_retrieval -- THE corpus-wide function+property retrieval leg (BGE+property pool via
     property_boosted_retrieval). Standardized on this after retiring the redundant cross_corpus_retrieval."""
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.typed_property_retrieval import production_typed_property_retrieval
+    from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
     store = ArcadeDBStore.from_env(database="ragwright_cuad_full")
     leg = production_typed_property_retrieval(  # ADR-0047: no classifier -- whole-index pool

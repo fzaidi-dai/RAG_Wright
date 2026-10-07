@@ -50,10 +50,10 @@ def _a100_ready() -> bool:
 def query():
     from fastapi import FastAPI, Request
 
-    from rag_wright.capabilities.dg_extraction import default_extraction_model
+    from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.capabilities.remote_encoders import query_embedder
     from rag_wright.store.arcadedb import ArcadeDBStore
-    from rag_wright.subgraphs.typed_property_retrieval import production_typed_property_retrieval
+    from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
     web = FastAPI()
 

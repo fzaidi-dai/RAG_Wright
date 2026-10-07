@@ -200,7 +200,7 @@ def _fleet_present() -> bool:
     """True only when every model dir the fleet references has been fetched (gitignored / local-only)."""
     import json
 
-    cfg_path = Path("src/rag_wright/spans/dim_fleet.json")
+    cfg_path = Path("src/rag_wright/packs/contracts/spans/dim_fleet.json")
     models_dir = Path(os.getenv("RAG_DIM_MODELS_DIR", "data/models"))
     try:
         cfg = json.loads(cfg_path.read_text())

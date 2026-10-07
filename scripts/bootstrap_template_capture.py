@@ -18,10 +18,10 @@ from rdflib import Graph, Literal, Namespace, URIRef
 from rdflib.collection import Collection
 from rdflib.namespace import RDF, RDFS, SKOS, XSD
 
-from rag_wright.ontology.template_introspect import introspect_template_fields
+from rag_wright.packs.contracts.ontology.template_introspect import introspect_template_fields
 
 CBR = Namespace("https://ragwright.local/ontology/contract-bridge#")
-TTL = Path(__file__).parents[1] / "src" / "rag_wright" / "ontology" / "contract_bridge.ttl"
+TTL = Path(__file__).parents[1] / "src" / "rag_wright" / "packs" / "contracts" / "ontology" / "contract_bridge.ttl"
 
 
 def build_augmentation() -> Graph:

@@ -86,7 +86,7 @@ def test_span_rejects_end_before_start():
 
 def test_the_reference_segmenter_meets_the_contract():
     """The reference pack's legal segmenter is one implementation of the hook; its output passes the same check."""
-    from rag_wright.spans.segment import OperativeSpan, segment_clause
+    from rag_wright.packs.contracts.spans.segment import OperativeSpan, segment_clause
 
     assert OperativeSpan is Span  # one span contract, not a legal-only twin
     body = '12.1 Limitation. (a) Neither party [except "Licensor"] shall; (b) the cap is $1.5M.\n13. Term.'
@@ -193,7 +193,7 @@ def test_extraction_rejects_an_unknown_confidence():
 
 def test_the_boundary_decider_contract_is_shared():
     from rag_wright.api import BoundaryDecider
-    from rag_wright.spans import boundary
+    from rag_wright.packs.contracts.spans import boundary
 
     assert boundary.BoundaryDecider is BoundaryDecider
 

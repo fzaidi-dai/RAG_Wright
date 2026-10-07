@@ -102,15 +102,15 @@ def test_cap_reg_2_capabilities_author_with_the_right_kind(slug, kind):
 
 
 def test_cap_reg_2_register_functions_register_the_right_kind():
-    from rag_wright.capabilities.contract_kg_serve import (
+    from rag_wright.packs.contracts.capabilities.contract_kg_serve import (
         register_clause_disambiguation,
         register_intra_document_scoped_query,
     )
-    from rag_wright.capabilities.query_function_classifier import register_query_function_classification
+    from rag_wright.packs.contracts.capabilities.query_function_classifier import register_query_function_classification
     from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.contracts.value_match import register_typed_value_normalization
-    from rag_wright.spans.legalbert_classifier import register_clause_function_classification
-    from rag_wright.spans.property_grounding import register_extraction_grounding_judge
+    from rag_wright.packs.contracts.schemas.value_match import register_typed_value_normalization
+    from rag_wright.packs.contracts.spans.legalbert_classifier import register_clause_function_classification
+    from rag_wright.packs.contracts.spans.property_grounding import register_extraction_grounding_judge
 
     reg = CapabilityRegistry()
     register_typed_value_normalization(reg)

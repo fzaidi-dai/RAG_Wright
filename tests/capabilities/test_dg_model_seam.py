@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from rag_wright.capabilities.dg_extraction import (
+from rag_wright.packs.contracts.capabilities.dg_extraction import (
     ExtractionModel,
     build_pipeline_config,
     ollama_model,

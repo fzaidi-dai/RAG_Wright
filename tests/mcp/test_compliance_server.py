@@ -9,8 +9,8 @@ import asyncio
 from fastmcp import Client
 
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.compliance import ComplianceReport
-from rag_wright.mcp.compliance_server import (
+from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
+from rag_wright.packs.compliance.mcp.compliance_server import (
     build_compliance_mcp,
     demo_check_fn,
     register_compliance_check_mcp,
@@ -68,7 +68,7 @@ def test_check_fn_is_injectable_no_store_or_llm_needed():
 
 def test_generic_check_compliance_tool_is_exposed_and_returns_a_noted_report():
     # COMP-VERDICT-GENERIC: the domain-agnostic tool is added when a generic_check_fn is provided
-    from rag_wright.contracts.compliance import ComplianceFinding, ComplianceReport, Verdict
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceFinding, ComplianceReport, Verdict
 
     async def _generic(store, subject_text, source_doc, sources=None):
         return ComplianceReport(
@@ -108,7 +108,7 @@ def test_generic_tool_absent_when_no_generic_check_fn():
 
 def test_check_compliance_tool_forwards_sources_and_exposes_the_param():
     # issue 0007: the MCP tool must expose the SAME `sources` scoping the function gained -- not left store-wide
-    from rag_wright.contracts.compliance import ComplianceReport
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
 
     seen = {}
 
@@ -133,7 +133,7 @@ def test_check_compliance_tool_forwards_sources_and_exposes_the_param():
 
 def test_check_ad_compliance_tool_forwards_sources():
     # symmetry: the advertising tool exposes the same parameter (harmless None default)
-    from rag_wright.contracts.compliance import ComplianceReport
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
 
     seen = {}
 
@@ -147,7 +147,7 @@ def test_check_ad_compliance_tool_forwards_sources():
 
 def test_sources_defaults_to_none_when_omitted():
     # back-compat: omitting `sources` keeps store-wide semantics (None reaches the checker)
-    from rag_wright.contracts.compliance import ComplianceReport
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
 
     seen = {}
 
@@ -163,7 +163,7 @@ def test_check_compliance_document_tool_decodes_base64_and_forwards():
     # issue 0008: the document tool accepts base64 bytes (JSON can't carry raw bytes), decodes + forwards them
     import base64
 
-    from rag_wright.contracts.compliance import ComplianceReport
+    from rag_wright.packs.compliance.schemas.compliance import ComplianceReport
 
     seen = {}
 

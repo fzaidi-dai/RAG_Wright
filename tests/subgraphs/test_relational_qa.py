@@ -12,7 +12,7 @@ from langgraph.types import RetryPolicy
 
 from rag_wright.capabilities.answer_generator import GeneratedAnswer
 from rag_wright.capabilities.graph_query import GraphAnswer, GraphEvidence
-from rag_wright.subgraphs.relational_qa import build_relational_qa, graph_structural_evidence
+from rag_wright.packs.contracts.subgraphs.relational_qa import build_relational_qa, graph_structural_evidence
 
 _FAST_RETRY = RetryPolicy(max_attempts=3, initial_interval=0.0)
 
@@ -120,7 +120,7 @@ async def test_transient_traversal_retries_then_degrades_to_empty_and_abstains()
 
 def test_registers_as_a_subgraph():
     from rag_wright.capabilities.registry import CapabilityRegistry
-    from rag_wright.subgraphs.relational_qa import register_relational_qa
+    from rag_wright.packs.contracts.subgraphs.relational_qa import register_relational_qa
 
     reg = CapabilityRegistry()
     register_relational_qa(reg)

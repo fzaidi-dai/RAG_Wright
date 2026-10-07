@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from json import dumps as json_dumps
 
-from rag_wright.contracts.function import FunctionConfidence
-from rag_wright.spans.clause_function_classifier import (
+from rag_wright.packs.contracts.schemas.function import FunctionConfidence
+from rag_wright.packs.contracts.spans.clause_function_classifier import (
     BatchSpanClassification,
     ClauseFunctionClassification,
     LegalBertClauseAdapter,
@@ -112,7 +112,7 @@ def test_batch_classifier_out_of_range_index_dropped():
 
 
 def test_batch_classifier_splits_big_chunk_into_sub_batches_with_offset_alignment():
-    from rag_wright.spans import clause_function_classifier as m
+    from rag_wright.packs.contracts.spans import clause_function_classifier as m
 
     assert m._BATCH_CAP == 10
     calls = []
@@ -149,7 +149,7 @@ def test_legalbert_adapter_classify_spans_is_span_level_single_label():
 
 
 def test_categorize_raw_splits_in_taxonomy_from_out_of_taxonomy():
-    from rag_wright.spans.clause_function_classifier import categorize_raw
+    from rag_wright.packs.contracts.spans.clause_function_classifier import categorize_raw
 
     raws = [
         RawScore(function="Cap On Liability", confidence="high"),
@@ -167,8 +167,8 @@ def test_categorize_raw_splits_in_taxonomy_from_out_of_taxonomy():
 
 
 def test_rawscore_function_advertises_the_closed_label_enum_in_the_schema():
-    from rag_wright.contracts.function import FUNCTION_LABELS
-    from rag_wright.spans.clause_function_classifier import BatchSpanClassification, RawScore
+    from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS
+    from rag_wright.packs.contracts.spans.clause_function_classifier import BatchSpanClassification, RawScore
 
     enum = RawScore.model_json_schema()["properties"]["function"]["enum"]
     assert set(enum) == set(FUNCTION_LABELS) | {"OTHER"}  # 52 labels + OTHER, so the model cannot invent a name
@@ -180,6 +180,6 @@ def test_rawscore_function_advertises_the_closed_label_enum_in_the_schema():
 def test_rawscore_still_accepts_a_stray_value_without_crashing():
     # json_schema_extra is schema-only, NOT pydantic-enforced -> a stray (a model that ignores the enum under
     # function-calling) parses instead of failing the whole sub-batch; categorize_raw handles it downstream.
-    from rag_wright.spans.clause_function_classifier import RawScore
+    from rag_wright.packs.contracts.spans.clause_function_classifier import RawScore
 
     assert RawScore(function="Exclusive Source of Supply", confidence="high").function == "Exclusive Source of Supply"

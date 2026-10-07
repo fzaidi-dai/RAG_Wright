@@ -93,7 +93,7 @@ class _ListItem:
 def test_content_items_reconstructs_the_enumerated_section_marker():
     # issue 0039: docling puts '1.1.' in `marker`, not `text`; content_items must reconstruct it so the section
     # number reaches the provision detector (else 0038 grouping degrades to chunk-level).
-    from rag_wright.spans.segment import starts_new_provision
+    from rag_wright.packs.contracts.spans.segment import starts_new_provision
 
     doc = _FakeDoc([
         _ListItem("\"API\" shall have the meaning given in the preamble.", marker="1.1."),

@@ -22,7 +22,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from rag_wright.contracts.function import FUNCTION_LABEL_SET
+from rag_wright.packs.contracts.schemas.function import FUNCTION_LABEL_SET
 from rag_wright.contracts.identifiers import ChunkId
 
 OUT = Path("data/models/cuad_clause_cache.jsonl")

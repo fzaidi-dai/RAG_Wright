@@ -23,8 +23,8 @@ from dotenv import load_dotenv
 
 def _prove_cache_reuse(cuad_path: Path, cache_dir: Path, limit: int) -> None:
     """(a) verify: seed the caches (as run_cuad_ingestion does) and report per-doc reuse -- no LLM, no DB."""
-    from rag_wright.corpus.cuad_ingestion import CuadAdapter
-    from rag_wright.subgraphs.contract_ingestion_pipeline import (
+    from rag_wright.packs.contracts.corpus.cuad_ingestion import CuadAdapter
+    from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
         seed_chunk_cache,
         seed_party_cache,
     )
@@ -42,10 +42,10 @@ def _prove_cache_reuse(cuad_path: Path, cache_dir: Path, limit: int) -> None:
 
 
 async def main() -> None:
-    from rag_wright.capabilities.contract_kg_store import ContractKGStore
+    from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
 
     load_dotenv()
-    from rag_wright.corpus.cuad_ingestion import arun_cuad_ingestion
+    from rag_wright.packs.contracts.corpus.cuad_ingestion import arun_cuad_ingestion
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     db = os.environ.get("SMOKE_DB", "ragwright_ingest_smoke")

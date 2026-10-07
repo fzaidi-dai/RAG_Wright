@@ -25,7 +25,7 @@ def test_parse_document_plumbs_path_into_the_byte_builder(monkeypatch, tmp_path)
     def _stub(source_doc_id, name, data, *, cache_dir, metadata=None, include_hidden_sheets, tuning):
         seen.update(id=source_doc_id, name=name, data=data, cache_dir=str(cache_dir), metadata=metadata,
                     hidden=include_hidden_sheets, tuning=tuning)
-        from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
+        from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import SourceDocument
         return SourceDocument(source_doc_id=source_doc_id, text="x")
 
     monkeypatch.setattr(
@@ -45,7 +45,7 @@ def test_aparse_document_plumbs_path_into_the_async_byte_builder(monkeypatch, tm
 
     async def _astub(source_doc_id, name, data, *, cache_dir, metadata=None, include_hidden_sheets, tuning):
         seen.update(id=source_doc_id, name=name, data=data, hidden=include_hidden_sheets, tuning=tuning)
-        from rag_wright.subgraphs.contract_ingestion_pipeline import SourceDocument
+        from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import SourceDocument
         return SourceDocument(source_doc_id=source_doc_id, text="x")
 
     monkeypatch.setattr(
