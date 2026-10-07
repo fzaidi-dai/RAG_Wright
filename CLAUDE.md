@@ -55,24 +55,28 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT ACTIVE WORKSTREAM (2026-10-07): ingestion-hooks, a generic hook-based ingestion builder (ADR-0124).**
-> `build_ingestion(extractor, ...hooks)` with domain-neutral defaults, the neutral default schema, and the reference
-> pack moved behind an import boundary. Specced in its own **plan + ledger**: **`docs/specs/ingestion-hooks/plan.md`**
-> (task-numbered `ING-*`); breaking changes for the product repo are recorded in
-> `docs/specs/ingestion-hooks/ing8-breaking-changes.md`. Treat that plan as the current ledger: read it first and run
-> the working loop against it. The engine-prep workstream (`docs/specs/engine-prep/plan.md`, `PREP-*`) is complete.
-> The preceding **engine-platform boundary** workstream (engine API layer + capability runtime + de-domaining,
-> ADR-0117/0052/0066/0067) landed the public API + capability runtime; its spec/ledger
-> (`docs/specs/engine-platform/SPEC.md` + `TASKS.md`) remain the reference for that surface. The root
+> **CURRENT STATE (2026-10-08): no active engine workstream.** The **ingestion-hooks** workstream (ADR-0124) is
+> COMPLETE and released as **`rag-wright` 0.2.0** (PyPI + GitHub tag/release `0.2.0`; release process
+> `docs/releasing.md`): the generic `build_ingestion` with hooks and domain-neutral defaults, the neutral default
+> schema, the reference pack in `rag_wright.packs.{contracts,compliance}` behind an import boundary, generic span
+> fields, and the pack-authoring helpers on `rag_wright.api`. Its plan + ledger is
+> **`docs/specs/ingestion-hooks/plan.md`** (`ING-*`, all done); every breaking change is in
+> `docs/specs/ingestion-hooks/ing8-breaking-changes.md`. **Next (user gates):** the RuleWright migration, done in the
+> RuleWright repo from `docs/specs/ingestion-hooks/rulewright-migration-0.2.0.md` (never edited from here), and the
+> TexWright build. Open engine follow-ups: `docs/domain-adaptation/_engine-gaps.md`. A new engine workstream gets its
+> own plan + ledger under `docs/specs/<name>/`; until one is agreed, read `tasks.md`'s top block for the resume point.
+> Earlier workstreams, all complete: engine-prep (`docs/specs/engine-prep/plan.md`, `PREP-*`) and the
+> **engine-platform boundary** (engine API layer + capability runtime + de-domaining, ADR-0117/0052/0066/0067;
+> `docs/specs/engine-platform/SPEC.md` + `TASKS.md`, the reference for that surface). The root
 > `SPEC.md`/`plan.md`/`tasks.md` carry orientation banners (ADR-0052: engine/product split, GraphWright parked);
 > historical/superseded docs are under `docs/archive/`, and the ADR index is `docs/adr/README.md`.
 >
-> **The consolidated doc set** (engine-prep WS2/WS4): `docs/concepts.md`, `docs/architecture.md`,
+> **The consolidated doc set** (engine-prep WS2/WS4, audited in ING-5): `docs/concepts.md`, `docs/architecture.md`,
 > `docs/installation.md`, `docs/configuration.md`, `docs/quickstart.md` (+ `examples/quickstart.py`),
 > `docs/reference-pack.md`, the generated `docs/api/`, and the domain-adaptation guide
 > `docs/domain-adaptation/` (ontology authoring, KG construction, entity resolution, authoring capabilities,
 > classification & decision models) + `_engine-gaps.md`. The product-starter templates are
-> `docs/templates/product-starter/`.
+> `docs/templates/product-starter/`. `tests/arch/test_doc_references.py` keeps these docs naming only what exists.
 
 Before doing anything else:
 
