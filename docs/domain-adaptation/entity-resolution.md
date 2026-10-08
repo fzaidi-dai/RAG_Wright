@@ -54,7 +54,7 @@ is generic; a domain's canonical ids and their normalization are the domain's co
 import hashlib
 from pathlib import Path
 
-from rag_wright.api import build_ingestion
+from rag_wright.api import build_ingestion, pack_store
 from rag_wright.capabilities.disambiguation import disambiguate
 from rag_wright.capabilities.entity_resolution import resolve_entities
 from rag_wright.capabilities.graph_storage import GraphWriter
@@ -70,7 +70,7 @@ async def entity_graph_hook(ws, sd, chunks):
     clusters = disambiguate(results)
     resolution = resolve_entities(clusters, results, resolver=my_resolver)
     content_hash = hashlib.sha256(sd.text.encode("utf-8")).hexdigest()
-    GraphWriter(ws._store, checkpoint_dir=cache_dir).write_document(sd.source_doc_id, content_hash, resolution)
+    pack_store(ws, GraphWriter, checkpoint_dir=cache_dir).write_document(sd.source_doc_id, content_hash, resolution)
 
 pipeline = build_ingestion(extractor, document_hook=entity_graph_hook)
 ```

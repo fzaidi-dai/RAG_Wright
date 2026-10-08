@@ -216,6 +216,10 @@ Optional: persist a document's extractions. The engine default writes them with 
 
 Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
 
+### `pack_store(ws: 'WorkspaceHandle', cls: 'Callable[..., _T]', *args: 'Any', **kwargs: 'Any') -> '_T'`
+
+Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store: `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, ContractKGStore)`. The store it receives implements the engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack.
+
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 
 Invoke a subgraph-kind capability by name over the workspace, inside a trace span. The implementation is resolved lazily from the manifest `impl_ref` (no central adapter dict). Retry/dead-letter comes from the LangGraph scaffold the subgraph is built on; usage is captured by the caller's `measure_usage()` (EP-API-5).

@@ -26,7 +26,7 @@ extensions. It holds **no** `ArcadeDBStore`, embedder, model id, or id-string pa
 | Parse a file to a document | `parse_document` / `aparse_document` / `source_document` |
 | Generic KG reads/writes/traversal, entity lookup, span positions, id/bbox | `kg_read` / `kg_write` / `kg_edges` / `entities_by_name` / `span_positions` / `document_of` / `decode_bbox` |
 | Usage / cost | `measure_usage()` (wrap a block; nesting is additive) |
-| Domain reads for the *reference* contract/compliance pack | the reference-pack extensions `ContractKGStore` / `ComplianceStore` over `ws._store`, and `rag_wright/packs/compliance/invokers.py` |
+| Domain reads for the *reference* contract/compliance pack | the reference-pack extensions `ContractKGStore` / `ComplianceStore`, built over the workspace store with `pack_store(ws, ContractKGStore)`, and `rag_wright/packs/compliance/invokers.py` |
 
 **Keep in the seam (the D-bucket) — genuinely yours:**
 

@@ -4,7 +4,7 @@ RuleWright's real `engine/seam.py` toward.
 
 Every method is a thin composition over the engine: `open_workspace` (tenancy = one call), the invokers
 (`ainvoke_subgraph`), the generic API reads (`entities_by_name`), and the reference-pack store extensions
-(`ContractKGStore` / `ComplianceStore`) + the compliance invoker wrappers. It holds NO `ArcadeDBStore`, embedder,
+(`ContractKGStore` / `ComplianceStore`, built with `pack_store(ws, ...)`) + the compliance invoker wrappers. It holds NO `ArcadeDBStore`, embedder,
 model id, or id-string parsing -- those are engine calls.
 
 **The product owns its capabilities.** The engine starts with an EMPTY capability catalog: nothing is registered
@@ -31,6 +31,7 @@ from rag_wright.api import (
     aparse_document,
     entities_by_name,
     open_workspace,
+    pack_store,
     source_document,
 )
 from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
@@ -83,19 +84,19 @@ class ContractComplianceSeam:
 
     def counterparties(self, ws, entity_id: str, *, max_hops: int = 1, documents: Optional[list[str]] = None):
         """The parties this one has a CONTRACTS_WITH edge to (one hop by default)."""
-        return ContractKGStore(ws._store).party_counterparties(entity_id, max_hops=max_hops, documents=documents)
+        return pack_store(ws, ContractKGStore).party_counterparties(entity_id, max_hops=max_hops, documents=documents)
 
     def affiliates(self, ws, entity_id: str, *, documents: Optional[list[str]] = None):
         """The parties this one has an AFFILIATE_OF edge to (same corporate group -- a separate traversal)."""
-        return ContractKGStore(ws._store).party_affiliates(entity_id, documents=documents)
+        return pack_store(ws, ContractKGStore).party_affiliates(entity_id, documents=documents)
 
     def contract_terms(self, ws, contract_id: str) -> list:
         """The typed clauses of one contract (the full view -- keeps AMBIGUOUS out-of-vocab values)."""
-        return ContractKGStore(ws._store).contract_terms(contract_id)
+        return pack_store(ws, ContractKGStore).contract_terms(contract_id)
 
     def span_locations(self, ws, contract_id: str) -> list:
         """Every span's position (pages/bbox/offsets) + the clause ids on it -- for a citation preview."""
-        return ContractKGStore(ws._store).span_locations(contract_id)
+        return pack_store(ws, ContractKGStore).span_locations(contract_id)
 
     @staticmethod
     def canonical_clause_type(label: str) -> Optional[str]:
@@ -124,12 +125,12 @@ class ContractComplianceSeam:
 
     def requirements_for(self, ws, source: str) -> list[dict]:
         """The curated requirement rows under one policy (the proof an ingest landed)."""
-        return ComplianceStore(ws._store).requirements_for(source)
+        return pack_store(ws, ComplianceStore).requirements_for(source)
 
     def requirement_locations(self, ws, source: str) -> list:
         """Where each requirement of one policy sits in its document (pages + bbox) -- for a citation preview."""
-        return ComplianceStore(ws._store).requirement_locations(source)
+        return pack_store(ws, ComplianceStore).requirement_locations(source)
 
     def curated_requirement_count(self, ws, sources: Optional[list[str]] = None) -> int:
         """How many requirements are in scope -- the denominator of an honest coverage statement."""
-        return ComplianceStore(ws._store).curated_requirement_count(sources)
+        return pack_store(ws, ComplianceStore).curated_requirement_count(sources)

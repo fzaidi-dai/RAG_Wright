@@ -114,16 +114,11 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Proposed:** export `publish` (with a target root) from `rag_wright.api`.
 - Surfaced: ING-5 doc audit.
 
-### G15: No public accessor for the workspace store (pack store extensions take `ws._store`)
-- **Where:** `WorkspaceHandle` documents its store as engine-internal ("NOT a product accessor"), yet a pack's store
-  extension (`ContractKGStore`, `ComplianceStore`, or a product pack's own) wraps the workspace store, and the reference
-  seam builds them from `ws._store` (7 uses in `packs/reference_seam.py`); the adaptation guides do the same.
-- **Impact:** a product following the reference seam reaches a private attribute; the API reference and the worked
-  example contradict each other.
-- **Interim rule (given to RuleWright):** `ws._store` is sanctioned only to construct a pack store extension.
-- **Proposed:** a public, typed way to hand the workspace store to a pack store extension (a read-only `Store`-protocol
-  accessor, or a `pack_store(ws, cls)` helper), then correct the API reference and the reference seam.
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G15: No public accessor for the workspace store (pack store extensions take `ws._store`) (closed)
+- Closed by PS-7: `pack_store(ws, cls, *args, **kwargs)` (in `rag_wright.api`) builds `cls(<workspace store>, ...)`,
+  so a pack store extension (`pack_store(ws, ContractKGStore)`, a product pack's own) or another store wrapper
+  (`pack_store(ws, GraphWriter, checkpoint_dir=...)`) is built without `ws._store`, which stays private. The reference
+  seam and the guides use it; the interim rule given to RuleWright is replaced.
 
 ### G16: No public bytes entry for document parsing (closed)
 - Closed by PS-2: `parse_document_bytes(document_id, name, data, *, cache_dir, ...)` and its async twin

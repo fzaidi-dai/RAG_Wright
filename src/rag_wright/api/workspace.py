@@ -3,16 +3,19 @@
 The product names a `corpus` (the logical KG = the backend database name; the product maps its own tenant -> db-name,
 so tenancy stays product-owned) and gets back an opaque handle that resolves + caches the store (and lazily the
 embedder) from the `EngineConfig`. The handle is what the engine's per-kind invokers (EP-API-2) take as resources.
-The product never imports `ArcadeDBStore`/`query_embedder` and the handle exposes no public store accessor."""
+The product never imports `ArcadeDBStore`/`query_embedder` and the handle exposes no public store accessor; a pack's
+store extension is built over the workspace store with `pack_store(ws, cls)` (PS-7)."""
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, Callable, Optional, TypeVar
 
 from rag_wright.api.config import EngineConfig
 from rag_wright.models.profiles import ModelRole, model_for
 
 logger = logging.getLogger(__name__)
+
+_T = TypeVar("_T")
 
 # Cached per (backend, host, port, corpus) -- one resolved workspace per customer DB (absorbs the product's
 # per-customer graph/store cache). Process-local; the embedder is lazy + per-handle.
@@ -84,3 +87,11 @@ def _build_embedder(config: EngineConfig) -> Optional[Any]:
     except Exception:  # noqa: BLE001 - embedder backend unavailable -> None; the retrieval consumer surfaces it
         logger.warning("engine_embedder_unavailable", exc_info=True)
         return None
+
+
+def pack_store(ws: WorkspaceHandle, cls: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
+    """Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store:
+    `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, ContractKGStore)`. The store it receives implements the
+    engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the
+    rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack."""
+    return cls(ws._store, *args, **kwargs)
