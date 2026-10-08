@@ -34,9 +34,9 @@ def test_default_extraction_model_is_openrouter_by_default():
 
 def test_extraction_model_carries_profile_provider_pin():
     # ADR-0100: the extraction surface honors the model PROFILE's provider routing, so the Qwen3.8-27b
-    # deepinfra/bf16 pin holds engine-wide (not just the seam). An un-pinned model carries no routing.
+    # model's routing holds engine-wide (not just the seam). Qwen3.8-27b carries none (ADR-0125).
     m = default_extraction_model("clause-extract", profiles._PRODUCT_LLM)
-    assert m.provider_routing == {"only": ["deepinfra/bf16"], "allow_fallbacks": False}
+    assert m.provider_routing is None
     # an un-pinned model (no `provider` in its profile) carries no routing -> the _call_api sort default applies
     g = default_extraction_model("clause-extract", "ibm-granite/granite-4.1-8b")
     assert g.provider_routing is None

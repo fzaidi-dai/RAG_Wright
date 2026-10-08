@@ -31,7 +31,7 @@ def test_openrouter_vlm_options_defaults_to_the_vision_ocr_role(monkeypatch):
     # the role's PROFILE is resolved: OpenRouter's served id, free-text reasoning OFF, the profile's provider pin
     assert o.params["model"] == "qwen/qwen3.8-27b" and "openrouter.ai" in str(o.url)
     assert o.params["reasoning"] == {"enabled": False}
-    assert o.params["provider"]["only"] == ["deepinfra/bf16"]
+    assert "provider" not in o.params  # no provider routing on the Qwen profile (ADR-0125)
 
 
 def test_a_self_hosted_profile_routes_ocr_to_its_vllm_server(monkeypatch):

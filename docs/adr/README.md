@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-124 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
-and 0121–0124). ADRs are an
+125 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+and 0121–0125). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -168,7 +168,7 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0107 Page provenance on a Requirement ·
 0109 Cutting Qwen3.8-27B cold start toward sub-60s ·
 0110 FP8 KV cache — Qwen3.8-27B 16K at ≥20× concurrency on one A100 ·
-0111 Pin Qwen3.8-27b to DeepInfra's bf16 endpoint ·
+0111 Pin Qwen3.8-27b to DeepInfra's bf16 endpoint (superseded by 0125) ·
 0112 Relax the `deepagents` pin to a `>=0.7.15` floor ·
 0113 Real span durations, TTFT, retrieval spans, provider generation ids ·
 0114 Trained SetFit ensemble is the default clause-function classifier ·
@@ -180,4 +180,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0121 spaCy is an optional extra; its model is a runtime download (supersedes ADR-0012 point 4) ·
 0122 Provision-boundary detection is deterministic-first with a decision-model (Jev) fallback for the residue ·
 0123 Batched engine releases via release-please; products consume releases via Dependabot ·
-0124 A generic ingestion builder with domain hooks; the legal pipeline becomes the reference instantiation
+0124 A generic ingestion builder with domain hooks; the legal pipeline becomes the reference instantiation ·
+0125 Qwen3.8-27b on OpenRouter is unpinned (no provider routing; supersedes 0111)

@@ -1,6 +1,6 @@
 # ADR-0111: pin Qwen3.8-27b to DeepInfra's bf16 endpoint on OpenRouter (engine-wide)
 
-**Status:** accepted · **Date:** 2026-09-20 · **Related:** ADR-0027 (provider flags live in config + a dated ADR, never in node code), ADR-0100 (profile-based routing), ADR-0110 (FP8 config on the self-hosted path)
+**Status:** superseded by [ADR-0125](0125-qwen-openrouter-unpinned.md) (2026-10-09) · **Date:** 2026-09-20 · **Related:** ADR-0027 (provider flags live in config + a dated ADR, never in node code), ADR-0100 (profile-based routing), ADR-0110 (FP8 config on the self-hosted path)
 
 ## Context
 

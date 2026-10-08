@@ -221,9 +221,9 @@ class ExtractionModel:
     base_url: str
     api_key: str | None = None
     inference: str = "remote"
-    # OpenRouter provider routing from the model's PROFILE (ADR-0100), e.g. a hard pin
-    # {"only": ["deepinfra/bf16"], "allow_fallbacks": False}. Threaded into the litellm extraction call so the
-    # extraction surface honors the same provider pin as the seam. None -> the env/sort default in `_call_api`.
+    # OpenRouter provider routing from the model's PROFILE (ADR-0100), when the profile carries one (Qwen3.8-27b
+    # carries none, ADR-0125). Threaded into the litellm extraction call so the extraction surface honors the same
+    # provider routing as the seam. None -> the env/sort default in `_call_api`.
     provider_routing: dict[str, Any] | None = None
 
 
@@ -389,7 +389,7 @@ def _deadline_bounded_client_class() -> type:
             capture = traced or usage_acct.usage_capturing()  # issue 0042: also capture into an active usage scope
             if "openrouter" in (getattr(self, "_base_url", "") or "").lower():
                 # provider routing precedence: OPENROUTER_PROVIDER_ORDER env (measurement override) > the model's
-                # PROFILE pin (ADR-0100, e.g. deepinfra/bf16 for Qwen3.8-27b) > the lowest-latency sort default.
+                # PROFILE routing (ADR-0100) > the lowest-latency sort default.
                 _order = os.getenv("OPENROUTER_PROVIDER_ORDER", "").strip()
                 _profile_prov = getattr(self, "_provider_routing", None)
                 if _order:
