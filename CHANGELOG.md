@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.2.0...0.2.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **reference:** the product owns its capabilities; the reference seam registers its own ([2fe1140](https://github.com/fzaidi-dai/RAG_Wright/commit/2fe114085e84c3b71ab00f3f126c68bd81086554))
+
 ## [0.2.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.1.0...0.2.0) (2026-10-07)
 
 
