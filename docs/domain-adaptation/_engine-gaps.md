@@ -114,6 +114,79 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Proposed:** export `publish` (with a target root) from `rag_wright.api`.
 - Surfaced: ING-5 doc audit.
 
+### G15: No public accessor for the workspace store (pack store extensions take `ws._store`)
+- **Where:** `WorkspaceHandle` documents its store as engine-internal ("NOT a product accessor"), yet a pack's store
+  extension (`ContractKGStore`, `ComplianceStore`, or a product pack's own) wraps the workspace store, and the reference
+  seam builds them from `ws._store` (7 uses in `packs/reference_seam.py`); the adaptation guides do the same.
+- **Impact:** a product following the reference seam reaches a private attribute; the API reference and the worked
+  example contradict each other.
+- **Interim rule (given to RuleWright):** `ws._store` is sanctioned only to construct a pack store extension.
+- **Proposed:** a public, typed way to hand the workspace store to a pack store extension (a read-only `Store`-protocol
+  accessor, or a `pack_store(ws, cls)` helper), then correct the API reference and the reference seam.
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
+### G16: No public bytes entry for document parsing
+- **Where:** every public parse entry takes a filesystem path (`parse_document`, `aparse_document`,
+  `IngestSource(path=...)`); the bytes entry `capabilities.document_parse.aparsed_source_document(source_doc_id, name,
+  data, *, cache_dir, metadata=None, deadline_s=600.0, include_hidden_sheets=True, tuning=None)` (and its sync twin) is
+  generic engine code but not exported. The compliance invoker already accepts bytes, so the surface is asymmetric.
+- **Impact:** a product ingesting uploads (bytes from object storage) imports an engine module or spills to temp files.
+- **Proposed:** export a bytes entry from `rag_wright.api` (e.g. `aparse_document_bytes(document_id, name, data, *,
+  cache_dir, ...)`), and accept bytes sources in `build_ingestion`.
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
+### G17: `ModelRole` is required by the public API but not exported
+- **Where:** `WorkspaceHandle.model_id(role: ModelRole)` takes it and `EngineConfig.models` is keyed by its values, but
+  `ModelRole` lives in `rag_wright.models.profiles` only.
+- **Impact:** a product cannot use `model_id` or name a role override without an engine-internal import.
+- **Proposed:** export `ModelRole` from `rag_wright.api`. (`model_for` / `PROFILES` stay internal: `ws.model_id(role)`
+  and `EngineConfig.models` are the product route.)
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
+### G18: A product cannot meter or trace its own model calls through the public API
+- **Where:** `measure_usage()` (public) is the same per-task scope as `models.usage.usage_scope` (context variable,
+  additive nesting), but adding a product's own model call to those scopes needs `models.usage.record_usage`, and
+  correlating engine traces with the product's (Langfuse) needs `models.tracing` (`traced_run`, `traced_step`,
+  `start_generation` / `finish_generation`); neither is exported.
+- **Impact:** a product's per-tier / per-run cost attribution and its trace correlation depend on engine internals.
+- **Proposed:** export `record_usage` and a small tracing-correlation surface (`traced_run`, `traced_step`) from
+  `rag_wright.api`.
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
+### G19: Answer generation and relevance judgment are not invocable by a product
+- **Where:** the engine capabilities `generation` and `span_relevance_judgment` are `agent_skill`s with no `impl_ref`;
+  their implementations (`capabilities.answer_generator.agenerate_answer` with `EvidenceItem`,
+  `capabilities.span_relevance_judgment` with `RelevanceVerdict`) and the query embedder
+  (`capabilities.remote_encoders.query_embedder`) are not exported. Only `jev_decision` of the 7 engine capabilities is
+  invocable by name.
+- **Impact:** a product composing its own question answering over engine retrieval reaches into engine modules.
+- **Proposed:** expose them as invocable model capabilities (an `impl_ref` + typed inputs/outputs) or export their entry
+  points and types from `rag_wright.api`; decide whether a product needs the query embedder directly.
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
+### G20: Trained classifier weights are not packaged and the property fleet's location is not configurable
+- **Where:** the reference pack's classifiers load weights from the engine checkout's gitignored `data/models/`. The
+  clause-type SetFit ensemble honours `RAG_SETFIT_CLAUSE_DIR`; the 29-dimension property fleet resolves
+  `data/models` relative to its source file (`packs/contracts/spans/dim_classifier.py`, `_MODELS_DIR`), and the
+  production path calls `load_dim_registry()` without a `models_dir`, so there is no setting to point it elsewhere.
+- **Impact:** the fleet works only from an engine checkout (an editable install); from a PyPI install it finds no
+  weights. A product that owns copies of the weights (the agreed direction) cannot point the fleet at them.
+- **Proposed:** a configurable models directory for every classifier (an env var / `EngineConfig` option), and the
+  reference pack's weights published as a downloadable GCS archive (then removed from the engine checkout).
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
+### G21: No defined "pack SDK" surface for pack code
+- **Where:** a pack's code (the reference pack today, a product's forked pack next) imports about 30 engine-internal
+  modules (`contracts.*`, `models.seam` / `models.tag_structured` / `models.profiles`, `subgraphs.scaffold`,
+  `store.seam`, several `capabilities.*`, `util.concurrent`) and makes 18 raw store queries (`_store._query` /
+  `_store._command`). Only the seam-level surface (`rag_wright.api`) is declared stable.
+- **Impact:** a product that owns its pack (the agreed direction for RuleWright) depends on engine internals; any engine
+  refactor can break it without a declared contract.
+- **Proposed:** define and document a stable pack-author tier (which modules and types a pack may import, with the
+  same compatibility promise as `rag_wright.api`), give pack store extensions a query primitive instead of raw SQL, and
+  enforce the boundary for pack code the way the import contracts enforce it for generic code.
+- Surfaced: RuleWright migration Q&A (2026-10-08).
+
 ## Resolved during engine-prep (for the record)
 
 - **spaCy is an optional runtime asset**, not a hard/direct-URL dependency — the publish blocker is gone
