@@ -59,7 +59,8 @@ from rag_wright.ingestion.tables import table_rows
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import entities_by_name, kg_edges, kg_read, kg_write, span_positions
-from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage
+from rag_wright.api.tracing import traced_run, traced_step
+from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage, record_usage
 from rag_wright.models.profiles import ModelRole
 from rag_wright.api.workspace import WorkspaceHandle, open_workspace
 
@@ -70,7 +71,7 @@ __all__ = [
     "kg_read", "kg_write", "kg_edges", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",
     "document_of", "decode_bbox",
     "source_document", "parse_document", "aparse_document", "parse_document_bytes", "aparse_document_bytes",
-    "measure_usage", "UsageTotals", "ModelUsage",
+    "measure_usage", "record_usage", "UsageTotals", "ModelUsage", "traced_run", "traced_step",
     "register_capability", "load_reference_pack", "reference_pack",
     # G5: a product authors + loads its own pack through the API (no engine internals)
     "CapabilityManifest", "load_pack", "engine_capabilities", "register_canonical_slugs", "canonical_capability_slugs",

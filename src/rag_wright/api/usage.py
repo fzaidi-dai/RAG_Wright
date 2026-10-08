@@ -10,15 +10,18 @@ the product reads stats without reaching into engine internals. Ambient (a `Cont
         out = await engine.ainvoke_subgraph("intra_document_qa", {...}, resources=ws)
     usage.calls, usage.input_tokens, usage.output_tokens, usage.cost_usd, usage.calls_without_cost,
     usage.latency_ms_total, usage.by_model  # {model_id: ModelUsage(...)}
+
+A product meters its OWN model calls (ones the engine does not make) into the same scopes with `record_usage`, so a
+task-level scope totals the engine's calls and the product's together (PS-3, G18).
 """
 from __future__ import annotations
 
 from contextlib import contextmanager
 from typing import Iterator
 
-from rag_wright.models.usage import ModelUsage, UsageTotals, usage_scope
+from rag_wright.models.usage import ModelUsage, UsageTotals, record_usage, usage_scope
 
-__all__ = ["measure_usage", "UsageTotals", "ModelUsage"]
+__all__ = ["measure_usage", "record_usage", "UsageTotals", "ModelUsage"]
 
 
 @contextmanager

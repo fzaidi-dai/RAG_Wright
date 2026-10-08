@@ -134,15 +134,10 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - Closed by PS-1: `ModelRole` is exported from `rag_wright.api` (the same enum), so a product passes it to
   `ws.model_id(role)` and keys `EngineConfig.models` by its values; `model_for` / `PROFILES` stay internal.
 
-### G18: A product cannot meter or trace its own model calls through the public API
-- **Where:** `measure_usage()` (public) is the same per-task scope as `models.usage.usage_scope` (context variable,
-  additive nesting), but adding a product's own model call to those scopes needs `models.usage.record_usage`, and
-  correlating engine traces with the product's (Langfuse) needs `models.tracing` (`traced_run`, `traced_step`,
-  `start_generation` / `finish_generation`); neither is exported.
-- **Impact:** a product's per-tier / per-run cost attribution and its trace correlation depend on engine internals.
-- **Proposed:** export `record_usage` and a small tracing-correlation surface (`traced_run`, `traced_step`) from
-  `rag_wright.api`.
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G18: A product cannot meter or trace its own model calls through the public API (closed)
+- Closed by PS-3: `record_usage` (a product's own model call, recorded into every active `measure_usage` scope) and
+  `traced_run` / `traced_step` (group engine generations with a product's run and steps in Langfuse; no-ops unless
+  tracing is configured) are exported from `rag_wright.api`. The generation-level helpers stay internal.
 
 ### G19: Answer generation and relevance judgment are not invocable by a product
 - **Where:** the engine capabilities `generation` and `span_relevance_judgment` are `agent_skill`s with no `impl_ref`;

@@ -258,6 +258,18 @@ The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the 
 
 Accumulate the model usage of every engine call made inside the block; read the returned `UsageTotals` after it. Nesting is additive, so a task-level scope totals everything while an inner per-call scope attributes its slice. Capturing is opt-in: with no active scope, the engine records usage nowhere (zero overhead).
 
+### `record_usage(model: 'str', *, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost: 'Optional[float]' = None, latency_ms: 'Optional[float]' = None) -> 'None'`
+
+Record one model call into every active scope (a no-op when none is active, so it is safe to call on every model call regardless of tracing). `cost=None` means the backend surfaced no cost (counted as `calls_without_cost`, never as $0). `model` is the engine model-id string, keyed consistently across paths.
+
+### `traced_run(*, document_id: 'Optional[str]' = None, job_id: 'Optional[str]' = None, name: 'Optional[str]' = None, metadata: 'Optional[dict[str, Any]]' = None) -> 'Iterator[None]'`
+
+Group every generation emitted inside the block under one trace/session -- the caller's correlation id (job/document). A no-op unless tracing is on. Flushes on exit so a short-lived run's spans are sent.
+
+### `traced_step(name: 'str', *, metadata: 'Optional[dict[str, Any]]' = None) -> 'Iterator[None]'`
+
+Time a NON-generation sub-step (e.g. retrieval: ArcadeDB + embedding + rerank) as its OWN Langfuse span, so its duration is separable from the generation in the same trace -- the retrieval/generation split engine issue 0048 asked for. No-op unless tracing is on. (Distinct from `subgraphs.observability.business_span`, which is an OTel-ambient span that no-ops under a Langfuse-only setup -- this one emits to Langfuse.)
+
 ### `register_capability(manifest: 'CapabilityManifest') -> 'None'`
 
 Register (or replace) one capability in the runtime ARD catalog. A product calls this for each of its domain capabilities (with an `impl_ref`); the invoker then resolves it by name with zero engine edits. The catalog starts EMPTY: the engine's own capabilities (e.g. `jev_decision`, `generation`) are registered the same way when a product uses them (their manifests are `capabilities.manifests.engine_capabilities()`).
