@@ -20,10 +20,19 @@ from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import bui
 
 
 def test_signature_is_stable():
-    # ocr_failures (0009-WIRE2) is a new OPTIONAL trailing arg -> 3-positional callers (the product) are unaffected
+    # ocr_failures (0009-WIRE2) and graph_failures (PS-R2) are OPTIONAL trailing args -> 3-positional callers (the
+    # product) are unaffected
     params = list(inspect.signature(build_partial_entry).parameters)
-    assert params == ["source_doc_id", "clause_failures", "span_failures", "ocr_failures"]
+    assert params == ["source_doc_id", "clause_failures", "span_failures", "ocr_failures", "graph_failures"]
     assert inspect.signature(build_partial_entry).parameters["ocr_failures"].default is None
+    assert inspect.signature(build_partial_entry).parameters["graph_failures"].default is None
+
+
+def test_new_graph_kind_flows_through_the_unified_failures_list():
+    # PS-R2: a failed party/graph extraction no longer dead-letters the document; it is a `graph` loss in `failures`
+    entry = build_partial_entry("D1", [], [], graph_failures=[{"stage": "extract_graph", "reason": "timeout"}])
+    assert entry["failures"] == [{"kind": "graph", "stage": "extract_graph", "reason": "timeout"}]
+    assert entry["graph_failures"] == [{"stage": "extract_graph", "reason": "timeout"}]
 
 
 def test_new_ocr_kind_flows_through_the_unified_failures_list():

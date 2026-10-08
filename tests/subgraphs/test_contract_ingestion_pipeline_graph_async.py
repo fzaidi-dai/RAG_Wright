@@ -174,7 +174,7 @@ async def test_async_ingest_graph_threads_span_failures_into_state():
 
 
 async def test_arun_corpus_ingestion_maps_all_and_dead_letters_one():
-    stages, _ = _astub_stages(fail_graph_for={"BAD"})
+    stages, _ = _astub_stages(fail_chunk_for={"BAD"})  # a failure on a core stage (chunking) dead-letters the doc
     report = await arun_corpus_ingestion(
         _FakeAdapter(["C1", "BAD", "C2"]), _agraph(stages), progress=lambda _m: None)
     assert isinstance(report, IngestionReport)
@@ -221,3 +221,25 @@ async def test_arun_parses_a_pending_document():
     stages, calls = _astub_stages()
     report = await arun_corpus_ingestion(_PendingAdapter(), _agraph(stages), progress=lambda _m: None)
     assert report.documents_ingested == 1 and calls["chunk"] == ["C1"]  # the PARSED doc reached the graph
+
+
+# --- PS-R2: a failed party/graph extraction degrades instead of dead-lettering the document --------------------------
+
+
+async def test_async_graph_failure_keeps_the_clauses_and_flags_the_failure():
+    stages, calls = _astub_stages(fail_graph_for={"C1"})
+    out = await _agraph(stages).ainvoke({"document": SourceDocument(source_doc_id="C1", text="t")})
+    assert "dead_letter" not in out
+    assert calls["graph"] == ["C1"] * 3  # retried first (a transient error still gets its retries)...
+    assert out["written"] == {"clauses": 1, "entities": 0, "spans": 1}  # ...then the clauses + spans are still written
+    assert [f["stage"] for f in out["graph_failures"]] == ["extract_graph"]
+    assert "Unterminated string" in out["graph_failures"][0]["reason"]
+
+
+async def test_a_graph_failure_is_reported_as_a_graph_partial():
+    stages, _ = _astub_stages(fail_graph_for={"C1"})
+    report = await arun_corpus_ingestion(_FakeAdapter(["C1", "C2"]), _agraph(stages), progress=lambda _m: None)
+    assert report.documents_ingested == 2 and report.dead_lettered == []
+    (entry,) = report.partial
+    assert entry["source_doc_id"] == "C1"
+    assert [f["kind"] for f in entry["failures"]] == ["graph"] and entry["graph_failures"][0]["stage"] == "extract_graph"

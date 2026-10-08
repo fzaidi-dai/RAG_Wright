@@ -72,6 +72,7 @@ class IngestionReport(BaseModel):
     #                                                                                   #  present, covers BOTH kinds
     #    "clause_failures": [...],   # present only if a clause loss (back-compat)
     #    "span_failures":   [...]}   # present only if a span loss   (back-compat)
+    # (`failures` also carries `ocr` and `graph` kinds -- a failed party/graph extraction, PS-R2.)
     # Integrators: key on `failures` (or on the doc being in `partial` at all). Reading only `clause_failures`
     # SILENTLY misses a span-only loss -- the per-kind keys are optional, `failures` is not.
     partial: list[dict] = []
@@ -108,6 +109,7 @@ class IngestionState(TypedDict, total=False):
     clause_failures: list  # PROD-3 lossless: per-clause extraction failures (span_id + reason) -> doc flagged PARTIAL
     span_count: int  # Span records written to the retrieval index (best-effort)
     span_failures: list  # 0006-C (NFR-2): per-span index-write failures (span_id + reason) -> doc flagged PARTIAL
+    graph_failures: list  # PS-R2: party/graph extraction failed after its retries (stage + reason) -> doc PARTIAL
     extraction_results: list
     resolution: Any
     written: dict
@@ -212,12 +214,19 @@ def abuild_document_ingest(
             return {"span_count": res}
 
     async def extract_graph(state: IngestionState, runtime: Runtime) -> IngestionState:
+        # PS-R2: best-effort like the span index. A failure is retried (transient), but once the retries are spent the
+        # document goes on WITHOUT graph results -- its clauses and spans are still written -- and the loss is
+        # surfaced as a `graph` PARTIAL, never a dead-letter that would throw the clause records away.
         doc = state["document"]
-
-        async def _w() -> dict:
-            return {"extraction_results": await graph_fn(doc, state.get("chunks", []))}
-
-        return await _aguard("extract_graph", _w, runtime, doc)
+        attempt = runtime.execution_info.node_attempt
+        with business_span("contract_ingestion.extract_graph", source_doc_id=doc.source_doc_id):
+            try:
+                return {"extraction_results": await graph_fn(doc, state.get("chunks", []))}
+            except Exception as exc:  # noqa: BLE001 - transient -> retry; exhausted -> degrade, visibly
+                if attempt >= max_attempts:
+                    return {"extraction_results": [],
+                            "graph_failures": [{"stage": "extract_graph", "reason": str(exc)[:500]}]}
+                raise TransientExtraction(str(exc)) from exc
 
     async def resolve(state: IngestionState) -> IngestionState:
         if state.get("dead_letter"):
@@ -264,7 +273,7 @@ async def aparse_pending(pending: PendingDocument, *, deadline_s: float = _INGES
 
 
 def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures: list,
-                        ocr_failures: Optional[list] = None) -> Optional[dict]:
+                        ocr_failures: Optional[list] = None, graph_failures: Optional[list] = None) -> Optional[dict]:
     """The single PARTIAL-entry shape, shared by the blocking driver AND the async job runner so the two can
     never drift. A UNIFIED, always-present `failures` list (kind-tagged) lets an integrator read ONE field and
     never silently miss a span-only loss; the per-kind `clause_failures`/`span_failures` keys stay for
@@ -276,15 +285,18 @@ def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures
     RULE: a new loss kind is a new `kind` value inside `failures` (0009-WIRE2 adds `ocr` -- a page a degraded scan
     left unreadable), NEVER a replacement top-level key -- so an integrator counting the kind-tagged list keeps
     surfacing losses it has no dedicated field for. `ocr_failures` is a new OPTIONAL trailing arg (3-arg callers
-    are unaffected)."""
+    are unaffected). `graph_failures` (PS-R2: a party/graph extraction that failed after its retries) is a further
+    optional trailing arg, a `graph` kind."""
     clause_failures = clause_failures or []
     span_failures = span_failures or []
     ocr_failures = ocr_failures or []
-    if not (clause_failures or span_failures or ocr_failures):
+    graph_failures = graph_failures or []
+    if not (clause_failures or span_failures or ocr_failures or graph_failures):
         return None
     failures = ([{"kind": "clause", **f} for f in clause_failures]
                 + [{"kind": "span", **f} for f in span_failures]
-                + [{"kind": "ocr", **f} for f in ocr_failures])
+                + [{"kind": "ocr", **f} for f in ocr_failures]
+                + [{"kind": "graph", **f} for f in graph_failures])
     entry: dict = {"source_doc_id": source_doc_id, "failures": failures}
     if clause_failures:
         entry["clause_failures"] = clause_failures
@@ -292,6 +304,8 @@ def build_partial_entry(source_doc_id: str, clause_failures: list, span_failures
         entry["span_failures"] = span_failures
     if ocr_failures:
         entry["ocr_failures"] = ocr_failures
+    if graph_failures:
+        entry["graph_failures"] = graph_failures
     return entry
 
 
@@ -354,13 +368,15 @@ async def arun_corpus_ingestion(
         span_failures = out.get("span_failures") or []
         ocr_failures = [{"page": pg, "reason": "unreadable scan (OCR + VLM failed)"}  # 0009-WIRE2
                         for pg in (getattr(document, "ocr_unreadable_pages", None) or [])]
-        entry = build_partial_entry(document.source_doc_id, clause_failures, span_failures, ocr_failures)
+        entry = build_partial_entry(document.source_doc_id, clause_failures, span_failures, ocr_failures,
+                                    out.get("graph_failures"))
         if entry is not None:  # 0006-C / 0009: ANY kind of loss flags the doc PARTIAL (never silent)
             partial.append(entry)
             reasons = ", ".join(
                 p for p in (f"{len(clause_failures)} clause(s)" if clause_failures else "",
                             f"{len(span_failures)} span(s)" if span_failures else "",
-                            f"{len(ocr_failures)} unreadable page(s)" if ocr_failures else "") if p)
+                            f"{len(ocr_failures)} unreadable page(s)" if ocr_failures else "",
+                            "party/graph extraction" if out.get("graph_failures") else "") if p)
             progress(f"[ingest] {i}/{total} {document.source_doc_id} PARTIAL ({reasons} failed) {summary}")
         else:
             progress(f"[ingest] {i}/{total} {document.source_doc_id} OK {summary}")
