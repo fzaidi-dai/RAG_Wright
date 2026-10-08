@@ -163,6 +163,8 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Proposed:** define and document a stable pack-author tier (which modules and types a pack may import, with the
   same compatibility promise as `rag_wright.api`), give pack store extensions a query primitive instead of raw SQL, and
   enforce the boundary for pack code the way the import contracts enforce it for generic code.
+- Progress: PS-6 added the query primitives (`kg_count`, `kg_delete`, `kg_update`, and `key_range` on `kg_read`, on
+  the `Store` protocol and `rag_wright.api`); the pack-SDK tier and the reference pack's move onto it are PS-7/PS-8.
 - Surfaced: RuleWright migration Q&A (2026-10-08).
 
 ## Resolved during engine-prep (for the record)

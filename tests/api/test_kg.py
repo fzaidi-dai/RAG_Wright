@@ -34,7 +34,8 @@ def test_kg_read_delegates_to_the_handle_store():
     s = _FakeStore()
     out = kg_read(_FakeWS(s), "Requirement", where={"source": "S"}, fields=["requirement_id"])
     assert out and s.calls[0] == ("read", "Requirement", {"where": {"source": "S"}, "fields": ["requirement_id"],
-                                                           "distinct": None, "order_by": None, "limit": None})
+                                                           "distinct": None, "order_by": None, "limit": None,
+                                                           "key_range": None})
 
 
 def test_kg_write_delegates_to_the_handle_store():

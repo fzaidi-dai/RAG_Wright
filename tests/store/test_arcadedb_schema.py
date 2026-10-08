@@ -125,7 +125,8 @@ class _InMemoryStore:
                                       "path_confidences": [e1.confidence, e2.confidence]})
         return paths
 
-    def kg_read(self, node_type, *, where=None, fields=None, distinct=None, order_by=None, limit=None):
+    def kg_read(self, node_type, *, where=None, fields=None, distinct=None, order_by=None, limit=None,
+                key_range=None):
         # DD-1a seam conformance: this in-memory stub holds no typed domain nodes, so the generic read is empty.
         for value in (where or {}).values():
             if isinstance(value, (list, tuple, set)) and not list(value):
@@ -141,6 +142,16 @@ class _InMemoryStore:
         return []
 
     def kg_ensure_edges(self, edges):  # ING-4b seam conformance: idempotent edge write (no-op stub)
+        return 0
+
+    # PS-6 seam conformance: the stub holds no typed nodes, so there is nothing to count, delete or update
+    def kg_count(self, type_name, *, where=None, key_range=None):
+        return 0
+
+    def kg_delete(self, type_name, *, where=None, key_range=None):
+        return 0
+
+    def kg_update(self, type_name, *, set, where=None, key_range=None):
         return 0
 
 

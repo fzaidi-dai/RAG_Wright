@@ -142,6 +142,36 @@ def _kg_sql(value: object) -> str:
     return _sql_str(str(value))
 
 
+def _kg_where_terms(where: Optional[dict[str, object]],
+                    key_range: Optional[tuple[str, object, object]] = None) -> Optional[list[str]]:
+    """The shared KG filter grammar (`kg_read` key ranges, `kg_edges`, `kg_count` / `kg_delete` / `kg_update`): a
+    scalar is equality, a list is membership, `NOT_NULL` is presence; `key_range=(field, lo, hi)` adds
+    `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
+    the caller returns without a statement)."""
+    out: list[str] = []
+    for field, value in (where or {}).items():
+        if value is NOT_NULL:
+            out.append(f"{field} IS NOT NULL")
+        elif isinstance(value, (list, tuple, set)):
+            vals = list(value)
+            if not vals:
+                return None
+            out.append(f"{field} IN {_kg_sql_array(vals)}")
+        else:
+            out.append(f"{field} = {_kg_sql_value(value)}")
+    if key_range is not None:
+        f, lo, hi = key_range
+        out += [f"{f} >= {_kg_sql_value(lo)}", f"{f} < {_kg_sql_value(hi)}"]
+    return out
+
+
+def _kg_changed_count(result: Any) -> int:
+    """The row count an ArcadeDB UPDATE / DELETE reports (`[{"count": n}]`); 0 when it reports none."""
+    if isinstance(result, list) and result and isinstance(result[0], dict):
+        return int(result[0].get("count") or 0)
+    return 0
+
+
 def _kg_encode(value: object, declared_type: Optional[str]) -> str:
     """Encode a `kg_write` NODE prop by its PACK-DECLARED storage type (DD-1b): the declared type is what
     disambiguates a list stored as a native array (`ARRAY_OF_*`) from one stored as a JSON string (`STRING`) --
@@ -444,9 +474,11 @@ class ArcadeDBStore:
         distinct: Optional[str] = None,
         order_by: Optional[str] = None,
         limit: Optional[int] = None,
+        key_range: Optional[tuple[str, object, object]] = None,
     ) -> list[dict]:
         """Read typed nodes of `node_type` (see `Store.kg_read`). A list `where` value that is empty is
-        scope-to-nothing -> `[]` without a query (never an invalid `IN []`). Clauses AND-ed in insertion order."""
+        scope-to-nothing -> `[]` without a query (never an invalid `IN []`). Clauses AND-ed in insertion order,
+        then `key_range` (`field >= lo AND field < hi`)."""
         clauses: list[str] = []
         for field, value in (where or {}).items():
             if isinstance(value, (list, tuple, set)):
@@ -456,6 +488,9 @@ class ArcadeDBStore:
                 clauses.append(f"{field} IN {_kg_sql_array(vals)}")
             else:
                 clauses.append(f"{field} = {_kg_sql_value(value)}")
+        if key_range is not None:
+            f, lo, hi = key_range
+            clauses += [f"{f} >= {_kg_sql_value(lo)}", f"{f} < {_kg_sql_value(hi)}"]
         proj = f"DISTINCT({distinct}) AS {distinct}" if distinct else (", ".join(fields) if fields else "*")
         sql = f"SELECT {proj} FROM {node_type}"
         if clauses:
@@ -481,26 +516,10 @@ class ArcadeDBStore:
         """Generic edge traversal (see `Store.kg_edges`): node-start MATCH (out/in) when a start selector is
         given, else a direct edge-table scan. An empty membership anywhere scopes to nothing -> `[]`."""
 
-        def _terms(d: Optional[dict[str, object]]) -> Optional[list[str]]:
-            out: list[str] = []
-            for field, value in (d or {}).items():
-                if value is NOT_NULL:
-                    out.append(f"{field} IS NOT NULL")
-                elif isinstance(value, (list, tuple, set)):
-                    vals = list(value)
-                    if not vals:
-                        return None  # empty membership -> scope-to-nothing
-                    out.append(f"{field} IN {_kg_sql_array(vals)}")
-                else:
-                    out.append(f"{field} = {_kg_sql_value(value)}")
-            return out
-
-        c_terms, e_terms, v_terms = _terms(where), _terms(edge_where), _terms(target_where)
+        c_terms = _kg_where_terms(where, key_range)
+        e_terms, v_terms = _kg_where_terms(edge_where), _kg_where_terms(target_where)
         if c_terms is None or e_terms is None or v_terms is None:
             return []
-        if key_range is not None:
-            f, lo, hi = key_range
-            c_terms = c_terms + [f"{f} >= {_kg_sql_value(lo)}", f"{f} < {_kg_sql_value(hi)}"]
         returns = ", ".join(f"{expr} AS {alias}" for alias, expr in select.items())
 
         if not (where or key_range is not None):  # --- edge-scan idiom ---
@@ -529,6 +548,50 @@ class ArcadeDBStore:
         e_blk = _blk("as: e", e_terms)
         v_blk = _blk("as: v", v_terms)
         return self._query(f"MATCH {c_blk}.{edge_step}{e_blk}.{far_step}{v_blk} RETURN {returns}")
+
+    def kg_count(self, type_name: str, *, where: Optional[dict[str, object]] = None,
+                 key_range: Optional[tuple[str, object, object]] = None) -> int:
+        """Count the vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`)."""
+        terms = _kg_where_terms(where, key_range)
+        if terms is None:
+            return 0
+        rows = self._query(f"SELECT count(*) AS n FROM {type_name}" + (" WHERE " + " AND ".join(terms) if terms else ""))
+        return int(rows[0]["n"]) if rows else 0
+
+    def _type_kind(self, type_name: str) -> str:
+        for row in self._query("SELECT name, type FROM schema:types"):
+            if row.get("name") == type_name:
+                return str(row.get("type"))
+        raise ValueError(f"unknown KG type: {type_name}")
+
+    def kg_delete(self, type_name: str, *, where: Optional[dict[str, object]] = None,
+                  key_range: Optional[tuple[str, object, object]] = None) -> int:
+        """Delete the vertices (with their edges) or edges of `type_name` matching `where` / `key_range` (see
+        `Store.kg_delete`). Edge types delete `UNSAFE` (this dialect's edge-safety check). Returns the count."""
+        terms = _kg_where_terms(where, key_range)
+        if terms is None:
+            return 0
+        sql = f"DELETE FROM {type_name}" + (" WHERE " + " AND ".join(terms) if terms else "")
+        if self._type_kind(type_name) == "edge":
+            sql += " UNSAFE"
+        return _kg_changed_count(self._command(sql))
+
+    def kg_update(self, type_name: str, *, set: dict[str, object], where: Optional[dict[str, object]] = None,
+                  key_range: Optional[tuple[str, object, object]] = None) -> int:
+        """Set fields on the vertices or edges of `type_name` matching `where` / `key_range`, changing only rows
+        where a set field differs (see `Store.kg_update`). Values encode as `kg_write` encodes them. Returns the
+        number of rows changed."""
+        if not set:
+            raise ValueError("kg_update needs at least one field to set")
+        terms = _kg_where_terms(where, key_range)
+        if terms is None:
+            return 0
+        types = self._property_types(type_name)
+        enc = {k: _kg_encode(v, types.get(k)) for k, v in set.items()}
+        differs = " OR ".join(f"{k} IS NULL OR {k} <> {v}" for k, v in enc.items())
+        sql = (f"UPDATE {type_name} SET " + ", ".join(f"{k} = {v}" for k, v in enc.items())
+               + " WHERE " + " AND ".join([*terms, f"({differs})"]))
+        return _kg_changed_count(self._command(sql))
 
     def _property_types(self, type_name: str) -> dict[str, str]:
         """`{property -> declared storage type}` for a KG node type, used by `kg_write` to encode each prop. Sourced

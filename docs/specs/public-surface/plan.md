@@ -59,8 +59,9 @@ reference pack, which is the proof that the tier is sufficient. Everything else 
 
 ## Tasks
 
-Order: PS-1, PS-2, PS-3, PS-4, PS-5, PS-6 (query primitives) before PS-7 (store accessor) and PS-8 (pack SDK, which
-needs both), then PS-9 (docs + release notes). One task, one approval, one commit.
+Order: PS-1 ... PS-6 (query primitives), PS-7 (store accessor), PS-8a (the reference pack's store code onto the
+primitives), PS-8b (pack SDK, which needs PS-7 and PS-8a), then PS-9 (docs + release notes). PS-8 was split
+in two at the PS-6 gate so the store rewrite is its own visible task. One task, one approval, one commit.
 
 | id | what | verify | status |
 |---|---|---|---|
@@ -69,7 +70,8 @@ needs both), then PS-9 (docs + release notes). One task, one approval, one commi
 | PS-3 | G18: export `record_usage`, `traced_run`, `traced_step` | scope-attribution test (nested scopes, a product call recorded); tracing no-op without Langfuse | done: `record_usage`, `traced_run`, `traced_step` exported (same objects); live: engine + product calls metered together and both in the Langfuse session; G18 closed |
 | PS-4 | G19: export `agenerate_answer(query, evidence, *, ws)`, `EvidenceItem`, `GeneratedAnswer`, `ajudge_spans(..., ws)`, `RelevanceVerdict` (+ `Relevance`, `Condition`) | hermetic tests with stubbed models; one live answer | done: exported with types (+`AnswerKind`), models from ws roles, final closed-vocab verdicts; judge moved to tag-parse (ADR-0045) after the live check found forced structured output failing on every call; G19 closed |
 | PS-5 | G20: `RAG_MODELS_DIR` / `EngineConfig.models_dir` for every classifier; `scripts/fetch_reference_models.py` (checksummed archive); the GCS publish step agreed with you | loader tests (configured dir honoured by the fleet and the clause classifier); fetch script verified against the archive | done: `RAG_MODELS_DIR` + `models_dir()` for the fleet, clause ensemble and query LegalBERT (no `EngineConfig.models_dir`: fleets are process-wide); 23 archives (17.11 GB) + manifest at `gs://dreamai-pocs-ragwright-ingest/models/reference-pack/v1/` (private); 3 random archives fetched + prediction-identical; G20 closed |
-| PS-6 | G21 query primitives: `kg_count`, `kg_delete`, `kg_update`, `key_range` on `kg_read` (Store protocol + ArcadeDB) | hermetic SQL tests; live store tests | todo |
+| PS-6 | G21 query primitives: `kg_count`, `kg_delete`, `kg_update`, `key_range` on `kg_read` (Store protocol + ArcadeDB) | hermetic SQL tests; live store tests | done: on `Store` + `ArcadeDBStore` + `rag_wright.api`; shared filter grammar with `kg_edges`; `kg_update` changes only differing rows; live count/update/delete/key_range |
 | PS-7 | G15: `pack_store(ws, cls)`; the reference seam and the guides use it | seam tests (incl. empty catalog); no `ws._store` left in the reference pack, the guides or the skills | todo |
-| PS-8 | G21: `rag_wright.pack_sdk`; the reference pack imports only `api` + `pack_sdk`; no raw `_query` / `_command` in the pack; import contract enforcing it | import contract kept; full suite; live Aimmune re-ingest record-identical | todo |
+| PS-8a | G21: the reference pack's store code onto the primitives: every raw `_query` / `_command` / `_db` call in `ContractKGStore` (and `ComplianceStore`), incl. `write_clause_exception_links` (`kg_delete` + `kg_write`) and `clause_property_values` (`kg_edges`) | per-method parity tests; no `_query` / `_command` / `_db` left in `rag_wright.packs`; live re-ingest record-identical | todo |
+| PS-8b | G21: `rag_wright.pack_sdk`; the reference pack imports only `api` + `pack_sdk`; import contract enforcing it | import contract kept; full suite | todo |
 | PS-9 | Docs: API reference regenerated; the engine-usage + authoring skills, the domain-adaptation guide, the product-starter templates and the RuleWright guide updated (the interim rules in its Q&A replaced by the new surface); G15-G21 closed in `_engine-gaps.md`; ADR | doc-reference test; full suite | todo |

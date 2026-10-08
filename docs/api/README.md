@@ -236,9 +236,9 @@ Public discovery index: `{slug: {kind, description}}` for every catalogued capab
 
 Rank the live ARD catalog by semantic match to `query`; return the top `k` (optionally filtered to one `kind`: `subgraph` / `model` / `function` / `agent_skill` / `mcp_tool`). Embedding-based, via the workspace's query embedder (BGE-M3, the same space retrieval uses). Returns `[]` when the (filtered) catalog is empty; raises `RuntimeError` if the workspace has no query embedder available (discovery needs one).
 
-### `kg_read(ws: 'WorkspaceHandle', node_type: 'str', *, where: 'Optional[dict]' = None, fields: 'Optional[list]' = None, distinct: 'Optional[str]' = None, order_by: 'Optional[str]' = None, limit: 'Optional[int]' = None) -> 'list[dict]'`
+### `kg_read(ws: 'WorkspaceHandle', node_type: 'str', *, where: 'Optional[dict]' = None, fields: 'Optional[list]' = None, distinct: 'Optional[str]' = None, order_by: 'Optional[str]' = None, limit: 'Optional[int]' = None, key_range: 'Optional[tuple]' = None) -> 'list[dict]'`
 
-Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equality/`IN` filters, projection, distinct, order, limit; an empty list `where` value is scope-to-nothing -> `[]`.
+Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equality/`IN` filters, a `key_range=(field, lo, hi)` range, projection, distinct, order, limit; an empty list `where` value is scope-to-nothing -> `[]`.
 
 ### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = ()) -> 'None'`
 
@@ -247,6 +247,18 @@ Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_wr
 ### `kg_edges(ws: 'WorkspaceHandle', from_type: 'Optional[str]' = None, *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None, direction: 'str' = 'out', edge_type: 'Optional[str]' = None, edge_where: 'Optional[dict]' = None, target_where: 'Optional[dict]' = None, select: 'dict') -> 'list[dict]'`
 
 Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out/in MATCH (by `where` equality/membership or an id-prefix `key_range`) or a direct edge scan; `select` projects `c.`/`e.`/`v.` expressions. The engine's relational/graph primitive on the API, so a domain's graph query never touches `ws._store`. (`NOT_NULL` from `rag_wright.api` is the presence filter.)
+
+### `kg_count(ws: 'WorkspaceHandle', type_name: 'str', *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
+
+The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`).
+
+### `kg_delete(ws: 'WorkspaceHandle', type_name: 'str', *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
+
+Delete the matching vertices (with their edges) or edges of `type_name`; all of them when `where` and `key_range` are both None. Returns the number deleted (see `Store.kg_delete`).
+
+### `kg_update(ws: 'WorkspaceHandle', type_name: 'str', *, set: 'dict', where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
+
+Set fields on the matching vertices or edges of `type_name`, changing only rows where a set field differs; returns the number changed (see `Store.kg_update`).
 
 ### `entities_by_name(ws: 'WorkspaceHandle', name: 'str') -> 'list[dict]'`
 

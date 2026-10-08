@@ -17,10 +17,33 @@ _SPAN_POSITION_FIELDS = [
 
 
 def kg_read(ws: WorkspaceHandle, node_type: str, *, where: Optional[dict] = None, fields: Optional[list] = None,
-            distinct: Optional[str] = None, order_by: Optional[str] = None, limit: Optional[int] = None) -> list[dict]:
-    """Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equality/`IN` filters, projection,
-    distinct, order, limit; an empty list `where` value is scope-to-nothing -> `[]`."""
-    return ws._store.kg_read(node_type, where=where, fields=fields, distinct=distinct, order_by=order_by, limit=limit)
+            distinct: Optional[str] = None, order_by: Optional[str] = None, limit: Optional[int] = None,
+            key_range: Optional[tuple] = None) -> list[dict]:
+    """Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equality/`IN` filters, a
+    `key_range=(field, lo, hi)` range, projection, distinct, order, limit; an empty list `where` value is
+    scope-to-nothing -> `[]`."""
+    return ws._store.kg_read(node_type, where=where, fields=fields, distinct=distinct, order_by=order_by, limit=limit,
+                             key_range=key_range)
+
+
+def kg_count(ws: WorkspaceHandle, type_name: str, *, where: Optional[dict] = None,
+             key_range: Optional[tuple] = None) -> int:
+    """The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`)."""
+    return ws._store.kg_count(type_name, where=where, key_range=key_range)
+
+
+def kg_delete(ws: WorkspaceHandle, type_name: str, *, where: Optional[dict] = None,
+              key_range: Optional[tuple] = None) -> int:
+    """Delete the matching vertices (with their edges) or edges of `type_name`; all of them when `where` and
+    `key_range` are both None. Returns the number deleted (see `Store.kg_delete`)."""
+    return ws._store.kg_delete(type_name, where=where, key_range=key_range)
+
+
+def kg_update(ws: WorkspaceHandle, type_name: str, *, set: dict, where: Optional[dict] = None,
+              key_range: Optional[tuple] = None) -> int:
+    """Set fields on the matching vertices or edges of `type_name`, changing only rows where a set field differs;
+    returns the number changed (see `Store.kg_update`)."""
+    return ws._store.kg_update(type_name, set=set, where=where, key_range=key_range)
 
 
 def kg_write(ws: WorkspaceHandle, nodes: list, edges: Any = ()) -> None:

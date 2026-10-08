@@ -176,10 +176,31 @@ class Store(Protocol):
         distinct: Optional[str] = None,
         order_by: Optional[str] = None,
         limit: Optional[int] = None,
+        key_range: Optional[tuple[str, object, object]] = None,
     ) -> list[dict]:
         """Read typed nodes of `node_type`. `where` maps a field to a scalar (equality) or a list (membership);
         a list value that is EMPTY means scope-to-nothing and returns `[]` without a query. `distinct` returns the
-        distinct values of one field; `fields=None` returns all fields. Equality/membership clauses are AND-ed."""
+        distinct values of one field; `fields=None` returns all fields. Equality/membership clauses are AND-ed;
+        `key_range=(field, lo, hi)` adds `field >= lo AND field < hi` (e.g. every id with one prefix)."""
+
+    # --- generic count / delete / update (PS-6, G21): with kg_read / kg_edges / kg_write, everything a pack's store
+    # extension needs, so it never emits store-native SQL. `where` / `key_range` as in `kg_edges` (scalar = equality,
+    # list = membership, `NOT_NULL` = presence); an EMPTY membership list scopes to nothing (0, no statement).
+
+    def kg_count(self, type_name: str, *, where: Optional[dict[str, object]] = None,
+                 key_range: Optional[tuple[str, object, object]] = None) -> int:
+        """The number of vertices or edges of `type_name` matching `where` / `key_range`."""
+
+    def kg_delete(self, type_name: str, *, where: Optional[dict[str, object]] = None,
+                  key_range: Optional[tuple[str, object, object]] = None) -> int:
+        """Delete the vertices or edges of `type_name` matching `where` / `key_range` (all of them when both are
+        None); deleting a vertex deletes its edges. Returns the number deleted."""
+
+    def kg_update(self, type_name: str, *, set: dict[str, object], where: Optional[dict[str, object]] = None,
+                  key_range: Optional[tuple[str, object, object]] = None) -> int:
+        """Set the `set` fields on the vertices or edges of `type_name` matching `where` / `key_range`. Only rows
+        where some set field differs (or is unset) change, so a repeated update changes nothing; returns the number
+        of rows changed. Values are encoded as `kg_write` encodes them."""
 
     def kg_edges(
         self,
