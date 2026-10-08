@@ -5,7 +5,8 @@ the start of every session. This is the user-facing product ({{PRODUCT_DOMAIN}})
 engine — a separate repo that depends on the open-core engine, one way.
 
 > **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}` (where
-> the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it — `uv add rag-wright`, a path dep, or git),
+> the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it, per the dependency mode in the playbook's section 5), `{{ENGINE_FLOOR}}`
+> (the minimum engine version, a `>=` floor such as `0.2.0`),
 > `{{STACK}}` (your backend/frontend/model/infra choices), the grounding-lane paths, the `{{SPEC}}`/`{{PLAN}}`/
 > `{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme, and `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill, if any). The generic core
 > below — the boundary, grounding discipline, skills, working loop, memory, version control, boundaries — stays as
@@ -55,10 +56,18 @@ engine — a separate repo that depends on the open-core engine, one way.
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.
 - **GraphWright is PARKED (ADR-0052).** There is no orchestration compiler; the product hand-builds orchestration.
-- **Engine upgrades arrive as Dependabot PRs** (`.github/dependabot.yml`), gated by CI incl. the live engine-seam
-  tests — never bump the engine by hand outside that path. The one exception: a temporary `[tool.uv.sources]` git
-  `rev` pin to adopt an engine fix before it is released, removed when the release lands (playbook section 5).
-  Engine bugs found here are fixed in the engine repo via a PR with a conventional `fix:` title.
+- **Register the engine capabilities at startup.** The engine's capability catalog ships empty: before any ingest or
+  query, register the engine capabilities you use (`for m in engine_capabilities(): register_capability(m)`, or
+  `load_reference_pack()` if you build on the reference pack). Without it the decision model (`jev_decision`) is
+  unknown: its ingestion paths fall back silently to many more LLM calls, and a direct invocation raises `KeyError`.
+- **The engine dependency follows the mode in playbook section 5.** *Local co-development* (engine and product
+  developed together on one machine): `rag-wright>={{ENGINE_FLOOR}}` plus an editable `[tool.uv.sources]` path to the
+  engine checkout, so engine changes are picked up immediately; check against the published release with
+  `uv sync --no-sources` (never with `--locked`, and never commit the `uv.lock` it rewrites). *Released product* (CI,
+  deploys or other developers): `rag-wright>={{ENGINE_FLOOR}}` from PyPI with a committed `uv.lock`; engine upgrades
+  arrive as Dependabot PRs (`.github/dependabot.yml`) gated by CI incl. the live engine-seam tests, and an unreleased
+  engine fix is adopted with a temporary `[tool.uv.sources]` git `rev` pin, removed when the release lands. Engine
+  bugs found here are fixed in the engine repo via a PR with a conventional `fix:` title.
 
 ---
 

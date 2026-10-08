@@ -65,8 +65,9 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 
 1. Scaffold the repo from the templates: `CLAUDE.md` (from `CLAUDE.md.template`), `{{SPEC}}`, `{{PLAN}}`,
    `{{TASKS}}`; fill the placeholders.
-2. Depend on the engine (`{{ENGINE_DEP}}`); wire the engine repo as a read/reference additional directory
-   (`.claude/settings.local.json`) so its docs + source are reachable.
+2. Choose the engine dependency mode (section 5: local co-development or released product) and depend on the engine
+   (`{{ENGINE_DEP}}`); wire the engine repo as a read/reference additional directory (`.claude/settings.local.json`)
+   so its docs + source are reachable.
 3. `.gitignore` covers `.env`, environments, caches, `graphify-out/`, and `.claude/skills/`.
 4. Create the uv project, pin Python `>=3.12,<3.13` (match the engine), declare deps with `uv add`, commit
    `uv.lock`.
@@ -76,10 +77,15 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 6. **Link the skills into `.claude/skills/`:** the engine-authored skills from the engine repo and the shared
    generic skills from their source (symlink so each tracks its version; never copy). Load
    **`using-the-rag-wright-engine`** first on any engine work.
-7. **Engine-release automation:** copy the starter's `dependabot.yml` to `.github/dependabot.yml`, so each new
-   `rag-wright` release arrives as a PR gated by your CI (section 5, "Keeping the engine current").
-8. Remaining Phase 0: the engine seam, config/secrets, any front-end scaffold, observability, and repaying the
-   `{{SPEC}}` placeholders.
+7. **Engine-release automation** (released-product mode): copy the starter's `dependabot.yml` to
+   `.github/dependabot.yml`, so each new `rag-wright` release arrives as a PR gated by your CI (section 5, "Keeping
+   the engine current").
+8. **Register the engine capabilities at startup**, in the engine seam, before any ingest or query:
+   `for m in engine_capabilities(): register_capability(m)` (both from `rag_wright.api`), or `load_reference_pack()`
+   if you build on the reference pack. The catalog ships empty; without this the decision model is unknown and its
+   ingestion paths fall back silently to the LLM.
+9. Remaining Phase 0: the rest of the engine seam, config/secrets, any front-end scaffold, observability, and
+   repaying the `{{SPEC}}` placeholders.
 
 ---
 
@@ -146,16 +152,22 @@ mere importability** (a transitive dep can flip importability-gated behaviour).
 ### Keeping the engine current
 
 Engine fixes land as engine PRs, but the engine **releases in batches** (release-please; the engine's
-`docs/releasing.md`). This product adopts releases automatically:
+`docs/releasing.md`). How this product depends on the engine follows its stage; both modes keep
+`rag-wright>={{ENGINE_FLOOR}}` in `pyproject` (a floor, never `==`):
 
-- **Normal path:** `pyproject` keeps `rag-wright>={{ENGINE_FLOOR}}` (a floor, never `==`); `uv.lock` pins the exact
-  version. Dependabot (`.github/dependabot.yml`) opens a PR when a new release appears on PyPI; CI — including the
-  LIVE engine-seam tests — gates it; merge on green.
-- **Need an engine fix before it's released?** Pin the merged engine commit temporarily:
-  `[tool.uv.sources] rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`, then
-  `uv lock`. Remove the override in the Dependabot PR that adopts the release containing the fix.
-- **Developing both at once, locally:** an editable path dep on `{{ENGINE_PATH}}` is fine on your machine, but
-  never commit it (CI cannot see that path).
+| | **Local co-development** | **Released product** |
+|---|---|---|
+| when | engine and product developed together on one machine | the product has CI, deploys or other developers |
+| dependency | the floor + an editable `[tool.uv.sources]` path to `{{ENGINE_PATH}}` (committed) | the floor from PyPI; `uv.lock` pins the exact version |
+| engine changes | picked up immediately: no build, publish or reinstall | adopted per release via Dependabot PRs gated by CI (incl. the LIVE engine-seam tests) |
+| release check | `uv sync --no-sources` (CI or before a deploy) installs the published engine; never with `--locked`, and never commit the `uv.lock` it rewrites | CI runs `uv sync --locked` as usual |
+| an unreleased engine fix | already visible through the path | a temporary `[tool.uv.sources]` git pin: `rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`, then `uv lock`; removed in the Dependabot PR that adopts the release |
+
+Why the release check runs without `--locked`: with the path source, `uv.lock` records the local path, and
+`uv sync --no-sources` re-resolves from PyPI (rewriting the lock in that checkout). Switch to the released-product mode
+when the product gets CI, deploys or other developers: drop the path source, `uv lock`, commit, and add Dependabot. In
+the co-development mode a breaking engine change breaks the product at once; that is useful feedback when deliberate,
+so the engine runs the product's suite against its working tree before changing a public symbol or store method.
 - Engine bugs found here are fixed **in the engine repo** (a PR with a conventional `fix:` title), never patched
   around in this repo.
 

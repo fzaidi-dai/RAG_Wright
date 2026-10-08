@@ -210,12 +210,13 @@ the compliance pack's `.ttl`).
 4. Live: ingest one contract and one policy; the contract run should show Jev calls and no per-provision LLM calls
    (`measure_usage` / the run report), the policy run no dead-lettered sections.
 
-## 9. Dependency setup: develop against the local engine, verify against the release
+## 9. Dependency setup: local co-development now, released product later
 
-Keep the editable path dependency for local work: every engine change is visible to RuleWright (and its coding agent)
-the moment it is saved, with no build, publish or reinstall. A wheel would be a snapshot to rebuild and reinstall on
-every change, so it is only worth it where there is no checkout (a sealed deploy image, an offline machine). Make the
-setup safe as well as fast:
+RuleWright is in the **local co-development** mode (the product-starter playbook's section 5): it commits an editable
+path dependency on the engine checkout, so every engine change is visible to it (and its coding agent) the moment it
+is saved, with no build, publish or reinstall. A wheel would be a snapshot to rebuild and reinstall on every change,
+so it is only worth it where there is no checkout (a sealed deploy image, an offline machine). Make the mode safe as
+well as fast:
 
 1. **Declare a version floor** in `pyproject.toml` (`dependencies`): `"rag-wright"` becomes `"rag-wright>=0.2.0"`. The
    editable source still satisfies it locally; an install without the source can no longer resolve an older release.
@@ -224,19 +225,22 @@ setup safe as well as fast:
    [project]
    dependencies = ["rag-wright>=0.2.0", ...]
 
-   [tool.uv.sources]  # local development only
+   [tool.uv.sources]  # local co-development
    rag-wright = { path = "../RAG_Wright", editable = true }
    ```
 
-2. **Test against the published release where it matters** (CI, before a deploy): `uv sync --no-sources` ignores the
-   path override and installs `rag-wright` from PyPI under the floor, then run the suite. Locally, the plain
-   `uv sync` keeps the editable engine.
-3. **Share an unreleased engine fix without publishing** by pinning a commit instead of the path, for a teammate or
-   CI: `rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`; drop it once the fix is
-   released (the engine's `docs/releasing.md`).
-4. **Expect the trade-off.** Editable means a breaking engine change breaks RuleWright at once (as 0.2.0 did). That is
-   useful feedback when deliberate: before the engine commits a change to a public symbol or store method, RuleWright's
-   suite is run against the engine working tree.
+2. **Check against the published release where it matters** (CI, before a deploy): `uv sync --no-sources` ignores
+   the path source and installs `rag-wright` from PyPI under the floor (verified on 0.2.0), then run the suite. Two
+   rules: never with `--locked` (the committed `uv.lock` records the local path, so `--no-sources` must re-resolve),
+   and never commit the `uv.lock` it leaves behind (it rewrites the lock to the PyPI source in that checkout; a plain
+   `uv lock` flips it back). Locally, the plain `uv sync` keeps the editable engine.
+3. **Expect the trade-off.** In this mode a breaking engine change breaks RuleWright at once (as 0.2.0 did). That is
+   useful feedback when deliberate: before the engine commits a change to a public symbol or store method,
+   RuleWright's suite is run against the engine working tree.
+4. **Switch to the released-product mode** when RuleWright gets CI, deploys or other developers: drop the path source,
+   `uv lock` against PyPI, commit, add the starter's `dependabot.yml` (engine releases then arrive as CI-gated PRs),
+   and adopt an unreleased engine fix with a temporary git pin
+   (`rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`) until its release lands.
 
 ## Later (optional): move to the public API
 

@@ -9,16 +9,18 @@ loop.
 
 - `CLAUDE.md.template` → your repo's `CLAUDE.md` (the working rules Claude Code reads every session).
 - `playbook.md.template` → your repo's `docs/playbook.md` (the build recipe + Phase-0 setup).
-- `dependabot.yml` → your repo's `.github/dependabot.yml` (adopts each new engine release as a CI-gated PR).
+- `dependabot.yml` → your repo's `.github/dependabot.yml` (adopts each new engine release as a CI-gated PR, once the
+  product depends on the published engine; playbook section 5).
 
 ## How to use
 
 1. Copy both templates into the new repo (`CLAUDE.md.template` → `CLAUDE.md`, `playbook.md.template` →
    `docs/playbook.md`).
 2. **Fill every `{{PLACEHOLDER}}`** (table below), then **delete the "FILL THESE FIRST" block** from each.
-3. Run the playbook's **Section 2 (one-time Phase-0 setup)**: depend on the engine, build the grounding lanes,
-   link the engine-authored + shared skills into `.claude/skills/`, and copy `dependabot.yml` to
-   `.github/dependabot.yml` so engine releases arrive as automated PRs.
+3. Run the playbook's **Section 2 (one-time Phase-0 setup)**: choose the engine dependency mode (playbook section 5:
+   local co-development or released product), depend on the engine, register the engine capabilities at startup,
+   build the grounding lanes, link the engine-authored + shared skills into `.claude/skills/`, and (released-product
+   mode) copy `dependabot.yml` to `.github/dependabot.yml` so engine releases arrive as automated PRs.
 4. Load the **`using-the-rag-wright-engine`** skill and follow the engine's domain-adaptation guide.
 
 Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should return nothing.
@@ -29,9 +31,9 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 |---|---|
 | `{{PRODUCT_NAME}}` | your product's name |
 | `{{PRODUCT_DOMAIN}}` | one line — what the product does |
-| `{{ENGINE_DEP}}` | how you depend on the engine (`uv add rag-wright`, a path dep, or git) |
+| `{{ENGINE_DEP}}` | how you depend on the engine, per the mode in playbook section 5: local co-development = `rag-wright>={{ENGINE_FLOOR}}` + an editable `[tool.uv.sources]` path; released product = `uv add 'rag-wright>={{ENGINE_FLOOR}}'` from PyPI |
 | `{{ENGINE_PATH}}` | where the engine repo/package is (e.g. `../RAG_Wright`) — for reading its docs/source |
-| `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.1.0`) — a `>=` floor, never `==` |
+| `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.2.0`): a `>=` floor, never `==` |
 | `{{ENGINE_LANE_PATH}}` / `{{PROJECT_LANE_PATH}}` | your `graphify-out/` lane paths (engine = the installed `rag_wright` package; project = this repo) |
 | `{{STACK}}` | your backend / frontend / model / infra choices |
 | `{{SPEC}}` / `{{PLAN}}` / `{{TASKS}}` | your spec, plan, and task-ledger filenames |

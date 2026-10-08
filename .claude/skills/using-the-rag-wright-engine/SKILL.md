@@ -35,12 +35,21 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
 ## 1. Install
 
 ```sh
-uv add rag-wright                       # or a path/git dep pre-publish (see the engine's installation doc)
+uv add 'rag-wright>=0.2.0'              # released-product mode (PyPI); see below for local co-development
 ```
 
 Stand up the runtime prerequisites you provide: ArcadeDB (the store), a model provider (OpenRouter or self-hosted
 vLLM), and — only for NER — `uv add 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`.
 Read the engine's **installation** + **configuration** docs for the exact `.env` and `EngineConfig` fields.
+
+**Local co-development** (engine and product developed together on one machine): keep the floor and add an editable
+source so engine changes are picked up immediately: `[tool.uv.sources] rag-wright = { path = "<engine checkout>",
+editable = true }`. Check against the published release with `uv sync --no-sources` (never with `--locked`; never
+commit the `uv.lock` it rewrites). Switch to the PyPI mode above once the product has CI, deploys or other developers.
+The product-starter playbook (section 5) has both modes.
+
+**Register the engine capabilities at startup** (the catalog ships empty): `for m in engine_capabilities():
+register_capability(m)` before any ingest or query, or the decision model is unknown.
 
 ## 2. Ground before you write (graphify)
 
