@@ -120,10 +120,9 @@ class DimClassifierRegistry:
 
 
 # CLS-D: the production 21-dim best-of-both fleet. `dim_fleet.json` (committed config) maps each dim to its
-# framework + local model dir + serving params; model weights live under `data/models/` (gitignored). A LAYA
-# group checkpoint serves several dims -> load each unique model ONCE and share the agent.
+# framework + local model dir + serving params; model weights live under the models root (`RAG_MODELS_DIR`, PS-5).
+# A LAYA group checkpoint serves several dims -> load each unique model ONCE and share the agent.
 _FLEET_CONFIG = Path(__file__).with_name("dim_fleet.json")
-_MODELS_DIR = Path(__file__).resolve().parents[5] / "data" / "models"
 
 
 def load_dim_registry(config_path=None, *, models_dir=None, device: Optional[str] = None) -> "DimClassifierRegistry":
@@ -131,8 +130,10 @@ def load_dim_registry(config_path=None, *, models_dir=None, device: Optional[str
     device-agnostic seam. Raises FileNotFoundError with the missing path if a checkpoint has not been fetched."""
     import json
 
+    from rag_wright.models.weights import models_dir as models_root
+
     cfg = json.loads(Path(config_path or _FLEET_CONFIG).read_text())
-    base = Path(models_dir or _MODELS_DIR)
+    base = Path(models_dir or models_root())
     laya_agents: dict[str, Any] = {}  # model dir name -> loaded laya agent (shared across its dims)
     classifiers: dict[PropertyDimension, DimClassifier] = {}
     for dim_str, spec in cfg.items():

@@ -15,12 +15,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 from pathlib import Path
 
 import pytest
 
 from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.models.weights import models_dir
 from rag_wright.packs.contracts.spans.property_extractor import (
     HybridPropertyExtractor,
     Provenance,
@@ -28,7 +28,7 @@ from rag_wright.packs.contracts.spans.property_extractor import (
     scoped_dims,
 )
 
-_MODELS_DIR = Path(os.getenv("RAG_DIM_MODELS_DIR", "data/models"))
+_MODELS_DIR = models_dir()  # the same root the loader uses (PS-5)
 _FLEET_CFG = Path(__file__).resolve().parents[2] / "src" / "rag_wright" / "packs" / "contracts" / "spans" / "dim_fleet.json"
 
 

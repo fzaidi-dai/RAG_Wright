@@ -114,6 +114,7 @@ def query_classifier(model_path: Any = None, *, post: Callable[..., dict] = _pos
         return RemoteLegalBertClassifier(url, post=post)
     from pathlib import Path
 
+    from rag_wright.models.weights import models_dir
     from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
 
-    return LegalBertFunctionClassifier.load(Path(model_path or "data/models/legalbert_function"))
+    return LegalBertFunctionClassifier.load(Path(model_path or models_dir() / "legalbert_function"))

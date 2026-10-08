@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -17,6 +16,7 @@ from fastmcp import Client
 from rag_wright.api import EngineConfig, StoreConfig, WorkspaceHandle
 from rag_wright.api import invoke as _invoke
 from rag_wright.api.mcp import build_capability_mcp
+from rag_wright.models.weights import models_dir
 
 
 def _handle():
@@ -78,14 +78,14 @@ def test_rejects_an_unknown_capability():
 def _fleet_present() -> bool:
     """True only when every model dir the fleet references has been fetched (gitignored / local-only)."""
     cfg_path = Path("src/rag_wright/packs/contracts/spans/dim_fleet.json")
-    models_dir = Path(os.getenv("RAG_DIM_MODELS_DIR", "data/models"))
+    root = models_dir()
     try:
         cfg = json.loads(cfg_path.read_text())
     except OSError:
         return False
     for spec in cfg.values():
         sub = "laya" if spec["framework"] == "laya" else "setfit"
-        if not (models_dir / sub / spec["model"]).exists():
+        if not (root / sub / spec["model"]).exists():
             return False
     return True
 

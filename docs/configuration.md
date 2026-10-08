@@ -111,7 +111,8 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` | read only by the contracts pack's legacy tag-parse clause extractor, which the default pipeline does not use (it is classifier-first) |
 | `RAG_STRUCTURED_TIMEOUT_S` / `RAG_JEV_TIMEOUT_S` / `RAG_JUDGE_TIMEOUT_S` / `RAG_RELEVANCE_TIMEOUT_S` | call timeouts (raise for reasoning-ON bulk work) |
 | `RAG_SPACY_MODEL` | the spaCy model name for the optional NER extra |
-| `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs |
+| `RAG_MODELS_DIR` | the models root every trained classifier loads its weights from (default: the engine checkout's `data/models` when it exists, else `./data/models`); fill it with `scripts/fetch_reference_models.py` for the reference pack |
+| `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs (`RAG_SETFIT_CLAUSE_DIR` overrides `<models root>/setfit_clause`) |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` / `RAG_TRACE_LEVEL` | observability (Langfuse tracing; see [`OBSERVABILITY.md`](OBSERVABILITY.md)) |
 
 Secrets belong only in a gitignored `.env`. See [`installation.md`](installation.md) for the minimal set and

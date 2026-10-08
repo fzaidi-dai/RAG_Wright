@@ -91,6 +91,22 @@ A new domain mirrors the pattern, swapping the vocabulary and document shape:
   `model` capabilities ([classification & decision models](domain-adaptation/classification-and-decision-models.md));
 - `intra_document_qa` / `typed_property_retrieval` / `relational_qa` show cited retrieval/QA legs to adapt.
 
+## Its trained weights: fetched, not shipped
+
+The pack's two `model` capabilities load trained weights that are not in the wheel or the repository (about 16 GB):
+the clause-type SetFit ensemble and the 29-dimension SetFit/Laya property fleet. They load from the models root
+(`RAG_MODELS_DIR`; default the engine checkout's `data/models` when it exists, else `./data/models`). Fetch them
+with:
+
+```sh
+uv run python scripts/fetch_reference_models.py            # into the models root
+uv run python scripts/fetch_reference_models.py --dest data/models
+```
+
+The script downloads one archive per model from a private GCS bucket (Google Cloud credentials with read access,
+`GOOGLE_APPLICATION_CREDENTIALS`), checks each archive's sha256 against the manifest before extracting it, and skips
+a model already fetched. A product that owns copies of these weights points `RAG_MODELS_DIR` at its own directory.
+
 ## Not shipped: the restrictively-licensed corpora
 
 The reference pack does **not** include CUAD or ACORD (the contract evaluation corpora) — they are

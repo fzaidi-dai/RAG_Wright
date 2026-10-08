@@ -11,9 +11,10 @@ from pathlib import Path
 
 import pytest
 
+from rag_wright.models.weights import models_dir
 from rag_wright.packs.contracts.schemas.function import FunctionConfidence, FunctionScore, canonical_function
 
-_ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_clause"))
+_ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR") or models_dir() / "setfit_clause")  # as the loader resolves it
 _HAVE = (_ROOT / "cap128b_legalbert" / "model_head.pkl").exists()
 pytestmark = pytest.mark.skipif(
     not _HAVE, reason="SetFit clause checkpoints not present (gitignored / local-only)")

@@ -470,12 +470,14 @@ class SetFitClauseAdapter:
 def production_setfit_clause_classifier(model_root: str | None = None, **kwargs) -> SetFitClauseAdapter:
     """Wire the ENSEMBLE SetFit soft-tagger -- the ingestion default (replaces the LLM classifier for latency,
     T55/SETFIT-SEG-1). Loads the 3 finalized checkpoints (LegalBERT + BGE-large + MPNet) from `model_root`
-    (env RAG_SETFIT_CLAUSE_DIR; default data/models/setfit_clause). In-process, no network hop, no `setfit` dep.
+    (env RAG_SETFIT_CLAUSE_DIR; default `<models root>/setfit_clause`, the root from `RAG_MODELS_DIR`). In-process, no network hop, no `setfit` dep.
     Tunables: RAG_SETFIT_TOPK, RAG_SETFIT_THRESHOLD, RAG_SETFIT_DEVICE."""
     import os
     from pathlib import Path
 
-    root = Path(model_root or os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_clause"))
+    from rag_wright.models.weights import models_dir
+
+    root = Path(model_root or os.getenv("RAG_SETFIT_CLAUSE_DIR") or models_dir() / "setfit_clause")
     subdirs = [root / n for n in ("cap128b_legalbert", "cap128b_bge", "cap128b_mpnet")]
     present = [d for d in subdirs if (d / "model_head.pkl").exists()]
     if not present:

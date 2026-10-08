@@ -146,16 +146,12 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   judge returns final, closed-vocabulary verdicts. The query embedder stays internal: retrieval goes through the
   invokers.
 
-### G20: Trained classifier weights are not packaged and the property fleet's location is not configurable
-- **Where:** the reference pack's classifiers load weights from the engine checkout's gitignored `data/models/`. The
-  clause-type SetFit ensemble honours `RAG_SETFIT_CLAUSE_DIR`; the 29-dimension property fleet resolves
-  `data/models` relative to its source file (`packs/contracts/spans/dim_classifier.py`, `_MODELS_DIR`), and the
-  production path calls `load_dim_registry()` without a `models_dir`, so there is no setting to point it elsewhere.
-- **Impact:** the fleet works only from an engine checkout (an editable install); from a PyPI install it finds no
-  weights. A product that owns copies of the weights (the agreed direction) cannot point the fleet at them.
-- **Proposed:** a configurable models directory for every classifier (an env var / `EngineConfig` option), and the
-  reference pack's weights published as a downloadable GCS archive (then removed from the engine checkout).
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G20: Trained classifier weights are not packaged and the property fleet's location is not configurable (closed)
+- Closed by PS-5: every reference-pack classifier (the property fleet, the clause-type ensemble, the query-side
+  LegalBERT) loads from one models root, `RAG_MODELS_DIR` (default: the engine checkout's `data/models` when it
+  exists, else `./data/models`), resolved by `rag_wright.models.weights.models_dir()`. The weights are published as
+  checksummed per-model archives under `gs://dreamai-pocs-ragwright-ingest/models/reference-pack/v1/` (private) and
+  fetched with `scripts/fetch_reference_models.py`. Removing them from the engine checkout is a later step.
 
 ### G21: No defined "pack SDK" surface for pack code
 - **Where:** a pack's code (the reference pack today, a product's forked pack next) imports about 30 engine-internal

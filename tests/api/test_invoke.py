@@ -23,6 +23,7 @@ from rag_wright.api import (
 )
 from rag_wright.api import invoke as _invoke
 from rag_wright.models.usage import usage_capturing
+from rag_wright.models.weights import models_dir
 
 
 def _handle():
@@ -179,7 +180,7 @@ def test_source_document_builds_a_text_doc():
 
 # --- live: a local model capability through the engine API ---
 
-_SETFIT_ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR", "data/models/setfit_clause"))
+_SETFIT_ROOT = Path(os.getenv("RAG_SETFIT_CLAUSE_DIR") or models_dir() / "setfit_clause")
 _HAVE_SETFIT = (_SETFIT_ROOT / "cap128b_legalbert" / "model_head.pkl").exists()
 
 
@@ -201,14 +202,14 @@ def _fleet_present() -> bool:
     import json
 
     cfg_path = Path("src/rag_wright/packs/contracts/spans/dim_fleet.json")
-    models_dir = Path(os.getenv("RAG_DIM_MODELS_DIR", "data/models"))
+    root = models_dir()
     try:
         cfg = json.loads(cfg_path.read_text())
     except OSError:
         return False
     for spec in cfg.values():
         sub = "laya" if spec["framework"] == "laya" else "setfit"
-        if not (models_dir / sub / spec["model"]).exists():
+        if not (root / sub / spec["model"]).exists():
             return False
     return True
 
