@@ -55,8 +55,11 @@ Three things matter for a new domain:
   `(resources, inputs) -> result` factory) is invoked **by name** through the engine — zero engine edits. Capabilities
   without one (most `function`s) are composed by direct import. In the reference pack, 9 of 36 capabilities are
   invocable-by-name; the rest are composed or served.
-- **The catalog ships empty.** The runtime ARD catalog (`MANIFEST_SPECS`) is empty on install. A product populates
-  it with `register_capability(manifest)`; the reference pack is opt-in via `load_reference_pack()`. The invoker
+- **The catalog ships empty, and the product owns it.** The runtime ARD catalog (`MANIFEST_SPECS`) is empty on
+  install and import; nothing in the engine registers capabilities on a product's behalf. A product registers what it
+  invokes, once, at startup in its seam: its own pack (`load_pack`), the engine's domain-neutral capabilities it uses
+  (`engine_capabilities()` offers their definitions), and the reference pack only if it builds on that worked example
+  (`load_reference_pack()`). The contract/compliance capabilities belong to the reference pack, not to the engine. The invoker
   resolves `impl_ref` lazily — there is no central adapter table.
 - **Packs and canonical slugs.** A registration is accepted only for a canonical slug. The engine's own generic
   capabilities (generation, the RLM skills, vision-to-text, the `jev_decision` decision model, span relevance

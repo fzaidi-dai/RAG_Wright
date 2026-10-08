@@ -5,6 +5,31 @@
 document is that record applied to RuleWright as it is today (commit `53f4894`): every item below was found by scanning
 RuleWright's code against the 0.2.0 engine, not assumed. Dependency direction is unchanged: Product -> Engine.
 
+> ## The core of this migration: RuleWright owns its capabilities, and its seam is where it owns them
+>
+> 1. **The engine starts with an EMPTY capability catalog.** Installing or importing `rag-wright` registers nothing.
+>    Every capability RuleWright invokes must be registered BY RULEWRIGHT, once, at startup. Nothing the engine does
+>    will register them on its behalf.
+> 2. **The contract and compliance capabilities are not the engine's.** All 30 of them
+>    (`contract_ingestion_pipeline`, `intra_document_qa`, `typed_property_retrieval`, `relational_qa`,
+>    `compliance_ingestion`, `compliance_check`, ...) belong to the **reference pack** (`rag_wright.packs.contracts`
+>    and `rag_wright.packs.compliance`): the engine's worked example, which RuleWright builds on today. RuleWright
+>    registers them by loading that pack: `load_reference_pack()`. If RuleWright later replaces them with its own
+>    capabilities, it registers its own pack instead (`load_pack("<its module>")`).
+> 3. **The engine's generic capabilities are offered, never pre-registered.** `engine_capabilities()` returns the
+>    definitions of the 7 domain-neutral ones (`jev_decision`, `generation`, `vision_to_text`,
+>    `span_relevance_judgment`, the RLM skills); a product registers the ones it uses (the reference pack already
+>    registers those it needs).
+> 4. **The seam is the only place RuleWright touches the engine**, and registration is the seam's first job, at
+>    startup, before any ingest or query. The engine ships a worked reference seam to model it on:
+>    `src/rag_wright/packs/reference_seam.py` (`ContractComplianceSeam`; it registers the reference pack in its
+>    constructor). Section 1 below is the minimum to get working now; "Later" at the end is the refactor of
+>    RuleWright's seam toward that shape.
+>
+> **What happens if this is missed:** `ainvoke_subgraph(...)` raises `KeyError` (unknown capability); the compliance
+> ingest dead-letters every policy section; the contract ingest silently falls back from the decision model to the
+> LLM (on the measured contract, 277 calls and $0.277 instead of 215 decision-model calls, 0 LLM calls, $0.013).
+
 ## 0. Where RuleWright stands
 
 - RuleWright depends on the engine as an **editable path dependency** (`[tool.uv.sources]
@@ -21,9 +46,10 @@ RuleWright's code against the 0.2.0 engine, not assumed. Dependency direction is
 
 Optional: switch from the path dependency to the release (`rag-wright>=0.2.0`) once this migration is done.
 
-## 1. Register the engine capabilities at startup (required)
+## 1. Own the capabilities: register them in the seam at startup (required)
 
-The capability catalog ships empty (ADR-0118). Two 0.2.0 paths look `jev_decision` (the decision model) up in it:
+The capability catalog ships empty (ADR-0118; see "The core of this migration" above). Beyond `ainvoke_subgraph`,
+two 0.2.0 paths RuleWright calls directly look `jev_decision` (the decision model) up in it:
 
 - **Compliance ingest** (`run_compliance_document_ingestion`, default `extraction_backend="jev"`) resolves
   `jev_decision` directly: unregistered, it raises `KeyError` and every policy section dead-letters.
@@ -32,7 +58,8 @@ The capability catalog ships empty (ADR-0118). Two 0.2.0 paths look `jev_decisio
   silently to the LLM: on the measured contract (Aimmune, 131 provisions) that is 277 calls ($0.277) instead of 215
   decision-model calls and 0 LLM calls ($0.013).
 
-Do this once, at process start (the seam's startup, before any ingest):
+Do this once, in the seam, at process start (before any ingest or query), exactly as the reference seam does in its
+constructor:
 
 ```python
 from rag_wright.api import load_reference_pack
@@ -40,8 +67,12 @@ from rag_wright.api import load_reference_pack
 load_reference_pack()  # the contracts + compliance packs and the engine capabilities they use (incl. jev_decision)
 ```
 
-(If RuleWright later registers only its own capabilities, register the engine ones it relies on instead:
-`for m in engine_capabilities(): register_capability(m)`, both from `rag_wright.api`.)
+It is idempotent (registering again replaces entries with identical ones). Check it at startup: after registration,
+`capability_index()` (from `rag_wright.api`) lists the capabilities RuleWright invokes; RuleWright's `engine_info()`
+reports `len(canonical_capability_slugs())` (section 3), which is 41 with the reference pack registered and 11 without.
+When RuleWright replaces the reference pack with its own capabilities, its seam calls `load_pack("<its pack module>")`
+(a module whose `register()` registers its manifests) and registers the engine capabilities it relies on
+(`for m in engine_capabilities(): register_capability(m)`, all from `rag_wright.api`).
 
 ## 2. Imports: 28 moved
 
@@ -242,10 +273,24 @@ well as fast:
    and adopt an unreleased engine fix with a temporary git pin
    (`rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<sha>" }`) until its release lands.
 
-## Later (optional): move to the public API
+## Later (recommended): rebuild the seam on the reference seam's shape
 
-RuleWright reaches into engine internals everywhere (none of its 52 engine symbols comes from `rag_wright.api`). 0.2.0 exposes a
-stable public surface (`docs/api/README.md`): `open_workspace`, `ainvoke_subgraph("contract_ingestion_pipeline", ...)`,
-`build_ingestion`, `kg_read` / `kg_edges` / `span_positions`, `measure_usage`, the pack-authoring helpers. Moving the
-seam onto it is what makes the next engine release a version bump instead of a migration; the product-starter
-templates and the `using-the-rag-wright-engine` skill describe that layout.
+RuleWright's seam (`src/rulewright/engine/seam.py`, about 1,500 lines, 49 functions) reaches into engine internals
+everywhere: none of its 52 engine symbols comes from `rag_wright.api`. That is why every engine release becomes a
+migration. The target shape is the engine's worked reference seam, **`src/rag_wright/packs/reference_seam.py`**
+(`ContractComplianceSeam`, about 130 lines):
+
+- **Registration first:** its constructor registers the capabilities it invokes (`load_reference_pack()`).
+- **Every method is one engine call** through `rag_wright.api` (`open_workspace`, `ainvoke_subgraph`,
+  `aparse_document`, `entities_by_name`) or a pack store (`ContractKGStore`, `ComplianceStore`): ingest a contract, ask
+  a contract, search the corpus, find a party, counterparties, affiliates, contract terms, span locations, the clause
+  vocabulary, ingest a policy, check a subject, requirements and their locations.
+- **No engine internals:** no `ArcadeDBStore`, embedder, model id or id-string parsing in the seam.
+- **Product concerns stay in RuleWright**, around those calls, where the reference seam marks `# PRODUCT OWNS:`:
+  tenancy and auth, scoping, the advertising-compliance variants, presentation and citation types, caching, telemetry
+  routing, settings. (`docs/product/seam-adaptation-guide.md` in the engine repo walks through the adaptation.)
+
+Rebuild RuleWright's seam by mapping each of its engine-facing functions onto the matching reference-seam method (or
+the `rag_wright.api` call behind it) and keeping its product concerns around that call. The public surface is listed
+in `docs/api/README.md`; the product-starter templates and the `using-the-rag-wright-engine` skill describe the same
+layout.

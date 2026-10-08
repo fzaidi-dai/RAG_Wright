@@ -114,3 +114,20 @@ def test_reference_seam_read_legs_live():
                                       dimension=PropertyDimension.MUTUALITY, value="mutual", span_id=f"{cid}#0")]))
     terms = s.contract_terms(ws, "K")
     assert len(terms) == 1 and ("mutuality", "mutual") in {(p.dimension, p.value) for p in terms[0].properties}
+
+
+def test_the_seam_registers_the_capabilities_it_invokes_from_an_empty_catalog(monkeypatch):
+    # The engine starts with an EMPTY catalog: the product owns registration, and the seam is where a product does it.
+    # (The test suite's conftest loads the reference pack, so empty it here to start where a product starts.)
+    from rag_wright.capabilities import manifests, registry
+
+    monkeypatch.setattr(manifests, "MANIFEST_SPECS", {})
+    monkeypatch.setattr(registry, "_canonical_slugs", set(registry.ENGINE_CAPABILITY_SLUGS))
+    from rag_wright.api import capability_index
+
+    assert capability_index() == {}
+    ContractComplianceSeam(object())  # the config is not used by registration
+    index = capability_index()
+    for slug in ("contract_ingestion_pipeline", "intra_document_qa", "typed_property_retrieval", "relational_qa",
+                 "compliance_ingestion", "compliance_check", "jev_decision"):
+        assert slug in index, slug

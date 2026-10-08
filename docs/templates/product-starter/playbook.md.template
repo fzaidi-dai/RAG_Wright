@@ -80,10 +80,13 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 7. **Engine-release automation** (released-product mode): copy the starter's `dependabot.yml` to
    `.github/dependabot.yml`, so each new `rag-wright` release arrives as a PR gated by your CI (section 5, "Keeping
    the engine current").
-8. **Register the engine capabilities at startup**, in the engine seam, before any ingest or query:
-   `for m in engine_capabilities(): register_capability(m)` (both from `rag_wright.api`), or `load_reference_pack()`
-   if you build on the reference pack. The catalog ships empty; without this the decision model is unknown and its
-   ingestion paths fall back silently to the LLM.
+8. **Own the capabilities: register them in the engine seam at startup**, before any ingest or query. The engine
+   starts with an EMPTY catalog and never registers anything for you. Register your own pack
+   (`load_pack("<your pack module>")`) and the engine capabilities you use
+   (`for m in engine_capabilities(): register_capability(m)`), all from `rag_wright.api`; `load_reference_pack()` only
+   if you build on the engine's contract/compliance worked example. Model the seam on the engine's
+   `src/rag_wright/packs/reference_seam.py`, which registers in its constructor. Without it `ainvoke_subgraph` raises
+   `KeyError` and the decision-model paths fall back silently to the LLM.
 9. Remaining Phase 0: the rest of the engine seam, config/secrets, any front-end scaffold, observability, and
    repaying the `{{SPEC}}` placeholders.
 

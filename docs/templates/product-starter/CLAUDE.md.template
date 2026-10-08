@@ -56,10 +56,16 @@ engine — a separate repo that depends on the open-core engine, one way.
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.
 - **GraphWright is PARKED (ADR-0052).** There is no orchestration compiler; the product hand-builds orchestration.
-- **Register the engine capabilities at startup.** The engine's capability catalog ships empty: before any ingest or
-  query, register the engine capabilities you use (`for m in engine_capabilities(): register_capability(m)`, or
-  `load_reference_pack()` if you build on the reference pack). Without it the decision model (`jev_decision`) is
-  unknown: its ingestion paths fall back silently to many more LLM calls, and a direct invocation raises `KeyError`.
+- **The product owns its capabilities; register them in the engine seam at startup.** The engine starts with an
+  EMPTY capability catalog: installing or importing it registers nothing, and nothing in the engine registers
+  capabilities on the product's behalf. The domain capabilities this product invokes are this product's (its own pack,
+  registered with `load_pack("<its pack module>")`); the contract/compliance capabilities belong to the engine's
+  reference pack (`load_reference_pack()`), only for a product that builds on that worked example; the engine's 7
+  domain-neutral capabilities (`jev_decision`, `generation`, `vision_to_text`, `span_relevance_judgment`, the RLM
+  skills) are offered as definitions by `engine_capabilities()` and registered by the product if it uses them
+  (`for m in engine_capabilities(): register_capability(m)`). Registration is the engine seam's first job, once,
+  before any ingest or query; the engine's `src/rag_wright/packs/reference_seam.py` shows the shape. Without it
+  `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back silently to many more LLM calls.
 - **The engine dependency follows the mode in playbook section 5.** *Local co-development* (engine and product
   developed together on one machine): `rag-wright>={{ENGINE_FLOOR}}` plus an editable `[tool.uv.sources]` path to the
   engine checkout, so engine changes are picked up immediately; check against the published release with

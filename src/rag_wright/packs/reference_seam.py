@@ -7,6 +7,14 @@ Every method is a thin composition over the engine: `open_workspace` (tenancy = 
 (`ContractKGStore` / `ComplianceStore`) + the compliance invoker wrappers. It holds NO `ArcadeDBStore`, embedder,
 model id, or id-string parsing -- those are engine calls.
 
+**The product owns its capabilities.** The engine starts with an EMPTY capability catalog: nothing is registered
+on install or import. A product registers every capability it invokes, once, at startup, and the seam is where it does
+it. This reference seam registers the reference pack (`load_reference_pack()`: the contracts and compliance packs plus
+the engine capabilities they use, including the `jev_decision` decision model) in its constructor; a product with its
+own pack registers that pack instead (`load_pack("<its module>")`), plus the engine capabilities it uses
+(`engine_capabilities()`). Without it, `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back
+silently to the LLM.
+
 This is a worked EXAMPLE, deliberately thin. A real product adds, around these calls, the concerns marked
 `# PRODUCT OWNS:` below -- tenancy policy, scoping (`ScopeViolation`), the FTC/ad-compliance variants, the
 unknown-policy guard, presentation/citation types, caching, and routing the engine's usage/progress to its own
@@ -19,6 +27,7 @@ from typing import Any, Optional
 from rag_wright.api import (
     EngineConfig,
     ainvoke_subgraph,
+    load_reference_pack,
     aparse_document,
     entities_by_name,
     open_workspace,
@@ -34,6 +43,9 @@ class ContractComplianceSeam:
 
     def __init__(self, config: EngineConfig) -> None:
         self._config = config
+        # PRODUCT OWNS: capability registration. The catalog starts empty; register what this seam invokes, once,
+        # at startup (idempotent). A product registers its own pack here instead of the reference pack.
+        load_reference_pack()
 
     # --- tenancy -------------------------------------------------------------------------------------
     def open(self, corpus: str, *, reset: bool = False):

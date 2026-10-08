@@ -14,6 +14,8 @@ description: >-
 You are building a **product** in its own repo on top of the RAG_Wright **engine** package. The engine is
 open-core and domain-neutral; your product brings the domain. Hard rules:
 
+- **You own your capabilities.** The engine's catalog starts empty; your seam registers everything you invoke, at
+  startup (section 1). The contract/compliance capabilities are the engine's reference pack, not the engine.
 - **Product → Engine, one way.** Never fork, edit, or reach into engine internals. If the engine needs a change,
   flag it upstream — don't work around it here.
 - **The public surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the invokers
@@ -48,8 +50,13 @@ editable = true }`. Check against the published release with `uv sync --no-sourc
 commit the `uv.lock` it rewrites). Switch to the PyPI mode above once the product has CI, deploys or other developers.
 The product-starter playbook (section 5) has both modes.
 
-**Register the engine capabilities at startup** (the catalog ships empty): `for m in engine_capabilities():
-register_capability(m)` before any ingest or query, or the decision model is unknown.
+**The product owns its capabilities.** The engine starts with an EMPTY catalog and never registers anything on your
+behalf. In your engine seam, once, at startup, before any ingest or query: register your own pack
+(`load_pack("<your pack module>")`) and the engine capabilities you use
+(`for m in engine_capabilities(): register_capability(m)`); `load_reference_pack()` only if you build on the engine's
+contract/compliance worked example. The engine's `src/rag_wright/packs/reference_seam.py` shows the shape (it
+registers in its constructor). Without it `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back
+silently to the LLM.
 
 ## 2. Ground before you write (graphify)
 
