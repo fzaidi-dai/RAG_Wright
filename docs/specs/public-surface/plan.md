@@ -64,7 +64,7 @@ needs both), then PS-9 (docs + release notes). One task, one approval, one commi
 
 | id | what | verify | status |
 |---|---|---|---|
-| PS-1 | G17: export `ModelRole` | export test; API docs regenerated | in-progress |
+| PS-1 | G17: export `ModelRole` | export test; API docs regenerated | done: exported (same enum); API reference lists enum members; G17 closed |
 | PS-2 | G16: `parse_document_bytes` / `aparse_document_bytes` exported; `IngestSource` bytes form; `build_ingestion` ingests bytes | hermetic tests; a live bytes ingest of a fixture | todo |
 | PS-3 | G18: export `record_usage`, `traced_run`, `traced_step` | scope-attribution test (nested scopes, a product call recorded); tracing no-op without Langfuse | todo |
 | PS-4 | G19: export `agenerate_answer(query, evidence, *, ws)`, `EvidenceItem`, `GeneratedAnswer`, `ajudge_spans(..., ws)`, `RelevanceVerdict` (+ `Relevance`, `Condition`) | hermetic tests with stubbed models; one live answer | todo |

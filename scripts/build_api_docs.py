@@ -8,6 +8,7 @@ Run: `uv run python scripts/build_api_docs.py`  (or `bash scripts/build_api_docs
 """
 from __future__ import annotations
 
+import enum
 import inspect
 from pathlib import Path
 
@@ -73,6 +74,8 @@ def render() -> str:
             constants.append(f"### `{name}`\n\n{_summary(type(obj))}\n")  # a sentinel/constant: its type's doc
             continue
         block = [f"### `{_signature(name, obj)}`", "", _summary(obj), ""]
+        if inspect.isclass(obj) and issubclass(obj, enum.Enum):  # an enum: list its members (what a caller passes)
+            block += ["Members: " + ", ".join(f"`{m.name}` (`{m.value!r}`)" for m in obj), ""]
         if inspect.isclass(obj) and not _is_protocol(obj):
             for mname, member in _own_methods(obj):
                 block += [f"#### `{name}.{mname}{inspect.signature(member)}`", "", _summary(member), ""]

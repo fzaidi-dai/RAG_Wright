@@ -135,13 +135,9 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   cache_dir, ...)`), and accept bytes sources in `build_ingestion`.
 - Surfaced: RuleWright migration Q&A (2026-10-08).
 
-### G17: `ModelRole` is required by the public API but not exported
-- **Where:** `WorkspaceHandle.model_id(role: ModelRole)` takes it and `EngineConfig.models` is keyed by its values, but
-  `ModelRole` lives in `rag_wright.models.profiles` only.
-- **Impact:** a product cannot use `model_id` or name a role override without an engine-internal import.
-- **Proposed:** export `ModelRole` from `rag_wright.api`. (`model_for` / `PROFILES` stay internal: `ws.model_id(role)`
-  and `EngineConfig.models` are the product route.)
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G17: `ModelRole` is required by the public API but not exported (closed)
+- Closed by PS-1: `ModelRole` is exported from `rag_wright.api` (the same enum), so a product passes it to
+  `ws.model_id(role)` and keys `EngineConfig.models` by its values; `model_for` / `PROFILES` stay internal.
 
 ### G18: A product cannot meter or trace its own model calls through the public API
 - **Where:** `measure_usage()` (public) is the same per-task scope as `models.usage.usage_scope` (context variable,

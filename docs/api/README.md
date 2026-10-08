@@ -28,6 +28,12 @@ An opaque handle to a resolved engine workspace. Public surface: `model_id(role)
 
 Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default.
 
+### `ModelRole(*values)`
+
+Which model does which job. The mapping to ids lives in config, not in capability code.
+
+Members: `STRUCTURED_REASONING` (`'structured_reasoning'`), `STRUCTURED_REASONING_SECONDARY` (`'structured_reasoning_secondary'`), `GENERAL` (`'general'`), `SUMMARIZATION` (`'summarization'`), `OKF_ENRICHMENT` (`'okf_enrichment'`), `FUNCTION_CLASSIFY` (`'function_classify'`), `VISION_OCR` (`'vision_ocr'`)
+
 ### `Discovered(slug: 'str', kind: 'str', description: 'str', representative_queries: 'tuple[str, ...]', score: 'float') -> None`
 
 One ranked capability match from `discover` — enough for an agent to pick and invoke it by `slug`.

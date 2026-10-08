@@ -59,10 +59,12 @@ from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import entities_by_name, kg_edges, kg_read, kg_write, span_positions
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage
+from rag_wright.models.profiles import ModelRole
 from rag_wright.api.workspace import WorkspaceHandle, open_workspace
 
 __all__ = [
     "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace",
+    "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
     "kg_read", "kg_write", "kg_edges", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",
     "document_of", "decode_bbox",
