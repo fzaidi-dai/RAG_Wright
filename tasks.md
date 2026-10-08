@@ -14,7 +14,9 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > ArcadeDB write-conflict retry; the enforced doc-reference check; the `building-an-ingestion-capability` skill. Every
 > break: `docs/specs/ingestion-hooks/ing8-breaking-changes.md`. **Next (user gates): the RuleWright migration, in its own
 > repo, from `docs/specs/ingestion-hooks/rulewright-migration-0.2.0.md`; the TexWright build.** Open engine gaps:
-> `docs/domain-adaptation/_engine-gaps.md`. The blocks below are HISTORICAL (superseded).
+> `docs/domain-adaptation/_engine-gaps.md`. **Parked for later:** ontology induction from a domain corpus (an OntoCast
+> baseline evaluation, then a home-grown propose / ground / consolidate / judge / critique inducer with confidence and a
+> review queue): `docs/proposals/ontology-induction.md`. The blocks below are HISTORICAL (superseded).
 
 > **⇒ ACTIVE WORKSTREAM (2026-10-06, HISTORICAL — superseded by the 2026-10-08 block above): engine-prep — COMPLETE.** Readying the engine for a new product (package +
 > docs + archive + domain-adaptation) is done; spec + ledger at **`docs/specs/engine-prep/plan.md`** (all `PREP-*`
