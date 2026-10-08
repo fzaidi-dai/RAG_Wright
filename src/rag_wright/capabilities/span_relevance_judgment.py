@@ -11,7 +11,9 @@ SKILL-SPLIT (mirrors `compliance_judgment`):
 - **`span_relevance_judgment` (agent_skill)** -- the LLM relevance METHOD, authored as
   `skills/span_relevance_judgment/SKILL.md`, applied through the model seam. Given one span's text + the
   structured `Condition` (+ the typed properties detected on the span, as CONTEXT not proof), returns a raw
-  `RelevanceVerdict`. `build_arelevance_judge_fn` is its runtime; `structured_factory` is injected for tests.
+  `RelevanceVerdict`. `build_arelevance_judge_fn` is its runtime; `structured_factory` is injected for tests. The
+  verdict is obtained by client-side tag parsing (ADR-0045, `build_tag_structured`): a forced server-side structured
+  call returned empty arguments on every attempt on an open model (PS-4 live check).
 - The applying capability owns the guarantees the skill does not: the closed verdict vocab and the CONSERVATIVE
   DEFAULT -- an unreadable/failed judgement maps to `uncertain` (recall-safe: a judge failure never fabricates a
   `not_found`; the span stays visible), exactly as the compliance judge defaults to `needs_review`.
@@ -28,9 +30,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Awaitable, Callable, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
-from rag_wright.models.seam import build_structured
+from rag_wright.models.tag_structured import build_tag_structured
 
 _SKILL_PATH = Path(__file__).parents[1] / "skills" / "span_relevance_judgment" / "SKILL.md"
 
@@ -110,17 +112,23 @@ def _tail(span_text: str, matched: list[tuple[str, str]], condition: Condition) 
     )
 
 
-def build_arelevance_judge_fn(model_id: str, *, structured_factory=build_structured) -> AJudgeFn:
+def build_arelevance_judge_fn(model_id: str, *, structured_factory=build_tag_structured) -> AJudgeFn:
     """The `span_relevance_judgment` SKILL runtime: an async relevance judge through the model seam. Given a span's
     text + the typed properties detected on it (context) + the structured condition, returns a raw
-    `RelevanceVerdict`. `structured_factory` is injected for hermetic tests."""
+    `RelevanceVerdict`. The verdict is tag-parsed client-side (ADR-0045); an answer that never parses (after the
+    seam's bounded re-ask) is the conservative `uncertain`, never an error. `structured_factory` is injected for
+    hermetic tests."""
     method = relevance_method()
 
     async def judge(span_text: str, matched: list[tuple[str, str]], condition: Condition) -> RelevanceVerdict:
         # label names the generation (ADR-0058 / issue 0025) so a reader tells `span-relevance` from
         # `query-constraints` in the cost report; ignored by the hermetic stub factory.
-        return await structured_factory(model_id, RelevanceVerdict, label="span-relevance").ainvoke(
-            method + _tail(span_text, matched, condition))
+        try:
+            return await structured_factory(model_id, RelevanceVerdict, label="span-relevance").ainvoke(
+                method + _tail(span_text, matched, condition))
+        except ValidationError:  # ADR-0045 graceful degrade: a persistent parse failure -> the conservative default
+            return RelevanceVerdict(verdict=Relevance.UNCERTAIN.value, rationale="relevance judge output unreadable",
+                                    confidence=0.0)
 
     return judge
 

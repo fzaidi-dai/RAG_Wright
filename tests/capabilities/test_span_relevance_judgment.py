@@ -114,3 +114,37 @@ async def test_ajudge_spans_bounds_wallclock_by_concurrency():
     out = await ajudge_spans([("a", []), ("b", []), ("c", []), ("d", [])], cond,
                              ajudge_fn=slowish, max_concurrency=4, timeout_s=None)
     assert len(out) == 4 and (asyncio.get_event_loop().time() - t0) < 0.5  # concurrent, not serial
+
+
+# --- PS-4: query-side structured output is client-side tag parsing (ADR-0045), and an unreadable judgment degrades --
+
+
+def test_the_judge_uses_client_side_tag_parsing_by_default():
+    import inspect
+
+    from rag_wright.models.tag_structured import build_tag_structured
+
+    default = inspect.signature(build_arelevance_judge_fn).parameters["structured_factory"].default
+    assert default is build_tag_structured
+
+
+async def test_an_unreadable_judgment_becomes_uncertain_not_an_error():
+    class _Unreadable:
+        async def ainvoke(self, prompt):
+            RelevanceVerdict.model_validate({})  # the model's answer never parsed (raises ValidationError)
+
+    judge = build_arelevance_judge_fn("m", structured_factory=lambda _m, _s, **_kw: _Unreadable())
+    out = await judge("some span", [], Condition(clause_type="payment terms"))
+    assert finalize_verdict(out).verdict == "uncertain" and out.confidence == 0.0
+
+
+async def test_a_non_parse_judge_error_still_propagates():
+    import pytest
+
+    class _Broken:
+        async def ainvoke(self, prompt):
+            raise RuntimeError("provider down")
+
+    judge = build_arelevance_judge_fn("m", structured_factory=lambda _m, _s, **_kw: _Broken())
+    with pytest.raises(RuntimeError):
+        await judge("some span", [], Condition(clause_type="payment terms"))

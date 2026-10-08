@@ -46,6 +46,36 @@ A typed KG node to upsert (DD-1b, ADR-0117): `type` is the vertex type, `key_fie
 
 A typed KG edge to create between two nodes identified by (type, key_field, key). `props` are native values (edge properties are type-driven: edges declare no storage schema).
 
+### `EvidenceItem(*, chunk_id: str, text: str, confidence: Optional[str] = None, properties: Optional[list[dict]] = None) -> None`
+
+One piece of grounding evidence: a chunk's text, its `chunk_id` (the citation), and — for a graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4).
+
+Engine issue 0011 / ADR-0064: a clause's typed properties ride OUT-OF-BAND here, NOT concatenated into `text`. `_evidence_block` renders only `text`, so the generator never sees the `dimension=value` schema tokens and cannot paraphrase them into prose ("the typed property cap_quantum=..."). The structured facts stay available on this field for a caller that wants them (the product's UI chips); they are never fed to the model. This is the ADR-0054 treatment (function label) applied to properties, but out-of-band rather than dropped, because the properties do real work elsewhere.
+
+### `GeneratedAnswer(*, answer: str, citations: list[str], abstained: bool = False, answer_kind: Optional[rag_wright.capabilities.answer_generator.AnswerKind] = None) -> None`
+
+The generated answer (FR-C.9): grounded text, the cited chunk_ids, whether it abstained, and its sufficiency `answer_kind` (PREC-1a). `abstained` is kept (backward-compat) and `answer_kind` is kept in sync: constructing with `abstained` alone derives the kind (ABSTAINED/ANSWERED); passing `answer_kind` (e.g. PARTIAL) wins and sets `abstained` accordingly. So no existing `abstained=`-only caller changes.
+
+### `AnswerKind(*values)`
+
+The sufficiency of a generated answer (PREC-1a): a first-class signal so an honest hedge is distinct from a confident over-answer, both in the contract the caller receives and in evaluation.
+
+Members: `ANSWERED` (`'answered'`), `PARTIAL` (`'partial'`), `ABSTAINED` (`'abstained'`)
+
+### `RelevanceVerdict(*, verdict: str, rationale: str = '', confidence: float = 0.0) -> None`
+
+The raw structured output of one relevance judgement (the `span_relevance_judgment` SKILL's typed output). `verdict` is a loose string mapped to the closed `Relevance` vocab by the applying capability (unreadable -> uncertain, the conservative default).
+
+### `Relevance(*values)`
+
+The closed relevance vocab. `uncertain` is both a real judgement (ambiguous text) AND the conservative default when the judge could not be read (recall-safe: never a fabricated not_found).
+
+Members: `RELEVANT` (`'relevant'`), `NOT_RELEVANT` (`'not_relevant'`), `UNCERTAIN` (`'uncertain'`)
+
+### `Condition(*, clause_type: str, value_condition: Optional[str] = None, question: Optional[str] = None) -> None`
+
+The structured test a retrieved span is judged against (issue 0023). `clause_type` is primary (a category to test membership of); `value_condition` is a narrower test within it (often absent or shared across a multi-condition sweep); `question` is CONTEXT ONLY -- in a multi-condition sweep it belongs to all conditions at once, so it must not by itself make a span relevant. (Per-condition question decomposition is a separate engine gap, not owned here.)
+
 ### `UsageTotals(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0, by_model: 'dict[str, ModelUsage]' = <factory>, _lock: 'threading.Lock' = <factory>) -> None`
 
 The usage accumulated within one `measure_usage()` block: top-level totals (calls, tokens, `cost_usd` for the calls whose cost is known, `calls_without_cost`, latency) + a per-model breakdown in `by_model`. Decision-model (Jev) calls and vision-OCR pages are counted too (OCR pages as calls without a cost).
@@ -253,6 +283,14 @@ The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the doclin
 ### `aparse_document_bytes(document_id: 'str', name: 'str', data: 'bytes', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
 The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the docling parse off the event loop.
+
+### `agenerate_answer(query: 'str', evidence: 'list[EvidenceItem]', *, ws: 'Any') -> 'GeneratedAnswer'`
+
+A grounded, cited answer to `query` over `evidence`, or an abstention. Empty evidence abstains without a model call; a citation not in the evidence is dropped, and an answer left with no valid citation becomes an abstention (no claim without a citation). `answer_kind` says whether the evidence fully supported the answer (`answered`), only partly (`partial`) or not at all (`abstained`).
+
+### `ajudge_spans(spans: 'list[tuple[str, list[tuple[str, str]]]]', condition: 'Condition', *, ws: 'Any', max_concurrency: 'int' = 8) -> 'list[RelevanceVerdict]'`
+
+Judge whether each span addresses `condition`, concurrently, one verdict per span in order. Each span is `(text, matched)`, where `matched` lists `(property, value)` pairs already detected on the span (context for the judge, not proof; pass `[]` when there are none). Every verdict is in the closed `Relevance` vocabulary: an unreadable judgment, or one that timed out, is `uncertain` (never a fabricated `not_relevant`).
 
 ### `measure_usage() -> 'Iterator[UsageTotals]'`
 

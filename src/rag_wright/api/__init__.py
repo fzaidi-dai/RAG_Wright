@@ -18,6 +18,8 @@ from rag_wright.capabilities.manifests import (
     register_capability,
 )
 from rag_wright.capabilities.registry import canonical_capability_slugs, register_canonical_slugs
+from rag_wright.api.answers import (AnswerKind, Condition, EvidenceItem, GeneratedAnswer, Relevance,
+                                    RelevanceVerdict, agenerate_answer, ajudge_spans)
 from rag_wright.api.documents import (aparse_document, aparse_document_bytes, parse_document,
                                       parse_document_bytes, source_document)
 from rag_wright.api.ids import decode_bbox, document_of
@@ -71,6 +73,8 @@ __all__ = [
     "kg_read", "kg_write", "kg_edges", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",
     "document_of", "decode_bbox",
     "source_document", "parse_document", "aparse_document", "parse_document_bytes", "aparse_document_bytes",
+    "agenerate_answer", "ajudge_spans", "EvidenceItem", "GeneratedAnswer", "AnswerKind",
+    "RelevanceVerdict", "Relevance", "Condition",
     "measure_usage", "record_usage", "UsageTotals", "ModelUsage", "traced_run", "traced_step",
     "register_capability", "load_reference_pack", "reference_pack",
     # G5: a product authors + loads its own pack through the API (no engine internals)

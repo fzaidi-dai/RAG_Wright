@@ -139,16 +139,12 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   `traced_run` / `traced_step` (group engine generations with a product's run and steps in Langfuse; no-ops unless
   tracing is configured) are exported from `rag_wright.api`. The generation-level helpers stay internal.
 
-### G19: Answer generation and relevance judgment are not invocable by a product
-- **Where:** the engine capabilities `generation` and `span_relevance_judgment` are `agent_skill`s with no `impl_ref`;
-  their implementations (`capabilities.answer_generator.agenerate_answer` with `EvidenceItem`,
-  `capabilities.span_relevance_judgment` with `RelevanceVerdict`) and the query embedder
-  (`capabilities.remote_encoders.query_embedder`) are not exported. Only `jev_decision` of the 7 engine capabilities is
-  invocable by name.
-- **Impact:** a product composing its own question answering over engine retrieval reaches into engine modules.
-- **Proposed:** expose them as invocable model capabilities (an `impl_ref` + typed inputs/outputs) or export their entry
-  points and types from `rag_wright.api`; decide whether a product needs the query embedder directly.
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G19: Answer generation and relevance judgment are not invocable by a product (closed)
+- Closed by PS-4: `agenerate_answer(query, evidence, *, ws)` and `ajudge_spans(spans, condition, *, ws)` are exported
+  from `rag_wright.api` with their types (`EvidenceItem`, `GeneratedAnswer`, `AnswerKind`, `RelevanceVerdict`,
+  `Relevance`, `Condition`); the models come from the workspace's roles (`GENERAL`, `STRUCTURED_REASONING`), and the
+  judge returns final, closed-vocabulary verdicts. The query embedder stays internal: retrieval goes through the
+  invokers.
 
 ### G20: Trained classifier weights are not packaged and the property fleet's location is not configurable
 - **Where:** the reference pack's classifiers load weights from the engine checkout's gitignored `data/models/`. The
