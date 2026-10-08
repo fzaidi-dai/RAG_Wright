@@ -10,9 +10,10 @@ The `check_*` functions are what the engine enforces on every hook's output, def
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Awaitable, Callable, Literal, Optional, Protocol, Sequence
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.store.seam import KgEdge, KgNode
@@ -294,13 +295,33 @@ class IngestionTuning(BaseModel):
 
 
 class IngestSource(BaseModel):
-    """One document to ingest: a file `path`, its `doc_id` (default: derived from the file name), how its tables
-    are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet
-    sheets are ingested."""
+    """One document to ingest: either a file `path`, or in-memory `data` (bytes, e.g. an upload) with its file `name`
+    (the extension picks the format); its `doc_id` (default: derived from the file name), how its tables are grouped
+    (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are
+    ingested."""
 
     model_config = {"frozen": True}
 
-    path: str
+    path: Optional[str] = None
+    data: Optional[bytes] = Field(default=None, repr=False)
+    name: Optional[str] = None
     doc_id: Optional[str] = None
     table_mode: TableMode = "auto"
     include_hidden_sheets: bool = True
+
+    @model_validator(mode="after")
+    def _one_form(self) -> "IngestSource":
+        if (self.path is None) == (self.data is None):
+            raise ValueError("an IngestSource takes either `path` or `data` (with `name`), not both or neither")
+        if self.data is not None and not self.name:
+            raise ValueError("`data` needs a `name` (the file name; its extension picks the format)")
+        return self
+
+    @property
+    def display_name(self) -> str:
+        """The file name: `name` for bytes, the path's file name otherwise."""
+        return self.name if self.data is not None else Path(self.path).name
+
+    def read_bytes(self) -> bytes:
+        """The document's bytes: `data`, or the file at `path`."""
+        return self.data if self.data is not None else Path(self.path).read_bytes()

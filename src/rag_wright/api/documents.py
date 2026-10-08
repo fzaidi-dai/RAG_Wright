@@ -3,7 +3,8 @@
 `source_document(document_id, text=...)` makes an engine `SourceDocument` from plain text (the simplest path, no
 parser needed). `parse_document` / `aparse_document` make a STRUCTURE-BEARING `SourceDocument` from a file PATH via
 the engine's real docling parse (`.parsed` set), so the full ingestion pipeline incl docling runs through the API --
-not only the text fallback. Heavy deps imported lazily so `import rag_wright.api` stays light."""
+not only the text fallback; `parse_document_bytes` / `aparse_document_bytes` do the same from in-memory BYTES (an
+upload), no temp file (PS-2, G16). Heavy deps imported lazily so `import rag_wright.api` stays light."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -29,19 +30,38 @@ def parse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dic
     blocks; use `aparse_document` on an event loop. A spreadsheet's hidden sheets are ingested unless
     `include_hidden_sheets=False` (then listed in `.skipped_hidden_sheets`). Files embedded in an Office package are
     extracted as `.embedded` children linked to their records (`tuning.identifier` sets the identifier rule)."""
-    from rag_wright.capabilities.document_parse import parsed_source_document
-
     p = Path(path)
-    return parsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata,
-                                  include_hidden_sheets=include_hidden_sheets, tuning=tuning)
+    return parse_document_bytes(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata,
+                                include_hidden_sheets=include_hidden_sheets, tuning=tuning)
 
 
 async def aparse_document(document_id: str, path: Any, *, cache_dir: Any, metadata: dict | None = None,
                           include_hidden_sheets: bool = True, tuning: Any = None) -> Any:
     """The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the docling parse off the event loop
     so a hand-built async ingest can parse a document into a structure-bearing `SourceDocument` without blocking."""
+    p = Path(path)
+    return await aparse_document_bytes(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata,
+                                       include_hidden_sheets=include_hidden_sheets, tuning=tuning)
+
+
+def parse_document_bytes(document_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: dict | None = None,
+                         include_hidden_sheets: bool = True, tuning: Any = None) -> Any:
+    """`parse_document` from in-memory BYTES (an upload read from object storage), no temp file. `name` is the
+    file name; its extension picks the format (`.pdf`, `.docx`, `.xlsx`, `.md`, ...). The parse is content-hash gated
+    and cached under `cache_dir` exactly like the path form, and returns the same `SourceDocument`. The docling parse
+    blocks; use `aparse_document_bytes` on an event loop."""
+    from rag_wright.capabilities.document_parse import parsed_source_document
+
+    return parsed_source_document(document_id, name, data, cache_dir=cache_dir, metadata=metadata,
+                                  include_hidden_sheets=include_hidden_sheets, tuning=tuning)
+
+
+async def aparse_document_bytes(document_id: str, name: str, data: bytes, *, cache_dir: Any,
+                                metadata: dict | None = None, include_hidden_sheets: bool = True,
+                                tuning: Any = None) -> Any:
+    """The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the docling parse off the event
+    loop."""
     from rag_wright.capabilities.document_parse import aparsed_source_document
 
-    p = Path(path)
-    return await aparsed_source_document(document_id, p.name, p.read_bytes(), cache_dir=cache_dir, metadata=metadata,
+    return await aparsed_source_document(document_id, name, data, cache_dir=cache_dir, metadata=metadata,
                                          include_hidden_sheets=include_hidden_sheets, tuning=tuning)

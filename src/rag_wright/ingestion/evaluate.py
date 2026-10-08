@@ -90,18 +90,20 @@ def _rows(text: str, start: int, end: int) -> list[tuple[int, int]]:
             if not _SEPARATOR.fullmatch(m.group())]
 
 
-def _evaluate_document(path: Path, src: IngestSource, tuning: IngestionTuning, cache: Path,
+def _evaluate_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
                        segmenter: Optional[Segmenter], grouper: Optional[UnitGrouper]) -> DocumentEvaluation:
-    from rag_wright.api.documents import parse_document
+    from rag_wright.api.documents import parse_document_bytes
     from rag_wright.capabilities.parsing import load_document
     from rag_wright.capabilities.rlm_chunking import StructuralBoundaryDiscoverer, chunk_texts
     from rag_wright.ingestion.group import group_units
     from rag_wright.ingestion.layout import chunk_layouts
     from rag_wright.ingestion.segment import segment_layout
 
-    ev = DocumentEvaluation(doc=path.name)
-    sd = parse_document(re.sub(r"[^A-Za-z0-9._-]+", "_", path.stem)[:80] or "doc", path, cache_dir=cache,
-                        include_hidden_sheets=src.include_hidden_sheets, tuning=tuning)
+    name = src.display_name
+    ev = DocumentEvaluation(doc=name)
+    sd = parse_document_bytes(re.sub(r"[^A-Za-z0-9._-]+", "_", Path(name).stem)[:80] or "doc", name,
+                              src.read_bytes(), cache_dir=cache, include_hidden_sheets=src.include_hidden_sheets,
+                              tuning=tuning)
     ev.embedded_children = len(sd.embedded)
     document = load_document(sd.parsed)
     texts = chunk_texts(document, discoverer=StructuralBoundaryDiscoverer())
@@ -189,10 +191,9 @@ def evaluate_ingestion(sources: Sequence[Union[str, Path, IngestSource]], *, cac
     for s in sources:
         src = s if isinstance(s, IngestSource) else IngestSource(path=str(s))
         try:
-            out.documents.append(_evaluate_document(Path(src.path), src, tuning, Path(cache_dir), segmenter,
-                                                    unit_grouper))
+            out.documents.append(_evaluate_document(src, tuning, Path(cache_dir), segmenter, unit_grouper))
         except Exception as exc:  # noqa: BLE001 - a document the hooks cannot handle is a reported failure
-            out.documents.append(DocumentEvaluation(doc=Path(src.path).name, error=f"{type(exc).__name__}: {exc}"))
+            out.documents.append(DocumentEvaluation(doc=src.display_name, error=f"{type(exc).__name__}: {exc}"))
     docs = out.documents
     f = out.failures
     f += [f"{d.doc}: {d.error}" for d in docs if d.error]

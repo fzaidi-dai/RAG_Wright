@@ -125,15 +125,10 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   accessor, or a `pack_store(ws, cls)` helper), then correct the API reference and the reference seam.
 - Surfaced: RuleWright migration Q&A (2026-10-08).
 
-### G16: No public bytes entry for document parsing
-- **Where:** every public parse entry takes a filesystem path (`parse_document`, `aparse_document`,
-  `IngestSource(path=...)`); the bytes entry `capabilities.document_parse.aparsed_source_document(source_doc_id, name,
-  data, *, cache_dir, metadata=None, deadline_s=600.0, include_hidden_sheets=True, tuning=None)` (and its sync twin) is
-  generic engine code but not exported. The compliance invoker already accepts bytes, so the surface is asymmetric.
-- **Impact:** a product ingesting uploads (bytes from object storage) imports an engine module or spills to temp files.
-- **Proposed:** export a bytes entry from `rag_wright.api` (e.g. `aparse_document_bytes(document_id, name, data, *,
-  cache_dir, ...)`), and accept bytes sources in `build_ingestion`.
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G16: No public bytes entry for document parsing (closed)
+- Closed by PS-2: `parse_document_bytes(document_id, name, data, *, cache_dir, ...)` and its async twin
+  `aparse_document_bytes` are exported from `rag_wright.api`, and `IngestSource(data=..., name=...)` lets
+  `build_ingestion` and `evaluate_ingestion` take uploads without temp files (`name`'s extension picks the format).
 
 ### G17: `ModelRole` is required by the public API but not exported (closed)
 - Closed by PS-1: `ModelRole` is exported from `rag_wright.api` (the same enum), so a product passes it to

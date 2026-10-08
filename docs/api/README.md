@@ -94,9 +94,13 @@ When `auto` treats a table as a DATABASE (one unit per row): a header of `min_he
 
 What counts as a record IDENTIFIER when linking an embedded file to a row: a token (4+ chars, contains a digit) on at most `max_rows` table rows and in at most `max_files` embedded files.
 
-### `IngestSource(*, path: str, doc_id: Optional[str] = None, table_mode: Literal['auto', 'record', 'block'] = 'auto', include_hidden_sheets: bool = True) -> None`
+### `IngestSource(*, path: Optional[str] = None, data: Optional[bytes] = None, name: Optional[str] = None, doc_id: Optional[str] = None, table_mode: Literal['auto', 'record', 'block'] = 'auto', include_hidden_sheets: bool = True) -> None`
 
-One document to ingest: a file `path`, its `doc_id` (default: derived from the file name), how its tables are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are ingested.
+One document to ingest: either a file `path`, or in-memory `data` (bytes, e.g. an upload) with its file `name` (the extension picks the format); its `doc_id` (default: derived from the file name), how its tables are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are ingested.
+
+#### `IngestSource.read_bytes(self) -> 'bytes'`
+
+The document's bytes: `data`, or the file at `path`.
 
 ### `IngestionPipeline(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]', span_tagger: 'Optional[SpanTagger]', unit_grouper: 'Optional[UnitGrouper]', boundary_decider: 'Optional[BoundaryDecider]', writer: 'Optional[RecordWriter]', tuning: 'Optional[IngestionTuning]', embedder: 'Any', chunk_model: 'Optional[str]', progress: 'Callable[[str], Any]', document_hook: 'Optional[DocumentHook]' = None) -> 'None'`
 
@@ -108,7 +112,7 @@ Advanced: the individual stage functions bound to a workspace (its store, ingest
 
 #### `IngestionPipeline.aingest(self, ws: 'Any', sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]') -> 'IngestionReport'`
 
-Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s; `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`.
+Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`.
 
 ### `IngestionReport(documents: 'list[DocumentReport]' = <factory>) -> None`
 
@@ -241,6 +245,14 @@ Docling-parse the file at `path` ONCE (content-hash gated + cached under `cache_
 ### `aparse_document(document_id: 'str', path: 'Any', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
 The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the docling parse off the event loop so a hand-built async ingest can parse a document into a structure-bearing `SourceDocument` without blocking.
+
+### `parse_document_bytes(document_id: 'str', name: 'str', data: 'bytes', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
+
+`parse_document` from in-memory BYTES (an upload read from object storage), no temp file. `name` is the file name; its extension picks the format (`.pdf`, `.docx`, `.xlsx`, `.md`, ...). The parse is content-hash gated and cached under `cache_dir` exactly like the path form, and returns the same `SourceDocument`. The docling parse blocks; use `aparse_document_bytes` on an event loop.
+
+### `aparse_document_bytes(document_id: 'str', name: 'str', data: 'bytes', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
+
+The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the docling parse off the event loop.
 
 ### `measure_usage() -> 'Iterator[UsageTotals]'`
 

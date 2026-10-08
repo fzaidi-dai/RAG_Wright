@@ -307,7 +307,7 @@ class IngestionPipeline:
     async def aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
                       cache_dir: Union[str, Path]) -> IngestionReport:
         """Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`).
-        `sources` are file paths or `IngestSource`s; `cache_dir` holds the content-hash-gated parse and chunk caches
+        `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches
         (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to
         `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised.
         Returns the `IngestionReport`."""
@@ -321,7 +321,7 @@ class IngestionPipeline:
         async def one(src: IngestSource) -> None:
             nonlocal done
             async with sem:
-                docs = await self._ingest_file(ws, stages, Path(src.path), src.doc_id or _doc_id(src.path), src,
+                docs = await self._ingest_file(ws, stages, src.doc_id or _doc_id(src.display_name), src,
                                                parent_id=None, child=None, depth=0)
             report.documents.extend(docs)
             done += 1
@@ -335,16 +335,17 @@ class IngestionPipeline:
         self._progress(f"[ingest] done {report.succeeded} ok, {report.failed} dead-lettered")
         return report
 
-    async def _ingest_file(self, ws: Any, stages: IngestionStages, path: Path, doc_id: str, src: IngestSource, *,
+    async def _ingest_file(self, ws: Any, stages: IngestionStages, doc_id: str, src: IngestSource, *,
                            parent_id: Optional[str], child: Optional[Any], depth: int) -> list[DocumentReport]:
-        """Ingest one file (`child` = its `EmbeddedChild` record when it was extracted from `parent_id`), then its
-        own embedded children."""
-        from rag_wright.api.documents import aparse_document
+        """Ingest one document (`child` = its `EmbeddedChild` record when it was extracted from `parent_id`), then
+        its own embedded children."""
+        from rag_wright.api.documents import aparse_document_bytes
 
         rep = DocumentReport(doc_id=doc_id, parent_doc_id=parent_id)
         try:
-            sd = await aparse_document(doc_id, path, cache_dir=stages.cache / "parsed",
-                                       include_hidden_sheets=src.include_hidden_sheets, tuning=stages.tuning)
+            name, data = src.display_name, src.read_bytes()
+            sd = await aparse_document_bytes(doc_id, name, data, cache_dir=stages.cache / "parsed",
+                                             include_hidden_sheets=src.include_hidden_sheets, tuning=stages.tuning)
             rep.skipped_hidden_sheets = list(sd.skipped_hidden_sheets)
             rep.embedded_skipped = list(sd.embedded_skipped)
             chunks = await stages.chunk(sd)
@@ -356,9 +357,9 @@ class IngestionPipeline:
                 await self._document_hook(ws, sd, chunks)
             await asyncio.to_thread(
                 stages.write_document_node, doc_id, parent_id=parent_id,
-                filename=(child.filename if child is not None else None) or path.name,
-                media_type=child.media_type if child is not None else (mimetypes.guess_type(path.name)[0] or ""),
-                sha256=child.sha256 if child is not None else hashlib.sha256(path.read_bytes()).hexdigest())
+                filename=(child.filename if child is not None else None) or name,
+                media_type=child.media_type if child is not None else (mimetypes.guess_type(name)[0] or ""),
+                sha256=child.sha256 if child is not None else hashlib.sha256(data).hexdigest())
         except Exception as exc:  # noqa: BLE001 - one bad document is dead-lettered, never the whole run
             rep.dead_letter = f"{type(exc).__name__}: {exc}"
             return [rep]
@@ -372,7 +373,7 @@ class IngestionPipeline:
                 continue
             emb_src = IngestSource(path=emb.path, doc_id=emb.doc_id, table_mode=src.table_mode,
                                    include_hidden_sheets=src.include_hidden_sheets)
-            kids = await self._ingest_file(ws, stages, Path(emb.path), emb.doc_id, emb_src,
+            kids = await self._ingest_file(ws, stages, emb.doc_id, emb_src,
                                            parent_id=doc_id, child=emb, depth=depth + 1)
             reports.extend(kids)
             if kids[0].dead_letter is None:
