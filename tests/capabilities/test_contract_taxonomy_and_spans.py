@@ -41,8 +41,8 @@ class _FakeStore:
              "doc_start": 50, "doc_end": 60},  # a span that never became a clause -> clause_ids == []
         ]
 
-    def _query(self, sql):
-        assert "FROM Clause" in sql
+    def kg_read(self, node_type, *, key_range=None, **kw):  # a contract's clauses: a clause-id range read (PS-8a)
+        assert node_type == "Clause" and key_range == ("clause_id", "K:", "K;")
         return [
             {"clause_id": "K:0:h", "function": "Cap On Liability", "span_id": "K:0:h#0"},
             {"clause_id": "K:9:h", "function": "Indemnification", "span_id": "OTHER#9"},  # span not here -> dropped

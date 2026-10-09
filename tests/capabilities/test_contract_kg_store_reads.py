@@ -38,7 +38,7 @@ def test_party_traversals_name_the_right_edge_and_thread_scope(monkeypatch):
 
 class _FakeStore:
     """Fakes the GENERIC store surface ContractKGStore delegates to: kg_edges (contract_clause_kg's edge scan)
-    + clauses_in_contract. So contract_terms exercises the REAL reshaping (contract_clause_index over kg_edges)."""
+    + kg_read (a contract's clauses). So contract_terms exercises the REAL reshaping (contract_clause_index over kg_edges)."""
 
     _A = "C:0:aaa"
 
@@ -53,8 +53,8 @@ class _FakeStore:
              "predicate_iri": "cbr:EXCEPTS", "folio_iri": "", "confidence": "AMBIGUOUS", "span_id": "sA"},
         ]
 
-    def _query(self, sql):  # ING-8e: ContractKGStore reads a contract's clauses itself (a clause-id range query)
-        assert "FROM Clause" in sql
+    def kg_read(self, node_type, *, key_range=None, **kw):  # a contract's clauses: a clause-id range read (PS-8a)
+        assert node_type == "Clause" and key_range == ("clause_id", "C:", "C;")
         return [{"clause_id": self._A, "function": "Cap On Liability", "folio_iri": "folio:CAP"}]
 
 

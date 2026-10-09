@@ -17,7 +17,6 @@ from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKG
 from rag_wright.packs.contracts.capabilities.contract_kg_store import (  # moved from the generic store (ING-8b)
     TYPED_PROPERTY_EDGE_TYPES,
     _edge_predicate_iri,
-    _stale_property_statements,
 )
 from rag_wright.store.arcadedb import ArcadeDBStore
 
@@ -176,18 +175,30 @@ def test_span_properties_joins_typed_edges_by_span_id():
 # --- ADR-0048 Phase A mark-stale: the pure UPDATE builder (no store) --------------------------------------
 
 
-def test_stale_property_statements_one_update_per_edge_type_scoped_to_spans():
-    stmts = _stale_property_statements(["s1", "s2"])
-    # one UPDATE per typed property edge type, no more (bounded by edge-type count, not pool size)
-    assert len(stmts) == len(TYPED_PROPERTY_EDGE_TYPES)
-    joined = "\n".join(stmts)
-    for edge_type in TYPED_PROPERTY_EDGE_TYPES:
-        assert f"UPDATE {edge_type} SET confidence = 'AMBIGUOUS'" in joined
-    # scoped to the given spans by the ADR-0025 span_id key, and idempotent (skips already-AMBIGUOUS)
-    for s in stmts:
-        assert "WHERE span_id IN ['s1','s2']" in s
-        assert "confidence <> 'AMBIGUOUS'" in s
+class _UpdateRecorder:
+    """Records the generic `kg_update` calls a mark-stale makes (each reports one changed edge)."""
+
+    def __init__(self):
+        self.updates = []
+
+    def kg_update(self, type_name, *, set, where=None, key_range=None):
+        self.updates.append((type_name, set, where))
+        return 1
 
 
-def test_stale_property_statements_empty_is_noop():
-    assert _stale_property_statements([]) == []
+def test_mark_stale_is_one_update_per_typed_edge_type_scoped_to_the_spans():
+    rec = _UpdateRecorder()
+    kg = object.__new__(ContractKGStore)
+    kg._store = rec
+    # one update per typed property edge type (bounded by the edge-type count, not the span count), keyed by the
+    # ADR-0025 span_id; kg_update only changes edges not already AMBIGUOUS, so a repeat is a no-op
+    assert kg.mark_span_properties_ambiguous(["s1", "s2"]) == len(TYPED_PROPERTY_EDGE_TYPES)
+    assert [u[0] for u in rec.updates] == list(TYPED_PROPERTY_EDGE_TYPES)
+    assert all(u[1:] == ({"confidence": "AMBIGUOUS"}, {"span_id": ["s1", "s2"]}) for u in rec.updates)
+
+
+def test_mark_stale_of_no_spans_issues_nothing():
+    rec = _UpdateRecorder()
+    kg = object.__new__(ContractKGStore)
+    kg._store = rec
+    assert kg.mark_span_properties_ambiguous([]) == 0 and rec.updates == []

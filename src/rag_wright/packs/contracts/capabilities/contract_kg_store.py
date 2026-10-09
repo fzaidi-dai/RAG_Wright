@@ -13,7 +13,7 @@ from rag_wright.packs.contracts.capabilities.highlight_serve import _decode_bbox
 from rag_wright.packs.contracts.schemas.contract_meta import ContractRecord
 from rag_wright.packs.contracts.schemas.highlight import SpanLocation
 from rag_wright.packs.contracts.schemas.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
-from rag_wright.store.arcadedb import SPAN_TYPE, _sql_str
+from rag_wright.store.arcadedb import SPAN_TYPE
 from rag_wright.contracts.provenance import ConfidenceTag
 from rag_wright.packs.contracts.ontology.loader import load_typed_edges, reference_pack_ttl
 from rag_wright.packs.contracts.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH  # DD-5 contract edge names
@@ -30,20 +30,6 @@ TYPED_PROPERTY_EDGE_TYPES: tuple[str, ...] = tuple(sorted(set(_DIM_EDGE_STR.valu
 def _edge_predicate_iri(edge_type: str) -> str:
     """The predicate IRI stamped on a typed edge (ODRL for the deontic edges, the bridge IRI otherwise)."""
     return _EDGE_PREDICATE_IRI[edge_type]
-
-
-def _stale_property_statements(span_ids: list[str]) -> list[str]:
-    """ADR-0048 Phase A mark-stale (pure): one `UPDATE ... SET confidence=AMBIGUOUS WHERE span_id IN (...) AND
-    confidence <> AMBIGUOUS` per typed property edge type, for the given spans. Separated from the DB call so the
-    SQL is unit-tested with no store. Empty span list -> no statements (the caller no-ops)."""
-    if not span_ids:
-        return []
-    id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
-    amb = _sql_str(ConfidenceTag.AMBIGUOUS.value)
-    return [
-        f"UPDATE {edge_type} SET confidence = {amb} WHERE span_id IN {id_list} AND confidence <> {amb}"
-        for edge_type in TYPED_PROPERTY_EDGE_TYPES
-    ]
 
 
 # ING-8e: the contracts pack's KG types (declared in contract_bridge.ttl), moved off the generic store.
@@ -194,48 +180,35 @@ class ContractKGStore:
     def clause_kg_counts(self) -> dict[str, int]:
         """Counts for the typed KG (introspection/tests): clauses, shared value nodes, and the total of the
         typed property edges across all typed edge types."""
-        clauses = self._store._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
-        values = self._store._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
-        typed = 0
         present = self._store.type_names()  # a DB populated before a schema extension lacks the newer edge types
-        for edge_type in TYPED_PROPERTY_EDGE_TYPES:
-            if edge_type not in present:
-                continue
-            rows = self._store._query(f"SELECT count(*) AS n FROM {edge_type}")
-            typed += int(rows[0]["n"]) if rows else 0
         return {
-            "clauses": int(clauses[0]["n"]) if clauses else 0,
-            "property_values": int(values[0]["n"]) if values else 0,
-            "typed_edges": typed,
+            "clauses": self._store.kg_count(CLAUSE_TYPE),
+            "property_values": self._store.kg_count(PROPVALUE_TYPE),
+            "typed_edges": sum(self._store.kg_count(t) for t in TYPED_PROPERTY_EDGE_TYPES if t in present),
         }
 
     def clear_clause_kg(self) -> None:
         """Delete the typed clause KG (all typed edges + the legacy flat edge + Clause + PropertyValue),
         leaving the span index intact -- the KG-3 counterpart of `clear_property_graph` for a clean
-        re-extraction into the typed schema. Edges first (UNSAFE bypasses the edge-safety check)."""
+        re-extraction into the typed schema. Edges first."""
         present = self._store.type_names()  # skip edge types a pre-extension DB never created
         for edge_type in (*TYPED_PROPERTY_EDGE_TYPES, PROPERTY_EDGE_TYPE):
             if edge_type in present:
-                self._store._command(f"DELETE FROM {edge_type} UNSAFE")
-        self._store._command(f"DELETE FROM {CLAUSE_TYPE}")
-        self._store._command(f"DELETE FROM {PROPVALUE_TYPE}")
+                self._store.kg_delete(edge_type)
+        self._store.kg_delete(CLAUSE_TYPE)
+        self._store.kg_delete(PROPVALUE_TYPE)
 
     def mark_span_properties_ambiguous(self, span_ids: list[str]) -> int:
         """ADR-0048 Phase A mark-stale: set `confidence = AMBIGUOUS` on every typed property edge of these spans.
         A clause whose PRIMARY function flipped had its properties extracted for the OLD function, so they are
         stale until Phase B re-extraction -- downgraded (kept but flagged) exactly as the ADR-0040 judges do, so
         the soft-boost down-weights them meanwhile. Keyed by the ADR-0025 `edge.span_id`. Idempotent (skips
-        already-AMBIGUOUS). Returns the number of edges downgraded (best-effort from the driver's row count)."""
+        already-AMBIGUOUS). Returns the number of edges downgraded. One update per typed edge type."""
         if not span_ids:
             return 0
-        total = 0
-        for stmt in _stale_property_statements(span_ids):
-            res = self._store._command(stmt)
-            if isinstance(res, list):
-                for row in res:
-                    if isinstance(row, dict) and "count" in row:
-                        total += int(row["count"])
-        return total
+        return sum(self._store.kg_update(edge_type, set={"confidence": ConfidenceTag.AMBIGUOUS.value},
+                                         where={"span_id": list(span_ids)})
+                   for edge_type in TYPED_PROPERTY_EDGE_TYPES)
 
     def span_properties(self, span_ids: list[str]) -> dict[str, set[tuple[str, str]]]:
         """The typed (dimension, value) assertions on each span, joined via the ADR-0025 `edge.span_id`. Scans each
@@ -344,19 +317,13 @@ class ContractKGStore:
 
     def all_contracts(self) -> list[dict]:
         """Every contract id in the store (e.g. for a corpus-wide backfill pass)."""
-        return self._store._query(f"SELECT contract_id FROM {CONTRACT_TYPE}")
-
-    def _contract_bounds(self, contract_id: str) -> tuple[str, str]:
-        return _sql_str(contract_id + ":"), _sql_str(contract_id + ";")
+        return self._store.kg_read(CONTRACT_TYPE, fields=["contract_id"])
 
     def _clauses_in_contract(self, contract_id: str) -> list[dict]:
         """Every clause in one contract (Leg-A scope): clause_id, function, folio_iri -- including clauses
         with no typed properties (still queryable by type)."""
-        lo, hi = self._contract_bounds(contract_id)
-        return self._store._query(
-            f"SELECT clause_id, function, folio_iri, span_id FROM {CLAUSE_TYPE} "
-            f"WHERE clause_id >= {lo} AND clause_id < {hi} ORDER BY clause_id"
-        )
+        return self._store.kg_read(CLAUSE_TYPE, fields=["clause_id", "function", "folio_iri", "span_id"],
+                                   key_range=("clause_id", *self._bounds(contract_id)), order_by="clause_id")
 
     def clause_positions(self, functions: list[str]) -> list[dict]:
         """Clauses of the given functions with their operative-span DOCUMENT offsets (via the clause-level
@@ -364,15 +331,13 @@ class ContractKGStore:
         doc_start, doc_end}. A clause with no resolvable span (legacy/unbackfilled) is skipped."""
         if not functions:
             return []
-        fn_list = "[" + ",".join(_sql_str(f) for f in functions) + "]"
-        clauses = self._store._query(
-            f"SELECT clause_id, function, span_id FROM {CLAUSE_TYPE} WHERE function IN {fn_list}")
+        clauses = self._store.kg_read(CLAUSE_TYPE, fields=["clause_id", "function", "span_id"],
+                                      where={"function": list(functions)})
         span_ids = [c["span_id"] for c in clauses if c.get("span_id")]
         if not span_ids:
             return []
-        id_list = "[" + ",".join(_sql_str(s) for s in span_ids) + "]"
-        spans = self._store._query(
-            f"SELECT span_id, doc_start, doc_end, document_id FROM {SPAN_TYPE} WHERE span_id IN {id_list}")
+        spans = self._store.kg_read(SPAN_TYPE, fields=["span_id", "doc_start", "doc_end", "document_id"],
+                                    where={"span_id": span_ids})
         by_span = {s["span_id"]: s for s in spans}
         out: list[dict] = []
         for c in clauses:
@@ -387,49 +352,38 @@ class ContractKGStore:
     def write_clause_exception_links(self, links: list) -> None:
         """ADR-0044: write the `IsExceptionTo` edges (exception/Uncapped clause -> the Cap clause it excepts).
         Idempotent: clears the existing IsExceptionTo layer first, so re-linking is safe and re-derivable. The
-        edge carries the INFERRED confidence (a derived, reasoned link, FR-S.4). One transaction."""
-        statements = (
-            [f"DELETE FROM {IS_EXCEPTION_TO_EDGE_TYPE} UNSAFE"]
-            if IS_EXCEPTION_TO_EDGE_TYPE in self._store.type_names() else [])
-        for link in links:
-            statements.append(
-                f"CREATE EDGE {IS_EXCEPTION_TO_EDGE_TYPE}"
-                f" FROM (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {_sql_str(link.exception_clause_id)})"
-                f" TO (SELECT FROM {CLAUSE_TYPE} WHERE clause_id = {_sql_str(link.cap_clause_id)})"
-                f" SET confidence = {_sql_str(link.confidence.value)}"
-            )
-        if statements:
-            self._db.execute_transaction(statements)
+        edge carries the INFERRED confidence (a derived, reasoned link, FR-S.4). The clear and the write are two
+        steps: a failure between them leaves no links until the next run re-derives them."""
+        if IS_EXCEPTION_TO_EDGE_TYPE in self._store.type_names():
+            self._store.kg_delete(IS_EXCEPTION_TO_EDGE_TYPE)
+        self._store.kg_write([], [
+            KgEdge(IS_EXCEPTION_TO_EDGE_TYPE, CLAUSE_TYPE, "clause_id", link.exception_clause_id,
+                   CLAUSE_TYPE, "clause_id", link.cap_clause_id, {"confidence": link.confidence.value})
+            for link in links])
 
     def clear_property_graph(self) -> None:
         """Delete all property-graph records (Clause / PropertyValue / HasProperty) while LEAVING the span
         index intact -- so a property re-extraction can start from scratch without re-embedding (T58 resume
-        control). Edges first (UNSAFE bypasses the edge-safety check this dialect requires), then vertices."""
-        self._store._command(f"DELETE FROM {PROPERTY_EDGE_TYPE} UNSAFE")
-        self._store._command(f"DELETE FROM {CLAUSE_TYPE}")
-        self._store._command(f"DELETE FROM {PROPVALUE_TYPE}")
+        control). Edges first, then vertices."""
+        self._store.kg_delete(PROPERTY_EDGE_TYPE)
+        self._store.kg_delete(CLAUSE_TYPE)
+        self._store.kg_delete(PROPVALUE_TYPE)
 
     def property_graph_counts(self) -> dict[str, int]:
         """Counts for introspection/tests: clauses, shared property-value nodes, and property edges."""
-        clauses = self._store._query(f"SELECT count(*) AS n FROM {CLAUSE_TYPE}")
-        values = self._store._query(f"SELECT count(*) AS n FROM {PROPVALUE_TYPE}")
-        edges = self._store._query(f"SELECT count(*) AS n FROM {PROPERTY_EDGE_TYPE}")
         return {
-            "clauses": int(clauses[0]["n"]) if clauses else 0,
-            "property_values": int(values[0]["n"]) if values else 0,
-            "property_edges": int(edges[0]["n"]) if edges else 0,
+            "clauses": self._store.kg_count(CLAUSE_TYPE),
+            "property_values": self._store.kg_count(PROPVALUE_TYPE),
+            "property_edges": self._store.kg_count(PROPERTY_EDGE_TYPE),
         }
 
     def clause_property_values(self, clause_id: str) -> list[dict]:
         """The property values a clause asserts, each with the edge's provenance (dimension, value,
         confidence, span_id) -- the readback for tests and the shape T58's query builds on."""
-        q = (
-            "MATCH {type: " + CLAUSE_TYPE + ", as: c, where: (clause_id = " + _sql_str(clause_id) + ")}"
-            ".outE('" + PROPERTY_EDGE_TYPE + "'){as: e}.inV(){as: v}"
-            " RETURN v.dimension AS dimension, v.value AS value, e.confidence AS confidence,"
-            " e.span_id AS span_id"
-        )
-        return self._store._query(q)
+        return self._store.kg_edges(
+            CLAUSE_TYPE, where={"clause_id": clause_id}, edge_type=PROPERTY_EDGE_TYPE,
+            select={"dimension": "v.dimension", "value": "v.value", "confidence": "e.confidence",
+                    "span_id": "e.span_id"})
 
 
 def clause_kg_graph(record: ClausePropertyRecord) -> tuple[list[KgNode], list[KgEdge]]:
