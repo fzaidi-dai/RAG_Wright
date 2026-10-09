@@ -4,6 +4,39 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.2.1...0.3.0) (2026-10-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **PS-R5c:** `ModelRole.OKF_ENRICHMENT` (and the `RAG_MODEL_OKF_ENRICHMENT` env override) is removed, and the reference pack no longer offers `okf_compile` / `okf_navigate`.
+
+### Features
+
+* **PS-10:** ship the engine skills in the wheel ([e6dd835](https://github.com/fzaidi-dai/RAG_Wright/commit/e6dd835415d35b38e4d8f3a123a1b8ba15cbeb9f))
+* **PS-1:** export ModelRole from rag_wright.api (G17) ([a27aae1](https://github.com/fzaidi-dai/RAG_Wright/commit/a27aae1fe4738331c23f9cc0418c21a16f8adab7))
+* **PS-2:** parse and ingest document bytes (G16) ([809e227](https://github.com/fzaidi-dai/RAG_Wright/commit/809e2270027d707639dac9878b682788ab4ceb9f))
+* **PS-3:** export metering and trace correlation (G18) ([868a18c](https://github.com/fzaidi-dai/RAG_Wright/commit/868a18c6e0458531202ffad5f4e135c9e2506ad2))
+* **PS-4:** export answer generation and relevance judgment (G19) ([aa741f6](https://github.com/fzaidi-dai/RAG_Wright/commit/aa741f6149652c00b37ebb81289311ef77c90e79))
+* **PS-5:** one models root for every classifier; publish and fetch reference weights (G20) ([0f549bf](https://github.com/fzaidi-dai/RAG_Wright/commit/0f549bf6ec1e3e152eae15826044818197b82ba6))
+* **PS-6:** KG count, delete and update primitives and key_range on kg_read (G21) ([f36b081](https://github.com/fzaidi-dai/RAG_Wright/commit/f36b081957eeed4a1dc12976df627049cc713927))
+* **PS-7:** pack_store accessor for pack store extensions (G15) ([4fe4a36](https://github.com/fzaidi-dai/RAG_Wright/commit/4fe4a36eb8dae91097725b7bba87823c6f659167))
+* **PS-8b:** the rag_wright.pack_sdk tier; generic helpers made public; StoreConfig.from_env() ([6405943](https://github.com/fzaidi-dai/RAG_Wright/commit/64059432dde24f0f603bc1b28379b5414ebce5d9))
+* **PS-R3:** unit_representative hook; the reference pack labels provisions by an operative-span vote ([bbd9250](https://github.com/fzaidi-dai/RAG_Wright/commit/bbd925090cef7d950b8c5a60218ce3d6f4056bf7))
+* **PS-R5b:** domain-neutral chunking prompts and entity rules; build_ingestion(chunk_discoverer=) ([66b7a6d](https://github.com/fzaidi-dai/RAG_Wright/commit/66b7a6d3bedc2f845c01355644013431f30ddab7))
+
+
+### Bug Fixes
+
+* **PS-R1:** unpin Qwen3.8-27b OpenRouter routing (ADR-0125) ([3c45c1f](https://github.com/fzaidi-dai/RAG_Wright/commit/3c45c1f2aa48562e63a0997a228ba720e231fd79))
+* **PS-R2:** a failed graph extraction keeps the document's clauses (graph partial) ([bfa2b43](https://github.com/fzaidi-dai/RAG_Wright/commit/bfa2b43c29a72ab94509cbb13736609f32adb883))
+* **PS-R5a:** domain vocabulary out of the generic engine's public surface ([61ef9fe](https://github.com/fzaidi-dai/RAG_Wright/commit/61ef9fe1f0016c1535287defb908b54972d7ddf9))
+
+
+### Code Refactoring
+
+* **PS-R5c:** retire the OKF code (ADR-0127) ([2470e2e](https://github.com/fzaidi-dai/RAG_Wright/commit/2470e2e0528bee2d0f032a74f274974ae0a7dd46))
+
 ## [0.2.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.2.0...0.2.1) (2026-10-08)
 
 
