@@ -23,7 +23,7 @@ Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) 
 | parse (PDF, Office, spreadsheets incl. hidden sheets, HTML, Markdown; embedded files) | engine | docling, content-hash cached | (none) |
 | chunk | engine default, domain may override | structural boundaries; a model refines only an over-cap section (domain-neutral prompt) | `chunk_model=`, `chunk_discoverer=` (e.g. `default_chunk_discoverer(guidance=...)` to say what a coherent unit is in your documents) |
 | segment a chunk into spans | engine default, domain may override | layout-driven: a table row per span, sentences for prose, a heading joins what follows | `segmenter=` |
-| tag spans (soft tags) | domain, optional | none | `span_tagger=` |
+| tag spans (soft tags) | domain, optional | none | `span_tagger=` (to compare models behind it, see section 5 of `docs/domain-adaptation/classification-and-decision-models.md`) |
 | index spans (embed + store, page/bbox provenance) | engine | the workspace's ingest embedder | `embedder=` |
 | group spans into units | engine default, domain may override | a heading starts a unit, a table stays whole (a record table is one unit per row), page furniture dropped, units capped | `unit_grouper=`, `boundary_decider=` |
 | choose each unit's representative span (its `anchor` + leading tag) | **domain decision**, optional | the grouper's choice: the first member, often a heading | `unit_representative=` |

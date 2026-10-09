@@ -105,6 +105,131 @@ the eval. This is the engine's "identify → **eval-first** → build" chain.
 - Keep a **graceful-degrade path** (an abstention/low-confidence routes to the residual LLM or an explicit
   "ambiguous"), never a silent wrong answer.
 
+## 5. Swapping the decision behind a hook
+
+A hook is where a domain decision plugs into an engine pipeline: `span_tagger=` on `build_ingestion` gives each span
+its soft tags, for example. Keep the model out of the hook. The hook invokes a `model` capability **of your own** by
+name, and that capability's `impl_ref` says what answers it: a trained classifier, the decision model or an LLM.
+Trying another model is then a registration change: register a manifest under the same slug with a different
+`impl_ref` (`register_capability` replaces a manifest by slug). The hook, the pipeline and the eval stay as they are.
+
+The hook. The capability's contract is yours to define; here it takes `{"texts": [...]}` and returns one
+`{"tags": [...], "scores": {label: probability}}` per text, tags strongest first:
+
+```python
+from rag_wright.api import TaggedSpan, ainvoke_model
+
+
+def make_span_tagger(ws, slug="span_labelling"):
+    """A span_tagger for build_ingestion that asks the `slug` capability, whatever implements it."""
+    async def tag(chunk_text, spans):
+        out = await ainvoke_model(slug, {"texts": [s.text for s in spans]}, resources=ws)
+        return [TaggedSpan(span=s, tags=r["tags"], scores=r["scores"]) for s, r in zip(spans, out["results"])]
+    return tag
+```
+
+Two implementations of that one contract. A trained classifier (sync, so `ainvoke_model` runs it off the event
+loop), and the decision model: one `choice` question per span, all of a chunk's spans in one call, with a `none`
+option so it can abstain. The labels and their one-line definitions belong in your pack's `.ttl` (ADR-0066); they are
+inline here only to keep the example short.
+
+```python
+from rag_wright.api import ainvoke_model
+
+LABELS = {
+    "batch_id": "states the identifier of a production batch",
+    "test_result": "states a measured test value",
+    "none": "none of these",
+}
+
+
+def classifier_span_labelling(resources, inputs):
+    results = []
+    for probs in my_classifier.predict_proba(inputs["texts"]):   # your model: one {label: probability} per text
+        tags = sorted((k for k, p in probs.items() if p >= 0.2), key=probs.get, reverse=True)[:3]
+        results.append({"tags": tags, "scores": probs})
+    return {"results": results}
+
+
+async def jev_span_labelling(resources, inputs):
+    texts = inputs["texts"]
+    state = "Label each numbered item by what it states.\n\n" + "\n".join(f"[{i}] {t}" for i, t in enumerate(texts))
+    questions = {f"s{i}": {"type": "choice", "instructions": f"Item [{i}]", "criteria": LABELS}
+                 for i in range(len(texts))}
+    out = await ainvoke_model("jev_decision", {"state": state, "questions": questions}, resources=resources)
+    results = []
+    for i in range(len(texts)):
+        answer = out["answers"][f"s{i}"]
+        scores = {k: p for k, p in answer["probabilities"].items() if k != "none"}
+        results.append({"tags": [] if answer["choice"] == "none" else [answer["choice"]], "scores": scores})
+    return {"results": results}
+```
+
+The swap. Both functions live in a module of yours (`my_product.caps.labelling` here); the manifest names the one in
+use. `jev_decision` is an engine capability, registered from `engine_capabilities()`:
+
+```python
+from rag_wright.api import CapabilityManifest, engine_capabilities, register_capability
+
+
+def register_span_labelling(impl):
+    register_capability(CapabilityManifest(
+        slug="span_labelling",
+        kind="model",
+        display_name="Span labelling",
+        description="Soft labels for each span, with a probability per label.",
+        representative_queries=("label these spans",),
+        impl_ref=f"my_product.caps.labelling:{impl}",
+    ))
+
+
+for m in engine_capabilities():
+    register_capability(m)
+register_span_labelling("classifier_span_labelling")   # the current arm
+register_span_labelling("jev_span_labelling")          # the other arm: the same slug, replaced
+```
+
+Fill `scores`, not only `tags`. A unit is labelled and cited by its representative span, and a
+`unit_representative` that votes reads `TaggedSpan.scores`; a tagger that returns tags alone leaves it nothing to
+vote with. A `choice` answer carries a probability for every option, so the decision model's scores come for free.
+A voting rule (the reference pack chose its own by measurement, ADR-0126):
+
+```python
+from rag_wright.api import build_ingestion
+
+
+def vote(members):
+    """The unit's label is the one with the highest probability summed over its members; the member most confident
+    in that label represents it."""
+    totals = {}
+    for m in members:
+        for label, p in m.scores.items():
+            totals[label] = totals.get(label, 0.0) + p
+    if not totals:
+        return members[0]
+    label = max(totals, key=totals.get)
+    best = max(members, key=lambda m: m.scores.get(label, 0.0))
+    return best.model_copy(update={"primary": label})
+
+
+pipeline = build_ingestion(my_extractor, span_tagger=make_span_tagger(ws), unit_representative=vote)
+```
+
+Before you choose an arm:
+
+- **Measure both on the same gold** (section 3, the `creating-evals` skill). Judge by the per-label floor, and by
+  top-1 accuracy wherever anything acts on the primary label, not only by top-k recall. Run the comparison on spans
+  the pipeline produced (headings, fragments, spans with no label), not only on curated snippets.
+- **Count the calls and their cost.** The decision model costs one call per chunk here, recorded in
+  `measure_usage`; a classifier costs none. Estimate the count for a bulk run before starting it.
+- **Make it repeatable.** The decision model's answers can change between identical calls (section 2); cache them,
+  with the prompt in the key, so a re-ingest gives the same tags.
+- **A long label list is a harder question.** A `choice` over dozens of options may lose accuracy; measure it. If it
+  does, try a two-step question (the group first, then the label within it), and measure that too: a cascade
+  multiplies the two steps' errors.
+- **The open-weight decision model (Laya)** fits behind the same slug once its server is reachable through a
+  `DecisionModelProfile` (engine gap G12).
+
 ## Skills
 
 `classifier-opportunity-analysis` (identify) → `creating-evals` (eval-first) → `setfit` / `laya` (build the

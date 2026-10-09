@@ -52,7 +52,8 @@ parse → chunk → segment (+ optional tag) → index  (embed each span → the
 - **chunk**: split the parsed document into chunks (structural boundaries; a model only refines an over-cap
   section). Cached. A document with no text is recorded with its children, not dead-lettered.
 - **segment**: split each chunk into spans, the citeable small unit; a table yields one span per row. An optional
-  `span_tagger` adds soft tags per span.
+  `span_tagger` adds soft tags per span. To try another model behind it (a trained classifier, the decision model),
+  see [swapping the decision behind a hook](classification-and-decision-models.md#5-swapping-the-decision-behind-a-hook).
 - **index**: embed each span (dense + sparse) into the hybrid retrieval index (`Span`, generic infra).
 - **group**: group the document's spans into extraction **units** (`Unit`: its spans, an anchor span, its text).
   A unit holding exactly one data row of a parsed table carries that row as `Unit.table_row` (exact cells).

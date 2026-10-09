@@ -4,7 +4,7 @@ Phase 2 output. The persistent, cross-session task ledger and shared memory of p
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
 > **⇒ RESUME / NEXT UP (2026-10-09, NEWEST): public-surface workstream COMPLETE (pending the 0.3.0 release).** Ledger:
-> **`docs/specs/public-surface/plan.md`** (PS-1..PS-10, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
+> **`docs/specs/public-surface/plan.md`** (PS-1..PS-11, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
 > G15-G21 closed (`pack_store`, bytes parsing, `ModelRole`, metering/tracing, answers + relevance on the API,
 > `RAG_MODELS_DIR` + reference weights on GCS, KG count/delete/update primitives) and the `rag_wright.pack_sdk` tier
 > with the reference pack held to `api` + `pack_sdk` by an import contract; the `unit_representative` hook with the
