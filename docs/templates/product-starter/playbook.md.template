@@ -23,7 +23,7 @@ orchestration compiler, is PARKED per engine ADR-0052).
 | Spec | `{{SPEC}}` (requirements `{{REQ_SCHEME}}`, acceptance `{{AC_SCHEME}}`) | The single source of truth |
 | Engine dependency | **RAG_Wright** via `{{ENGINE_DEP}}`; repo at `{{ENGINE_PATH}}` (read/reference). One-way: Product → Engine; consumed via `rag_wright.api` | The boundary |
 | Stack | {{STACK}} · Python 3.12 + uv (pinned `>=3.12,<3.13` to match the engine) | Environment, test runner, tooling |
-| Grounding index | **Graphify lanes**: `engine` (the installed `rag_wright` package) · `engine-docs` (the engine repo's docs + skills at the installed version's tag) · `project` (own code/libs) | The index the agent consults |
+| Grounding index | **Graphify lanes**: `engine` (the installed `rag_wright` package) · `engine-docs` (the engine repo's docs at the installed version's tag + the linked engine skills) · `project` (own code/libs) | The index the agent consults |
 | Data artifacts | caches, model caches, eval outputs, `graphify-out/` (all gitignored) | The `.gitignore` |
 
 ### The engine / product boundary (mirrors engine ADR-0052)
@@ -42,7 +42,7 @@ engine's worked example — a template, never your domain.
 
 ## 1. The skill set
 
-**Engine-authored** (in the engine repo's `.claude/skills/`; link them in — step 2):
+**Engine-authored** (shipped inside the installed engine at `rag_wright/.agents/skills/`; link them in — step 6):
 
 | Skill | Role |
 |---|---|
@@ -72,12 +72,21 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 4. Create the uv project, pin Python `>=3.12,<3.13` (match the engine), declare deps with `uv add`, commit
    `uv.lock`.
 5. **Build the grounding lanes:** index the installed `rag_wright` package as the `engine` lane, the engine repo's
-   `docs/` and `.claude/skills/` (checked out at the tag matching the installed engine) as the `engine-docs` lane,
+   `docs/` (checked out at the tag matching the installed engine) plus the engine skills linked in step 6 as the
+   `engine-docs` lane,
    and your own repo as the `project` lane (the engine's `refresh_framework_graph.sh` is the pattern). Ground every
    `rag_wright.api` / `rag_wright.pack_sdk` call against the `engine` lane before writing it. **Rebuild both engine lanes whenever the engine changes**, before grounding the next call: after a Dependabot merge, after `uv sync` picks up a new engine version, and (editable path dependency) after engine edits you pull in. A stale lane grounds calls against the old API.
-6. **Link the skills into `.claude/skills/`:** the engine-authored skills from the engine repo and the shared
-   generic skills from their source (symlink so each tracks its version; never copy). Load
-   **`using-the-rag-wright-engine`** first on any engine work.
+6. **Link the skills into `.claude/skills/`** (symlink so each tracks its version; never copy). The engine-authored
+   skills ship inside the installed engine, so link them from the package (this works for a PyPI install and an
+   editable path dependency alike), and re-run it after every engine upgrade:
+
+   ```bash
+   SKILLS=$(uv run python -c "import pathlib, rag_wright; print(pathlib.Path(rag_wright.__file__).parent / '.agents' / 'skills')")
+   mkdir -p .claude/skills && for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; done
+   ```
+
+   Link the shared generic skills from their source. Load **`using-the-rag-wright-engine`** first on any engine
+   work.
 7. **Engine-release automation** (released-product mode): copy the starter's `dependabot.yml` to
    `.github/dependabot.yml`, so each new `rag-wright` release arrives as a PR gated by your CI (section 5, "Keeping
    the engine current").
@@ -139,7 +148,7 @@ to confirm, then write.** A method name seen in prose is never confirmation.
 | Lane | Authority for |
 |---|---|
 | `engine` | the installed `rag_wright` package — every `rag_wright.api` / `rag_wright.pack_sdk` call grounds here first |
-| `engine-docs` | the engine repo's `docs/` + skills at the installed version's tag — how a feature is meant to be wired |
+| `engine-docs` | the engine repo's `docs/` at the installed version's tag + the linked engine skills — how a feature is meant to be wired |
 | `project` | this product's own code + libraries |
 
 (Ground against **both** the graph **and** the installed `inspect.signature` — a clone at latest can drift from the

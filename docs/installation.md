@@ -49,6 +49,18 @@ to reach the network (mock the call, or mark the test). The live markers, declar
   ```
 - **`rag-wright[ocr-bench]`** — the OCR-benchmark extras (`mlx-vlm`, `ocrmac`, `onnxruntime`, `scikit-image`).
 
+### Skills for coding agents
+
+The engine ships its Claude Code skills (`using-the-rag-wright-engine`, `building-an-ingestion-capability`,
+`authoring-a-capability`, `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`)
+inside the package, at `rag_wright/.agents/skills/`, so they match the installed version. Link them into a product
+repo's `.claude/skills/`, and re-run this after every engine upgrade:
+
+```sh
+SKILLS=$(uv run python -c "import pathlib, rag_wright; print(pathlib.Path(rag_wright.__file__).parent / '.agents' / 'skills')")
+mkdir -p .claude/skills && for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; done
+```
+
 ## Run ArcadeDB (the single store)
 
 One ArcadeDB database holds both the hybrid retrieval index and the knowledge graph. Pinned to **26.7.1** (do not

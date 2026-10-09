@@ -4,6 +4,8 @@ discovery text, public docstrings -- which the import-linter cannot see.
 
 - Zero tolerance: the engine's skill files, the engine capability manifests' discovery text, and the docstrings of
   everything `rag_wright.api` and `rag_wright.pack_sdk` export.
+- Not covered: the Claude Code skills shipped under `.agents/skills/` (PS-10). They are developer docs that cite the
+  reference pack's measured results as worked examples, as they did from `.claude/skills/` before they shipped.
 - A ratchet everywhere else in the generic engine: a file's count of domain-term lines may only go down (the
   committed baseline), and a file not in the baseline must have none. Lower the baseline as files are cleaned
   (`uv run pytest tests/arch/test_engine_domain_vocabulary.py --update-baseline` is NOT offered on purpose: edit the
@@ -88,7 +90,7 @@ def _generic_files() -> dict[str, int]:
     counts = {}
     for f in sorted(_SRC.rglob("*")):
         rel = f.relative_to(_SRC)
-        if not f.is_file() or f.suffix not in (".py", ".md") or rel.parts[0] in ("packs", "skills"):
+        if not f.is_file() or f.suffix not in (".py", ".md") or rel.parts[0] in ("packs", "skills", ".agents"):
             continue
         n = len(_hits(f.read_text(errors="ignore")))
         if n:

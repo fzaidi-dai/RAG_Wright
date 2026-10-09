@@ -305,7 +305,7 @@ Concrete tool gotchas from a real run; following them saves real time.
    against the training numbers before trusting it.
 
 ## Reference implementation
-A worked, converged implementation of every mechanism above (training + registry + snapshot + `ckpt:` loading,
-the top-k and ensemble evaluators, the mine/curate/select scripts, the symmetric-eval and capped-train prep)
-lives at `~/work/clause-classifier-ab/` (`modal_setfit_train.py` and the `prep_*`/`mine_*`/`select_*` scripts).
-Re-use its PATTERNS; do not copy its label set, thresholds, or numbers — those are specific to that problem.
+The engine authors converged every mechanism above (training + registry + snapshot + `ckpt:` loading, the top-k
+and ensemble evaluators, the mine/curate/select scripts, the symmetric-eval and capped-train prep) in a private
+working repo that is not shipped; this skill is its distillation. Its label set, thresholds and numbers were
+specific to that problem.

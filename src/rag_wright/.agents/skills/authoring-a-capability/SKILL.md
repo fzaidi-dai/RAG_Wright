@@ -22,7 +22,8 @@ functions/models; a product invokes a capability by name through `rag_wright.api
 `load_pack(module)`), the reference pack's manifests (`CONTRACT_SPECS` / `COMPLIANCE_SPECS` in `rag_wright.packs.{contracts,compliance}.pack`), `capabilities/ard.py` (`EntryKind`, `MEDIA_TYPE_BY_KIND`,
 `CALLABLE_KINDS`), `scripts/publish_manifests.py`, `api/invoke.py` + `capabilities/invoke.py::capability_impl` (the adapter-free impl_ref invoker + drift guard),
 `api/mcp.py` (generic MCP exposure). The guardrail test is `tests/capabilities/test_authoring_contract.py`.
-Paths here are relative to `src/rag_wright/` unless they start with `scripts/` or `tests/`. A product imports the
+Paths here are relative to `src/rag_wright/` unless they start with `scripts/` or `tests/`; all of them
+are in the engine repository: read them there or on GitHub, at the tag matching your installed engine. A product imports the
 authoring surface from `rag_wright.api`: `CapabilityManifest`, `register_capability`, `load_pack`,
 `engine_capabilities`, `register_canonical_slugs`, `canonical_capability_slugs`, `load_reference_pack`,
 `reference_pack` (the same objects as in `capabilities/manifests.py` and `capabilities/registry.py`).
@@ -112,7 +113,12 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 
 ## Verify (the guardrail)
 
-Run `uv run pytest tests/capabilities/test_authoring_contract.py tests/capabilities/test_manifests.py
+**In a product**, the engine's guardrail tests are not yours to run; write the equivalent for your own pack: load
+it with `load_pack("<your pack module>")` in a test, then for each of your manifests assert the slug is in
+`capability_index()` with the kind you declared, and resolve and call its `impl_ref` (`capability_impl(slug)`, from
+`rag_wright.pack_sdk`) with a small input. The rest of this section is the engine's own guardrail.
+
+**In the engine repo**, run `uv run pytest tests/capabilities/test_authoring_contract.py tests/capabilities/test_manifests.py
 tests/capabilities/test_registry.py tests/arch/test_import_contracts.py` after authoring. It pins the contract this
 skill teaches: no manifest under a non-canonical slug; the reserved-without-manifest set is a fixed allowlist (so
 adding a slug but forgetting its manifest FAILS here); every manifest kind is a real ARD kind; every cap that declares

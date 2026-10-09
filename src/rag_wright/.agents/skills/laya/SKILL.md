@@ -82,7 +82,7 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
   goes in TRAIN only; val/test stay gold.
 
 ## Fine-tune — single T4, RLCD, calibration built in
-- From the cloned laya repo (`~/work/laya`, its own uv project, not this engine's env): `uv run python research/scripts/finetune_single_device.py --data <train.jsonl> --model-dir <english-base> --output-dir <out> --epochs 4` (reproduces the 2×T4 notebook without DDP; CPU/one-GPU; flags: `--data`, `--model-dir`, `--output-dir`, `--device`, `--epochs`, `--seed`). Inside the Modal image the harness runs the copied script with the container's own `python`.
+- From a clone of the laya repo (its own uv project, not your product's env): `uv run python research/scripts/finetune_single_device.py --data <train.jsonl> --model-dir <english-base> --output-dir <out> --epochs 4` (reproduces the 2×T4 notebook without DDP; CPU/one-GPU; flags: `--data`, `--model-dir`, `--output-dir`, `--device`, `--epochs`, `--seed`). Inside the Modal image the harness runs the copied script with the container's own `python`.
 - Runs on **one 16 GB GPU (T4)** — ~1–2 h for large data, minutes for our small dims. RLCD = soft-CE + GRPO-style
   policy gradient on proper scoring rules. Calibration (one temperature per type) is fitted inside the run on a
   held-out slice; **argmax/accuracy unchanged, only confidence moves** — always fit before gating on confidence.
@@ -132,6 +132,5 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
   runtime, exactly like the model-profile seam for the LLM.
 
 ## Reference implementation
-`~/work/laya` (the cloned repo: `research/scripts/finetune_single_device.py`, `docs/finetune.md`, `examples/`) and
-`~/work/clause-classifier-ab/{laya_modal.py, build_laya_data.py, build_laya_refine.py}` (our Modal fine-tune + eval
-+ data builders). Re-use the PATTERNS; the criteria, thresholds, and floors are specific to that problem.
+The laya repo (its `research/scripts/finetune_single_device.py`, its fine-tuning guide and its `examples/`) and
+the engine authors' own Modal fine-tune + eval + data builders (a private working repo, not shipped). Re-use the PATTERNS; the criteria, thresholds, and floors are specific to that problem.

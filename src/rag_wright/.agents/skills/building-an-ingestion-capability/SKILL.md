@@ -14,6 +14,7 @@ description: >-
 The engine owns the ingestion MECHANISM; a domain supplies one function, the extractor, plus any optional hook whose
 default does not fit. Everything named here is imported from `rag_wright.api` (the generated `docs/api/README.md` has
 every signature). The decision record is ADR-0124 (`docs/adr/0124-generic-ingestion-builder-and-hooks.md`).
+Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
 
 ## 1. Who owns which stage
 

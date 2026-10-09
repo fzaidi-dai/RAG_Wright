@@ -19,7 +19,7 @@ loop.
 2. **Fill every `{{PLACEHOLDER}}`** (table below), then **delete the "FILL THESE FIRST" block** from each.
 3. Run the playbook's **Section 2 (one-time Phase-0 setup)**: choose the engine dependency mode (playbook section 5:
    local co-development or released product), depend on the engine, register the engine capabilities at startup,
-   build the grounding lanes, link the engine-authored + shared skills into `.claude/skills/`, and (released-product
+   build the grounding lanes, link the engine-authored skills (shipped in the installed engine) and the shared skills into `.claude/skills/`, and (released-product
    mode) copy `dependabot.yml` to `.github/dependabot.yml` so engine releases arrive as automated PRs.
 4. Load the **`using-the-rag-wright-engine`** skill and follow the engine's domain-adaptation guide.
 
@@ -34,7 +34,7 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 | `{{ENGINE_DEP}}` | how you depend on the engine, per the mode in playbook section 5: local co-development = `rag-wright>={{ENGINE_FLOOR}}` + an editable `[tool.uv.sources]` path; released product = `uv add 'rag-wright>={{ENGINE_FLOOR}}'` from PyPI |
 | `{{ENGINE_PATH}}` | where the engine repo/package is (e.g. `../RAG_Wright`) — for reading its docs/source |
 | `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.3.0`): a `>=` floor, never `==` |
-| `{{ENGINE_LANE_PATH}}` / `{{ENGINE_DOCS_LANE_PATH}}` / `{{PROJECT_LANE_PATH}}` | your `graphify-out/` lane paths (engine = the installed `rag_wright` package; engine-docs = the engine repo's `docs/` + skills at the installed version's tag; project = this repo) |
+| `{{ENGINE_LANE_PATH}}` / `{{ENGINE_DOCS_LANE_PATH}}` / `{{PROJECT_LANE_PATH}}` | your `graphify-out/` lane paths (engine = the installed `rag_wright` package; engine-docs = the engine repo's `docs/` at the installed version's tag + the engine skills linked in `.claude/skills/`; project = this repo) |
 | `{{STACK}}` | your backend / frontend / model / infra choices |
 | `{{SPEC}}` / `{{PLAN}}` / `{{TASKS}}` | your spec, plan, and task-ledger filenames |
 | `{{REQ_SCHEME}}` / `{{AC_SCHEME}}` | your requirement / acceptance id schemes (e.g. `PR-N` / `AC-N`) |

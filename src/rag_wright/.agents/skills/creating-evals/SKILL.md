@@ -19,6 +19,9 @@ can A/B alternatives and catch regressions forever. Corollary observed repeatedl
 data you build for a classifier/decision model IS an eval** (a labeled gold set + a metric) — so building the eval
 first also gives you the data design for free.
 
+Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine. The `eval/` and `scripts/` files named as patterns are the engine's own evals: read them as
+worked examples; your evals live in your repo.
+
 ## When to use
 - **Starting a new domain**: the FIRST build step after capabilities are defined (step 5 of the domain-adaptation guide, `docs/domain-adaptation/README.md`) — write
   each capability's eval before/while you implement it.

@@ -9,7 +9,11 @@ description: Authoritative recipe for standing up the self-hosted Qwen3.8-27B vL
 half-remembered fragments and iterating live cost a full painful session even though it had all been done, decided,
 and tested before. The two sources of truth:
 1. **ADR-0110** (`docs/adr/0110-fp8-kv-cache-16k-single-a100.md`) — the LOCKED config + why.
-2. **`scripts/modal_qwen3_vllm_server.py`** — the deploy script.
+2. **`scripts/modal_qwen3_vllm_server.py`** — the deploy script. It ships with this skill, in this skill's own
+   `scripts/` directory, so a product deploys it from there (it needs only `modal` in your environment); in the
+   engine repo `scripts/modal_qwen3_vllm_server.py` links to the same file.
+ADR-0110 and the other `docs/` paths are in the engine repository: read them there or on GitHub, at the tag
+matching your installed engine.
 This skill is the operational checklist that ties them together.
 
 ## The LOCKED production config (ADR-0110) — do not re-litigate
@@ -30,6 +34,7 @@ MODAL_IMAGE_BUILDER_VERSION=2025.06 \
   GPU=A100-80GB:1 TP=1 MAX_LEN=16384 GPU_UTIL=0.95 MAX_NUM_SEQS=<target> \
   uv run --no-sync modal deploy scripts/modal_qwen3_vllm_server.py
 ```
+(From a product repo, deploy the copy in this skill's directory: `.claude/skills/qwen-vllm-modal/scripts/modal_qwen3_vllm_server.py` once the skills are linked.)
 Then wire the engine: `.env` `VLLM_BASE_URL=https://<workspace>--rw-qwen3-modal-serve.modal.run/v1`,
 `VLLM_API_KEY=rw-vllm-dev-key`; the profile `qwen3.8-27b-modal` routes there. **Stop billing when done:**
 `uv run --no-sync modal app stop rw-qwen3-modal --yes` (A100 is expensive).

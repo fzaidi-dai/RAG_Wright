@@ -67,6 +67,8 @@ contract/compliance worked example. The engine's `src/rag_wright/packs/reference
 registers in its constructor). Without it `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back
 silently to the LLM.
 
+Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
+
 ## 2. Ground before you write (graphify)
 
 Never call an engine API you have not confirmed against the index. Build the grounding lanes and query them first:
@@ -75,8 +77,8 @@ Never call an engine API you have not confirmed against the index. Build the gro
   path dep). This is the source of truth for what the API and the pack SDK expose and each symbol's exact
   signature. Ground every `rag_wright.api` / `rag_wright.pack_sdk` call against it before writing.
 - **`engine-docs` lane** — index the engine repo's `docs/` (concepts, architecture, the domain-adaptation guide, the
-  generated `docs/api/` references, the reference pack) and its `.claude/skills/`, checked out at the tag matching
-  the installed engine version (the docs are not in the wheel). This is how the engine's docs are grounded: query it
+  generated `docs/api/` references, the reference pack), checked out at the tag matching the installed engine
+  version (the docs are not in the wheel; the engine's skills are, see "Engine skills to use"). This is how the engine's docs are grounded: query it
   to understand how a feature is meant to be wired, then confirm the call against the `engine` lane.
 - **`project` lane** — your own product repo, as you build it.
 
@@ -149,8 +151,18 @@ engine PR:
 
 `creating-evals` (eval-first), `building-an-ingestion-capability` (your ingestion hooks),
 `classifier-opportunity-analysis` → `setfit`/`laya` (build a decision),
-`authoring-a-capability` (register a cap), `qwen-vllm-modal` (bulk teacher-labeling substrate). Pull these (and the
-Addy-Osmani spec-driven/TDD/planning skills) into your repo via your setup step, as the product template does.
+`authoring-a-capability` (register a cap), `qwen-vllm-modal` (bulk teacher-labeling substrate, with its Modal
+deploy script). They ship inside the installed engine, at `rag_wright/.agents/skills/<name>/` (the convention
+docling and fastapi use), so they always match your engine version. Link them into your repo's `.claude/skills/`
+(gitignored) from the installed package, which works for a PyPI install and an editable path dependency alike:
+
+```bash
+SKILLS=$(uv run python -c "import pathlib, rag_wright; print(pathlib.Path(rag_wright.__file__).parent / '.agents' / 'skills')")
+mkdir -p .claude/skills && for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; done
+```
+
+Re-run it after every engine upgrade (a symlink follows the installed version, but a newly added skill needs a new
+link). The Addy-Osmani spec-driven/TDD/planning skills come from their own source, as the product template says.
 
 ## Anti-patterns
 

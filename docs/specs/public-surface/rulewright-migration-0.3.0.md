@@ -63,7 +63,23 @@ releases; RuleWright's seam today imports about 40 engine-internal modules (`sto
 `capabilities.answer_generator` 7, `models.profiles` 7, `capabilities.remote_encoders` 6, ...), and each of those is
 now available from one of the two tiers.
 
-## 5. Verify
+## 5. Link the engine skills from the installed engine (PS-10)
+
+The engine's Claude Code skills now ship in the package, at `rag_wright/.agents/skills/` (the convention docling and
+fastapi use), version-matched to the engine: `using-the-rag-wright-engine`, `building-an-ingestion-capability`,
+`authoring-a-capability`, `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya` and
+`qwen-vllm-modal` (with its Modal deploy script). RuleWright links none of them today. Its
+`scripts/refresh_framework_graph.sh` already links every dependency's `.agents/skills/` from site-packages, but that
+`find` misses the engine while it is an editable path dependency (site-packages holds only a `.pth` pointing at the
+engine's `src/`). Resolve the engine's skills directory by import instead, which works in both modes, and link
+them in the same step:
+
+```bash
+SKILLS=$(uv run python -c "import pathlib, rag_wright; print(pathlib.Path(rag_wright.__file__).parent / '.agents' / 'skills')")
+for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; done
+```
+
+## 6. Verify
 
 Run RuleWright's suite against the engine checkout (editable path) and its live engine-seam test; re-ingest one
 contract and compare its clauses (expect the section 2 changes, not errors).

@@ -87,7 +87,7 @@ before that library is in a graph** — declare + install → build/refresh the 
 | Lane | Path | Authority for |
 |---|---|---|
 | `engine` | `{{ENGINE_LANE_PATH}}` | the installed `rag_wright` package — every `rag_wright.api` / `rag_wright.pack_sdk` call grounds here first |
-| `engine-docs` | `{{ENGINE_DOCS_LANE_PATH}}` | the engine repo's `docs/` (concepts, architecture, domain-adaptation guide, generated `docs/api/`) and skills, at the tag matching the installed engine (the docs are not in the wheel) — query it to understand a feature, then confirm against `engine` |
+| `engine-docs` | `{{ENGINE_DOCS_LANE_PATH}}` | the engine repo's `docs/` (concepts, architecture, domain-adaptation guide, generated `docs/api/`) at the tag matching the installed engine (the docs are not in the wheel), plus the engine skills linked in `.claude/skills/` (they are in the wheel) — query it to understand a feature, then confirm against `engine` |
 | `project` | `{{PROJECT_LANE_PATH}}` | this product's own code + libraries |
 
 **Rebuild both engine lanes whenever the engine changes**, before grounding the next call: after a Dependabot merge, after `uv sync` picks up a new engine version, and (editable path dependency) after engine edits you pull in. A stale lane grounds calls against the old API.
@@ -122,9 +122,10 @@ relevant one.** Skills are workflows — follow their steps and verification, do
 
 The engine-authored skills (`using-the-rag-wright-engine`, `authoring-a-capability`,
 `building-an-ingestion-capability`, `creating-evals`,
-`classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`) ship in the engine repo's `.claude/skills/`;
-the generic ones are the shared (Addy Osmani) set. The one-time setup links both into this repo's `.claude/skills/`
-(see the playbook).
+`classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`) ship inside the installed engine, at
+`rag_wright/.agents/skills/`, so they always match the engine version; the generic ones are the shared (Addy Osmani)
+set. The one-time setup links both into this repo's `.claude/skills/` (see the playbook), and the engine-skill links
+are re-made after every engine upgrade.
 
 ## Engine documentation (not shipped in the wheel — read in the engine repo / on GitHub)
 
