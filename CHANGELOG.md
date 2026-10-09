@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.3.0...0.3.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **PS-10:** the release build ships the engine skills ([c505ba6](https://github.com/fzaidi-dai/RAG_Wright/commit/c505ba609826976bd1ff4744e56737207bf1d0ba))
+
 ## [0.3.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.2.1...0.3.0) (2026-10-09)
 
 
