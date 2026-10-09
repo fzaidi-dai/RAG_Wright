@@ -20,7 +20,7 @@ from typing import Any, Callable
 
 from rag_wright.packs.contracts.capabilities.dg_extraction import aextract_parties, extract_parties
 from rag_wright.packs.compliance.schemas.compliance import Claim, ClaimType
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import ConfidenceTag
 from rag_wright.packs.compliance.skills.claim_extraction.template import ExtractedAd, ExtractedClaim  # the skill's schema asset
 
 __all__ = ["ExtractedAd", "ExtractedClaim", "extract_ad", "aextract_ad", "to_claims", "claim_extraction",

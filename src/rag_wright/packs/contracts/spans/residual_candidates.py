@@ -166,7 +166,7 @@ def select_residual_extractor(resources: Any = None) -> Optional[DecisionResidua
     """The decision-model residual lane when a decision model is configured; None (-> the LLM residual call) when
     none is, or when `RAG_RESIDUAL_EXTRACTOR=llm`."""
     from rag_wright.api import ainvoke_model, capability_index
-    from rag_wright.models.profiles import decision_profile
+    from rag_wright.pack_sdk import decision_profile
 
     if os.environ.get("RAG_RESIDUAL_EXTRACTOR", "decision") == "llm":
         return None

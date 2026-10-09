@@ -27,7 +27,7 @@ from enum import Enum
 from typing import Any, Callable, Optional
 
 from rag_wright.packs.contracts.schemas.function import canonical_function
-from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.pack_sdk import ChunkId
 from rag_wright.packs.contracts.schemas.property import (
     CLOSED_VOCAB,
     FOLIO_CLAUSE_IRI,
@@ -35,7 +35,7 @@ from rag_wright.packs.contracts.schemas.property import (
     PropertyAssertion,
     PropertyDimension,
 )
-from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.pack_sdk import ConfidenceTag, Provenance
 from rag_wright.packs.contracts.ontology._generated_vocab import VALUE_SYNONYMS
 from rag_wright.packs.contracts.ontology.clause_template import DamageType, ExceptionModel, _normalize_enum
 from rag_wright.packs.contracts.spans.property_grounding import reground

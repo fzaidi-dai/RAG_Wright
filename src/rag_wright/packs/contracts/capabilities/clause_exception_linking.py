@@ -23,8 +23,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
-from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import CapabilityRegistry
+from rag_wright.pack_sdk import ConfidenceTag
 
 CAP_FUNCTION = "Cap On Liability"
 EXCEPTION_FUNCTION = "Uncapped Liability"

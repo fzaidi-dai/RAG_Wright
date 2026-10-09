@@ -183,7 +183,6 @@ _CT = ["efficacy", "comparative", "pricing", "health", "environmental", "endorse
 
 
 async def test_ajev_extract_gates_fills_and_is_verbatim(monkeypatch):
-    import rag_wright.capabilities.invoke as inv
 
     async def fake_jev(resources, inputs):
         state = inputs["state"]
@@ -193,7 +192,7 @@ async def test_ajev_extract_gates_fills_and_is_verbatim(monkeypatch):
             ans[f"ct_{ct}"] = {"noul": 0.8 if (ct == "endorsement" and "endorser" in state) else 0.1}
         return {"answers": ans}
 
-    monkeypatch.setattr(inv, "capability_impl", lambda name: fake_jev)
+    monkeypatch.setattr("rag_wright.pack_sdk.capability_impl", lambda name: fake_jev)
     text = ("Advertisers must disclose any material connection with an endorser. "
             "Definitions in this part apply throughout. "
             "An endorser may not misrepresent their actual experience.")
@@ -208,7 +207,6 @@ async def test_ajev_extract_gates_fills_and_is_verbatim(monkeypatch):
 
 
 async def test_ajev_extract_drops_spans_the_jev_gate_rejects(monkeypatch):
-    import rag_wright.capabilities.invoke as inv
 
     async def all_nonrule(resources, inputs):
         ans = {"operative": {"noul": 0.1}, "actor": {"choice": "other"}}
@@ -216,7 +214,7 @@ async def test_ajev_extract_drops_spans_the_jev_gate_rejects(monkeypatch):
             ans[f"ct_{ct}"] = {"noul": 0.0}
         return {"answers": ans}
 
-    monkeypatch.setattr(inv, "capability_impl", lambda name: all_nonrule)
+    monkeypatch.setattr("rag_wright.pack_sdk.capability_impl", lambda name: all_nonrule)
     sec = await ajev_extract_regulation_section("The seller must substantiate every efficacy claim.")
     assert sec.requirements == []  # cue present but Jev gate says not-a-rule -> dropped
 
@@ -235,7 +233,6 @@ def test_ajev_extract_live():
 
 async def test_ajev_gated_residual_open_fields(monkeypatch):
     # ADR-0119: the residual open-field extraction runs ONLY for rules with a conditional/evidence cue.
-    import rag_wright.capabilities.invoke as inv
     import rag_wright.packs.compliance.capabilities.requirement_extraction as rex
     calls = []
 
@@ -249,7 +246,7 @@ async def test_ajev_gated_residual_open_fields(monkeypatch):
         calls.append(span)
         return (["jurisdiction: california"], "competent and reliable scientific evidence")
 
-    monkeypatch.setattr(inv, "capability_impl", lambda name: keep)
+    monkeypatch.setattr("rag_wright.pack_sdk.capability_impl", lambda name: keep)
     monkeypatch.setattr(rex, "_residual_open_fields", fake_residual)
     text = ("Employers must keep the log if the company has more than ten employees. "
             "Each injury must be recorded on the OSHA 300 Log.")

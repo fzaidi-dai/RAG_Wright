@@ -22,7 +22,7 @@ from langgraph.runtime import Runtime
 
 from rag_wright.packs.compliance.capabilities.requirement_extraction import aextract_regulation_section, to_requirements
 from rag_wright.packs.compliance.schemas.compliance import Requirement
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction
 
 # extract_fn: section text -> raw ExtractedRegulationSection | None; adapt_fn: (extracted, source, section) -> Requirement[]

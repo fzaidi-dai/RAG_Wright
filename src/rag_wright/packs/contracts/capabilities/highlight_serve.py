@@ -21,9 +21,10 @@ from pydantic import BaseModel
 
 from rag_wright.packs.contracts.schemas.highlight import HighlightResult, HighlightSpan
 from rag_wright.packs.contracts.schemas.query_intent import QueryIntent
-from rag_wright.contracts.span import decode_bbox
-from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
+from rag_wright.api import decode_bbox
+from rag_wright.api import ModelRole
+from rag_wright.pack_sdk import model_for
+from rag_wright.pack_sdk import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 
 DEFAULT_FALLBACK_K = 5
 _EXTRACT_CONCURRENCY = 8

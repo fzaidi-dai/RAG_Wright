@@ -152,7 +152,6 @@ async def test_aextract_affiliations_pre_filter_skips_the_llm_when_no_cue():
 
 async def test_aextract_affiliations_parses_pairs_on_a_cue_hit(monkeypatch):
     from rag_wright.packs.contracts.capabilities import graph_extraction as gx
-    from rag_wright.models import tag_structured
 
     class _R:
         async def ainvoke(self, _prompt):
@@ -160,20 +159,19 @@ async def test_aextract_affiliations_parses_pairs_on_a_cue_hit(monkeypatch):
                 gx.Affiliation(organization="Acme Holdings Ltd", affiliate_of="Acme Corp"),
                 gx.Affiliation(organization="", affiliate_of="skip")])  # empty side dropped
 
-    monkeypatch.setattr(tag_structured, "build_tag_structured", lambda *a, **k: _R())
+    monkeypatch.setattr("rag_wright.pack_sdk.build_tag_structured", lambda *a, **k: _R())
     out = await gx.aextract_affiliations("Acme Holdings Ltd, an affiliate of Acme Corp, agrees ...")
     assert out == [("Acme Holdings Ltd", "Acme Corp")]
 
 
 async def test_aextract_affiliations_degrades_to_empty_on_parse_failure(monkeypatch):
     from rag_wright.packs.contracts.capabilities import graph_extraction as gx
-    from rag_wright.models import tag_structured
 
     class _R:
         async def ainvoke(self, _prompt):
             raise RuntimeError("parse blip")
 
-    monkeypatch.setattr(tag_structured, "build_tag_structured", lambda *a, **k: _R())
+    monkeypatch.setattr("rag_wright.pack_sdk.build_tag_structured", lambda *a, **k: _R())
     assert await gx.aextract_affiliations("wholly-owned subsidiary of Foo") == []  # cue present, LLM fails -> []
 
 

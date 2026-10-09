@@ -11,7 +11,7 @@ from typing import Iterable, Optional
 
 from rag_wright.packs.contracts.capabilities.highlight_serve import _decode_bbox
 from rag_wright.packs.compliance.schemas.compliance import Requirement, RequirementLocation
-from rag_wright.store.seam import KgNode
+from rag_wright.api import KgNode
 
 # ING-8e: the compliance pack's KG type, declared in its compliance_bridge.ttl (moved off the generic store).
 REQUIREMENT_TYPE = "Requirement"  # CC-5 (compliance §13): a deontic regulatory rule

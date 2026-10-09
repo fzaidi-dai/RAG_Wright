@@ -5,7 +5,6 @@ the parsers are pure; the runnable's stream is monkeypatched."""
 
 from __future__ import annotations
 
-import rag_wright.models.seam as seam
 from rag_wright.packs.contracts.spans.clause_function_classifier import (
     _TagClassifierRunnable,
     parse_batch_span_tags,
@@ -47,7 +46,7 @@ async def test_tag_runnable_ainvoke_streams_with_label_then_parses(monkeypatch):
         assert prompt.endswith("TAGS")  # the instructions were appended to the prompt
         return '<span index="0">Governing Law:high</span>'
 
-    monkeypatch.setattr(seam, "astream_text", fake_astream)
+    monkeypatch.setattr("rag_wright.pack_sdk.astream_text", fake_astream)
     runnable = _TagClassifierRunnable(
         "m", instructions="TAGS", parse=parse_batch_span_tags, label="clause_function_classifier.classify_spans")
     out = await runnable.ainvoke("classify this section")

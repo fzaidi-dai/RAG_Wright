@@ -28,7 +28,7 @@ from fastmcp import FastMCP
 
 from rag_wright.packs.compliance.schemas.compliance import Claim, ComplianceFinding, ComplianceReport, Verdict
 from rag_wright.packs.contracts.mcp.session_store import StoreResolver, resolve_request_store
-from rag_wright.store.seam import Store
+from rag_wright.pack_sdk import Store
 
 
 # The injected checker: (text, source_doc, optional policy `sources` scope) -> ComplianceReport. Injected so the
@@ -170,8 +170,9 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
 
     load_dotenv()
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.capabilities.remote_encoders import query_embedder
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import model_for
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_ad_compliance_check
 
     extract_model = default_extraction_model("claim-extract")  # tenant-indep. (RAG_MODEL_ALL-aware default)
@@ -192,8 +193,9 @@ def production_generic_check_fn(*, k: int = 8) -> CheckFn:
     from dotenv import load_dotenv
 
     load_dotenv()
-    from rag_wright.capabilities.remote_encoders import query_embedder
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import model_for
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
 
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)  # tenant-independent
@@ -213,8 +215,9 @@ def production_document_check_fn(*, k: int = 8) -> "DocumentCheckFn":
     from dotenv import load_dotenv
 
     load_dotenv()
-    from rag_wright.capabilities.remote_encoders import query_embedder
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import model_for
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_compliance_document_verdict
 
     judge_model_id = model_for(ModelRole.STRUCTURED_REASONING)  # tenant-independent
@@ -261,9 +264,11 @@ def demo_check_fn() -> CheckFn:
 def production_env_store() -> Store:
     """The single-tenant fallback store from `COMPLIANCE_DB` (demo / eval / single-tenant). Built lazily so
     `RAG_MCP_DEMO` never touches ArcadeDB; a multi-tenant caller passes a `store_resolver` (issue 0035)."""
-    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.api import EngineConfig, StoreConfig, open_workspace, pack_store
 
-    return ArcadeDBStore.from_env(database=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
+    # PS-8c: the pack opens a WORKSPACE (never the backend) and takes its Store through the public accessor
+    ws = open_workspace(EngineConfig(store=StoreConfig.from_env()), corpus=os.environ.get("COMPLIANCE_DB", "ragwright_compliance"))
+    return pack_store(ws, lambda store: store)
 
 
 def register_compliance_check_mcp(registry) -> None:

@@ -29,7 +29,7 @@ from rag_wright.packs.contracts.schemas.property import (
     PropertyAssertion,
     PropertyDimension,
 )
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import ConfidenceTag
 
 _D = PropertyDimension
 

@@ -122,12 +122,14 @@ pack's is `tests/spans/test_model_capabilities.py`). If you deliberately add a r
 add it to `_RESERVED_WITHOUT_MANIFEST` with a one-line reason. The engine's `tests/conftest.py` loads the reference
 pack, so these tests see its slugs.
 
-**The import boundary (engine repo).** `pyproject.toml` `[tool.importlinter]` has two forbidden contracts: every
+**The import boundary (engine repo).** `pyproject.toml` `[tool.importlinter]` has three forbidden contracts: every
 generic engine package (`source_modules`: `rag_wright.api`, `capabilities`, `contracts`, `corpus`, `ingestion`,
-`models`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) must never import `rag_wright.packs`;
-and `rag_wright.packs.contracts` must never import `rag_wright.packs.compliance`. A new generic top-level package
+`models`, `ontology`, `pack_sdk`, `skills`, `spans`, `store`, `subgraphs`, `util`) must never import
+`rag_wright.packs`; pack code (`rag_wright.packs`) imports only `rag_wright.api` and `rag_wright.pack_sdk` (plus
+itself), never another engine package directly; and `rag_wright.packs.contracts` must never import
+`rag_wright.packs.compliance`. A pack capability's code therefore takes its building blocks from those two tiers. A new generic top-level package
 goes in the first contract's `source_modules`; a new module inside an existing package or inside `rag_wright.packs`
-needs no edit. `tests/arch/test_import_contracts.py` enforces both.
+needs no edit. `tests/arch/test_import_contracts.py` enforces all three.
 
 **The network guard.** `tests/conftest.py` fails any test that resolves a non-local host unless it carries a live
 marker (`model`, `store`, `parse`, `embed`, `rerank`, `ner`, `fleet`). Mock model and HTTP calls in unit tests, or

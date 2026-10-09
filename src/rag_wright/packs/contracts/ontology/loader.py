@@ -22,8 +22,8 @@ from rdflib import Graph
 from rdflib.collection import Collection
 from rdflib.namespace import OWL, RDF, RDFS, SH, SKOS
 
-from rag_wright.ontology.pack_schema import KgVertexType  # noqa: F401 - generic since ING-8b; re-exported
-from rag_wright.ontology.pack_schema import load_kg_schema as _load_pack_kg_schema
+from rag_wright.pack_sdk import KgVertexType  # noqa: F401 - generic since ING-8b; re-exported
+from rag_wright.pack_sdk import load_kg_schema as _load_pack_kg_schema
 
 _TTL_PATH = Path(__file__).with_name("contract_bridge.ttl")
 
@@ -268,7 +268,7 @@ def load_entity_rules(path: str = str(_TTL_PATH)) -> Any:
     `disambiguate` / `resolve_entities`. Cached per path."""
     from rdflib import URIRef
 
-    from rag_wright.corpus.canonicalize import EntityRules
+    from rag_wright.pack_sdk import EntityRules
 
     g = Graph()
     g.parse(path, format="turtle")

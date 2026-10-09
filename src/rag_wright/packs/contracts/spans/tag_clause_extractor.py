@@ -19,8 +19,8 @@ import asyncio
 import os
 from typing import Any
 
-from rag_wright.models.profiles import DEFAULT_GENERAL
-from rag_wright.models.tag_structured import field_kind, build_tag_structured
+from rag_wright.pack_sdk import DEFAULT_GENERAL
+from rag_wright.pack_sdk import build_tag_structured, field_kind
 from rag_wright.packs.contracts.ontology.clause_template import Clause
 
 # The 7 thematic groups (5a consents/control + 5b restrictions/duties per the design). document_reference is the

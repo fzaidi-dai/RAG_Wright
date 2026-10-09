@@ -4,14 +4,10 @@ checking run on the contract extraction stack, then adds this pack's slugs and m
 
 from __future__ import annotations
 
-from rag_wright.capabilities.ard import ResponseBounds  # noqa: F401 - used by some specs
-from rag_wright.capabilities.manifests import (  # noqa: F401 - the spec dataclass + shared helpers the specs use
-    RLM_GRANTED_SUBAGENTS,
-    CapabilityManifest,
-    engine_capabilities,
-    register_capability,
-)
-from rag_wright.capabilities.registry import register_canonical_slugs
+from rag_wright.pack_sdk import ResponseBounds  # noqa: F401 - used by some specs
+from rag_wright.api import CapabilityManifest, engine_capabilities, register_capability  # noqa: F401 - the spec dataclass + shared helpers the specs use
+from rag_wright.pack_sdk import RLM_GRANTED_SUBAGENTS  # noqa: F401 - the spec dataclass + shared helpers the specs use
+from rag_wright.api import register_canonical_slugs
 from rag_wright.packs.contracts import pack as contracts_pack
 
 COMPLIANCE_CAPABILITY_SLUGS: frozenset[str] = frozenset({

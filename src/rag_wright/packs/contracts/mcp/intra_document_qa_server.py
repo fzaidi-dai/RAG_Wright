@@ -28,12 +28,12 @@ from typing import Any, Awaitable, Callable, Optional
 
 from fastmcp import FastMCP
 
-from rag_wright.capabilities.answer_generator import GeneratedAnswer
+from rag_wright.api import GeneratedAnswer
 
 # qa_fn: (contract_id, question) -> GeneratedAnswer. Injected so the server is testable without infra.
 # ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async intra_document_qa subgraph.
 from rag_wright.packs.contracts.mcp.session_store import StoreResolver, resolve_request_store
-from rag_wright.store.seam import Store
+from rag_wright.pack_sdk import Store
 
 # issue 0035: store-PARAMETRIC -- the runner takes the per-request store (resolved out-of-band), never a
 # model-supplied one. The demo/stub runner ignores it.
@@ -101,7 +101,8 @@ def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: s
     from dotenv import load_dotenv
 
     load_dotenv()
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import model_for
     from rag_wright.packs.contracts.subgraphs.intra_document_qa import production_intra_document_qa
 
     default_model = answer_model_id or function_model_id or model_for(ModelRole.GENERAL)  # tenant-independent
@@ -122,9 +123,11 @@ def production_qa_fn(*, function_model_id: str | None = None, answer_model_id: s
 def production_env_store() -> Store:
     """The single-tenant fallback store from `QA_DB` (demo / eval / single-tenant). Built lazily so `RAG_MCP_DEMO`
     never touches ArcadeDB; a multi-tenant caller passes a `store_resolver` instead (issue 0035)."""
-    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.api import EngineConfig, StoreConfig, open_workspace, pack_store
 
-    return ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
+    # PS-8c: the pack opens a WORKSPACE (never the backend) and takes its Store through the public accessor
+    ws = open_workspace(EngineConfig(store=StoreConfig.from_env()), corpus=os.environ.get("QA_DB", "ragwright_cuad_full"))
+    return pack_store(ws, lambda store: store)
 
 
 # --- demo answerer: a deterministic, real-shaped cited answer (no ArcadeDB / LLM) for the Deep-Agent prototype -

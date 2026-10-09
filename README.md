@@ -125,6 +125,7 @@ src/rag_wright/
   subgraphs/     the generic LangGraph scaffolding, semantic chunking and graph extraction
   models/        the model-profile seam (OpenRouter default / self-hosted open models)
   ontology/      the generic pack-schema reader + entity-registry derivation
+  pack_sdk/      the pack-author tier: what a domain pack imports beyond rag_wright.api
   store/         the single ArcadeDB store behind the query seam
   spans/         page_map (page and bounding-box positions of spans)
   corpus/        document parsing + embedded-file extraction

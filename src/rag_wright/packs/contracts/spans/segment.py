@@ -21,9 +21,9 @@ from __future__ import annotations
 
 import re
 
-from rag_wright.contracts.ingestion import Span
-from rag_wright.corpus.document_parser import LEADING_ENUM, is_bare_heading  # generic text rules (ADR-0124)
-from rag_wright.contracts.span import to_span_record  # noqa: F401 - re-exported (moved, ING-4b)
+from rag_wright.api import Span
+from rag_wright.pack_sdk import LEADING_ENUM, is_bare_heading  # generic text rules (ADR-0124)
+from rag_wright.pack_sdk import to_span_record  # noqa: F401 - re-exported (moved, ING-4b)
 from rag_wright.packs.contracts.ontology.loader import load_segmentation_vocab
 
 # ING-3b (ADR-0066): the segmentation VOCABULARY (abbreviations, section words/symbols, furniture labels) is declared

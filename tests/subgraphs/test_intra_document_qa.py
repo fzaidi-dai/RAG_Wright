@@ -318,7 +318,6 @@ def test_production_defaults_answer_model_via_answer_model_for(monkeypatch):
 async def test_production_serves_whole_contract_not_function_narrowed(monkeypatch):
     """ADR-0047: production `serve` uses `contract_clause_index` (the WHOLE contract) and never the
     `clauses_of_function` narrowing / the query function classifier -- a mislabel can't hide the real clause."""
-    from rag_wright.capabilities import answer_generator as ag
     from rag_wright.packs.contracts.capabilities import contract_kg_serve as cks
     from rag_wright.capabilities.answer_generator import GeneratedAnswer
     from rag_wright.packs.contracts.subgraphs import intra_document_qa as idq
@@ -339,7 +338,7 @@ async def test_production_serves_whole_contract_not_function_narrowed(monkeypatc
     async def _agen(q, ev, model=None, guidance=None):
         return GeneratedAnswer(answer="", citations=[], abstained=True)
 
-    monkeypatch.setattr(ag, "agenerate_answer", _agen)
+    monkeypatch.setattr("rag_wright.pack_sdk.agenerate_answer_with_model", _agen)
 
     class _Store:
         def kg_edges(self, *a, **k):  # EP-REF-1a-ii: exceptions_of_clause now reads via store.kg_edges
@@ -358,7 +357,6 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
     """ADR-0047 rework: with more than top_k clauses, `serve` BGE-reranks the contract's clauses to the question
     and serves only the top-K (bounded evidence) -- mislabel-robust (ranks by meaning) AND avoids dumping the
     whole 100-clause contract into generation."""
-    from rag_wright.capabilities import answer_generator as ag
     from rag_wright.packs.contracts.capabilities import contract_kg_serve as cks
     from rag_wright.capabilities.answer_generator import GeneratedAnswer
     from rag_wright.packs.contracts.subgraphs import intra_document_qa as idq
@@ -380,7 +378,7 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
         captured["ids"] = [e.chunk_id for e in ev]  # EvidenceItem.chunk_id == the clause_id
         return GeneratedAnswer(answer="", citations=[], abstained=True)
 
-    monkeypatch.setattr(ag, "agenerate_answer", _gen)
+    monkeypatch.setattr("rag_wright.pack_sdk.agenerate_answer_with_model", _gen)
 
     class _Store:
         def kg_edges(self, *a, **k):  # EP-REF-1a-ii: exceptions_of_clause now reads via store.kg_edges

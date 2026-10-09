@@ -23,13 +23,13 @@ from typing import Any, Callable, Iterable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from rag_wright.contracts.identifiers import canonical_source_doc_id
+from rag_wright.pack_sdk import canonical_source_doc_id
 from rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline import (
     IngestionReport,
     SourceDocument,
     arun_corpus_ingestion,
 )
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction
 from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
@@ -105,7 +105,7 @@ class DocumentRegulationAdapter:
         if self._sections_fn is not None:
             sections = self._sections_fn(self._name, self._data)
         else:  # production: docling parse -> heading-split sections (DOCPARSE-1)
-            from rag_wright.corpus.document_parser import document_to_sections, parse_document_bytes
+            from rag_wright.pack_sdk import document_to_sections, parse_docling_bytes as parse_document_bytes
 
             sections = document_to_sections(parse_document_bytes(self._name, self._data))
         if self._limit:
@@ -297,7 +297,7 @@ async def ainvoke(resources, inputs: dict):
     handle; the policy from `inputs`. Two source shapes: `{source, sections_path}` (a pre-sectioned eCFR-style
     `sections.json`) or `{source, doc_name, data}` (a policy DOCUMENT's raw bytes, split at its headings)."""
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.models.profiles import ModelRole
+    from rag_wright.api import ModelRole
 
     model = default_extraction_model("requirement-extract", resources.model_id(ModelRole.STRUCTURED_REASONING))
     if inputs.get("data") is not None:  # a policy DOCUMENT (bytes)

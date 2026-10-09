@@ -357,13 +357,13 @@ class _TagClassifierRunnable:
         self._max_tokens = max_tokens
 
     def invoke(self, prompt: Any, config: Any = None) -> Any:  # config accepted for runnable-compat, unused
-        from rag_wright.models.seam import build_model
+        from rag_wright.pack_sdk import build_model
 
         text = build_model(self._model_id, max_tokens=self._max_tokens).invoke(prompt + self._instructions).content
         return self._parse(str(text))
 
     async def ainvoke(self, prompt: Any, config: Any = None) -> Any:
-        from rag_wright.models.seam import astream_text
+        from rag_wright.pack_sdk import astream_text
 
         text = await astream_text(self._model_id, prompt + self._instructions,
                                   max_tokens=self._max_tokens, label=self._label)
@@ -502,7 +502,7 @@ def production_setfit_clause_classifier(model_root: str | None = None, **kwargs)
     import os
     from pathlib import Path
 
-    from rag_wright.models.weights import models_dir
+    from rag_wright.pack_sdk import models_dir
 
     root = Path(model_root or os.getenv("RAG_SETFIT_CLAUSE_DIR") or models_dir() / "setfit_clause")
     subdirs = [root / n for n in ("cap128b_legalbert", "cap128b_bge", "cap128b_mpnet")]

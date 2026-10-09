@@ -22,7 +22,7 @@ from typing import Any, Callable
 
 from rag_wright.packs.contracts.capabilities.dg_extraction import aextract_parties, extract_parties
 from rag_wright.packs.compliance.schemas.compliance import ClaimType, Constraint, DeonticType, Requirement
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import ConfidenceTag
 from rag_wright.packs.compliance.skills.requirement_extraction.template import (  # the skill's schema asset
     ExtractedRegulationSection,
     ExtractedRequirement,
@@ -104,7 +104,7 @@ async def _residual_open_fields(span_text: str, model_id: str) -> tuple[list[str
     conditional/evidence cue. Degrades to ([], '') on any failure (recall-first: never drop the rule)."""
     from pydantic import BaseModel, Field
 
-    from rag_wright.models.seam import build_structured
+    from rag_wright.pack_sdk import build_structured
 
     class _Open(BaseModel):
         applicability: list[str] = Field(
@@ -132,8 +132,8 @@ async def ajev_extract_regulation_section(
     operative gate rejects. Thresholds default from the decision-model profile (`op_threshold`/`multilabel`),
     overridable here. applicability/evidence_standard come from one gated residual LLM call, made only for a rule
     whose text carries a conditional or evidence cue (`_needs_residual`); otherwise they stay empty."""
-    from rag_wright.capabilities.invoke import capability_impl
-    from rag_wright.models.profiles import decision_profile
+    from rag_wright.pack_sdk import capability_impl
+    from rag_wright.pack_sdk import decision_profile
 
     spans = operative_rule_spans(text)
     if not spans:
@@ -142,7 +142,8 @@ async def ajev_extract_regulation_section(
     op_thr = prof.op_threshold if op_threshold is None else op_threshold
     ct_thr = prof.multilabel_threshold if ct_threshold is None else ct_threshold
     if residual_model_id is None:
-        from rag_wright.models.profiles import ModelRole, model_for
+        from rag_wright.api import ModelRole
+        from rag_wright.pack_sdk import model_for
         residual_model_id = model_for(ModelRole.STRUCTURED_REASONING)
     jev = capability_impl("jev_decision")  # async (resources, inputs) -> decision body; store-independent
     questions = _jev_questions()

@@ -25,16 +25,11 @@ from typing import Any, Callable
 
 from pydantic import BaseModel
 
-from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.contracts.extraction import (
-    EntityMention,
-    ExtractionResult,
-    Extractor,
-    run_extractors,
-)
-from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.contracts.graph import RelationshipFact
-from rag_wright.contracts.provenance import ConfidenceTag, Provenance
+from rag_wright.pack_sdk import CapabilityRegistry
+from rag_wright.pack_sdk import EntityMention, ExtractionResult, GraphExtractor as Extractor, run_extractors
+from rag_wright.pack_sdk import ChunkId
+from rag_wright.pack_sdk import RelationshipFact
+from rag_wright.pack_sdk import ConfidenceTag, Provenance
 # DD-5 (ADR-0066/0117): this is a CONTRACT-domain builder (reference pack). The engine contracts are
 # taxonomy-free; the reference pack's entity/edge values live in ontology/contract_taxonomy.
 from rag_wright.packs.contracts.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH, ORGANIZATION
@@ -145,7 +140,7 @@ async def aextract_affiliations(text: str, *, model_id: str = DEFAULT_GRAPH_EXTR
     failure (never raised)."""
     if not _AFFILIATION_CUE_RE.search(text or ""):
         return []
-    from rag_wright.models.tag_structured import build_tag_structured
+    from rag_wright.pack_sdk import build_tag_structured
 
     try:
         out = await build_tag_structured(model_id, Affiliations, label="affiliations").ainvoke(

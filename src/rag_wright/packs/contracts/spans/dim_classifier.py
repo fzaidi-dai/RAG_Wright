@@ -130,7 +130,7 @@ def load_dim_registry(config_path=None, *, models_dir=None, device: Optional[str
     device-agnostic seam. Raises FileNotFoundError with the missing path if a checkpoint has not been fetched."""
     import json
 
-    from rag_wright.models.weights import models_dir as models_root
+    from rag_wright.pack_sdk import models_dir as models_root
 
     cfg = json.loads(Path(config_path or _FLEET_CONFIG).read_text())
     base = Path(models_dir or models_root())

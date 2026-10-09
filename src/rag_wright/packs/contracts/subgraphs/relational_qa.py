@@ -35,10 +35,10 @@ from typing import Any, Awaitable, Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from rag_wright.capabilities.answer_generator import EvidenceItem, GeneratedAnswer
-from rag_wright.capabilities.graph_query import GraphAnswer
+from rag_wright.api import EvidenceItem, GeneratedAnswer
+from rag_wright.pack_sdk import GraphAnswer
 from rag_wright.packs.contracts.ontology.contract_taxonomy import CONTRACTS_WITH  # this is a CONTRACT-reference leg (DD-5)
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
 # traverse_fn: (start_entity_id, relationship_type, max_hops) -> GraphAnswer (must raise on a transient blip).
@@ -129,8 +129,8 @@ def build_relational_qa(traverse_fn: TraverseFn, generate_fn: GenerateFn, *, ret
 def production_relational_qa(*, store: Any, answer_model: Any):
     """Wire the real `graph_query` + `generate_answer` into the composite (no text_store: the evidence is
     graph-structural). Imports are lazy so the module stays import-light and hermetic (tests inject stubs)."""
-    from rag_wright.capabilities.answer_generator import agenerate_answer
-    from rag_wright.capabilities.graph_query import graph_query
+    from rag_wright.pack_sdk import agenerate_answer_with_model as agenerate_answer
+    from rag_wright.pack_sdk import graph_query
 
     def traverse(start: str, rel: str, max_hops: int) -> GraphAnswer:
         # graph_query is domain-free and takes a generic edge-type string; this contract-reference leg passes the
@@ -159,8 +159,8 @@ def register_relational_qa(registry) -> None:
 
 async def ainvoke(resources, inputs: dict):
     """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target)."""
-    from rag_wright.capabilities.answer_generator import answer_model_for
-    from rag_wright.models.profiles import ModelRole
+    from rag_wright.pack_sdk import answer_model_for
+    from rag_wright.api import ModelRole
 
     graph = production_relational_qa(store=resources._store,
                                      answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)))

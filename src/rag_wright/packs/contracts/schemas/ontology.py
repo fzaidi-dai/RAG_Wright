@@ -26,8 +26,8 @@ from __future__ import annotations
 from enum import Enum
 
 
-from rag_wright.contracts.provenance import GraphFact
-from rag_wright.contracts.graph import EntityNode, RelationshipFact  # noqa: F401 - generic since ING-8b; re-exported
+from rag_wright.pack_sdk import GraphFact
+from rag_wright.pack_sdk import EntityNode, RelationshipFact  # noqa: F401 - generic since ING-8b; re-exported
 
 
 class ClauseCategory(str, Enum):

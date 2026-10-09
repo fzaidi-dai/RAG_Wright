@@ -18,7 +18,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from rag_wright.packs.contracts.schemas.function import FUNCTION_LABELS, canonical_function
-from rag_wright.models.tag_structured import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
+from rag_wright.pack_sdk import build_tag_structured  # ADR-0045: LLM-agnostic client-side output
 
 _PROMPT = (
     "You match a legal question about a contract to clause types from a FIXED taxonomy. Return the EXACT "
@@ -70,7 +70,7 @@ def route_query(
     them. Kept as a single wrapper so production and the eval share one shape.
     """
     from rag_wright.packs.contracts.capabilities.dg_extraction import extract_clause
-    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.pack_sdk import ChunkId
     from rag_wright.packs.contracts.spans.clause_kg_extractor import clause_to_record
 
     constraints: list[tuple[str, str]] = []

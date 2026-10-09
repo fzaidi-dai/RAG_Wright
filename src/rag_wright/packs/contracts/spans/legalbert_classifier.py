@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import torch
 
-from rag_wright.capabilities.remote_encoders import post_json, stack_url
+from rag_wright.pack_sdk import post_json, stack_url
 
 
 class LegalBertFunctionClassifier:
@@ -114,7 +114,7 @@ def query_classifier(model_path: Any = None, *, post: Callable[..., dict] = post
         return RemoteLegalBertClassifier(url, post=post)
     from pathlib import Path
 
-    from rag_wright.models.weights import models_dir
+    from rag_wright.pack_sdk import models_dir
     from rag_wright.packs.contracts.spans.legalbert_classifier import LegalBertFunctionClassifier
 
     return LegalBertFunctionClassifier.load(Path(model_path or models_dir() / "legalbert_function"))

@@ -28,6 +28,7 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 | package | responsibility | domain-free? |
 |---|---|---|
 | `api/` | the stable, domain-agnostic public surface: config, workspace, invokers, KG accessors, ids, usage | **yes** (in the enforced source set) |
+| `pack_sdk/` | the pack-author tier (PS-8b): re-exports of the engine building blocks a domain pack's code needs beyond `api` (identifiers, the model seam, the LangGraph scaffold, the store protocol, the generic capabilities a pack composes); a pack imports only `api` and `pack_sdk` | **yes** |
 | `capabilities/` | the capability catalog + ARD runtime — `CapabilityManifest`, `registry`, `manifests`, the adapter-free `invoke` client; plus the generic primitives (graph query, retrieval core, embedding, disambiguation, entity resolution, the decision model) | **yes** |
 | `ingestion/` | the generic ingestion mechanism (ADR-0124): `build_ingestion` + the shared `IngestionStages`, the default layout segmenter and structural unit grouper, `table_rows`, `evaluate_ingestion` | **yes** |
 | `subgraphs/` | the generic LangGraph scaffolding (`scaffold.py`), semantic chunking, graph extraction and observability; domain graphs live in their pack | **yes** |
@@ -44,13 +45,16 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 ### The domain-free rule (enforced)
 
 The **generic engine** — every package outside `rag_wright.packs` (`api`, `capabilities`, `contracts`, `corpus`,
-`ingestion`, `models`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) — **must not import any
-domain pack** (`rag_wright.packs`). A second contract keeps the packs layered: `packs.contracts` must not import
-`packs.compliance`, which is built on it. Both are `forbidden`
+`ingestion`, `models`, `ontology`, `pack_sdk`, `skills`, `spans`, `store`, `subgraphs`, `util`) — **must not import
+any domain pack** (`rag_wright.packs`). A second contract keeps a pack on the public tiers: `rag_wright.packs` may
+import `rag_wright.api` and `rag_wright.pack_sdk` (and itself) but no other engine package directly (PS-8c). A third
+keeps the packs layered: `packs.contracts` must not import `packs.compliance`, which is built on it. All three are
+`forbidden`
 import-linter contracts in `pyproject.toml` (`[tool.importlinter]`), run inside the normal test suite as a pytest
 test (`tests/arch/test_import_contracts.py`); a re-coupling import fails the build. The reference pack's own
-modules (its domain graphs and stores) are the importers, not the imported: they are *allowed* to import the
-generic engine, because a domain pipeline is domain-shaped by construction. This is the primitives-vs-domain
+modules (its domain graphs and stores) are the importers, not the imported: they build on the generic engine
+through its two public tiers (`rag_wright.api` and `rag_wright.pack_sdk`), because a domain pipeline is domain-shaped
+by construction. This is the primitives-vs-domain
 distinction: generic primitives stay pure; domain graphs compose them.
 
 ## Data flow

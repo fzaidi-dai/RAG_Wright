@@ -34,7 +34,7 @@ from langgraph.types import interrupt
 from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord
 from rag_wright.packs.contracts.spans.property_grounding import needs_escalation, reground
 from rag_wright.packs.contracts.spans.symbolic_validation import symbolic_validate
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, dead_letter, raw_llm_span
+from rag_wright.pack_sdk import DEFAULT_RETRY, dead_letter, raw_llm_span
 
 # record_fn: (clause_text, model_id) -> an ADAPTED ClausePropertyRecord (pre-grounding), or None when
 # extraction genuinely produced no model. It must raise TransientExtraction on a retryable blip.
@@ -42,7 +42,7 @@ RecordFn = Callable[[str, str], Optional[ClausePropertyRecord]]
 EscalateFn = Callable[[ClausePropertyRecord, str], bool]
 
 
-from rag_wright.subgraphs.scaffold import TransientExtraction  # noqa: E402,F401 - generic since ING-8b; re-exported
+from rag_wright.pack_sdk import TransientExtraction  # noqa: E402,F401 - generic since ING-8b; re-exported
 
 
 class ClauseExtractionState(TypedDict, total=False):
@@ -141,7 +141,7 @@ def production_record_fn() -> RecordFn:
     """
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model, extract_clause
     from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
-    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.pack_sdk import ChunkId
     from rag_wright.packs.contracts.spans.clause_kg_extractor import clause_to_record
 
     def extract(text: str, model_id: str) -> Optional[ClausePropertyRecord]:

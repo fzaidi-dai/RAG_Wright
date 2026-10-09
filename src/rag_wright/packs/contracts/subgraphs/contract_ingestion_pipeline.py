@@ -45,15 +45,15 @@ from pydantic import BaseModel
 
 # EP-API-6b: the generic corpus-seam contract + docling-parse helpers moved to a DOMAIN-FREE module (so the engine
 # parse API does not import this contract pipeline). Re-exported here, unchanged, for this module's own importers.
-from rag_wright.capabilities.document_parse import (  # noqa: F401 (re-export)
+from rag_wright.pack_sdk import (  # noqa: F401 (re-export)
     INGEST_PARSE_DEADLINE_S,
     SourceDocument,
     aparsed_source_document,
     parsed_source_document,
 )
-from rag_wright.capabilities.document_parse import parsed_text_document as _parsed_from_text  # noqa: F401 - moved (ING-4c)
-from rag_wright.contracts.ingestion import BoundaryDecider, Span, TaggedSpan, Unit
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
+from rag_wright.pack_sdk import parsed_text_document as _parsed_from_text  # noqa: F401 - moved (ING-4c)
+from rag_wright.api import BoundaryDecider, Span, TaggedSpan, Unit
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction
 
 
@@ -331,7 +331,7 @@ async def arun_corpus_ingestion(
     Observability (issue 0017): each document's ingest runs inside `traced_run`, so EVERY generation it emits is
     stamped with the correlation id -- `document_id = source_doc_id` and the caller's `job_id` -- making cost per
     document (or per job) a single Langfuse query. A no-op unless RAG_TRACE_LEVEL is on + Langfuse configured."""
-    from rag_wright.models.tracing import traced_run
+    from rag_wright.api import traced_run
     documents = list(adapter.documents())
     total = len(documents)
     progress(f"[ingest] starting: {total} documents")
@@ -398,7 +398,7 @@ def seed_party_cache(party_dir: Any, legacy_path: Any) -> int:
     import json
     from pathlib import Path
 
-    from rag_wright.contracts.identifiers import canonical_source_doc_id
+    from rag_wright.pack_sdk import canonical_source_doc_id
 
     if not Path(legacy_path).exists():
         return 0
@@ -480,7 +480,7 @@ async def _aaffiliations_extraction(doc: SourceDocument, affil_dir: Any, aaffili
     if not affiliations:
         return []
     from rag_wright.packs.contracts.capabilities.graph_extraction import affiliations_to_extraction
-    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.pack_sdk import ChunkId
 
     return [affiliations_to_extraction(ChunkId.of(doc.source_doc_id, 0, doc.text), affiliations)]
 
@@ -531,7 +531,7 @@ def _parties_extraction(names: list, doc: SourceDocument) -> list:
     if not names:
         return []
     from rag_wright.packs.contracts.capabilities.graph_extraction import parties_to_extraction
-    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.pack_sdk import ChunkId
 
     return [parties_to_extraction(ChunkId.of(doc.source_doc_id, 0, doc.text), names)]
 
@@ -545,7 +545,7 @@ def function_span_tagger(classify_fn: Any, *, max_concurrency: Optional[int], sp
     knob, default 8).
     `span_scores` (when given) receives each span's `FunctionScore` list for the extractor."""
     from rag_wright.packs.contracts.schemas.function import NO_FUNCTION, primary_function
-    from rag_wright.contracts.ingestion import TaggedSpan
+    from rag_wright.api import TaggedSpan
 
     sem = asyncio.Semaphore(max_concurrency if max_concurrency is not None
                             else int(os.environ.get("CLASSIFY_CONCURRENCY", "8")))
@@ -649,7 +649,7 @@ _LABEL_PREFIX = re.compile(r"^(?:(?:section|article|clause)\s+)?(?:\d+(?:\.\d+)*
 def _is_heading_label(span: Span) -> bool:
     """A span that only NAMES a provision ('Section 9. Uncapped Liability.', 'Governing Law', a heading/title span),
     with no operative sentence of its own. A short operative provision ('3. Fees. Customer shall pay ...') is not."""
-    from rag_wright.corpus.document_parser import is_bare_heading
+    from rag_wright.pack_sdk import is_bare_heading
 
     if span.kind in ("title", "heading"):
         return True
@@ -811,16 +811,17 @@ def aproduction_document_ingest(
     import json
     from pathlib import Path
 
-    from rag_wright.capabilities.disambiguation import disambiguate
-    from rag_wright.capabilities.embedding_profiles import build_ingest_embedder
-    from rag_wright.capabilities.entity_resolution import resolve_entities
+    from rag_wright.pack_sdk import disambiguate
+    from rag_wright.pack_sdk import build_ingest_embedder
+    from rag_wright.pack_sdk import resolve_entities
     from rag_wright.packs.contracts.capabilities.graph_extraction import aproduction_extract_fn
-    from rag_wright.capabilities.graph_storage import to_graph
-    from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer
+    from rag_wright.pack_sdk import to_graph
+    from rag_wright.pack_sdk import StructuralModelFallbackDiscoverer
     from rag_wright.packs.contracts.schemas.contract_meta import ContractRecord
-    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.pack_sdk import ChunkId
     from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import model_for
     from rag_wright.packs.contracts.ontology.clause_template import Clause
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
     from rag_wright.packs.contracts.spans.clause_kg_extractor import classifier_property_extractor
@@ -917,8 +918,8 @@ def aproduction_document_ingest(
     # keeps its 7-node LangGraph wiring, node names and state keys (the product drives and streams them).
     from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore, clause_kg_graph
     from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
-    from rag_wright.contracts.ingestion import IngestionTuning, UnitExtraction
-    from rag_wright.ingestion.builder import IngestionStages
+    from rag_wright.api import IngestionTuning, UnitExtraction
+    from rag_wright.pack_sdk import IngestionStages
     from rag_wright.packs.contracts.spans.boundary import cached_decider, jev_boundary_decider
     from rag_wright.packs.contracts.spans.segment import segment_clause
 
@@ -1057,8 +1058,8 @@ async def ainvoke(resources, inputs: dict):
     SourceDocument) + cache_dir. Ingest knobs + embedder come from EngineConfig.options/embeddings (EP-API-4a/4b);
     the entity resolver is the generic closed-world default (DD-3)."""
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.models.profiles import ModelRole
-    from rag_wright.ontology.registry import EntityRegistry
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import EntityRegistry
     from rag_wright.packs.contracts.options import contract_ingest_options
 
     opts = contract_ingest_options(resources._config)

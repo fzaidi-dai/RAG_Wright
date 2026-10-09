@@ -23,7 +23,7 @@ from typing import Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from rag_wright.packs.contracts.schemas.property import ClausePropertyRecord
-from rag_wright.subgraphs.scaffold import raw_llm_span
+from rag_wright.pack_sdk import raw_llm_span
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
 RecordFn = Callable[[str, str], Optional[ClausePropertyRecord]]

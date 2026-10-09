@@ -22,7 +22,7 @@ from enum import Enum
 
 from pydantic import BaseModel
 
-from rag_wright.contracts.identifiers import EntityId
+from rag_wright.pack_sdk import EntityId
 
 _CIK_PREFIX = re.compile(r"(?i)^cik[-:_ ]*")
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
@@ -214,7 +214,7 @@ def build_edgar_registry(rows, *, aliases_by_cik=None):
     from `company_tickers.json` rows, keyed by a normalized CIK `EntityId`, with `normalize_name` as the surface
     normalizer. A row whose CIK is invalid is skipped (recorded in `skipped_ids`), never fabricated. The engine's
     EntityRegistry stays domain-neutral; this SEC builder + normalize_cik live in the SEC layer (the plug-in)."""
-    from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
+    from rag_wright.pack_sdk import EntityRegistry, RegistryRecord
 
     aliases_by_cik = aliases_by_cik or {}
     registry = EntityRegistry(normalize=normalize_name)

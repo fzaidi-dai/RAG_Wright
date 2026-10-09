@@ -143,6 +143,26 @@ forbidden_modules = [
 ]
 
 [[tool.importlinter.contracts]]
+name = "A domain pack builds only on the public tiers: rag_wright.packs imports rag_wright.api and rag_wright.pack_sdk, never engine internals (PS-8c, G21)"
+type = "forbidden"
+source_modules = ["rag_wright.packs"]
+forbidden_modules = [
+    "rag_wright.capabilities",
+    "rag_wright.contracts",
+    "rag_wright.corpus",
+    "rag_wright.ingestion",
+    "rag_wright.models",
+    "rag_wright.ontology",
+    "rag_wright.skills",
+    "rag_wright.spans",
+    "rag_wright.store",
+    "rag_wright.subgraphs",
+    "rag_wright.util",
+]
+# the public tiers themselves re-export internals; only a DIRECT import from a pack is the violation
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
 name = "The contracts pack does not depend on the compliance pack built on it (ING-8c)"
 type = "forbidden"
 source_modules = ["rag_wright.packs.contracts"]

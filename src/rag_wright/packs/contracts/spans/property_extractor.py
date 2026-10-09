@@ -19,7 +19,7 @@ from typing import Optional, Protocol, runtime_checkable
 from pydantic import BaseModel, ValidationError
 
 from rag_wright.packs.contracts.schemas.function import canonical_function
-from rag_wright.contracts.identifiers import ChunkId
+from rag_wright.pack_sdk import ChunkId
 from rag_wright.packs.contracts.schemas.property import (
     CLOSED_VOCAB,
     FOLIO_CLAUSE_IRI,
@@ -27,9 +27,10 @@ from rag_wright.packs.contracts.schemas.property import (
     PropertyAssertion,
     PropertyDimension,
 )
-from rag_wright.contracts.provenance import ConfidenceTag, Provenance
-from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_structured
+from rag_wright.pack_sdk import ConfidenceTag, Provenance
+from rag_wright.api import ModelRole
+from rag_wright.pack_sdk import model_for
+from rag_wright.pack_sdk import build_structured
 
 _D = PropertyDimension
 

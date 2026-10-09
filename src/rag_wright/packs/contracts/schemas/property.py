@@ -31,7 +31,7 @@ from pydantic import BaseModel, field_validator, model_validator
 
 from rag_wright.packs.contracts.schemas.function import FUNCTION_LABEL_SET, NO_FUNCTION, FunctionScore
 from rag_wright.packs.contracts.schemas.ontology import ClauseCategory
-from rag_wright.contracts.provenance import ConfidenceTag, GraphFact
+from rag_wright.pack_sdk import ConfidenceTag, GraphFact
 from rag_wright.packs.contracts.ontology._generated_vocab import VOCAB as _GENERATED_VOCAB  # ADR-0066: generated FROM the ttl
 
 

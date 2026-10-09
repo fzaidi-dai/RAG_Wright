@@ -31,3 +31,21 @@ def test_import_linter_actually_detects_a_violation():
     ))
     checks = report.get_contracts_and_checks()
     assert checks and not all(check.kept for _, check in checks)  # the deliberate violation is caught
+
+
+def test_a_direct_only_contract_still_catches_a_direct_import():
+    # RED proof for the PS-8c pack-tier contract, which allows INDIRECT imports (the public tiers re-export
+    # internals): with `allow_indirect_imports`, a DIRECT import must still be reported -- rag_wright.api really does
+    # import rag_wright.capabilities directly.
+    report = create_report(UserOptions(
+        session_options={"root_packages": ["rag_wright"]},
+        contracts_options=[{
+            "name": "proof: rag_wright.api must not import rag_wright.capabilities directly (deliberately violated)",
+            "type": "forbidden",
+            "source_modules": ["rag_wright.api"],
+            "forbidden_modules": ["rag_wright.capabilities"],
+            "allow_indirect_imports": "true",
+        }],
+    ))
+    checks = report.get_contracts_and_checks()
+    assert checks and not all(check.kept for _, check in checks)

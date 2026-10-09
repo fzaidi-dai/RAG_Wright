@@ -30,12 +30,12 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from rag_wright.capabilities.disambiguation import disambiguate
-from rag_wright.capabilities.entity_resolution import ResolutionResult, resolve_entities
+from rag_wright.pack_sdk import disambiguate
+from rag_wright.pack_sdk import ResolutionResult, resolve_entities
 from rag_wright.packs.contracts.capabilities.graph_extraction import parties_to_extraction
-from rag_wright.contracts.identifiers import ChunkId, canonical_source_doc_id
+from rag_wright.pack_sdk import ChunkId, canonical_source_doc_id
 from rag_wright.packs.contracts.corpus.edgar import normalize_cik, normalize_name
-from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
+from rag_wright.pack_sdk import EntityRegistry, RegistryRecord
 
 _DOCLING_LOGGER = "docling_graph"  # the package-root logger; children propagate their ERROR records up to it
 
@@ -277,8 +277,8 @@ def default_extraction_model(label: str = "clause-extract", model: str | None = 
     ADR-0100: the backend/base_url/served-id come from the model string's PROFILE (`resolve_connection`), so a
     string can pin OpenRouter or a self-hosted vLLM/Modal server -- mix per stage. An un-pinned string falls back
     to `RAG_SERVING`, unchanged from before."""
-    from rag_wright.models.profiles import profile_for
-    from rag_wright.models.seam import resolve_connection
+    from rag_wright.pack_sdk import profile_for
+    from rag_wright.pack_sdk import resolve_connection
 
     model = model or os.getenv("RAG_MODEL_ALL") or _PRODUCT_EXTRACT_DEFAULT
     conn = resolve_connection(model)
@@ -374,7 +374,7 @@ def _deadline_bounded_client_class() -> type:
     from docling_graph.exceptions import ClientError
     from docling_graph.llm_clients.litellm import LiteLLMClient
 
-    from rag_wright.models import seam
+    from rag_wright.pack_sdk import ModelCallTimeout, call_description, model_deadline_s
 
     class _DeadlineBoundedLiteLLMClient(LiteLLMClient):
         def _call_api(self, messages: list[dict[str, str]], **params: Any) -> tuple[str, dict[str, Any]]:
@@ -387,10 +387,10 @@ def _deadline_bounded_client_class() -> type:
             # default granite-4.2-8b is a reasoning model: on a forced structured call it returns empty `content`
             # unless reasoning is disabled (ADR-0079). The seam applies both via the model profile; the
             # docling-graph path uses litellm, so it is added here. Skipped for a non-OpenRouter (vLLM / local) base.
-            from rag_wright.models import tracing
-            from rag_wright.models import usage as usage_acct
-            traced = tracing.tracing_on()
-            capture = traced or usage_acct.usage_capturing()  # issue 0042: also capture into an active usage scope
+            from rag_wright.api import record_usage
+            from rag_wright.pack_sdk import finish_generation, start_generation, tracing_on, usage_capturing
+            traced = tracing_on()
+            capture = traced or usage_capturing()  # issue 0042: also capture into an active usage scope
             if "openrouter" in (getattr(self, "_base_url", "") or "").lower():
                 # provider routing precedence: OPENROUTER_PROVIDER_ORDER env (measurement override) > the model's
                 # PROFILE routing (ADR-0100) > the lowest-latency sort default.
@@ -409,13 +409,13 @@ def _deadline_bounded_client_class() -> type:
                 request["extra_body"] = _eb
 
             async def _go() -> Any:
-                async with asyncio.timeout(seam._MODEL_DEADLINE_S):
+                async with asyncio.timeout(model_deadline_s()):
                     return await litellm.acompletion(**request)
 
             import time as _time
             # 0048: open the generation BEFORE the call so Langfuse's own latency is the real duration (not ~0);
             # ended on success AND on the error paths below so no span is left dangling.
-            _gen = tracing.start_generation(
+            _gen = start_generation(
                 model=self.model, input=messages,
                 label=getattr(self, "_stage_label", None) or "docling-graph-extract", stage="litellm") \
                 if traced else None
@@ -423,25 +423,25 @@ def _deadline_bounded_client_class() -> type:
             try:
                 response = asyncio.run(_go())
             except TimeoutError as exc:
-                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
                                           metadata={"error": "timeout"})
-                raise seam.ModelCallTimeout(
-                    f"docling-graph extraction on {seam.call_description(self.model, getattr(self, '_stage_label', None))} "
-                    f"exceeded the {seam._MODEL_DEADLINE_S}s deadline") from exc
+                raise ModelCallTimeout(
+                    f"docling-graph extraction on {call_description(self.model, getattr(self, '_stage_label', None))} "
+                    f"exceeded the {model_deadline_s()}s deadline") from exc
             except Exception as exc:  # noqa: BLE001 - wrap like the base's _call_api (docling-graph ClientError)
-                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
                                           metadata={"error": type(exc).__name__})
                 raise ClientError(f"LiteLLM async call failed: {type(exc).__name__}",
                                   details={"model": self.model, "error": str(exc)}, cause=exc) from exc
 
             choices = response.get("choices", [])
             if not choices:
-                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
                                           metadata={"error": "no_choices"})
                 raise ClientError("LiteLLM returned no choices", details={"model": self.model})
             content = choices[0].get("message", {}).get("content")
             if not content:
-                tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
+                finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
                                           metadata={"error": "empty_content"})
                 raise ClientError("LiteLLM returned empty content", details={"model": self.model})
             _usage_obj = response.get("usage")
@@ -455,16 +455,16 @@ def _deadline_bounded_client_class() -> type:
                 cost = getattr(_usage_obj, "cost", None) if _usage_obj else None
                 if cost is None:
                     cost = (getattr(response, "_hidden_params", {}) or {}).get("response_cost")
-                usage_acct.record_usage(self.model, input_tokens=_in, output_tokens=_out, cost=cost,
+                record_usage(self.model, input_tokens=_in, output_tokens=_out, cost=cost,
                                         latency_ms=_latency_ms)
                 _gid = response.get("id")  # 0048: OpenRouter generation id for queue-vs-gen attribution
-                tracing.finish_generation(
+                finish_generation(
                     _gen, output=str(content),
                     usage=({"input": _in, "output": _out} if _usage_obj else None), cost=cost,
                     latency_ms=_latency_ms,
                     metadata=({"openrouter_generation_id": _gid} if _gid else None))
             else:
-                tracing.finish_generation(_gen, latency_ms=_latency_ms)  # end the span even when not capturing usage
+                finish_generation(_gen, latency_ms=_latency_ms)  # end the span even when not capturing usage
             metadata = {"finish_reason": choices[0].get("finish_reason"),
                         "model": response.get("model", self.model), "usage": _usage_obj}
             return str(content), metadata

@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 from typing import Any, Optional
 
-from rag_wright.contracts.ingestion import BoundaryDecider  # the shared residue-decider contract (ING-1, ADR-0124)
+from rag_wright.api import BoundaryDecider  # the shared residue-decider contract (ING-1, ADR-0124)
 from rag_wright.packs.contracts.spans.segment import provision_boundary_verdict
 
 _THRESHOLD = 0.5
@@ -87,7 +87,7 @@ def jev_boundary_decider(resources: Any = None) -> Optional[BoundaryDecider]:
     one batched call: the structural rubric + all candidate lines in the ``state``, one ``noul`` question per line
     (`residue_request`)."""
     from rag_wright.api import ainvoke_model, capability_index
-    from rag_wright.models.profiles import decision_profile
+    from rag_wright.pack_sdk import decision_profile
 
     model = os.environ.get("RAG_DECISION_MODEL")
     prof = decision_profile(model)
@@ -117,7 +117,7 @@ def cached_decider(decider: Optional[BoundaryDecider], cache_dir: Any) -> Option
     import json
     from pathlib import Path
 
-    from rag_wright.models.profiles import decision_profile
+    from rag_wright.pack_sdk import decision_profile
 
     store = Path(cache_dir)
 

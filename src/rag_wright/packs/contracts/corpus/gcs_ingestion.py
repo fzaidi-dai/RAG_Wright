@@ -77,7 +77,7 @@ class GcsCorpusAdapter:
             f"`parse_bytes` (text) to ingest PDF/DOCX/HTML customer documents. The PROD-1 corpus is text (.txt).")
 
     def documents(self) -> Iterable[Any]:  # SourceDocument (text) or PendingDocument (binary, deferred parse)
-        from rag_wright.contracts.identifiers import canonical_source_doc_id
+        from rag_wright.pack_sdk import canonical_source_doc_id
 
         client = self._get_client()
         blobs = [b for b in client.list_blobs(self._bucket, prefix=self._prefix) if not b.name.endswith("/")]

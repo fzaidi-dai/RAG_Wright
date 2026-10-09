@@ -14,7 +14,6 @@ from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKG
 
 
 def test_party_traversals_name_the_right_edge_and_thread_scope(monkeypatch):
-    import rag_wright.capabilities.graph_query as gq
     from rag_wright.capabilities.graph_query import GraphAnswer
 
     calls = []
@@ -23,7 +22,7 @@ def test_party_traversals_name_the_right_edge_and_thread_scope(monkeypatch):
         calls.append({"start": start_entity_id, "rel": relationship_type, "hops": max_hops, "docs": documents})
         return GraphAnswer(start_entity_id=start_entity_id, relationship_type=relationship_type, evidence=[])
 
-    monkeypatch.setattr(gq, "graph_query", _fake)
+    monkeypatch.setattr("rag_wright.pack_sdk.graph_query", _fake)
     ckg = ContractKGStore(object())  # graph_query is faked; the store is never touched
 
     ckg.party_counterparties("acme", max_hops=2, documents=["d1"])

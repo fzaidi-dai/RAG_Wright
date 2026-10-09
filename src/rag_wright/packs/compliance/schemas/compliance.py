@@ -20,8 +20,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
-from rag_wright.contracts.identifiers import canonical_source_doc_id
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import canonical_source_doc_id
+from rag_wright.pack_sdk import ConfidenceTag
 
 # the sibling ontology (CC-1): public deontic backbone (ODRL/LKIF) + PROV + the thin authored ad vocab
 BRIDGE_TTL_PATH = Path(__file__).resolve().parent.parent / "ontology" / "compliance_bridge.ttl"

@@ -25,7 +25,7 @@ from typing import Any, Awaitable, Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from rag_wright.packs.compliance.capabilities.compliance_judgment import AJudgeFn, ajudge_pairs
-from rag_wright.capabilities.retrieval_core import cosine
+from rag_wright.pack_sdk import cosine
 from enum import Enum
 
 from rag_wright.packs.compliance.schemas.compliance import (
@@ -40,9 +40,9 @@ from rag_wright.packs.compliance.schemas.compliance import (
     RuleScope,
     Verdict,
 )
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import ConfidenceTag
 from rag_wright.packs.compliance.ontology.loader import load_actor_synonyms, load_role_domains, load_section_overrides
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span
 from rag_wright.packs.compliance.capabilities.compliance_store import ComplianceStore
 
 _ALL_CLAIM_TYPES = {c.value for c in ClaimType}
@@ -563,7 +563,7 @@ def _requirement_from_row(row: dict) -> Requirement:
     import json
 
     from rag_wright.packs.compliance.schemas.compliance import DeonticType, Severity
-    from rag_wright.contracts.provenance import ConfidenceTag
+    from rag_wright.pack_sdk import ConfidenceTag
 
     scope = [Constraint(dimension=d, value=v) for d, v in json.loads(row.get("applicability_json") or "[]")]
     sev = row.get("severity") or None
@@ -809,7 +809,7 @@ def _item_provenance(parsed_doc: Any) -> list[dict]:
     paragraphs, not physical lines. `section` = the enclosing section number (shared `section_number`; None
     before the first heading -> a flat doc stays section-less). Ordinals count WITHIN a section, PER KIND (¶ for
     body text, bullet for list items), reset at each heading."""
-    from rag_wright.corpus.document_parser import section_number
+    from rag_wright.pack_sdk import section_number
 
     raw: list[tuple[str, str]] = []
     for item in getattr(parsed_doc, "texts", []) or []:
@@ -911,7 +911,7 @@ async def subject_chunks(parsed_doc: Any, *, discoverer: Any = None) -> list[str
     cost never scales with document length (no size bottleneck) and there is NO subject-specific large-doc code.
     `parsed_doc` is the docling document (exposes `.texts`). RLM is a future escalation, as on ingestion. SEG-3
     extracts the checkable assertions from each returned chunk."""
-    from rag_wright.capabilities.rlm_chunking import achunk_texts
+    from rag_wright.pack_sdk import achunk_texts
 
     return await achunk_texts(parsed_doc, discoverer=discoverer)
 
@@ -946,7 +946,7 @@ async def _aparse_subject_any(*, text: Optional[str], name: Optional[str], data:
     if data is not None:
         return await aparse_subject(name, data)
     if text is not None:
-        from rag_wright.corpus.document_parser import aparse_document_bytes
+        from rag_wright.pack_sdk import aparse_docling_bytes as aparse_document_bytes
 
         return await aparse_document_bytes("subject.txt", text.encode("utf-8")), []
     raise ValueError("run_subject_compliance_verdict needs either text= or (name=, data=)")
@@ -957,8 +957,8 @@ async def aparse_subject(name: str, data: bytes, *, parser: Any = None) -> tuple
     ingestion), returning `(docling_document, ocr_unreadable_pages)`. The unreadable pages (a degraded scan the
     VLM still could not read) are captured from the tiered parser's report so they can surface on the
     `ComplianceReport` -- a verdict is never silently based on half-read text. `parser` injected for tests."""
-    from rag_wright.capabilities.parsing import TieredOCRParser
-    from rag_wright.corpus.document_parser import aparse_document_bytes
+    from rag_wright.pack_sdk import TieredOCRParser
+    from rag_wright.pack_sdk import aparse_docling_bytes as aparse_document_bytes
 
     tiered = parser if parser is not None else TieredOCRParser()
     document = await aparse_document_bytes(name, data, parser=tiered)
@@ -1027,7 +1027,7 @@ async def ainvoke(resources, inputs: dict):
     judge model (STRUCTURED_REASONING), and the embedder come from the workspace handle; the subject + scope from
     `inputs`. Two subject shapes: `{subject_text, source_doc}` (text) or `{doc_name, data}` (raw document bytes).
     `inputs` may also carry `k` (retrieval depth) and `sources` (scope to named policies)."""
-    from rag_wright.models.profiles import ModelRole
+    from rag_wright.api import ModelRole
 
     judge = resources.model_id(ModelRole.STRUCTURED_REASONING)
     k = inputs.get("k", 8)

@@ -14,8 +14,9 @@ from typing import Optional, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from rag_wright.packs.contracts.schemas.function import canonical_function
-from rag_wright.models.profiles import ModelRole, model_for
-from rag_wright.models.seam import build_structured
+from rag_wright.api import ModelRole
+from rag_wright.pack_sdk import model_for
+from rag_wright.pack_sdk import build_structured
 from rag_wright.packs.contracts.spans.function_families import route_family
 
 NONE_LABEL = "NONE"

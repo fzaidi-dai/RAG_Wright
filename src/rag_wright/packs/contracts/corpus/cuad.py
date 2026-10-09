@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from rag_wright.contracts.identifiers import canonical_source_doc_id
+from rag_wright.pack_sdk import canonical_source_doc_id
 from rag_wright.packs.contracts.corpus.selection import ContractMeta
 
 RASTER_DPI = 150  # render resolution for the synthetic image-only PDFs (readable for OCR)

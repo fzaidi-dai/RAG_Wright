@@ -32,13 +32,13 @@ from typing import Any, Awaitable, Callable, Optional
 from fastmcp import FastMCP
 
 from rag_wright.packs.contracts.capabilities.property_boosted_retrieval import RankedSpan
-from rag_wright.capabilities.span_relevance_judgment import RelevanceVerdict
+from rag_wright.api import RelevanceVerdict
 from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import JudgedSpan, TypedPropertyRetrieval
 
 # retrieval_fn: (query) -> TypedPropertyRetrieval. Injected so the server is testable without infra.
 # ASYNC-C1 (ADR-0057): async -- the tool handler awaits it, and it awaits the async typed_property_retrieval subgraph.
 from rag_wright.packs.contracts.mcp.session_store import StoreResolver, resolve_request_store
-from rag_wright.store.seam import Store
+from rag_wright.pack_sdk import Store
 
 # issue 0035: store-PARAMETRIC -- the runner takes the per-request store (resolved out-of-band), never a
 # model-supplied one. The demo/stub runner ignores the store.
@@ -113,7 +113,7 @@ def production_retrieval_fn(*, k: int = 8) -> RetrievalFn:
 
     load_dotenv()
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.capabilities.remote_encoders import query_embedder
+    from rag_wright.pack_sdk import query_embedder
     from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
     embedder = query_embedder()  # tenant-independent, built once
@@ -130,9 +130,11 @@ def production_retrieval_fn(*, k: int = 8) -> RetrievalFn:
 def production_env_store() -> Store:
     """The single-tenant fallback store from `QA_DB` (a demo / eval / single-tenant deployment). Built lazily so
     `RAG_MCP_DEMO` never touches ArcadeDB; a multi-tenant caller passes a `store_resolver` instead (issue 0035)."""
-    from rag_wright.store.arcadedb import ArcadeDBStore
+    from rag_wright.api import EngineConfig, StoreConfig, open_workspace, pack_store
 
-    return ArcadeDBStore.from_env(database=os.environ.get("QA_DB", "ragwright_cuad_full"))
+    # PS-8c: the pack opens a WORKSPACE (never the backend) and takes its Store through the public accessor
+    ws = open_workspace(EngineConfig(store=StoreConfig.from_env()), corpus=os.environ.get("QA_DB", "ragwright_cuad_full"))
+    return pack_store(ws, lambda store: store)
 
 
 # --- demo retriever: deterministic, real-shaped ranked cited spans (no infra) for the Deep-Agent prototype -----

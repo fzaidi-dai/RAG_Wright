@@ -16,7 +16,7 @@ from typing import Any, Iterable
 
 from pydantic import BaseModel
 
-from rag_wright.capabilities.retrieval_core import typed_constraint_match_rank
+from rag_wright.pack_sdk import typed_constraint_match_rank
 
 
 class RankedSpan(BaseModel):

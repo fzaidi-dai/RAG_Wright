@@ -276,7 +276,7 @@ def test_ingest_extraction_models_are_caller_configurable(monkeypatch, tmp_path)
     monkeypatch.setattr("rag_wright.packs.contracts.spans.semantic_judge.build_asemantic_judge_fn",
                         lambda mid: captured.update(judge_id=mid) or (lambda *a, **k: None))
     monkeypatch.setattr("rag_wright.packs.contracts.capabilities.graph_extraction.aproduction_extract_fn", _fake_party)
-    monkeypatch.setattr("rag_wright.capabilities.rlm_chunking.StructuralModelFallbackDiscoverer",
+    monkeypatch.setattr("rag_wright.pack_sdk.StructuralModelFallbackDiscoverer",
                         lambda model_id=None, **kw: captured.update(chunk_model_id=model_id))
 
     with pytest.raises(_StopHere):

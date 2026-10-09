@@ -25,10 +25,11 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 from pydantic import BaseModel
 
-from rag_wright.capabilities.document_scope import UnknownDocumentError
+from rag_wright.pack_sdk import UnknownDocumentError
 from rag_wright.packs.contracts.capabilities.property_boosted_retrieval import RankedSpan
-from rag_wright.capabilities.span_relevance_judgment import Condition, RelevanceVerdict, finalize_verdict
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span
+from rag_wright.api import Condition, RelevanceVerdict
+from rag_wright.pack_sdk import finalize_verdict
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
 # issue 0034: distinguishes "documents absent from the invoke state" (-> use the build-time default) from an
@@ -186,12 +187,12 @@ async def aquery_constraints(query: str, model_id: str, *, structured_factory=No
     retrieval proceeds over the whole-index pool with no boost. `structured_factory` is injected for hermetic tests
     (defaults to `build_tag_structured`)."""
     from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
-    from rag_wright.contracts.identifiers import ChunkId
+    from rag_wright.pack_sdk import ChunkId
     from rag_wright.packs.contracts.ontology.clause_template import Clause
     from rag_wright.packs.contracts.spans.clause_kg_extractor import clause_to_record
 
     if structured_factory is None:
-        from rag_wright.models.tag_structured import build_tag_structured
+        from rag_wright.pack_sdk import build_tag_structured
         structured_factory = build_tag_structured
     try:
         clause = await structured_factory(model_id, Clause, label="query-constraints").ainvoke(
@@ -224,7 +225,7 @@ def production_typed_property_retrieval(
     this default (absent from the state -> this default; issue 0034). `None` = the whole corpus; an unknown id
     RAISES `UnknownDocumentError` (validated at invoke time, past the degrade so it is never silently emptied);
     `[]` = scope-to-nothing (no results)."""
-    from rag_wright.capabilities.document_scope import validate_documents
+    from rag_wright.pack_sdk import validate_documents
     from rag_wright.packs.contracts.capabilities.property_boosted_retrieval import property_boosted_retrieval
     from rag_wright.packs.contracts.schemas.value_match import constraint_match_count  # the contract-domain (dim,value) matcher
 
@@ -244,7 +245,7 @@ def production_typed_property_retrieval(
 
     relevance_judge: RelevanceJudgeFn | None = None
     if judge_model_id is not None:
-        from rag_wright.capabilities.span_relevance_judgment import ajudge_spans, build_arelevance_judge_fn
+        from rag_wright.pack_sdk import ajudge_spans_with_judge as ajudge_spans, build_arelevance_judge_fn
         jid = getattr(judge_model_id, "model", judge_model_id)  # accept an ExtractionModel or a bare id
         from rag_wright.packs.contracts.skills.guidance import contract_guidance
 
@@ -271,7 +272,7 @@ async def ainvoke(resources, inputs: dict):
     """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target) -- build Leg B over the opaque
     workspace handle and run it. `inputs`: query (+ optional k/pool_k/documents)."""
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.models.profiles import ModelRole
+    from rag_wright.api import ModelRole
 
     graph = production_typed_property_retrieval(
         store=resources._store, embedder=resources._embedder,

@@ -13,11 +13,11 @@ from rag_wright.packs.contracts.capabilities.highlight_serve import _decode_bbox
 from rag_wright.packs.contracts.schemas.contract_meta import ContractRecord
 from rag_wright.packs.contracts.schemas.highlight import SpanLocation
 from rag_wright.packs.contracts.schemas.property import FOLIO_SUBJECT_IRI, ClausePropertyRecord
-from rag_wright.store.arcadedb import SPAN_TYPE
-from rag_wright.contracts.provenance import ConfidenceTag
+from rag_wright.pack_sdk import SPAN_TYPE
+from rag_wright.pack_sdk import ConfidenceTag
 from rag_wright.packs.contracts.ontology.loader import load_typed_edges, reference_pack_ttl
 from rag_wright.packs.contracts.ontology.contract_taxonomy import AFFILIATE_OF, CONTRACTS_WITH  # DD-5 contract edge names
-from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
+from rag_wright.api import KgEdge, KgNode, NOT_NULL
 
 
 # KG-3 (ADR-0033) / ADR-0067 P5a: the reference pack's TYPED property-edge layer -- each property dimension maps to
@@ -247,7 +247,7 @@ class ContractKGStore:
         """The parties this one has a CONTRACTS_WITH edge to, each citing the contract it came from. ONE hop by
         default -- two hops would return the counterparties OF the counterparties (parties this one has no
         agreement with), overstating exposure. `documents` scopes the traversal (every edge on a path must belong)."""
-        from rag_wright.capabilities.graph_query import graph_query
+        from rag_wright.pack_sdk import graph_query
         return list(graph_query(entity_id, store=self._store, relationship_type=CONTRACTS_WITH,
                                 max_hops=max_hops, documents=documents).evidence)
 
@@ -255,7 +255,7 @@ class ContractKGStore:
         """The parties this one has an AFFILIATE_OF edge to (same corporate group). A SEPARATE traversal from
         counterparties on purpose: a parent and its subsidiary are two legal persons whose obligations must not be
         pooled, and the engine does not merge the entities -- the affiliate is its own node."""
-        from rag_wright.capabilities.graph_query import graph_query
+        from rag_wright.pack_sdk import graph_query
         return list(graph_query(entity_id, store=self._store, relationship_type=AFFILIATE_OF,
                                 documents=documents).evidence)
 

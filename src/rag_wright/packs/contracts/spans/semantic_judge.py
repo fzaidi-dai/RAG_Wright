@@ -30,10 +30,10 @@ from typing import Any, Callable, Optional
 from pydantic import BaseModel
 
 from rag_wright.packs.contracts.schemas.property import CLOSED_VOCAB, ClausePropertyRecord, PropertyDimension
-from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.models.tag_structured import build_tag_structured
+from rag_wright.pack_sdk import ConfidenceTag
+from rag_wright.pack_sdk import build_tag_structured
 from rag_wright.packs.contracts.spans.property_grounding import GROUNDING_CUES
-from rag_wright.util.concurrent import map_concurrent
+from rag_wright.pack_sdk import map_concurrent
 
 _SKILL_PATH = Path(__file__).parents[1] / "skills" / "extraction_semantic_judge" / "SKILL.md"
 
@@ -168,7 +168,7 @@ def build_decision_judge(resources: Any = None) -> Optional[DecisionJudge]:
     """The decision-model judge, or None when no decision model is configured/registered (same availability rule as
     the boundary decider)."""
     from rag_wright.api import ainvoke_model, capability_index
-    from rag_wright.models.profiles import decision_profile
+    from rag_wright.pack_sdk import decision_profile
 
     model = os.environ.get("RAG_DECISION_MODEL")
     if not os.environ.get(decision_profile(model).api_key_env) or "jev_decision" not in capability_index():
@@ -180,7 +180,8 @@ def select_asemantic_judge(judge_model: Any = None, *, resources: Any = None) ->
     """ING-9: the ingest Layer-3 judge. Default: the decision-model judge when one is available; an explicit
     `judge_model`, or `RAG_SEMANTIC_JUDGE=llm`, selects the LLM judge (`build_asemantic_judge_fn`), as does the absence
     of a decision model (`model_for(STRUCTURED_REASONING)` when no model is named)."""
-    from rag_wright.models.profiles import ModelRole, model_for
+    from rag_wright.api import ModelRole
+    from rag_wright.pack_sdk import model_for
 
     if judge_model is None and os.environ.get("RAG_SEMANTIC_JUDGE", "decision") != "llm":
         judge = build_decision_judge(resources)

@@ -33,8 +33,8 @@ from rag_wright.packs.compliance.schemas.compliance import (
     Requirement,
     Verdict,
 )
-from rag_wright.models.seam import build_structured
-from rag_wright.util.concurrent import map_concurrent
+from rag_wright.pack_sdk import build_structured
+from rag_wright.pack_sdk import map_concurrent
 
 _VERDICTS = {v.value for v in Verdict}
 _SKILL_PATH = Path(__file__).parents[1] / "skills" / "compliance_judgment" / "SKILL.md"  # advertising method

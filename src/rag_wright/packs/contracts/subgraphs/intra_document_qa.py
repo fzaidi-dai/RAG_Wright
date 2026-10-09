@@ -37,12 +37,12 @@ from typing import Any, Awaitable, Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
-from rag_wright.capabilities.answer_generator import EvidenceItem, GeneratedAnswer
+from rag_wright.api import EvidenceItem, GeneratedAnswer
 from rag_wright.packs.contracts.capabilities.clause_exception_linking import CAP_FUNCTION
 from rag_wright.packs.contracts.capabilities.contract_kg_serve import CitedClause, CitedProperty
-from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.models import tracing  # 0048: emit retrieval as a Langfuse span, split from the generation
-from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
+from rag_wright.pack_sdk import ConfidenceTag
+from rag_wright.api import traced_step  # 0048: emit retrieval as a Langfuse span, split from the generation
+from rag_wright.pack_sdk import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction  # shared retryable-blip signal
 
 # serve_fn: (contract_id, question) -> the scoped clauses (must raise on a transient store blip).
@@ -188,7 +188,7 @@ def build_intra_document_qa(
         # final attempt where it degrades to NO clauses (the generator abstains -- the query is never lost).
         attempt = runtime.execution_info.node_attempt
         with business_span("intra_document_qa.serve", contract_id=state["contract_id"]), \
-                tracing.traced_step("intra_document_qa.serve"):  # 0048: retrieval span, separable from generate
+                traced_step("intra_document_qa.serve"):  # 0048: retrieval span, separable from generate
             try:
                 clauses = serve_fn(state["contract_id"], state["question"])
             except Exception as exc:  # noqa: BLE001 - transient -> retry, or degrade to empty on exhaustion
@@ -204,7 +204,7 @@ def build_intra_document_qa(
         attempt = runtime.execution_info.node_attempt
         contract_id = state["contract_id"]
         with business_span("intra_document_qa.assemble", clause_count=len(clauses)), \
-                tracing.traced_step("intra_document_qa.assemble"):  # 0048: rehydration/retrieval span
+                traced_step("intra_document_qa.assemble"):  # 0048: rehydration/retrieval span
             try:
                 texts = clause_text_fn(contract_id, clauses)
             except KeyError as exc:  # an orphan span_id is a pipeline inconsistency: surface, never fabricate
@@ -239,7 +239,7 @@ def build_intra_document_qa(
 def _answer_model_for_impl(model_id: str | None = None, **kwargs: Any) -> Any:
     """Indirection over `answer_model_for` so `production_intra_document_qa` can default the answer model (and
     tests can monkeypatch this hook). Lazy import keeps the subgraph module import-light."""
-    from rag_wright.capabilities.answer_generator import answer_model_for
+    from rag_wright.pack_sdk import answer_model_for
     return answer_model_for(model_id, **kwargs)
 
 
@@ -262,12 +262,12 @@ def production_intra_document_qa(
     `client_side_structured` model (self-hosted Gemma), the structured-output seam otherwise. A caller may still
     inject a specific `answer_model` (tests, or to force a strategy). Imports are lazy so the subgraph module
     stays import-light and hermetic (tests inject stubs)."""
-    from rag_wright.capabilities.answer_generator import agenerate_answer
+    from rag_wright.pack_sdk import agenerate_answer_with_model as agenerate_answer
 
     if answer_model is None:
         answer_model = _answer_model_for_impl(answer_model_id)
     if reranker is None:
-        from rag_wright.capabilities.reranking import BGEReranker
+        from rag_wright.pack_sdk import BGEReranker
         reranker = BGEReranker()
     from rag_wright.packs.contracts.capabilities.contract_kg_serve import contract_clause_index
     from rag_wright.packs.contracts.capabilities.contract_kg_store import ContractKGStore
@@ -322,8 +322,8 @@ def register_intra_document_qa(registry) -> None:
 
 async def ainvoke(resources, inputs: dict):
     """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target)."""
-    from rag_wright.capabilities.answer_generator import answer_model_for
-    from rag_wright.models.profiles import ModelRole
+    from rag_wright.pack_sdk import answer_model_for
+    from rag_wright.api import ModelRole
 
     graph = production_intra_document_qa(store=resources._store,
                                          answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)),

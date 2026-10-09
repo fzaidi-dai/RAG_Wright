@@ -32,7 +32,7 @@ class CuadAdapter:
         self._limit = limit
 
     def documents(self) -> Iterable[SourceDocument]:
-        from rag_wright.contracts.identifiers import canonical_source_doc_id
+        from rag_wright.pack_sdk import canonical_source_doc_id
         from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
 
         contracts = list(parse_cuad(self._path))

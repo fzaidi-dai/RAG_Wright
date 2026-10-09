@@ -17,7 +17,7 @@ from __future__ import annotations
 import inspect
 from typing import Any, Awaitable, Callable, Optional, Union
 
-from rag_wright.store.seam import Store
+from rag_wright.pack_sdk import Store
 
 # The caller binds a store per SESSION: given the opaque per-request MCP context (whatever tenancy the caller
 # set out-of-band -- init params / headers), return that tenant's store. Sync or async. It is handed the MCP
