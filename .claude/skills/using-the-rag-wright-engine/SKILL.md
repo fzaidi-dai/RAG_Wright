@@ -18,26 +18,35 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   startup (section 1). The contract/compliance capabilities are the engine's reference pack, not the engine.
 - **Product → Engine, one way.** Never fork, edit, or reach into engine internals. If the engine needs a change,
   flag it upstream — don't work around it here.
-- **The public surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the invokers
-  (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`),
-  `kg_read`/`kg_write`/`kg_edges` (with `NOT_NULL`)/`entities_by_name`/`span_positions`, `measure_usage`,
-  `register_capability`/`load_reference_pack`/`reference_pack`, the document helpers
-  (`parse_document`/`aparse_document`/`source_document`/`table_rows`, `decode_bbox`, `document_of`),
-  and the **ingestion surface**: `build_ingestion` (returns an `IngestionPipeline`; `await
-  pipeline.aingest(ws, sources, cache_dir=...)` returns an `IngestionReport`), its hook contracts (`Segmenter`,
-  `SpanTagger`, `UnitGrouper`, `BoundaryDecider`, `Extractor`, `RecordWriter`, `DocumentHook`, checked by
-  `check_tiling`/`check_units`/`check_extraction`),
-  `IngestionTuning`, `IngestSource` (`table_mode`, `include_hidden_sheets`) and `evaluate_ingestion`. Nothing
-  deeper (never `ArcadeDBStore`, `query_embedder`, or engine id formats). The pack-authoring helpers are on the API
-  too (`CapabilityManifest`, `load_pack`, `engine_capabilities`, `register_canonical_slugs`,
-  `canonical_capability_slugs`); the one remaining exception is the entity-resolution building blocks (gap G1).
-  The generated `docs/api/` lists the full surface. To **plan** over the engine for a task, `discover(task, resources=ws)`
-  returns the best-matching capabilities (embedding-ranked); then invoke the top ones by slug.
+- **The public surface is `rag_wright.api`; a pack also uses `rag_wright.pack_sdk`.** From `rag_wright.api` import
+  `EngineConfig`/`StoreConfig` (`StoreConfig.from_env()` reads `ARCADEDB_*`)/`open_workspace`, the invokers
+  (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`), the KG accessors
+  (`kg_read` with `key_range`, `kg_write`, `kg_edges` with `NOT_NULL`, `kg_count`/`kg_delete`/`kg_update`,
+  `entities_by_name`, `span_positions`), `pack_store(ws, cls)` (build your pack's store extension over the
+  workspace's store; the store itself stays private), metering and tracing (`measure_usage`, `record_usage`,
+  `traced_run`/`traced_step`), answers (`agenerate_answer`, `ajudge_spans` with `EvidenceItem`/`Condition`, the
+  models from the workspace's roles, your domain wording via `guidance=`), `ModelRole`, pack loading
+  (`register_capability`/`load_pack`/`engine_capabilities`/`load_reference_pack`), the document helpers
+  (`parse_document`/`aparse_document`, `parse_document_bytes`/`aparse_document_bytes` for uploads,
+  `source_document`/`table_rows`, `decode_bbox`, `document_of`), and the **ingestion surface**: `build_ingestion`
+  (returns an `IngestionPipeline`; `await pipeline.aingest(ws, sources, cache_dir=...)` returns an
+  `IngestionReport`), its hook contracts (`Segmenter`, `SpanTagger`, `UnitGrouper`, `BoundaryDecider`,
+  `UnitRepresentative`, `BoundaryDiscoverer` with `default_chunk_discoverer(guidance=...)`, `Extractor`,
+  `RecordWriter`, `DocumentHook`, checked by `check_tiling`/`check_units`/`check_extraction`), `IngestionTuning`,
+  `IngestSource` (a `path`, or `data` + `name` for bytes; `table_mode`, `include_hidden_sheets`) and
+  `evaluate_ingestion`. Your **pack's own code** (its capabilities, stores, graphs) also imports
+  `rag_wright.pack_sdk`: identifiers and provenance, the model seam, the LangGraph scaffold, the `Store` protocol, the
+  entity-graph building blocks (`build_graph_extraction`, `disambiguate`, `resolve_entities`, `EntityRules`,
+  `GraphWriter`, `EntityRegistry`), reranking, embedding, parsing and chunking. Nothing deeper: anything else in the
+  engine (`ArcadeDBStore`, `rag_wright.capabilities.*`, engine id formats) is internal and may change. The generated
+  `docs/api/README.md` and `docs/api/pack_sdk.md` list both tiers. To **plan** over the engine for a task,
+  `discover(task, resources=ws)` returns the best-matching capabilities (embedding-ranked); then invoke the top ones
+  by slug.
 
 ## 1. Install
 
 ```sh
-uv add 'rag-wright>=0.2.0'              # released-product mode (PyPI); see below for local co-development
+uv add 'rag-wright>=0.3.0'              # released-product mode (PyPI); see below for local co-development
 ```
 
 Stand up the runtime prerequisites you provide: ArcadeDB (the store), a model provider (OpenRouter or self-hosted
@@ -63,9 +72,17 @@ silently to the LLM.
 Never call an engine API you have not confirmed against the index. Build the grounding lanes and query them first:
 
 - **`engine` lane** — index the INSTALLED `rag_wright` package (its site-packages location, or the engine repo if a
-  path dep). This is the source of truth for what the API exposes and each symbol's exact signature. Ground every
-  `rag_wright.api` call against it before writing.
+  path dep). This is the source of truth for what the API and the pack SDK expose and each symbol's exact
+  signature. Ground every `rag_wright.api` / `rag_wright.pack_sdk` call against it before writing.
+- **`engine-docs` lane** — index the engine repo's `docs/` (concepts, architecture, the domain-adaptation guide, the
+  generated `docs/api/` references, the reference pack) and its `.claude/skills/`, checked out at the tag matching
+  the installed engine version (the docs are not in the wheel). This is how the engine's docs are grounded: query it
+  to understand how a feature is meant to be wired, then confirm the call against the `engine` lane.
 - **`project` lane** — your own product repo, as you build it.
+
+**Rebuild both engine lanes whenever the engine changes**, before grounding the next call: after a Dependabot merge,
+after `uv sync` picks up a new engine version, and (editable path dependency) after engine edits you pull in. A stale
+lane grounds calls against the old API.
 
 Discipline (same as elsewhere): the **code graph is the authority** for what exists and its signature; the engine's
 **doc set + the docs MCP** are for understanding concepts and how a feature is meant to be wired. Order on any
@@ -138,8 +155,8 @@ Addy-Osmani spec-driven/TDD/planning skills) into your repo via your setup step,
 ## Anti-patterns
 
 - Calling an engine API without grounding it against the `engine` lane first.
-- Importing engine internals instead of `rag_wright.api` (beyond the named G1 exception); forking or editing the
-  engine.
+- Importing engine internals instead of `rag_wright.api` (and `rag_wright.pack_sdk` in pack code); forking or
+  editing the engine.
 - Treating the contract/compliance reference pack as the engine's purpose, or copying its vocabulary into your
   domain instead of authoring your own `.ttl`.
 - Hand-constructing a capability's logic instead of invoking it by name through the invoker.

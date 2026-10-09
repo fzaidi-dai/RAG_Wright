@@ -8,22 +8,15 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 
 ## Open (engine follow-ups)
 
-### G1: No public seam for a domain's entity resolver / registry (partly closed)
-- **Closed part:** `build_ingestion(..., document_hook=)` is a public per-document seam. The hook
-  `(ws, source_document, chunks)` runs once per document after its records are written, so a domain can run its own
-  entity graph and resolver there (recipe in [entity resolution](entity-resolution.md)).
-- **Still open:** there is no resolver/registry hook on `EngineConfig` or `rag_wright.api`, and the entity-graph
-  building blocks are not exported from `rag_wright.api`: `build_graph_extraction`
-  (`rag_wright.subgraphs.graph_extraction`), `disambiguate` (`rag_wright.capabilities.disambiguation`),
-  `resolve_entities` (`rag_wright.capabilities.entity_resolution`) and `GraphWriter`
-  (`rag_wright.capabilities.graph_storage`), with the contracts they take (`ExtractionResult` / `EntityMention` in
-  `rag_wright.contracts.extraction`, `ChunkId` / `EntityId` in `rag_wright.contracts.identifiers`) and the registry
-  (`EntityRegistry` / `RegistryRecord` in `rag_wright.ontology.registry`). `GraphWriter` also takes the store
-  itself, which a product only reaches through the workspace's internal store. `entity_resolution` and `entity_disambiguation` remain internal pipeline
-  steps (ADR-0118, EP-CORE-1b-iii), not invocable by name.
-- **Proposed:** export the entity-graph building blocks (or one helper that runs them over a workspace) from
-  `rag_wright.api`, and/or a resolver/registry hook on `EngineConfig`. (Entity resolution itself is already
-  domain-neutral and injectable per ADR-0067; this is an exposure gap, not coupling.)
+### G1: No public seam for a domain's entity resolver / registry (mostly closed)
+- **Closed part:** `build_ingestion(..., document_hook=)` is a public per-document seam (the hook
+  `(ws, source_document, chunks)` runs once per document after its records are written), and the entity-graph
+  building blocks are public in `rag_wright.pack_sdk` (PS-8b): `build_graph_extraction`, `disambiguate`,
+  `resolve_entities`, `GraphWriter` (built with `pack_store(ws, GraphWriter, checkpoint_dir=...)`), `EntityRules`,
+  `EntityRegistry` / `RegistryRecord`, the extraction contracts and the identifiers. Recipe in
+  [entity resolution](entity-resolution.md).
+- **Still open:** no resolver/registry hook on `EngineConfig`; `entity_resolution` and `entity_disambiguation` remain
+  internal pipeline steps (ADR-0118), not invocable by name.
 - Surfaced: PREP-4.4.
 
 ### G2: The public config/env names carry contract-domain vocabulary (closed)
@@ -92,17 +85,13 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   engine code edit, or mutating the module-level dict from product code (an engine internal).
 - **Proposed:** a public way to register a `DecisionModelProfile` (on `EngineConfig`, or an `rag_wright.api` helper).
 
-### G13: Entity disambiguation is tuned for contract parties and not injectable
-- **Where:** `rag_wright.capabilities.disambiguation.disambiguate` normalizes and rejects mentions with
-  `rag_wright.corpus.canonicalize` (and `GraphWriter` keys unlinked nodes by the same normalizer): legal-form suffixes
-  (`Inc.`, `LLC`, `GmbH`, `N.A.`, ...) are stripped, contract role phrases (`the buyer`, `collectively`, ...) and a
-  fixed list of role and broad words (`buyer`, `seller`, `licensor`, `customer`, `supplier`, `services`, `global`,
-  ...) are rejected as entities on their own. Its only parameter is `coreference_resolvers`. The generic
-  `RegistryRecord` also carries a `ticker` field (the reference domain's SEC alias).
-- **Impact:** a new domain's entity names are normalized and filtered by contract-party rules it cannot replace (a
-  mention that is exactly `Customer` or `Supplier` is dropped); this is domain knowledge in Python (ADR-0066).
-- **Proposed:** inject the normalizer and the reject rules (as `EntityRegistry(normalize=)` already is), with the
-  current rules moved to the contracts pack as its own; generic aliases instead of `ticker`.
+### G13: Entity disambiguation is tuned for contract parties and not injectable (mostly closed)
+- **Closed by PS-R5b:** the contract role words and phrases moved out of `rag_wright.corpus.canonicalize` into the
+  contracts pack (`cbr:entityRules` in `contract_bridge.ttl`, ADR-0066); a domain injects its own as `EntityRules`
+  through `is_entity` / `disambiguate` / `resolve_entities`. The engine keeps only generic organization rules
+  (company-form suffixes, alias markers, placeholders, bare broad words).
+- **Still open:** the name normalizer is not injectable into `disambiguate` (it is into `EntityRegistry`), and the
+  generic `RegistryRecord` still carries `ticker` (the reference domain's SEC alias).
 - Surfaced: ING-5 doc audit.
 
 ### G14: ARD publication is not on `rag_wright.api`
@@ -148,19 +137,11 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   checksummed per-model archives under `gs://dreamai-pocs-ragwright-ingest/models/reference-pack/v1/` (private) and
   fetched with `scripts/fetch_reference_models.py`. Removing them from the engine checkout is a later step.
 
-### G21: No defined "pack SDK" surface for pack code
-- **Where:** a pack's code (the reference pack today, a product's forked pack next) imports about 30 engine-internal
-  modules (`contracts.*`, `models.seam` / `models.tag_structured` / `models.profiles`, `subgraphs.scaffold`,
-  `store.seam`, several `capabilities.*`, `util.concurrent`) and makes 18 raw store queries (`_store._query` /
-  `_store._command`). Only the seam-level surface (`rag_wright.api`) is declared stable.
-- **Impact:** a product that owns its pack (the agreed direction for RuleWright) depends on engine internals; any engine
-  refactor can break it without a declared contract.
-- **Proposed:** define and document a stable pack-author tier (which modules and types a pack may import, with the
-  same compatibility promise as `rag_wright.api`), give pack store extensions a query primitive instead of raw SQL, and
-  enforce the boundary for pack code the way the import contracts enforce it for generic code.
-- Progress: PS-6 added the query primitives (`kg_count`, `kg_delete`, `kg_update`, and `key_range` on `kg_read`, on
-  the `Store` protocol and `rag_wright.api`); the pack-SDK tier and the reference pack's move onto it are PS-7/PS-8.
-- Surfaced: RuleWright migration Q&A (2026-10-08).
+### G21: No defined "pack SDK" surface for pack code (closed)
+- Closed by PS-6 / PS-8a / PS-8b / PS-8c: `rag_wright.pack_sdk` is the pack-author tier (re-exports of the engine
+  building blocks a pack needs beyond `rag_wright.api`, same compatibility promise; `docs/api/pack_sdk.md`); the
+  store primitives `kg_count` / `kg_delete` / `kg_update` / `key_range` replaced the reference pack's raw SQL; the
+  reference pack imports only `api` + `pack_sdk`, enforced by an import contract (ADR-0128).
 
 ## Resolved during engine-prep (for the record)
 

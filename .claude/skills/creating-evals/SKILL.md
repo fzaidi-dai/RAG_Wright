@@ -59,6 +59,13 @@ on a diagnostic).
 - **Classification / typed decision** (incl. SetFit, Laya, **Jev**): per-class recall + the per-class **floor**;
   symmetric eval; top-k recall for multi-label (reported against tags-per-item). Prefer a soft-tag/calibrated
   metric when the output routes rather than hard-gates.
+  - **Evaluate it the way its consumers USE it (ADR-0126).** List every consumer of the output first. If anything acts
+    on the PRIMARY label (a link, a record's type, a route), report top-1 accuracy as well as top-k recall: a top-k
+    metric hides a confusable pair whose correct label is always rank 2. Measure on PIPELINE-PRODUCED inputs (what the
+    segmenter really emits: headings, fragments, mixed sentences, the many no-label spans), not only on curated
+    snippets. And before declaring a classifier swap has "no downstream impact", check each consumer of its primary
+    label end to end. (ADR-0114's SetFit clause classifier passed >0.65 top-3 recall on gold snippets; in the pipeline
+    its top-1 confused Cap / Uncapped Liability, which silently broke exception linking.)
 - **Retrieval**: recall@k (binary, relevant = grade ≥ a floor) as the GATE; nDCG@k (graded, exp gain) as a
   DIAGNOSTIC (do NOT threshold nDCG). Isolate the retrieval legs (score corpus-ids before rehydration). Pattern:
   `eval/acord_retrieval.py`.

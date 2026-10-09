@@ -1,5 +1,8 @@
 # RuleWright: migrating to rag-wright 0.2.0
 
+> **Next:** after this migration, read `docs/specs/public-surface/rulewright-migration-0.3.0.md` (what 0.3.0 changes for
+> RuleWright, and the public calls that replace the interim rules from the 0.2.0 Q&A).
+
 **Audience:** the RuleWright repo (and its coding agent). **Engine release:** `rag-wright` 0.2.0 on PyPI, tag `0.2.0`
 (ingestion hooks, ADR-0124). **Source of truth for every break:** `ing8-breaking-changes.md` (beside this file). This
 document is that record applied to RuleWright as it is today (commit `53f4894`): every item below was found by scanning

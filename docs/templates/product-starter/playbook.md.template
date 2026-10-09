@@ -23,7 +23,7 @@ orchestration compiler, is PARKED per engine ADR-0052).
 | Spec | `{{SPEC}}` (requirements `{{REQ_SCHEME}}`, acceptance `{{AC_SCHEME}}`) | The single source of truth |
 | Engine dependency | **RAG_Wright** via `{{ENGINE_DEP}}`; repo at `{{ENGINE_PATH}}` (read/reference). One-way: Product → Engine; consumed via `rag_wright.api` | The boundary |
 | Stack | {{STACK}} · Python 3.12 + uv (pinned `>=3.12,<3.13` to match the engine) | Environment, test runner, tooling |
-| Grounding index | **Graphify lanes**: `engine` (the installed `rag_wright` package) · `project` (own code/libs). Plus the docs lane | The index the agent consults |
+| Grounding index | **Graphify lanes**: `engine` (the installed `rag_wright` package) · `engine-docs` (the engine repo's docs + skills at the installed version's tag) · `project` (own code/libs) | The index the agent consults |
 | Data artifacts | caches, model caches, eval outputs, `graphify-out/` (all gitignored) | The `.gitignore` |
 
 ### The engine / product boundary (mirrors engine ADR-0052)
@@ -32,9 +32,9 @@ This repo is the **PRODUCT**: UI/UX, the product tool surface, orchestration, da
 and the user loops. The **RAG_Wright ENGINE** (open-core) owns the capabilities, ingestion/query pipelines, MCP
 servers, ARD, and the ontology machinery. Dependency is strict and one-way: **Product → Engine.** Never modify the
 engine from this repo; flag needed engine changes and make them in the engine project. The product consumes the
-engine **only through `rag_wright.api`** and never touches the store (ArcadeDB) directly. (The current exception is an
-engine gap, listed in the engine's `docs/domain-adaptation/_engine-gaps.md`: the entity-resolution building blocks,
-their contracts and the entity registry; flag each use.) Your domain is a `.ttl`
+engine **only through `rag_wright.api`** (the seam) and **`rag_wright.pack_sdk`** (the pack's own capability code), and
+never touches the store (ArcadeDB) directly (`pack_store(ws, cls)` builds a pack store over the workspace). A need
+neither tier covers is an engine gap: flag it in the engine's `docs/domain-adaptation/_engine-gaps.md`. Your domain is a `.ttl`
 pack + capabilities authored here against the engine; the contract/compliance **reference pack** is only the
 engine's worked example — a template, never your domain.
 
@@ -71,9 +71,10 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 3. `.gitignore` covers `.env`, environments, caches, `graphify-out/`, and `.claude/skills/`.
 4. Create the uv project, pin Python `>=3.12,<3.13` (match the engine), declare deps with `uv add`, commit
    `uv.lock`.
-5. **Build the grounding lanes:** index the installed `rag_wright` package as the `engine` lane and your own repo
-   as the `project` lane (the engine's `refresh_framework_graph.sh` is the pattern). Ground every `rag_wright.api`
-   call against the `engine` lane before writing it.
+5. **Build the grounding lanes:** index the installed `rag_wright` package as the `engine` lane, the engine repo's
+   `docs/` and `.claude/skills/` (checked out at the tag matching the installed engine) as the `engine-docs` lane,
+   and your own repo as the `project` lane (the engine's `refresh_framework_graph.sh` is the pattern). Ground every
+   `rag_wright.api` / `rag_wright.pack_sdk` call against the `engine` lane before writing it. **Rebuild both engine lanes whenever the engine changes**, before grounding the next call: after a Dependabot merge, after `uv sync` picks up a new engine version, and (editable path dependency) after engine edits you pull in. A stale lane grounds calls against the old API.
 6. **Link the skills into `.claude/skills/`:** the engine-authored skills from the engine repo and the shared
    generic skills from their source (symlink so each tracks its version; never copy). Load
    **`using-the-rag-wright-engine`** first on any engine work.
@@ -137,14 +138,15 @@ to confirm, then write.** A method name seen in prose is never confirmation.
 
 | Lane | Authority for |
 |---|---|
-| `engine` | the installed `rag_wright` package — every `rag_wright.api` call grounds here first |
+| `engine` | the installed `rag_wright` package — every `rag_wright.api` / `rag_wright.pack_sdk` call grounds here first |
+| `engine-docs` | the engine repo's `docs/` + skills at the installed version's tag — how a feature is meant to be wired |
 | `project` | this product's own code + libraries |
 
 (Ground against **both** the graph **and** the installed `inspect.signature` — a clone at latest can drift from the
 pinned install.) `graphify-out/` is gitignored and local-only; it will not work in CI without a build step.
 
-The engine's `docs/` are NOT shipped in the wheel — read them in the engine repo (`{{ENGINE_PATH}}/docs/`) or on
-GitHub: concepts, architecture, installation, configuration, quickstart, the domain-adaptation guide, reference
+The engine's `docs/` are NOT shipped in the wheel — index them as the `engine-docs` lane (from the engine repo,
+`{{ENGINE_PATH}}/docs/`, at the installed version's tag) and read them there or on GitHub: concepts, architecture, installation, configuration, quickstart, the domain-adaptation guide, reference
 pack, and the generated API reference.
 
 **Onboarding a new library:** `uv add` it, then index it by the route that fits (pip-stable → add to the refresh

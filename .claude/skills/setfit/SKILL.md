@@ -34,6 +34,13 @@ your label set, data volume, and confusable structure differ, so re-measure ever
   more forgiving than a *hard* decision (one answer that gets acted on). If the downstream only needs hints/augmentation, choose soft-tagging — it turns many "errors" into acceptable extra tags.
 - **Define the label set explicitly**, and include an `OTHER`/`NONE` escape so out-of-taxonomy inputs don't get
   force-fit to a wrong class.
+- **Evaluate it the way its consumers USE it (ADR-0126).** List every consumer of the output first. If anything acts
+  on the PRIMARY label (a link, a record's type, a route), report top-1 accuracy as well as top-k recall: a top-k
+  metric hides a confusable pair whose correct label is always rank 2. Measure on PIPELINE-PRODUCED inputs (what the
+  segmenter really emits: headings, fragments, mixed sentences, the many no-label spans), not only on curated
+  snippets. And before declaring a classifier swap has "no downstream impact", check each consumer of its primary
+  label end to end. (ADR-0114's SetFit clause classifier passed >0.65 top-3 recall on gold snippets; in the pipeline
+  its top-1 confused Cap / Uncapped Liability, which silently broke exception linking.)
 
 ## Phase 0.5 — Before you train: A/B a System-1 decision model (Jev / Laya)
 

@@ -55,7 +55,11 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-08): no active engine workstream.** The **ingestion-hooks** workstream (ADR-0124) is
+> **CURRENT STATE (2026-10-09): the public-surface workstream is COMPLETE, pending the 0.3.0 release** (ledger
+> `docs/specs/public-surface/plan.md`, ADR-0128: two public tiers, `rag_wright.api` for a product's seam and
+> `rag_wright.pack_sdk` for a pack's code, enforced by import contracts and a domain-vocabulary guard). Next: cut
+> 0.3.0; RuleWright moves from `docs/specs/public-surface/rulewright-migration-0.3.0.md`; PS-R4 is tracked. Before it,
+> the **ingestion-hooks** workstream (ADR-0124) is
 > COMPLETE and released as **`rag-wright` 0.2.0** (PyPI + GitHub tag/release `0.2.0`; release process
 > `docs/releasing.md`): the generic `build_ingestion` with hooks and domain-neutral defaults, the neutral default
 > schema, the reference pack in `rag_wright.packs.{contracts,compliance}` behind an import boundary, generic span

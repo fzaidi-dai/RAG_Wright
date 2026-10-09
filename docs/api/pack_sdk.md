@@ -104,6 +104,14 @@ The canonical `entity_id` for a known surface form, or `None` (closed-world).
 
 One registered entity: its canonical id, conformed name, ticker, and known aliases.
 
+### `GraphWriter(store: 'Store', *, checkpoint_dir: 'Path') -> 'None'`
+
+Writes a document's resolved graph to the store, content-hash gated (FR-I.5). A checkpoint per document keyed by content hash makes an unchanged document a no-op; the store holds the graph.
+
+#### `GraphWriter.write_document(self, source_doc_id: 'str', content_hash: 'str', resolution: 'ResolutionResult') -> 'GraphWriteResult'`
+
+Write the document's nodes/edges (one transaction), unless an unchanged run already did.
+
 ### `GraphAnswer(*, start_entity_id: str, relationship_type: str, evidence: list[rag_wright.capabilities.graph_query.GraphEvidence]) -> None`
 
 The graph query capability's output: candidate answers as evidence for fusion (FR-C.5, FR-Q.3).
@@ -405,6 +413,10 @@ Each cluster resolves to a canonical id (or None) via the injected `EntityResolv
 ### `to_graph(resolution: 'ResolutionResult') -> 'tuple[list[GraphNode], list[GraphEdge]]'`
 
 Map a `ResolutionResult` to store nodes + edges. A relationship endpoint that has no standalone entity (a ref-only endpoint) gets a minimal node so every edge connects to a vertex.
+
+### `build_graph_extraction(extractors: 'list[Extractor]', *, retry_policy: 'Any' = RetryPolicy(initial_interval=1.0, backoff_factor=2.0, max_interval=128.0, max_attempts=3, jitter=True, retry_on=default_retry_on))`
+
+Compile the `graph_extraction` subgraph (per chunk) over the given `extractors` (a domain supplies its stack; the reference contract pack's is `capabilities.graph_extraction.default_extractors()` -- ING-8b: no default here). `retry_policy` is each extractor node's policy (overridable for fast tests).
 
 ### `graph_query(start_entity_id: 'str', *, store: 'Store', relationship_type: 'str', max_hops: 'int' = 1, documents: 'Optional[list[str]]' = None) -> 'GraphAnswer'`
 

@@ -47,6 +47,8 @@ The unit is the text one extractor call reads. Get it right first; every other c
   tables whole with `"block"`. A form (fields of ONE record) -> one unit (`auto` keeps a form grid whole).
 - Units are capped at `IngestionTuning.max_unit_chars` (default 6000); a split table repeats its header row in each
   continuation unit.
+- A source is a file path or uploaded bytes: `IngestSource(path=...)`, or `IngestSource(data=..., name=...)` (the
+  name's extension picks the format), so an upload from object storage needs no temp file.
 - If your documents mark units in a way layout does not show (a numbering scheme, a domain heading convention),
   override `unit_grouper=` or pass a `boundary_decider=` (candidate line texts -> "starts a new unit?" per text) to
   settle the lines the default grouper is unsure of. Domain conventions belong in your pack, never in the engine.

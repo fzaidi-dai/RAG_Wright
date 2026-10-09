@@ -5,6 +5,12 @@ invokes them by name with **zero engine edits**. The full step-by-step workflow 
 optional bespoke MCP server; the definition of done; the conformance guardrail) is the **`authoring-a-capability`**
 skill; this page is the orientation.
 
+**What a capability's code may import.** A pack's capability code builds on two public tiers only: `rag_wright.api`
+(what a product's seam also uses) and `rag_wright.pack_sdk` (the pack-author building blocks: identifiers and
+provenance, the model seam, the LangGraph scaffold, the `Store` protocol, the generic capabilities a pack composes;
+`docs/api/pack_sdk.md`). Anything else in the engine is internal and may change; the engine holds its own reference
+pack to this with an import contract.
+
 ## The manifest
 
 Each capability is declared by a frozen `CapabilityManifest` (`rag_wright.api`):

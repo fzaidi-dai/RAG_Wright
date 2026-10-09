@@ -6,7 +6,7 @@ engine — a separate repo that depends on the open-core engine, one way.
 
 > **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}` (where
 > the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it, per the dependency mode in the playbook's section 5), `{{ENGINE_FLOOR}}`
-> (the minimum engine version, a `>=` floor such as `0.2.0`),
+> (the minimum engine version, a `>=` floor such as `0.3.0`),
 > `{{STACK}}` (your backend/frontend/model/infra choices), the grounding-lane paths, the `{{SPEC}}`/`{{PLAN}}`/
 > `{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme, and `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill, if any). The generic core
 > below — the boundary, grounding discipline, skills, working loop, memory, version control, boundaries — stays as
@@ -26,7 +26,7 @@ engine — a separate repo that depends on the open-core engine, one way.
 | Plan / tasks | `{{PLAN}}` (build order) · `{{TASKS}}` (the ledger). | Build order + ledger |
 | Engine dependency | **RAG_Wright** (open-core engine) via `{{ENGINE_DEP}}`; repo at `{{ENGINE_PATH}}` as a read/reference directory. One-way: **Product → Engine**. | The boundary |
 | Stack | {{STACK}} · Python 3.12 + uv (pinned `>=3.12,<3.13` to match the engine). | Environment |
-| Grounding | **Graphify lanes** (section "Grounding"): `engine` · `project` (+ the docs lane). | Grounding |
+| Grounding | **Graphify lanes** (section "Grounding"): `engine` · `engine-docs` · `project`. | Grounding |
 
 ### The engine / product boundary (read this first) — mirrors engine ADR-0052
 
@@ -36,7 +36,7 @@ engine — a separate repo that depends on the open-core engine, one way.
 - **Dependency is strict and one-way: Product → Engine, never the reverse.** Consume the engine; do not fork it.
   **Never modify the engine from this repo or session.** If the product needs an engine capability or change, FLAG
   it and make that change in the engine repo (`{{ENGINE_PATH}}`), where the engine's own CLAUDE.md governs.
-- **The whole engine surface is `rag_wright.api`.** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
+- **The engine surface is `rag_wright.api` (your seam) plus `rag_wright.pack_sdk` (your pack's own code).** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
   invokers, discovery (`capability_index`/`discover` — `discover(task, resources=ws)` embedding-ranks the catalog
   for an agent planning over the engine), `kg_read`/`kg_write`/`kg_edges`/`measure_usage`,
   `register_capability`/`load_reference_pack`,
@@ -44,14 +44,14 @@ engine — a separate repo that depends on the open-core engine, one way.
   `IngestionTuning`, `IngestSource`, `evaluate_ingestion`, `table_rows`/`TableRow`, the hook contracts
   `Unit`/`UnitExtraction`/`KgNode`/`KgEdge`, the hook protocols and `DocumentHook`, and the checks
   `check_tiling`/`check_units`/`check_extraction`; `NOT_NULL` for `kg_edges` presence filters) — never engine internals (`ArcadeDBStore`,
-  `query_embedder`, engine id formats). The product never touches the store directly.
+  `query_embedder`, engine id formats). The product never touches the store directly: a pack store extension is
+  built with `pack_store(ws, YourPackStore)`. Your pack's capability code also imports `rag_wright.pack_sdk`
+  (identifiers, the model seam, the LangGraph scaffold, the `Store` protocol, the entity-graph building blocks,
+  parsing and chunking); the generated `docs/api/pack_sdk.md` lists it. Nothing else in the engine is stable.
 - **Pack authoring is on the API too:** `CapabilityManifest`, `load_pack`, `engine_capabilities`,
   `register_canonical_slugs`, `canonical_capability_slugs`.
-- **Current exception to "only `rag_wright.api`"** (an engine gap; import from the named engine module and FLAG each
-  use, do not work around it): the entity-resolution building blocks (`build_graph_extraction`, `disambiguate`,
-  `resolve_entities`, `GraphWriter`), their contracts (`ExtractionResult`, `EntityMention`, `ChunkId`, `EntityId`)
-  and the entity registry (`EntityRegistry`, `RegistryRecord`). See the engine's
-  `docs/domain-adaptation/_engine-gaps.md` (G1).
+- **Engine gaps** are listed in the engine's `docs/domain-adaptation/_engine-gaps.md`; if you need something that is
+  on neither tier, flag it there (an engine change), never import an engine internal to work around it.
 - **Your domain is a `.ttl` pack + capabilities, authored HERE against the engine** (the engine is
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.
@@ -86,8 +86,11 @@ before that library is in a graph** — declare + install → build/refresh the 
 
 | Lane | Path | Authority for |
 |---|---|---|
-| `engine` | `{{ENGINE_LANE_PATH}}` | the installed `rag_wright` package — every `rag_wright.api` call grounds here first |
+| `engine` | `{{ENGINE_LANE_PATH}}` | the installed `rag_wright` package — every `rag_wright.api` / `rag_wright.pack_sdk` call grounds here first |
+| `engine-docs` | `{{ENGINE_DOCS_LANE_PATH}}` | the engine repo's `docs/` (concepts, architecture, domain-adaptation guide, generated `docs/api/`) and skills, at the tag matching the installed engine (the docs are not in the wheel) — query it to understand a feature, then confirm against `engine` |
 | `project` | `{{PROJECT_LANE_PATH}}` | this product's own code + libraries |
+
+**Rebuild both engine lanes whenever the engine changes**, before grounding the next call: after a Dependabot merge, after `uv sync` picks up a new engine version, and (editable path dependency) after engine edits you pull in. A stale lane grounds calls against the old API.
 
 The **`using-the-rag-wright-engine`** skill is the engine-usage playbook: how to install, build these lanes, ground
 every engine call, and follow the build sequence. Load it before engine work.

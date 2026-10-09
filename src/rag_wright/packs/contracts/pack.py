@@ -159,18 +159,19 @@ CONTRACT_SPECS: tuple[CapabilityManifest, ...] = (
         slug="clause_function_classification",
         impl_ref="rag_wright.packs.contracts.spans.model_capabilities:clause_function_classification",
         kind="model",
-        display_name="Clause function classification (LegalBERT)",
+        display_name="Clause function classification (SetFit ensemble)",
         description=(
-            "Classify an operative span into its CUAD-type function label(s) with a fine-tuned LegalBERT "
-            "sequence classifier (T56); supports top-k for confusable-sibling routing. Model inference "
-            "(CPU/GPU)."
+            "Classify operative spans into their CUAD-type function label(s) with the trained SetFit ensemble "
+            "(LegalBERT + BGE-large + MPNet bodies, averaged probabilities, ADR-0114): top-3 soft tags per span, and "
+            "with `with_probabilities` each span's averaged probabilities too (the reference unit representative "
+            "votes with them, ADR-0126). In-process model inference (CPU/GPU)."
         ),
         representative_queries=(
             "classify a contract span into its CUAD function type",
             "predict the top-k function labels for an operative span",
             "route a span to its clause type with a fine-tuned classifier",
         ),
-        tags=("classification", "legalbert", "model"),
+        tags=("classification", "setfit", "model"),
     ),
     CapabilityManifest(
         slug="clause_property_classification",

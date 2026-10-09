@@ -11,13 +11,12 @@ runs them as its own steps.
 
 1. **Disambiguation.** Mentions are normalized, non-entities are rejected, and the rest are clustered by
    (normalized name, entity type), so surface variants of the same entity group together (ADR-0004). It lives in the
-   engine (`rag_wright.capabilities.disambiguation.disambiguate`), but its normalize and reject rules are not
-   injectable and are tuned for organization names in contracts: legal-form suffixes (`Inc.`, `LLC`, `GmbH`, ...)
-   are stripped, contract role words (`buyer`, `seller`, `licensor`, `customer`, ...) and broad words (`services`,
-   `global`, ...) are rejected as entities on their own (`rag_wright.corpus.canonicalize`; engine gap G13). Check
-   its output on your own mentions.
+   engine (`rag_wright.pack_sdk.disambiguate`). Its built-in rules are generic to organization names: company-form
+   suffixes (`Inc.`, `LLC`, `GmbH`, ...) are stripped, and placeholders and bare broad words (`services`, `global`,
+   ...) are rejected. Your domain's ROLE words and phrases are yours: pass them as `EntityRules` (step 3 below). The
+   name normalizer itself is not injectable yet (engine gap G13). Check its output on your own mentions.
 2. **Resolution.** Each cluster is matched to a canonical id by an injected **resolver**
-   (`rag_wright.capabilities.entity_resolution.resolve_entities(..., resolver=…)`). A relationship endpoint takes
+   (`rag_wright.pack_sdk.resolve_entities(..., resolver=…)`). A relationship endpoint takes
    the id of the cluster with the same name, so an entity seen both as a mention and as an endpoint becomes one node
    (the two-channel dedup, ADR-0004), and self-loops are dropped. The matching strategy is the domain's concern; only
    the surface-form lookup is delegated to the resolver (ADR-0013).
@@ -27,7 +26,7 @@ private/unknown entities), **never a fabricated id**. Unlinked is a valid, hones
 
 ## The generic default
 
-The engine ships a domain-neutral `EntityRegistry` (`rag_wright.ontology.registry`): a closed-world set of canonical
+The engine ships a domain-neutral `EntityRegistry` (`rag_wright.pack_sdk`): a closed-world set of canonical
 entities indexed by **normalized surface form**, with the normalizer **injectable** (`EntityRegistry(normalize=…)`,
 default `default_surface_key`: lowercase, with runs of other characters folded to one space). `resolve(surface)`
 returns the canonical `entity_id` (an `EntityId`) or `None`. This exact-normalized match
@@ -48,7 +47,7 @@ is generic; a domain's canonical ids and their normalization are the domain's co
 3. **Declare your non-entity roles.** The engine rejects only generic noise (template placeholders, bare tokens
    like "Company" or "Holdings"). Words that name a ROLE in your documents ("the applicant", "the supplier") and
    phrases that mark a role description ("together with", "collectively") are your domain's: declare them in your
-   pack and pass them as `EntityRules(role_terms=..., role_phrases=...)` (`rag_wright.corpus.canonicalize`) to both
+   pack and pass them as `EntityRules(role_terms=..., role_phrases=...)` (`rag_wright.pack_sdk`) to both
    `disambiguate` and `resolve_entities`. The reference pack declares its contract roles on `cbr:entityRules` in
    `contract_bridge.ttl` (ADR-0066).
 4. **Run it in a `document_hook`**: pass your resolver and rules to `resolve_entities`. The clustering/dedup stays
@@ -61,12 +60,9 @@ import hashlib
 from pathlib import Path
 
 from rag_wright.api import build_ingestion, pack_store
-from rag_wright.capabilities.disambiguation import disambiguate
-from rag_wright.capabilities.entity_resolution import resolve_entities
-from rag_wright.capabilities.graph_storage import GraphWriter
-from rag_wright.corpus.canonicalize import EntityRules
-from rag_wright.contracts.identifiers import ChunkId
-from rag_wright.subgraphs.graph_extraction import build_graph_extraction
+from rag_wright.pack_sdk import (
+    ChunkId, EntityRules, GraphWriter, build_graph_extraction, disambiguate, resolve_entities,
+)
 
 graph = build_graph_extraction(my_entity_extractors)   # required: your stack of graph extractors
 my_rules = EntityRules(role_terms=frozenset({"the applicant", "the supplier"}), role_phrases=("together with",))
@@ -85,13 +81,13 @@ pipeline = build_ingestion(extractor, document_hook=entity_graph_hook)
 
 - The hook receives the workspace, the parsed source document (`sd.source_doc_id`, `sd.text`) and the document's
   chunks (each with `chunk_id`, `chunk_index`, `text`).
-- Each graph extractor implements the graph-extraction `Extractor` protocol in `rag_wright.contracts.extraction`
+- Each graph extractor implements the graph-extraction protocol `GraphExtractor` (`rag_wright.pack_sdk`)
   (`name`, and `extract(chunk_id, text) -> ExtractionResult`, whose `entity_mentions` are `EntityMention`s); this
   is a different protocol from the ingestion `Extractor` you pass to `build_ingestion`. `extractors` is required:
   the reference pack's party-extraction stack
   (`rag_wright.packs.contracts.capabilities.graph_extraction.default_extractors`) is reference-pack code, not an
   engine default.
-- The generic graph targets are `EntityNode` and `RelationshipFact` in `rag_wright.contracts.graph`; their type
+- The generic graph targets are `EntityNode` and `RelationshipFact` (`rag_wright.pack_sdk`); their type
   fields are opaque strings your domain names.
 - `GraphWriter` writes `Entity` nodes and `Relationship` edges, and skips a document whose content hash it has
   already written. A linked entity's node key is its canonical id; an unlinked one is `UNLINKED:<normalized name>`

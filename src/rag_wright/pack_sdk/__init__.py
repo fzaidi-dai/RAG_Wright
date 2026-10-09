@@ -33,7 +33,7 @@ from rag_wright.capabilities.document_scope import UnknownDocumentError, validat
 from rag_wright.capabilities.embedding_profiles import build_ingest_embedder
 from rag_wright.capabilities.entity_resolution import ResolutionResult, resolve_entities
 from rag_wright.capabilities.graph_query import GraphAnswer, graph_query
-from rag_wright.capabilities.graph_storage import to_graph
+from rag_wright.capabilities.graph_storage import GraphWriter, to_graph
 from rag_wright.capabilities.invoke import capability_impl
 from rag_wright.capabilities.manifests import RLM_GRANTED_SUBAGENTS
 from rag_wright.capabilities.parsing import TieredOCRParser
@@ -78,6 +78,7 @@ from rag_wright.ontology.pack_schema import KgVertexType, load_kg_schema
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 from rag_wright.store.arcadedb import SPAN_TYPE
 from rag_wright.store.seam import Store
+from rag_wright.subgraphs.graph_extraction import build_graph_extraction
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, TransientExtraction, business_span, dead_letter, raw_llm_span
 from rag_wright.util.concurrent import map_concurrent
 
@@ -98,7 +99,7 @@ __all__ = [
     # generic capabilities a pack composes
     "agenerate_answer_with_model", "answer_model_for", "ajudge_spans_with_judge", "build_arelevance_judge_fn",
     "finalize_verdict", "disambiguate", "resolve_entities", "ResolutionResult", "EntityRules", "EntityRegistry",
-    "RegistryRecord", "to_graph", "graph_query", "GraphAnswer", "BGEReranker", "query_embedder",
+    "RegistryRecord", "to_graph", "GraphWriter", "build_graph_extraction", "graph_query", "GraphAnswer", "BGEReranker", "query_embedder",
     "build_ingest_embedder", "typed_constraint_match_rank", "cosine", "post_json", "stack_url",
     # documents, parsing and chunking
     "SourceDocument", "parsed_source_document", "aparsed_source_document", "parsed_text_document",

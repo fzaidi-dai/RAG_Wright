@@ -42,6 +42,10 @@ the cache.
 | `backend` | `str` | `"arcadedb"` | store implementation (only `arcadedb` today) |
 | `protocol` | `str` | `"http"` | `http` locally; `https` for a remote/Modal store |
 
+`StoreConfig.from_env()` builds one from `ARCADEDB_HOST` (default `localhost`), `ARCADEDB_PORT` (`2480`),
+`ARCADEDB_USER` (`root`), `ARCADEDB_PASSWORD` (required) and `ARCADEDB_PROTOCOL` (`http`), for a standalone
+entrypoint (a script, an MCP server) that opens a workspace without its own config.
+
 ### `EngineOptions` / `IngestOptions` / pack options
 
 `EngineOptions.ingest` (an `IngestOptions`) holds the engine's generic ingest knobs; `EngineOptions.packs` holds each
@@ -102,7 +106,7 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 
 | variable | purpose |
 |---|---|
-| `ARCADEDB_HOST` / `ARCADEDB_PORT` / `ARCADEDB_USER` / `ARCADEDB_PASSWORD` / `ARCADEDB_DATABASE` / `ARCADEDB_PROTOCOL` | store connection for non-API callers (`ArcadeDBStore.from_env`, the scripts); `open_workspace` reads only `StoreConfig` |
+| `ARCADEDB_HOST` / `ARCADEDB_PORT` / `ARCADEDB_USER` / `ARCADEDB_PASSWORD` / `ARCADEDB_DATABASE` / `ARCADEDB_PROTOCOL` | store connection: `StoreConfig.from_env()` reads them (and the scripts do); `open_workspace` itself reads only the `StoreConfig` it is given |
 | `OPENROUTER_API_KEY` / `OPENROUTER_BASE_URL` / `OPENROUTER_PROVIDER` / `OPENROUTER_ALLOW_FALLBACKS` | OpenRouter access + provider routing (`OPENROUTER_SORT` / `OPENROUTER_PROVIDER_ORDER`: the contracts pack's docling-graph extraction only) |
 | `RAG_SERVING` / `VLLM_BASE_URL` / `VLLM_API_KEY` / `STACK_URL` | serving backend (openrouter \| vllm) + self-hosted endpoint |
 | `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_GENERAL`, `RAG_MODEL_VISION_OCR`) / `RAG_MODEL_ALL` / `RAG_GRAPH_EXTRACT_MODEL` / `RAG_DECISION_MODEL` | model overrides (one role / all roles / graph extraction / decision-model profile) |
