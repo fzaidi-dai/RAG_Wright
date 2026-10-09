@@ -52,7 +52,8 @@ here so the engine is demoable out of the box — your product brings its own do
 The whole doc set is under [`docs/`](docs/). Pick your path:
 
 - **New here?** Read [Concepts](docs/concepts.md) (the mental model), then run the [Quickstart](docs/quickstart.md).
-- **Installing / configuring?** [Installation](docs/installation.md) → [Configuration](docs/configuration.md).
+- **Installing / configuring?** [Installation](docs/installation.md) → [Configuration](docs/configuration.md) →
+  [Workspaces](docs/workspaces.md) (what applies per workspace, per call and per process).
 - **Building a product on the engine?** The [domain-adaptation guide](docs/domain-adaptation/) walks the whole
   sequence (author a `.ttl` pack → build & register capabilities → eval-first → ingest → entity resolution → the
   product seam); a coding agent should drive it with the `using-the-rag-wright-engine` skill.

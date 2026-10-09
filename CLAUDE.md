@@ -76,7 +76,7 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 > historical/superseded docs are under `docs/archive/`, and the ADR index is `docs/adr/README.md`.
 >
 > **The consolidated doc set** (engine-prep WS2/WS4, audited in ING-5): `docs/concepts.md`, `docs/architecture.md`,
-> `docs/installation.md`, `docs/configuration.md`, `docs/quickstart.md` (+ `examples/quickstart.py`),
+> `docs/installation.md`, `docs/configuration.md`, `docs/workspaces.md`, `docs/quickstart.md` (+ `examples/quickstart.py`),
 > `docs/reference-pack.md`, the generated `docs/api/`, and the domain-adaptation guide
 > `docs/domain-adaptation/` (ontology authoring, KG construction, entity resolution, authoring capabilities,
 > classification & decision models) + `_engine-gaps.md`. The product-starter templates are

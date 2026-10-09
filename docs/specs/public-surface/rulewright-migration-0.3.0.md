@@ -89,3 +89,5 @@ for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; do
 
 Run RuleWright's suite against the engine checkout (editable path) and its live engine-seam test; re-ingest one
 contract and compare its clauses (expect the section 2 changes, not errors).
+
+Next: `docs/specs/public-surface/rulewright-migration-0.4.0.md` (customer workspaces, per-customer models, document metadata).

@@ -114,6 +114,8 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
   your own libs against `project`.
 - The reference pack (contract/compliance) is the engine's EXAMPLE, not your domain — author your
   own .ttl pack + capabilities.
+- Workspaces: one corpus + one EngineConfig + one cache_dir per tenant; register capabilities once
+  per process; the engine's docs/workspaces.md says what is per workspace, per call, per process.
 - Per task: ground, define the contract, failing test (TDD), implement to green, verify, short ADR
   if an architectural decision was made, update docs. A LIVE engine-seam test on every integration.
 - One task at a time; stop for approval; commit each approved task atomically from a clean tree.

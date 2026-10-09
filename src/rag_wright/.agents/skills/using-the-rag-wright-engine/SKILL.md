@@ -73,6 +73,11 @@ replaces it for all of them. Workspaces can differ in store, corpus and configur
 slug resolves to. Tenants that need different implementations of one slug run in separate processes, or use one slug
 per implementation chosen per tenant in your code.
 
+**Workspaces.** One corpus and one `EngineConfig` per tenant, a `cache_dir` per tenant, document metadata on
+`IngestSource(metadata=...)`; models follow the workspace's `EngineConfig.models` in every call that takes it
+(`use_workspace_models(ws)` for a call that does not). The first config opened for a corpus is the one the process
+keeps. `docs/workspaces.md` lists what applies per workspace, per call and per process.
+
 Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
 
 ## 2. Ground before you write (graphify)
@@ -103,7 +108,8 @@ The engine's `docs/` are NOT shipped in the wheel — read them in the engine re
 or on GitHub. Start with **Concepts** and **Architecture**, then the **domain-adaptation guide**
 (`docs/domain-adaptation/README.md`) — the 9-step sequence this skill operationalizes — and its companions
 (ontology authoring, KG construction, entity resolution, authoring capabilities, classification & decision models),
-plus **Quickstart**, **Reference pack**, and the generated **API reference** (`docs/api/`).
+plus **Quickstart**, **Workspaces** (`docs/workspaces.md`: per workspace, per call, per process), **Reference
+pack**, and the generated **API reference** (`docs/api/`).
 
 ## 4. Follow the build sequence
 

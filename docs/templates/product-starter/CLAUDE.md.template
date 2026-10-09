@@ -131,6 +131,8 @@ are re-made after every engine upgrade.
 
 - **Concepts** + **Architecture** — the mental model and the engine/product boundary.
 - **Installation** + **Configuration** + **Quickstart** — `uv add`, ArcadeDB, the model provider, `EngineConfig`.
+- **Workspaces** (`docs/workspaces.md`) — one corpus and one `EngineConfig` per tenant; what applies per
+  workspace, per call and per process; document metadata; how a config change takes effect.
 - **Domain adaptation** (`docs/domain-adaptation/`) — the build sequence + companions (ontology, KG, ER,
   capabilities, classification & decision models).
 - **Reference pack** — the contract/compliance worked example (a template, not your domain).

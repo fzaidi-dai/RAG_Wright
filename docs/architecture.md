@@ -113,6 +113,8 @@ knobs.
   already in progress. Workspaces in one process can differ in store, corpus and configuration, but not in which
   implementation a slug resolves to. A product whose tenants need different implementations of the same slug runs
   them in separate processes. There is no plan to change this; raise it if a product needs it.
+- **One handle per corpus, and per-process settings.** What applies per workspace, per call and per process, and
+  how a configuration change for an open corpus takes effect, is in [`workspaces.md`](workspaces.md).
 
 ## Pointers
 

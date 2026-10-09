@@ -17,7 +17,8 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 2. **Configure the engine.** Construct an `EngineConfig` (store, model roles, embedding profile, and the options
    catalog: the generic ingest `tuning`, plus your pack's own options under `EngineOptions.packs`) and
    `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name; tenancy is
-   product-side. → [Configuration](../configuration.md).
+   product-side: one corpus and one config per tenant, with the settings that stay per process listed in
+   [Workspaces](../workspaces.md). → [Configuration](../configuration.md).
 
 3. **Author the domain `.ttl` pack.** The domain KNOWLEDGE — closed value sets, the KG schema, SHACL constraints,
    mappings — lives in the ontology, declaratively, never in Python (ADR-0066). It co-evolves with step 4 (it

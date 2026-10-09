@@ -89,7 +89,8 @@ process: the serving backend and its endpoints (`RAG_SERVING`, `VLLM_BASE_URL`, 
 model's profile (`RAG_DECISION_MODEL`; a call can name one in the `jev_decision` input `model`), the call timeouts,
 the trained classifier weights (`RAG_MODELS_DIR`), and the reference pack's graph-extraction model
 (`RAG_GRAPH_EXTRACT_MODEL`) and standalone MCP servers, which resolve their models from the environment when they
-start.
+start. [`workspaces.md`](workspaces.md) has the full picture: what applies per workspace, per call and per process,
+and how to manage workspaces.
 
 - **Serving backend** — `RAG_SERVING` selects `openrouter` (default) or `vllm` (self-hosted). For vLLM set
   `VLLM_BASE_URL` and `VLLM_API_KEY`; for OpenRouter set `OPENROUTER_API_KEY` (optionally `OPENROUTER_PROVIDER`, a
