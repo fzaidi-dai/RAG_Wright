@@ -321,7 +321,15 @@ class IngestionPipeline:
         `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches
         (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to
         `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised.
-        Returns the `IngestionReport`."""
+        Returns the `IngestionReport`. Every model role resolves through the workspace's `EngineConfig.models`
+        (PS-14)."""
+        from rag_wright.api.workspace import use_workspace_models
+
+        with use_workspace_models(ws):
+            return await self._aingest(ws, sources, cache_dir=cache_dir)
+
+    async def _aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
+                       cache_dir: Union[str, Path]) -> IngestionReport:
         stages = self.stages(ws, cache_dir=cache_dir)
         items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
         report = IngestionReport()

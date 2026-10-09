@@ -15,7 +15,7 @@ import asyncio
 from typing import Any
 
 from rag_wright.capabilities.invoke import capability_impl
-from rag_wright.api.workspace import WorkspaceHandle
+from rag_wright.api.workspace import WorkspaceHandle, use_workspace_models
 from rag_wright.models.tracing import traced_step
 
 def _index() -> dict[str, Any]:
@@ -47,7 +47,7 @@ async def ainvoke_subgraph(name: str, inputs: dict, *, resources: WorkspaceHandl
     LangGraph scaffold the subgraph is built on; usage is captured by the caller's `measure_usage()` (EP-API-5)."""
     _validate(name, "subgraph")
     factory = capability_impl(name)  # resolves impl_ref -> the co-located `ainvoke(resources, inputs)`
-    with traced_step(f"invoke:{name}"):
+    with use_workspace_models(resources), traced_step(f"invoke:{name}"):  # PS-14: the workspace's models
         return await factory(resources, inputs)
 
 
@@ -63,7 +63,7 @@ def invoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle) -> Any:
     if asyncio.iscoroutinefunction(factory):
         raise TypeError(
             f"capability {name!r} has an async impl; call ainvoke_model() instead of invoke_model()")
-    with traced_step(f"invoke:{name}"):
+    with use_workspace_models(resources), traced_step(f"invoke:{name}"):
         return factory(resources, inputs)
 
 
@@ -82,7 +82,7 @@ async def ainvoke_model(name: str, inputs: dict, *, resources: WorkspaceHandle,
     factory = capability_impl(name)
 
     async def _run() -> Any:
-        with traced_step(f"invoke:{name}"):
+        with use_workspace_models(resources), traced_step(f"invoke:{name}"):
             if asyncio.iscoroutinefunction(factory):
                 return await factory(resources, inputs)
             return await asyncio.to_thread(factory, resources, inputs)

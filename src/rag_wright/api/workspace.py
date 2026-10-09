@@ -8,10 +8,11 @@ store extension is built over the workspace store with `pack_store(ws, cls)` (PS
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Optional, TypeVar
+from contextlib import contextmanager
+from typing import Any, Callable, Iterator, Optional, TypeVar
 
 from rag_wright.api.config import EngineConfig
-from rag_wright.models.profiles import ModelRole, model_for
+from rag_wright.models.profiles import ModelRole, model_for, scoped_models
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,18 @@ class WorkspaceHandle:
         """Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default."""
         key = role.value if isinstance(role, ModelRole) else str(role)
         return self._config.models.get(key) or model_for(role)
+
+
+@contextmanager
+def use_workspace_models(ws: Any) -> Iterator[None]:
+    """Resolve every model role through `ws`'s `EngineConfig.models` inside the block (PS-14), ahead of the
+    `RAG_MODEL_*` environment. The engine's own entry points that take a workspace (`aingest`, the invokers) do this
+    for you; use it around engine calls that take no workspace, such as `parse_document_bytes` (OCR) or a
+    `default_chunk_discoverer` run, when the workspace overrides those roles. Per call, never shared: concurrent
+    blocks for different workspaces each see their own models."""
+    config = getattr(ws, "_config", None)
+    with scoped_models(getattr(config, "models", None)):
+        yield
 
 
 def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False) -> WorkspaceHandle:

@@ -18,8 +18,10 @@ below is a documented default, overridable by env so the empirical slug needs no
 from __future__ import annotations
 
 import os
+from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import Enum
-from typing import Any, Literal, Optional
+from typing import Any, Iterator, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -265,11 +267,29 @@ PROFILES: dict[str, ModelProfile] = {
 }
 
 
+# PS-14: the active workspace's role -> model overrides (`EngineConfig.models`), set for the duration of an engine
+# call that runs for a workspace. A context variable, so concurrent calls for different workspaces never see each
+# other's models; asyncio tasks and `asyncio.to_thread` carry it.
+_SCOPED_MODELS: ContextVar[Optional[dict[str, str]]] = ContextVar("rag_wright_scoped_models", default=None)
+
+
+@contextmanager
+def scoped_models(models: Optional[dict[str, str]]) -> Iterator[None]:
+    """Resolve roles through `models` (`ModelRole` value -> model id) inside the block, ahead of the environment."""
+    token = _SCOPED_MODELS.set(dict(models or {}))
+    try:
+        yield
+    finally:
+        _SCOPED_MODELS.reset(token)
+
+
 def model_for(role: ModelRole) -> str:
-    """Resolve a role to a model id. Precedence (all config, MS1-2): the ROLE-SPECIFIC override
-    (`RAG_MODEL_<ROLE>`) > the ALL-ROLES override (`RAG_MODEL_ALL`, to point every role at one model for a
-    quick cross-model test) > the documented default. So a run can swap one role, or every role, purely by env.
-    """
+    """Resolve a role to a model id. Precedence: the active workspace's `EngineConfig.models` (PS-14, see
+    `scoped_models`) > the ROLE-SPECIFIC override (`RAG_MODEL_<ROLE>`) > the ALL-ROLES override (`RAG_MODEL_ALL`,
+    to point every role at one model for a quick cross-model test) > the documented default."""
+    scoped = _SCOPED_MODELS.get()
+    if scoped and scoped.get(role.value):
+        return scoped[role.value]
     env_var, default = _ROLE_ENV[role]
     return os.getenv(env_var) or os.getenv("RAG_MODEL_ALL") or default
 

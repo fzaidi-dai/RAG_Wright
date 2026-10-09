@@ -13,6 +13,7 @@ needs no KG schema change for the MVP. The full version can move the store to Ar
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import os
 import threading
 from datetime import datetime, timezone
@@ -200,5 +201,7 @@ def submit_ingestion(
         asyncio.run(run_job(job_id, documents, ingest_graph, store,
                             link_fn=link_fn, is_done=is_done, max_concurrency=max_concurrency))
 
-    threading.Thread(target=_worker, daemon=True, name=f"ingest-{job_id}").start()
+    # the submitter's context (usage scopes, the workspace's models) goes with the job; a bare thread starts empty
+    threading.Thread(target=contextvars.copy_context().run, args=(_worker,), daemon=True,
+                     name=f"ingest-{job_id}").start()
     return job_id

@@ -142,7 +142,7 @@ Advanced: the individual stage functions bound to a workspace (its store, ingest
 
 #### `IngestionPipeline.aingest(self, ws: 'Any', sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]') -> 'IngestionReport'`
 
-Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`.
+Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`. Every model role resolves through the workspace's `EngineConfig.models` (PS-14).
 
 ### `IngestionReport(documents: 'list[DocumentReport]' = <factory>) -> None`
 
@@ -231,6 +231,10 @@ Resolve (and cache) the workspace for `corpus` (the backend database name) from 
 ### `pack_store(ws: 'WorkspaceHandle', cls: 'Callable[..., _T]', *args: 'Any', **kwargs: 'Any') -> '_T'`
 
 Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store: `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, MyPackStore)`. The store it receives implements the engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack.
+
+### `use_workspace_models(ws: 'Any') -> 'Iterator[None]'`
+
+Resolve every model role through `ws`'s `EngineConfig.models` inside the block (PS-14), ahead of the `RAG_MODEL_*` environment. The engine's own entry points that take a workspace (`aingest`, the invokers) do this for you; use it around engine calls that take no workspace, such as `parse_document_bytes` (OCR) or a `default_chunk_discoverer` run, when the workspace overrides those roles. Per call, never shared: concurrent blocks for different workspaces each see their own models.
 
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 

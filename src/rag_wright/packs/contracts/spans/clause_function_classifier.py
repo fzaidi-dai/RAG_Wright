@@ -13,6 +13,7 @@ becomes NONE, exactly as an off-taxonomy span does today)."""
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import re
 from typing import Any, Protocol, runtime_checkable
 
@@ -221,8 +222,9 @@ class LlmBatchClauseClassifier:
         if len(subs) <= 1:  # single sub-batch -> no thread pool
             results = [_call(subs[0])]
         else:  # concurrent sub-batches (independent calls, merged by span_index)
-            with ThreadPoolExecutor(max_workers=len(subs)) as ex:
-                results = list(ex.map(_call, subs))
+            with ThreadPoolExecutor(max_workers=len(subs)) as ex:  # each call in a copy of the caller's context
+                results = list(ex.map(lambda item, ctx: ctx.run(_call, item), subs,  # (usage scopes, models)
+                                      [contextvars.copy_context() for _ in subs]))
         return _merge_subbatches(results, span_texts)
 
     async def _aclassify_raw(self, chunk_text: str, span_texts: list[str],

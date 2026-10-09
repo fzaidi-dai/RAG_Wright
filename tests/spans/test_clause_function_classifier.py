@@ -183,3 +183,18 @@ def test_rawscore_still_accepts_a_stray_value_without_crashing():
     from rag_wright.packs.contracts.spans.clause_function_classifier import RawScore
 
     assert RawScore(function="Exclusive Source of Supply", confidence="high").function == "Exclusive Source of Supply"
+
+
+def test_concurrent_sub_batch_calls_are_metered():
+    """PS-14: the sub-batches run in a thread pool; each call's usage reaches the caller's `measure_usage()` scope
+    (a pool thread starts with an empty context unless the caller's is carried in)."""
+    from rag_wright.api import measure_usage, record_usage
+
+    class _Metered:
+        def invoke(self, prompt):
+            record_usage("probe-model", input_tokens=10, output_tokens=2, cost=0.001)
+            return BatchSpanClassification(spans=[])
+
+    with measure_usage() as usage:
+        LlmBatchClauseClassifier(_Metered()).classify_spans("ctx", [f"s{i}" for i in range(25)])
+    assert usage.calls == 3  # 25 spans, cap 10 -> 3 concurrent sub-batch calls, all metered

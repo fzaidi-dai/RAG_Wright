@@ -13,6 +13,7 @@ calls are in flight at once, bounded by `max_concurrency`. Results come back in 
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -109,7 +110,8 @@ async def map_concurrent_async(
                 else:
                     _post(fut, lambda f, r: f.done() or f.set_result(r), result)
 
-            threading.Thread(target=_work, daemon=True).start()
+            # the caller's context (usage scopes, the workspace's models) goes with the work; a bare thread starts empty
+            threading.Thread(target=contextvars.copy_context().run, args=(_work,), daemon=True).start()
             try:
                 return await asyncio.wait_for(future, timeout_s)
             except (asyncio.TimeoutError, TimeoutError):

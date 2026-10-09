@@ -294,7 +294,7 @@ Composes `doc_start = chunk_doc_start + op.start`, `doc_end = chunk_doc_start + 
 
 ### `model_for(role: 'ModelRole') -> 'str'`
 
-Resolve a role to a model id. Precedence (all config, MS1-2): the ROLE-SPECIFIC override (`RAG_MODEL_<ROLE>`) > the ALL-ROLES override (`RAG_MODEL_ALL`, to point every role at one model for a quick cross-model test) > the documented default. So a run can swap one role, or every role, purely by env.
+Resolve a role to a model id. Precedence: the active workspace's `EngineConfig.models` (PS-14, see `scoped_models`) > the ROLE-SPECIFIC override (`RAG_MODEL_<ROLE>`) > the ALL-ROLES override (`RAG_MODEL_ALL`, to point every role at one model for a quick cross-model test) > the documented default.
 
 ### `profile_for(model_id: 'str') -> 'ModelProfile'`
 

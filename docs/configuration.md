@@ -79,6 +79,18 @@ cfg = EngineConfig(store=..., options=EngineOptions(packs={"contracts": Contract
 Models are chosen by **role** (`ModelRole`) and resolved to a concrete model by a **profile** keyed by model id —
 never a hardcoded provider flag. Override a role per workspace via `EngineConfig.models`, or globally via env.
 
+**Per workspace.** A role resolves to the active workspace's `EngineConfig.models` entry first, then
+`RAG_MODEL_<ROLE>`, then `RAG_MODEL_ALL`, then the default. Every engine call that takes a workspace (ingestion
+through `aingest`, the `invoke_*` / `ainvoke_*` calls and the MCP tools built on them, `agenerate_answer`,
+`ajudge_spans`) runs under that workspace's models, and concurrent calls for different workspaces each see their
+own. Wrap a call that takes no workspace in `with use_workspace_models(ws):`, for example `parse_document_bytes`
+(its OCR escalation uses `VISION_OCR`) or a `default_chunk_discoverer` run. Not per workspace, set once for the
+process: the serving backend and its endpoints (`RAG_SERVING`, `VLLM_BASE_URL`, `OPENROUTER_*`), the decision
+model's profile (`RAG_DECISION_MODEL`; a call can name one in the `jev_decision` input `model`), the call timeouts,
+the trained classifier weights (`RAG_MODELS_DIR`), and the reference pack's graph-extraction model
+(`RAG_GRAPH_EXTRACT_MODEL`) and standalone MCP servers, which resolve their models from the environment when they
+start.
+
 - **Serving backend** — `RAG_SERVING` selects `openrouter` (default) or `vllm` (self-hosted). For vLLM set
   `VLLM_BASE_URL` and `VLLM_API_KEY`; for OpenRouter set `OPENROUTER_API_KEY` (optionally `OPENROUTER_PROVIDER`, a
   comma-separated provider list, with `OPENROUTER_ALLOW_FALLBACKS` to allow routing beyond it; the contracts pack's
