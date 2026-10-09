@@ -17,7 +17,7 @@ import urllib.request
 from typing import Any, Callable
 
 
-def _post_json(url: str, payload: dict, timeout: int = 120) -> dict:
+def post_json(url: str, payload: dict, timeout: int = 120) -> dict:
     req = urllib.request.Request(
         url, data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"}, method="POST")
@@ -30,7 +30,7 @@ class RemoteBGEEmbedder:
     (encode_dense / encode_sparse / encode_batch), producing vectors in the SAME space as the KG's stored
     span vectors (verified byte-identical in MS1-5b)."""
 
-    def __init__(self, base_url: str, *, post: Callable[..., dict] = _post_json) -> None:
+    def __init__(self, base_url: str, *, post: Callable[..., dict] = post_json) -> None:
         self._url = base_url.rstrip("/") + "/embed"
         self._post = post
 
@@ -51,7 +51,7 @@ def stack_url() -> str | None:
     return os.getenv("STACK_URL")
 
 
-def query_embedder(*, post: Callable[..., dict] = _post_json) -> Any:
+def query_embedder(*, post: Callable[..., dict] = post_json) -> Any:
     """The query-side embedder: the remote A100 `/embed` adapter when `STACK_URL` is set, else the local
     in-process `BGEM3Embedder` (dev/default). One env (`STACK_URL`) moves the query's embed onto the A100."""
     url = stack_url()

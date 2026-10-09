@@ -25,7 +25,7 @@ from typing import Any, Awaitable, Callable, Optional, TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from rag_wright.packs.compliance.capabilities.compliance_judgment import AJudgeFn, ajudge_pairs
-from rag_wright.capabilities.retrieval_core import _cosine
+from rag_wright.capabilities.retrieval_core import cosine
 from enum import Enum
 
 from rag_wright.packs.compliance.schemas.compliance import (
@@ -285,7 +285,7 @@ def build_obligation_pairs_fn(embedder: Any, *, top_n: int = OBLIGATION_TOP_N,
         pairs: list = []
         for ob in obligations:
             ob_vec = embedder.encode_dense(ob.requirement_text)
-            ranked = [c for c, _ in sorted(claim_vecs, key=lambda cv: _cosine(ob_vec, cv[1]), reverse=True)]
+            ranked = [c for c, _ in sorted(claim_vecs, key=lambda cv: cosine(ob_vec, cv[1]), reverse=True)]
             evidence = _within_budget(ranked, top_n=top_n, char_budget=char_budget)
             # issue 0044: `assertion_text` is document text ONLY (so the citation stays a quote from the user's
             # doc); the DEON-8 signals ride in `document_signals`, seen by the judge but never cited. The bundle is
@@ -325,7 +325,7 @@ def build_defense_linker(embedder: Any, requirements: list, *, top_n: int = DEFE
         ra = canonical_actor(rule.actor)
         cands = [p for p in perms if _actor_compatible(ra, canonical_actor(p.actor))]
         rule_vec = vectors.get(rule.requirement_id, [])
-        ranked = sorted(cands, key=lambda p: _cosine(rule_vec, vectors.get(p.requirement_id, [])), reverse=True)
+        ranked = sorted(cands, key=lambda p: cosine(rule_vec, vectors.get(p.requirement_id, [])), reverse=True)
         return ranked[:top_n]
 
     return defenses_for
@@ -353,7 +353,7 @@ def _dedup(requirements: list, vectors: dict, threshold: float) -> list:
     kept: list = []
     for req in requirements:
         vec = vectors.get(req.requirement_id)
-        if vec is not None and any(_cosine(vec, vectors[k.requirement_id]) >= threshold for k in kept
+        if vec is not None and any(cosine(vec, vectors[k.requirement_id]) >= threshold for k in kept
                                    if vectors.get(k.requirement_id) is not None):
             continue
         kept.append(req)
@@ -378,7 +378,7 @@ def build_select_fn(
     vectors = {r.requirement_id: embedder.encode_dense(r.requirement_text) for r in requirements}
 
     def _ranked(reqs: list, claim_vec: list) -> list:
-        return sorted(reqs, key=lambda r: _cosine(claim_vec, vectors.get(r.requirement_id, [])), reverse=True)
+        return sorted(reqs, key=lambda r: cosine(claim_vec, vectors.get(r.requirement_id, [])), reverse=True)
 
     def select(claim: Any, reqs: list) -> list:
         if constraint_scope_fn is not None:  # generic structured routing (any domain, ontology-driven, DATA)
@@ -806,10 +806,10 @@ def _merge_wrapped_items(raw: list[tuple[str, str]]) -> list[tuple[str, str]]:
 def _item_provenance(parsed_doc: Any) -> list[dict]:
     """SEG-4: docling items -> per-LOGICAL-ELEMENT structural provenance `{text, section, element_kind,
     element_ordinal}`. Line-wrapped paragraphs are merged first (`_merge_wrapped_items`) so ordinals count real
-    paragraphs, not physical lines. `section` = the enclosing section number (shared `_section_number`; None
+    paragraphs, not physical lines. `section` = the enclosing section number (shared `section_number`; None
     before the first heading -> a flat doc stays section-less). Ordinals count WITHIN a section, PER KIND (¶ for
     body text, bullet for list items), reset at each heading."""
-    from rag_wright.corpus.document_parser import _section_number
+    from rag_wright.corpus.document_parser import section_number
 
     raw: list[tuple[str, str]] = []
     for item in getattr(parsed_doc, "texts", []) or []:
@@ -828,7 +828,7 @@ def _item_provenance(parsed_doc: Any) -> list[dict]:
     for kind, text in _merge_wrapped_items(raw):
         if kind in _HEADING_KINDS:  # a heading opens a new section and resets the within-section ordinals
             n_sections += 1
-            section = _section_number(text, n_sections)
+            section = section_number(text, n_sections)
             para_ord = bullet_ord = 0
             out.append({"text": text, "section": section, "element_kind": kind, "element_ordinal": None})
             continue

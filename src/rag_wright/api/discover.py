@@ -28,7 +28,7 @@ class Discovered:
     score: float  # cosine similarity in [-1, 1]; higher is a better task match
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
+def cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
@@ -56,7 +56,7 @@ def discover(query: str, *, resources: WorkspaceHandle, kind: Optional[str] = No
     dense, _sparse = embedder.encode_batch([query] + [_match_text(s) for s in specs])
     query_vec, cand_vecs = dense[0], dense[1:]
     ranked = sorted(
-        zip(specs, cand_vecs), key=lambda sv: _cosine(query_vec, sv[1]), reverse=True
+        zip(specs, cand_vecs), key=lambda sv: cosine(query_vec, sv[1]), reverse=True
     )
     return [
         Discovered(
@@ -64,7 +64,7 @@ def discover(query: str, *, resources: WorkspaceHandle, kind: Optional[str] = No
             kind=s.kind,
             description=s.description,
             representative_queries=tuple(s.representative_queries or ()),
-            score=round(_cosine(query_vec, v), 4),
+            score=round(cosine(query_vec, v), 4),
         )
         for s, v in ranked[:k]
     ]

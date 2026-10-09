@@ -90,7 +90,7 @@ def _device() -> str:
     return "cpu"
 
 
-def _cosine(a, b) -> float:
+def cosine(a, b) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = sum(x * x for x in a) ** 0.5
     nb = sum(y * y for y in b) ** 0.5
@@ -314,7 +314,7 @@ def main() -> None:
 
     def _tiebreak(qid, c):
         if VARIANT in ("v4", "v3") and c in clause_emb:
-            return -_cosine(query_emb[qid], clause_emb[c])
+            return -cosine(query_emb[qid], clause_emb[c])
         return 0.0
 
     def _typematch(qid, c):

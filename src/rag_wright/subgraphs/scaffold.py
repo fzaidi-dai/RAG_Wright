@@ -67,4 +67,4 @@ def dead_letter(reason: str, **fields: Any) -> dict:
 
 class TransientExtraction(Exception):
     """A retryable extraction blip. Custom (not in LangGraph's default no-retry list) -> DEFAULT_RETRY retries.
-    (Generic: any extraction node raises it; moved here from the reference pack's typed clause extraction, ING-8b.)"""
+    (Generic: any extraction node raises it; moved here from the reference pack, ING-8b.)"""

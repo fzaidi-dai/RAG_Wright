@@ -59,7 +59,7 @@ def _to_span(row: dict, *, confidence: float, extracted_value: str | None = None
     )
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
+def cosine(a: list[float], b: list[float]) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = sum(x * x for x in a) ** 0.5
     nb = sum(y * y for y in b) ** 0.5
@@ -118,7 +118,7 @@ def serve_highlight(
         rows = store.all_spans_by_document(contract_id)
         query_vec = embedder.encode_dense(query) if embedder is not None else None
         if query_vec is not None:
-            rows = sorted(rows, key=lambda r: _cosine(query_vec, r["dense"]), reverse=True)
+            rows = sorted(rows, key=lambda r: cosine(query_vec, r["dense"]), reverse=True)
         spans = [_to_span(r, confidence=intent.confidence) for r in rows[:fallback_k]]
         low_confidence = True
 

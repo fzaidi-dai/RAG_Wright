@@ -33,7 +33,7 @@ def _get(url: str, timeout: int = 10) -> dict:
         return json.loads(r.read())
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
+def cosine(a: list[float], b: list[float]) -> float:
     import math
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
@@ -66,7 +66,7 @@ def main() -> None:
     lb_match = 0
     for i, sp in enumerate(spans, 1):
         emb = _post(f"{url}/embed", {"text": sp["text"]})
-        cos = _cosine(emb["dense"][0], sp["dense"])
+        cos = cosine(emb["dense"][0], sp["dense"])
         cos_min = min(cos_min, cos)
         lab = _post(f"{url}/classify", {"text": sp["text"]})["labels"][0]
         ok = lab == sp["function"]

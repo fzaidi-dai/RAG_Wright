@@ -19,7 +19,7 @@ from pydantic import BaseModel
 from rag_wright.capabilities.parsing import ParsedDocument
 from rag_wright.contracts.provenance import ConfidenceTag
 
-_INGEST_PARSE_DEADLINE_S = 600.0  # per-document parse ceiling (a degraded multi-page doc escalated to the VLM)
+INGEST_PARSE_DEADLINE_S = 600.0  # per-document parse ceiling (a degraded multi-page doc escalated to the VLM)
 
 
 class ChildAnchor(BaseModel):
@@ -64,7 +64,7 @@ class EmbeddedChild(BaseModel):
 
 class SourceDocument(BaseModel):
     """One document to ingest: its canonical `source_doc_id` (HYG-1), its already-parsed text, and optional
-    per-corpus metadata (e.g. CUAD annotated parties, ACORD pre-segmented spans) the stages may consult."""
+    per-corpus metadata (e.g. annotations or pre-segmented spans a corpus ships with) the stages may consult."""
 
     source_doc_id: str
     text: str
@@ -262,7 +262,7 @@ def _link_records(document: Any, children: list, texts: list[str], *, identifier
 
 async def aparsed_source_document(
     source_doc_id: str, name: str, data: bytes, *, cache_dir: Any, metadata: Optional[dict] = None,
-    deadline_s: float = _INGEST_PARSE_DEADLINE_S, include_hidden_sheets: bool = True, tuning: Optional[Any] = None,
+    deadline_s: float = INGEST_PARSE_DEADLINE_S, include_hidden_sheets: bool = True, tuning: Optional[Any] = None,
 ) -> SourceDocument:
     """The ASYNC, deadline-bounded twin of `parsed_source_document` (ADR-0057) -- STABLE PUBLIC API. Runs the sync
     build (docling parse + the tiered OCR/VLM escalation, the slowest call in the pipeline) OFF the event loop

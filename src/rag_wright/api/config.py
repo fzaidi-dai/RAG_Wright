@@ -4,6 +4,8 @@ named -- everything else goes through the handle. EP-API-4a adds the `options` c
 retrieval/rerank groups land as needed), so a product tunes the engine through config, never environment variables."""
 from __future__ import annotations
 
+import os
+
 from dataclasses import dataclass, field
 from typing import Any, Mapping, Optional
 
@@ -21,6 +23,16 @@ class StoreConfig:
     password: str
     backend: str = "arcadedb"
     protocol: str = "http"
+
+    @classmethod
+    def from_env(cls) -> "StoreConfig":
+        """PS-8b: the store connection from the environment -- `ARCADEDB_HOST` (default `localhost`),
+        `ARCADEDB_PORT` (default `2480`), `ARCADEDB_USER` (default `root`), `ARCADEDB_PASSWORD` (required) and
+        `ARCADEDB_PROTOCOL` (default `http`) -- for a standalone entrypoint (a script, an MCP server) that opens a
+        workspace without its own config file."""
+        return cls(host=os.environ.get("ARCADEDB_HOST", "localhost"), port=os.environ.get("ARCADEDB_PORT", "2480"),
+                   user=os.environ.get("ARCADEDB_USER", "root"), password=os.environ["ARCADEDB_PASSWORD"],
+                   protocol=os.environ.get("ARCADEDB_PROTOCOL", "http"))
 
 
 @dataclass(frozen=True)

@@ -70,8 +70,8 @@ class DenseRanking(BaseModel):
     ranked: list[DenseScoredClause]
 
 
-def _cosine(a: Sequence[float], b: Sequence[float]) -> float:
-    """Cosine similarity; 0.0 when either vector has zero norm (mirrors eval/kg_primary._cosine)."""
+def cosine(a: Sequence[float], b: Sequence[float]) -> float:
+    """Cosine similarity; 0.0 when either vector has zero norm (mirrors eval/kg_primary.cosine)."""
     dot = sum(x * y for x, y in zip(a, b))
     na = sum(x * x for x in a) ** 0.5
     nb = sum(y * y for y in b) ** 0.5
@@ -114,7 +114,7 @@ def dense_rank_tiebreak(
     """Order candidates by descending cosine similarity to the query vector -- the embedding tiebreak signal
     (KG-6 / V4). Pure: the vectors come from the `embedding` capability, not from a store or a model here."""
     scored = [
-        DenseScoredClause(clause_id=clause_id, cosine=_cosine(query_vector, vector))
+        DenseScoredClause(clause_id=clause_id, cosine=cosine(query_vector, vector))
         for clause_id, vector in candidate_vectors
     ]
     ranked = sorted(scored, key=lambda r: -r.cosine)

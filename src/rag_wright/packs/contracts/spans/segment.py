@@ -22,7 +22,7 @@ from __future__ import annotations
 import re
 
 from rag_wright.contracts.ingestion import Span
-from rag_wright.corpus.document_parser import _LEADING_ENUM, _is_bare_heading  # generic text rules (ADR-0124)
+from rag_wright.corpus.document_parser import LEADING_ENUM, is_bare_heading  # generic text rules (ADR-0124)
 from rag_wright.contracts.span import to_span_record  # noqa: F401 - re-exported (moved, ING-4b)
 from rag_wright.packs.contracts.ontology.loader import load_segmentation_vocab
 
@@ -159,7 +159,7 @@ def starts_new_provision(text: str) -> bool:
         return bool(_SECTION_NUM.match(t[m.end():]))
     if re.match(r"^\(?\d", t):  # a numbered item: ONLY the depth-capped section rule decides (no heading override)
         return bool(_SECTION_START.match(t))
-    if _is_bare_heading(t):  # un-numbered but titled ('Governing Law', a short Title-case line)
+    if is_bare_heading(t):  # un-numbered but titled ('Governing Law', a short Title-case line)
         return True
     if t and not any(c.islower() for c in t) and len(_WORD_RE.findall(t)) < _MIN_ALLCAPS_WORDS:
         return True  # a short ALL-CAPS heading ('CONFIDENTIALITY')
@@ -189,7 +189,7 @@ def _heading_candidate(text: str) -> bool:
     t = text.strip()
     if not t or len(t) > 90 or t[0].islower():
         return False  # empty, long, or lowercase-led -> provision body, never a candidate
-    if _LEADING_ENUM.match(t):
+    if LEADING_ENUM.match(t):
         return True  # an enumerated lead-in the deterministic rules did not confidently start
     return not (re.search(r"\.\s", t) or t.endswith("."))  # short + capitalized + NOT a full sentence -> a heading candidate
 
@@ -243,7 +243,7 @@ def _merge_subfloor(ranges: list[tuple[int, int]], body: str, min_chars: int) ->
         start = carry if carry is not None else s
         is_last = i == len(ranges) - 1
         # fold FORWARD a sub-floor fragment OR a bare heading (0006-B) -- so a heading never stands alone
-        if (len(body[start:e].strip()) < min_chars or _is_bare_heading(body[start:e])) and not is_last:
+        if (len(body[start:e].strip()) < min_chars or is_bare_heading(body[start:e])) and not is_last:
             carry = start  # carry its start into the next span (its body)
             continue
         merged.append((start, e))

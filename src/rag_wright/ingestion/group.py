@@ -33,7 +33,7 @@ from rag_wright.contracts.ingestion import (
     Unit,
     UnitRepresentative,
 )
-from rag_wright.corpus.document_parser import _is_bare_heading
+from rag_wright.corpus.document_parser import is_bare_heading
 
 DEFAULT_MAX_UNIT_CHARS = IngestionTuning().max_unit_chars  # ~1,500 tokens; ~90% of contract provisions fit (ING-3)
 
@@ -49,7 +49,7 @@ def _alnum(s: str) -> int:
 async def _decided_starts(spans: Sequence[Span], decider: Optional[BoundaryDecider]) -> list[bool]:
     """Per span: does the decider say this heading-like plain line starts a unit? False when not asked."""
     out = [False] * len(spans)
-    idx = [i for i, s in enumerate(spans) if s.kind in (None, "paragraph", "other") and _is_bare_heading(s.text)]
+    idx = [i for i, s in enumerate(spans) if s.kind in (None, "paragraph", "other") and is_bare_heading(s.text)]
     if decider is None or not idx:
         return out
     try:

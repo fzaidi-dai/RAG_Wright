@@ -36,7 +36,7 @@ from rag_wright.capabilities.parsing import ParsedDocument, load_document
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.corpus.document_parser import _HEADING_LABELS  # the single docling heading-label authority (ADR-0058)
 from rag_wright.corpus.document_parser import content_items  # issue 0014: reading-order body (text+tables+pictures)
-from rag_wright.corpus.document_parser import _is_bare_heading  # the single bare-heading text authority (0006-B)
+from rag_wright.corpus.document_parser import is_bare_heading  # the single bare-heading text authority (0006-B)
 from rag_wright.models.tag_structured import build_tag_structured
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
@@ -616,7 +616,7 @@ def _merge_bare_headings(chunks: list[str], token_cap: int) -> list[str]:
     merged: list[str] = []
     carry = ""  # leading bare heading(s) awaiting the next body-bearing section
     for c in chunks:
-        if _is_bare_heading(c) or len(c.strip()) < _MIN_NONEMPTY_CHARS:
+        if is_bare_heading(c) or len(c.strip()) < _MIN_NONEMPTY_CHARS:
             carry = f"{carry}{_SEP}{c}" if carry else c
             continue
         merged.extend(_capped(f"{carry}{_SEP}{c}" if carry else c))

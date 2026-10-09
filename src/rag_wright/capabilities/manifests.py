@@ -41,7 +41,7 @@ from rag_wright.skills.rlm.agent import GRANTED_SUBAGENTS
 # from `GRANTED_SUBAGENTS` so the manifest roster cannot drift from the names the skill actually declares
 # and dispatches — a conformance test asserts the two are identical (drift passes here, fails GraphWright's
 # bind).
-_RLM_GRANTED = list(GRANTED_SUBAGENTS)
+RLM_GRANTED_SUBAGENTS = list(GRANTED_SUBAGENTS)
 
 
 @dataclass(frozen=True)
@@ -104,7 +104,7 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         # decompose(), dispatching the two real sub-agents (ADR-0015). granted_subagents is bound from the
         # skill's own roster so it cannot drift from what the skill declares/dispatches.
         skill_runtime=SkillRuntime(
-            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
+            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=RLM_GRANTED_SUBAGENTS
         ),
     ),
     CapabilityManifest(
@@ -126,7 +126,7 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         requires=("rlm_method",),
         tags=("chunking", "rlm", "ingestion"),
         skill_runtime=SkillRuntime(  # LLM boundary discovery via the recursive machinery; real sub-agents
-            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
+            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=RLM_GRANTED_SUBAGENTS
         ),
         capability_interface=CapabilityInterface(
             # Emits the ingestion `chunk` (id + text + summary + index) — NOT the query-side chunk_with_text;
@@ -160,7 +160,7 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         requires=("rlm_method",),
         tags=("rlm", "synthesis", "query"),
         skill_runtime=SkillRuntime(  # recursive descent (real sub-agents) + kept _reduce ascent
-            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=_RLM_GRANTED
+            needs_interpreter=True, rlm=True, requires_dynamic_dispatch=True, granted_subagents=RLM_GRANTED_SUBAGENTS
         ),
         capability_interface=CapabilityInterface(
             # Takes chunk_with_text (already rehydrated; does not fetch text). Emits the answer AND the

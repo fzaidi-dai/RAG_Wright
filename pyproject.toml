@@ -131,6 +131,7 @@ source_modules = [
     "rag_wright.ingestion",
     "rag_wright.models",
     "rag_wright.ontology",
+    "rag_wright.pack_sdk",
     "rag_wright.skills",
     "rag_wright.spans",
     "rag_wright.store",

@@ -346,7 +346,13 @@ def _provider_gen_id(raw: Any) -> Optional[str]:
     return getattr(raw, "id", None) or (getattr(raw, "response_metadata", {}) or {}).get("id")
 
 
-def _call_desc(model_id: str, label: str | None) -> str:
+def model_deadline_s() -> float:
+    """PS-8b: the total wall-clock deadline (seconds) for one logical model call, across its bounded retries -- the
+    value every seam call runs under (read at call time, so a test or configuration override is honoured)."""
+    return _MODEL_DEADLINE_S
+
+
+def call_description(model_id: str, label: str | None) -> str:
     """The model-call description used in the deadline/retry warnings + the timeout message. ADR-0058 side-fix
     (issue 0004): include the STAGE/call-site (`label`) when the caller supplies it, so a timeout names WHICH
     stage was cancelled (e.g. `granite-4.2-8b for semantic_chunking.discover`), not just the model."""
@@ -366,7 +372,7 @@ async def _bounded_deadline(
     per-socket-op timeout never catches is CANCELLED at the deadline -- `asyncio.timeout` delivers CancelledError
     into the awaited call, httpx closes the socket -- and surfaces as a terminal `ModelCallTimeout`. Retry sleeps
     count against the same budget, so the total is bounded regardless of how it is spent."""
-    desc = _call_desc(model_id, label)
+    desc = call_description(model_id, label)
 
     async def _run() -> Any:
         for attempt in range(1, _STRUCTURED_RETRY_ATTEMPTS + 1):

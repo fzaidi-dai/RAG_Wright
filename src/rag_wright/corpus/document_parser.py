@@ -26,18 +26,18 @@ _HEADING_LABELS = frozenset({DocItemLabel.SECTION_HEADER, DocItemLabel.TITLE, Do
 
 # ING-2 (ADR-0124): domain-neutral heading-TEXT rules, shared by the generic chunker and the reference segmenter.
 # A leading enumeration marker ('9.', '(a)', '12.1', '§') stripped before deciding whether a line is a bare heading.
-_LEADING_ENUM = re.compile(r"^\s*(?:\(?[\dA-Za-z]{1,4}\s*[.)]|\d+(?:\.\d+){0,3}\.?|§+)\s+")
+LEADING_ENUM = re.compile(r"^\s*(?:\(?[\dA-Za-z]{1,4}\s*[.)]|\d+(?:\.\d+){0,3}\.?|§+)\s+")
 
 
-def _is_bare_heading(text: str) -> bool:
-    """A bare SECTION HEADING (e.g. '9. Limitation of Liability') -- a short enumerated/Title-case line with NO
-    sentence terminator. It must fold INTO its body, never stand alone: a standalone heading gets classified as
-    a clause pointing at a bare heading, which pollutes evidence and can hide the real clause (issue 0006). A
-    genuine short provision carries an operative sentence (terminal '.'/';'/':'), so it is NOT a heading."""
+def is_bare_heading(text: str) -> bool:
+    """A bare SECTION HEADING (e.g. '9. Scope of Work') -- a short enumerated/Title-case line with NO sentence
+    terminator. It must fold INTO its body, never stand alone: a standalone heading gets labelled as a unit that
+    points at a bare heading, which pollutes evidence and can hide the real passage (issue 0006). A genuine short
+    section carries an operative sentence (terminal '.'/';'/':'), so it is NOT a heading."""
     t = text.strip()
     if not t or len(t) > 60:
         return False
-    rest = _LEADING_ENUM.sub("", t, count=1)  # drop a leading '9.' / '(a)' / '12.1' enumeration marker
+    rest = LEADING_ENUM.sub("", t, count=1)  # drop a leading '9.' / '(a)' / '12.1' enumeration marker
     if not rest or not rest[0].isupper():  # a heading's title starts capitalised
         return False
     return not re.search(r"[.;:]", rest)  # a bare title has no sentence punctuation; a provision does
@@ -313,9 +313,9 @@ def content_items(doc: Any) -> list[ContentItem]:
     return items
 
 
-def _section_number(heading: str, index: int) -> str:
-    """A short section id: the leading numeric token of the heading (e.g. '1' from '1. Confidentiality'), else the
-    1-based position -- so the compliance citation is stable and human-meaningful."""
+def section_number(heading: str, index: int) -> str:
+    """A short section id: the leading numeric token of the heading (e.g. '1' from '1. Introduction'), else the
+    1-based position -- so a section citation is stable and human-meaningful."""
     token = heading.strip().split()[0].rstrip(".").rstrip(")") if heading.strip() else ""
     return token if token and any(c.isdigit() for c in token) else str(index)
 
@@ -338,7 +338,7 @@ def document_to_sections(doc: Any) -> list[dict]:
         text = "\n".join(body).strip()
         if heading or text:  # keep a section if it has a heading OR any body (never emit a fully empty one)
             bbox = boxes[0] if len(boxes) == 1 else None  # best-effort: only a single-item section has one box
-            sections.append({"section": _section_number(heading, len(sections) + 1), "heading": heading,
+            sections.append({"section": section_number(heading, len(sections) + 1), "heading": heading,
                              "text": text, "pages": sorted(pages), "bbox": bbox})
 
     for item, _level in doc.iterate_items():

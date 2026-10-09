@@ -3,7 +3,7 @@ generic code from IMPORTING a pack; this stops domain KNOWLEDGE from leaking in 
 discovery text, public docstrings -- which the import-linter cannot see.
 
 - Zero tolerance: the engine's skill files, the engine capability manifests' discovery text, and the docstrings of
-  everything `rag_wright.api` exports.
+  everything `rag_wright.api` and `rag_wright.pack_sdk` export.
 - A ratchet everywhere else in the generic engine: a file's count of domain-term lines may only go down (the
   committed baseline), and a file not in the baseline must have none. Lower the baseline as files are cleaned
   (`uv run pytest tests/arch/test_engine_domain_vocabulary.py --update-baseline` is NOT offered on purpose: edit the
@@ -66,13 +66,17 @@ def test_engine_capability_discovery_text_carries_no_domain_vocabulary():
 
 
 def test_public_api_docstrings_carry_no_domain_vocabulary():
-    from rag_wright import api
+    from rag_wright import api, pack_sdk
 
     offenders = {}
-    for name in api.__all__:
-        hits = _hits(inspect.getdoc(getattr(api, name)) or "")
-        if hits:
-            offenders[name] = hits
+    for module in (api, pack_sdk):  # both public tiers (PS-8b)
+        for name in module.__all__:
+            obj = getattr(module, name)
+            if not (inspect.isclass(obj) or callable(obj)):
+                continue  # a constant's doc is its type's (str, float, ...), not ours
+            hits = _hits(inspect.getdoc(obj) or "")
+            if hits:
+                offenders[f"{module.__name__}.{name}"] = hits
     for mod in sorted((_SRC / "api").glob("*.py")):
         doc = inspect.getdoc(__import__(f"rag_wright.api.{mod.stem}", fromlist=["_"])) or ""
         if _hits(doc):

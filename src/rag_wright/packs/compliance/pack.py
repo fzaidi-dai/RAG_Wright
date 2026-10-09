@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from rag_wright.capabilities.ard import ResponseBounds  # noqa: F401 - used by some specs
 from rag_wright.capabilities.manifests import (  # noqa: F401 - the spec dataclass + shared helpers the specs use
-    _RLM_GRANTED,
+    RLM_GRANTED_SUBAGENTS,
     CapabilityManifest,
     engine_capabilities,
     register_capability,

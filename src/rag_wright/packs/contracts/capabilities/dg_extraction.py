@@ -426,7 +426,7 @@ def _deadline_bounded_client_class() -> type:
                 tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,
                                           metadata={"error": "timeout"})
                 raise seam.ModelCallTimeout(
-                    f"docling-graph extraction on {seam._call_desc(self.model, getattr(self, '_stage_label', None))} "
+                    f"docling-graph extraction on {seam.call_description(self.model, getattr(self, '_stage_label', None))} "
                     f"exceeded the {seam._MODEL_DEADLINE_S}s deadline") from exc
             except Exception as exc:  # noqa: BLE001 - wrap like the base's _call_api (docling-graph ClientError)
                 tracing.finish_generation(_gen, latency_ms=(_time.monotonic() - _t0) * 1000.0,

@@ -94,7 +94,7 @@ def to_span_record(
     """CU-B2 (ADR-0029): OperativeSpan -> SpanRecord with DOCUMENT-ABSOLUTE offsets.
 
     Composes `doc_start = chunk_doc_start + op.start`, `doc_end = chunk_doc_start + op.end` (the span's
-    clause-relative offsets shifted by the parent chunk's offset in the canonical document text, CU-B1). The
+    chunk-relative offsets shifted by the parent chunk's offset in the canonical document text, CU-B1). The
     RAW span text (`op.text = body[start:end]`) is stored -- NOT stripped -- so the citation invariant
     `canonical_document_text[doc_start:doc_end] == span.text` holds byte-faithfully. The caller may embed over
     `op.text.strip()`; the stored text stays raw for the highlight.

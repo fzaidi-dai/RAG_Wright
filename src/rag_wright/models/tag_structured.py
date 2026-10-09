@@ -42,14 +42,14 @@ def _unwrap_optional(ann: Any) -> Any:
     return ann
 
 
-def _classify(ann: Any) -> tuple[str, type[BaseModel] | None, str]:
+def field_kind(ann: Any) -> tuple[str, type[BaseModel] | None, str]:
     """Classify a field annotation into `(kind, submodel, hint)`:
       - 'scalar'      : a single scalar/enum/Literal/bool/number value  (submodel None)
       - 'list_scalar' : `list[<scalar/enum>]`                           (submodel None)
       - 'nested'      : a single nested `BaseModel`                     (submodel = that model)
       - 'nested_list' : `list[<BaseModel>]`                            (submodel = the item model)
-    Nested kinds (TAGPARSE-INGEST-1a) let the ingestion contracts (Clause's bounded_by/caps/governed_by + the
-    `excepts` list, ContractParties' `parties` list) round-trip through tags; the emitter/parser recurse."""
+    Nested kinds (TAGPARSE-INGEST-1a) let a nested extraction schema (a record with nested sub-records or a list
+    of them) round-trip through tags; the emitter/parser recurse."""
     ann = _unwrap_optional(ann)
     if get_origin(ann) is list:
         item = (get_args(ann) or (str,))[0]
@@ -76,7 +76,7 @@ def _field_lines(schema: type[BaseModel], fields: set[str] | None = None) -> lis
     for name, field in schema.model_fields.items():
         if fields is not None and name not in fields:
             continue
-        kind, sub, hint = _classify(field.annotation)
+        kind, sub, hint = field_kind(field.annotation)
         desc = (field.description or "").strip()
         # Guidance goes AFTER the tags (a trailing `-- ...`), NOT inside them: a hint placed inside the tag body
         # (e.g. `(one of: a | b)`) gets ECHOED by the model (`<f>(a)</f>`), which then fails value/enum parsing.
@@ -123,7 +123,7 @@ def _field_value(body: str, field: Any, lenient: bool, full_text: str | None = N
     models often FLATTEN a nested field -- emitting `<governed_by>Delaware</governed_by>` then the sub-fields
     `<jurisdiction_name>...`/`<law_multiplicity>...` as SIBLINGS rather than nested inside. Sub-field tag names are
     unique in these contracts, so scanning the full text finds them whether nested or flattened."""
-    kind, sub, _ = _classify(field.annotation)
+    kind, sub, _ = field_kind(field.annotation)
     if kind == "scalar":
         return body.strip()
     if kind == "list_scalar":
@@ -176,7 +176,7 @@ def parse_tagged(text: str, schema: type[BaseModel], *, lenient: bool = False,
     for name, field in schema.model_fields.items():
         if fields is not None and name not in fields:
             continue
-        kind, _sub, _ = _classify(field.annotation)
+        kind, _sub, _ = field_kind(field.annotation)
         body = _extract(text, name)
         if body is None:
             # ISSUE-0020: a nested single model may be FULLY FLATTENED -- the model emits its sub-fields as siblings

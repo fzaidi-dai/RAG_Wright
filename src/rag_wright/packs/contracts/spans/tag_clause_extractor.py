@@ -20,7 +20,7 @@ import os
 from typing import Any
 
 from rag_wright.models.profiles import DEFAULT_GENERAL
-from rag_wright.models.tag_structured import _classify, build_tag_structured
+from rag_wright.models.tag_structured import field_kind, build_tag_structured
 from rag_wright.packs.contracts.ontology.clause_template import Clause
 
 # The 7 thematic groups (5a consents/control + 5b restrictions/duties per the design). document_reference is the
@@ -105,7 +105,7 @@ def _combine_group(samples: list[Clause | None], fields: tuple[str, ...]) -> dic
     valid = [r for r in samples if r is not None]
     out: dict[str, Any] = {}
     for f in fields:
-        kind, _sub, _hint = _classify(Clause.model_fields[f].annotation)
+        kind, _sub, _hint = field_kind(Clause.model_fields[f].annotation)
         vals = [getattr(r, f) for r in valid]
         if kind in ("list_scalar", "nested_list"):
             merged = _union_lists(vals)
@@ -123,7 +123,7 @@ def _combine_group(samples: list[Clause | None], fields: tuple[str, ...]) -> dic
 def _group_has_list(fields: tuple[str, ...]) -> bool:
     """True if the group has any LIST-valued field (list_scalar / nested_list) -- the fields where under-
     enumeration bites, and the only ones a cross-model union is worth paying a second model for."""
-    return any(_classify(Clause.model_fields[f].annotation)[0] in ("list_scalar", "nested_list") for f in fields)
+    return any(field_kind(Clause.model_fields[f].annotation)[0] in ("list_scalar", "nested_list") for f in fields)
 
 
 async def atag_extract_clause(text: str, model_id: str, *, document_reference: str = "",

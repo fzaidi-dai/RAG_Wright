@@ -15,3 +15,11 @@ def test_the_api_reference_matches_the_live_public_surface():
     spec.loader.exec_module(gen)
     committed = (_ROOT / "docs" / "api" / "README.md").read_text(encoding="utf-8")
     assert committed == gen.render(), "docs/api/README.md is stale -- run `bash scripts/build_api_docs.sh`"
+
+
+def test_the_pack_sdk_reference_matches_the_live_pack_sdk():
+    spec = importlib.util.spec_from_file_location("build_api_docs", _ROOT / "scripts" / "build_api_docs.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    committed = (_ROOT / "docs" / "api" / "pack_sdk.md").read_text(encoding="utf-8")
+    assert committed == gen.render_sdk(), "docs/api/pack_sdk.md is stale -- run `bash scripts/build_api_docs.sh`"

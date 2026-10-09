@@ -46,7 +46,7 @@ from pydantic import BaseModel
 # EP-API-6b: the generic corpus-seam contract + docling-parse helpers moved to a DOMAIN-FREE module (so the engine
 # parse API does not import this contract pipeline). Re-exported here, unchanged, for this module's own importers.
 from rag_wright.capabilities.document_parse import (  # noqa: F401 (re-export)
-    _INGEST_PARSE_DEADLINE_S,
+    INGEST_PARSE_DEADLINE_S,
     SourceDocument,
     aparsed_source_document,
     parsed_source_document,
@@ -265,7 +265,7 @@ class PendingDocument:
 
 
 
-async def aparse_pending(pending: PendingDocument, *, deadline_s: float = _INGEST_PARSE_DEADLINE_S) -> SourceDocument:
+async def aparse_pending(pending: PendingDocument, *, deadline_s: float = INGEST_PARSE_DEADLINE_S) -> SourceDocument:
     """Run a `PendingDocument`'s deferred parse OFF the event loop (`to_thread`) under a wall-clock deadline
     (ADR-0057), so the tiered OCR escalation is concurrency-safe and bounded during ingestion."""
     async with asyncio.timeout(deadline_s):
@@ -649,12 +649,12 @@ _LABEL_PREFIX = re.compile(r"^(?:(?:section|article|clause)\s+)?(?:\d+(?:\.\d+)*
 def _is_heading_label(span: Span) -> bool:
     """A span that only NAMES a provision ('Section 9. Uncapped Liability.', 'Governing Law', a heading/title span),
     with no operative sentence of its own. A short operative provision ('3. Fees. Customer shall pay ...') is not."""
-    from rag_wright.corpus.document_parser import _is_bare_heading
+    from rag_wright.corpus.document_parser import is_bare_heading
 
     if span.kind in ("title", "heading"):
         return True
     t = span.text.strip()
-    return _is_bare_heading(t) or _is_bare_heading(_LABEL_PREFIX.sub("", t, count=1).rstrip("."))
+    return is_bare_heading(t) or is_bare_heading(_LABEL_PREFIX.sub("", t, count=1).rstrip("."))
 
 
 def operative_span(members: Sequence[TaggedSpan]) -> TaggedSpan:

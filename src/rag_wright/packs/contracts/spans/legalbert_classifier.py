@@ -18,7 +18,7 @@ from typing import Any, Callable
 
 import torch
 
-from rag_wright.capabilities.remote_encoders import _post_json, stack_url
+from rag_wright.capabilities.remote_encoders import post_json, stack_url
 
 
 class LegalBertFunctionClassifier:
@@ -91,7 +91,7 @@ class RemoteLegalBertClassifier:
     """LegalBERT function classification via the A100 `/classify` endpoint. Matches
     `LegalBertFunctionClassifier` (classify / classify_topk)."""
 
-    def __init__(self, base_url: str, *, post: Callable[..., dict] = _post_json) -> None:
+    def __init__(self, base_url: str, *, post: Callable[..., dict] = post_json) -> None:
         self._url = base_url.rstrip("/") + "/classify"
         self._post = post
 
@@ -106,7 +106,7 @@ class RemoteLegalBertClassifier:
         return self._post(self._url, {"texts": list(texts), "k": k})["topk"]
 
 
-def query_classifier(model_path: Any = None, *, post: Callable[..., dict] = _post_json) -> Any:
+def query_classifier(model_path: Any = None, *, post: Callable[..., dict] = post_json) -> Any:
     """The query-side function classifier: the remote A100 `/classify` adapter when `STACK_URL` is set, else
     the local in-process `LegalBertFunctionClassifier` loaded from `model_path`."""
     url = stack_url()
