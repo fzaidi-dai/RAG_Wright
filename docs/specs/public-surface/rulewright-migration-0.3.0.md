@@ -65,6 +65,9 @@ now available from one of the two tiers.
 
 ## 5. Link the engine skills from the installed engine (PS-10)
 
+Needs rag-wright 0.3.1 or later from PyPI: the 0.3.0 wheel left the skills out (an editable path dependency
+has them either way).
+
 The engine's Claude Code skills now ship in the package, at `rag_wright/.agents/skills/` (the convention docling and
 fastapi use), version-matched to the engine: `using-the-rag-wright-engine`, `building-an-ingestion-capability`,
 `authoring-a-capability`, `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya` and

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -57,12 +58,15 @@ def test_engine_repo_paths_in_a_shipped_skill_are_marked():
     assert unmarked == []
 
 
-def test_the_wheel_ships_the_skills(tmp_path):
-    # offline: the build backend comes from uv's cache, so the test never reaches the network
-    subprocess.run(["uv", "build", "--wheel", "--offline", "--out-dir", str(tmp_path)], cwd=_ROOT, check=True,
-                   capture_output=True)
+def test_the_release_build_ships_the_skills(tmp_path):
+    # Built the way publish.yml builds (`uv build`: the sdist first, then the wheel FROM the sdist). A wheel built
+    # straight from the tree (`--wheel`) had the skills while the 0.3.0 release, built from its sdist, did not.
+    # Offline: the build backend comes from uv's cache, so the test never reaches the network.
+    subprocess.run(["uv", "build", "--offline", "--out-dir", str(tmp_path)], cwd=_ROOT, check=True, capture_output=True)
     (wheel,) = tmp_path.glob("rag_wright-*.whl")
-    names = set(zipfile.ZipFile(wheel).namelist())
-    expected = {f"rag_wright/.agents/skills/{n}/SKILL.md" for n in SHIPPED} | {
-        f"rag_wright/.agents/skills/{QWEN_SCRIPT}"}
-    assert expected - names == set()
+    (sdist,) = tmp_path.glob("rag_wright-*.tar.gz")
+    shipped = [f"rag_wright/.agents/skills/{n}/SKILL.md" for n in SHIPPED] + [f"rag_wright/.agents/skills/{QWEN_SCRIPT}"]
+    assert set(shipped) - set(zipfile.ZipFile(wheel).namelist()) == set()
+    with tarfile.open(sdist) as tar:
+        in_sdist = {n.split("/", 1)[1] for n in tar.getnames()}
+    assert {f"src/{s}" for s in shipped} - in_sdist == set()

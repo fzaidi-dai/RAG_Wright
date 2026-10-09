@@ -89,6 +89,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/rag_wright"]
 
+# PS-10: the shipped engine skills. Hatchling's sdist walk leaves this dot-directory out, and publish.yml builds the
+# wheel from the sdist, so without this the release ships no skills (0.3.0 did). tests/arch/test_shipped_skills.py.
+[tool.hatch.build.targets.sdist.force-include]
+"src/rag_wright/.agents" = "src/rag_wright/.agents"
+
 [tool.pytest.ini_options]
 testpaths = ["tests", "eval"]
 pythonpath = ["src", "."]
