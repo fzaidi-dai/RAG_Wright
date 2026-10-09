@@ -1,6 +1,9 @@
-# RuleWright: moving to rag-wright 0.3.0
+# RuleWright: moving to rag-wright 0.3 (target 0.3.1)
 
-What 0.3.0 changes for RuleWright, written from a read-only scan of the RuleWright repo (2026-10-09). It follows the
+Install rag-wright 0.3.1 or later. Every change below landed in 0.3.0, but the 0.3.0 wheel on PyPI left out the
+engine skills that section 5 links (0.3.1 fixes the packaging and changes nothing else).
+
+What 0.3 changes for RuleWright, written from a read-only scan of the RuleWright repo (2026-10-09). It follows the
 0.2.0 migration (`docs/specs/ingestion-hooks/rulewright-migration-0.2.0.md`); do that one first. Nothing here is
 edited from the engine repo.
 
