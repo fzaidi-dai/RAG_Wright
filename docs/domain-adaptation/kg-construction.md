@@ -89,6 +89,21 @@ the run goes on. Every node and edge type your extractor returns must be declare
   6,000), the fragment floor, the database-table rule (`RecordTableRule`), the identifier rule for linking embedded
   files to rows (`IdentifierRule`), and the two concurrency limits. Set it on the builder or on
   `EngineConfig.options.ingest.tuning`.
+- **`IngestSource.metadata`**: your own fields for a document (an owner, a case number, tags, a received date),
+  written onto its `Document` node in the same write as the engine's fields, and onto each of its embedded files'.
+  Keys are identifiers that do not shadow an engine field (`doc_id`, `parent_doc_id`, `filename`, `media_type`,
+  `sha256`); values are strings, numbers, booleans, `None` or lists of those. Read and filter it with
+  `kg_read(ws, "Document", where={"owner": "team-a"})`, then pass the matching document ids to a query's document
+  scope (spans and records do not carry it). A re-ingest without metadata leaves it in place, and one with metadata
+  updates the keys it gives; change it at any time with `kg_update(ws, "Document", set={...}, where={"doc_id": ...})`.
+
+  ```python
+  from rag_wright.api import IngestSource, kg_read
+
+  src = IngestSource(path="intake/report-118.pdf", metadata={"owner": "team-a", "tags": ["q3", "audit"]})
+  report = await pipeline.aingest(ws, [src], cache_dir="cache/")
+  team_a = [r["doc_id"] for r in kg_read(ws, "Document", where={"owner": "team-a"}, fields=["doc_id"])]
+  ```
 - **`IngestSource.table_mode`**: `auto` (default) decides per table whether it is a database (one unit per row) or a
   form (one unit); `record` and `block` force one mode for that source.
 - **`evaluate_ingestion(sources, cache_dir=..., tuning=..., table_labels=...)`** runs the structural stages (parse,

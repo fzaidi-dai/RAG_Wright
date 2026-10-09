@@ -112,3 +112,11 @@ def test_spans_by_contract_parity():
         "SELECT span_id, parent_chunk_id, span_index, text, primary_tag, document_id, doc_start,"
         " doc_end, pages, bbox FROM Span WHERE document_id = 'c1' AND primary_tag IN ['cap_on_liability']"
         " ORDER BY doc_start")
+
+
+def test_kg_read_drops_the_stores_projection_type_hint():
+    """PS-13: projecting a list field makes ArcadeDB add an `@props` type hint to each row; it is not data, so
+    `kg_read` drops it (the record keys `@rid` / `@type` / `@cat` of a `SELECT *` are kept, as before)."""
+    s, _, _, set_rows = _store_capturing_sql()
+    set_rows([{"doc_id": "d1", "tags": ["q3"], "@props": "tags:9"}])
+    assert s.kg_read("Document", fields=["doc_id", "tags"]) == [{"doc_id": "d1", "tags": ["q3"]}]

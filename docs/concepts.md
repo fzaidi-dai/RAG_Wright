@@ -118,7 +118,8 @@ report = await pipeline.aingest(ws, sources, cache_dir="cache/")
   row), and the default writer uses `kg_write`. `document_hook(ws, source_document, chunks)` runs once per document
   after its records are written (for example, a domain's entity graph).
 - **Inputs and tuning.** `sources` are paths or `IngestSource` objects (a per-document `doc_id`, `table_mode` of
-  `auto`/`record`/`block`, `include_hidden_sheets`). Every structural threshold is in `IngestionTuning`; set it from
+  `auto`/`record`/`block`, `include_hidden_sheets`, and your own `metadata`, stored on the document's `Document`
+  node). Every structural threshold is in `IngestionTuning`; set it from
   `evaluate_ingestion(sources, cache_dir=...)`, which scores tiling, layout respect, table-row integrity and coverage
   on your own samples without any model call, and (given your span tagger and a small gold set of unit labels) how
   well units are labelled. `table_rows(source_document)` reads a parsed table's rows from the

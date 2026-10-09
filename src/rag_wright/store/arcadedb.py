@@ -499,7 +499,8 @@ class ArcadeDBStore:
             sql += f" ORDER BY {order_by}"
         if limit is not None:
             sql += f" LIMIT {int(limit)}"
-        return self._query(sql)
+        # PS-13: projecting a list field makes ArcadeDB add an `@props` type hint to each row; it is not data
+        return [{k: v for k, v in row.items() if k != "@props"} for row in self._query(sql)]
 
     def kg_edges(
         self,

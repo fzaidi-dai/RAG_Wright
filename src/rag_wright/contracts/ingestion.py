@@ -10,8 +10,9 @@ The `check_*` functions are what the engine enforces on every hook's output, def
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Awaitable, Callable, Literal, Optional, Protocol, Sequence
+from typing import Any, Awaitable, Callable, Literal, Optional, Protocol, Sequence
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -267,6 +268,22 @@ def check_extraction(unit: Unit, extraction: UnitExtraction) -> None:
 
 TableMode = Literal["auto", "record", "block"]
 
+# PS-13: the fields the engine writes on every `Document` node; product metadata may not shadow them
+DOCUMENT_FIELDS = ("doc_id", "parent_doc_id", "filename", "media_type", "sha256")
+_METADATA_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+_SCALAR = (str, int, float, bool)
+
+
+def _check_metadata(metadata: dict[str, Any]) -> None:
+    for key, value in metadata.items():
+        if not isinstance(key, str) or not _METADATA_KEY.fullmatch(key):
+            raise ValueError(f"metadata key {key!r} must be an identifier (letters, digits, underscore)")
+        if key in DOCUMENT_FIELDS:
+            raise ValueError(f"metadata key {key!r} is an engine field of the Document node")
+        if not (value is None or isinstance(value, _SCALAR)
+                or (isinstance(value, list) and all(isinstance(v, _SCALAR) for v in value))):
+            raise ValueError(f"metadata {key!r}: a value is a string, number, boolean, None or a list of those")
+
 
 class RecordTableRule(BaseModel):
     """When `auto` treats a table as a DATABASE (one unit per row): a header of `min_header_cols`+ named columns,
@@ -308,8 +325,11 @@ class IngestionTuning(BaseModel):
 class IngestSource(BaseModel):
     """One document to ingest: either a file `path`, or in-memory `data` (bytes, e.g. an upload) with its file `name`
     (the extension picks the format); its `doc_id` (default: derived from the file name), how its tables are grouped
-    (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are
-    ingested."""
+    (`auto` decides per table; `record` / `block` force one mode), whether hidden spreadsheet sheets are ingested,
+    and the product's own `metadata` (PS-13): written onto the document's `Document` node in the same write as the
+    engine's fields, and onto each embedded file's. Keys are identifiers that do not shadow an engine field
+    (`doc_id`, `parent_doc_id`, `filename`, `media_type`, `sha256`); values are strings, numbers, booleans, None or lists of those. Read or filter it with
+    `kg_read(ws, "Document", where={...})`; change it later with `kg_update`."""
 
     model_config = {"frozen": True}
 
@@ -319,6 +339,7 @@ class IngestSource(BaseModel):
     doc_id: Optional[str] = None
     table_mode: TableMode = "auto"
     include_hidden_sheets: bool = True
+    metadata: Optional[dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _one_form(self) -> "IngestSource":
@@ -326,6 +347,8 @@ class IngestSource(BaseModel):
             raise ValueError("an IngestSource takes either `path` or `data` (with `name`), not both or neither")
         if self.data is not None and not self.name:
             raise ValueError("`data` needs a `name` (the file name; its extension picks the format)")
+        if self.metadata:
+            _check_metadata(self.metadata)
         return self
 
     @property

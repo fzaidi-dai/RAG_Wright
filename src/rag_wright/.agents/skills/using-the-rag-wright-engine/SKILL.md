@@ -33,7 +33,8 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   `IngestionReport`), its hook contracts (`Segmenter`, `SpanTagger`, `UnitGrouper`, `BoundaryDecider`,
   `UnitRepresentative`, `BoundaryDiscoverer` with `default_chunk_discoverer(guidance=...)`, `Extractor`,
   `RecordWriter`, `DocumentHook`, checked by `check_tiling`/`check_units`/`check_extraction`), `IngestionTuning`,
-  `IngestSource` (a `path`, or `data` + `name` for bytes; `table_mode`, `include_hidden_sheets`) and
+  `IngestSource` (a `path`, or `data` + `name` for bytes; `table_mode`, `include_hidden_sheets`, your own `metadata`
+  for the document's `Document` node) and
   `evaluate_ingestion`. Your **pack's own code** (its capabilities, stores, graphs) also imports
   `rag_wright.pack_sdk`: identifiers and provenance, the model seam, the LangGraph scaffold, the `Store` protocol, the
   entity-graph building blocks (`build_graph_extraction`, `disambiguate`, `resolve_entities`, `EntityRules`,

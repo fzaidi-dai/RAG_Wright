@@ -254,10 +254,11 @@ class IngestionStages:
         return sum(len(e.nodes) for e in extractions)
 
     def write_document_node(self, doc_id: str, *, parent_id: Optional[str], filename: str, media_type: str,
-                            sha256: str) -> None:
+                            sha256: str, metadata: Optional[dict] = None) -> None:
+        """The `Document` node: the engine's fields plus the product's `metadata` (PS-13), in one write."""
         self.store.kg_write([KgNode("Document", "doc_id", {
-            "doc_id": doc_id, "parent_doc_id": parent_id or "", "filename": filename, "media_type": media_type,
-            "sha256": sha256})])
+            **(metadata or {}), "doc_id": doc_id, "parent_doc_id": parent_id or "", "filename": filename,
+            "media_type": media_type, "sha256": sha256})])
 
     def write_child_links(self, parent_id: str, child: Any, row_spans: dict, rep: DocumentReport) -> None:
         """The child's `EmbeddedIn` edge (its first anchor's position) and an `AttachedTo` edge per record link."""
@@ -369,7 +370,8 @@ class IngestionPipeline:
                 stages.write_document_node, doc_id, parent_id=parent_id,
                 filename=(child.filename if child is not None else None) or name,
                 media_type=child.media_type if child is not None else (mimetypes.guess_type(name)[0] or ""),
-                sha256=child.sha256 if child is not None else hashlib.sha256(data).hexdigest())
+                sha256=child.sha256 if child is not None else hashlib.sha256(data).hexdigest(),
+                metadata=src.metadata)
         except Exception as exc:  # noqa: BLE001 - one bad document is dead-lettered, never the whole run
             rep.dead_letter = f"{type(exc).__name__}: {exc}"
             return [rep]
@@ -382,7 +384,7 @@ class IngestionPipeline:
                 rep.embedded_skipped.append(f"{emb.doc_id}: nested deeper than {_MAX_CHILD_DEPTH}")
                 continue
             emb_src = IngestSource(path=emb.path, doc_id=emb.doc_id, table_mode=src.table_mode,
-                                   include_hidden_sheets=src.include_hidden_sheets)
+                                   include_hidden_sheets=src.include_hidden_sheets, metadata=src.metadata)
             kids = await self._ingest_file(ws, stages, emb.doc_id, emb_src,
                                            parent_id=doc_id, child=emb, depth=depth + 1)
             reports.extend(kids)

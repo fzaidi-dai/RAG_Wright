@@ -184,9 +184,9 @@ Group into units (checked), attach table rows, extract each unit concurrently (p
 
 Persist the records (the domain's writer, else `kg_write`). Returns the number of record nodes.
 
-#### `IngestionStages.write_document_node(self, doc_id: 'str', *, parent_id: 'Optional[str]', filename: 'str', media_type: 'str', sha256: 'str') -> 'None'`
+#### `IngestionStages.write_document_node(self, doc_id: 'str', *, parent_id: 'Optional[str]', filename: 'str', media_type: 'str', sha256: 'str', metadata: 'Optional[dict]' = None) -> 'None'`
 
-_(no docstring)_
+The `Document` node: the engine's fields plus the product's `metadata` (PS-13), in one write.
 
 #### `IngestionStages.write_child_links(self, parent_id: 'str', child: 'Any', row_spans: 'dict', rep: 'DocumentReport') -> 'None'`
 

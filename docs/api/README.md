@@ -124,9 +124,9 @@ When `auto` treats a table as a DATABASE (one unit per row): a header of `min_he
 
 What counts as a record IDENTIFIER when linking an embedded file to a row: a token (4+ chars, contains a digit) on at most `max_rows` table rows and in at most `max_files` embedded files.
 
-### `IngestSource(*, path: Optional[str] = None, data: Optional[bytes] = None, name: Optional[str] = None, doc_id: Optional[str] = None, table_mode: Literal['auto', 'record', 'block'] = 'auto', include_hidden_sheets: bool = True) -> None`
+### `IngestSource(*, path: Optional[str] = None, data: Optional[bytes] = None, name: Optional[str] = None, doc_id: Optional[str] = None, table_mode: Literal['auto', 'record', 'block'] = 'auto', include_hidden_sheets: bool = True, metadata: Optional[dict[str, Any]] = None) -> None`
 
-One document to ingest: either a file `path`, or in-memory `data` (bytes, e.g. an upload) with its file `name` (the extension picks the format); its `doc_id` (default: derived from the file name), how its tables are grouped (`auto` decides per table; `record` / `block` force one mode), and whether hidden spreadsheet sheets are ingested.
+One document to ingest: either a file `path`, or in-memory `data` (bytes, e.g. an upload) with its file `name` (the extension picks the format); its `doc_id` (default: derived from the file name), how its tables are grouped (`auto` decides per table; `record` / `block` force one mode), whether hidden spreadsheet sheets are ingested, and the product's own `metadata` (PS-13): written onto the document's `Document` node in the same write as the engine's fields, and onto each embedded file's. Keys are identifiers that do not shadow an engine field (`doc_id`, `parent_doc_id`, `filename`, `media_type`, `sha256`); values are strings, numbers, booleans, None or lists of those. Read or filter it with `kg_read(ws, "Document", where={...})`; change it later with `kg_update`.
 
 #### `IngestSource.read_bytes(self) -> 'bytes'`
 
