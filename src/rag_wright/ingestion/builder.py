@@ -289,7 +289,8 @@ class IngestionPipeline:
                  writer: Optional[RecordWriter], tuning: Optional[IngestionTuning], embedder: Any,
                  chunk_model: Optional[str], progress: Callable[[str], Any],
                  document_hook: Optional[DocumentHook] = None,
-                 unit_representative: Optional[UnitRepresentative] = None) -> None:
+                 unit_representative: Optional[UnitRepresentative] = None,
+                 chunk_discoverer: Any = None) -> None:
         self._hooks = dict(extractor=extractor, segmenter=segmenter, span_tagger=span_tagger,
                            unit_grouper=unit_grouper, boundary_decider=boundary_decider, writer=writer,
                            unit_representative=unit_representative)
@@ -298,6 +299,7 @@ class IngestionPipeline:
         self._chunk_model = chunk_model
         self._progress = progress
         self._document_hook = document_hook
+        self._chunk_discoverer = chunk_discoverer  # PS-R5b: the product's chunk-boundary rule (None = engine default)
 
     def stages(self, ws: Any, *, cache_dir: Union[str, Path]) -> IngestionStages:
         """Advanced: the individual stage functions bound to a workspace (its store, ingest embedder and tuning), for a
@@ -309,6 +311,7 @@ class IngestionPipeline:
 
             self._embedder = build_ingest_embedder(ws._config.embeddings.get("text", "bge-m3"))
         return IngestionStages(ws._store, **self._hooks, tuning=tuning, embedder=self._embedder,
+                               discoverer=self._chunk_discoverer,
                                chunk_model=self._chunk_model, cache_dir=cache_dir)
 
     async def aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
@@ -457,7 +460,8 @@ def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = No
                     tuning: Optional[IngestionTuning] = None, embedder: Any = None, chunk_model: Optional[str] = None,
                     progress: Callable[[str], Any] = functools.partial(print, flush=True),
                     document_hook: Optional[DocumentHook] = None,
-                    unit_representative: Optional[UnitRepresentative] = None) -> IngestionPipeline:
+                    unit_representative: Optional[UnitRepresentative] = None,
+                    chunk_discoverer: Any = None) -> IngestionPipeline:
     """The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override
     any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch`
     object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section.
@@ -466,8 +470,10 @@ def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = No
     texts -> "starts a new unit?" per text) is handed to the unit grouper to settle the boundaries its rules are
     unsure of; None = the grouper's own rules only. `unit_representative` (a `UnitRepresentative`: a unit's member
     spans -> the one that represents it) sets each unit's `anchor` and leading tag after grouping -- e.g. the
-    operative sentence rather than a heading; None = the grouper's own choice. Returns an `IngestionPipeline`; run it
-    with
+    operative sentence rather than a heading; None = the grouper's own choice. `chunk_discoverer` (a
+    `BoundaryDiscoverer`) sets the chunk-boundary rule; None = the engine default (structural boundaries, `chunk_model`
+    refining only over-cap sections), and `default_chunk_discoverer(guidance=...)` is that default with your domain's
+    wording. Returns an `IngestionPipeline`; run it with
     `await pipeline.aingest(ws, sources, cache_dir=...)`."""
     t = tuning or IngestionTuning()
     if t.extract_concurrency < 1 or t.document_concurrency < 1:
@@ -475,7 +481,16 @@ def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = No
     return IngestionPipeline(extractor, segmenter=segmenter, span_tagger=span_tagger, unit_grouper=unit_grouper,
                              boundary_decider=boundary_decider, writer=writer, tuning=tuning, embedder=embedder,
                              chunk_model=chunk_model, progress=progress, document_hook=document_hook,
-                             unit_representative=unit_representative)
+                             unit_representative=unit_representative, chunk_discoverer=chunk_discoverer)
 
 
-__all__ = ["build_ingestion", "IngestionPipeline", "IngestionStages", "ExtractStage", "IngestionReport", "DocumentReport"]
+def default_chunk_discoverer(chunk_model: Optional[str] = None, *, guidance: Optional[str] = None) -> Any:
+    """PS-R5b: the engine's default chunk-boundary rule (structural boundaries first; `chunk_model` refines only an
+    over-cap section, through a domain-neutral prompt) with your domain's `guidance` added to that prompt (e.g. what a
+    coherent unit is in your documents). Pass it as `build_ingestion(chunk_discoverer=...)`."""
+    from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer
+
+    return StructuralModelFallbackDiscoverer(chunk_model, guidance=guidance)
+
+
+__all__ = ["build_ingestion", "default_chunk_discoverer", "IngestionPipeline", "IngestionStages", "ExtractStage", "IngestionReport", "DocumentReport"]

@@ -2739,3 +2739,13 @@ cbr:segmentationVocabulary a cbr:SegmentationVocabulary ;
     cbr:sectionSymbol "§" ;
     cbr:furnitureLabel "by", "name", "title", "attest", "witness", "its", "date", "signature", "attention", "attn",
         "facsimile", "fax", "email", "e-mail", "telephone", "tel", "phone" .
+
+# PS-R5b (ADR-0066): the contract domain's NON-ENTITY vocabulary for entity resolution, moved out of the engine's
+# generic canonicalisation. `cbr:roleTerm`: a party ROLE, not a party, once normalized; `cbr:rolePhrase`: a
+# party-definition fragment that marks a mention as a role description rather than a name.
+cbr:entityRules a cbr:EntityRules ;
+    cbr:roleTerm "parties", "party", "buyer", "seller", "purchaser", "vendor", "supplier", "licensor", "licensee",
+        "customer", "client", "contractor", "agent", "lender", "borrower", "guarantor", "affiliate", "affiliates",
+        "subsidiary", "the company", "the parties" ;
+    cbr:rolePhrase "together with", "buyer entit", "seller entit", "the buyer", "the seller", "buyer the",
+        "seller the", "the company and", "and together", "the parties", "collectively" .

@@ -14,10 +14,11 @@ normalize/reject/cluster rules harden into the T23b capability -- keep them.
 from __future__ import annotations
 
 import re
+from typing import Optional
 
 from pydantic import BaseModel
 
-# Legal-form suffixes stripped for the clustering key, so "Bank of America" and "Bank of America,
+# Company-form suffixes stripped for the clustering key, so "Bank of America" and "Bank of America,
 # N.A." collapse to one key. Applied repeatedly (a name may carry several, e.g. "Co., Ltd.").
 _LEGAL_SUFFIX = re.compile(
     r"[,\.\s]+\b("
@@ -29,30 +30,20 @@ _LEGAL_SUFFIX = re.compile(
 _NON_ALNUM = re.compile(r"[^a-z0-9]+")
 _APOSTROPHE = re.compile(r"['’‘`]")  # so "Stremick's" == "Stremicks"
 _PLACEHOLDER = re.compile(r"<<|>>|_{2,}|\bxxx+\b|\benter\b|company name|\[\s*\]", re.IGNORECASE)
-# Alias clause markers: everything from the marker on is an alias, not part of the legal name, so
-# "Acme Inc. d/b/a Brand" -> "Acme Inc." and a mention that is only an alias clause ("formerly known
+# Alias markers: everything from the marker on is an alias, not part of the registered name, so
+# "Acme Inc. d/b/a Brand" -> "Acme Inc." and a mention that is only an alias phrase ("formerly known
 # as Tradeum, Inc. which d/b/a VerticalNet Solutions") strips to empty and is rejected.
 _ALIAS_MARKER = re.compile(
     r"\b(formerly known as|doing business as|also known as|"
     r"f\s*/?\s*k\s*/?\s*a|d\s*/?\s*b\s*/?\s*a|a\s*/?\s*k\s*/?\s*a)\b",
     re.IGNORECASE,
 )
-# Contract party-definition clause fragments ("...and together with Buyer the Buyer Entities"), not
-# entity names. A mention carrying one of these is a role phrase, not a company.
-_ROLE_PHRASE = re.compile(
-    r"\b(together with|buyer entit|seller entit|the buyer|the seller|buyer the|seller the|"
-    r"the company and|and together|the parties|collectively)\b",
-    re.IGNORECASE,
-)
-
-# Bare over-broad / role words that are not entities on their own (a key equal to one of these,
-# after suffix stripping, is a role label or an over-broad match, not a company).
+# Bare over-broad words that are not entities on their own in any domain (a key equal to one of these, after suffix
+# stripping, is an over-broad match, not an organisation). A domain's ROLE words and phrases (e.g. a contract's
+# "the applicant", "the supplier") are the domain's: it passes them as `EntityRules` (PS-R5b, ADR-0066).
 _OVERBROAD = frozenset(
     {
-        "bank", "company", "co", "parties", "party", "buyer", "seller", "purchaser", "vendor",
-        "supplier", "licensor", "licensee", "customer", "client", "contractor", "agent", "lender",
-        "borrower", "guarantor", "corporation", "corp", "trust", "group", "holdings", "holding",
-        "affiliate", "affiliates", "subsidiary", "the company", "the parties",
+        "bank", "company", "co", "corporation", "corp", "trust", "group", "holdings", "holding",
         # bare generic-token fragments that are not entities on their own
         "services", "solutions", "systems", "technologies", "technology", "international",
         "enterprises", "industries", "communications", "networks", "media", "capital",
@@ -63,13 +54,13 @@ _OVERBROAD = frozenset(
 
 
 def _strip_alias_clause(name: str) -> str:
-    """Cut an alias clause ('... d/b/a X', '... formerly known as Y'), keeping the name before it."""
+    """Cut an alias phrase ('... d/b/a X', '... formerly known as Y'), keeping the name before it."""
     match = _ALIAS_MARKER.search(name)
     return name[: match.start()].strip(" ,;(") if match else name
 
 
 def normalize_entity_name(name: str) -> str:
-    """Clustering key: lowercase, surrounding quotes/parens and legal suffixes stripped, whitespace
+    """Clustering key: lowercase, surrounding quotes/parens and company-form suffixes stripped, whitespace
     collapsed. Merges `Bank of America`, `Bank of America, N.A.`, `Bank of America, N. A`."""
     text = _strip_alias_clause(name).strip().strip("\"'()[]").lower()
     text = _APOSTROPHE.sub("", text)  # possessive: "stremick's" -> "stremicks"
@@ -80,15 +71,29 @@ def normalize_entity_name(name: str) -> str:
     return _NON_ALNUM.sub(" ", text).strip()
 
 
-def is_entity(name: str) -> bool:
-    """Reject non-entities: template placeholders, role artifacts, and bare over-broad tokens."""
+class EntityRules(BaseModel):
+    """PS-R5b: a domain's own non-entity vocabulary, declared in its pack (ADR-0066) and passed to `is_entity` /
+    `disambiguate` / `resolve_entities`. `role_terms`: names that are a role, not an entity, once normalized (a
+    role such as "the applicant" or "the supplier"); `role_phrases`: phrases that mark a mention as a role description
+    rather than a name (e.g. "together with", "collectively")."""
+
+    model_config = {"frozen": True}
+
+    role_terms: frozenset[str] = frozenset()
+    role_phrases: tuple[str, ...] = ()
+
+
+def is_entity(name: str, rules: Optional[EntityRules] = None) -> bool:
+    """Reject non-entities: template placeholders and bare over-broad tokens, plus the domain's role words and
+    phrases when `rules` are given."""
     stripped = name.strip().strip("\"'()[]")
-    if not stripped or _PLACEHOLDER.search(name) or _ROLE_PHRASE.search(name):
+    if not stripped or _PLACEHOLDER.search(name):
         return False
-    if stripped.lower().startswith("collectively"):
+    if rules is not None and rules.role_phrases and re.search(
+            r"\b(" + "|".join(re.escape(p) for p in rules.role_phrases) + r")\b", name, re.IGNORECASE):
         return False
     key = normalize_entity_name(name)
-    return bool(key) and key not in _OVERBROAD
+    return bool(key) and key not in _OVERBROAD and (rules is None or key not in rules.role_terms)
 
 
 class EntityCluster(BaseModel):
@@ -99,11 +104,12 @@ class EntityCluster(BaseModel):
     variants: list[str]
 
 
-def cluster_entities(names: list[str]) -> list[EntityCluster]:
-    """Cluster surface forms into entities by normalized key (non-entities rejected first)."""
+def cluster_entities(names: list[str], rules: Optional[EntityRules] = None) -> list[EntityCluster]:
+    """Cluster surface forms into entities by normalized key (non-entities rejected first, with the domain's
+    `rules` when given)."""
     groups: dict[str, list[str]] = {}
     for name in names:
-        if not is_entity(name):
+        if not is_entity(name, rules):
             continue
         key = normalize_entity_name(name)
         groups.setdefault(key, [])

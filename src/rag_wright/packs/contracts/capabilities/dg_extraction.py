@@ -158,7 +158,11 @@ def resolve_extracted(
         names = [p.name for p in cp.parties]
         chunk_id = ChunkId.of(canonical_source_doc_id(contract_id), 0, "|".join(names) or contract_id)
         results.append(parties_to_extraction(chunk_id, names))
-    resolution = resolve_entities(disambiguate(results), results, resolver=registry)
+    from rag_wright.packs.contracts.ontology.loader import load_entity_rules
+
+    rules = load_entity_rules()  # PS-R5b: the contract domain's non-entity roles, from contract_bridge.ttl
+    resolution = resolve_entities(disambiguate(results, entity_rules=rules), results, resolver=registry,
+                                  entity_rules=rules)
     if private_map:
         resolution = _apply_private_identities(resolution, private_map)
     return resolution

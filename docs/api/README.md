@@ -132,7 +132,7 @@ One document to ingest: either a file `path`, or in-memory `data` (bytes, e.g. a
 
 The document's bytes: `data`, or the file at `path`.
 
-### `IngestionPipeline(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]', span_tagger: 'Optional[SpanTagger]', unit_grouper: 'Optional[UnitGrouper]', boundary_decider: 'Optional[BoundaryDecider]', writer: 'Optional[RecordWriter]', tuning: 'Optional[IngestionTuning]', embedder: 'Any', chunk_model: 'Optional[str]', progress: 'Callable[[str], Any]', document_hook: 'Optional[DocumentHook]' = None, unit_representative: 'Optional[UnitRepresentative]' = None) -> 'None'`
+### `IngestionPipeline(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]', span_tagger: 'Optional[SpanTagger]', unit_grouper: 'Optional[UnitGrouper]', boundary_decider: 'Optional[BoundaryDecider]', writer: 'Optional[RecordWriter]', tuning: 'Optional[IngestionTuning]', embedder: 'Any', chunk_model: 'Optional[str]', progress: 'Callable[[str], Any]', document_hook: 'Optional[DocumentHook]' = None, unit_representative: 'Optional[UnitRepresentative]' = None, chunk_discoverer: 'Any' = None) -> 'None'`
 
 Built by `build_ingestion`; run with `await pipeline.aingest(ws, sources, cache_dir=...)`. Drives the shared `IngestionStages` per document (parse -> chunk -> segment -> tag -> index -> group -> extract -> write -> `document_hook` -> `Document` node), then ingests embedded files and PDF attachments the same way, as child documents linked to their parent.
 
@@ -195,6 +195,10 @@ One unit -> the domain's typed records (required; the domain-specific step).
 ### `RecordWriter: (source_doc_id: 'str', extractions: 'Sequence[UnitExtraction]') -> 'Awaitable[None]'`
 
 Optional: persist a document's extractions. The engine default writes them with `kg_write`.
+
+### `BoundaryDiscoverer: (**kwargs)`
+
+The semantic boundary-discovery seam: decide chunk boundaries as a partition of item-index spans.
 
 ## Type aliases
 
@@ -368,9 +372,13 @@ A grouper's units must use known spans, each at most once, in document order, in
 
 Provenance (FR-S.4), wherever the facts live -- on nodes or on edges (ADR-0124, ING-4c): every node or edge that carries a `span_id` must cite a span of its unit, every `confidence` must be a `ConfidenceTag`, and a non-empty extraction must cite at least once. Nodes without a `span_id` are shared vocabulary (value or taxonomy nodes) and are allowed beside a cited fact.
 
-### `build_ingestion(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, boundary_decider: 'Optional[BoundaryDecider]' = None, writer: 'Optional[RecordWriter]' = None, tuning: 'Optional[IngestionTuning]' = None, embedder: 'Any' = None, chunk_model: 'Optional[str]' = None, progress: 'Callable[[str], Any]' = functools.partial(<built-in function print>, flush=True), document_hook: 'Optional[DocumentHook]' = None, unit_representative: 'Optional[UnitRepresentative]' = None) -> 'IngestionPipeline'`
+### `build_ingestion(extractor: 'Extractor', *, segmenter: 'Optional[Segmenter]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, boundary_decider: 'Optional[BoundaryDecider]' = None, writer: 'Optional[RecordWriter]' = None, tuning: 'Optional[IngestionTuning]' = None, embedder: 'Any' = None, chunk_model: 'Optional[str]' = None, progress: 'Callable[[str], Any]' = functools.partial(<built-in function print>, flush=True), document_hook: 'Optional[DocumentHook]' = None, unit_representative: 'Optional[UnitRepresentative]' = None, chunk_discoverer: 'Any' = None) -> 'IngestionPipeline'`
 
-The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section. `document_hook(ws, source_document, chunks)` is awaited once per document after its records are written (e.g. a domain's entity graph); its return value is ignored. `boundary_decider` (a `BoundaryDecider`: candidate line texts -> "starts a new unit?" per text) is handed to the unit grouper to settle the boundaries its rules are unsure of; None = the grouper's own rules only. `unit_representative` (a `UnitRepresentative`: a unit's member spans -> the one that represents it) sets each unit's `anchor` and leading tag after grouping -- e.g. the operative sentence rather than a heading; None = the grouper's own choice. Returns an `IngestionPipeline`; run it with `await pipeline.aingest(ws, sources, cache_dir=...)`.
+The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch` object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section. `document_hook(ws, source_document, chunks)` is awaited once per document after its records are written (e.g. a domain's entity graph); its return value is ignored. `boundary_decider` (a `BoundaryDecider`: candidate line texts -> "starts a new unit?" per text) is handed to the unit grouper to settle the boundaries its rules are unsure of; None = the grouper's own rules only. `unit_representative` (a `UnitRepresentative`: a unit's member spans -> the one that represents it) sets each unit's `anchor` and leading tag after grouping -- e.g. the operative sentence rather than a heading; None = the grouper's own choice. `chunk_discoverer` (a `BoundaryDiscoverer`) sets the chunk-boundary rule; None = the engine default (structural boundaries, `chunk_model` refining only over-cap sections), and `default_chunk_discoverer(guidance=...)` is that default with your domain's wording. Returns an `IngestionPipeline`; run it with `await pipeline.aingest(ws, sources, cache_dir=...)`.
+
+### `default_chunk_discoverer(chunk_model: 'Optional[str]' = None, *, guidance: 'Optional[str]' = None) -> 'Any'`
+
+PS-R5b: the engine's default chunk-boundary rule (structural boundaries first; `chunk_model` refines only an over-cap section, through a domain-neutral prompt) with your domain's `guidance` added to that prompt (e.g. what a coherent unit is in your documents). Pass it as `build_ingestion(chunk_discoverer=...)`.
 
 ### `evaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None) -> 'IngestionEvaluation'`
 

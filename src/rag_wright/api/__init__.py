@@ -56,7 +56,9 @@ from rag_wright.ingestion.builder import (
     IngestionPipeline,
     IngestionReport,
     build_ingestion,
+    default_chunk_discoverer,
 )
+from rag_wright.capabilities.rlm_chunking import BoundaryDiscoverer
 from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, evaluate_ingestion
 from rag_wright.ingestion.tables import table_rows
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
@@ -87,7 +89,8 @@ __all__ = [
     "check_tiling", "check_units", "check_extraction",
     # ING-4b: tuning + sources
     "IngestionTuning", "RecordTableRule", "IdentifierRule", "IngestSource", "TableMode",
-    "build_ingestion", "IngestionPipeline", "DocumentHook", "IngestionReport", "DocumentReport",
+    "build_ingestion", "default_chunk_discoverer", "BoundaryDiscoverer", "IngestionPipeline", "DocumentHook",
+    "IngestionReport", "DocumentReport",
     "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation",
     "table_rows", "TableRow",
 ]

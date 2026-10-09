@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from functools import lru_cache
+from typing import Any
 from pathlib import Path
 
 from rdflib import Graph
@@ -258,6 +259,22 @@ def load_segmentation_vocab(path: str = str(_TTL_PATH)) -> dict[str, frozenset[s
     keys = {"abbreviations": "nonTerminalAbbreviation", "section_words": "sectionWord",
             "section_symbols": "sectionSymbol", "furniture_labels": "furnitureLabel"}
     return {k: frozenset(str(v) for v in g.objects(node, URIRef(_CBR + prop))) for k, prop in keys.items()}
+
+
+@lru_cache(maxsize=4)
+def load_entity_rules(path: str = str(_TTL_PATH)) -> Any:
+    """PS-R5b (ADR-0066): the contract domain's non-entity vocabulary on `cbr:entityRules` -- `cbr:roleTerm` (party
+    roles) and `cbr:rolePhrase` (party-definition fragments) -- as the engine's `EntityRules`, passed to
+    `disambiguate` / `resolve_entities`. Cached per path."""
+    from rdflib import URIRef
+
+    from rag_wright.corpus.canonicalize import EntityRules
+
+    g = Graph()
+    g.parse(path, format="turtle")
+    node = URIRef(_CBR + "entityRules")
+    return EntityRules(role_terms=frozenset(str(v) for v in g.objects(node, URIRef(_CBR + "roleTerm"))),
+                       role_phrases=tuple(sorted(str(v) for v in g.objects(node, URIRef(_CBR + "rolePhrase")))))
 
 
 def load_residual_role_rubric(path: str = str(_TTL_PATH)) -> str:

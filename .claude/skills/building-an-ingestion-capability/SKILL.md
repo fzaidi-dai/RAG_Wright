@@ -20,7 +20,7 @@ every signature). The decision record is ADR-0124 (`docs/adr/0124-generic-ingest
 | stage | owner | default (engine) | override with |
 |---|---|---|---|
 | parse (PDF, Office, spreadsheets incl. hidden sheets, HTML, Markdown; embedded files) | engine | docling, content-hash cached | (none) |
-| chunk | engine | structural boundaries; a model refines only an over-cap section | `chunk_model=` |
+| chunk | engine default, domain may override | structural boundaries; a model refines only an over-cap section (domain-neutral prompt) | `chunk_model=`, `chunk_discoverer=` (e.g. `default_chunk_discoverer(guidance=...)` to say what a coherent unit is in your documents) |
 | segment a chunk into spans | engine default, domain may override | layout-driven: a table row per span, sentences for prose, a heading joins what follows | `segmenter=` |
 | tag spans (soft tags) | domain, optional | none | `span_tagger=` |
 | index spans (embed + store, page/bbox provenance) | engine | the workspace's ingest embedder | `embedder=` |

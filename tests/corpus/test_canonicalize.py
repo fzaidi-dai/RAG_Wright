@@ -32,13 +32,28 @@ def test_does_not_over_strip_names_ending_in_suffix_letters():
     assert normalize_entity_name("Costco") == "costco"  # not "cost"
 
 
-@pytest.mark.parametrize(
-    "noise",
-    ["Bank", "<<enter Company Name>>", '(collectively the "Company").', "Company", "Group", "Holdings", "",
-     "the Company and together with Buyer the Buyer Entities", "together with Seller"],
-)
+@pytest.mark.parametrize("noise", ["Bank", "<<enter Company Name>>", "Company", "Group", "Holdings", ""])
 def test_rejects_non_entities(noise):
     assert not is_entity(noise)
+
+
+# --- PS-R5b: domain role words and phrases are the DOMAIN's (declared in its pack), not the engine's ---------------
+
+
+def _contract_rules():
+    from rag_wright.packs.contracts.ontology.loader import load_entity_rules
+
+    return load_entity_rules()
+
+
+@pytest.mark.parametrize("phrase", ['(collectively the "Company").', "the Company and together with Buyer the Buyer Entities",
+                                    "together with Seller", "Buyer", "Licensee", "the Parties"])
+def test_a_domains_role_words_and_phrases_are_rejected_with_its_rules(phrase):
+    assert not is_entity(phrase, rules=_contract_rules())  # the contracts pack's rules reject them
+
+
+def test_the_engine_rules_know_no_domain_roles():
+    assert is_entity("Buyer") and is_entity("Licensor")  # a role word is only a non-entity in a domain that says so
 
 
 @pytest.mark.parametrize(

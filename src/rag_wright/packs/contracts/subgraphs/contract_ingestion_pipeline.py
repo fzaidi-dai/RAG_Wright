@@ -847,7 +847,10 @@ def aproduction_document_ingest(
     # OVER-CAP section triggers a bounded per-section tag-parse call, and this is the model it uses (issue 0033
     # follow-up). None -> default (GENERAL role). A bare id or an ExtractionModel (unwrapped to its id).
     chunk_model_id = getattr(chunk_model, "model", chunk_model)
-    discoverer = StructuralModelFallbackDiscoverer(chunk_model_id)
+    from rag_wright.packs.contracts.skills.guidance import contract_guidance
+
+    # PS-R5b: the engine's chunking prompts are domain-neutral; the pack adds what a coherent unit is in contracts
+    discoverer = StructuralModelFallbackDiscoverer(chunk_model_id, guidance=contract_guidance("chunking"))
     from rag_wright.packs.contracts.spans.residual_candidates import select_residual_extractor
     from rag_wright.packs.contracts.spans.semantic_judge import select_asemantic_judge
     # caller-configurable ingest models (else backend/env defaults). A bare id -> an ExtractionModel; for the
@@ -1002,10 +1005,15 @@ def aproduction_document_ingest(
             affil_dir=(affil_dir if _affiliations_on else None),
             aaffiliations_fn=(_aaffiliations if _affiliations_on else None))
 
+    from rag_wright.packs.contracts.ontology.loader import load_entity_rules
+
+    entity_rules = load_entity_rules()  # PS-R5b: the contract domain's non-entity roles, from contract_bridge.ttl
+
     async def resolve_fn(extraction_results: list) -> Any:
         return await asyncio.to_thread(
-            lambda: to_graph(resolve_entities(
-                disambiguate(extraction_results), extraction_results, resolver=registry)))  # registry IS an EntityResolver (DD-3)
+            lambda: to_graph(resolve_entities(  # registry IS an EntityResolver (DD-3)
+                disambiguate(extraction_results, entity_rules=entity_rules), extraction_results, resolver=registry,
+                entity_rules=entity_rules)))
 
     async def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
         await stages.write(doc, extractions_by_doc.pop(doc.source_doc_id, []))

@@ -19,6 +19,7 @@ import zipfile
 from pathlib import Path
 
 from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
+from rag_wright.packs.contracts.ontology.loader import load_entity_rules
 from rag_wright.packs.contracts.corpus.cuad import (
     RASTER_DPI,
     load_contract_metadata,
@@ -158,7 +159,7 @@ def main() -> None:
     # legal-suffix/whitespace variants to canonical keys, so shared-party density reflects real
     # entities (a merged Bank of America is one party), not fragmented surface forms.
     clean_metas = [
-        m.model_copy(update={"parties": [p for p in m.parties if is_entity(p)]}) for m in metas
+        m.model_copy(update={"parties": [p for p in m.parties if is_entity(p, load_entity_rules())]}) for m in metas
     ]
     canon_metas = [
         m.model_copy(update={"parties": sorted({normalize_entity_name(p) for p in m.parties})})

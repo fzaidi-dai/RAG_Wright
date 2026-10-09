@@ -26,7 +26,7 @@ from rag_wright.capabilities.disambiguation import DisambiguationResult, Mention
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import ExtractionResult
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
+from rag_wright.corpus.canonicalize import EntityRules, is_entity, normalize_entity_name
 from rag_wright.ontology.registry import EntityResolver
 
 
@@ -76,6 +76,7 @@ def resolve_entities(
     results: Sequence[ExtractionResult],
     *,
     resolver: EntityResolver,
+    entity_rules: Optional[EntityRules] = None,
 ) -> ResolutionResult:
     """Link clusters to canonical ids and resolve relationship endpoints as one stream (self-loops dropped).
 
@@ -84,7 +85,8 @@ def resolve_entities(
     a cluster key first — so a ref that is the same entity as a standalone mention takes that cluster's id (the
     two-channel dedup, ADR-0004) — falling back to a direct resolver lookup only for a ref with no cluster. A
     relationship whose two refs resolve to the same non-None id is dropped (self-loop). These invariants are
-    domain-neutral and stay here; only the surface-form lookup is delegated to the resolver.
+    domain-neutral and stay here; only the surface-form lookup is delegated to the resolver. `entity_rules` (the
+    domain's non-entity role words / phrases, PS-R5b) apply to relationship endpoints as in `disambiguate`.
     """
     entities: list[ResolvedEntity] = []
     key_to_id: dict[str, Optional[str]] = {}
@@ -100,7 +102,7 @@ def resolve_entities(
         )
 
     def _resolve_ref(ref: str) -> Optional[str]:
-        if not is_entity(ref):
+        if not is_entity(ref, entity_rules):
             return None
         key = normalize_entity_name(ref)
         if key in key_to_id:  # same entity as a standalone mention -> its id (even if None)

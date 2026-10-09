@@ -37,6 +37,7 @@ async def _run(cache_dir: str, database: str, vset_path: str | None) -> None:
 
     from rag_wright.packs.contracts.capabilities.dg_extraction import build_verified_registry
     from rag_wright.capabilities.disambiguation import disambiguate
+    from rag_wright.packs.contracts.ontology.loader import load_entity_rules
     from rag_wright.capabilities.entity_resolution import resolve_entities
     from rag_wright.packs.contracts.capabilities.graph_extraction import aextract_affiliations, affiliations_to_extraction
     from rag_wright.capabilities.graph_storage import to_graph
@@ -80,7 +81,8 @@ async def _run(cache_dir: str, database: str, vset_path: str | None) -> None:
                 log(f"[backfill] {i}/{n} {doc_id}: no affiliation")
                 continue
             extraction = affiliations_to_extraction(ChunkId.of(doc_id, 0, text), pairs)
-            nodes, edges = to_graph(resolve_entities(disambiguate([extraction]), [extraction], resolver=registry))
+            nodes, edges = to_graph(resolve_entities(disambiguate([extraction], entity_rules=load_entity_rules()), [extraction],
+                                                    resolver=registry, entity_rules=load_entity_rules()))
             added = store.add_affiliation_edges(nodes, edges)
             affil_cache.write_text(json.dumps(pairs), encoding="utf-8")  # mark processed AFTER a successful write
             edges_added += added

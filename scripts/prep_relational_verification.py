@@ -16,8 +16,11 @@ import json
 from pathlib import Path
 
 from rag_wright.corpus.canonicalize import cluster_entities, is_entity, normalize_entity_name
+from rag_wright.packs.contracts.ontology.loader import load_entity_rules
+
 from rag_wright.packs.contracts.corpus.edgar import loose_cik_candidates
 
+_RULES = load_entity_rules()  # PS-R5b: the contract domain's non-entity roles
 DATA = Path("data")
 META_CACHE = DATA / "cuad" / "metadata_cache.json"
 SUBSET_MANIFEST = DATA / "cuad" / "subset" / "manifest.json"
@@ -33,9 +36,9 @@ def build() -> dict:
     raw = json.loads(META_CACHE.read_text())
     subset = set(json.loads(SUBSET_MANIFEST.read_text())["selected_ids"])
     metas = [m for m in raw if m["contract_id"] in subset]
-    parties_of = {m["contract_id"]: [p for p in m["parties"] if is_entity(p)] for m in metas}
+    parties_of = {m["contract_id"]: [p for p in m["parties"] if is_entity(p, _RULES)] for m in metas}
     keys_of = {cid: {normalize_entity_name(p) for p in ps} for cid, ps in parties_of.items()}
-    clusters = {c.key: c for c in cluster_entities([p for ps in parties_of.values() for p in ps])}
+    clusters = {c.key: c for c in cluster_entities([p for ps in parties_of.values() for p in ps], _RULES)}
     contracts_of: dict[str, set[str]] = collections.defaultdict(set)
     for cid, ks in keys_of.items():
         for k in ks:

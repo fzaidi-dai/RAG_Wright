@@ -17,14 +17,14 @@ additional resolvers bind later, with nothing here reopened.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 from rag_wright.capabilities.registry import CapabilityRegistry
 from rag_wright.contracts.extraction import ExtractionResult
 from rag_wright.contracts.provenance import ConfidenceTag
-from rag_wright.corpus.canonicalize import is_entity, normalize_entity_name
+from rag_wright.corpus.canonicalize import EntityRules, is_entity, normalize_entity_name
 
 # Confidence weakness rank: a cluster carries the WEAKEST tag among its mentions (a cluster is only as
 # trustworthy as its least-certain member).
@@ -96,20 +96,22 @@ def disambiguate(
     results: Sequence[ExtractionResult],
     *,
     coreference_resolvers: Sequence[CoreferenceResolver] = (),
+    entity_rules: Optional[EntityRules] = None,
 ) -> DisambiguationResult:
     """Normalize, reject, and cluster the extracted entity mentions into human-verifiable proposals.
 
     Mentions are collected across the extraction results (their `chunk_id` is provenance), non-entities
     are rejected (never reach T24), survivors are clustered by (normalized key, type), each cluster
     carries its provenance and weakest confidence, deferred coreference resolvers (if any) rewrite the
-    clusters, and ambiguous near-duplicates are flagged for human decision (never merged).
+    clusters, and ambiguous near-duplicates are flagged for human decision (never merged). `entity_rules` are the
+    domain's role words and phrases that are not entities (PS-R5b; declared in its pack).
     """
     groups: dict[tuple[str, str], dict] = {}  # (normalized key, entity_type) -> cluster accumulator
     rejected: list[str] = []
     for result in results:
         chunk_id = result.chunk_id.value
         for mention in result.entity_mentions:
-            if not is_entity(mention.text):
+            if not is_entity(mention.text, entity_rules):
                 rejected.append(mention.text)
                 continue
             key = normalize_entity_name(mention.text)

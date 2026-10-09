@@ -59,14 +59,16 @@ def test_possessive_apostrophe_variants_collapse():
 
 
 def test_rejects_placeholders_role_artifacts_generics_and_alias_only_mentions():
+    from rag_wright.packs.contracts.ontology.loader import load_entity_rules
+
     result = disambiguate([_result(
         0,
         ("<<enter Company Name>>", _ORG, _X),          # R1 placeholder
-        ('(collectively the "Company")', _ORG, _X),    # R2 role artifact
+        ('(collectively the "Company")', _ORG, _X),    # R2 role artifact (a CONTRACT rule: the pack's EntityRules)
         ("Services", _ORG, _X),                        # R3 bare generic token
         ("formerly known as Tradeum, Inc.", _ORG, _X),  # R4 alias-only -> strips to empty
         ("Acme Corporation", _ORG, _X),                # a real entity survives
-    )])
+    )], entity_rules=load_entity_rules())  # PS-R5b: a domain's role words/phrases come from its pack
     assert [c.representative for c in result.clusters] == ["Acme Corporation"]
     assert len(result.rejected) == 4  # the four non-entities dropped, never reach T24
 

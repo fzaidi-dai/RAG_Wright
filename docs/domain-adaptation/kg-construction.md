@@ -24,6 +24,8 @@ pipeline = build_ingestion(
     document_hook=None,        # async (ws, source_document, chunks), once per document after its records are written
                                #          (e.g. an entity graph); its return value is not used
     embedder=None,             # default: the workspace's ingest embedder (an object with encode_batch)
+    chunk_discoverer=None,     # default: structural boundaries, a model refining only over-cap sections; pass
+                               #          default_chunk_discoverer(guidance="...") to add your domain's wording
 )
 report = await pipeline.aingest(ws, ["a.pdf", IngestSource(path="b.xlsx", table_mode="record")], cache_dir="cache/")
 ```

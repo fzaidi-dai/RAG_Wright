@@ -3,7 +3,7 @@
 Chunk boundaries are decided by an **LLM exploring the document** (the RLM machinery, T15): a strong
 model reads the parsed document's structure, greps for structural markers, examines section sizes, and
 returns semantically coherent boundary spans over the document's items. This is the capability, and it is
-mandatory — no fixed-size chunking, ever (SPEC): abrupt fixed-size cuts destroy clause-level retrieval,
+mandatory — no fixed-size chunking, ever (SPEC): abrupt fixed-size cuts destroy unit-level retrieval,
 and the LLM-found semantic boundary is what prevents that. Recursion is available-when-warranted (a
 section too large to judge in one pass may be decomposed further) but is not required of chunking; that
 is intrinsic to synthesis (T28) and the RLM method, not chunking (ADR-0019).
@@ -45,7 +45,13 @@ from rag_wright.skills.rlm.agent import build_rlm_agent, rlm_interpreter_session
 
 DEFAULT_TOKEN_CAP = 20_000
 DEFAULT_SUMMARY_CONCURRENCY = 8  # in-flight summary calls (backpressure); summaries are network-bound
-_SUMMARIZE_PROMPT = "Summarize this contract chunk in one or two sentences, factually:"
+_SUMMARIZE_PROMPT = "Summarize this document chunk in one or two sentences, factually:"
+
+
+def _guidance_line(guidance: Optional[str]) -> str:
+    """PS-R5b: a domain's wording for a domain-neutral chunking prompt (e.g. what a coherent unit is in its
+    documents), or nothing."""
+    return f"\n\nDomain guidance: {guidance.strip()}" if guidance and guidance.strip() else ""
 
 # Minimum chunk size floor (~250 tokens, T-CHK). Applied in `_finalize_chunks` over the DISCOVERER's
 # spans: an LLM boundary discoverer can just as easily emit a boundary around a lone heading or a
@@ -65,8 +71,8 @@ class Chunk(BaseModel):
     CU-B1 (ADR-0029): `doc_start`/`doc_end` are this chunk's character range in the CANONICAL document text
     (`canonical_document_text()` = the `_SEP`-join of the finalized chunk texts), so
     `canonical_document_text(chunks)[doc_start:doc_end] == text` byte-faithfully. This is the citation
-    coordinate the CUAD highlight pipeline indexes into (span offsets, CU-B2, compose as chunk.doc_start +
-    the clause-relative span offset). The chunker strips/merges/splits item text, so the canonical text is
+    coordinate a citation-highlight pipeline indexes into (span offsets, CU-B2, compose as chunk.doc_start +
+    the chunk-relative span offset). The chunker strips/merges/splits item text, so the canonical text is
     the reconstruction from chunks (what the app renders + highlights), not the raw parsed text. Page/bbox
     overlay is a separate, DEFERRED concern (CU-B5) but NOT lost: the parsed `DoclingDocument` (persisted at
     parse) retains per-item page+bbox provenance, so a later canonical-char-offset -> Docling-item -> bbox
@@ -125,8 +131,8 @@ _DISCOVERY_INSTRUCTIONS = (
     "`const _n = await tools.workingSetSize(); if (items.length !== _n) throw new Error('LOAD UNDER-READ: ' "
     "+ items.length + ' of ' + _n);` — the size is the truthful runtime count and a short load is a silent "
     "text drop. Partition it into semantically coherent chunks by grouping CONTIGUOUS items so "
-    "that each chunk is one coherent unit (a clause, a section, a related run) and no chunk exceeds ~{cap} "
-    "characters. Never split a single coherent clause across two chunks, and never cut at a fixed size. "
+    "that each chunk is one coherent unit (a section, a passage, a related run) and no chunk exceeds ~{cap} "
+    "characters. Never split a single coherent unit across two chunks, and never cut at a fixed size. "
     "COVERAGE TAIL (do not skip): before returning, verify in code that your spans cover EVERY item from 0 "
     "to items.length-1 with no gap; for any item range the recursion missed, add a span covering it — the "
     "code guarantees coverage, a missed item is a silent text drop. Return ONLY a JSON array of the "
@@ -192,11 +198,14 @@ class SeamBoundaryDiscoverer:
     available-when-warranted, not forced. It returns a partition of boundary spans.
     """
 
-    def __init__(self, model: object = None, *, token_cap: int = DEFAULT_TOKEN_CAP) -> None:
+    def __init__(self, model: object = None, *, token_cap: int = DEFAULT_TOKEN_CAP,
+                 guidance: Optional[str] = None) -> None:
         # `model` is a model id (str) resolved through the profile seam, or a `BaseChatModel` instance
-        # (tests inject a fake); defaults to the quality-sensitive STRUCTURED_REASONING role.
+        # (tests inject a fake); defaults to the quality-sensitive STRUCTURED_REASONING role. `guidance` is the
+        # domain's wording for the domain-neutral instructions (PS-R5b).
         self._model = model if model is not None else model_for(ModelRole.STRUCTURED_REASONING)
         self._token_cap = token_cap
+        self._guidance = guidance
 
     def discover(self, document) -> list[BoundarySpan]:
         items = _document_items(document)
@@ -212,7 +221,7 @@ class SeamBoundaryDiscoverer:
             load-completeness assertion checks, so an under-read of the document fails loud, not silent)."""
             return len(items)
 
-        instructions = _DISCOVERY_INSTRUCTIONS.format(cap=self._token_cap * 4)
+        instructions = _DISCOVERY_INSTRUCTIONS.format(cap=self._token_cap * 4) + _guidance_line(self._guidance)
         request = f"Run this as a workflow.\n\n{instructions}"
         # one model across all roles (the strong reasoning model): boundary discovery is a single
         # exploration, and a sub-agent it dispatches for an over-large section warrants the same model.
@@ -252,10 +261,10 @@ def _final_text(messages) -> str:
 # --- single-call (non-agentic) boundary discovery + deterministic repair (CU-B4) ------------------
 
 _SINGLE_CALL_PROMPT = (
-    "Below are {n} numbered structural items of a contract. Partition them into semantically coherent "
-    "clauses/sections: CONTIGUOUS groups of item indices, each one coherent clause or section (never split a "
-    "single clause), together covering EVERY item from 0 to {last} with no gap or overlap. Return the spans "
-    "as {{start_index, end_index}} (inclusive).\n\n{body}"
+    "Below are {n} numbered structural items of a document. Partition them into semantically coherent "
+    "units: CONTIGUOUS groups of item indices, each one coherent section or passage (never split a single "
+    "coherent unit), together covering EVERY item from 0 to {last} with no gap or overlap. Return the spans "
+    "as {{start_index, end_index}} (inclusive).{guidance}\n\n{body}"
 )
 
 
@@ -279,14 +288,16 @@ def repair_partition(raw: list[tuple[int, int]], n: int) -> list[BoundarySpan]:
 
 class SingleCallBoundaryDiscoverer:
     """A NON-agentic boundary discoverer: ONE structured LLM call -> a boundary partition, deterministically
-    repaired (`repair_partition`) to a valid partition. For well-structured documents (CUAD contracts) this
-    replaces the agentic `SeamBoundaryDiscoverer` at ~100x less cost/latency (measured 3.4s vs 5-9min) with
-    equal clause integrity. Uses the GENERAL role (Gemma-4-class). No interpreter -> no process-wide lock ->
+    repaired (`repair_partition`) to a valid partition. For well-structured documents (measured on a contract
+    corpus) this replaces the agentic `SeamBoundaryDiscoverer` at ~100x less cost/latency (3.4s vs 5-9min) with
+    equal unit integrity. Uses the GENERAL role (Gemma-4-class). No interpreter -> no process-wide lock ->
     ordinary async concurrency (no process pool needed). `structured_factory` is injectable for tests."""
 
-    def __init__(self, model_id: str | None = None, *, structured_factory=build_structured) -> None:
+    def __init__(self, model_id: str | None = None, *, structured_factory=build_structured,
+                 guidance: Optional[str] = None) -> None:
         self._model_id = model_id or model_for(ModelRole.GENERAL)
         self._factory = structured_factory
+        self._guidance = guidance  # PS-R5b: the domain's wording for the domain-neutral prompt
 
     def _prompt(self, document) -> tuple[str | None, int]:
         items = _document_items(document)
@@ -294,7 +305,7 @@ class SingleCallBoundaryDiscoverer:
         if n == 0:
             return None, 0
         body = "\n".join(f"[{it['index']}] {it['text'][:140]}" for it in items)
-        return _SINGLE_CALL_PROMPT.format(n=n, last=n - 1, body=body), n
+        return _SINGLE_CALL_PROMPT.format(n=n, last=n - 1, body=body, guidance=_guidance_line(self._guidance)), n
 
     # ADR-0058 side-fix (issue 0004): name the stage so a deadline warning says WHICH call was cancelled.
     _STAGE = "semantic_chunking.discover"
@@ -317,9 +328,9 @@ class SingleCallBoundaryDiscoverer:
 
 _CUT_PROMPT = (
     "Below are {n} numbered structural items of a document (indices 0 to {last}). Group CONTIGUOUS items into "
-    "semantically coherent clauses/sections (never split a single clause). List the item index where EACH new "
-    "chunk BEGINS -- the first item of every clause/section, in increasing order; index 0 always begins the "
-    "first chunk.\n\n{body}"
+    "semantically coherent sections or passages (never split a single coherent unit). List the item index where "
+    "EACH new chunk BEGINS -- the first item of every unit, in increasing order; index 0 always begins the "
+    "first chunk.{guidance}\n\n{body}"
 )
 
 
@@ -348,9 +359,11 @@ class TagBoundaryDiscoverer:
 
     _STAGE = "semantic_chunking.discover"
 
-    def __init__(self, model_id: str | None = None, *, structured_factory=build_tag_structured) -> None:
+    def __init__(self, model_id: str | None = None, *, structured_factory=build_tag_structured,
+                 guidance: Optional[str] = None) -> None:
         self._model_id = model_id or model_for(ModelRole.GENERAL)
         self._factory = structured_factory
+        self._guidance = guidance  # PS-R5b: the domain's wording for the domain-neutral prompt
 
     def _prompt(self, document) -> tuple[str | None, int]:
         items = _document_items(document)
@@ -358,7 +371,7 @@ class TagBoundaryDiscoverer:
         if n == 0:
             return None, 0
         body = "\n".join(f"[{it['index']}] {it['text'][:140]}" for it in items)
-        return _CUT_PROMPT.format(n=n, last=n - 1, body=body), n
+        return _CUT_PROMPT.format(n=n, last=n - 1, body=body, guidance=_guidance_line(self._guidance)), n
 
     def discover(self, document) -> list[BoundarySpan]:
         prompt, n = self._prompt(document)
@@ -387,7 +400,7 @@ class StructuralBoundaryDiscoverer:
     headings degrades to one span (then cap-split) -- the case CHUNK-4's per-section model fallback improves."""
 
     respects_structure = True  # 0006-A: authoritative section boundaries -> finalize keeps each section, does NOT
-    #                            apply the 1000-char prose floor that would coalesce short clauses into one chunk.
+    #                            apply the 1000-char prose floor that would coalesce short sections into one chunk.
 
     def _starts(self, document) -> list[int]:
         # boundary START indices: 0, plus every heading-labelled item's index (deduped, sorted).
@@ -428,10 +441,11 @@ class StructuralModelFallbackDiscoverer:
 
     def __init__(self, model_id: str | None = None, *, token_cap: int = DEFAULT_TOKEN_CAP,
                  structural: Any = None, fallback: Any = None,
-                 max_concurrency: int = DEFAULT_SUMMARY_CONCURRENCY) -> None:
+                 max_concurrency: int = DEFAULT_SUMMARY_CONCURRENCY, guidance: Optional[str] = None) -> None:
         self._cap_chars = token_cap * 4  # matches _finalize_chunks' hard-split trigger exactly
         self._structural = structural if structural is not None else StructuralBoundaryDiscoverer()
-        self._fallback = fallback if fallback is not None else TagBoundaryDiscoverer(model_id)
+        # PS-R5b: `guidance` (the domain's wording) reaches the model fallback's domain-neutral prompt
+        self._fallback = fallback if fallback is not None else TagBoundaryDiscoverer(model_id, guidance=guidance)
         self._max_concurrency = max_concurrency
 
     def _needs_refine(self, document, span: BoundarySpan) -> bool:
@@ -489,11 +503,13 @@ class SeamSummarizer:
     temperature-zero base keep summaries stable per call.
     """
 
-    def __init__(self, model_id: str | None = None) -> None:
+    def __init__(self, model_id: str | None = None, *, guidance: Optional[str] = None) -> None:
         self._model_id = model_id or model_for(ModelRole.SUMMARIZATION)
+        self._guidance = guidance  # PS-R5b: the domain's wording for the domain-neutral prompt
 
     def summarize(self, text: str) -> str:
-        result = build_structured(self._model_id, _Summary).invoke(f"{_SUMMARIZE_PROMPT}\n\n{text}")
+        prompt = f"{_SUMMARIZE_PROMPT}{_guidance_line(self._guidance)}\n\n{text}"
+        result = build_structured(self._model_id, _Summary).invoke(prompt)
         return result.summary
 
 
@@ -585,7 +601,7 @@ def _finalize_chunks(document, spans: list[BoundarySpan], token_cap: int,
 
 def _merge_bare_headings(chunks: list[str], token_cap: int) -> list[str]:
     """Structure-first (ADR-0058 / 0006-A): every docling section is a legitimate chunk, however short, so the
-    1000-char prose floor does NOT apply -- a complete short clause keeps its own chunk. Only a BARE HEADING (a
+    1000-char prose floor does NOT apply -- a complete short section keeps its own chunk. Only a BARE HEADING (a
     lone section header / title with no operative body) is folded into a neighbour, so a heading never becomes a
     standalone chunk (issue 0006 Problem 2 at chunk granularity): leading heading(s) fold FORWARD into the next
     section, a trailing heading folds BACKWARD. The token cap still wins (a rare heading+near-cap section is

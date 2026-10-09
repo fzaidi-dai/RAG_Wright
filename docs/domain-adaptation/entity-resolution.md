@@ -45,8 +45,14 @@ is generic; a domain's canonical ids and their normalization are the domain's co
    alias are indexed, and so is the optional `ticker`) and optionally inject a domain `normalize=`, or
    implement the `EntityResolver` protocol yourself (a custom strategy, or a call to an external authority service)
    honoring the closed-world contract.
-3. **Run it in a `document_hook`**: pass your resolver to `resolve_entities`. The clustering/dedup stays the
-   engine's generic disambiguation; only the lookup is yours.
+3. **Declare your non-entity roles.** The engine rejects only generic noise (template placeholders, bare tokens
+   like "Company" or "Holdings"). Words that name a ROLE in your documents ("the applicant", "the supplier") and
+   phrases that mark a role description ("together with", "collectively") are your domain's: declare them in your
+   pack and pass them as `EntityRules(role_terms=..., role_phrases=...)` (`rag_wright.corpus.canonicalize`) to both
+   `disambiguate` and `resolve_entities`. The reference pack declares its contract roles on `cbr:entityRules` in
+   `contract_bridge.ttl` (ADR-0066).
+4. **Run it in a `document_hook`**: pass your resolver and rules to `resolve_entities`. The clustering/dedup stays
+   the engine's generic disambiguation; only the lookup and the rules are yours.
 
 ### Recipe: an entity graph in a `document_hook`
 
@@ -58,17 +64,19 @@ from rag_wright.api import build_ingestion, pack_store
 from rag_wright.capabilities.disambiguation import disambiguate
 from rag_wright.capabilities.entity_resolution import resolve_entities
 from rag_wright.capabilities.graph_storage import GraphWriter
+from rag_wright.corpus.canonicalize import EntityRules
 from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.subgraphs.graph_extraction import build_graph_extraction
 
 graph = build_graph_extraction(my_entity_extractors)   # required: your stack of graph extractors
+my_rules = EntityRules(role_terms=frozenset({"the applicant", "the supplier"}), role_phrases=("together with",))
 cache_dir = Path("cache")                              # GraphWriter keeps its content-hash checkpoints here
 
 async def entity_graph_hook(ws, sd, chunks):
     results = [graph.invoke({"chunk_id": ChunkId.of(sd.source_doc_id, c.chunk_index, c.text), "text": c.text})["result"]
                for c in chunks]
-    clusters = disambiguate(results)
-    resolution = resolve_entities(clusters, results, resolver=my_resolver)
+    clusters = disambiguate(results, entity_rules=my_rules)
+    resolution = resolve_entities(clusters, results, resolver=my_resolver, entity_rules=my_rules)
     content_hash = hashlib.sha256(sd.text.encode("utf-8")).hexdigest()
     pack_store(ws, GraphWriter, checkpoint_dir=cache_dir).write_document(sd.source_doc_id, content_hash, resolution)
 
