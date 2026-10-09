@@ -93,6 +93,12 @@ def register() -> None:
 `for m in engine_capabilities(): register_capability(m)` (or from your pack's `register()`, as above);
 otherwise `ainvoke_model("jev_decision", ...)` raises `KeyError` (unknown capability).
 
+**One catalog per process (a known limitation).** The catalog is shared by every workspace in the process:
+registering a slug replaces it for all of them, including the later steps of a run already in progress, so register
+once at startup. To give tenants different implementations of one slug (for example a decision model for one and a
+trained classifier for another), run them in separate processes, or register one slug per implementation and choose
+the slug per tenant in your own code.
+
 **Discovery.** Once registered, a product agent finds your capability two ways: `capability_index()` — the flat
 `{slug: {kind, description}}` listing (what exists) — or **`discover(task, resources=ws)`** — embedding-ranked
 selection over the live catalog for a task (returns the top matches by BGE-M3 similarity to each capability's

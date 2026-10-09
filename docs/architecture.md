@@ -106,6 +106,14 @@ graph structure. The reference query capabilities are `intra_document_qa`, `type
 See [`concepts.md`](concepts.md) for both seams in context, and [`configuration.md`](configuration.md) for the
 knobs.
 
+## Known limitations
+
+- **One capability catalog per process.** The runtime catalog that `register_capability` fills is shared by every
+  workspace in the process, and registering a slug replaces it for all of them, including the later steps of a run
+  already in progress. Workspaces in one process can differ in store, corpus and configuration, but not in which
+  implementation a slug resolves to. A product whose tenants need different implementations of the same slug runs
+  them in separate processes. There is no plan to change this; raise it if a product needs it.
+
 ## Pointers
 
 - [`ARCHITECTURE_OVERVIEW.md`](ARCHITECTURE_OVERVIEW.md) — the detailed as-built pipeline (diagrams, model defaults,

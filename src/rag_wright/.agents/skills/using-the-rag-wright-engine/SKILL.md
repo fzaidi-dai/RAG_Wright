@@ -67,6 +67,11 @@ contract/compliance worked example. The engine's `src/rag_wright/packs/reference
 registers in its constructor). Without it `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back
 silently to the LLM.
 
+The catalog is **one per process** (a known limitation): it is shared by every workspace, and registering a slug
+replaces it for all of them. Workspaces can differ in store, corpus and configuration, not in which implementation a
+slug resolves to. Tenants that need different implementations of one slug run in separate processes, or use one slug
+per implementation chosen per tenant in your code.
+
 Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
 
 ## 2. Ground before you write (graphify)
