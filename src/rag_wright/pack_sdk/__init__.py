@@ -60,7 +60,7 @@ from rag_wright.corpus.document_parser import (
 from rag_wright.corpus.document_parser import aparse_document_bytes as aparse_docling_bytes
 from rag_wright.corpus.document_parser import parse_document_bytes as parse_docling_bytes
 from rag_wright.ingestion.builder import IngestionStages
-from rag_wright.models.profiles import DEFAULT_GENERAL, decision_profile, model_for, profile_for
+from rag_wright.models.profiles import decision_profile, model_for, profile_for
 from rag_wright.models.seam import (
     ModelCallTimeout,
     astream_text,
@@ -90,7 +90,7 @@ __all__ = [
     # the store protocol
     "Store", "SPAN_TYPE",
     # the model seam + its observability
-    "model_for", "profile_for", "decision_profile", "DEFAULT_GENERAL", "build_model", "build_structured",
+    "model_for", "profile_for", "decision_profile", "build_model", "build_structured",
     "build_tag_structured", "field_kind", "astream_text", "resolve_connection", "ModelCallTimeout",
     "model_deadline_s", "call_description", "start_generation", "finish_generation", "tracing_on", "usage_capturing",
     "models_dir",

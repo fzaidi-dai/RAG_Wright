@@ -5,7 +5,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 
 > **⇒ RESUME / NEXT UP (2026-10-09, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.3.1**
 > (PyPI; 0.3.0's wheel left out the shipped skills, fixed in 0.3.1). Ledger:
-> **`docs/specs/public-surface/plan.md`** (PS-1..PS-16, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
+> **`docs/specs/public-surface/plan.md`** (PS-1..PS-17, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
 > G15-G21 closed (`pack_store`, bytes parsing, `ModelRole`, metering/tracing, answers + relevance on the API,
 > `RAG_MODELS_DIR` + reference weights on GCS, KG count/delete/update primitives) and the `rag_wright.pack_sdk` tier
 > with the reference pack held to `api` + `pack_sdk` by an import contract; the `unit_representative` hook with the

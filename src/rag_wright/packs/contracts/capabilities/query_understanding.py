@@ -33,7 +33,7 @@ _INTENTS = ("highlight", "extract", "discriminate")
 # structured call (CLAUDE.md standing rule; ADR-0006 Qwen precedent; ADR-0032). Step 1 reasons in free text
 # (a GENERAL-model strength -- no forced tool, so no thinking-mode tool rejection); step 2 emits the schema
 # from that reasoning (the profile disables thinking on this forced call for the models that need it, e.g.
-# Gemma). This makes NL->type work on the cheap GENERAL model, not just DeepSeek Pro (benchmarked in CU-D2).
+# Qwen). This makes NL->type work on the cheap GENERAL model, not just DeepSeek Pro (benchmarked in CU-D2).
 _REASON_PROMPT = (
     "You match a user's natural-language question about a SINGLE known contract to clause types from a fixed "
     "taxonomy. Reason briefly about which type(s) the question concerns and what the user wants, then END "
@@ -79,7 +79,7 @@ def understand_query(
     above): step 1 reasons in free text, step 2 emits the schema from that reasoning. Then boundary
     normalization: `in_taxonomy` is DERIVED from what actually maps (a mapping miss degrades gracefully to
     semantic fallback, never a hard error); a failed emit (None) degrades to out-of-taxonomy low-confidence.
-    Defaults to the GENERAL model (Gemma): the two-step ties/beats DeepSeek Pro on NL->type at ~3x less
+    Defaults to the GENERAL model: the two-step ties/beats DeepSeek Pro on NL->type at ~3x less
     latency and cost, and is not throttled (benchmarked CU-D2 / ADR-0032). Factories are injectable for
     hermetic tests."""
     model_id = model_id or model_for(ModelRole.GENERAL)

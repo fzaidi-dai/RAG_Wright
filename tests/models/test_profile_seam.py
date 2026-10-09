@@ -124,7 +124,7 @@ def test_dropped_foundation_models_stay_registered_for_dev_override(monkeypatch)
     # get its REAL profile (not the safe fallback) -- the profiles are dropped from the default, not deregistered.
     for model_id in (
         profiles.DEFAULT_STRUCTURED_REASONING,  # deepseek-pro
-        profiles.DEFAULT_GENERAL,  # gemma
+        "google/gemma-4-31b-it",  # gemma: selectable through config, never a default (PS-17)
         profiles.DEFAULT_STRUCTURED_REASONING_SECONDARY,  # qwen
     ):
         assert profiles.profile_for(model_id).model_id == model_id

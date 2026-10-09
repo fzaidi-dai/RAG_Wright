@@ -5,7 +5,7 @@ rule — **no claim without a citation** (FR-Q.6): every non-abstaining answer m
 are actually in the evidence, and a question the evidence does not support yields an **abstention**, not
 a fabrication. It is **confidence-aware**: graph-derived facts carry their confidence tag into the
 evidence the model sees (T26 surfaces it; here it is put in front of the generator). Vision-to-text is a
-separate capability/slug (`vision_to_text.py`, ADR-0014), though both run on the Gemma 4 class model.
+separate capability/slug (`vision_to_text.py`, ADR-0014), though both run on the GENERAL role.
 
 Grounding and citation are enforced in CODE around the model, not left to the prompt: fabricated
 citations (ids not in the evidence) are dropped, and an answer that ends up with no valid citation is

@@ -1,8 +1,8 @@
 """Step-5b: the LLM-hybrid function classifier. LegalBERT predicts every span (fast, local); when its top-2
-are confusable SIBLINGS in a dev-validated ROUTE family, the span is routed to a Gemma confirm among that
+are confusable SIBLINGS in a dev-validated ROUTE family, the span is routed to an LLM confirm among that
 family (the LLM distinguishes those clause types better -- Notice-Period, Irrevocable, No-Solicit went from
 ~0 to 0.33-0.67). Non-routed spans keep LegalBERT (stronger on the other families, e.g. Cap-vs-Uncapped).
-Only ~3% of spans route, so the LLM cost is small. Confirmer defaults to GEMMA (benchmarked); injectable for
+Only ~3% of spans route, so the LLM cost is small. Confirmer defaults to the GENERAL model (benchmarked with Gemma); injectable for
 tests. The routed LLM calls in one `classify` batch run CONCURRENTLY (the standing eval/serve concurrency rule).
 """
 
@@ -39,7 +39,7 @@ class FamilyConfirmer(Protocol):
 
 
 class SeamFamilyConfirmer:
-    """The real confirmer: structured output on GENERAL (Gemma). Returns a validated family label or NONE
+    """The real confirmer: structured output on GENERAL. Returns a validated family label or NONE
     (an off-family / hallucinated answer -> NONE). Retries a transient bare `None`."""
 
     def __init__(self, model_id: Optional[str] = None, *, retries: int = 3) -> None:

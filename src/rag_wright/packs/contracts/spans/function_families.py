@@ -1,6 +1,6 @@
 """Step-5b: confusable-clause FAMILIES for the LLM-hybrid classifier. Derived data-drivenly from the
 LegalBERT model's holdout confusion (>=0.12 of a class's gold spans predicted as the sibling; connected
-components). `ROUTE_FAMILIES` is the dev-validated subset where an LLM (Gemma) beats LegalBERT at the
+components). `ROUTE_FAMILIES` is the dev-validated subset where an LLM (measured with Gemma) beats LegalBERT at the
 sibling distinction -- only these route to the LLM; the rest keep LegalBERT (which is stronger on them, e.g.
 Cap-vs-Uncapped, which Gemma craters). Labels are canonical `FUNCTION_LABELS`; membership is canonicalized
 so it matches the classifier's CUAD-cased output too."""
@@ -24,7 +24,7 @@ CONFUSABLE_FAMILIES: tuple[tuple[str, ...], ...] = (
     ("Indemnification", "No-Solicit Of Employees", "Third Party Beneficiary"),
 )
 
-# The dev-validated LLM-winning subset: route ONLY these to Gemma (test-half mean non-NONE recall
+# The dev-validated LLM-winning subset: route ONLY these to the LLM (measured with Gemma; test-half mean non-NONE recall
 # 0.627 -> 0.641; fixes Notice-Period 0->0.33, Irrevocable 0->0.50, No-Solicit 0.17->0.50). The excluded
 # families (liability, control, dates, ...) keep LegalBERT, which is stronger there.
 ROUTE_FAMILIES: tuple[tuple[str, ...], ...] = (

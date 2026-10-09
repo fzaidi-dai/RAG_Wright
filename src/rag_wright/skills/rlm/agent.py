@@ -18,7 +18,7 @@ ADR-0015 (Q2, corrected — design B') for the grounded reason and why interpret
 faithful realization, not a workaround.
 
 Models resolve through the model-profile seam (T11): the RLM reasoning role (orchestrator + decomposer)
-is a Gemma 4 class model (`ModelRole.GENERAL`); the leaf worker's model is chosen by the applying
+is the GENERAL-role model (`ModelRole.GENERAL`); the leaf worker's model is chosen by the applying
 capability (a smaller model for chunking summaries, the structured-reasoning model for synthesis). No
 provider or model flag lives here.
 """
@@ -210,7 +210,7 @@ def _resolve_model(model: _ModelArg, default_role: ModelRole) -> BaseChatModel:
 def decomposer_config(*, model: _ModelArg = None) -> SubAgent:
     """The `rlm_decomposer` sub-agent: decides one level's split; a fresh agent per dispatch.
 
-    Reasoning work, so it defaults to the Gemma 4 class RLM role (`ModelRole.GENERAL`). It carries no
+    Reasoning work, so it defaults to the GENERAL role (`ModelRole.GENERAL`). It carries no
     roster of its own — the interpreter, not the decomposer, drives the recursion (ADR-0015 Q2).
     """
     return {

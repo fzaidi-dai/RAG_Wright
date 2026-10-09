@@ -290,7 +290,7 @@ class SingleCallBoundaryDiscoverer:
     """A NON-agentic boundary discoverer: ONE structured LLM call -> a boundary partition, deterministically
     repaired (`repair_partition`) to a valid partition. For well-structured documents (measured on a contract
     corpus) this replaces the agentic `SeamBoundaryDiscoverer` at ~100x less cost/latency (3.4s vs 5-9min) with
-    equal unit integrity. Uses the GENERAL role (Gemma-4-class). No interpreter -> no process-wide lock ->
+    equal unit integrity. Uses the GENERAL role. No interpreter -> no process-wide lock ->
     ordinary async concurrency (no process pool needed). `structured_factory` is injectable for tests."""
 
     def __init__(self, model_id: str | None = None, *, structured_factory=build_structured,

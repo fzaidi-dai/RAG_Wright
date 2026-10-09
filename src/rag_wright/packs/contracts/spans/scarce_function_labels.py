@@ -5,7 +5,7 @@ instances hide in the NONE pool -- narrowed by a cheap high-recall KEYWORD pre-f
 LLM. Unlike T60 these are EXISTING `ClauseCategory` types (they have CUAD gold too); the silver only augments
 TRAINING (mined from train contracts; the SEED=0 holdout stays pure gold, no leakage).
 
-Confirmer defaults to the GENERAL model (Gemma) per the benchmarked model decisions -- its structured
+Confirmer defaults to the GENERAL model per the benchmarked model decisions -- its structured
 thinking-disable (ADR-0032) makes this single-label forced call reliable; A/B against DeepSeek if it
 underperforms. Keyword pre-filter is unit-testable + free; the confirmer is stub-injectable.
 """
@@ -83,7 +83,7 @@ class ScarceConfirmer(Protocol):
 
 
 class SeamScarceConfirmer:
-    """The real confirmer: structured output through the model-profile seam. Defaults to GENERAL (Gemma);
+    """The real confirmer: structured output through the model-profile seam. Defaults to GENERAL;
     pass `model_id` to A/B another model (e.g. DeepSeek). Returns a validated label in `candidates` or NONE
     (a hallucinated / off-list label is treated as NONE, conservative). Retries a transient bare `None`."""
 

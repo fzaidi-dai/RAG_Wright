@@ -1,6 +1,6 @@
 """Vision-to-text (FR-C.9, split from `generation` by ADR-0014, T29), SKILL-SPLIT: image/scan -> text.
 
-The Gemma 4 class model (GENERAL role) transcribes a scanned filing's images to text, exercising the
+The GENERAL-role model (it must accept images) transcribes a scanned filing's images to text, exercising the
 image-only PDF subset (ADR-0002). This is a SINGLE grounded vision-language act -- the ingestion-side twin of
 answer `generation` -- so it is an `agent_skill`, not a function (per the capability-architecture rubric: a
 function is deterministic and takes no model; a single LLM act is an authored skill). The transcription METHOD
@@ -50,7 +50,7 @@ class VisionModel(Protocol):
 
 
 class SeamVisionModel:
-    """The `vision_to_text` SKILL's runtime: a multimodal call on the GENERAL (Gemma 4 class) model via the
+    """The `vision_to_text` SKILL's runtime: a multimodal call on the GENERAL-role model via the
     seam, with the SKILL.md method as the instruction."""
 
     def __init__(self, model_id: str | None = None) -> None:

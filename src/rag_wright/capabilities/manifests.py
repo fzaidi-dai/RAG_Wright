@@ -200,12 +200,12 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         kind="agent_skill",  # a single grounded vision-language act; SKILL.md, applied via the seam (SKILL-SPLIT)
         display_name="Vision-to-text (scanned-image transcription; authored skill)",
         description=(
-            "Transcribe a scanned filing's images to text at ingestion on the Gemma 4 class model (FR-C.9), "
+            "Transcribe a scanned filing's images to text at ingestion on the GENERAL-role model (FR-C.9), "
             "authored as skills/vision_to_text/SKILL.md: transcribe all visible text exactly, preserving "
             "reading order, output only the text. A single grounded vision-language act -- the ingestion-side "
             "twin of answer generation (also an agent_skill). Split from generation (ADR-0014): different "
             "inputs (an image, not evidence), different failure modes, a different caller (ingestion). "
-            "Model-neutral through the seam (product = self-hosted Gemma-class, ADR-0039)."
+            "Model-neutral through the seam (the model is whatever the GENERAL role resolves to)."
         ),
         representative_queries=(
             "transcribe a scanned filing image to text",

@@ -113,7 +113,7 @@ flowchart LR
   dv --> fuse["vector.fuse"]
   sv --> fuse
   fuse --> pool["candidate pool (+ property/metadata boost)"]
-  pool --> rr["rerank (BGE reranker / Gemma listwise)"]
+  pool --> rr["rerank (BGE reranker)"]
   rr --> top["top-k, cited"]
 ```
 
@@ -210,7 +210,7 @@ Two registries:
 | Chunking (single-call / RLM discoverer) | ingestion `chunk` |
 | Embedding (BGE-M3, dense+sparse) | `index_spans`, query |
 | Hybrid search (dense+sparse fuse) | `hybrid_search` / `span_hybrid_search` |
-| Reranking (BGE reranker / Gemma listwise) | query rerank stage |
+| Reranking (BGE reranker) | query rerank stage |
 | Graph extraction | clauses (classifier fleet + Jev residual values) + parties (docling-graph) + affiliations (tag-parse, only when a cue word is present) |
 | Entity resolution | `resolve` (canonical id from the configured registry; EDGAR CIK for the CUAD corpus) |
 | Ontology-driven schema/vocab | the `.ttl` layer (all stages) |

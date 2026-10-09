@@ -7,9 +7,9 @@ applied by the seam only to the forced structured call (for example to disable t
 structured emit), leaving free-text and reasoning calls unaffected. Provider/model flags live here
 in config and in a dated ADR, never in a capability or node call site (CLAUDE.md standing rule).
 
-Model priority for the structured-output-under-reasoning call class is a config decision, not
-capability code: DeepSeek V4 Pro is the primary, Qwen 3.7 Plus the selectable secondary, and the
-Gemma 4 class is the general / local-deployment default (SPEC section 4, tech stack; Phase 2 ledger).
+Which model serves a role is a config decision, not capability code: every role defaults to the one product
+model (`_PRODUCT_LLM`), and the other registered models (DeepSeek, Qwen 3.7 Plus, Gemma 4, ...) are used only
+when a workspace config, the environment or a caller names them (none is a default, PS-17).
 The exact OpenRouter slug and the empirical structured profile (method + `extra_body`) for the
 structured-reasoning model are confirmed against a live call at T12 and recorded in its ADR; each id
 below is a documented default, overridable by env so the empirical slug needs no code change.
@@ -87,7 +87,6 @@ class ModelRole(str, Enum):
 # Overridable by env (`_ROLE_ENV`), so a later slug change stays config, not code.
 DEFAULT_STRUCTURED_REASONING = "deepseek/deepseek-v4-pro"
 DEFAULT_STRUCTURED_REASONING_SECONDARY = "qwen/qwen3.7-plus"
-DEFAULT_GENERAL = "google/gemma-4-31b-it"
 DEFAULT_SUMMARIZATION = "deepseek/deepseek-v4-flash"  # the smaller/faster DeepSeek (FR-I.6)
 
 # MS1-2 (ADR-0039): the product substrate is a SINGLE self-hosted model on the A100. EVERY role defaults to
@@ -131,8 +130,8 @@ PROFILES: dict[str, ModelProfile] = {
     # disabled on the forced structured call. Same fix as the secondary (structured-only, so free-text/reasoning
     # calls -- and the two-step reason node -- are untouched); simpler schemas (chunking _BoundaryList/_Summary)
     # verified still valid with it. Empirical, dated: CU-D2 / ADR-0032.
-    DEFAULT_GENERAL: ModelProfile(
-        model_id=DEFAULT_GENERAL,
+    "google/gemma-4-31b-it": ModelProfile(  # selectable through config only, never a default (PS-17)
+        model_id="google/gemma-4-31b-it",
         structured_extra_body={"reasoning": {"enabled": False}},
     ),
     # DeepSeek V4 Flash does reasoning + structured output together, like V4 Pro (ADR-0006); no

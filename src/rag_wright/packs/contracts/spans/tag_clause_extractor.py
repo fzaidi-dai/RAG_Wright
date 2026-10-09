@@ -19,7 +19,6 @@ import asyncio
 import os
 from typing import Any
 
-from rag_wright.pack_sdk import DEFAULT_GENERAL
 from rag_wright.pack_sdk import build_tag_structured, field_kind
 from rag_wright.packs.contracts.ontology.clause_template import Clause
 
@@ -58,6 +57,14 @@ import re as _re
 
 _MAX_VALUE_CHARS = 240  # a clause PROPERTY value is short ("12_months", "Delaware"); longer = leaked prose
 _TAG_LIKE = _re.compile(r"<[A-Za-z_][\w-]*>")  # a value must never contain XML tags (model reasoning/prompt leak)
+
+
+def list_model_for(list_model: str | None) -> str | None:
+    """The cross-model list model, or None for no second pass: the explicit ARGUMENT wins, else
+    `RAG_INGEST_LIST_MODEL`; nothing is used unless one of them names a model (no default model, PS-17), and
+    "off" / "none" / "" disable it."""
+    raw = list_model if list_model is not None else os.environ.get("RAG_INGEST_LIST_MODEL", "")
+    return None if not raw or str(raw).strip().lower() in ("none", "off") else str(raw).strip()
 
 
 def _sane(value: Any) -> Any:
@@ -137,17 +144,14 @@ async def atag_extract_clause(text: str, model_id: str, *, document_reference: s
     `samples` (env `RAG_INGEST_CLAUSE_SAMPLES`, default 1) runs each group N times and UNIONs the LIST-valued
     fields across samples -- the inference-time fix for granite's list under-enumeration.
 
-    `list_model` (env `RAG_INGEST_LIST_MODEL`, DEFAULT gemma) enables a CROSS-MODEL union: for LIST-bearing groups
+    `list_model` (env `RAG_INGEST_LIST_MODEL`; none by default, PS-17) enables a CROSS-MODEL union: for LIST-bearing groups
     ONLY, also run a second (stronger, complementary) model and union its list values with the main model's.
     granite and gemma under-enumerate DIFFERENT items, so their union is more complete than either alone (it fixes
     the CONSISTENT misses same-model multi-sample can't); scoping the second model to list-bearing groups keeps its
     cost off the ~half of groups with no list field. Scalars prefer the main model (its results are unioned first).
-    ON by default; disable with `RAG_INGEST_LIST_MODEL=off`."""
+    OFF unless a list model is named (`list_model=` or `RAG_INGEST_LIST_MODEL`); see `list_model_for`."""
     n = samples if samples is not None else max(1, int(os.environ.get("RAG_INGEST_CLAUSE_SAMPLES", "1")))
-    # cross-model list model: explicit ARGUMENT wins, else env, else the profile's general model (gemma). Any of
-    # them may be "off"/"none"/"" to disable -- so the default-on model is configurable, never a buried hardcode.
-    _raw = list_model if list_model is not None else os.environ.get("RAG_INGEST_LIST_MODEL", DEFAULT_GENERAL)
-    lm = None if not _raw or str(_raw).strip().lower() in ("none", "off") else str(_raw).strip()
+    lm = list_model_for(list_model)
     stemp = temperature if n == 1 else max(temperature, 0.5)  # diversity across samples for the union to help
 
     async def _pass(fields: tuple[str, ...], model: str) -> Clause | None:

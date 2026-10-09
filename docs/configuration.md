@@ -126,7 +126,7 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_GENERAL`, `RAG_MODEL_VISION_OCR`) / `RAG_MODEL_ALL` / `RAG_GRAPH_EXTRACT_MODEL` / `RAG_DECISION_MODEL` | model overrides (one role / all roles / graph extraction / decision-model profile) |
 | `RAG_SEMANTIC_JUDGE` / `RAG_RESIDUAL_EXTRACTOR` | set to `llm` to move the reference pipeline's extraction judge / residual property values off the decision model |
 | `CLASSIFY_CONCURRENCY` / `CLAUSE_CONCURRENCY` / `RAG_INGEST_AFFILIATIONS` / `RAG_FUNCTION_CLASSIFIER` | contracts-pack ingest knobs (mirror `ContractIngestOptions`) |
-| `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` | read only by the contracts pack's legacy tag-parse clause extractor, which the default pipeline does not use (it is classifier-first) |
+| `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` | read only by the contracts pack's legacy tag-parse clause extractor, which the default pipeline does not use (it is classifier-first); its second list model runs only when `RAG_INGEST_LIST_MODEL` names one (no default model) |
 | `RAG_STRUCTURED_TIMEOUT_S` / `RAG_JEV_TIMEOUT_S` / `RAG_JUDGE_TIMEOUT_S` / `RAG_RELEVANCE_TIMEOUT_S` | call timeouts (raise for reasoning-ON bulk work) |
 | `RAG_SPACY_MODEL` | the spaCy model name for the optional NER extra |
 | `RAG_MODELS_DIR` | the models root every trained classifier loads its weights from (default: the engine checkout's `data/models` when it exists, else `./data/models`); fill it with `scripts/fetch_reference_models.py` for the reference pack |

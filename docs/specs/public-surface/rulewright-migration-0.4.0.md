@@ -16,6 +16,10 @@ of these is optional; section 2 is the recommended shape for customer workspaces
   models resolve exactly as before: the environment, then the defaults. Its explicit `answer_model_id` keeps
   working.
 - **`kg_read`** no longer returns ArcadeDB's `@props` projection hint. RuleWright reads no `@` keys.
+- **No Gemma default anywhere.** `DEFAULT_GENERAL` (Gemma) is gone from `rag_wright.pack_sdk`, and the reference
+  pack's legacy tag-parse extractor runs its second list model only when `RAG_INGEST_LIST_MODEL` names one.
+  RuleWright imports neither and already treats `RAG_INGEST_LIST_MODEL` as retired; Gemma stays selectable through
+  config.
 - **Threads the engine starts** now carry the caller's context, so usage metering in those paths now counts calls
   it used to miss. Totals measured with `measure_usage()` can rise for the same work.
 

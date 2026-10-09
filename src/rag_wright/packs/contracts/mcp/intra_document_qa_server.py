@@ -2,7 +2,7 @@
 
 Wraps the `intra_document_qa` SUBGRAPH (A1, Leg A) as a single MCP tool
 `answer_contract_question(contract_id, question)` -> a cited `GeneratedAnswer` (as JSON). The store (the contract
-clause KG) + the models (function classifier + Gemma generation via the seam) bind SERVER-SIDE from env, so the
+clause KG) + the models (function classifier + generation via the seam) bind SERVER-SIDE from env, so the
 tool call is just `{contract_id, question}` -- the token/coordination win. An external agent discovers this via
 ARD search and calls it. Second Tier-1 leg wrapped after `compliance_check` (`compliance_server.py`, the
 reference pattern this mirrors).
