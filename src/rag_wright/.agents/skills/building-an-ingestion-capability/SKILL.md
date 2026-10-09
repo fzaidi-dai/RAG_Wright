@@ -59,8 +59,10 @@ The unit is the text one extractor call reads. Get it right first; every other c
   Without it a unit is represented by its first member, which is usually its heading: the weakest text to tag and a
   poor citation. The reference contracts pack passes `provision_vote` (ADR-0126): the label with the highest
   probability summed over the non-heading members, cited by the member most confident in it; on 510 CUAD contracts
-  that beat heading-first by about 10 points. Measure your own rule on a gold set of your documents before choosing
-  it (the creating-evals skill).
+  that beat heading-first by about 10 points. Build the gold BEFORE you choose a rule: for a sample of your documents,
+  a short snippet from each unit you can label, with its expected label. Then compare rules with
+  `evaluate_ingestion(..., span_tagger=..., unit_representative=..., unit_labels=...)` (leave out
+  `unit_representative` for the first-member baseline) and keep the rule that labels best (the creating-evals skill).
 
 ## 3. Declare your record types in the pack `.ttl`
 
@@ -143,7 +145,8 @@ network-bound work inside it; the engine runs up to `IngestionTuning.extract_con
 
 ## 6. Verify (definition of done)
 
-1. `evaluate_ingestion` passes on a representative sample of YOUR documents (not a hand-picked easy one).
+1. `evaluate_ingestion` passes on a representative sample of YOUR documents (not a hand-picked easy one). If your
+   units carry labels, its `labels` report on your gold meets the bar you set, with the confusions understood.
 2. A live ingest of that sample: no dead letters, `extraction_failures` explained, records cite spans
    (`kg_read(ws, "<your type>", fields=["span_id"])`), and `span_positions(ws, doc_id)` gives the citation positions.
 3. A hermetic test of your extractor on fixed units (no model calls in the default suite; the engine's test network

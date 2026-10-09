@@ -90,6 +90,17 @@ on a diagnostic).
 - **Ingestion structure**: `evaluate_ingestion` (in `rag_wright.api`) is the packaged structural eval of the
   ingestion hooks (tiling, table-row integrity, layout respect, coverage) on your own sample documents. Gate
   patterns: `eval/segmenter_eval.py`, `eval/unit_grouper_eval.py`.
+- **Unit labelling** (when a unit's leading tag is a label something acts on): the same call with your
+  `span_tagger`, any `unit_representative` and `unit_labels`, the gold `{<file name>: [{"text": <a snippet that
+  occurs in exactly one unit>, "label": <expected, "" for none>}]}`. It needs no knowledge graph, so build it before
+  the first ingest: label the units of a representative sample (headings, short fragments and units that should
+  carry no label included, not only clean examples). `labels` reports accuracy, per-label recall and precision, and
+  the confusion pairs, scored per unit. A snippet found in no unit or in several, and a unit whose snippets carry
+  different labels, are failures, because that gold cannot be scored (if your units hold several labelled things,
+  label the unit, not each thing in it).
+  Compare candidate representatives (and the first-member baseline) on the same gold. Reference example, numbers
+  only: the reference pack chose its rule this way on 510 documents with gold (ADR-0126): a vote over the non-heading
+  members labelled 56.6% of units correctly, against 46.8% for the first member (usually the heading).
 
 ## 3. Build the gold cheaply (without faking it)
 - **Silver bootstrapping**: a higher-capability teacher (LLM, or a decision model) labels candidate items; CURATE

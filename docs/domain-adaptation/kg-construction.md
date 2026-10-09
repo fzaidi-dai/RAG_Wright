@@ -93,7 +93,24 @@ the run goes on. Every node and edge type your extractor returns must be declare
   form (one unit); `record` and `block` force one mode for that source.
 - **`evaluate_ingestion(sources, cache_dir=..., tuning=..., table_labels=...)`** runs the structural stages (parse,
   deterministic chunk, segment, group; no model, no store) on your own samples and reports `passed` / `failures`. Use
-  it to set `IngestionTuning` before a full run.
+  it to set `IngestionTuning` before a full run. It also measures unit **labelling** without a knowledge graph: pass
+  your `span_tagger` (and any `unit_representative`) with `unit_labels`, a small gold set of units, each found by a
+  snippet that occurs in it alone, with its expected label (`""` for none). `labels` reports accuracy, per-label
+  results and the confusion pairs, per unit; a snippet found in no unit or in several, and a unit given different
+  labels by its snippets, are reported as failures. Compare a representative rule against the first-member baseline on the same gold:
+
+  ```python
+  from rag_wright.api import evaluate_ingestion
+
+  gold = {"spec_sheet.pdf": [
+      {"text": "knitted on a 30-inch machine", "label": "construction"},
+      {"text": "Customer: Northwind Apparel", "label": ""},
+  ]}
+  baseline = evaluate_ingestion(samples, cache_dir="cache/", span_tagger=my_tagger, unit_labels=gold)
+  voted = evaluate_ingestion(samples, cache_dir="cache/", span_tagger=my_tagger, unit_representative=vote,
+                             unit_labels=gold)
+  print(baseline.labels.accuracy, voted.labels.accuracy, voted.labels.confusions[:5])
+  ```
 - **`table_rows(source_document)`** returns every parsed table's data rows (`TableRow`: `columns`, `values`,
   `cell(name)`, table ref, sheet or page, row index), read from the parse's cell grid, so a table split across chunks
   comes back whole. What a column means is your domain's decision.

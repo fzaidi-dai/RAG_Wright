@@ -14,7 +14,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > OKF retired, ADR-0127); the engine's Claude Code skills shipped in the wheel at
 > `rag_wright/.agents/skills/` (PS-10). **Next (user gates): RuleWright moves (to 0.3.1+) from
 > `docs/specs/public-surface/rulewright-migration-0.3.0.md`; PS-R4 (unit-labelling eval in `evaluate_ingestion`) is
-> tracked; TexWright.**
+> done (unreleased); TexWright.**
 >
 > **⇒ RESUME / NEXT UP (2026-10-08, HISTORICAL): ingestion-hooks COMPLETE and RELEASED as `rag-wright` 0.2.0** (PyPI +
 > GitHub tag/release `0.2.0`, via release-please; `docs/releasing.md`). Ledger: **`docs/specs/ingestion-hooks/plan.md`**

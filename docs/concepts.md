@@ -120,7 +120,8 @@ report = await pipeline.aingest(ws, sources, cache_dir="cache/")
 - **Inputs and tuning.** `sources` are paths or `IngestSource` objects (a per-document `doc_id`, `table_mode` of
   `auto`/`record`/`block`, `include_hidden_sheets`). Every structural threshold is in `IngestionTuning`; set it from
   `evaluate_ingestion(sources, cache_dir=...)`, which scores tiling, layout respect, table-row integrity and coverage
-  on your own samples without any model call. `table_rows(source_document)` reads a parsed table's rows from the
+  on your own samples without any model call, and (given your span tagger and a small gold set of unit labels) how
+  well units are labelled. `table_rows(source_document)` reads a parsed table's rows from the
   cell grid, whole even when the chunker split the table.
 
 The reference contract pipeline (`contract_ingestion_pipeline`) drives these same stages with legal hooks. Hook signatures are in the
