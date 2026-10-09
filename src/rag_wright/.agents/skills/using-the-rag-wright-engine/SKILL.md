@@ -75,8 +75,8 @@ per implementation chosen per tenant in your code.
 
 **Workspaces.** One corpus and one `EngineConfig` per tenant, a `cache_dir` per tenant, document metadata on
 `IngestSource(metadata=...)`; models follow the workspace's `EngineConfig.models` in every call that takes it
-(`use_workspace_models(ws)` for a call that does not). The first config opened for a corpus is the one the process
-keeps. `docs/workspaces.md` lists what applies per workspace, per call and per process.
+(`use_workspace_models(ws)` for a call that does not). To change a tenant's config, open its corpus again with the
+new config: a different config replaces the cached handle, no restart needed. `docs/workspaces.md` lists what applies per workspace, per call and per process.
 
 Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
 

@@ -228,6 +228,8 @@ The semantic boundary-discovery seam: decide chunk boundaries as a partition of 
 
 Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
 
+One handle per store and corpus is cached for the process. An equal `config` returns it; a different one (new models, options, credentials or pack) returns a new handle that replaces it from then on, so a configuration change takes effect without a restart (PS-16). The new handle reuses the store when the store settings and the pack are unchanged, and the query embedder when the embedding profile is unchanged; a call still holding the old handle finishes on the old config.
+
 ### `pack_store(ws: 'WorkspaceHandle', cls: 'Callable[..., _T]', *args: 'Any', **kwargs: 'Any') -> '_T'`
 
 Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store: `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, MyPackStore)`. The store it receives implements the engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack.

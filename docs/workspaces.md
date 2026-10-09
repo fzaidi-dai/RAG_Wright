@@ -31,7 +31,7 @@ crosses corpora: every read and write goes through the handle's store.
 | per process | the serving backend and endpoints, provider routing, call timeouts | `RAG_SERVING`, `VLLM_BASE_URL`, `OPENROUTER_*`, `RAG_*_TIMEOUT_S` |
 | per process | the decision model's profile (one call can name another in the `jev_decision` input `model`) | `RAG_DECISION_MODEL` |
 | per process | trained classifier weights and their knobs | `RAG_MODELS_DIR`, `RAG_SETFIT_*` |
-| per process | one handle per corpus: the first `EngineConfig` opened for a corpus is the one used | see "Changing a workspace's configuration" |
+| per process | one cached handle per corpus, replaced when the corpus is opened with a different config | see "Changing a workspace's configuration" |
 | per process | the reference pack's graph-extraction model and its standalone MCP servers (they read the environment when they start) | `RAG_GRAPH_EXTRACT_MODEL`; one server process per deployment |
 
 Concurrent calls for different workspaces in one process are safe: each call resolves its own workspace's models,
@@ -63,8 +63,14 @@ and metering and trace scopes belong to the call that opened them.
 
 ## Changing a workspace's configuration
 
-`open_workspace` keeps one handle per store and corpus for the life of the process, and returns it to every later
-call for that corpus: the first `EngineConfig` opened for a corpus is the one used. To change a workspace's
-configuration (another model, other options), restart the process, or run the changed tenant in a process of its
-own. `reset=True` opens a fresh handle but also drops and recreates the database, so it is not a way to change
-configuration.
+Open the corpus again with the new `EngineConfig`; no restart is needed. `open_workspace` caches one handle per
+store and corpus: an equal config returns that handle, and a different one (other models, options, credentials or
+pack) returns a new handle that replaces it for every later call. The new handle reuses the store connection when
+the store settings and the pack are unchanged, and the query embedder when the embedding profile is unchanged, so a
+model change costs nothing to apply. Calls already holding the old handle finish on the old config.
+
+Configs are compared by value, so build them from your tenant's stored settings on each request if that is
+convenient; an unchanged config returns the cached handle. An option object of your own in `EngineOptions.packs`
+should compare by value (a dataclass or a pydantic model does); one that compares by identity looks changed every
+time, and each call then builds a new handle (still reusing the store and the embedder). `reset=True` drops and
+recreates the database, so it is not a way to change configuration.

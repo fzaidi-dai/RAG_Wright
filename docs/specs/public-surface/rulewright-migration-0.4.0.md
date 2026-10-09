@@ -37,9 +37,10 @@ store per database from the environment, and `export_engine_env` republishes the
 3. **A cache per customer.** RuleWright passes one `DEFAULT_CACHE_DIR` for every customer. Caches are keyed by
    content, so this cannot leak one customer's text to another, but a `cache_dir` per customer keeps retention and
    deletion per customer.
-4. **A config change takes effect on restart.** `open_workspace` keeps one handle per corpus for the life of the
-   process, and the first config opened for a corpus is the one used. A customer whose models change needs the
-   process restarted (or its own process).
+4. **A config change takes effect on the next open.** Open the customer's databases again with the new
+   `EngineConfig`: a different config replaces the cached handle (reusing the connection and the embedder when
+   only models or options changed), and requests already running finish on the old one. Building the config from
+   the customer's stored settings on each request is fine, since an unchanged config returns the cached handle.
 5. **The capability catalog is per process.** RuleWright already registers once (`register_engine_capabilities`),
    which is right; every customer in a process shares one implementation per slug.
 6. **RuleWright's own workspaces are not engine workspaces.** A RuleWright workspace is a selection inside a

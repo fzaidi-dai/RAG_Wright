@@ -29,7 +29,8 @@ ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the ba
 
 `open_workspace(config, *, corpus, reset=False)` resolves and caches a workspace and ensures the schema. `corpus`
 is the backend database name (tenancy is the product's concern); `reset=True` drops and recreates it and bypasses
-the cache.
+the cache. Opening a cached corpus with a different config returns a new handle that replaces the cached one, so a
+configuration change takes effect without a restart ([`workspaces.md`](workspaces.md)).
 
 ### `StoreConfig`
 

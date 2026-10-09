@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 _T = TypeVar("_T")
 
 # Cached per (backend, host, port, corpus) -- one resolved workspace per customer DB (absorbs the product's
-# per-customer graph/store cache). Process-local; the embedder is lazy + per-handle.
+# per-customer graph/store cache). Process-local; the embedder is lazy + per-handle. A different config for a cached
+# corpus replaces the entry (PS-16), reusing the store and the embedder when their settings are unchanged.
 _WORKSPACES: dict[tuple, "WorkspaceHandle"] = {}
 
 
@@ -43,6 +44,11 @@ class WorkspaceHandle:
             self.__embedder_built = True
         return self.__embedder
 
+    def _share_embedder(self, other: "WorkspaceHandle") -> None:
+        """Reuse `other`'s query embedder (same embedding profile) instead of building a second one."""
+        if other.__embedder_built:
+            self.__embedder, self.__embedder_built = other.__embedder, True
+
     def model_id(self, role: ModelRole) -> str:
         """Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default."""
         key = role.value if isinstance(role, ModelRole) else str(role)
@@ -65,11 +71,25 @@ def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False) ->
     """Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema:
     the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose
     `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an
-    opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache."""
+    opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
+
+    One handle per store and corpus is cached for the process. An equal `config` returns it; a different one (new
+    models, options, credentials or pack) returns a new handle that replaces it from then on, so a configuration
+    change takes effect without a restart (PS-16). The new handle reuses the store when the store settings and the
+    pack are unchanged, and the query embedder when the embedding profile is unchanged; a call still holding the old
+    handle finishes on the old config."""
     sc = config.store
     cache_key = (sc.backend, sc.host, sc.port, corpus)
-    if not reset and cache_key in _WORKSPACES:
-        return _WORKSPACES[cache_key]
+    cached = None if reset else _WORKSPACES.get(cache_key)
+    if cached is not None:
+        if cached._config == config:
+            return cached
+        if (cached._config.store, cached._config.pack) == (config.store, config.pack):
+            handle = WorkspaceHandle(cached._store, config, corpus)
+            if cached._config.embeddings == config.embeddings:
+                handle._share_embedder(cached)
+            _WORKSPACES[cache_key] = handle
+            return handle
     store = _build_store(config, corpus, reset=reset)
     store.ensure_schema()
     handle = WorkspaceHandle(store, config, corpus)
