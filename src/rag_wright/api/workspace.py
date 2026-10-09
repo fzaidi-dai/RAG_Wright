@@ -91,7 +91,7 @@ def _build_embedder(config: EngineConfig) -> Optional[Any]:
 
 def pack_store(ws: WorkspaceHandle, cls: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
     """Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store:
-    `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, ContractKGStore)`. The store it receives implements the
+    `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, MyPackStore)`. The store it receives implements the
     engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the
     rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack."""
     return cls(ws._store, *args, **kwargs)

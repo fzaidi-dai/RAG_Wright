@@ -1,7 +1,7 @@
 """Engine issue 0023: a per-span RELEVANCE VERDICT on the corpus retrieval path.
 
-`typed_property_retrieval` always returns the top-k nearest spans, so `not_found` was unreachable and a nonsense
-query still returned a full page of clauses. No SCORE fixes this: RRF is a relabeling of the row number, cosine's
+A retrieval leg always returns the top-k nearest spans, so `not_found` was unreachable and a nonsense query still
+returned a full page of results. No SCORE fixes this: RRF is a relabeling of the row number, cosine's
 distribution moves with model/domain/chunking, and a cross-encoder is a better number but still a number to
 threshold -- every threshold is a corpus-specific magic knob that fails silently. The generic answer is a VERDICT
 (the shape the compliance judge and answer-abstention already use): the engine decides "does this span address
@@ -50,13 +50,12 @@ _VERDICTS = {v.value for v in Relevance}
 
 
 class Condition(BaseModel):
-    """The structured test a retrieved span is judged against (issue 0023). `clause_type` is primary (a category
-    to test membership of); `value_condition` is a narrower test within it (often absent or shared across a
-    multi-condition sweep); `question` is CONTEXT ONLY -- in a multi-condition sweep it belongs to all conditions
-    at once, so it must not by itself make a span relevant. (Per-condition question decomposition is a separate
-    engine gap, not owned here.)"""
+    """The structured test a retrieved span is judged against (issue 0023). `category` is primary (the kind of
+    passage searched for, in the domain's own terms); `value_condition` is a narrower test within it (often absent or
+    shared across a multi-condition search); `question` is CONTEXT ONLY -- in a multi-condition search it belongs to
+    all conditions at once, so it must not by itself make a span relevant."""
 
-    clause_type: str
+    category: str
     value_condition: Optional[str] = None
     question: Optional[str] = None
 
@@ -85,14 +84,16 @@ def _skill_body(path: Path) -> str:
     return text.strip()
 
 
-def relevance_method() -> str:
-    """The authored relevance-judgment method (skills/span_relevance_judgment/SKILL.md)."""
-    return _skill_body(_SKILL_PATH)
+def relevance_method(guidance: Optional[str] = None) -> str:
+    """The authored relevance-judgment method (skills/span_relevance_judgment/SKILL.md, domain-neutral), followed by
+    the domain's `guidance` (what its categories look like) when given (PS-R5a: the domain wording is the pack's)."""
+    method = _skill_body(_SKILL_PATH)
+    return f"{method}\n\n## Domain guidance\n\n{guidance.strip()}" if guidance and guidance.strip() else method
 
 
 _PROMPT_TAIL = (
     "\n\nCONDITION being searched for:\n"
-    "- clause type: {clause_type}\n"
+    "- category: {category}\n"
     "- specific condition: {value_condition}\n"
     "- user's question (CONTEXT ONLY -- may be shared across several conditions): {question}\n\n"
     "TYPED PROPERTIES already detected on this span (CONTEXT -- extracted from the question and reused across "
@@ -104,21 +105,22 @@ _PROMPT_TAIL = (
 def _tail(span_text: str, matched: list[tuple[str, str]], condition: Condition) -> str:
     matched_str = ", ".join(f"{d} = {v}" for d, v in matched) if matched else "(none)"
     return _PROMPT_TAIL.format(
-        clause_type=condition.clause_type,
-        value_condition=condition.value_condition or "(none -- judge against the clause type)",
+        category=condition.category,
+        value_condition=condition.value_condition or "(none -- judge against the category)",
         question=condition.question or "(none)",
         matched=matched_str,
         span=span_text,
     )
 
 
-def build_arelevance_judge_fn(model_id: str, *, structured_factory=build_tag_structured) -> AJudgeFn:
+def build_arelevance_judge_fn(model_id: str, *, guidance: Optional[str] = None,
+                              structured_factory=build_tag_structured) -> AJudgeFn:
     """The `span_relevance_judgment` SKILL runtime: an async relevance judge through the model seam. Given a span's
     text + the typed properties detected on it (context) + the structured condition, returns a raw
     `RelevanceVerdict`. The verdict is tag-parsed client-side (ADR-0045); an answer that never parses (after the
     seam's bounded re-ask) is the conservative `uncertain`, never an error. `structured_factory` is injected for
-    hermetic tests."""
-    method = relevance_method()
+    hermetic tests. `guidance` is the domain's addition to the method (see `relevance_method`)."""
+    method = relevance_method(guidance)
 
     async def judge(span_text: str, matched: list[tuple[str, str]], condition: Condition) -> RelevanceVerdict:
         # label names the generation (ADR-0058 / issue 0025) so a reader tells `span-relevance` from

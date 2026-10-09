@@ -4,7 +4,7 @@ The engine emits one Langfuse generation per model call when tracing is on (`RAG
 `verbose`, AND `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` set); otherwise both helpers are no-ops. A product
 groups the engine's generations with its own work:
 
-    with traced_run(job_id=job.id, name="review-contract", metadata={"tenant": tenant}):
+    with traced_run(job_id=job.id, name="review-document", metadata={"tenant": tenant}):
         with traced_step("retrieve"):
             out = await ainvoke_subgraph(...)
 

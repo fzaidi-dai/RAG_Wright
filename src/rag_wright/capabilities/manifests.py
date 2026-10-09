@@ -182,7 +182,7 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         representative_queries=(
             "answer a question grounded in the retrieved evidence with citations",
             "abstain when the retrieved context does not support an answer",
-            "generate a confidence-aware cited answer from contract evidence",
+            "generate a confidence-aware cited answer from document evidence",
             "produce a cited answer or an abstention from retrieved passages",
         ),
         tags=("generation", "answer", "grounded", "cited", "abstention"),
@@ -210,7 +210,7 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         representative_queries=(
             "transcribe a scanned filing image to text",
             "extract the text from a scanned or image-only document",
-            "convert a contract page image into machine-readable text at ingestion",
+            "convert a document page image into machine-readable text at ingestion",
             "read text off a rasterized document image",
         ),
         tags=("vision-to-text", "ocr", "transcription", "ingestion"),
@@ -225,16 +225,16 @@ _ENGINE_SPECS: tuple[CapabilityManifest, ...] = (
         kind="agent_skill",  # a single grounded LLM relevance judgement; SKILL.md, applied via the seam (issue 0023)
         display_name="Span relevance judgment (span x condition -> verdict; authored skill)",
         description=(
-            "Decide whether ONE retrieved span (a clause's operative text) actually addresses ONE structured "
-            "condition being searched for (a clause type, optionally a value condition, with the question as "
+            "Decide whether ONE retrieved span (a passage of a document) actually addresses ONE structured "
+            "condition being searched for (a category, optionally a specific condition, with the question as "
             "context) -- returning a VERDICT (relevant | not_relevant | uncertain), not a similarity score, so no "
-            "caller chooses a threshold (issue 0023, ADR-0088). The retrieval analog of the compliance judge and of "
-            "answer abstention. Applied by typed_property_retrieval (Leg B) over the returned spans; the applying "
-            "capability owns the verdict vocab + conservative default, this skill teaches only the reading."
+            "caller chooses a threshold (issue 0023, ADR-0088). The retrieval analog of answer abstention. Applied "
+            "by a retrieval leg over its returned spans; domain-neutral (a domain adds its own guidance); the "
+            "applying capability owns the verdict vocab + conservative default, this skill teaches only the reading."
         ),
         representative_queries=(
-            "decide whether a retrieved clause actually addresses the searched condition",
-            "judge a span as relevant, not_relevant, or uncertain for a clause-type + value condition",
+            "decide whether a retrieved passage actually addresses the searched condition",
+            "judge a span as relevant, not_relevant, or uncertain for a category + specific condition",
             "return a relevance verdict for a retrieved span instead of a similarity score",
             "filter retrieved spans by whether they truly address the query condition",
         ),

@@ -138,7 +138,10 @@ def production_relational_qa(*, store: Any, answer_model: Any):
         return graph_query(start, store=store, relationship_type=rel, max_hops=max_hops)
 
     async def generate(query: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
-        return await agenerate_answer(query, evidence, model=answer_model)
+        from rag_wright.packs.contracts.skills.guidance import contract_guidance
+
+        return await agenerate_answer(query, evidence, model=answer_model,
+                                      guidance=contract_guidance("generation"))  # PS-R5a: the domain overlay
 
     return build_relational_qa(traverse, generate)
 

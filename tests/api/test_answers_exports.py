@@ -66,14 +66,14 @@ def test_judge_uses_the_workspace_structured_model_and_returns_final_verdicts(mo
         seen["model_id"] = model_id
 
         async def judge(span_text, matched, condition):
-            seen.setdefault("calls", []).append((span_text, matched, condition.clause_type))
+            seen.setdefault("calls", []).append((span_text, matched, condition.category))
             return RelevanceVerdict(verdict={"a": "Relevant", "b": "gibberish"}[span_text], confidence=1.7)
 
         return judge
 
     monkeypatch.setattr("rag_wright.capabilities.span_relevance_judgment.build_arelevance_judge_fn", _build)
     ws = _ws(**{ModelRole.STRUCTURED_REASONING.value: "my/judge-model"})
-    out = asyncio.run(ajudge_spans([("a", [("term", "30 days")]), ("b", [])], Condition(clause_type="payment"),
+    out = asyncio.run(ajudge_spans([("a", [("term", "30 days")]), ("b", [])], Condition(category="payment"),
                                    ws=ws))
     assert seen["model_id"] == "my/judge-model"
     assert [v.verdict for v in out] == [Relevance.RELEVANT.value, Relevance.UNCERTAIN.value]  # unreadable -> uncertain
@@ -86,3 +86,17 @@ def test_the_exports_are_public():
 
     assert {"agenerate_answer", "ajudge_spans", "EvidenceItem", "GeneratedAnswer", "AnswerKind", "RelevanceVerdict",
             "Relevance", "Condition"} <= set(api.__all__)
+
+
+def test_generation_guidance_reaches_the_prompt(monkeypatch):
+    built = _patch_answer_model(monkeypatch, GeneratedAnswer(answer=f"x [{_CID}]", citations=[_CID]))
+    asyncio.run(agenerate_answer("q", [EvidenceItem(chunk_id=_CID, text="t")], ws=_ws(), guidance="DOMAIN-HINT-7"))
+    prompt = built["model"].prompts[0]
+    assert "## Domain guidance" in prompt and "DOMAIN-HINT-7" in prompt
+
+
+def test_the_generation_method_is_domain_neutral():
+    from rag_wright.capabilities.answer_generator import generation_method
+
+    text = generation_method().lower()
+    assert "contract" not in text and "liability" not in text and "clause" not in text

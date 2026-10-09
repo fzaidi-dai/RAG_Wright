@@ -302,7 +302,10 @@ def production_intra_document_qa(
         return rehydrate_clause_texts(store, contract_id, clauses)
 
     async def generate(question: str, evidence: list[EvidenceItem]) -> GeneratedAnswer:
-        return await agenerate_answer(question, evidence, model=answer_model)
+        from rag_wright.packs.contracts.skills.guidance import contract_guidance
+
+        return await agenerate_answer(question, evidence, model=answer_model,
+                                      guidance=contract_guidance("generation"))  # PS-R5a: the domain overlay
 
     return build_intra_document_qa(serve, clause_text, generate)
 

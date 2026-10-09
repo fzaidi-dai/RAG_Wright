@@ -30,27 +30,29 @@ _ABSTENTION = "The retrieved context does not support an answer."
 _SKILL_PATH = Path(__file__).parents[1] / "skills" / "generation" / "SKILL.md"
 
 
-def generation_method() -> str:
-    """The grounded-answer method (the `generation` SKILL body, YAML frontmatter stripped) used as the
-    generator's instruction. Authored knowledge (skills/generation/SKILL.md), not a hardcoded string. The
-    citation/abstention GUARANTEES are still enforced in code around the model (see `generate_answer`)."""
+def generation_method(guidance: Optional[str] = None) -> str:
+    """The grounded-answer method (the `generation` SKILL body, YAML frontmatter stripped, domain-neutral) used as
+    the generator's instruction, followed by the domain's `guidance` when given (PS-R5a: the domain wording is the
+    pack's). Authored knowledge (skills/generation/SKILL.md), not a hardcoded string. The citation/abstention
+    GUARANTEES are still enforced in code around the model (see `generate_answer`)."""
     text = _SKILL_PATH.read_text(encoding="utf-8")
     if text.startswith("---"):
         marker = text.find("\n---", 3)
         if marker != -1:
             text = text[marker + 4 :]
-    return text.strip()
+    method = text.strip()
+    return f"{method}\n\n## Domain guidance\n\n{guidance.strip()}" if guidance and guidance.strip() else method
 
 
 class EvidenceItem(BaseModel):
     """One piece of grounding evidence: a chunk's text, its `chunk_id` (the citation), and — for a
     graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4).
 
-    Engine issue 0011 / ADR-0064: a clause's typed properties ride OUT-OF-BAND here, NOT concatenated into
-    `text`. `_evidence_block` renders only `text`, so the generator never sees the `dimension=value` schema
-    tokens and cannot paraphrase them into prose ("the typed property cap_quantum=..."). The structured facts
+    Engine issue 0011 / ADR-0064: an evidence item's typed properties ride OUT-OF-BAND here, NOT concatenated
+    into `text`. `_evidence_block` renders only `text`, so the generator never sees the `dimension=value` schema
+    tokens and cannot paraphrase them into prose ("the typed property <dimension>=..."). The structured facts
     stay available on this field for a caller that wants them (the product's UI chips); they are never fed to
-    the model. This is the ADR-0054 treatment (function label) applied to properties, but out-of-band rather
+    the model. This is the ADR-0054 treatment (a function label) applied to properties, but out-of-band rather
     than dropped, because the properties do real work elsewhere."""
 
     chunk_id: str
@@ -337,27 +339,28 @@ def _finalize(raw: GeneratedAnswer, evidence: list[EvidenceItem]) -> GeneratedAn
     return GeneratedAnswer(answer=answer, citations=citations, answer_kind=raw.answer_kind)
 
 
-def _answer_prompt(query: str, evidence: list[EvidenceItem]) -> str:
-    return (f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
+def _answer_prompt(query: str, evidence: list[EvidenceItem], guidance: Optional[str] = None) -> str:
+    return (f"{generation_method(guidance)}\n\nQuestion: {query}\n\nEvidence:\n{_evidence_block(evidence)}"
             f"{_confidence_directive(evidence)}")
 
 
 def generate_answer(
-    query: str, evidence: list[EvidenceItem], *, model: AnswerModel
+    query: str, evidence: list[EvidenceItem], *, model: AnswerModel, guidance: Optional[str] = None
 ) -> GeneratedAnswer:
     """Generate a grounded, cited answer — or abstain — enforcing no-claim-without-a-citation in code.
 
     Empty evidence abstains without a model call. Otherwise the model answers over the evidence block
     (with confidence tags surfaced); any citation not present in the evidence is dropped, and an answer
     left with no valid citation is coerced to an abstention. This is the single-call baseline strategy.
+    `guidance` is the domain's addition to the generation method (see `generation_method`).
     """
     if not evidence:
         return _abstain()
-    return _finalize(model.generate(_answer_prompt(query, evidence)), evidence)
+    return _finalize(model.generate(_answer_prompt(query, evidence, guidance)), evidence)
 
 
 async def agenerate_answer(
-    query: str, evidence: list[EvidenceItem], *, model: AnswerModel
+    query: str, evidence: list[EvidenceItem], *, model: AnswerModel, guidance: Optional[str] = None
 ) -> GeneratedAnswer:
     """ASYNC-C1 (ADR-0057): the async twin of `generate_answer` -- the single-call baseline strategy on the
     async generation seam (`model.agenerate`, a true wall-clock deadline on the model call). Identical
@@ -365,7 +368,7 @@ async def agenerate_answer(
     answer left with no valid citation is coerced to an abstention (no claim without a citation, FR-Q.6)."""
     if not evidence:
         return _abstain()
-    return _finalize(await model.agenerate(_answer_prompt(query, evidence)), evidence)
+    return _finalize(await model.agenerate(_answer_prompt(query, evidence, guidance)), evidence)
 
 
 _REASON_HEADER = (
@@ -377,7 +380,8 @@ _REASON_HEADER = (
 
 
 def generate_answer_reasoned(
-    query: str, evidence: list[EvidenceItem], *, reason_model: ReasonModel, emit_model: AnswerModel
+    query: str, evidence: list[EvidenceItem], *, reason_model: ReasonModel, emit_model: AnswerModel,
+    guidance: Optional[str] = None,
 ) -> GeneratedAnswer:
     """Strategy B: split generation into a FREE-TEXT reasoning node then a STRUCTURED emit node. The reason
     node analyzes the evidence in prose (where the model is strongest and the forced-structured/thinking-mode
@@ -388,10 +392,11 @@ def generate_answer_reasoned(
         return _abstain()
     block = _evidence_block(evidence)
     directive = _confidence_directive(evidence)  # out-of-band hedging (ADR-0055), applied to both nodes
+    method = generation_method(guidance)
     analysis = reason_model.reason(
-        f"{generation_method()}\n\n{_REASON_HEADER}\n\nQuestion: {query}\n\nEvidence:\n{block}{directive}")
+        f"{method}\n\n{_REASON_HEADER}\n\nQuestion: {query}\n\nEvidence:\n{block}{directive}")
     emit_prompt = (
-        f"{generation_method()}\n\nQuestion: {query}\n\nEvidence:\n{block}{directive}\n\n"
+        f"{method}\n\nQuestion: {query}\n\nEvidence:\n{block}{directive}\n\n"
         f"STEP 2 — using your STEP 1 analysis below, emit the final grounded, cited answer now, or abstain "
         f"if the analysis concluded the evidence does not support one.\n\nSTEP 1 analysis:\n{analysis}"
     )
@@ -400,7 +405,7 @@ def generate_answer_reasoned(
 
 def generate_answer_best_of_n(
     query: str, evidence: list[EvidenceItem], *, model: AnswerModel, n: int = 5, min_answers: int = 1,
-    max_concurrency: int = 5,
+    max_concurrency: int = 5, guidance: Optional[str] = None,
 ) -> GeneratedAnswer:
     """Strategy C: sample the single-call generation `n` times (supply a temperature>0 `model` for genuine
     diversity), run CONCURRENTLY, and take the best-cited NON-abstaining sample — abstaining only if fewer
@@ -409,7 +414,7 @@ def generate_answer_best_of_n(
     evidence abstains without any model call."""
     if not evidence:
         return _abstain()
-    prompt = _answer_prompt(query, evidence)
+    prompt = _answer_prompt(query, evidence, guidance)
     raws = map_concurrent([prompt] * n, model.generate, max_concurrency=max_concurrency)
     answered = [f for f in (_finalize(r, evidence) for r in raws if r is not None) if not f.abstained]
     if len(answered) < min_answers:

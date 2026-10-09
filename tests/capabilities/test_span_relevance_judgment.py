@@ -53,12 +53,12 @@ async def test_judge_prompt_carries_condition_span_and_matched_as_context():
     sink: dict = {}
     judge = build_arelevance_judge_fn(
         "m", structured_factory=_stub_factory(RelevanceVerdict(verdict="relevant"), sink))
-    cond = Condition(clause_type="Cap On Liability", value_condition="multiple of fees",
+    cond = Condition(category="Cap On Liability", value_condition="multiple of fees",
                      question="how is liability capped")
     out = await judge("Supplier's liability shall not exceed the fees paid.", [("cap_basis", "multiple_of_fees")], cond)
     assert out.verdict == "relevant"
     p = sink["prompt"]
-    assert "Cap On Liability" in p and "multiple of fees" in p            # the condition (clause_type + value)
+    assert "Cap On Liability" in p and "multiple of fees" in p            # the condition (category + value)
     assert "how is liability capped" in p                                  # question as context
     assert "cap_basis = multiple_of_fees" in p                             # matched[] as context
     assert "shall not exceed the fees paid" in p                          # the span text
@@ -88,7 +88,7 @@ async def test_ajudge_spans_preserves_order_and_judges_every_span():
     async def ajudge(text, matched, condition):
         return RelevanceVerdict(verdict="relevant" if text == "a" else "not_relevant")
 
-    cond = Condition(clause_type="X")
+    cond = Condition(category="X")
     out = await ajudge_spans([("a", []), ("b", [])], cond, ajudge_fn=ajudge)
     assert [v.verdict for v in out] == ["relevant", "not_relevant"]      # 1:1, order preserved
 
@@ -98,7 +98,7 @@ async def test_ajudge_spans_timeout_becomes_uncertain_not_a_hang():
         await asyncio.sleep(1.5)
         return RelevanceVerdict(verdict="relevant")
 
-    cond = Condition(clause_type="X")
+    cond = Condition(category="X")
     out = await ajudge_spans([("a", [])], cond, ajudge_fn=slow, timeout_s=0.05, timeout_retries=0)
     assert out[0].verdict == "uncertain"                                  # stalled provider -> conservative, no hang
 
@@ -109,7 +109,7 @@ async def test_ajudge_spans_bounds_wallclock_by_concurrency():
         await asyncio.sleep(0.2)
         return RelevanceVerdict(verdict="relevant")
 
-    cond = Condition(clause_type="X")
+    cond = Condition(category="X")
     t0 = asyncio.get_event_loop().time()
     out = await ajudge_spans([("a", []), ("b", []), ("c", []), ("d", [])], cond,
                              ajudge_fn=slowish, max_concurrency=4, timeout_s=None)
@@ -134,7 +134,7 @@ async def test_an_unreadable_judgment_becomes_uncertain_not_an_error():
             RelevanceVerdict.model_validate({})  # the model's answer never parsed (raises ValidationError)
 
     judge = build_arelevance_judge_fn("m", structured_factory=lambda _m, _s, **_kw: _Unreadable())
-    out = await judge("some span", [], Condition(clause_type="payment terms"))
+    out = await judge("some span", [], Condition(category="payment terms"))
     assert finalize_verdict(out).verdict == "uncertain" and out.confidence == 0.0
 
 
@@ -147,4 +147,29 @@ async def test_a_non_parse_judge_error_still_propagates():
 
     judge = build_arelevance_judge_fn("m", structured_factory=lambda _m, _s, **_kw: _Broken())
     with pytest.raises(RuntimeError):
-        await judge("some span", [], Condition(clause_type="payment terms"))
+        await judge("some span", [], Condition(category="payment terms"))
+
+
+# --- PS-R5a: the method is domain-neutral; a domain appends its guidance -----------------------------------------
+
+
+def test_the_engine_method_is_domain_neutral_and_a_domain_appends_its_guidance():
+    method = relevance_method()
+    assert "contract" not in method.lower() and "clause" not in method.lower()
+    with_guidance = relevance_method("The documents are textile test reports.")
+    assert with_guidance.startswith(method) and with_guidance.endswith("The documents are textile test reports.")
+    assert relevance_method("   ") == method  # blank guidance adds nothing
+
+
+async def test_the_judge_prompt_carries_the_domain_guidance():
+    sink: dict = {}
+    judge = build_arelevance_judge_fn("m", guidance="DOMAIN-HINT-42",
+                                      structured_factory=_stub_factory(RelevanceVerdict(verdict="relevant"), sink))
+    await judge("span", [], Condition(category="fabric strength"))
+    assert "DOMAIN-HINT-42" in sink["prompt"] and "category: fabric strength" in sink["prompt"]
+
+
+def test_the_reference_pack_supplies_its_contract_guidance():
+    from rag_wright.packs.contracts.skills.guidance import contract_guidance
+
+    assert "clause type" in contract_guidance("relevance") and "carve-outs" in contract_guidance("generation")

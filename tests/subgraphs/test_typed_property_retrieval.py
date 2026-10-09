@@ -97,7 +97,7 @@ async def test_judge_attaches_a_verdict_to_every_span_when_wired():
     out = await _run(seams, relevance_judge=judge,
                      extra_input={"clause_type": "Anti-Assignment", "value_condition": "freely assignable"})
     assert [j.relevance.verdict for j in out.results] == ["relevant", "not_relevant"]  # every span judged
-    assert seen["condition"].clause_type == "Anti-Assignment"
+    assert seen["condition"].category == "Anti-Assignment"  # the pack maps its clause_type input onto the generic category
     assert seen["condition"].value_condition == "freely assignable"
     assert seen["condition"].question == "anti-assignment freely assignable"  # the query rides as context
 

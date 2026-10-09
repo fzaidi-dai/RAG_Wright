@@ -50,7 +50,7 @@ A typed KG edge to create between two nodes identified by (type, key_field, key)
 
 One piece of grounding evidence: a chunk's text, its `chunk_id` (the citation), and — for a graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4).
 
-Engine issue 0011 / ADR-0064: a clause's typed properties ride OUT-OF-BAND here, NOT concatenated into `text`. `_evidence_block` renders only `text`, so the generator never sees the `dimension=value` schema tokens and cannot paraphrase them into prose ("the typed property cap_quantum=..."). The structured facts stay available on this field for a caller that wants them (the product's UI chips); they are never fed to the model. This is the ADR-0054 treatment (function label) applied to properties, but out-of-band rather than dropped, because the properties do real work elsewhere.
+Engine issue 0011 / ADR-0064: an evidence item's typed properties ride OUT-OF-BAND here, NOT concatenated into `text`. `_evidence_block` renders only `text`, so the generator never sees the `dimension=value` schema tokens and cannot paraphrase them into prose ("the typed property <dimension>=..."). The structured facts stay available on this field for a caller that wants them (the product's UI chips); they are never fed to the model. This is the ADR-0054 treatment (a function label) applied to properties, but out-of-band rather than dropped, because the properties do real work elsewhere.
 
 ### `GeneratedAnswer(*, answer: str, citations: list[str], abstained: bool = False, answer_kind: Optional[rag_wright.capabilities.answer_generator.AnswerKind] = None) -> None`
 
@@ -72,9 +72,9 @@ The closed relevance vocab. `uncertain` is both a real judgement (ambiguous text
 
 Members: `RELEVANT` (`'relevant'`), `NOT_RELEVANT` (`'not_relevant'`), `UNCERTAIN` (`'uncertain'`)
 
-### `Condition(*, clause_type: str, value_condition: Optional[str] = None, question: Optional[str] = None) -> None`
+### `Condition(*, category: str, value_condition: Optional[str] = None, question: Optional[str] = None) -> None`
 
-The structured test a retrieved span is judged against (issue 0023). `clause_type` is primary (a category to test membership of); `value_condition` is a narrower test within it (often absent or shared across a multi-condition sweep); `question` is CONTEXT ONLY -- in a multi-condition sweep it belongs to all conditions at once, so it must not by itself make a span relevant. (Per-condition question decomposition is a separate engine gap, not owned here.)
+The structured test a retrieved span is judged against (issue 0023). `category` is primary (the kind of passage searched for, in the domain's own terms); `value_condition` is a narrower test within it (often absent or shared across a multi-condition search); `question` is CONTEXT ONLY -- in a multi-condition search it belongs to all conditions at once, so it must not by itself make a span relevant.
 
 ### `UsageTotals(calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, cost_usd: 'float' = 0.0, calls_without_cost: 'int' = 0, latency_ms_total: 'float' = 0.0, by_model: 'dict[str, ModelUsage]' = <factory>, _lock: 'threading.Lock' = <factory>) -> None`
 
@@ -222,7 +222,7 @@ Resolve (and cache) the workspace for `corpus` (the backend database name) from 
 
 ### `pack_store(ws: 'WorkspaceHandle', cls: 'Callable[..., _T]', *args: 'Any', **kwargs: 'Any') -> '_T'`
 
-Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store: `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, ContractKGStore)`. The store it receives implements the engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack.
+Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store: `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, MyPackStore)`. The store it receives implements the engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack.
 
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 
@@ -304,13 +304,13 @@ The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the doclin
 
 The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the docling parse off the event loop.
 
-### `agenerate_answer(query: 'str', evidence: 'list[EvidenceItem]', *, ws: 'Any') -> 'GeneratedAnswer'`
+### `agenerate_answer(query: 'str', evidence: 'list[EvidenceItem]', *, ws: 'Any', guidance: 'Optional[str]' = None) -> 'GeneratedAnswer'`
 
-A grounded, cited answer to `query` over `evidence`, or an abstention. Empty evidence abstains without a model call; a citation not in the evidence is dropped, and an answer left with no valid citation becomes an abstention (no claim without a citation). `answer_kind` says whether the evidence fully supported the answer (`answered`), only partly (`partial`) or not at all (`abstained`).
+A grounded, cited answer to `query` over `evidence`, or an abstention. Empty evidence abstains without a model call; a citation not in the evidence is dropped, and an answer left with no valid citation becomes an abstention (no claim without a citation). `answer_kind` says whether the evidence fully supported the answer (`answered`), only partly (`partial`) or not at all (`abstained`). `guidance` adds your domain's wording to the domain-neutral method.
 
-### `ajudge_spans(spans: 'list[tuple[str, list[tuple[str, str]]]]', condition: 'Condition', *, ws: 'Any', max_concurrency: 'int' = 8) -> 'list[RelevanceVerdict]'`
+### `ajudge_spans(spans: 'list[tuple[str, list[tuple[str, str]]]]', condition: 'Condition', *, ws: 'Any', max_concurrency: 'int' = 8, guidance: 'Optional[str]' = None) -> 'list[RelevanceVerdict]'`
 
-Judge whether each span addresses `condition`, concurrently, one verdict per span in order. Each span is `(text, matched)`, where `matched` lists `(property, value)` pairs already detected on the span (context for the judge, not proof; pass `[]` when there are none). Every verdict is in the closed `Relevance` vocabulary: an unreadable judgment, or one that timed out, is `uncertain` (never a fabricated `not_relevant`).
+Judge whether each span addresses `condition`, concurrently, one verdict per span in order. Each span is `(text, matched)`, where `matched` lists `(property, value)` pairs already detected on the span (context for the judge, not proof; pass `[]` when there are none). Every verdict is in the closed `Relevance` vocabulary: an unreadable judgment, or one that timed out, is `uncertain` (never a fabricated `not_relevant`). `guidance` adds your domain's wording (what its categories look like) to the domain-neutral method.
 
 ### `measure_usage() -> 'Iterator[UsageTotals]'`
 

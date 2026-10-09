@@ -140,7 +140,7 @@ def build_typed_property_retrieval(
         if relevance_judge is None or not clause_type or not results:
             # no judge wired (or no condition / nothing retrieved) -> pass through UNJUDGED (relevance None)
             return {"judged": [JudgedSpan(span=r) for r in results]}
-        condition = Condition(clause_type=clause_type, value_condition=state.get("value_condition"),
+        condition = Condition(category=clause_type, value_condition=state.get("value_condition"),
                               question=state.get("query"))
 
         async def _work() -> dict:
@@ -246,7 +246,9 @@ def production_typed_property_retrieval(
     if judge_model_id is not None:
         from rag_wright.capabilities.span_relevance_judgment import ajudge_spans, build_arelevance_judge_fn
         jid = getattr(judge_model_id, "model", judge_model_id)  # accept an ExtractionModel or a bare id
-        _ajudge = build_arelevance_judge_fn(jid)
+        from rag_wright.packs.contracts.skills.guidance import contract_guidance
+
+        _ajudge = build_arelevance_judge_fn(jid, guidance=contract_guidance("relevance"))  # PS-R5a: the domain overlay
 
         async def relevance_judge(spans: list[RankedSpan], condition: Condition) -> list[RelevanceVerdict]:
             # judge exactly the returned spans, concurrently; matched[] passed as CONTEXT (evidence, not verdict)

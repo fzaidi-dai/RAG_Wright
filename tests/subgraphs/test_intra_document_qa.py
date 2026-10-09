@@ -336,7 +336,7 @@ async def test_production_serves_whole_contract_not_function_narrowed(monkeypatc
     monkeypatch.setattr(cks, "contract_clause_index", _whole)
     monkeypatch.setattr(cks, "clauses_of_function", _by_function, raising=False)
 
-    async def _agen(q, ev, model=None):
+    async def _agen(q, ev, model=None, guidance=None):
         return GeneratedAnswer(answer="", citations=[], abstained=True)
 
     monkeypatch.setattr(ag, "agenerate_answer", _agen)
@@ -376,7 +376,7 @@ async def test_production_bge_reranks_to_top_k_within_contract(monkeypatch):
 
     captured = {}
 
-    async def _gen(q, ev, model=None):
+    async def _gen(q, ev, model=None, guidance=None):
         captured["ids"] = [e.chunk_id for e in ev]  # EvidenceItem.chunk_id == the clause_id
         return GeneratedAnswer(answer="", citations=[], abstained=True)
 
