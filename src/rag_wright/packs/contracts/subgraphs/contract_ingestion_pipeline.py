@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, Iterable, Optional, Protocol, Sequence, TypedDict, runtime_checkable
 
@@ -51,7 +52,7 @@ from rag_wright.capabilities.document_parse import (  # noqa: F401 (re-export)
     parsed_source_document,
 )
 from rag_wright.capabilities.document_parse import parsed_text_document as _parsed_from_text  # noqa: F401 - moved (ING-4c)
-from rag_wright.contracts.ingestion import BoundaryDecider, TaggedSpan, Unit
+from rag_wright.contracts.ingestion import BoundaryDecider, Span, TaggedSpan, Unit
 from rag_wright.subgraphs.scaffold import DEFAULT_RETRY, business_span, dead_letter
 from rag_wright.packs.contracts.subgraphs.typed_clause_extraction import TransientExtraction
 
@@ -553,11 +554,16 @@ def function_span_tagger(classify_fn: Any, *, max_concurrency: Optional[int], sp
     async def tagger(chunk_text: str, spans: list) -> list:
         if not spans:
             return []
-        scores = await classify_fn.aclassify_spans(chunk_text, [s.text for s in spans], sem=sem)
+        texts = [s.text for s in spans]
+        if hasattr(classify_fn, "aclassify_spans_with_probabilities"):  # PS-R3: probabilities for provision_vote
+            rows = await classify_fn.aclassify_spans_with_probabilities(chunk_text, texts, sem=sem)
+        else:  # a classifier without probabilities (e.g. the LLM one): provision_vote falls back to operative_span
+            rows = [(sc, {}) for sc in await classify_fn.aclassify_spans(chunk_text, texts, sem=sem)]
         out = []
-        for span, sc in zip(spans, scores):
+        for span, (sc, probs) in zip(spans, rows):
             scores_out[span.span_id] = sc
-            out.append(TaggedSpan(span=span, tags=[x.function for x in sc], primary=primary_function(sc) or NO_FUNCTION))
+            out.append(TaggedSpan(span=span, tags=[x.function for x in sc], scores=probs,
+                                  primary=primary_function(sc) or NO_FUNCTION))
         return out
 
     return tagger
@@ -634,6 +640,61 @@ async def provision_units(spans: Sequence[TaggedSpan], *, decider: Optional[Boun
                           text="\n".join(m[0].text.strip() for m in members),
                           tags=[] if function == NO_FUNCTION else [function]))
     return units
+
+
+# A provision's heading label: an optional "Section/Article/Clause" word plus a section number ('9.', '12.1', 'IV.').
+_LABEL_PREFIX = re.compile(r"^(?:(?:section|article|clause)\s+)?(?:\d+(?:\.\d+)*|[ivxlc]+)\.?\s*", re.IGNORECASE)
+
+
+def _is_heading_label(span: Span) -> bool:
+    """A span that only NAMES a provision ('Section 9. Uncapped Liability.', 'Governing Law', a heading/title span),
+    with no operative sentence of its own. A short operative provision ('3. Fees. Customer shall pay ...') is not."""
+    from rag_wright.corpus.document_parser import _is_bare_heading
+
+    if span.kind in ("title", "heading"):
+        return True
+    t = span.text.strip()
+    return _is_bare_heading(t) or _is_bare_heading(_LABEL_PREFIX.sub("", t, count=1).rstrip("."))
+
+
+def operative_span(members: Sequence[TaggedSpan]) -> TaggedSpan:
+    """PS-R3: the reference CONTRACT pack's `UnitRepresentative` -- a provision is represented by its OPERATIVE span:
+    the first member with a real function that is not a heading label. That span is the clause's citation
+    (`span_id`), its function, and the scope of its property classifiers. Why: a heading is the weakest text to
+    classify ('Section 9. Uncapped Liability.' was tagged Cap On Liability while its operative sentence was tagged
+    Uncapped Liability), and a citation should point at the sentence that says it. Fallbacks: the first member with a
+    function (e.g. a tagged heading over untagged text), then the first member. A product with different documents
+    supplies its own rule (`build_ingestion(unit_representative=...)`)."""
+    from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
+
+    def tagged(m: TaggedSpan) -> bool:
+        return m.primary_tag not in ("", NO_FUNCTION)
+
+    return (next((m for m in members if tagged(m) and not _is_heading_label(m.span)), None)
+            or next((m for m in members if tagged(m)), members[0]))
+
+
+def provision_vote(members: Sequence[TaggedSpan]) -> TaggedSpan:
+    """PS-R3: the reference CONTRACT pack's `UnitRepresentative` (rule D, ADR-0126). The provision's label is the
+    function with the highest probability summed over its OPERATIVE members (those that are not heading labels; all
+    members when every one is a heading), and it is cited by the operative member most confident in that label --
+    returned as that member with its `primary` set to the label. Measured on all 510 CUAD contracts against CUAD gold:
+    56.6% provision accuracy vs 46.8% for heading-first (today's behaviour) and 45.2% for `operative_span` alone, the
+    best Cap On Liability recall, and fewer false Uncapped clauses (ADR-0126). Without probabilities on the spans
+    (a classifier that gives none) it falls back to `operative_span`."""
+    from rag_wright.packs.contracts.schemas.function import NO_FUNCTION
+
+    voters = [m for m in members if not _is_heading_label(m.span)] or list(members)
+    totals: dict[str, float] = {}
+    for m in voters:
+        for label, p in m.scores.items():
+            if label and label != NO_FUNCTION:
+                totals[label] = totals.get(label, 0.0) + p
+    if not totals:
+        return operative_span(members)
+    label = max(totals, key=lambda k: totals[k])
+    best = max(voters, key=lambda m: m.scores.get(label, 0.0))
+    return best.model_copy(update={"primary": label})
 
 
 def clause_cache_key(clause_id: str, anchor_span_id: str, function: str, template_version: str) -> str:
@@ -914,7 +975,8 @@ def aproduction_document_ingest(
         unit_grouper=provision_grouper,
         boundary_decider=cached_decider(jev_boundary_decider(), Path(cache_dir) / "boundary_decisions"),
         writer=clause_kg_writer, tuning=IngestionTuning(extract_concurrency=clause_concurrency), embedder=embedder,
-        chunk_model=chunk_model_id, cache_dir=cache_dir, discoverer=discoverer)
+        chunk_model=chunk_model_id, cache_dir=cache_dir, discoverer=discoverer,
+        unit_representative=provision_vote)  # PS-R3 / ADR-0126: label by the operative members' vote, cite the operative span
 
     async def chunk_fn(doc: SourceDocument) -> list:
         chunks = await stages.chunk(doc)

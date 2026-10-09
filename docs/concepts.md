@@ -101,7 +101,8 @@ A new domain does not write an ingestion pipeline; it passes hooks to the engine
 
 ```python
 pipeline = build_ingestion(extractor, segmenter=None, span_tagger=None, unit_grouper=None,
-                           boundary_decider=None, writer=None, tuning=None, document_hook=None)
+                           boundary_decider=None, unit_representative=None, writer=None, tuning=None,
+                           document_hook=None)
 report = await pipeline.aingest(ws, sources, cache_dir="cache/")
 ```
 

@@ -16,6 +16,9 @@ pipeline = build_ingestion(
     unit_grouper=None,         # default: layout-structural grouping (a heading owns its content; a table is one unit,
                                #          or one unit per row for a database-style table)
     boundary_decider=None,     # default: none (an uncertain boundary does not split)
+    unit_representative=None,  # default: none (a unit is labelled and cited by its first member, often a heading);
+                               #          your rule picks the member span that represents each unit (its anchor and
+                               #          leading tag), e.g. the operative sentence
     writer=None,               # default: the store's kg_write of your KgNode/KgEdge
     tuning=None,               # IngestionTuning; else EngineConfig.options.ingest.tuning; else the defaults
     document_hook=None,        # async (ws, source_document, chunks), once per document after its records are written

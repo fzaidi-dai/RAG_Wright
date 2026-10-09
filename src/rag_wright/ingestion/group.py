@@ -24,12 +24,14 @@ from typing import Optional, Sequence
 
 from rag_wright.contracts.ingestion import (
     BoundaryDecider,
+    IngestionContractError,
     IngestionTuning,
     RecordTableRule,
     Span,
     TableMode,
     TaggedSpan,
     Unit,
+    UnitRepresentative,
 )
 from rag_wright.corpus.document_parser import _is_bare_heading
 
@@ -143,3 +145,24 @@ async def group_units(spans: Sequence[TaggedSpan], *, decider: Optional[Boundary
             units.append(Unit(index=len(units), anchor=members[0].span, spans=[ts.span for ts in members],
                               text=_text(members, prefix), tags=tags))
     return units
+
+
+def apply_unit_representative(units: Sequence[Unit], tagged: Sequence[TaggedSpan],
+                              representative: UnitRepresentative) -> list[Unit]:
+    """PS-R3: re-anchor and re-label each unit by its `representative` member (see `UnitRepresentative`): the chosen
+    span becomes the `anchor`, its primary tag leads `tags` (the grouper's tags follow, de-duplicated). Raises
+    `IngestionContractError` when the hook returns a span that is not a member of the unit."""
+    by_id = {ts.span.span_id: ts for ts in tagged}
+    out: list[Unit] = []
+    for unit in units:
+        members = [by_id[s.span_id] for s in unit.spans if s.span_id in by_id]
+        if not members:
+            out.append(unit)
+            continue
+        rep = representative(members)
+        if rep.span.span_id not in {m.span.span_id for m in members}:
+            raise IngestionContractError(
+                f"unit {unit.index}: the representative {rep.span.span_id!r} is not a member of the unit")
+        tags = [t for t in dict.fromkeys([rep.primary_tag, *unit.tags]) if t]
+        out.append(unit.model_copy(update={"anchor": rep.span, "tags": tags}))
+    return out

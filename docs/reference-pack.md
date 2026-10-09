@@ -91,6 +91,25 @@ A new domain mirrors the pattern, swapping the vocabulary and document shape:
   `model` capabilities ([classification & decision models](domain-adaptation/classification-and-decision-models.md));
 - `intra_document_qa` / `typed_property_retrieval` / `relational_qa` show cited retrieval/QA legs to adapt.
 
+## How a clause gets its function and its citation (a domain decision)
+
+The contract pipeline groups spans into PROVISIONS (a numbered section with its body) and extracts one clause per
+provision. Which span represents the provision is a domain decision, made through the engine's `unit_representative`
+hook; the reference pack passes `provision_vote` (ADR-0126): the clause's `function` is the label with the highest
+classifier probability summed over the provision's operative members (those that are not heading labels: a
+heading/title span, or a line that only names the section, such as "Section 9. Uncapped Liability."), and its
+citation `span_id` is the operative member most confident in that label (whose soft tags also scope the property
+classifiers). Measured on all 510 CUAD contracts: 56.6% provision accuracy, against 46.8% for heading-first and 45.2%
+for the operative span alone.
+
+Why: a heading is the weakest text to classify and a poor citation. Measured: in "Section 9. Uncapped Liability.
+Notwithstanding Section 8, ... there shall be no cap on ... liability", the heading was tagged Cap On Liability and
+the operative sentence Uncapped Liability; with the heading as the representative the clause became a Cap clause and
+lost its carve-out link (`clause_exception_linking` links Uncapped clauses to Cap clauses). Without classifier
+probabilities it falls back to `operative_span` (the first tagged operative member, then a tagged heading, then the
+first member). A product with other documents writes its own rule and passes it
+to `build_ingestion(unit_representative=...)`.
+
 ## Its trained weights: fetched, not shipped
 
 The pack's two `model` capabilities load trained weights that are not in the wheel or the repository (about 16 GB):

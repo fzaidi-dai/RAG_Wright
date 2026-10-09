@@ -25,6 +25,7 @@ every signature). The decision record is ADR-0124 (`docs/adr/0124-generic-ingest
 | tag spans (soft tags) | domain, optional | none | `span_tagger=` |
 | index spans (embed + store, page/bbox provenance) | engine | the workspace's ingest embedder | `embedder=` |
 | group spans into units | engine default, domain may override | a heading starts a unit, a table stays whole (a record table is one unit per row), page furniture dropped, units capped | `unit_grouper=`, `boundary_decider=` |
+| choose each unit's representative span (its `anchor` + leading tag) | **domain decision**, optional | the grouper's choice: the first member, often a heading | `unit_representative=` |
 | extract records from a unit | **domain (required)** | (none) | the `extractor` argument |
 | write records | engine default | `kg_write` | `writer=` |
 | per-document follow-up (e.g. an entity graph) | domain, optional | none | `document_hook=` |
@@ -49,6 +50,14 @@ The unit is the text one extractor call reads. Get it right first; every other c
 - If your documents mark units in a way layout does not show (a numbering scheme, a domain heading convention),
   override `unit_grouper=` or pass a `boundary_decider=` (candidate line texts -> "starts a new unit?" per text) to
   settle the lines the default grouper is unsure of. Domain conventions belong in your pack, never in the engine.
+- **Decide which span REPRESENTS a unit** (`unit_representative=`, a `UnitRepresentative`: the unit's member spans,
+  with their tags -> the one that represents it). The chosen span becomes `unit.anchor` (the citation your records
+  carry, `span_id = unit.anchor.span_id`) and its primary tag leads `unit.tags` (the label your extractor reads).
+  Without it a unit is represented by its first member, which is usually its heading: the weakest text to tag and a
+  poor citation. The reference contracts pack passes `provision_vote` (ADR-0126): the label with the highest
+  probability summed over the non-heading members, cited by the member most confident in it; on 510 CUAD contracts
+  that beat heading-first by about 10 points. Measure your own rule on a gold set of your documents before choosing
+  it (the creating-evals skill).
 
 ## 3. Declare your record types in the pack `.ttl`
 

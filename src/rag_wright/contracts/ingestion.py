@@ -167,6 +167,17 @@ class SpanTagger(Protocol):
 BoundaryDecider = Callable[[list[str]], Awaitable[list[bool]]]
 
 
+class UnitRepresentative(Protocol):
+    """PS-R3: which member span represents a unit -- a DOMAIN decision. The engine applies it after grouping (to any
+    grouper's units): the chosen span becomes the unit's `anchor` (the citation its records carry and the span their
+    provenance points to) and its primary tag leads the unit's `tags` (the label the extractor reads). Must return
+    one of `members` (the unit's spans, in order, with their tags and `scores`) -- or a copy of one with its `primary`
+    set, when the unit's label is decided across members (e.g. a vote over their `scores`). Without it the grouper's own choice stands (the
+    engine's default grouper: the first member, often a heading -- a weak label)."""
+
+    def __call__(self, members: Sequence[TaggedSpan]) -> TaggedSpan: ...
+
+
 class UnitGrouper(Protocol):
     """A document's spans (in order, across chunks) -> extraction units. May drop spans (e.g. page furniture); a
     dropped span stays in the span index. `decider` (a `BoundaryDecider`: candidate line texts -> "starts a new

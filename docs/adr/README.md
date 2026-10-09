@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-125 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
-and 0121–0125). ADRs are an
+126 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+and 0121–0126). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -181,4 +181,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0122 Provision-boundary detection is deterministic-first with a decision-model (Jev) fallback for the residue ·
 0123 Batched engine releases via release-please; products consume releases via Dependabot ·
 0124 A generic ingestion builder with domain hooks; the legal pipeline becomes the reference instantiation ·
-0125 Qwen3.8-27b on OpenRouter is unpinned (no provider routing; supersedes 0111)
+0125 Qwen3.8-27b on OpenRouter is unpinned (no provider routing; supersedes 0111) ·
+0126 Which span represents a unit is a domain hook; the reference pack votes over operative spans

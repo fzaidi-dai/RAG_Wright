@@ -53,7 +53,12 @@ def _setfit_clause_classifier() -> Any:
 # manifests' `impl_ref` ("rag_wright.packs.contracts.spans.model_capabilities:clause_function_classification", etc.).
 
 def clause_function_classification(resources: Any, inputs: dict) -> Any:  # noqa: ARG001 - store-independent
-    return _setfit_clause_classifier().classify_spans(inputs["chunk_text"], inputs["span_texts"])
+    # `with_probabilities` (PS-R3, optional): each span as (its FunctionScores, {function: averaged probability}) for
+    # the reference unit representative's vote; the default output (FunctionScores per span) is unchanged.
+    clf = _setfit_clause_classifier()
+    if inputs.get("with_probabilities"):
+        return clf.classify_spans_with_probabilities(inputs["chunk_text"], inputs["span_texts"])
+    return clf.classify_spans(inputs["chunk_text"], inputs["span_texts"])
 
 
 def clause_property_classification(resources: Any, inputs: dict) -> Any:  # noqa: ARG001 - store-independent
@@ -95,6 +100,12 @@ class CapabilityFunctionClassifier:
                               *, sem: asyncio.Semaphore | None = None) -> Any:
         return await adispatch_model("clause_function_classification",
                                      {"chunk_text": chunk_text, "span_texts": span_texts}, sem=sem)
+
+    async def aclassify_spans_with_probabilities(self, chunk_text: str, span_texts: list[str],
+                                                 *, sem: asyncio.Semaphore | None = None) -> Any:
+        return await adispatch_model("clause_function_classification",
+                                     {"chunk_text": chunk_text, "span_texts": span_texts,
+                                      "with_probabilities": True}, sem=sem)
 
 
 def capability_property_classifier_fn() -> Callable[[str, tuple], list[dict]]:

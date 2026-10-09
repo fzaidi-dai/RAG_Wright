@@ -33,6 +33,7 @@ from rag_wright.contracts.ingestion import (
     TaggedSpan,
     UnitExtraction,
     UnitGrouper,
+    UnitRepresentative,
     check_extraction,
     check_tiling,
     check_units,
@@ -121,13 +122,15 @@ class IngestionStages:
                  span_tagger: Optional[SpanTagger] = None, unit_grouper: Optional[UnitGrouper] = None,
                  boundary_decider: Optional[BoundaryDecider] = None, writer: Optional[RecordWriter] = None,
                  tuning: Optional[IngestionTuning] = None, embedder: Any = None, chunk_model: Optional[str] = None,
-                 cache_dir: Union[str, Path], discoverer: Any = None) -> None:
+                 cache_dir: Union[str, Path], discoverer: Any = None,
+                 unit_representative: Optional[UnitRepresentative] = None) -> None:
         self.store = store
         self.discoverer = discoverer  # a chunk-boundary discoverer; default: structural + `chunk_model` refinement
         self.extractor = extractor
         self.segmenter = segmenter
         self.tagger = span_tagger
         self.grouper = unit_grouper
+        self.representative = unit_representative
         self.decider = boundary_decider
         self.writer = writer
         self.tuning = tuning or IngestionTuning()
@@ -211,13 +214,15 @@ class IngestionStages:
     async def extract(self, sd: Any, tagged: list[TaggedSpan], *, table_mode: str = "auto") -> ExtractStage:
         """Group into units (checked), attach table rows, extract each unit concurrently (provenance checked); a failed
         unit is recorded and skipped."""
-        from rag_wright.ingestion.group import group_units
+        from rag_wright.ingestion.group import apply_unit_representative, group_units
 
         stage = ExtractStage()
         if not tagged:
             return stage
         grouper = self.grouper or functools.partial(group_units, tuning=self.tuning, table_mode=table_mode)
         stage.units = await grouper(tagged, decider=self.decider)
+        if self.representative is not None:  # PS-R3: the domain's choice of each unit's representative span
+            stage.units = apply_unit_representative(stage.units, tagged, self.representative)
         check_units([t.span for t in tagged], stage.units)
         document = self.document(sd)
         stage.row_spans = _row_spans(document, [t.span for t in tagged])
@@ -283,9 +288,11 @@ class IngestionPipeline:
                  unit_grouper: Optional[UnitGrouper], boundary_decider: Optional[BoundaryDecider],
                  writer: Optional[RecordWriter], tuning: Optional[IngestionTuning], embedder: Any,
                  chunk_model: Optional[str], progress: Callable[[str], Any],
-                 document_hook: Optional[DocumentHook] = None) -> None:
+                 document_hook: Optional[DocumentHook] = None,
+                 unit_representative: Optional[UnitRepresentative] = None) -> None:
         self._hooks = dict(extractor=extractor, segmenter=segmenter, span_tagger=span_tagger,
-                           unit_grouper=unit_grouper, boundary_decider=boundary_decider, writer=writer)
+                           unit_grouper=unit_grouper, boundary_decider=boundary_decider, writer=writer,
+                           unit_representative=unit_representative)
         self._tuning = tuning
         self._embedder = embedder
         self._chunk_model = chunk_model
@@ -449,21 +456,26 @@ def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = No
                     boundary_decider: Optional[BoundaryDecider] = None, writer: Optional[RecordWriter] = None,
                     tuning: Optional[IngestionTuning] = None, embedder: Any = None, chunk_model: Optional[str] = None,
                     progress: Callable[[str], Any] = functools.partial(print, flush=True),
-                    document_hook: Optional[DocumentHook] = None) -> IngestionPipeline:
+                    document_hook: Optional[DocumentHook] = None,
+                    unit_representative: Optional[UnitRepresentative] = None) -> IngestionPipeline:
     """The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `UnitExtraction`) and override
     any other hook you need; `tuning` sets the thresholds of the default hooks. `embedder` (an `encode_batch`
     object) defaults to the workspace's ingest embedder; `chunk_model` is used only to refine an over-cap section.
     `document_hook(ws, source_document, chunks)` is awaited once per document after its records are written (e.g. a
     domain's entity graph); its return value is ignored. `boundary_decider` (a `BoundaryDecider`: candidate line
     texts -> "starts a new unit?" per text) is handed to the unit grouper to settle the boundaries its rules are
-    unsure of; None = the grouper's own rules only. Returns an `IngestionPipeline`; run it with
+    unsure of; None = the grouper's own rules only. `unit_representative` (a `UnitRepresentative`: a unit's member
+    spans -> the one that represents it) sets each unit's `anchor` and leading tag after grouping -- e.g. the
+    operative sentence rather than a heading; None = the grouper's own choice. Returns an `IngestionPipeline`; run it
+    with
     `await pipeline.aingest(ws, sources, cache_dir=...)`."""
     t = tuning or IngestionTuning()
     if t.extract_concurrency < 1 or t.document_concurrency < 1:
         raise ValueError("extract_concurrency and document_concurrency must be >= 1")
     return IngestionPipeline(extractor, segmenter=segmenter, span_tagger=span_tagger, unit_grouper=unit_grouper,
                              boundary_decider=boundary_decider, writer=writer, tuning=tuning, embedder=embedder,
-                             chunk_model=chunk_model, progress=progress, document_hook=document_hook)
+                             chunk_model=chunk_model, progress=progress, document_hook=document_hook,
+                             unit_representative=unit_representative)
 
 
 __all__ = ["build_ingestion", "IngestionPipeline", "IngestionStages", "ExtractStage", "IngestionReport", "DocumentReport"]

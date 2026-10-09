@@ -45,6 +45,7 @@ from rag_wright.contracts.ingestion import (
     Unit,
     UnitExtraction,
     UnitGrouper,
+    UnitRepresentative,
     check_extraction,
     check_tiling,
     check_units,
@@ -82,7 +83,7 @@ __all__ = [
     "CapabilityManifest", "load_pack", "engine_capabilities", "register_canonical_slugs", "canonical_capability_slugs",
     # ING-1 (ADR-0124): the ingestion hook contracts + the engine-enforced checks
     "LayoutItem", "LayoutKind", "Span", "SpanKind", "TaggedSpan", "Unit", "UnitExtraction", "IngestionContractError",
-    "Segmenter", "SpanTagger", "UnitGrouper", "BoundaryDecider", "Extractor", "RecordWriter",
+    "Segmenter", "SpanTagger", "UnitGrouper", "UnitRepresentative", "BoundaryDecider", "Extractor", "RecordWriter",
     "check_tiling", "check_units", "check_extraction",
     # ING-4b: tuning + sources
     "IngestionTuning", "RecordTableRule", "IdentifierRule", "IngestSource", "TableMode",

@@ -437,9 +437,8 @@ class SetFitClauseAdapter:
         async with sem:
             return await asyncio.to_thread(self.classify_spans, chunk_text, span_texts)
 
-    def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:  # noqa: ARG002
-        if not span_texts:
-            return []
+    def _probabilities(self, span_texts: list[str]) -> Any:
+        """The ensemble-averaged probability of every label, one row per span."""
         np = self._np
         agg = np.zeros((len(span_texts), len(self._labels)))
         for body, head, norm, cols in self._models:
@@ -449,22 +448,50 @@ class SetFitClauseAdapter:
                 idx = self._lab_idx.get(c)
                 if idx is not None:
                     agg[:, idx] += proba[:, j]
-        agg /= len(self._models)
-        out: list[list[FunctionScore]] = []
-        for row in agg:
-            scores: list[FunctionScore] = []
-            for j in np.argsort(-row)[: self._top_k]:
-                p = float(row[j])
-                if p < self._threshold:
-                    break
+        return agg / len(self._models)
+
+    def classify_spans(self, chunk_text: str, span_texts: list[str]) -> list[list[FunctionScore]]:  # noqa: ARG002
+        if not span_texts:
+            return []
+        return [self._scores(row) for row in self._probabilities(span_texts)]
+
+    def classify_spans_with_probabilities(self, chunk_text: str, span_texts: list[str]  # noqa: ARG002
+                                          ) -> list[tuple[list[FunctionScore], dict[str, float]]]:
+        """PS-R3: each span's top-k `FunctionScore`s (exactly `classify_spans`) AND its averaged probabilities for its
+        top-5 canonical functions (what the reference unit representative votes with), computed once."""
+        if not span_texts:
+            return []
+        out = []
+        for row in self._probabilities(span_texts):
+            probs: dict[str, float] = {}
+            for j in self._np.argsort(-row)[:5]:
                 canon = canonical_function(self._labels[int(j)])
-                if not canon:
-                    continue
-                conf = (FunctionConfidence.HIGH if p >= self._hi
-                        else FunctionConfidence.MEDIUM if p >= self._mid else FunctionConfidence.LOW)
-                scores.append(FunctionScore(function=canon, confidence=conf))
-            out.append(scores)
+                if canon:
+                    probs[canon] = round(probs.get(canon, 0.0) + float(row[j]), 6)
+            out.append((self._scores(row), probs))
         return out
+
+    async def aclassify_spans_with_probabilities(self, chunk_text: str, span_texts: list[str],
+                                                 *, sem: asyncio.Semaphore | None = None) -> list:
+        if sem is None:
+            return await asyncio.to_thread(self.classify_spans_with_probabilities, chunk_text, span_texts)
+        async with sem:
+            return await asyncio.to_thread(self.classify_spans_with_probabilities, chunk_text, span_texts)
+
+    def _scores(self, row: Any) -> list[FunctionScore]:
+        """One span's top-k `FunctionScore`s from its probability row (continuous probability -> coarse confidence)."""
+        scores: list[FunctionScore] = []
+        for j in self._np.argsort(-row)[: self._top_k]:
+            p = float(row[j])
+            if p < self._threshold:
+                break
+            canon = canonical_function(self._labels[int(j)])
+            if not canon:
+                continue
+            conf = (FunctionConfidence.HIGH if p >= self._hi
+                    else FunctionConfidence.MEDIUM if p >= self._mid else FunctionConfidence.LOW)
+            scores.append(FunctionScore(function=canon, confidence=conf))
+        return scores
 
 
 def production_setfit_clause_classifier(model_root: str | None = None, **kwargs) -> SetFitClauseAdapter:
