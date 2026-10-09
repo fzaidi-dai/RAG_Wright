@@ -3,7 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ RESUME / NEXT UP (2026-10-09, NEWEST): public-surface workstream COMPLETE (pending the 0.3.0 release).** Ledger:
+> **⇒ RESUME / NEXT UP (2026-10-09, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.3.1**
+> (PyPI; 0.3.0's wheel left out the shipped skills, fixed in 0.3.1). Ledger:
 > **`docs/specs/public-surface/plan.md`** (PS-1..PS-11, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
 > G15-G21 closed (`pack_store`, bytes parsing, `ModelRole`, metering/tracing, answers + relevance on the API,
 > `RAG_MODELS_DIR` + reference weights on GCS, KG count/delete/update primitives) and the `rag_wright.pack_sdk` tier
@@ -11,7 +12,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > reference rule chosen on 510 CUAD contracts (ADR-0126); `build_ingestion(chunk_discoverer=)`; Qwen unpinned
 > (ADR-0125); graph-extraction failures kept as PARTIAL; domain vocabulary out of the generic engine (guard + ratchet;
 > OKF retired, ADR-0127); the engine's Claude Code skills shipped in the wheel at
-> `rag_wright/.agents/skills/` (PS-10). **Next (user gates): cut 0.3.0 (merge the release-please PR); RuleWright moves from
+> `rag_wright/.agents/skills/` (PS-10). **Next (user gates): RuleWright moves (to 0.3.1+) from
 > `docs/specs/public-surface/rulewright-migration-0.3.0.md`; PS-R4 (unit-labelling eval in `evaluate_ingestion`) is
 > tracked; TexWright.**
 >
