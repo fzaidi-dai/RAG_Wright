@@ -4,6 +4,25 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.3.1...0.4.0) (2026-10-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* **PS-17:** rag_wright.pack_sdk.DEFAULT_GENERAL is removed (name the model you want instead), and the legacy tag-parse extractor no longer runs a Gemma list pass by default (set RAG_INGEST_LIST_MODEL to keep one).
+
+### Features
+
+* **PS-13:** document metadata on IngestSource ([cf2372d](https://github.com/fzaidi-dai/RAG_Wright/commit/cf2372d6ed9ecde761b823d322f7944a221f59d5))
+* **PS-14:** every role-based model call honours the workspace's EngineConfig.models ([a2d086a](https://github.com/fzaidi-dai/RAG_Wright/commit/a2d086a30026146fd78e068c647c12a3a2bd3c69))
+* **PS-16:** a workspace's configuration change takes effect without a restart ([d5f0bcd](https://github.com/fzaidi-dai/RAG_Wright/commit/d5f0bcd5f3dc6a88634caf4a64d6728078a22752))
+* **PS-R4:** unit-labelling eval in evaluate_ingestion ([2d33a31](https://github.com/fzaidi-dai/RAG_Wright/commit/2d33a3178a220b18c5c745d6f30168e1240a2abc))
+
+
+### Code Refactoring
+
+* **PS-17:** no Gemma default anywhere ([427fac0](https://github.com/fzaidi-dai/RAG_Wright/commit/427fac0f88b1772c2bb3fbbe47f1ec09f4f16d15))
+
 ## [0.3.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.3.0...0.3.1) (2026-10-09)
 
 
