@@ -32,7 +32,7 @@ Resolve a model role to its id: the `EngineConfig.models` override wins, else th
 
 Which model does which job. The mapping to ids lives in config, not in capability code.
 
-Members: `STRUCTURED_REASONING` (`'structured_reasoning'`), `STRUCTURED_REASONING_SECONDARY` (`'structured_reasoning_secondary'`), `GENERAL` (`'general'`), `SUMMARIZATION` (`'summarization'`), `OKF_ENRICHMENT` (`'okf_enrichment'`), `FUNCTION_CLASSIFY` (`'function_classify'`), `VISION_OCR` (`'vision_ocr'`)
+Members: `STRUCTURED_REASONING` (`'structured_reasoning'`), `STRUCTURED_REASONING_SECONDARY` (`'structured_reasoning_secondary'`), `GENERAL` (`'general'`), `SUMMARIZATION` (`'summarization'`), `FUNCTION_CLASSIFY` (`'function_classify'`), `VISION_OCR` (`'vision_ocr'`)
 
 ### `Discovered(slug: 'str', kind: 'str', description: 'str', representative_queries: 'tuple[str, ...]', score: 'float') -> None`
 

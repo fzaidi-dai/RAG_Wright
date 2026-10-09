@@ -25,8 +25,6 @@ CONTRACT_CAPABILITY_SLUGS: frozenset[str] = frozenset({
     "intra_document_qa",
     "intra_document_qa_mcp",
     "intra_document_scoped_query",
-    "okf_compile",
-    "okf_navigate",
     "query_constraint_extraction",
     "query_function_classification",
     "relational_qa",
@@ -38,25 +36,6 @@ CONTRACT_CAPABILITY_SLUGS: frozenset[str] = frozenset({
 })
 
 CONTRACT_SPECS: tuple[CapabilityManifest, ...] = (
-    CapabilityManifest(
-        slug="okf_navigate",
-        kind="agent_skill",  # query-discovered traversal; SKILL.md, applied via the seam (FR-K.6, ADR-0022; T50)
-        display_name="OKF navigation (embedding-free progressive-disclosure traversal)",
-        description=(
-            "Find the concepts in an Open Knowledge Format (OKF) bundle that answer a question by progressive "
-            "disclosure rather than vector similarity (FR-K.6, experimental per ADR-0022): keep the bundle in "
-            "interpreter variables, read index signposts + frontmatter with tools, dispatch a selector sub-agent to "
-            "choose which signposts to explore, judge candidate bodies in parallel, and return the shortlist of "
-            "concept ids. The embedding-free complement to similarity retrieval."
-        ),
-        representative_queries=(
-            "find the concepts in a knowledge bundle that answer a question without embeddings",
-            "navigate an OKF bundle by progressive disclosure to a shortlist of concept ids",
-            "traverse a markdown knowledge tree by reading signposts instead of vector similarity",
-            "return the concept ids relevant to a query from an OKF foundation bundle",
-        ),
-        tags=("okf", "navigation", "embedding-free", "progressive-disclosure", "skill"),
-    ),
     CapabilityManifest(
         slug="clause_exception_linking",
         kind="function",

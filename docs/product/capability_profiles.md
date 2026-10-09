@@ -147,7 +147,7 @@ Legend — Impl+Tested: ✅ yes / 🟡 prototype / ✗ no. Registered: ✅ / ✗
 
 ### Summary of the work implied
 - **Available now (correctly registered):** `document_parsing`, `entity_resolution`, `hybrid_search`,
-  `relational_graph_query` (+ existing `fusion`, `chunk_read`, `vision_to_text`, `rlm_*`, `okf_*` outside this
+  `relational_graph_query` (+ existing `fusion`, `chunk_read`, `vision_to_text`, `rlm_*` outside this
   contract set).
 - **Reclassify (5 existing manifests):** `text_embedding`, `cross_encoder_rerank` → `model`;
   `grounded_answer_generation` → `agent_skill`; `graph_extraction` → `subgraph`; `semantic_chunking`

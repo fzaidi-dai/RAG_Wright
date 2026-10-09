@@ -60,7 +60,7 @@ JudgeFn = Callable[[CheckableFact, Requirement], Optional[JudgeVerdict]]
 AJudgeFn = Callable[[CheckableFact, Requirement], Awaitable[Optional[JudgeVerdict]]]
 
 # The per-call appendix bound onto the SKILL method (the static method teaches the reading; the specific
-# requirement + subject are appended at call time, the okf_navigate `_with_question` pattern).
+# requirement + subject are appended at call time, a static method plus a per-call question).
 # COMP-VERDICT-GENERIC: split into a domain-agnostic BASE tail (requirement + subject assertion -- works for ANY
 # CheckableFact / domain) + an ADVERTISING enrichment line (claim_type / disclosures / evidence). The generic
 # judge uses only the base; the advertising judge appends the enrichment (behavior unchanged).

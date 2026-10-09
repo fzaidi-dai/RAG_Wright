@@ -15,12 +15,10 @@ from rag_wright.capabilities.registry import canonical_capability_slugs
 CANONICAL_CAPABILITY_SLUGS = canonical_capability_slugs()  # engine + the reference pack (loaded by conftest)
 
 # Canonical slugs that are deliberately NOT ARD-published (reserved / internal-only; no CapabilityManifest).
-# Both are FR "foundation derivation" slugs -- a reserved name with no standalone invocation: okf_compile builds
-# the OKF bundle (FR-K.1-K.4, experimental ADR-0022), ontology_registry_derivation is the FR-C.8 placeholder with
-# no implementation yet. Pinning this set means adding a NEW canonical slug without its manifest fails here -- the
-# exact authoring mistake the skill warns about. (EP-RT-1b published span_relevance_judgment + okf_navigate.)
+# `ontology_registry_derivation` is an FR "foundation derivation" slug -- a reserved name with no standalone
+# invocation (the FR-C.8 placeholder with no implementation yet; OKF's okf_compile was retired, ADR-0127). Pinning this set means adding a NEW canonical slug without its manifest fails here -- the
+# exact authoring mistake the skill warns about. (EP-RT-1b published span_relevance_judgment.)
 _RESERVED_WITHOUT_MANIFEST = {
-    "okf_compile",
     "ontology_registry_derivation",
     # EP-CORE-1b-iii: internal ingestion-pipeline steps, composed by direct import (not agent-facing ARD
     # caps), de-registered from the reference pack after DD-3/4/5 removed their domain-vocab coupling.

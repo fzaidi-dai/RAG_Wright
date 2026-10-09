@@ -3,7 +3,7 @@
 Demand-derived from the 57 ACORD test queries (schema review gate, approved). Every ACORD query is a
 FUNCTION (clause type, `schemas/function.py`) plus zero-or-more PROPERTY constraints; this module is
 the contract for the property layer the extractor (T57b) populates and the property graph (T57c)
-persists. The clause itself stays source-of-truth in the clause OKF bundle; the property graph points
+persists. The clause text stays source-of-truth in the span index; the property graph points
 back to it (`clause_id`), and the schema stores no clause text.
 
 Two tiers, mirroring the approved design:
@@ -157,8 +157,8 @@ class PropertyAssertion(GraphFact):
 class ClausePropertyRecord(BaseModel):
     """The property layer for one clause: its FUNCTION plus its property assertions.
 
-    `clause_id` is the parent chunk id's string form (the clause is source-of-truth in the clause OKF
-    bundle; the property graph points back to it). `function` must be a member of the retrieval
+    `clause_id` is the parent chunk id's string form (the clause text is source-of-truth in the span
+    index; the property graph points back to it). `function` must be a member of the retrieval
     function taxonomy (FUNCTION_LABELS). Every assertion is anchored to this clause: its provenance's
     chunk id must be this `clause_id`, so a property cannot cite a different clause (FR-Q.6). `folio_iri`
     names the clause TYPE (naming alignment only) and is filled from `FOLIO_CLAUSE_IRI` when known.

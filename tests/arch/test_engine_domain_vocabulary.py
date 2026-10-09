@@ -23,8 +23,8 @@ _ROOT = Path(__file__).resolve().parents[2]
 _SRC = _ROOT / "src" / "rag_wright"
 _BASELINE = Path(__file__).with_name("domain_vocabulary_baseline.json")
 
-# Allowed for now, each with the task that removes it.
-_SKILL_ALLOW = {"okf_navigate": "PS-R5c moves OKF into the reference pack"}
+# Allowed for now, each with the task that removes it (none: PS-R5c retired OKF, the last entry).
+_SKILL_ALLOW: dict[str, str] = {}
 
 
 def _pattern() -> re.Pattern:

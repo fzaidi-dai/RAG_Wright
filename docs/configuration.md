@@ -81,7 +81,7 @@ never a hardcoded provider flag. Override a role per workspace via `EngineConfig
   docling-graph extraction reads its own `OPENROUTER_PROVIDER_ORDER` / `OPENROUTER_SORT`).
 - **Roles** (`ModelRole`): `STRUCTURED_REASONING` (extraction/grading/synthesis), `STRUCTURED_REASONING_SECONDARY`
   (the same call class, a selectable fallback), `GENERAL` (reasoning/generation/vision, the local-deployment
-  default), `SUMMARIZATION` (chunking/summarization), `OKF_ENRICHMENT` (OKF signpost classify + description),
+  default), `SUMMARIZATION` (chunking/summarization),
   `FUNCTION_CLASSIFY`, `VISION_OCR` (the scanned-page OCR escalation; must be a vision model). Every role
   defaults to the one product LLM (Qwen3.8-27B, profile `qwen3.8-27b-modal-or`, which accepts images), so a
   deployment serves a single model; OCR resolves its endpoint and flags through the same profile as every other

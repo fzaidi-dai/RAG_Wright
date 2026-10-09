@@ -124,7 +124,7 @@ pack, so these tests see its slugs.
 
 **The import boundary (engine repo).** `pyproject.toml` `[tool.importlinter]` has two forbidden contracts: every
 generic engine package (`source_modules`: `rag_wright.api`, `capabilities`, `contracts`, `corpus`, `ingestion`,
-`models`, `okf`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) must never import `rag_wright.packs`;
+`models`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) must never import `rag_wright.packs`;
 and `rag_wright.packs.contracts` must never import `rag_wright.packs.compliance`. A new generic top-level package
 goes in the first contract's `source_modules`; a new module inside an existing package or inside `rag_wright.packs`
 needs no edit. `tests/arch/test_import_contracts.py` enforces both.

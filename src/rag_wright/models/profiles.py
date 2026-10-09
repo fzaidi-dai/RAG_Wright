@@ -72,7 +72,6 @@ class ModelRole(str, Enum):
     STRUCTURED_REASONING_SECONDARY = "structured_reasoning_secondary"  # same call class, selectable fallback
     GENERAL = "general"  # reasoning, generation, vision-to-text, RLM; the local-deployment default
     SUMMARIZATION = "summarization"  # a smaller model for chunking and summarization (FR-I.6 tiering)
-    OKF_ENRICHMENT = "okf_enrichment"  # cheap classify + one-line description for OKF signposts (FR-K.2, ADR-0023)
     # issue 0005: the ingest clause-function classifier as its OWN role, so it can run on a different model than
     # GENERAL (e.g. Gemma-4) without moving the other stages. Route (b) is CLIENT-SIDE tag-parse -> works on any
     # model. Defaults to the product LLM (unchanged behavior); set RAG_MODEL_FUNCTION_CLASSIFY to override.
@@ -88,17 +87,11 @@ DEFAULT_STRUCTURED_REASONING = "deepseek/deepseek-v4-pro"
 DEFAULT_STRUCTURED_REASONING_SECONDARY = "qwen/qwen3.7-plus"
 DEFAULT_GENERAL = "google/gemma-4-31b-it"
 DEFAULT_SUMMARIZATION = "deepseek/deepseek-v4-flash"  # the smaller/faster DeepSeek (FR-I.6)
-# OKF signpost enrichment is a simple classify-and-describe task; a cheap Gemma matched DeepSeek V4 Pro
-# on it (100% category agreement, good one-liners, ~4x cheaper/faster) at the 2026-07-22 bench (ADR-0023).
-# THIS TASK ONLY; every other call class stays on its DeepSeek/Gemma role above.
-DEFAULT_OKF_ENRICHMENT = "google/gemma-4-26b-a4b-it"
 
 # MS1-2 (ADR-0039): the product substrate is a SINGLE self-hosted model on the A100. EVERY role defaults to
 # Granite -- Gemma/DeepSeek are DROPPED from the product default but stay REGISTERED in `PROFILES` below, so a
 # dev run can still select any of them via the `RAG_MODEL_*` / `RAG_MODEL_ALL` env overrides. The DEFAULT_*
-# constants above are kept as those foundation-model profile keys + documented dev-override values. (OKF
-# signpost enrichment -- the one-time ADR-0023 Gemma exception -- is NOT wired into the ingestion/query
-# pipeline (only `okf/enrich.py`), so it too defaults to Granite; ADR-0023's Gemma choice is now vestigial.)
+# constants above are kept as those foundation-model profile keys + documented dev-override values.
 _PRODUCT_LLM = "qwen3.8-27b-modal-or"  # engine-wide default (ADR-0100): Qwen via OpenRouter for now
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
@@ -106,7 +99,6 @@ _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
     ModelRole.STRUCTURED_REASONING_SECONDARY: ("RAG_MODEL_STRUCTURED_REASONING_SECONDARY", _PRODUCT_LLM),
     ModelRole.GENERAL: ("RAG_MODEL_GENERAL", _PRODUCT_LLM),
     ModelRole.SUMMARIZATION: ("RAG_MODEL_SUMMARIZATION", _PRODUCT_LLM),
-    ModelRole.OKF_ENRICHMENT: ("RAG_MODEL_OKF_ENRICHMENT", _PRODUCT_LLM),
     ModelRole.FUNCTION_CLASSIFY: ("RAG_MODEL_FUNCTION_CLASSIFY", _PRODUCT_LLM),
     # 0009-VLM: OCR needs vision. The Gemma-4 default existed only because the old product LLM (Granite) was
     # text-only; Qwen3.8-27B accepts images, so ING-4c folds VISION_OCR into the one served model (ADR-0110).
@@ -150,7 +142,7 @@ PROFILES: dict[str, ModelProfile] = {
     ),
     # Gemma 4 26b-a4b takes the forced tool call cleanly (default function_calling, no extra_body);
     # 0 structured-output errors across the 20-clause bench (ADR-0023).
-    DEFAULT_OKF_ENRICHMENT: ModelProfile(model_id=DEFAULT_OKF_ENRICHMENT),
+    "google/gemma-4-26b-a4b-it": ModelProfile(model_id="google/gemma-4-26b-a4b-it"),  # a cheap Gemma (dev override)
     # The ADOPTED default (2026-09-04): DeepSeek V4 Flash via OpenRouter's auto-updating `~...-latest` alias.
     # It does reasoning + structured output together (function_calling, no thinking-disable needed) and returns
     # content directly. The `~...-latest` alias otherwise routes to a SLOW/flaky provider (measured 6.9s vs 1.0s),

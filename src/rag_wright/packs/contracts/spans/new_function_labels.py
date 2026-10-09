@@ -7,7 +7,7 @@ operative spans CUAD leaves unlabeled (NONE) are candidates, narrowed by a cheap
 pre-filter and then confirmed by an LLM (DeepSeek via the model-profile seam).
 
 The keyword pre-filter is unit-testable and free; the LLM confirm is the same structured-output seam
-pattern the OKF classifier uses (stub-injectable, so the plumbing is tested without a model call).
+pattern used across the pack (stub-injectable, so the plumbing is tested without a model call).
 """
 
 from __future__ import annotations

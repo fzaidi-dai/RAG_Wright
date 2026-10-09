@@ -30,12 +30,12 @@ along with the pack):
 | `subgraph` | 9 | `contract_ingestion_pipeline`, `intra_document_qa`, `typed_property_retrieval`, `relational_qa`, `typed_clause_extraction`, `query_constraint_extraction`, `requirement_extraction`, `compliance_ingestion`, `compliance_check` |
 | `function` | 9 | `typed_value_normalization`, `extraction_grounding_judge`, `extraction_semantic_gate`, `clause_exception_linking`, `clause_disambiguation` |
 | `model` | 3 | `clause_function_classification` (SetFit ensemble), `clause_property_classification` (a 29-dimension SetFit/Laya fleet), `jev_decision` (engine typed-decision model) |
-| `agent_skill` | 11 | `rlm_method`, `rlm_chunking`, `rlm_synthesis`, `generation`, `vision_to_text`, `span_relevance_judgment`, `extraction_semantic_judge`, `claim_extraction`, `compliance_judgment` |
+| `agent_skill` | 10 | `rlm_method`, `rlm_chunking`, `rlm_synthesis`, `generation`, `vision_to_text`, `span_relevance_judgment`, `extraction_semantic_judge`, `claim_extraction`, `compliance_judgment` |
 | `mcp_tool` | 4 | `compliance_check_mcp`, `intra_document_qa_mcp`, `relational_qa_mcp`, `typed_property_retrieval_mcp` |
 
 Two reference domains over the shared store: **contract** (ingestion → the clause KG + hybrid index → scoped QA,
 typed-property retrieval, relational QA) and **compliance** (FTC 16 CFR 255 endorsement rules → requirements →
-checking a subject's claims against them), plus generic RLM / generation / OKF primitives and four MCP tool
+checking a subject's claims against them), plus generic RLM / generation primitives and four MCP tool
 surfaces.
 
 The domain **knowledge** lives in the ontology bridges, not in code (ADR-0066): `packs/contracts/ontology/contract_bridge.ttl`,

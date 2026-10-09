@@ -75,8 +75,8 @@ def rlm_interpreter_session(
     the model's context (`working_set` → `tools.workingSet()`, T36 / GraphWright working-set contract).
     """
     # `max_result_chars` overrides the interpreter's 4,000-char eval-result cap (which truncates a large
-    # JSON return mid-string). A capability whose workflow returns a big result (e.g. okf_navigate's shortlist
-    # + decision log at a high frontier budget) raises it; RLM leaves it at the default.
+    # JSON return mid-string). A capability whose workflow returns a big result (e.g. a long shortlist plus its
+    # decision log) raises it; RLM leaves it at the default.
     _INTERPRETER_SEMAPHORE.acquire()
     kwargs: dict = {"subagents": True, "ptc": list(ptc) or None}
     if max_result_chars is not None:

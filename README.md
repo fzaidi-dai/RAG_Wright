@@ -128,7 +128,6 @@ src/rag_wright/
   store/         the single ArcadeDB store behind the query seam
   spans/         page_map (page and bounding-box positions of spans)
   corpus/        document parsing + embedded-file extraction
-  okf/           the OKF (Open Knowledge Format) bundle-compile path
   skills/        authored SKILL.md content for the generic capabilities
   util/          shared, capability-agnostic utilities
   packs/         the reference pack: packs/contracts (contract domain) and packs/compliance (built on it),

@@ -3,7 +3,7 @@
 One record per operative span in the ArcadeDB `Span` hybrid index. Unlike a `ChunkRecord` (dense over the
 summary, text kept in a sidecar), the span IS the small retrieval unit, so the record carries the span text:
 the dense vector is over the span, the sparse vector is over the span, the `function` is the classifier tag
-(T56), and the parent pointer (`parent_chunk_id` + the clause's OKF path) locates the full clause for the
+(T56), and the parent pointer (`parent_chunk_id`) locates the full parent unit for the
 rerank stage. `span_id` embeds the parent (identifier rule).
 """
 

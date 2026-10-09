@@ -37,8 +37,8 @@ log = logging.getLogger(__name__)
 #
 # FREE-TEXT / plain build_model: the OpenAI SDK's own retry loop (max_retries) is the single layer, covering the
 # native transients (429 / 5xx APIStatusError / connection / timeout), with the SDK's exponential backoff and
-# Retry-After (429) handling intact. The okf_navigate agent's own model/sub-agent calls are covered separately
-# by ModelRetryMiddleware.
+# Retry-After (429) handling intact. An RLM agent's own model/sub-agent calls are covered separately by
+# ModelRetryMiddleware.
 #
 # Bounded worst case (engine issue 0003 / ADR-0056): a persistent upstream stall makes each attempt hit the
 # per-request timeout, then the SDK retries -- so the worst case is timeout x (max_retries + 1). At the old

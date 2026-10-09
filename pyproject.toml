@@ -130,7 +130,6 @@ source_modules = [
     "rag_wright.corpus",
     "rag_wright.ingestion",
     "rag_wright.models",
-    "rag_wright.okf",
     "rag_wright.ontology",
     "rag_wright.skills",
     "rag_wright.spans",

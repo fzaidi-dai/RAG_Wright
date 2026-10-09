@@ -39,13 +39,12 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 | `packs/` | the REFERENCE PACK, as two domain packs (ING-8c): `packs.contracts` (segmentation, the clause classifier fleet, judges, the boundary decider, the contract KG store (`ContractKGStore`) and the ingestion/retrieval/QA graphs, its ontology and loaders, the CUAD/EDGAR corpus adapters, its MCP servers) and `packs.compliance` (requirement and claim extraction, compliance judgment and checking, its `ComplianceStore`, its ontology and regulation packs, its MCP server), each with a `pack.py` (manifests, canonical slugs, `register()`); compliance builds on contracts. `packs.reference_seam` is a worked product seam over both | reference pack (domain) |
 | `corpus/` | the generic document parser, embedded-file extraction, canonicalization and HTTP helpers | **yes** |
 | `skills/` | authored `SKILL.md` content for the generic capabilities (a pack keeps its own under `packs/<pack>/skills/`) | **yes** |
-| `okf/` | the OKF (Open Knowledge Format) bundle-compile path | **yes** |
 | `util/` | shared capability-agnostic utilities | **yes** |
 
 ### The domain-free rule (enforced)
 
 The **generic engine** — every package outside `rag_wright.packs` (`api`, `capabilities`, `contracts`, `corpus`,
-`ingestion`, `models`, `okf`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) — **must not import any
+`ingestion`, `models`, `ontology`, `skills`, `spans`, `store`, `subgraphs`, `util`) — **must not import any
 domain pack** (`rag_wright.packs`). A second contract keeps the packs layered: `packs.contracts` must not import
 `packs.compliance`, which is built on it. Both are `forbidden`
 import-linter contracts in `pyproject.toml` (`[tool.importlinter]`), run inside the normal test suite as a pytest
