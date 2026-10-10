@@ -3,12 +3,14 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ RESUME / NEXT UP (2026-10-09, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.5.0**
+> **⇒ RESUME / NEXT UP (2026-10-11, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.6.0**
 > (PyPI; 0.3.1 fixed 0.3.0's missing skills; 0.4.0 adds PS-R4, PS-12..PS-17: labelling eval, document metadata,
 > per-workspace models, config changes without restart, the workspaces guide, no Gemma default); 0.5.0 adds
 > PS-18 (scikit-learn 1.9.1, Laya temperatures ADR-0129) and PS-19 (deploy the Qwen/Modal server from the engine,
-> ADR-0130). PS-20 (cold start) is tracked for later. Ledger:
-> **`docs/specs/public-surface/plan.md`** (PS-1..PS-19, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
+> ADR-0130); 0.5.1 adds the runnable `examples/model_server.py`; 0.6.0 adds PS-21 (RuleWright's model-server review:
+> no default server key (breaking), the concurrency ceiling, `amodel_server_status`, ADR-0131). PS-20 (cold start) is
+> tracked for later. Ledger:
+> **`docs/specs/public-surface/plan.md`** (PS-1..PS-21, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
 > G15-G21 closed (`pack_store`, bytes parsing, `ModelRole`, metering/tracing, answers + relevance on the API,
 > `RAG_MODELS_DIR` + reference weights on GCS, KG count/delete/update primitives) and the `rag_wright.pack_sdk` tier
 > with the reference pack held to `api` + `pack_sdk` by an import contract; the `unit_representative` hook with the
