@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.5.0...0.5.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **PS-19:** a runnable model-server example for products; async Modal URL lookup ([35cd80f](https://github.com/fzaidi-dai/RAG_Wright/commit/35cd80f003453dfbb648df020a03ffe85ef64826))
+
 ## [0.5.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.4.0...0.5.0) (2026-10-10)
 
 
