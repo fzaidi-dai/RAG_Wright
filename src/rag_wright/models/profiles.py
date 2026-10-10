@@ -63,6 +63,7 @@ class ModelProfile(BaseModel):
     backend: Optional[Literal["openrouter", "vllm", "ollama"]] = None  # None -> RAG_SERVING default
     # the id the backend actually expects (OpenRouter slug / vLLM `--served-model-name`), often != our string.
     served_model_id: Optional[str] = None  # default = model_id
+    base_url: Optional[str] = None  # PS-19: an explicit endpoint (a deployed server's own); wins over base_url_env
     base_url_env: Optional[str] = None  # env var holding the base_url; default per backend (VLLM_BASE_URL, ...)
     api_key_env: Optional[str] = None   # env var holding the api key; default per backend (VLLM_API_KEY, ...)
 
@@ -291,6 +292,13 @@ def model_for(role: ModelRole) -> str:
         return scoped[role.value]
     env_var, default = _ROLE_ENV[role]
     return os.getenv(env_var) or os.getenv("RAG_MODEL_ALL") or default
+
+
+def register_model_profile(profile: ModelProfile) -> ModelProfile:
+    """Add (or replace) the profile for `profile.model_id`, process-wide, so that model id resolves to it from now on
+    (PS-19: a deployed server registers its own profile)."""
+    PROFILES[profile.model_id] = profile
+    return profile
 
 
 def profile_for(model_id: str) -> ModelProfile:

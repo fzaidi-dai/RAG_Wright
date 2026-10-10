@@ -72,3 +72,5 @@ store per database from the environment, and `export_engine_env` republishes the
 Run RuleWright's suite against the engine checkout (editable path) and its live engine-seam test. If you move to
 customer workspaces: open two customers with different `general` models, run a question for each concurrently
 inside `measure_usage()`, and check each call was metered on its own customer's model.
+
+Next: `docs/specs/public-surface/rulewright-migration-0.5.0.md` (its own Qwen server; the scikit-learn floor).

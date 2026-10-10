@@ -21,7 +21,7 @@ crosses corpora: every read and write goes through the handle's store.
 | scope | what | how you set it |
 |---|---|---|
 | **per workspace** | the corpus and everything stored in it, including document metadata | `open_workspace(config, corpus=...)`; `IngestSource(metadata=...)` |
-| per workspace | the model for each role (`ModelRole`) | `EngineConfig.models`: ahead of `RAG_MODEL_<ROLE>` / `RAG_MODEL_ALL` for every engine call that takes the workspace (`aingest`, the invokers and the MCP tools on them, `agenerate_answer`, `ajudge_spans`) |
+| per workspace | the model for each role (`ModelRole`), including a self-hosted server's `model_id` ([A self-hosted model server](configuration.md#a-self-hosted-model-server-qwen-on-modal)) | `EngineConfig.models`: ahead of `RAG_MODEL_<ROLE>` / `RAG_MODEL_ALL` for every engine call that takes the workspace (`aingest`, the invokers and the MCP tools on them, `agenerate_answer`, `ajudge_spans`) |
 | per workspace | the embedding profile, the ingestion tuning, each pack's options | `EngineConfig.embeddings`, `EngineConfig.options` |
 | **per call** | the caches (parse, chunk, decisions) | the `cache_dir` you pass to `aingest` / `evaluate_ingestion` |
 | per call | usage metering and trace grouping | `measure_usage()`, `traced_run(...)` around the call |

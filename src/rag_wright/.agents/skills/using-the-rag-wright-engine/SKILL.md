@@ -137,6 +137,13 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
 6. **Build the product seam** — your thin layer over the engine API + registered caps (tenancy, orchestration,
    the product tool surface). Wrap `open_workspace`/the invokers/`kg_read`/`measure_usage`.
 
+**Using a self-hosted model (Qwen on Modal).** Deploy it from the engine and use its model id like any model:
+`server = await adeploy_model_server(ModelServerSpec(name="<app>", max_num_seqs=<concurrency target>))` (the locked
+setup of the `qwen-vllm-modal` skill; needs `rag-wright[modal]`, a Modal login and `VLLM_API_KEY` in `.env`), then
+`EngineConfig(models={"general": server.model_id, ...})`. Other processes reconnect with `amodel_server(spec)`;
+call `await_model_server(server)` before traffic (cold start is minutes); `stop_model_server(name)` stops billing.
+Full walk-through: `docs/configuration.md`, "A self-hosted model server".
+
 **Using the decision model (Jev).** Register `jev_decision` (from `engine_capabilities()`) and set
 `OPENROUTER_API_KEY` (`RAG_DECISION_MODEL` overrides the default profile `jev-1.13`). Without both, the reference
 pack's decision paths silently fall back (to deterministic rules or the LLM); your own

@@ -150,17 +150,18 @@ def resolve_connection(model_id: str) -> Connection:
     if backend == "openrouter":
         return Connection(
             backend, "openrouter",
-            os.getenv(profile.base_url_env or "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+            profile.base_url or os.getenv(profile.base_url_env or "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
             os.environ.get(profile.api_key_env or "OPENROUTER_API_KEY"), served)
     if backend == "vllm":
         return Connection(
             backend, "hosted_vllm",
-            os.environ[profile.base_url_env or "VLLM_BASE_URL"].rstrip("/"),
+            (profile.base_url or os.environ[profile.base_url_env or "VLLM_BASE_URL"]).rstrip("/"),
             os.getenv(profile.api_key_env or "VLLM_API_KEY", "rw-vllm-dev-key"), served)
     if backend == "ollama":
         return Connection(
             backend, "ollama",
-            os.getenv(profile.base_url_env or "OLLAMA_BASE_URL", "http://localhost:11434"), None, served)
+            profile.base_url or os.getenv(profile.base_url_env or "OLLAMA_BASE_URL", "http://localhost:11434"), None,
+            served)
     raise ValueError(f"unknown backend {backend!r} for model {model_id!r} (openrouter | vllm | ollama)")
 
 

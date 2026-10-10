@@ -3564,6 +3564,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+modal = [
+    { name = "modal" },
+]
 ner = [
     { name = "spacy" },
 ]
@@ -3601,6 +3604,7 @@ requires-dist = [
     { name = "laya", specifier = ">=0.3.22" },
     { name = "mcp", specifier = ">=1.28.1" },
     { name = "mlx-vlm", marker = "extra == 'ocr-bench'", specifier = ">=0.3.9" },
+    { name = "modal", marker = "extra == 'modal'", specifier = ">=1.5.3" },
     { name = "ocrmac", marker = "extra == 'ocr-bench'", specifier = ">=1.0.1" },
     { name = "olefile", specifier = ">=0.47" },
     { name = "onnxruntime", marker = "extra == 'ocr-bench'", specifier = ">=1.29.0" },
@@ -3615,7 +3619,7 @@ requires-dist = [
     { name = "spacy", marker = "extra == 'ner'", specifier = ">=3.8.14" },
     { name = "transformers", specifier = ">=5.4,<5.9" },
 ]
-provides-extras = ["ner", "ocr-bench"]
+provides-extras = ["ner", "ocr-bench", "modal"]
 
 [package.metadata.requires-dev]
 dev = [

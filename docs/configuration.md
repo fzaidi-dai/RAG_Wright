@@ -106,6 +106,7 @@ and how to manage workspaces.
   call. Override one role with `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_VISION_OCR`, `RAG_MODEL_GENERAL`), or every
   role at once with `RAG_MODEL_ALL`; the role-specific variable wins.
 - **Structured output** is client-side tag-parse (ADR-0045); any provider flags live in the profile.
+- **A self-hosted Qwen server**: see [A self-hosted model server](#a-self-hosted-model-server-qwen-on-modal) below.
 - **Decision models** (e.g. Jev) are reached through a `DecisionModelProfile` (default `jev-1.13`;
   `RAG_DECISION_MODEL` only overrides which profile). The reference contract pipeline uses the decision model
   whenever its key (`OPENROUTER_API_KEY`) is set **and** the `jev_decision` capability is registered
@@ -113,6 +114,70 @@ and how to manage workspaces.
   numeric/open property values, so there is no per-provision LLM call. Without either, those steps fall back
   (deterministic boundaries; the LLM judge and residual call). `RAG_SEMANTIC_JUDGE=llm` / `RAG_RESIDUAL_EXTRACTOR=llm`
   switch the judge / the residual values back to the LLM.
+
+## A self-hosted model server (Qwen on Modal)
+
+By default every role uses Qwen3.8-27B through OpenRouter. A product can instead run its own Qwen server on Modal,
+deployed from the engine, and use it like any other model. The server's setup is the locked one from the
+`qwen-vllm-modal` skill (ADR-0110: FP8 weights and KV cache on one A100-80GB, 16K context); you choose only its name
+and its concurrency target.
+
+**One-time setup.**
+
+```sh
+uv add 'rag-wright[modal]'      # Modal is an optional extra
+uv run modal token new          # log in to Modal once per machine
+```
+
+and put the server's API key in your `.env` (any secret string; the server is deployed with it and every call
+sends it): `VLLM_API_KEY=<a long random string>`. There is no default key.
+
+**Deploy, then use it like any model.**
+
+```python
+from rag_wright.api import (EngineConfig, ModelServerSpec, StoreConfig, adeploy_model_server, open_workspace,
+                            stop_model_server)
+
+spec = ModelServerSpec(name="acme-qwen", max_num_seqs=32)   # name = the Modal app (and URL); 32 = concurrency target
+server = await adeploy_model_server(spec)                    # deploys, waits for /health, prints progress
+
+ws = open_workspace(EngineConfig(store=StoreConfig.from_env(), models={"general": server.model_id,
+                                                                        "structured_reasoning": server.model_id}),
+                    corpus="acme")
+# every engine call for this workspace that uses those roles now runs on the server
+```
+
+`server.model_id` (here `qwen3.8-27b-modal@acme-qwen`) is an ordinary model id: put it in `EngineConfig.models`
+for the roles it should serve, or pass it as a `model=` argument. Its profile carries the server's own endpoint and
+the Qwen thinking settings, so no `VLLM_BASE_URL` is needed, and two servers (one per tenant, say) are just two
+model ids in two workspaces' configs.
+
+**In a service.** Deploy from one place (a startup job or an operator script). Every other process reconnects
+without redeploying, which only looks up the server and registers its model id:
+
+```python
+from rag_wright.api import amodel_server, await_model_server
+
+server = await amodel_server(ModelServerSpec(name="acme-qwen", max_num_seqs=32))   # same spec as the deploy
+await await_model_server(server)    # returns at once if it is up; waits through a cold start if it scaled down
+```
+
+**What to know before you rely on it.**
+
+- **Cold start.** A new or scaled-down server takes minutes to become ready (226 s in the last live run; up to about
+  8 minutes, ADR-0109). After 10 idle minutes Modal scales the container to zero (no GPU billing) but keeps the app
+  deployed; the next request waits through a cold start, so call `await_model_server` before sending traffic.
+- **Cost.** An A100 bills while a container runs. `stop_model_server("acme-qwen")` removes the app entirely; deploy
+  again to bring it back.
+- **Concurrency.** `max_num_seqs` is how many requests the server batches at once (ADR-0110 sets it to your real
+  concurrency target); keep your own client concurrency below it.
+- **Timeouts.** Reasoning-on structured calls under full load can take about a minute; raise
+  `RAG_STRUCTURED_TIMEOUT_S` (default 60) for bulk work, or calls time out and retry.
+- **Process-wide.** A registered server model id is known to the whole process, like every model profile; after a
+  restart, call `amodel_server` again.
+
+The `qwen-vllm-modal` skill has the operational detail (the image fixes, serving gotchas, the manual `modal deploy`
+command) and ADR-0130 the design.
 
 ## Environment variables (reference)
 

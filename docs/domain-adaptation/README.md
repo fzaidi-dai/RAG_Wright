@@ -18,7 +18,9 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
    catalog: the generic ingest `tuning`, plus your pack's own options under `EngineOptions.packs`) and
    `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name; tenancy is
    product-side: one corpus and one config per tenant, with the settings that stay per process listed in
-   [Workspaces](../workspaces.md). → [Configuration](../configuration.md).
+   [Workspaces](../workspaces.md). To run on your own Qwen server instead of OpenRouter, deploy it from the engine
+   and use its model id in `EngineConfig.models` ([A self-hosted model server](../configuration.md#a-self-hosted-model-server-qwen-on-modal)).
+   → [Configuration](../configuration.md).
 
 3. **Author the domain `.ttl` pack.** The domain KNOWLEDGE — closed value sets, the KG schema, SHACL constraints,
    mappings — lives in the ontology, declaratively, never in Python (ADR-0066). It co-evolves with step 4 (it

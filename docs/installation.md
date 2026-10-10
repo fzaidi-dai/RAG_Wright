@@ -47,6 +47,8 @@ to reach the network (mock the call, or mark the test). The live markers, declar
   uv add 'rag-wright[ner]'                         # in a product; working on the engine itself: uv sync --extra ner
   uv run python -m spacy download en_core_web_sm   # configurable via RAG_SPACY_MODEL
   ```
+- **`rag-wright[modal]`**: Modal, for deploying the self-hosted Qwen server from the engine
+  (`adeploy_model_server`; see [Configuration](configuration.md)). Log in once with `uv run modal token new`.
 - **`rag-wright[ocr-bench]`** — the OCR-benchmark extras (`mlx-vlm`, `ocrmac`, `onnxruntime`, `scikit-image`).
 
 ### Skills for coding agents

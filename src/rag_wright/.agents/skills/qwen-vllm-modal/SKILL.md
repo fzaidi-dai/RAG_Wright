@@ -26,6 +26,26 @@ This skill is the operational checklist that ties them together.
 - Served-model-name is `Qwen/Qwen3.8-27B` (what the engine profile `qwen3.8-27b-modal` asks for), even though the
   weights are the `-FP8` repo.
 
+**From the engine (PS-19): deploy, then use the server like any model.** `ModelServerSpec`'s defaults ARE the
+locked config below (FP8 weights + FP8 KV, one A100-80GB, TP 1, 16K, 0.95, served `Qwen/Qwen3.8-27B`, hermes +
+qwen3 parsers, image builder 2025.06); state only the concurrency target, which ADR-0110 leaves to you.
+`adeploy_model_server` runs the deploy below with those settings, waits for `/health` (with progress; a cold start is
+~8 min), and registers a model profile with the server's own endpoint, so no `VLLM_BASE_URL` is needed:
+
+```python
+from rag_wright.api import EngineConfig, ModelServerSpec, adeploy_model_server, stop_model_server
+
+server = await adeploy_model_server(ModelServerSpec(name="acme-qwen", max_num_seqs=32))  # key from VLLM_API_KEY
+config = EngineConfig(store=..., models={"general": server.model_id})   # or any model= argument
+...
+stop_model_server("acme-qwen")                                            # stop billing
+```
+
+`amodel_server(spec)` reconnects to a server deployed earlier (a restart, another process) without redeploying.
+The API key comes from the variable `ModelServerSpec.api_key_env` names (default `VLLM_API_KEY`); there is no default
+key, so set a real one. Needs `rag-wright[modal]` and a Modal login. One app per server name: different names give
+different servers (and URLs), for example one per tenant.
+
 **The exact working deploy (this succeeded):**
 ```
 MODAL_IMAGE_BUILDER_VERSION=2025.06 \

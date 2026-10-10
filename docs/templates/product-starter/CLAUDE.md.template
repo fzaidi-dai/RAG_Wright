@@ -130,7 +130,9 @@ are re-made after every engine upgrade.
 ## Engine documentation (not shipped in the wheel — read in the engine repo / on GitHub)
 
 - **Concepts** + **Architecture** — the mental model and the engine/product boundary.
-- **Installation** + **Configuration** + **Quickstart** — `uv add`, ArcadeDB, the model provider, `EngineConfig`.
+- **Installation** + **Configuration** + **Quickstart** — `uv add`, ArcadeDB, the model provider, `EngineConfig`;
+  Configuration's "A self-hosted model server" deploys your own Qwen server (`adeploy_model_server`) and uses its
+  model id like any model.
 - **Workspaces** (`docs/workspaces.md`) — one corpus and one `EngineConfig` per tenant; what applies per
   workspace, per call and per process; document metadata; how a config change takes effect.
 - **Domain adaptation** (`docs/domain-adaptation/`) — the build sequence + companions (ontology, KG, ER,

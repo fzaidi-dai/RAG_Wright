@@ -28,6 +28,18 @@ An opaque handle to a resolved engine workspace. Public surface: `model_id(role)
 
 Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default.
 
+### `ModelServerSpec(max_num_seqs: 'int', name: 'str' = 'rw-qwen3-modal', model: 'str' = 'Qwen/Qwen3.8-27B-FP8', kv_cache_dtype: 'str' = 'fp8', served_name: 'str' = 'Qwen/Qwen3.8-27B', gpu: 'str' = 'A100-80GB:1', tensor_parallel: 'int' = 1, max_len: 'int' = 16384, gpu_util: 'float' = 0.95, tool_parser: 'str' = 'hermes', reasoning_parser: 'str' = 'qwen3', image_builder_version: 'str' = '2025.06', api_key_env: 'str' = 'VLLM_API_KEY') -> None`
+
+One self-hosted Qwen server on Modal. The defaults are the locked setup of the `qwen-vllm-modal` skill (ADR-0110, Config B): FP8 weights + FP8 KV cache, one A100-80GB, tensor parallel 1, 16K context, 0.95 GPU memory, served as `Qwen/Qwen3.8-27B` with the hermes tool parser and the qwen3 reasoning parser, image builder 2025.06. `max_num_seqs` has no default: ADR-0110 sets it to the real concurrency target (keep client concurrency below it). `name` is the Modal app name, and so the server's URL. `api_key_env` names the environment variable that holds the server's API key.
+
+#### `ModelServerSpec.deploy_env(self) -> 'dict[str, str]'`
+
+The deploy command's settings, as the skill's documented command passes them.
+
+### `ModelServer(name: 'str', root: 'str', base_url: 'str', model_id: 'str', served_model_id: 'str', api_key_env: 'str') -> None`
+
+A deployed server: `model_id` is the model id to use (in `EngineConfig.models` or a `model=` argument); `base_url` is its OpenAI-compatible endpoint; `root` is its URL (for `/health`).
+
 ### `ModelRole(*values)`
 
 Which model does which job. The mapping to ids lives in config, not in capability code.
@@ -237,6 +249,22 @@ Build a pack's store extension (or any object that wraps the workspace store) ov
 ### `use_workspace_models(ws: 'Any') -> 'Iterator[None]'`
 
 Resolve every model role through `ws`'s `EngineConfig.models` inside the block (PS-14), ahead of the `RAG_MODEL_*` environment. The engine's own entry points that take a workspace (`aingest`, the invokers) do this for you; use it around engine calls that take no workspace, such as `parse_document_bytes` (OCR) or a `default_chunk_discoverer` run, when the workspace overrides those roles. Per call, never shared: concurrent blocks for different workspaces each see their own models.
+
+### `adeploy_model_server(spec: 'ModelServerSpec', *, wait: 'bool' = True, timeout_s: 'float' = 1500, poll_s: 'float' = 15, progress: 'Callable[[str], object]' = print) -> 'ModelServer'`
+
+Deploy (or redeploy) the server described by `spec` on Modal, register its model profile, and (with `wait`) wait for it to be ready. Returns the `ModelServer`; use `server.model_id` as the model. Raises `RuntimeError` when the API-key variable is unset (nothing is deployed). The server runs (and bills) until `stop_model_server`, or until Modal scales it down after 10 idle minutes.
+
+### `amodel_server(spec: 'ModelServerSpec') -> 'ModelServer'`
+
+Reconnect to a server deployed earlier (by this process or another) without redeploying: look up its URL and register its model profile. `spec` must match the deployed server (its name and served model).
+
+### `await_model_server(server: 'ModelServer', *, timeout_s: 'float' = 1500, poll_s: 'float' = 15, progress: 'Callable[[str], object]' = print) -> 'ModelServer'`
+
+Wait until the server answers `/health` (a cold start is about 8 minutes, ADR-0109); progress as `i/N`. Raises `TimeoutError` after `timeout_s`.
+
+### `stop_model_server(name: 'str') -> 'None'`
+
+Stop the Modal app `name` (stops billing); its URL stops answering.
 
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 

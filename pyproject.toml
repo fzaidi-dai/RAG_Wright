@@ -72,6 +72,9 @@ ocr-bench = [
     "onnxruntime>=1.29.0",
     "scikit-image>=0.26.0",
 ]
+modal = [
+    "modal>=1.5.3",
+]
 
 [dependency-groups]
 dev = [
