@@ -35,7 +35,9 @@ KV_DTYPE = os.environ.get("KV_CACHE_DTYPE", "auto")      # "auto" (unquantized) 
 N = int(os.environ.get("N", "48"))                       # requests per concurrency level (small -> cheap, meaningful)
 MAX_TOK = int(os.environ.get("MAX_TOK", "256"))          # output tokens/request (a clause-property JSON size)
 CSWEEP = [int(x) for x in os.environ.get("CSWEEP", "1,4,8,16,32,64").split(",")]
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 
 app = modal.App("rw-qwen3-27b-bench")
 

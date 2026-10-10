@@ -60,7 +60,7 @@ def _show(name: str, res: dict) -> None:
 def main() -> None:
     load_dotenv()
     vbase = os.environ["VLLM_URL"].rstrip("/") + "/v1"
-    vkey = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+    vkey = os.environ["VLLM_API_KEY"]
     obase = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
     okey = os.environ["OPENROUTER_API_KEY"]
     m = "ibm-granite/granite-4.1-8b"

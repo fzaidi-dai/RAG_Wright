@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-128 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
-and 0121–0130). ADRs are an
+129 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+and 0121–0131). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -186,4 +186,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0127 Retire the OKF code ·
 0128 Two public tiers: `rag_wright.api` for products, `rag_wright.pack_sdk` for packs ·
 0129 The shipped Laya temperatures stay as fitted; scikit-learn floor at 1.9.1 ·
-0130 A product deploys the self-hosted model server from the engine and uses it like any model
+0130 A product deploys the self-hosted model server from the engine and uses it like any model ·
+0131 No default server key anywhere; a model's concurrency ceiling travels with its id

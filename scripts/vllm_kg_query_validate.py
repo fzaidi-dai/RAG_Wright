@@ -36,7 +36,7 @@ def main() -> None:
     from rag_wright.util.concurrent import map_concurrent
 
     vbase = os.environ["VLLM_URL"].rstrip("/") + "/v1"
-    vkey = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+    vkey = os.environ["VLLM_API_KEY"]
     n = int(os.environ.get("N", "15"))
 
     # a DIVERSE sample: distinct functions so the queries span the property space

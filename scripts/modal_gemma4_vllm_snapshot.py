@@ -33,7 +33,9 @@ import modal
 
 MODEL = os.environ.get("MODEL", "google/gemma-4-31B-it-qat-w4a16-ct")
 QUANT = os.environ.get("QUANT", "")  # e.g. int8_per_channel_weight_only for the 26B-A4B MoE
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 GPU = os.environ.get("GPU", "A100-40GB")
 GPU_UTIL = os.environ.get("VLLM_GPU_UTIL", "0.80")
 MAX_LEN = os.environ.get("VLLM_MAX_LEN", "16384")

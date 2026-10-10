@@ -16,7 +16,9 @@ import modal
 
 MODEL_HF = os.environ.get("GRANITE_HF", "ibm-granite/granite-4.1-8b")
 GPU = os.environ.get("GPU", "A100-40GB")
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")  # vLLM's --api-key; clients send it as the bearer
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 HF_CACHE = "/root/.cache/huggingface"
 
 app = modal.App("rw-granite-vllm")
@@ -24,7 +26,7 @@ hf_vol = modal.Volume.from_name("rw-hf-cache", create_if_missing=True)
 vllm_image = (
     modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
     .pip_install("vllm", "huggingface_hub[hf_transfer]")
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE})
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE, "VLLM_API_KEY": API_KEY})  # the container reads its own env
 )
 
 

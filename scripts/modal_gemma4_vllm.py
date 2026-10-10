@@ -7,7 +7,7 @@ model config (no --quantization flag for the 4-bit dense model).
 
   MODEL=google/gemma-4-31B-it-qat-w4a16-ct  uv run --no-sync modal deploy scripts/modal_gemma4_vllm.py
   # then, self-hosted silver run:
-  #   RAG_SERVING=vllm VLLM_BASE_URL=https://<app>.modal.run/v1 VLLM_API_KEY=rw-vllm-dev-key \
+  #   RAG_SERVING=vllm VLLM_BASE_URL=https://<app>.modal.run/v1 VLLM_API_KEY=<the server key> \
   #     SILVER_MODELS="gemma4-31b-qat:google/gemma-4-31B-it-qat-w4a16-ct" \
   #     uv run --no-sync python -m scripts.measure_silver 3
   uv run --no-sync modal app stop rw-gemma4
@@ -24,7 +24,9 @@ import modal
 MODEL = os.environ.get("MODEL", "google/gemma-4-31B-it-qat-w4a16-ct")
 QUANT = os.environ.get("QUANT", "")  # empty for the W4A16 compressed-tensors dense model (auto-detected);
 # for the 26B-A4B MoE (no 4-bit checkpoint) set QUANT=int8_per_channel_weight_only (Google's vLLM rec).
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 GPU = os.environ.get("GPU", "A100-40GB")
 GPU_UTIL = os.environ.get("VLLM_GPU_UTIL", "0.80")  # LEAVE HEADROOM: json_schema guided decoding (xgrammar)
 # needs GPU workspace beyond weights+KV; at 0.90 a guided request OOM-killed the engine. 0.80 keeps room.

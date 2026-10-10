@@ -141,7 +141,11 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
 `server = await adeploy_model_server(ModelServerSpec(name="<app>", max_num_seqs=<concurrency target>))` (the locked
 setup of the `qwen-vllm-modal` skill; needs `rag-wright[modal]`, a Modal login and `VLLM_API_KEY` in `.env`), then
 `EngineConfig(models={"general": server.model_id, ...})`. Other processes reconnect with `amodel_server(spec)`;
-call `await_model_server(server)` before traffic (cold start is minutes); `stop_model_server(name)` stops billing.
+call `await_model_server(server, timeout_s=<startup budget>)` before traffic (cold start is minutes; the default
+waits 25 min); `stop_model_server(name)` stops billing. `amodel_server_status(spec)` looks without waking it (deployed,
+running, healthy, weights cached). There is no default `VLLM_API_KEY`. Count concurrency end to end: `aingest` runs
+`min(document_concurrency, documents) x extract_concurrency` calls per run, parallel runs add up, and the sum must
+stay below `max_num_seqs` (`aingest` warns when its own peak exceeds it).
 Full walk-through: `docs/configuration.md`, "A self-hosted model server".
 
 **Using the decision model (Jev).** Register `jev_decision` (from `engine_capabilities()`) and set

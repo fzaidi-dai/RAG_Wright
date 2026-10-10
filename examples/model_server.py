@@ -9,7 +9,7 @@ Prerequisites (see docs/installation.md):
   - ArcadeDB running locally, with ARCADEDB_* set in .env.
 
 Run from the repo root:
-    uv run python examples/model_server.py deploy      # deploy, ask one question on it, stop it, confirm it is gone
+    uv run python examples/model_server.py deploy      # status, deploy, ask one question, stop, confirm it is gone
     uv run python examples/model_server.py reconnect   # reconnect to a server already deployed, ask one question
 
 `deploy` is what an operator script or startup job does, and it always stops the server at the end (an A100 bills
@@ -30,11 +30,13 @@ from rag_wright.api import (
     EvidenceItem,
     ModelRole,
     ModelServer,
+    ModelServerNotDeployed,
     ModelServerSpec,
     StoreConfig,
     adeploy_model_server,
     agenerate_answer,
     amodel_server,
+    amodel_server_status,
     await_model_server,
     measure_usage,
     open_workspace,
@@ -62,6 +64,9 @@ async def ask_one_question(server: ModelServer) -> None:
 
 
 async def deploy() -> None:
+    before = await amodel_server_status(SPEC)  # looks only: deploys nothing, wakes nothing
+    print(f"before: deployed={before.deployed} running={before.running} weights_cached={before.weights_cached} "
+          f"({'a short image build and a cold start' if before.weights_cached else 'plus a ~27 GB weight download'})")
     start = time.monotonic()
     try:
         server = await adeploy_model_server(SPEC, poll_s=20)  # deploys, waits for /health, registers the model id
@@ -69,17 +74,22 @@ async def deploy() -> None:
         await ask_one_question(server)
     finally:
         stop_model_server(SPEC.name)  # always, even if something above failed
-    try:
-        await amodel_server(SPEC)
-    except Exception as exc:  # a stopped app no longer resolves
-        print(f"stopped: {SPEC.name} no longer resolves ({type(exc).__name__}); {time.monotonic() - start:.0f}s total")
-    else:
-        raise SystemExit(f"{SPEC.name} still resolves after stop")
+    after = await amodel_server_status(SPEC)
+    if after.deployed:
+        raise SystemExit(f"{SPEC.name} is still deployed after stop")
+    print(f"stopped: {SPEC.name} is no longer deployed (weights still cached: {after.weights_cached}); "
+          f"{time.monotonic() - start:.0f}s total")
 
 
 async def reconnect() -> None:
-    server = await amodel_server(SPEC)  # looks the server up and registers its model id; does not deploy
-    await await_model_server(server, poll_s=20)  # at once if it is up; through a cold start if it scaled down
+    try:
+        server = await amodel_server(SPEC)  # looks the server up and registers its model id; does not deploy
+    except ModelServerNotDeployed as exc:
+        raise SystemExit(str(exc))
+    try:  # a startup-sized timeout: on expiry, fail readiness (or fall back to a provider-served model id)
+        await await_model_server(server, timeout_s=600, poll_s=20)
+    except TimeoutError as exc:
+        raise SystemExit(f"{exc}; failing startup")
     await ask_one_question(server)
 
 

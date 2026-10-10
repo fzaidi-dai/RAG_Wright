@@ -23,7 +23,9 @@ import modal
 MODEL = os.environ.get("MODEL", "Qwen/Qwen3.8-27B")
 GPU = os.environ.get("GPU", "A100-80GB:2")
 TP = os.environ.get("TP", "2")
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 GPU_UTIL = os.environ.get("VLLM_GPU_UTIL", "0.90")
 MAX_LEN = os.environ.get("VLLM_MAX_LEN", "16384")
 MAX_NUM_SEQS = os.environ.get("MAX_NUM_SEQS", "256")

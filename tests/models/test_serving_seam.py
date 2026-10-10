@@ -55,10 +55,29 @@ def test_vllm_serving_reads_base_url_and_key(monkeypatch):
     assert _serving_config() == {"api_key": "vk", "base_url": "https://app.modal.run/v1"}
 
 
-def test_vllm_api_key_defaults_when_unset(monkeypatch):
+def test_vllm_requires_an_api_key(monkeypatch):
+    """PS-21: there is no default key (a default would be the only gate on a deployed server, printed in the repo)."""
     monkeypatch.setenv("RAG_SERVING", "vllm")
     monkeypatch.setenv("VLLM_BASE_URL", "https://app.modal.run/v1")
-    assert _serving_config()["api_key"] == "rw-vllm-dev-key"
+    monkeypatch.delenv("VLLM_API_KEY", raising=False)
+    with pytest.raises(ValueError, match="VLLM_API_KEY"):
+        _serving_config()
+
+
+def test_a_vllm_profile_requires_its_api_key(monkeypatch):
+    from rag_wright.models.profiles import PROFILES, ModelProfile, register_model_profile
+    from rag_wright.models.seam import resolve_connection
+
+    monkeypatch.delenv("ACME_KEY", raising=False)
+    saved = dict(PROFILES)
+    try:
+        register_model_profile(ModelProfile(model_id="m@acme", backend="vllm", base_url="https://x/v1",
+                                            api_key_env="ACME_KEY"))
+        with pytest.raises(ValueError, match="ACME_KEY"):
+            resolve_connection("m@acme")
+    finally:
+        PROFILES.clear()
+        PROFILES.update(saved)
 
 
 def test_vllm_requires_base_url(monkeypatch):
@@ -75,6 +94,7 @@ def test_unknown_serving_raises(monkeypatch):
 
 def test_case_insensitive_serving(monkeypatch):
     monkeypatch.setenv("RAG_SERVING", "VLLM")
+    monkeypatch.setenv("VLLM_API_KEY", "vk")
     monkeypatch.setenv("VLLM_BASE_URL", "https://app.modal.run/v1")
     assert _serving_config()["base_url"] == "https://app.modal.run/v1"
 
@@ -86,6 +106,7 @@ def test_build_model_uses_openrouter_base_url_by_default():
 
 def test_build_model_routes_to_vllm_when_selected(monkeypatch):
     monkeypatch.setenv("RAG_SERVING", "vllm")
+    monkeypatch.setenv("VLLM_API_KEY", "vk")
     monkeypatch.setenv("VLLM_BASE_URL", "https://app.modal.run/v1")
     assert build_model("ibm-granite/granite-4.2-8b").openai_api_base == "https://app.modal.run/v1"
 

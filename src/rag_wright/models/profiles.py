@@ -66,6 +66,9 @@ class ModelProfile(BaseModel):
     base_url: Optional[str] = None  # PS-19: an explicit endpoint (a deployed server's own); wins over base_url_env
     base_url_env: Optional[str] = None  # env var holding the base_url; default per backend (VLLM_BASE_URL, ...)
     api_key_env: Optional[str] = None   # env var holding the api key; default per backend (VLLM_API_KEY, ...)
+    # PS-21: the most requests the model's server batches at once (a deployed server's `max_num_seqs`, ADR-0110);
+    # None = unknown (a provider-served model). Ingestion warns when its own fan-out can exceed it.
+    max_concurrency: Optional[int] = None
 
 
 class ModelRole(str, Enum):

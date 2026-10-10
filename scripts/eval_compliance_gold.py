@@ -15,7 +15,7 @@ runs local or fully on Modal (KG on the rw-arcadedb Volume + Granite/BGE on the 
   # fully on Modal (A100 Granite + A100 BGE + Modal compliance KG):
   ARCADEDB_HOST=farhan-zaidi--rw-arcadedb-serve.modal.run ARCADEDB_PORT=443 ARCADEDB_PROTOCOL=https \
     ARCADEDB_USER=root ARCADEDB_PASSWORD=rag_wright_dev_2026 \
-    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=rw-vllm-dev-key STACK_URL=<a100> \
+    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=<the server key> STACK_URL=<a100> \
     uv run --no-sync python -m scripts.eval_compliance_gold
 """
 

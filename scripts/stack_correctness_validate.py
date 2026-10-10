@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 def _post(url: str, payload: dict, timeout: int = 60) -> dict:
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST",
                                  headers={"Content-Type": "application/json",
-                                          "Authorization": "Bearer rw-vllm-dev-key"})
+                                          "Authorization": f"Bearer {os.environ['VLLM_API_KEY']}"})
     with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.loads(r.read())
 

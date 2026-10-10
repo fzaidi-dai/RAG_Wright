@@ -119,11 +119,18 @@ def _serving_config() -> dict[str, Any]:
     if serving == "openrouter":
         return _openrouter_config()
     if serving == "vllm":
-        return {
-            "api_key": os.getenv("VLLM_API_KEY", "rw-vllm-dev-key"),
-            "base_url": os.environ["VLLM_BASE_URL"].rstrip("/"),
-        }
+        base_url = os.environ["VLLM_BASE_URL"].rstrip("/")
+        return {"api_key": _required_key("VLLM_API_KEY"), "base_url": base_url}
     raise ValueError(f"RAG_SERVING must be 'openrouter' or 'vllm', got {serving!r}")
+
+
+def _required_key(env: str) -> str:
+    """PS-21: a self-hosted server's API key has no default (a default would be the only gate on the server, and
+    printed in the repo); set it to the key the server was deployed with."""
+    key = os.environ.get(env)
+    if not key:
+        raise ValueError(f"set {env} to the self-hosted model server's API key (there is no default key)")
+    return key
 
 
 @dataclass(frozen=True)
@@ -156,7 +163,7 @@ def resolve_connection(model_id: str) -> Connection:
         return Connection(
             backend, "hosted_vllm",
             (profile.base_url or os.environ[profile.base_url_env or "VLLM_BASE_URL"]).rstrip("/"),
-            os.getenv(profile.api_key_env or "VLLM_API_KEY", "rw-vllm-dev-key"), served)
+            _required_key(profile.api_key_env or "VLLM_API_KEY"), served)
     if backend == "ollama":
         return Connection(
             backend, "ollama",

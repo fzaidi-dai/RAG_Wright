@@ -48,7 +48,7 @@ def main() -> None:
     from rag_wright.packs.contracts.spans.semantic_judge import build_semantic_judge_fn
 
     vbase = os.environ["VLLM_URL"].rstrip("/") + "/v1"
-    vkey = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+    vkey = os.environ["VLLM_API_KEY"]
     method = os.environ.get("METHOD", "json_schema")
     model_id = "ibm-granite/granite-4.1-8b"
     print(f"[probe] METHOD={method} ; warming {model_id}", flush=True)

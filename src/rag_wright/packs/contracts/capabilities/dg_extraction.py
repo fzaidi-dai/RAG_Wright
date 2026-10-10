@@ -255,7 +255,7 @@ def vllm_model(label: str, model: str) -> ExtractionModel:
     base_url/key from the `VLLM_*` env (MS1-3, ADR-0039). This is the product-substrate extraction path."""
     return ExtractionModel(
         label=label, provider="hosted_vllm", model=model,
-        base_url=os.environ["VLLM_BASE_URL"], api_key=os.getenv("VLLM_API_KEY", "rw-vllm-dev-key"),
+        base_url=os.environ["VLLM_BASE_URL"], api_key=os.environ["VLLM_API_KEY"],  # no default key (PS-21)
         inference="remote",
     )
 

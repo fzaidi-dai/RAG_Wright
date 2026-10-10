@@ -71,9 +71,13 @@ from rag_wright.models.profiles import ModelRole
 from rag_wright.api.workspace import WorkspaceHandle, open_workspace, pack_store, use_workspace_models
 from rag_wright.models.model_servers import (
     ModelServer,
+    ModelServerNotDeployed,
     ModelServerSpec,
+    ModelServerStatus,
     adeploy_model_server,
     amodel_server,
+    amodel_server_status,
+    astop_model_server,
     await_model_server,
     stop_model_server,
 )
@@ -82,6 +86,7 @@ __all__ = [
     "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace", "pack_store", "use_workspace_models",
     # PS-19: deploy the self-hosted model server and use it like any model
     "ModelServerSpec", "ModelServer", "adeploy_model_server", "amodel_server", "await_model_server", "stop_model_server",
+    "ModelServerNotDeployed", "ModelServerStatus", "amodel_server_status", "astop_model_server",
     "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
     "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",

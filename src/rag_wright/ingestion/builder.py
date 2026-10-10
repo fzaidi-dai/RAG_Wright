@@ -17,6 +17,7 @@ import functools
 import hashlib
 import mimetypes
 import re
+import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Optional, Sequence, Union
@@ -336,6 +337,7 @@ class IngestionPipeline:
         sem = asyncio.Semaphore(stages.tuning.document_concurrency)
         done = 0
         self._progress(f"[ingest] start N={len(items)}")
+        _check_model_ceilings(stages.tuning, len(items), self._progress)
 
         async def one(src: IngestSource) -> None:
             nonlocal done
@@ -462,6 +464,27 @@ def _attach_table_rows(document: Any, units: list, row_spans: dict) -> None:
         keys = {span_row[s.span_id] for s in unit.spans if s.span_id in span_row}
         if len(keys) == 1:
             unit.table_row = rows.get(keys.pop())
+
+
+def _check_model_ceilings(tuning: IngestionTuning, documents: int, progress: Callable[[str], Any]) -> None:
+    """PS-21: warn when this ingest's extractor fan-out can exceed a resolved model's server ceiling. The peak is
+    `min(document_concurrency, documents) x extract_concurrency`; a model's ceiling is its profile's
+    `max_concurrency` (a deployed server registers its `max_num_seqs`). Calls of parallel `aingest` runs add up."""
+    from rag_wright.models.profiles import ModelRole, model_for, profile_for
+
+    peak = min(tuning.document_concurrency, max(documents, 1)) * tuning.extract_concurrency
+    roles: dict[str, list[str]] = {}
+    for role in ModelRole:
+        roles.setdefault(model_for(role), []).append(role.value)
+    for model_id, names in roles.items():
+        ceiling = profile_for(model_id).max_concurrency
+        if ceiling is not None and peak > ceiling:
+            message = (f"this ingest can run up to {peak} extractor calls at once (min(document_concurrency, "
+                       f"documents) x extract_concurrency); model {model_id} (roles: {', '.join(names)}) accepts "
+                       f"{ceiling} at once. If the extractor calls it, lower the tuning or deploy with a higher "
+                       f"max_num_seqs; parallel aingest runs add up")
+            progress(f"[ingest] warning: {message}")
+            warnings.warn(message, RuntimeWarning, stacklevel=3)
 
 
 def build_ingestion(extractor: Extractor, *, segmenter: Optional[Segmenter] = None,

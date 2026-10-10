@@ -23,7 +23,9 @@ import subprocess
 import modal
 
 MODEL_HF = os.environ.get("GRANITE_HF", "ibm-granite/granite-4.1-8b")
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 GPU_UTIL = os.environ.get("VLLM_GPU_UTIL", "0.75")  # leave ~10GB of the 40GB for BGE (~2.3GB) + LegalBERT (~0.5GB)
 HF_CACHE = "/root/.cache/huggingface"
 LEGALBERT_PATH = "/models/legalbert_function"
@@ -34,7 +36,7 @@ models_vol = modal.Volume.from_name("rw-models", create_if_missing=True)
 image = (
     modal.Image.from_registry("nvidia/cuda:12.8.1-devel-ubuntu22.04", add_python="3.12")
     .pip_install("vllm", "FlagEmbedding", "transformers", "fastapi", "httpx", "huggingface_hub[hf_transfer]")
-    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE})
+    .env({"HF_HUB_ENABLE_HF_TRANSFER": "1", "HF_HOME": HF_CACHE, "VLLM_API_KEY": API_KEY})  # the container reads its own env
 )
 
 

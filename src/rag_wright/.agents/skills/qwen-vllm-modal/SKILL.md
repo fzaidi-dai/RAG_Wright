@@ -48,15 +48,17 @@ different servers (and URLs), for example one per tenant.
 
 **The exact working deploy (this succeeded):**
 ```
-MODAL_IMAGE_BUILDER_VERSION=2025.06 \
+VLLM_API_KEY=<a long random string> MODAL_IMAGE_BUILDER_VERSION=2025.06 \
   APP_NAME=rw-qwen3-modal MODEL=Qwen/Qwen3.8-27B-FP8 KV_CACHE_DTYPE=fp8 \
   SERVED_NAME=Qwen/Qwen3.8-27B TOOL_PARSER=hermes REASONING_PARSER=qwen3 \
   GPU=A100-80GB:1 TP=1 MAX_LEN=16384 GPU_UTIL=0.95 MAX_NUM_SEQS=<target> \
   uv run --no-sync modal deploy scripts/modal_qwen3_vllm_server.py
 ```
 (From a product repo, deploy the copy in this skill's directory: `.claude/skills/qwen-vllm-modal/scripts/modal_qwen3_vllm_server.py` once the skills are linked.)
-Then wire the engine: `.env` `VLLM_BASE_URL=https://<workspace>--rw-qwen3-modal-serve.modal.run/v1`,
-`VLLM_API_KEY=rw-vllm-dev-key`; the profile `qwen3.8-27b-modal` routes there. **Stop billing when done:**
+The script refuses to deploy without `VLLM_API_KEY`: Modal's web endpoint is public and unauthenticated, so vLLM's
+`--api-key` is the only gate on a billing A100, and there is no default key. Then wire the engine: `.env`
+`VLLM_BASE_URL=https://<workspace>--rw-qwen3-modal-serve.modal.run/v1` and the same `VLLM_API_KEY`; the profile
+`qwen3.8-27b-modal` routes there (the seam also refuses an unset key). **Stop billing when done:**
 `uv run --no-sync modal app stop rw-qwen3-modal --yes` (A100 is expensive).
 
 **The engine does NOT reach Modal by default.** Every role's default is `_PRODUCT_LLM = "qwen3.8-27b-modal-or"`,

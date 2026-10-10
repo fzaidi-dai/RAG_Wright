@@ -67,7 +67,7 @@ def main() -> None:
     )
 
     vbase = os.environ["VLLM_URL"].rstrip("/") + "/v1"
-    vkey = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+    vkey = os.environ["VLLM_API_KEY"]
     n_docs = int(os.environ.get("DOCS", "4"))
     runs = int(os.environ.get("RUNS", "3"))
     model_id = "ibm-granite/granite-4.1-8b"

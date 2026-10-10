@@ -11,7 +11,7 @@ Capped to a few §255.5 disclosure requirements to sidestep the CC-6 cross-produ
   # on Modal (A100 Granite judge + extraction, Modal compliance KG) -- MODAL-COMPLIANCE:
   ARCADEDB_HOST=farhan-zaidi--rw-arcadedb-serve.modal.run ARCADEDB_PORT=443 ARCADEDB_PROTOCOL=https \
     ARCADEDB_USER=root ARCADEDB_PASSWORD=rag_wright_dev_2026 \
-    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=rw-vllm-dev-key \
+    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=<the server key> \
     uv run --no-sync python -m scripts.compliance_engine_smoke
 """
 

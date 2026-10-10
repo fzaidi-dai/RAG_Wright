@@ -50,7 +50,7 @@ def main() -> None:
     from rag_wright.util.concurrent import map_concurrent
 
     vbase = os.environ["VLLM_URL"].rstrip("/") + "/v1"
-    vkey = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+    vkey = os.environ["VLLM_API_KEY"]
     n = int(os.environ.get("N", "12"))
     model_id = "ibm-granite/granite-4.1-8b"
 

@@ -24,6 +24,16 @@ QWEN_MODAL_SCRIPT = (Path(__file__).resolve().parents[1] / ".agents" / "skills" 
                      / "modal_qwen3_vllm_server.py")
 _TEMPLATE_PROFILE = "qwen3.8-27b-modal"
 _SERVE_FUNCTION = "serve"  # the web function in the script; its URL is the server's root
+WEIGHTS_VOLUME = "rw-hf-cache"  # the Modal Volume the script keeps the Hugging Face weights in (HF cache layout)
+
+
+class ModelServerNotDeployed(RuntimeError):
+    """No deployed model server has this name (never deployed, or stopped)."""
+
+    def __init__(self, name: str):
+        super().__init__(f"model server {name!r} is not deployed; deploy it with adeploy_model_server "
+                         f"(or check the name matches the deployed one)")
+        self.name = name
 
 
 @dataclass(frozen=True)
@@ -73,6 +83,20 @@ class ModelServer:
     api_key_env: str
 
 
+@dataclass(frozen=True)
+class ModelServerStatus:
+    """What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is
+    billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while
+    it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips
+    the ~27 GB download (an empty `modal app list` says nothing about this)."""
+
+    name: str
+    deployed: bool
+    running: bool
+    healthy: bool
+    weights_cached: bool
+
+
 def _modal_cli(args: list[str], env: dict[str, str]) -> None:
     """Run Modal's CLI (`modal deploy ...`, `modal app stop ...`) with the current interpreter."""
     subprocess.run([sys.executable, "-m", "modal", *args], env=env, check=True)
@@ -80,11 +104,35 @@ def _modal_cli(args: list[str], env: dict[str, str]) -> None:
 
 async def _web_url(name: str) -> str:
     import modal
+    from modal.exception import NotFoundError
 
-    url = await modal.Function.from_name(name, _SERVE_FUNCTION).get_web_url.aio()  # the async form: called in a loop
+    try:
+        url = await modal.Function.from_name(name, _SERVE_FUNCTION).get_web_url.aio()  # async form: called in a loop
+    except NotFoundError as exc:
+        raise ModelServerNotDeployed(name) from exc
     if not url:
-        raise RuntimeError(f"Modal app {name!r} has no web endpoint (is it deployed?)")
+        raise ModelServerNotDeployed(name)
     return url.rstrip("/")
+
+
+async def _runners(name: str) -> int:
+    """How many containers the server has up, from Modal's stats (no request reaches the server, so nothing wakes)."""
+    import modal
+
+    stats = await modal.Function.from_name(name, _SERVE_FUNCTION).get_current_stats.aio()
+    return stats.num_total_runners
+
+
+async def _weights_cached(model: str) -> bool:
+    """Whether `model`'s weights are in the weights Volume (`hub/models--<org>--<name>/snapshots/<rev>`)."""
+    import modal
+    from modal.exception import NotFoundError
+
+    snapshots = f"hub/models--{model.replace('/', '--')}/snapshots"
+    try:
+        return bool(await modal.Volume.from_name(WEIGHTS_VOLUME).listdir.aio(snapshots))
+    except NotFoundError:  # no Volume yet, or no such model in it
+        return False
 
 
 def _healthy(root: str, key: Optional[str]) -> bool:
@@ -109,7 +157,8 @@ def _register(spec: ModelServerSpec, root: str) -> ModelServer:
     model_id = f"{_TEMPLATE_PROFILE}@{spec.name}"
     register_model_profile(PROFILES[_TEMPLATE_PROFILE].model_copy(update={
         "model_id": model_id, "backend": "vllm", "served_model_id": spec.served_name,
-        "base_url": f"{root}/v1", "base_url_env": None, "api_key_env": spec.api_key_env}))
+        "base_url": f"{root}/v1", "base_url_env": None, "api_key_env": spec.api_key_env,
+        "max_concurrency": spec.max_num_seqs}))
     return ModelServer(name=spec.name, root=root, base_url=f"{root}/v1", model_id=model_id,
                        served_model_id=spec.served_name, api_key_env=spec.api_key_env)
 
@@ -155,7 +204,8 @@ async def adeploy_model_server(spec: ModelServerSpec, *, wait: bool = True, time
 
 async def amodel_server(spec: ModelServerSpec) -> ModelServer:
     """Reconnect to a server deployed earlier (by this process or another) without redeploying: look up its URL and
-    register its model profile. `spec` must match the deployed server (its name and served model)."""
+    register its model profile. `spec` must match the deployed server (its name and served model). Raises
+    `ModelServerNotDeployed` when no server has that name."""
     _require_modal()
     return _register(spec, await _web_url(spec.name))
 
@@ -164,3 +214,23 @@ def stop_model_server(name: str) -> None:
     """Stop the Modal app `name` (stops billing); its URL stops answering."""
     _require_modal()
     _modal_cli(["app", "stop", name, "--yes"], dict(os.environ))
+
+
+async def amodel_server_status(spec: ModelServerSpec) -> ModelServerStatus:
+    """Look, without deploying or waking anything: is the server deployed, is a container running (billing), does it
+    answer `/health`, and are its model weights cached. `/health` is asked only of a running container: a request to
+    a scaled-down server would start a cold start."""
+    _require_modal()
+    cached = await _weights_cached(spec.model)
+    try:
+        root = await _web_url(spec.name)
+    except ModelServerNotDeployed:
+        return ModelServerStatus(spec.name, deployed=False, running=False, healthy=False, weights_cached=cached)
+    running = await _runners(spec.name) > 0
+    healthy = running and await asyncio.to_thread(_healthy, root, os.environ.get(spec.api_key_env))
+    return ModelServerStatus(spec.name, deployed=True, running=running, healthy=healthy, weights_cached=cached)
+
+
+async def astop_model_server(name: str) -> None:
+    """`stop_model_server` for async code."""
+    await asyncio.to_thread(stop_model_server, name)

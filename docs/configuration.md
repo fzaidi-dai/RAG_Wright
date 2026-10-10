@@ -130,7 +130,9 @@ uv run modal token new          # log in to Modal once per machine
 ```
 
 and put the server's API key in your `.env` (any secret string; the server is deployed with it and every call
-sends it): `VLLM_API_KEY=<a long random string>`. There is no default key.
+sends it): `VLLM_API_KEY=<a long random string>`. There is no default key: Modal's web endpoint is public, so this key
+is the only thing between the internet and a billing A100. Deploying (through the engine or the skill's raw
+`modal deploy` command) and calling the server both refuse to run without it.
 
 **Deploy, then use it like any model.**
 
@@ -159,8 +161,36 @@ without redeploying, which only looks up the server and registers its model id:
 from rag_wright.api import amodel_server, await_model_server
 
 server = await amodel_server(ModelServerSpec(name="acme-qwen", max_num_seqs=32))   # same spec as the deploy
-await await_model_server(server)    # returns at once if it is up; waits through a cold start if it scaled down
+await await_model_server(server, timeout_s=600)   # at once if it is up; through a cold start if it scaled down
 ```
+
+`amodel_server` raises `ModelServerNotDeployed` (a `RuntimeError`) when no server has that name. Choose
+`await_model_server`'s `timeout_s` for your startup: the default (1500 s) covers the worst cold start, but it also
+holds a service's startup that long when the server is down. Pick what your orchestrator tolerates, and on
+`TimeoutError` either fail the readiness check (the orchestrator retries) or start without the server and fall back
+to a provider-served model id for those roles.
+
+**Looking without waking it.** `await amodel_server_status(spec)` reports `deployed`, `running` (a container is up,
+so the GPU is billing), `healthy` and `weights_cached`. It asks `/health` only of a running container, because any
+request to a scaled-down server starts a cold start. `weights_cached` is what decides a deploy's cost: the weights
+live in the Modal Volume `rw-hf-cache` (the vLLM compile cache in `rw-vllm-serve-compile-cache`), and stay there when
+the app is stopped, so an empty `modal app list` does not mean a cold cache. With the weights cached, a deploy is a
+short image build and a cold start; without them, it also downloads about 27 GB. `astop_model_server` is
+`stop_model_server` for async code.
+
+**Concurrency: the engine's fan-out multiplies with yours.** `max_num_seqs` is the most requests the server batches
+at once; requests above it queue, and under load queued reasoning calls time out and retry. Count everything that
+can call the server at the same moment:
+
+- `build_ingestion`'s `aingest` runs up to `min(document_concurrency, documents) x extract_concurrency` extractor
+  calls at once (`IngestionTuning`, defaults 2 x 8 = 16), per `aingest` call. Two `aingest` runs in parallel are 32.
+- The reference contracts pack runs `CLAUSE_CONCURRENCY` (default 8) extractions per document (Jev calls by default;
+  Qwen calls only when Qwen is its extraction model), capped process-wide by `RAG_EXTRACT_WORKERS` (default 32).
+- Plus your own concurrent queries and answers.
+
+The server's profile carries its ceiling (`max_concurrency`, set from `max_num_seqs`), and `aingest` warns before it
+starts (a `RuntimeWarning` and an `[ingest] warning:` progress line) when its own peak can exceed the ceiling of a
+model the workspace resolves. It cannot see your other parallel runs: keep their sum below `max_num_seqs`.
 
 **What to know before you rely on it.**
 
@@ -169,16 +199,15 @@ await await_model_server(server)    # returns at once if it is up; waits through
   deployed; the next request waits through a cold start, so call `await_model_server` before sending traffic.
 - **Cost.** An A100 bills while a container runs. `stop_model_server("acme-qwen")` removes the app entirely; deploy
   again to bring it back.
-- **Concurrency.** `max_num_seqs` is how many requests the server batches at once (ADR-0110 sets it to your real
-  concurrency target); keep your own client concurrency below it.
 - **Timeouts.** Reasoning-on structured calls under full load can take about a minute; raise
   `RAG_STRUCTURED_TIMEOUT_S` (default 60) for bulk work, or calls time out and retry.
 - **Process-wide.** A registered server model id is known to the whole process, like every model profile; after a
   restart, call `amodel_server` again.
 
-**A runnable example.** `examples/model_server.py` does all of this through `rag_wright.api`: `deploy` brings a
-server up, asks one question on it through a workspace, checks the call was metered on the server's model id, then
-stops it and confirms it is gone; `reconnect` is the service-process path (look up, wait, ask, leave it running).
+**A runnable example.** `examples/model_server.py` does all of this through `rag_wright.api`: `deploy` reports the
+status, brings a server up, asks one question on it through a workspace, checks the call was metered on the
+server's model id, then stops it and confirms it is gone; `reconnect` is the service-process path (look up, wait
+with a startup timeout, ask, leave it running).
 
 The `qwen-vllm-modal` skill has the operational detail (the image fixes, serving gotchas, the manual `modal deploy`
 command) and ADR-0130 the design.

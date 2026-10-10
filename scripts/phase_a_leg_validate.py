@@ -7,7 +7,7 @@ the STACK_URL adapters).
 
   ARCADEDB_HOST=<rw-arcadedb>.modal.run ARCADEDB_PORT=443 ARCADEDB_PROTOCOL=https \
     ARCADEDB_USER=root ARCADEDB_PASSWORD=rag_wright_dev_2026 ARCADEDB_DATABASE=ragwright_cuad_full \
-    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=rw-vllm-dev-key STACK_URL=<a100> \
+    RAG_SERVING=vllm VLLM_BASE_URL=<a100>/v1 VLLM_API_KEY=<the server key> STACK_URL=<a100> \
     uv run --no-sync python -m scripts.phase_a_leg_validate A
 
 Arg selects the leg(s): A (intra_document_qa), Crel (relational_qa, graph-structural), B

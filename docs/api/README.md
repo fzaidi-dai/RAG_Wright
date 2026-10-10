@@ -40,6 +40,14 @@ The deploy command's settings, as the skill's documented command passes them.
 
 A deployed server: `model_id` is the model id to use (in `EngineConfig.models` or a `model=` argument); `base_url` is its OpenAI-compatible endpoint; `root` is its URL (for `/health`).
 
+### `ModelServerNotDeployed(name: 'str')`
+
+No deployed model server has this name (never deployed, or stopped).
+
+### `ModelServerStatus(name: 'str', deployed: 'bool', running: 'bool', healthy: 'bool', weights_cached: 'bool') -> None`
+
+What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips the ~27 GB download (an empty `modal app list` says nothing about this).
+
 ### `ModelRole(*values)`
 
 Which model does which job. The mapping to ids lives in config, not in capability code.
@@ -256,7 +264,7 @@ Deploy (or redeploy) the server described by `spec` on Modal, register its model
 
 ### `amodel_server(spec: 'ModelServerSpec') -> 'ModelServer'`
 
-Reconnect to a server deployed earlier (by this process or another) without redeploying: look up its URL and register its model profile. `spec` must match the deployed server (its name and served model).
+Reconnect to a server deployed earlier (by this process or another) without redeploying: look up its URL and register its model profile. `spec` must match the deployed server (its name and served model). Raises `ModelServerNotDeployed` when no server has that name.
 
 ### `await_model_server(server: 'ModelServer', *, timeout_s: 'float' = 1500, poll_s: 'float' = 15, progress: 'Callable[[str], object]' = print) -> 'ModelServer'`
 
@@ -265,6 +273,14 @@ Wait until the server answers `/health` (a cold start is about 8 minutes, ADR-01
 ### `stop_model_server(name: 'str') -> 'None'`
 
 Stop the Modal app `name` (stops billing); its URL stops answering.
+
+### `amodel_server_status(spec: 'ModelServerSpec') -> 'ModelServerStatus'`
+
+Look, without deploying or waking anything: is the server deployed, is a container running (billing), does it answer `/health`, and are its model weights cached. `/health` is asked only of a running container: a request to a scaled-down server would start a cold start.
+
+### `astop_model_server(name: 'str') -> 'None'`
+
+`stop_model_server` for async code.
 
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 

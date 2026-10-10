@@ -34,7 +34,9 @@ SERVED = os.environ.get("SERVED_NAME", "qwen3-eval")         # served-model-name
 TOOL_PARSER = os.environ.get("TOOL_PARSER", "")             # "" off | "hermes" -> tool calling (the product agent)
 REASONING_PARSER = os.environ.get("REASONING_PARSER", "")   # "" off | "qwen3" -> reasoning coexists with a tool call
 APP_NAME = os.environ.get("APP_NAME", "rw-qwen3-vllm-eval")  # distinct app (=distinct URL) per purpose
-API_KEY = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+API_KEY = os.environ.get("VLLM_API_KEY")  # vLLM's --api-key: the only gate on the server's public URL
+if not API_KEY:  # no default key (PS-21): a default would be public, and would gate a billing GPU
+    raise SystemExit("set VLLM_API_KEY to the server's API key (a long random string) before deploying")
 
 HF_CACHE = "/root/.cache/huggingface"
 VLLM_CACHE = "/root/.cache/vllm"

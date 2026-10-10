@@ -38,7 +38,7 @@ def main() -> None:
     from rag_wright.util.concurrent import map_concurrent
 
     vllm_base = os.environ["VLLM_URL"].rstrip("/") + "/v1"
-    key = os.environ.get("VLLM_API_KEY", "rw-vllm-dev-key")
+    key = os.environ["VLLM_API_KEY"]
     n = int(os.environ.get("N", "30"))
     temp = float(os.environ.get("TEMP", "0"))  # pin to 0 (greedy) to isolate model diff from sampling noise
     mode = os.environ.get("MODE", "vllm")  # "vllm" = vLLM-vs-OpenRouter; "control" = OpenRouter-vs-OpenRouter
