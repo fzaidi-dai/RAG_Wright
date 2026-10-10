@@ -112,6 +112,12 @@ to `build_ingestion(unit_representative=...)`.
 
 ## Its trained weights: fetched, not shipped
 
+Two things to know about these weights (ADR-0129). Nine of the 15 Laya checkpoints carry a `choice` temperature
+above the Laya runtime's accepted range, so Laya clamps it and warns on load. The fleet's labels are unaffected,
+because it emits options by rank and never reads the probability, but those nine checkpoints' probabilities are
+sharper than calibrated: do not gate on them. The SetFit heads were pickled with scikit-learn 1.9.1, the engine's
+floor.
+
 The pack's two `model` capabilities load trained weights that are not in the wheel or the repository (about 16 GB):
 the clause-type SetFit ensemble and the 29-dimension SetFit/Laya property fleet. They load from the models root
 (`RAG_MODELS_DIR`; default the engine checkout's `data/models` when it exists, else `./data/models`). Fetch them

@@ -86,6 +86,26 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
 - Runs on **one 16 GB GPU (T4)** — ~1–2 h for large data, minutes for our small dims. RLCD = soft-CE + GRPO-style
   policy gradient on proper scoring rules. Calibration (one temperature per type) is fitted inside the run on a
   held-out slice; **argmax/accuracy unchanged, only confidence moves** — always fit before gating on confidence.
+- **Check the fitted temperatures against the SERVING runtime's range (a known Laya mismatch).** The research
+  fine-tuning script fits each type's temperature and clips it to [0.1, 10]
+  (`research/scripts/finetune_single_device.py:154`); the Laya runtime (0.3.22) serves only [0.5, 5]
+  (`laya.common.TEMP_MIN` / `TEMP_MAX`) and clamps the rest, with a load-time `RuntimeWarning` ("... values outside
+  [0.5, 5] ... treat confidence ... as uncalibrated"). A clamped `choice` temperature leaves the ranking alone (one
+  scale per question: argmax, top-k and `none`-abstains are stable) but makes the probabilities sharper than
+  fitted, so they are overconfident. So, after every training run:
+  1. read `temperature` in each checkpoint's `rl_agent_config.json` and compare it with the runtime range;
+  2. if you only rank (top-k, abstain on `none`), an out-of-range value changes no label: record it and move on;
+  3. if anything gates on `probabilities` or `answer_confidence`, refit within the runtime range with the runtime
+     calibrator on a held-out labelled slice (`laya.calibrate.records_from_labeled(agent, pairs)` ->
+     `fit_temperature_map(records)`, whose fits are clamped to the runtime range), save it with
+     `Agent.save_calibration(path)` and serve with `Agent.load_calibration(path)`.
+
+  The engine's reference fleet has nine such checkpoints and only ranks (ADR-0129). A report to Laya upstream is
+  drafted in the engine repository (`docs/upstream/laya-temperature-range-mismatch.md`, not yet filed); check the
+  Laya release notes before relying on either range. Repository paths in this skill (`docs/`) are in the engine repository:
+  read them there or on GitHub.
+- **Train with the scikit-learn your serving environment runs** (or raise the serving floor with it): a SetFit
+  head pickled by a newer scikit-learn warns on load and can change predictions without an error.
 - **OOM knobs:** ModernBERT-large (~400M) is tight on a 16 GB T4/L4. The single-device script has NO batch or
   sequence flags: it fixes `micro_batch = 8`, `max_tokens_per_batch = 4096`, `max_len = 1024` and `head_max_len = 256`
   in code, and turns on gradient checkpointing on CUDA. Our short-clause dims ran with it unchanged. If a run still

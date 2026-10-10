@@ -48,7 +48,7 @@ dependencies = [
     "pypdfium2>=5.11",
     "pyshacl>=0.40.1",
     "python-dotenv>=1.2",
-    "scikit-learn>=1.9.0",
+    "scikit-learn>=1.9.1",
     "sentence-transformers>=6.1.0",
     "transformers>=5.4,<5.9",
 ]
