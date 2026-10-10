@@ -4,6 +4,18 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.4.0...0.5.0) (2026-10-10)
+
+
+### Features
+
+* **PS-19:** deploy the self-hosted model server from the engine and use it like any model ([5cd4d22](https://github.com/fzaidi-dai/RAG_Wright/commit/5cd4d22b6e684052b2d75162df32078fdf1cf2e6))
+
+
+### Bug Fixes
+
+* **PS-18:** scikit-learn floor 1.9.1 for the shipped heads; Laya temperatures recorded (ADR-0129) ([2350de4](https://github.com/fzaidi-dai/RAG_Wright/commit/2350de44a877bd74ad4e920c39a1557d43a0f2c8))
+
 ## [0.4.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.3.1...0.4.0) (2026-10-09)
 
 
