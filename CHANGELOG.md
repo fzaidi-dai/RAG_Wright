@@ -4,6 +4,17 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.5.1...0.6.0) (2026-10-10)
+
+
+### ⚠ BREAKING CHANGES
+
+* **PS-21:** a self-hosted server call or deploy with VLLM_API_KEY (or the profile's api_key_env) unset now raises instead of using the default key "rw-vllm-dev-key".
+
+### Bug Fixes
+
+* **PS-21:** no default model-server key; concurrency ceiling, status and clearer errors (ADR-0131) ([a73a4fd](https://github.com/fzaidi-dai/RAG_Wright/commit/a73a4fd9595a9f8d70d95d393147ba10a1f1718b))
+
 ## [0.5.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.5.0...0.5.1) (2026-10-10)
 
 
