@@ -46,3 +46,13 @@ The engine's full walk-through is `docs/configuration.md`, "A self-hosted model 
 Run RuleWright's suite against the engine checkout. If it moves a setting to a server: deploy (or reconnect), run
 one question inside `measure_usage()`, and check the call was metered on the server's model id; then stop the
 server if it was a test deployment.
+
+The engine's `examples/model_server.py` is that check, written against the public API only, and the place to start
+(read it from the engine checkout; it is not in the wheel):
+
+- `uv run python examples/model_server.py deploy` brings a server up (`adeploy_model_server`), opens a workspace
+  whose `general` role is `server.model_id`, asks one question inside `measure_usage()`, checks the call was metered
+  on the server's model id, then stops the server (`stop_model_server`, always, even on failure) and confirms it no
+  longer resolves.
+- `uv run python examples/model_server.py reconnect` is what each RuleWright service process does at startup:
+  `amodel_server` then `await_model_server`, one question, and the server left running.

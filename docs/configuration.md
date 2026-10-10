@@ -176,6 +176,10 @@ await await_model_server(server)    # returns at once if it is up; waits through
 - **Process-wide.** A registered server model id is known to the whole process, like every model profile; after a
   restart, call `amodel_server` again.
 
+**A runnable example.** `examples/model_server.py` does all of this through `rag_wright.api`: `deploy` brings a
+server up, asks one question on it through a workspace, checks the call was metered on the server's model id, then
+stops it and confirms it is gone; `reconnect` is the service-process path (look up, wait, ask, leave it running).
+
 The `qwen-vllm-modal` skill has the operational detail (the image fixes, serving gotchas, the manual `modal deploy`
 command) and ADR-0130 the design.
 

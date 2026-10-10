@@ -38,7 +38,10 @@ def modal_fake(monkeypatch):
         return calls["health"] >= 2  # down on the first poll, ready on the second
 
     monkeypatch.setattr(ms, "_modal_cli", cli)
-    monkeypatch.setattr(ms, "_web_url", lambda name: URL)
+    async def web_url(name):
+        return URL
+
+    monkeypatch.setattr(ms, "_web_url", web_url)
     monkeypatch.setattr(ms, "_healthy", health)
     monkeypatch.setenv("ACME_VLLM_KEY", "secret-key")
     saved = dict(PROFILES)
@@ -106,6 +109,25 @@ async def test_waiting_gives_up_with_a_timeout(modal_fake, monkeypatch):
 async def test_reconnecting_registers_without_deploying(modal_fake):
     server = await amodel_server(ModelServerSpec(name="acme-qwen", max_num_seqs=32, api_key_env="ACME_VLLM_KEY"))
     assert modal_fake["cli"] == [] and resolve_connection(server.model_id).base_url == URL + "/v1"
+
+
+async def test_the_url_lookup_uses_modals_async_interface(monkeypatch):
+    """Modal warns (AsyncUsageWarning) when its blocking interface runs inside an event loop; the deploy and reconnect
+    paths are async, so the lookup must use the `.aio` form."""
+    import sys
+    import types
+
+    class WebUrl:
+        def __call__(self):
+            raise AssertionError("the blocking get_web_url() was called from async code")
+
+        async def aio(self):
+            return URL + "/"
+
+    fake = types.SimpleNamespace(Function=types.SimpleNamespace(
+        from_name=lambda name, fn: types.SimpleNamespace(get_web_url=WebUrl())))
+    monkeypatch.setitem(sys.modules, "modal", fake)
+    assert await ms._web_url("acme-qwen") == URL
 
 
 def test_stop_stops_the_modal_app(modal_fake):

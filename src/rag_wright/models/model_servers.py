@@ -78,10 +78,10 @@ def _modal_cli(args: list[str], env: dict[str, str]) -> None:
     subprocess.run([sys.executable, "-m", "modal", *args], env=env, check=True)
 
 
-def _web_url(name: str) -> str:
+async def _web_url(name: str) -> str:
     import modal
 
-    url = modal.Function.from_name(name, _SERVE_FUNCTION).get_web_url()
+    url = await modal.Function.from_name(name, _SERVE_FUNCTION).get_web_url.aio()  # the async form: called in a loop
     if not url:
         raise RuntimeError(f"Modal app {name!r} has no web endpoint (is it deployed?)")
     return url.rstrip("/")
@@ -146,7 +146,7 @@ async def adeploy_model_server(spec: ModelServerSpec, *, wait: bool = True, time
     progress(f"[model-server] deploying {spec.name} ({spec.model}, {spec.gpu}, max_num_seqs={spec.max_num_seqs})")
     env = {**os.environ, **spec.deploy_env(), "VLLM_API_KEY": key}
     await asyncio.to_thread(_modal_cli, ["deploy", str(QWEN_MODAL_SCRIPT)], env)
-    server = _register(spec, await asyncio.to_thread(_web_url, spec.name))
+    server = _register(spec, await _web_url(spec.name))
     progress(f"[model-server] deployed {spec.name} at {server.base_url}; model id {server.model_id}")
     if wait:
         await await_model_server(server, timeout_s=timeout_s, poll_s=poll_s, progress=progress)
@@ -157,7 +157,7 @@ async def amodel_server(spec: ModelServerSpec) -> ModelServer:
     """Reconnect to a server deployed earlier (by this process or another) without redeploying: look up its URL and
     register its model profile. `spec` must match the deployed server (its name and served model)."""
     _require_modal()
-    return _register(spec, await asyncio.to_thread(_web_url, spec.name))
+    return _register(spec, await _web_url(spec.name))
 
 
 def stop_model_server(name: str) -> None:
