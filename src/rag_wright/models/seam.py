@@ -24,7 +24,7 @@ from typing import Any, Optional
 
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_openai import ChatOpenAI
-from openai import APIConnectionError, APITimeoutError, InternalServerError, RateLimitError
+from openai import APIConnectionError, APITimeoutError, BadRequestError, InternalServerError, RateLimitError
 from pydantic import PrivateAttr
 
 from rag_wright.models.profiles import profile_for
@@ -77,11 +77,15 @@ _STRUCTURED_RETRY_ON: tuple[type[BaseException], ...] = (
 # 60s timeout, and a 399s call succeeded with no exception at all. Only elapsed wall clock, enforced OUTSIDE the
 # socket, can bound it. `asyncio.timeout` delivers a real CancelledError into the awaited call, so httpx closes
 # the socket -- a true cancel, not the soft/leaked-thread cancel a synchronous watchdog gives.
-_MODEL_DEADLINE_S = 180.0  # total wall-clock ceiling per LOGICAL model call (across bounded retries + backoff)
+# PS-22: `RAG_MODEL_DEADLINE_S` sets it explicitly; unset, it follows the per-try timeout (`model_deadline_s`), so
+# raising `RAG_STRUCTURED_TIMEOUT_S` for reasoning-on work is not silently capped at the old fixed 180 s.
+_MODEL_DEADLINE_S: float | None = (float(os.environ["RAG_MODEL_DEADLINE_S"])
+                                   if os.getenv("RAG_MODEL_DEADLINE_S") else None)
+_MODEL_DEADLINE_FLOOR_S = 180.0  # the default never drops below the pre-PS-22 ceiling
 
 
 class ModelCallTimeout(Exception):
-    """A logical model call exceeded the total wall-clock deadline (`_MODEL_DEADLINE_S`) and was truly cancelled
+    """A logical model call exceeded the total wall-clock deadline (`model_deadline_s()`) and was truly cancelled
     (socket torn down). TERMINAL: a stalling peer is not a transient worth re-hitting, so this is deliberately
     NOT in `_STRUCTURED_RETRY_ON` and must be kept out of any pregel `retry_on` -- the caller degrades or
     dead-letters on it. It is the async fix a per-socket-op timeout cannot be (engine issue 0003 / ADR-0057)."""
@@ -256,7 +260,9 @@ def build_structured(
     `temperature` defaults to 0 (deterministic-intent); a caller doing best-of-N self-consistency raises it
     to sample GENUINELY diverse structured completions (the base client's temperature, not a provider flag).
     `max_tokens` caps the completion length -- a safety net against a model that runs away to the context
-    limit under a schema constraint (observed on self-hosted Gemma-4 with a mis-set chat template).
+    limit under a schema constraint (observed on self-hosted Gemma-4 with a mis-set chat template). Left None,
+    the profile's `structured_max_tokens` applies (PS-22: a thinking model's reasoning-loop guard), and a prompt
+    too long to leave room for that cap is sent again without it.
     """
     from rag_wright.models import tracing
     from rag_wright.models import usage as usage_acct
@@ -281,10 +287,16 @@ def build_structured(
     # (max_retries=0) and use a tighter per-request timeout, so `_with_bounded_retry` is the sole, bounded layer
     # (worst case = timeout x attempts, not multiplied by the SDK budget).
     overrides: dict[str, Any] = {"max_retries": 0, "timeout": _STRUCTURED_TIMEOUT_S}
-    if max_tokens is not None:
-        overrides["max_tokens"] = max_tokens
+    # PS-22: with no `max_tokens` from the caller, the profile's cap applies (a thinking model's loop guard)
+    cap = max_tokens if max_tokens is not None else profile.structured_max_tokens
+    if cap is not None:
+        overrides["max_tokens"] = cap
     inner: Runnable = build_model(model_id, temperature=temperature, **overrides).with_structured_output(
         schema, **kwargs)
+    if max_tokens is None and cap is not None:
+        uncapped = {k: v for k, v in overrides.items() if k != "max_tokens"}
+        inner = _uncapped_when_too_long(inner, lambda: build_model(
+            model_id, temperature=temperature, **uncapped).with_structured_output(schema, **kwargs), model_id)
     if not include_raw:
         # we forced include_raw for instrumentation, but the caller wanted the parsed value with the native
         # raise-on-parse-failure contract -- restore it so the bounded retry sees the SAME error it would have.
@@ -326,6 +338,37 @@ def build_structured(
     return RunnableLambda(_sync, afunc=_adeadline)
 
 
+def _too_long_for_cap(exc: BaseException) -> bool:
+    """vLLM rejects a request whose prompt plus `max_tokens` exceeds the context with a 400 naming `input_tokens`
+    (`vllm/renderers/params.py`); without `max_tokens` it would have used whatever context is left."""
+    return isinstance(exc, BadRequestError) and getattr(exc, "param", None) == "input_tokens"
+
+
+def _uncapped_when_too_long(capped: Runnable, make_uncapped: Callable[[], Runnable], model_id: str) -> Runnable:
+    """PS-22: the profile's cap never fails a call that would succeed without it: a prompt too long to leave room
+    for the cap is sent once more without it (the call as it was before the cap)."""
+
+    def _sync(x: Any) -> Any:
+        try:
+            return capped.invoke(x)
+        except BadRequestError as exc:
+            if not _too_long_for_cap(exc):
+                raise
+            log.info("structured call to %s: prompt too long for the profile's output cap; sent without it", model_id)
+            return make_uncapped().invoke(x)
+
+    async def _async(x: Any) -> Any:
+        try:
+            return await capped.ainvoke(x)
+        except BadRequestError as exc:
+            if not _too_long_for_cap(exc):
+                raise
+            log.info("structured call to %s: prompt too long for the profile's output cap; sent without it", model_id)
+            return await make_uncapped().ainvoke(x)
+
+    return RunnableLambda(_sync, afunc=_async)
+
+
 def _raise_on_parse_error(result: Any) -> Any:
     """When `include_raw=True` was forced for instrumentation but the caller wanted the parsed value, restore the
     native `include_raw=False` contract: re-raise the exact parse error so the bounded retry retries identically."""
@@ -356,8 +399,14 @@ def _provider_gen_id(raw: Any) -> Optional[str]:
 
 def model_deadline_s() -> float:
     """PS-8b: the total wall-clock deadline (seconds) for one logical model call, across its bounded retries -- the
-    value every seam call runs under (read at call time, so a test or configuration override is honoured)."""
-    return _MODEL_DEADLINE_S
+    value every seam call runs under (read at call time, so a test or configuration override is honoured).
+
+    PS-22: `RAG_MODEL_DEADLINE_S` when set; otherwise long enough for every try at the per-try timeout plus the
+    largest backoffs between them, and never under 180 s."""
+    if _MODEL_DEADLINE_S is not None:
+        return _MODEL_DEADLINE_S
+    backoffs = sum(min(0.5 * (2 ** (a - 1)), 8.0) + 0.5 for a in range(1, _STRUCTURED_RETRY_ATTEMPTS))
+    return max(_MODEL_DEADLINE_FLOOR_S, _STRUCTURED_TIMEOUT_S * _STRUCTURED_RETRY_ATTEMPTS + backoffs)
 
 
 def call_description(model_id: str, label: str | None) -> str:
@@ -376,7 +425,7 @@ async def _bounded_deadline(
     in the warnings (ADR-0058, issue 0004 side-fix).
 
     Bounded transient retries (the `_STRUCTURED_RETRY_ON` set) with per-attempt logging and exponential-jitter
-    backoff, ALL under one `asyncio.timeout(_MODEL_DEADLINE_S)`. A slow-drip or connection-alive stall that a
+    backoff, ALL under one `asyncio.timeout(model_deadline_s())`. A slow-drip or connection-alive stall that a
     per-socket-op timeout never catches is CANCELLED at the deadline -- `asyncio.timeout` delivers CancelledError
     into the awaited call, httpx closes the socket -- and surfaces as a terminal `ModelCallTimeout`. Retry sleeps
     count against the same budget, so the total is bounded regardless of how it is spent."""
@@ -395,13 +444,14 @@ async def _bounded_deadline(
                     raise
                 await asyncio.sleep(_backoff_s(attempt))
 
+    deadline = model_deadline_s()
     try:
-        async with asyncio.timeout(_MODEL_DEADLINE_S):
+        async with asyncio.timeout(deadline):
             return await _run()
     except TimeoutError as exc:
-        log.warning("model call to %s exceeded the %.0fs total wall-clock deadline; cancelled",
-                    desc, _MODEL_DEADLINE_S)
-        raise ModelCallTimeout(f"model call to {desc} exceeded {_MODEL_DEADLINE_S}s deadline") from exc
+        log.warning("model call to %s exceeded the %.0fs total wall-clock deadline; cancelled", desc, deadline)
+        raise ModelCallTimeout(f"model call to {desc} exceeded {deadline}s deadline "
+                               f"(raise RAG_MODEL_DEADLINE_S or RAG_STRUCTURED_TIMEOUT_S)") from exc
 
 
 async def _ainvoke_bounded(runnable: Runnable, x: Any, model_id: str, label: str | None = None) -> Any:

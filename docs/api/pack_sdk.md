@@ -70,7 +70,7 @@ Self-loop is rejected here only at the ref level (the same mention as both sourc
 
 ### `ModelCallTimeout`
 
-A logical model call exceeded the total wall-clock deadline (`_MODEL_DEADLINE_S`) and was truly cancelled (socket torn down). TERMINAL: a stalling peer is not a transient worth re-hitting, so this is deliberately NOT in `_STRUCTURED_RETRY_ON` and must be kept out of any pregel `retry_on` -- the caller degrades or dead-letters on it. It is the async fix a per-socket-op timeout cannot be (engine issue 0003 / ADR-0057).
+A logical model call exceeded the total wall-clock deadline (`model_deadline_s()`) and was truly cancelled (socket torn down). TERMINAL: a stalling peer is not a transient worth re-hitting, so this is deliberately NOT in `_STRUCTURED_RETRY_ON` and must be kept out of any pregel `retry_on` -- the caller degrades or dead-letters on it. It is the async fix a per-socket-op timeout cannot be (engine issue 0003 / ADR-0057).
 
 ### `TransientExtraction`
 
@@ -310,7 +310,7 @@ A structured-output runnable for `model_id`, driven by its profile.
 
 The profile supplies the method and the optional structured-only `extra_body`; the `extra_body` is bound to this forced structured call only. This is the sole path to `with_structured_output`. The runnable is wrapped in a SINGLE bounded retry layer (`_with_bounded_retry`); the SDK's own retry loop is disabled here (max_retries=0) so the two do not stack into a ~36 min worst case (engine issue 0003 / ADR-0056).
 
-`temperature` defaults to 0 (deterministic-intent); a caller doing best-of-N self-consistency raises it to sample GENUINELY diverse structured completions (the base client's temperature, not a provider flag). `max_tokens` caps the completion length -- a safety net against a model that runs away to the context limit under a schema constraint (observed on self-hosted Gemma-4 with a mis-set chat template).
+`temperature` defaults to 0 (deterministic-intent); a caller doing best-of-N self-consistency raises it to sample GENUINELY diverse structured completions (the base client's temperature, not a provider flag). `max_tokens` caps the completion length -- a safety net against a model that runs away to the context limit under a schema constraint (observed on self-hosted Gemma-4 with a mis-set chat template). Left None, the profile's `structured_max_tokens` applies (PS-22: a thinking model's reasoning-loop guard), and a prompt too long to leave room for that cap is sent again without it.
 
 ### `build_tag_structured(model_id: 'str', schema: 'type[BaseModel]', *, include_raw: 'bool' = False, temperature: 'float' = 0.0, max_tokens: 'int | None' = 2048, retries: 'int' = 1, label: 'str | None' = None, fields: 'set[str] | None' = None) -> '_TagStructuredRunnable'`
 
@@ -331,6 +331,8 @@ ADR-0100: resolve a model STRING to its access (backend + base_url + key + the i
 ### `model_deadline_s() -> 'float'`
 
 PS-8b: the total wall-clock deadline (seconds) for one logical model call, across its bounded retries -- the value every seam call runs under (read at call time, so a test or configuration override is honoured).
+
+PS-22: `RAG_MODEL_DEADLINE_S` when set; otherwise long enough for every try at the per-try timeout plus the largest backoffs between them, and never under 180 s.
 
 ### `call_description(model_id: 'str', label: 'str | None') -> 'str'`
 

@@ -98,7 +98,9 @@ the OFFICIAL prebuilt vLLM image** rather than pip-building vLLM:
    reasoning calls take ~50–60 s; the seam's default 60 s timeout kills the ones just over the line → **retry pileup →
    requests pile past `max_inputs` → instant `APIConnectionError` (0.0 s) cascade**. FIX: the seam reads
    `RAG_STRUCTURED_TIMEOUT_S` (default 60) — raise it (e.g. `150`) for reasoning-ON bulk work. Server logs confirm the
-   calls actually complete 200 OK (~50 s); it was the client giving up.
+   calls actually complete 200 OK (~50 s); it was the client giving up. The total per call (all tries) follows it;
+   `RAG_MODEL_DEADLINE_S` overrides that (ADR-0133). Reasoning loops end at the profile's 8,192-token structured cap,
+   not at the deadline; keep temperature 0 (Qwen's recommended sampling did not remove them).
 3. **Pick client concurrency empirically, below the ceiling.** 16 was stable; 20 (== `max-num-seqs`) sat at the exact
    ceiling and risked queueing. `Running: N, Waiting: 0` + zero cancellations = healthy.
 4. **Reasoning ON vs OFF for bulk classification:** reasoning-OFF is ~30× faster but **changes the labels**

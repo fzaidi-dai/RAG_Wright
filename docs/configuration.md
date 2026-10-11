@@ -206,7 +206,14 @@ model the workspace resolves. It cannot see your other parallel runs: keep their
 - **Cost.** An A100 bills while a container runs. `stop_model_server("acme-qwen")` removes the app entirely, and its
   snapshots with it; deploy again to bring it back (and pay the snapshot-building boots again).
 - **Timeouts.** Reasoning-on structured calls under full load can take about a minute; raise
-  `RAG_STRUCTURED_TIMEOUT_S` (default 60) for bulk work, or calls time out and retry.
+  `RAG_STRUCTURED_TIMEOUT_S` (default 60) for bulk work, or calls time out and retry. The total time for one call,
+  across its retries, follows that setting (three tries plus backoff, never under 180 s); set
+  `RAG_MODEL_DEADLINE_S` to choose it yourself. A call that runs past it raises `ModelCallTimeout`: count it as a
+  failed call, not as an answer.
+- **Reasoning loops.** A thinking model now and then reasons in circles. Its profile caps a structured call's
+  output (`ModelProfile.structured_max_tokens`, 8,192 on the thinking Qwen profiles), so a loop ends as a failed
+  parse that the seam retries; a prompt too long to leave room for the cap is sent again without it. A caller's
+  own `max_tokens` takes precedence. Keep temperature 0: Qwen's recommended sampling did not remove loops (ADR-0133).
 - **Process-wide.** A registered server model id is known to the whole process, like every model profile; after a
   restart, call `amodel_server` again.
 
@@ -232,6 +239,7 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `CLASSIFY_CONCURRENCY` / `CLAUSE_CONCURRENCY` / `RAG_INGEST_AFFILIATIONS` / `RAG_FUNCTION_CLASSIFIER` | contracts-pack ingest knobs (mirror `ContractIngestOptions`) |
 | `RAG_INGEST_LIST_MODEL` / `RAG_INGEST_CLAUSE_SAMPLES` / `RAG_INGEST_CLAUSE_EXTRACTOR` | read only by the contracts pack's legacy tag-parse clause extractor, which the default pipeline does not use (it is classifier-first); its second list model runs only when `RAG_INGEST_LIST_MODEL` names one (no default model) |
 | `RAG_STRUCTURED_TIMEOUT_S` / `RAG_JEV_TIMEOUT_S` / `RAG_JUDGE_TIMEOUT_S` / `RAG_RELEVANCE_TIMEOUT_S` | call timeouts (raise for reasoning-ON bulk work) |
+| `RAG_MODEL_DEADLINE_S` | total wall-clock limit for one model call across its retries (default: follows `RAG_STRUCTURED_TIMEOUT_S`, never under 180 s) |
 | `RAG_SPACY_MODEL` | the spaCy model name for the optional NER extra |
 | `RAG_MODELS_DIR` | the models root every trained classifier loads its weights from (default: the engine checkout's `data/models` when it exists, else `./data/models`); fill it with `scripts/fetch_reference_models.py` for the reference pack |
 | `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs (`RAG_SETFIT_CLAUSE_DIR` overrides `<models root>/setfit_clause`) |

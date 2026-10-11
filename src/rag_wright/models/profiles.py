@@ -50,6 +50,10 @@ class ModelProfile(BaseModel):
     # `structured_extra_body` does not reach here (it binds only to `with_structured_output`), so this is a separate
     # slot; it also lets the free-text extraction use a DIFFERENT reasoning setting than the forced-structured judge.
     text_extra_body: Optional[dict[str, Any]] = Field(default=None)
+    # PS-22: the default `max_tokens` for a forced structured call (a caller's own `max_tokens` wins). A thinking
+    # model can loop in its reasoning; the cap ends that at `finish_reason=length`, a parse failure the seam's
+    # bounded retry handles, instead of running into the wall-clock deadline. None = no cap.
+    structured_max_tokens: Optional[int] = None
     # Applied by the seam to the BASE client (every call to this model). Carries request-level provider
     # routing (e.g. OpenRouter `{"provider": {"sort": "throughput"}}`) -- a provider flag, so it lives in
     # config + a dated ADR, never in node/agent code (ADR-0027). Grounded: `extra_body` is a real
@@ -97,6 +101,9 @@ DEFAULT_SUMMARIZATION = "deepseek/deepseek-v4-flash"  # the smaller/faster DeepS
 # Granite -- Gemma/DeepSeek are DROPPED from the product default but stay REGISTERED in `PROFILES` below, so a
 # dev run can still select any of them via the `RAG_MODEL_*` / `RAG_MODEL_ALL` env overrides. The DEFAULT_*
 # constants above are kept as those foundation-model profile keys + documented dev-override values.
+# PS-22: the structured-output cap for a thinking model. Correct ContractNLI verdicts took up to ~7k tokens; a
+# looping one runs on until stopped (2026-10-11 sampling A/B). Leaves room for the answer after the reasoning.
+_THINKING_CAP = 8192
 _PRODUCT_LLM = "qwen3.8-27b-modal-or"  # engine-wide default (ADR-0100): Qwen via OpenRouter for now
 
 _ROLE_ENV: dict[ModelRole, tuple[str, str]] = {
@@ -184,7 +191,7 @@ PROFILES: dict[str, ModelProfile] = {
     # validated on Modal (ADR-0110).
     "qwen/qwen3.8-27b": ModelProfile(
         model_id="qwen/qwen3.8-27b",
-        structured_extra_body={"reasoning": {"enabled": True}},
+        structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
     ),
     # ADR-0100: backend-PINNED strings for the same Qwen3.8-27B -- pick the string, get the backend. `-or` routes
@@ -193,7 +200,7 @@ PROFILES: dict[str, ModelProfile] = {
     # OpenRouter `provider` routing). The product uses one string; mixing backends per stage is just two strings.
     "qwen3.8-27b-or": ModelProfile(
         model_id="qwen3.8-27b-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
-        structured_extra_body={"reasoning": {"enabled": True}},
+        structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
     ),
     "qwen3.8-27b-modal": ModelProfile(
@@ -201,6 +208,7 @@ PROFILES: dict[str, ModelProfile] = {
         # vLLM controls Qwen3 reasoning via chat_template_kwargs (enable_thinking), not OpenRouter's reasoning
         # field; base_url/key come from VLLM_BASE_URL/VLLM_API_KEY (override with base_url_env for a 2nd server).
         structured_extra_body={"chat_template_kwargs": {"enable_thinking": True}},
+        structured_max_tokens=_THINKING_CAP,
         text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
     ),
     # Reasoning-OFF variant of `qwen3.8-27b-modal` for BULK closed-vocab classification (e.g. silver mining): the
@@ -233,7 +241,7 @@ PROFILES: dict[str, ModelProfile] = {
     # follows -- no other change. Carries the OpenRouter Qwen flags (reasoning on judge / off free-text).
     "qwen3.8-27b-modal-or": ModelProfile(
         model_id="qwen3.8-27b-modal-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
-        structured_extra_body={"reasoning": {"enabled": True}},
+        structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
