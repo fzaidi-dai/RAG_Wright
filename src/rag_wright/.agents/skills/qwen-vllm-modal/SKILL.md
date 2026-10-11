@@ -18,7 +18,7 @@ This skill is the operational checklist that ties them together.
 
 ## The LOCKED production config (ADR-0110) — do not re-litigate
 **Config B: `Qwen/Qwen3.8-27B-FP8` weights + `--kv-cache-dtype fp8`, on 1× A100-80GB, TP=1, `--max-model-len 16384`, `--gpu-memory-utilization 0.95`.**
-- Config B (FP8 weights) is the **locked deploy** — 52.71× concurrency @16K (ADR-0110 rounds it to 53×), ~23% higher throughput, ~27 GB weights;
+- Config B (FP8 weights) is the **locked deploy** — 52.71× concurrency @16K (ADR-0110 rounds it to 53×), ~23% higher throughput, ~31 GB weights (30.9 GB on disk, 28.9 GiB in VRAM);
   accuracy measured **identical to bf16** on the real compliance workload (no FP8 penalty).
 - **Config A** (`Qwen/Qwen3.8-27B`, **bf16 weights** + FP8 KV) is the **documented FALLBACK only** — 25.47× concurrency,
   "zero weight-loss" — use it *only* if a later clean check ever shows an FP8-weight regression. Don't default to A.

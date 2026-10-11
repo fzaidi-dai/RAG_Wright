@@ -88,7 +88,7 @@ class ModelServerStatus:
     """What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is
     billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while
     it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips
-    the ~27 GB download (an empty `modal app list` says nothing about this)."""
+    the ~31 GB download (an empty `modal app list` says nothing about this)."""
 
     name: str
     deployed: bool

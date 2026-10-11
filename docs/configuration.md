@@ -175,7 +175,7 @@ so the GPU is billing), `healthy` and `weights_cached`. It asks `/health` only o
 request to a scaled-down server starts a cold start. `weights_cached` is what decides a deploy's cost: the weights
 live in the Modal Volume `rw-hf-cache` (the vLLM compile cache in `rw-vllm-serve-compile-cache`), and stay there when
 the app is stopped, so an empty `modal app list` does not mean a cold cache. With the weights cached, a deploy is a
-short image build and a cold start; without them, it also downloads about 27 GB. `astop_model_server` is
+short image build and a cold start; without them, it also downloads about 31 GB. `astop_model_server` is
 `stop_model_server` for async code.
 
 **Concurrency: the engine's fan-out multiplies with yours.** `max_num_seqs` is the most requests the server batches

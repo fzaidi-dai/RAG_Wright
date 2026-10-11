@@ -45,6 +45,31 @@ Plausible target after the snapshot is built: **~10–20s cold restart**, well u
 - **Fallback if the alpha proves unstable:** the §4 supporting trims alone do NOT reach sub-60s (per the reframe), so the fallback for a hard sub-60s SLA reverts to keep-one-warm (the ruled-out cost) until the snapshot path matures.
 - No engine code changes here; this is deployment/serving infrastructure for the product substrate (ADR-0039). This ADR sets direction and diagnosis; a follow-up will record the prototype's measured result.
 
+## Addendum (2026-10-11): `runai_streamer` measured on Modal, not adopted
+
+The §4 trim `--load-format runai_streamer` was measured on the locked Config B (ADR-0110: `Qwen/Qwen3.8-27B-FP8`,
+fp8 KV, 1×A100-80GB, TP=1, 16K) with the weights cached on the `rw-hf-cache` Volume and the AOT compile cache hit in
+every run. It is already in the `vllm/vllm-openai` image (vLLM's Dockerfile installs `runai-model-streamer`), and it
+streams from the Hugging Face cache when given a repo id. Seven cold starts, timed from container start:
+
+| Loader | Weight read (s) | "Model loading" (s) | Container start → ready (s) |
+|---|---|---|---|
+| default | 40.6 / 26.5 / 11.6 | 46.8 / 36.8 / 17.0 | 146 / 245 / 114 |
+| `runai_streamer`, concurrency 16 | 30 / 31 / 56 | 36.9 / 61.9 / 64.8 | 154 / 167 / 185 |
+| `runai_streamer`, concurrency 32 | 45 | 57.0 | 218 |
+
+**Decision: keep the default loader.** Means: weight read 26 s (default) against 39 s (streamer at 16); start to
+ready 168 s against 169 s. On a Modal Volume the read rate swings 0.76 to 2.7 GB/s with the default loader alone,
+depending on whether the files are already cached, which is larger than any loader effect; the streamer's
+published gains (2.4× on local NVMe, up to 6× from object storage) do not transfer. The streamer's "Model loading"
+also carries ~30 s beyond its read. The weight read is 10-30% of a cold start; the remainder is process start
+(~70-120 s before the load begins) and engine init (~30-50 s), which confirms the reframe above: the cold-start
+work is the snapshot path, not the loader.
+
+Two corrections to figures above. Config B's weights are **30.9 GB on disk (28.9 GiB in VRAM)**, not ~27 GB. The
+current cold start with weights and compile cache warm is **~2-4 minutes** (114-245 s here), not the ~481 s
+measured for the bf16 model in September.
+
 ### Sources
 - Modal GPU snapshots (alpha, what's captured): https://modal.com/blog/gpu-mem-snapshots ; caveats (multi-GPU incompat, storage-bound caveat, torch.compile): https://modal.com/docs/guide/memory-snapshots ; vLLM example: https://modal.com/docs/examples/lfm_snapshot , https://modal.com/docs/examples/gpu_snapshot
 - Cold-start is CPU-bound; Tensorizer fastest: https://arxiv.org/abs/2606.07362 ; 35B breakdown: https://route179.dev/2026/06/30/optimizing-vllm-cold-start-with-model-streaming-and-compile-caching/
@@ -52,3 +77,4 @@ Plausible target after the snapshot is built: **~10–20s cold restart**, well u
 - vLLM loaders: runai_streamer https://docs.vllm.ai/en/stable/models/extensions/runai_model_streamer/ ; Tensorizer https://docs.vllm.ai/en/v0.10.1/models/extensions/tensorizer.html
 - vLLM CUDA graphs / capture cost: https://docs.vllm.ai/en/stable/design/cuda_graphs/
 - Modal Volume 1–2 GB/s, keep-warm knobs: https://modal.com/docs/guide/high-performance-llm-inference , https://modal.com/docs/guide/cold-start , https://modal.com/docs/guide/scale
+- vLLM loaders (cont.): runai_streamer source https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/model_loader/runai_streamer_loader.py ; route179 35B breakdown (2.4× on NVMe) above

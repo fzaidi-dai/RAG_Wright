@@ -66,7 +66,7 @@ async def ask_one_question(server: ModelServer) -> None:
 async def deploy() -> None:
     before = await amodel_server_status(SPEC)  # looks only: deploys nothing, wakes nothing
     print(f"before: deployed={before.deployed} running={before.running} weights_cached={before.weights_cached} "
-          f"({'a short image build and a cold start' if before.weights_cached else 'plus a ~27 GB weight download'})")
+          f"({'a short image build and a cold start' if before.weights_cached else 'plus a ~31 GB weight download'})")
     start = time.monotonic()
     try:
         server = await adeploy_model_server(SPEC, poll_s=20)  # deploys, waits for /health, registers the model id
