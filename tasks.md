@@ -10,7 +10,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > ADR-0130); 0.5.1 adds the runnable `examples/model_server.py`; 0.6.0 adds PS-21 (RuleWright's model-server review:
 > no default server key (breaking), the concurrency ceiling, `amodel_server_status`, ADR-0131). PS-20 (cold start: the
 > server restores from a Modal GPU snapshot behind a public-route gate, ADR-0132) and PS-22 (the model-call deadline follows the timeout; a profile token cap on
-> thinking models' structured calls, ADR-0133) are released in 0.7.0.
+> thinking models' structured calls, ADR-0133) are released in 0.7.0. Next engine workstream: evals as a capability
+> (`docs/specs/evals/plan.md`, EV-*, target 0.8.0, TexWright first); plan approved, EV-0 waits for the user's go-ahead.
 > Ledger:
 > **`docs/specs/public-surface/plan.md`** (PS-1..PS-21, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
 > G15-G21 closed (`pack_store`, bytes parsing, `ModelRole`, metering/tracing, answers + relevance on the API,
