@@ -131,10 +131,16 @@ async def test_the_url_lookup_uses_modals_async_interface(monkeypatch):
         async def aio(self):
             return URL + "/"
 
-    fake = types.SimpleNamespace(Function=types.SimpleNamespace(
-        from_name=lambda name, fn: types.SimpleNamespace(get_web_url=WebUrl())))
+    looked_up = []
+
+    def from_name(name, cls):
+        looked_up.append((name, cls))
+        return lambda: types.SimpleNamespace(serve=types.SimpleNamespace(get_web_url=WebUrl()))
+
+    fake = types.SimpleNamespace(Cls=types.SimpleNamespace(from_name=from_name))
     monkeypatch.setitem(sys.modules, "modal", fake)
     assert await ms._web_url("acme-qwen") == URL
+    assert looked_up == [("acme-qwen", "QwenServer")]  # PS-20: the server is a class (the snapshot needs one)
 
 
 def test_stop_stops_the_modal_app(modal_fake):
@@ -201,7 +207,8 @@ async def test_reconnecting_to_an_undeployed_server_says_what_to_do(monkeypatch)
         async def aio(self):
             raise NotFoundError("Lookup failed for Function 'serve' from the 'acme-qwen' app")
 
-    monkeypatch.setattr(modal.Function, "from_name", lambda name, fn: types.SimpleNamespace(get_web_url=WebUrl()))
+    monkeypatch.setattr(modal.Cls, "from_name", lambda name, cls: lambda: types.SimpleNamespace(
+        serve=types.SimpleNamespace(get_web_url=WebUrl())))
     with pytest.raises(ModelServerNotDeployed, match="acme-qwen.*adeploy_model_server"):
         await amodel_server(ModelServerSpec(name="acme-qwen", max_num_seqs=32))
     assert issubclass(ModelServerNotDeployed, RuntimeError)
@@ -270,3 +277,67 @@ async def test_astop_stops_the_modal_app(modal_fake):
 
     await astop_model_server("acme-qwen")
     assert modal_fake["cli"][0][0] == ["app", "stop", "acme-qwen", "--yes"]
+
+
+# PS-20: cold start. The server is a class restored from a Modal GPU memory snapshot (vLLM asleep, weights in host
+# RAM), behind a gate that keeps vLLM's unauthenticated dev routes off the public URL.
+
+GATE = ms.QWEN_MODAL_SCRIPT.parent / "rw_gate.py"
+
+
+def _gate():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("rw_gate", GATE)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+async def test_the_container_count_is_read_from_the_server_class(monkeypatch):
+    """Status reads Modal's container count for the server class (no request reaches the server)."""
+    import sys
+
+    asked = []
+
+    class Stats:
+        async def aio(self):
+            return types.SimpleNamespace(num_total_runners=1)
+
+    def from_name(app, cls):
+        asked.append((app, cls))
+        return lambda: types.SimpleNamespace(serve=types.SimpleNamespace(get_current_stats=Stats()))
+
+    # Modal's public Function.from_name refuses a class's "<Class>.*" name; the method handle carries its stats
+    monkeypatch.setitem(sys.modules, "modal", types.SimpleNamespace(Cls=types.SimpleNamespace(from_name=from_name)))
+    assert await ms._runners("acme-qwen") == 1 and asked == [("acme-qwen", "QwenServer")]
+
+
+def test_the_script_defines_the_class_the_engine_looks_up_and_keeps_the_url():
+    text = ms.QWEN_MODAL_SCRIPT.read_text()
+    assert "class QwenServer" in text
+    assert 'label=f"{APP_NAME}-serve"' in text  # the URL stays https://<workspace>--<app>-serve.modal.run
+
+
+def test_the_script_snapshots_a_sleeping_vllm():
+    text = ms.QWEN_MODAL_SCRIPT.read_text()
+    assert "SNAPSHOT = TP == 1" in text  # Modal: GPU snapshots do not work across several GPUs
+    assert 'enable_memory_snapshot=SNAPSHOT' in text and '{"enable_gpu_snapshot": SNAPSHOT}' in text
+    assert "--enable-sleep-mode" in text and "@modal.enter(snap=True)" in text and "@modal.enter(snap=False)" in text
+
+
+def test_vllms_unauthenticated_routes_never_reach_the_public_url():
+    """Sleep mode needs VLLM_SERVER_DEV_MODE, which adds /sleep, /wake_up and /collective_rpc; vLLM's --api-key guards
+    only /v1, /v2, /inference and /cohere. So vLLM listens on loopback and the public port is the gate."""
+    text = ms.QWEN_MODAL_SCRIPT.read_text()
+    assert '"--host", "127.0.0.1"' in text and '"0.0.0.0"' not in text
+    allowed = _gate().allowed
+    for path in ("/health", "/v1/chat/completions", "/v1/models", "/v1/completions"):
+        assert allowed(path), path
+    for path in ("/sleep", "/wake_up", "/is_sleeping", "/collective_rpc", "/reset_prefix_cache", "/server_info",
+                 "/metrics", "/", "/v1", "/v1x/models", "/tokenize"):
+        assert not allowed(path), path
+
+
+def test_the_gate_ships_beside_the_script():
+    assert GATE.is_file() and "rw_gate.py" in ms.QWEN_MODAL_SCRIPT.read_text()

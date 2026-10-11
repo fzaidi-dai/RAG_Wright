@@ -23,7 +23,8 @@ from rag_wright.models.profiles import PROFILES, register_model_profile
 QWEN_MODAL_SCRIPT = (Path(__file__).resolve().parents[1] / ".agents" / "skills" / "qwen-vllm-modal" / "scripts"
                      / "modal_qwen3_vllm_server.py")
 _TEMPLATE_PROFILE = "qwen3.8-27b-modal"
-_SERVE_FUNCTION = "serve"  # the web function in the script; its URL is the server's root
+_SERVER_CLASS = "QwenServer"  # the script's server class (a class so Modal can snapshot it, PS-20)
+_SERVE_METHOD = "serve"  # its web method; that URL is the server's root
 WEIGHTS_VOLUME = "rw-hf-cache"  # the Modal Volume the script keeps the Hugging Face weights in (HF cache layout)
 
 
@@ -107,7 +108,8 @@ async def _web_url(name: str) -> str:
     from modal.exception import NotFoundError
 
     try:
-        url = await modal.Function.from_name(name, _SERVE_FUNCTION).get_web_url.aio()  # async form: called in a loop
+        server = modal.Cls.from_name(name, _SERVER_CLASS)()
+        url = await getattr(server, _SERVE_METHOD).get_web_url.aio()  # async form: called in a loop
     except NotFoundError as exc:
         raise ModelServerNotDeployed(name) from exc
     if not url:
@@ -119,7 +121,9 @@ async def _runners(name: str) -> int:
     """How many containers the server has up, from Modal's stats (no request reaches the server, so nothing wakes)."""
     import modal
 
-    stats = await modal.Function.from_name(name, _SERVE_FUNCTION).get_current_stats.aio()
+    server = modal.Cls.from_name(name, _SERVER_CLASS)()
+    # a method's handle is bound to the class's backing function, so these are the class's containers
+    stats = await getattr(server, _SERVE_METHOD).get_current_stats.aio()
     return stats.num_total_runners
 
 
@@ -165,8 +169,9 @@ def _register(spec: ModelServerSpec, root: str) -> ModelServer:
 
 async def await_model_server(server: ModelServer, *, timeout_s: float = 1500, poll_s: float = 15,
                              progress: Callable[[str], object] = print) -> ModelServer:
-    """Wait until the server answers `/health` (a cold start is about 8 minutes, ADR-0109); progress as `i/N`.
-    Raises `TimeoutError` after `timeout_s`."""
+    """Wait until the server answers `/health`; progress as `i/N`. A cold start restored from the server's snapshot
+    is ready ~13 s after its container starts; a boot that builds a snapshot (the first few, and now and then
+    another) takes 4-9 minutes (ADR-0132). Raises `TimeoutError` after `timeout_s`."""
     key = os.environ.get(server.api_key_env)
     polls = max(1, int(timeout_s // poll_s)) if poll_s else "?"
     start, i = time.monotonic(), 0
@@ -187,7 +192,8 @@ async def adeploy_model_server(spec: ModelServerSpec, *, wait: bool = True, time
     """Deploy (or redeploy) the server described by `spec` on Modal, register its model profile, and (with `wait`)
     wait for it to be ready. Returns the `ModelServer`; use `server.model_id` as the model. Raises `RuntimeError` when
     the API-key variable is unset (nothing is deployed). The server runs (and bills) until `stop_model_server`, or
-    until Modal scales it down after 10 idle minutes."""
+    until Modal scales it down after 10 idle minutes. Stopping discards the server's snapshots, so the next deploy
+    pays snapshot-building boots again (ADR-0132)."""
     key = os.environ.get(spec.api_key_env)
     if not key:
         raise RuntimeError(f"set {spec.api_key_env} to the server's API key before deploying")

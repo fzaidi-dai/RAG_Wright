@@ -70,6 +70,19 @@ Two corrections to figures above. Config B's weights are **30.9 GB on disk (28.9
 current cold start with weights and compile cache warm is **~2-4 minutes** (114-245 s here), not the ~481 s
 measured for the bf16 model in September.
 
+## Addendum (2026-10-11): where the non-snapshot cold start goes, and the outcome
+
+Timed from the server function's start in three default-loader cold starts (146 / 245 / 114 s): the API server
+process reaching its arguments 30 / 80 / 31 s; the engine process initialised 31 / 70 / 29 s later; model loading
+47 / 37 / 17 s; compile-cache load and CUDA-graph capture 31 / 45 / 31 s. The first two are imports: on a CPU
+container the API server's import takes 37 s cold and 28-29 s warm, the same with every module precompiled to
+bytecode (so not compilation). The largest single cost is transformers' `import_utils`, whose import calls
+`importlib.metadata.packages_distributions()` (it stats every file of every installed package) and reads its own
+model modules (21,413 `stat` calls in one `import transformers`). `HF_HUB_OFFLINE=1` removes the Hub lookups but
+resolves the model to a local snapshot path, which changed vLLM's compile-cache key in each container (a 73-104 s
+recompile per start), so it is not adopted. **Outcome: the snapshot path (decision 2-3 above) is adopted; see
+ADR-0132.**
+
 ### Sources
 - Modal GPU snapshots (alpha, what's captured): https://modal.com/blog/gpu-mem-snapshots ; caveats (multi-GPU incompat, storage-bound caveat, torch.compile): https://modal.com/docs/guide/memory-snapshots ; vLLM example: https://modal.com/docs/examples/lfm_snapshot , https://modal.com/docs/examples/gpu_snapshot
 - Cold-start is CPU-bound; Tensorizer fastest: https://arxiv.org/abs/2606.07362 ; 35B breakdown: https://route179.dev/2026/06/30/optimizing-vllm-cold-start-with-model-streaming-and-compile-caching/

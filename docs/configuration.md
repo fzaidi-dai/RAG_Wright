@@ -194,11 +194,17 @@ model the workspace resolves. It cannot see your other parallel runs: keep their
 
 **What to know before you rely on it.**
 
-- **Cold start.** A new or scaled-down server takes minutes to become ready (226 s in the last live run; up to about
-  8 minutes, ADR-0109). After 10 idle minutes Modal scales the container to zero (no GPU billing) but keeps the app
-  deployed; the next request waits through a cold start, so call `await_model_server` before sending traffic.
-- **Cost.** An A100 bills while a container runs. `stop_model_server("acme-qwen")` removes the app entirely; deploy
-  again to bring it back.
+- **Cold start.** After 10 idle minutes Modal scales the container to zero (no GPU billing) but keeps the app
+  deployed; the next request waits through a cold start, so call `await_model_server` before sending traffic. The
+  server is restored from a Modal GPU memory snapshot (ADR-0132): a restore is ready about 13 s after its container
+  starts (67 s end to end in the live run, including getting a container). Modal decides per container whether to
+  restore or to boot in full and build a new snapshot (4 to 9 minutes): it builds several after a deploy (four in a
+  row in the live run, one of them after a GPU preemption), and now and then another later. Redeploying a server
+  keeps its snapshots; stopping it discards them. So a scaled-down server usually answers in seconds but can make
+  a request wait minutes; where that is not acceptable, keep the server busy or warm rather than relying on the
+  snapshot.
+- **Cost.** An A100 bills while a container runs. `stop_model_server("acme-qwen")` removes the app entirely, and its
+  snapshots with it; deploy again to bring it back (and pay the snapshot-building boots again).
 - **Timeouts.** Reasoning-on structured calls under full load can take about a minute; raise
   `RAG_STRUCTURED_TIMEOUT_S` (default 60) for bulk work, or calls time out and retry.
 - **Process-wide.** A registered server model id is known to the whole process, like every model profile; after a

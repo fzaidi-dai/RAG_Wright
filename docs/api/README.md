@@ -46,7 +46,7 @@ No deployed model server has this name (never deployed, or stopped).
 
 ### `ModelServerStatus(name: 'str', deployed: 'bool', running: 'bool', healthy: 'bool', weights_cached: 'bool') -> None`
 
-What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips the ~27 GB download (an empty `modal app list` says nothing about this).
+What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips the ~31 GB download (an empty `modal app list` says nothing about this).
 
 ### `ModelRole(*values)`
 
@@ -260,7 +260,7 @@ Resolve every model role through `ws`'s `EngineConfig.models` inside the block (
 
 ### `adeploy_model_server(spec: 'ModelServerSpec', *, wait: 'bool' = True, timeout_s: 'float' = 1500, poll_s: 'float' = 15, progress: 'Callable[[str], object]' = print) -> 'ModelServer'`
 
-Deploy (or redeploy) the server described by `spec` on Modal, register its model profile, and (with `wait`) wait for it to be ready. Returns the `ModelServer`; use `server.model_id` as the model. Raises `RuntimeError` when the API-key variable is unset (nothing is deployed). The server runs (and bills) until `stop_model_server`, or until Modal scales it down after 10 idle minutes.
+Deploy (or redeploy) the server described by `spec` on Modal, register its model profile, and (with `wait`) wait for it to be ready. Returns the `ModelServer`; use `server.model_id` as the model. Raises `RuntimeError` when the API-key variable is unset (nothing is deployed). The server runs (and bills) until `stop_model_server`, or until Modal scales it down after 10 idle minutes. Stopping discards the server's snapshots, so the next deploy pays snapshot-building boots again (ADR-0132).
 
 ### `amodel_server(spec: 'ModelServerSpec') -> 'ModelServer'`
 
@@ -268,7 +268,7 @@ Reconnect to a server deployed earlier (by this process or another) without rede
 
 ### `await_model_server(server: 'ModelServer', *, timeout_s: 'float' = 1500, poll_s: 'float' = 15, progress: 'Callable[[str], object]' = print) -> 'ModelServer'`
 
-Wait until the server answers `/health` (a cold start is about 8 minutes, ADR-0109); progress as `i/N`. Raises `TimeoutError` after `timeout_s`.
+Wait until the server answers `/health`; progress as `i/N`. A cold start restored from the server's snapshot is ready ~13 s after its container starts; a boot that builds a snapshot (the first few, and now and then another) takes 4-9 minutes (ADR-0132). Raises `TimeoutError` after `timeout_s`.
 
 ### `stop_model_server(name: 'str') -> 'None'`
 

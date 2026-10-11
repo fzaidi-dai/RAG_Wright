@@ -29,8 +29,8 @@ This skill is the operational checklist that ties them together.
 **From the engine (PS-19): deploy, then use the server like any model.** `ModelServerSpec`'s defaults ARE the
 locked config below (FP8 weights + FP8 KV, one A100-80GB, TP 1, 16K, 0.95, served `Qwen/Qwen3.8-27B`, hermes +
 qwen3 parsers, image builder 2025.06); state only the concurrency target, which ADR-0110 leaves to you.
-`adeploy_model_server` runs the deploy below with those settings, waits for `/health` (with progress; a cold start is
-~8 min), and registers a model profile with the server's own endpoint, so no `VLLM_BASE_URL` is needed:
+`adeploy_model_server` runs the deploy below with those settings, waits for `/health` (with progress; a restore from
+the snapshot is seconds, a snapshot-building boot 4-9 min, see Cold start below), and registers a model profile with the server's own endpoint, so no `VLLM_BASE_URL` is needed:
 
 ```python
 from rag_wright.api import EngineConfig, ModelServerSpec, adeploy_model_server, stop_model_server
@@ -62,7 +62,7 @@ The script refuses to deploy without `VLLM_API_KEY`: Modal's web endpoint is pub
 `uv run --no-sync modal app stop rw-qwen3-modal --yes` (A100 is expensive).
 
 **The engine does NOT reach Modal by default.** Every role's default is `_PRODUCT_LLM = "qwen3.8-27b-modal-or"`,
-the same model routed through OpenRouter (the Modal cold start is unsolved). To send calls to the Modal server, set
+the same model routed through OpenRouter (a Modal cold start can still take minutes when Modal builds a snapshot). To send calls to the Modal server, set
 `RAG_MODEL_ALL=qwen3.8-27b-modal` (all roles), a per-role `RAG_MODEL_<ROLE>`, or `EngineConfig.models`. For bulk
 closed-vocab labeling, the reasoning-off profile `qwen3.8-27b-modal-nothink` exists (opt-in; see the reasoning
 caveat below). `VISION_OCR` now defaults to the product LLM too, but image inputs through the Modal vLLM server are
@@ -104,11 +104,23 @@ the OFFICIAL prebuilt vLLM image** rather than pip-building vLLM:
 4. **Reasoning ON vs OFF for bulk classification:** reasoning-OFF is ~30× faster but **changes the labels**
    (over-keeps / different distribution) — do NOT swap it in for work that must match the reasoning-teacher's gold
    (e.g. distillation silver). Keep reasoning ON when fidelity to the gold teacher matters; accept the cost.
+5. **Never expose vLLM's port directly (PS-20).** Sleep mode needs `VLLM_SERVER_DEV_MODE=1`, which adds
+   unauthenticated `/sleep`, `/wake_up` and `/collective_rpc` routes (`--api-key` guards only `/v1`, `/v2`,
+   `/inference`, `/cohere`). The script binds vLLM to 127.0.0.1:8001 and serves `rw_gate.py` on the public port,
+   forwarding only `/v1/*` and `/health`; keep `rw_gate.py` next to the script.
 
 ## Cold start & cost
-- Cold start ~440–480 s (CPU-bound engine init + a 51-graph CUDA-graph capture + first-time weight download), NOT
-  weight I/O — no load trick alone fixes it. GPU-snapshot / sleep-mode is a DEFERRED todo (the one attempt failed
-  because it was CPU-only; GPU retry not done). Run long deploys detached; poll `/health` for readiness.
+- **The server is a class restored from a Modal GPU memory snapshot (PS-20, ADR-0132).** A boot without a snapshot
+  starts vLLM with `--enable-sleep-mode`, warms it, sleeps it at level 1 (weights to host RAM, KV discarded) and
+  Modal snapshots the container; a restore only wakes vLLM (~3.5 s) and is ready ~13 s after its container starts.
+  Modal builds the first few snapshots after a deploy (4-9 min boots; 3-4 in our runs) and now and then another
+  (a new host, a preemption): budget for an occasional slow cold start. Redeploying keeps the snapshots; **`modal app
+  stop` discards them**. Snapshots need TP=1 (the script boots without one at TP>1).
+- Without a snapshot a cold start is ~2-4 min on Config B (114-245 s measured): about 30 s of imports in EACH of
+  vLLM's two processes (transformers' `importlib.metadata.packages_distributions()` stats every installed file),
+  a weight read of 12-154 s from the Volume (9P), then compile-cache load + CUDA-graph capture. Measured and NOT
+  worth adopting (ADR-0109 addendum): `--load-format runai_streamer`, precompiled `.pyc`, `HF_HUB_OFFLINE=1` (it
+  changes vLLM's compile-cache key every container, so each start recompiles). Poll `/health` for readiness.
 - **A100 is billed while up — `modal app stop <app> --yes` the moment you're done.** Verify with `modal app list`
   (state `stopped`, 0 tasks) + endpoint 404.
 - **Do NOT warm the GPU before the consumer is ready, and do NOT trust auto-scaledown to protect billing** (burned
