@@ -4,6 +4,14 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.6.0...0.7.0) (2026-10-11)
+
+
+### Features
+
+* **PS-20:** the model server cold-starts from a Modal GPU memory snapshot behind a public-route gate (ADR-0132) ([1305237](https://github.com/fzaidi-dai/RAG_Wright/commit/13052378c57f31d126d281cda49c614ca9e7207b))
+* **PS-22:** the model-call deadline follows the configured timeout; a profile caps thinking models' structured output (ADR-0133) ([d327813](https://github.com/fzaidi-dai/RAG_Wright/commit/d3278130aaae10e7af3c326e503612337e7336cb))
+
 ## [0.6.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.5.1...0.6.0) (2026-10-10)
 
 
