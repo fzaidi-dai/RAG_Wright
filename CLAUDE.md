@@ -55,10 +55,10 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-11): the public-surface workstream is COMPLETE and released as `rag-wright` 0.6.0** (ledger
+> **CURRENT STATE (2026-10-11): the public-surface workstream is COMPLETE and released as `rag-wright` 0.7.0** (ledger
 > `docs/specs/public-surface/plan.md`, ADR-0128: two public tiers, `rag_wright.api` for a product's seam and
 > `rag_wright.pack_sdk` for a pack's code, enforced by import contracts and a domain-vocabulary guard). Next:
-> RuleWright moves from `docs/specs/public-surface/rulewright-migration-0.3.0.md` then `rulewright-migration-0.4.0.md`, `-0.5.0.md` and `-0.6.0.md`; PS-R4 (the unit-labelling eval) is done, unreleased. Before it,
+> RuleWright moves from `docs/specs/public-surface/rulewright-migration-0.3.0.md` then `rulewright-migration-0.4.0.md`, `-0.5.0.md`, `-0.6.0.md` and `-0.7.0.md`; PS-R4 (the unit-labelling eval) is done, unreleased. 0.7.0 adds PS-20 (the model server cold-starts from a GPU snapshot, ADR-0132) and PS-22 (the model-call deadline follows the timeout; a token cap on thinking models' structured calls, ADR-0133). Before it,
 > the **ingestion-hooks** workstream (ADR-0124) is
 > COMPLETE and released as **`rag-wright` 0.2.0** (PyPI + GitHub tag/release `0.2.0`; release process
 > `docs/releasing.md`): the generic `build_ingestion` with hooks and domain-neutral defaults, the neutral default

@@ -3,14 +3,14 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ RESUME / NEXT UP (2026-10-11, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.6.0**
+> **⇒ RESUME / NEXT UP (2026-10-11, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.7.0**
 > (PyPI; 0.3.1 fixed 0.3.0's missing skills; 0.4.0 adds PS-R4, PS-12..PS-17: labelling eval, document metadata,
 > per-workspace models, config changes without restart, the workspaces guide, no Gemma default); 0.5.0 adds
 > PS-18 (scikit-learn 1.9.1, Laya temperatures ADR-0129) and PS-19 (deploy the Qwen/Modal server from the engine,
 > ADR-0130); 0.5.1 adds the runnable `examples/model_server.py`; 0.6.0 adds PS-21 (RuleWright's model-server review:
 > no default server key (breaking), the concurrency ceiling, `amodel_server_status`, ADR-0131). PS-20 (cold start: the
-> server restores from a Modal GPU snapshot behind a public-route gate, ADR-0132) is done, unreleased (0.7.0 on release). PS-22 (the model-call deadline follows the timeout; a
-> profile token cap on thinking models' structured calls, ADR-0133) is done, unreleased (0.7.0 on release).
+> server restores from a Modal GPU snapshot behind a public-route gate, ADR-0132) and PS-22 (the model-call deadline follows the timeout; a profile token cap on
+> thinking models' structured calls, ADR-0133) are released in 0.7.0.
 > Ledger:
 > **`docs/specs/public-surface/plan.md`** (PS-1..PS-21, PS-8a/8b/8c, PS-R1..PS-R5c; ADR-0125..0128). Delivered: gaps
 > G15-G21 closed (`pack_store`, bytes parsing, `ModelRole`, metering/tracing, answers + relevance on the API,
@@ -19,7 +19,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > reference rule chosen on 510 CUAD contracts (ADR-0126); `build_ingestion(chunk_discoverer=)`; Qwen unpinned
 > (ADR-0125); graph-extraction failures kept as PARTIAL; domain vocabulary out of the generic engine (guard + ratchet;
 > OKF retired, ADR-0127); the engine's Claude Code skills shipped in the wheel at
-> `rag_wright/.agents/skills/` (PS-10). **Next (user gates): RuleWright moves (0.3, 0.4, then 0.5 guide) from
+> `rag_wright/.agents/skills/` (PS-10). **Next (user gates): RuleWright moves (the 0.3 to 0.7 guides) from
 > `docs/specs/public-surface/rulewright-migration-0.3.0.md`; PS-R4 (unit-labelling eval in `evaluate_ingestion`) is
 > done (unreleased); TexWright.**
 >
