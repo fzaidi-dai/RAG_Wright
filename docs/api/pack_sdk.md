@@ -452,6 +452,8 @@ Build a STRUCTURE-BEARING `SourceDocument` from raw document BYTES (PDF/DOCX/HTM
 
 ING-4a: a spreadsheet's HIDDEN sheets are ingested by default; `include_hidden_sheets=False` skips them and lists them in `skipped_hidden_sheets`. The choice is part of the parse cache key.
 
+PS-26 (ADR-0136): a spreadsheet table the parse cut at its blank rows is glued back together where the piece below continues it, on a fresh parse and once on a parse cached before the fix.
+
 ### `aparsed_source_document(source_doc_id: 'str', name: 'str', data: 'bytes', *, cache_dir: 'Any', metadata: 'Optional[dict]' = None, deadline_s: 'float' = 600.0, include_hidden_sheets: 'bool' = True, tuning: 'Optional[Any]' = None) -> 'SourceDocument'`
 
 The ASYNC, deadline-bounded twin of `parsed_source_document` (ADR-0057) -- STABLE PUBLIC API. Runs the sync build (docling parse + the tiered OCR/VLM escalation, the slowest call in the pipeline) OFF the event loop (`to_thread`) under an `asyncio.timeout`, so a hand-built async ingest can parse a document into the structure-bearing `SourceDocument` the chunker needs WITHOUT reimplementing the wrapper (or blocking the loop). Same caveat as every `to_thread` bound: the deadline unblocks the CALLER; the docling worker thread finishes in the background (true cancellation would route the vision call through the async model seam).

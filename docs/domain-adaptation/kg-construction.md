@@ -112,7 +112,10 @@ the run goes on. Every node and edge type your extractor returns must be declare
   your `span_tagger` (and any `unit_representative`) with `unit_labels`, a small gold set of units, each found by a
   snippet that occurs in it alone, with its expected label (`""` for none). `labels` reports accuracy, per-label
   results and the confusion pairs, per unit; a snippet found in no unit or in several, and a unit given different
-  labels by its snippets, are reported as failures. Compare a representative rule against the first-member baseline on the same gold:
+  labels by its snippets, are reported as failures. `warnings` lists what it cannot decide and a person should
+  check, without failing the run: a text-only spreadsheet table with no formatting that may continue past a blank
+  row (the engine glues a table back across blank rows when its number or date columns or its formatting show the
+  next row is data; ADR-0136). Compare a representative rule against the first-member baseline on the same gold:
 
   ```python
   from rag_wright.api import evaluate_ingestion

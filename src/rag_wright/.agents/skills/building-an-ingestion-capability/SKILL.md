@@ -136,6 +136,11 @@ network-bound work inside it; the engine runs up to `IngestionTuning.extract_con
 
 - **Hidden sheets** are ingested by default; `IngestSource(include_hidden_sheets=False)` skips them (listed in
   `DocumentReport.skipped_hidden_sheets`).
+- **Blank rows inside a table**: the parse cuts a sheet's table at every blank row; the engine glues a piece back
+  onto the table above when its first row is data (its number or date columns agree, or it is formatted like the
+  data rather than the header), so no record is read as a header. A text-only table with no formatting cannot be
+  decided from the file: it stays apart and `evaluate_ingestion` lists it in `warnings` (format the header row, or
+  remove the blank rows).
 - **Exact cell values**: `table_rows(parse_document(...))` returns every data row as a `TableRow` (`columns`,
   `values`, `cell(name)`), read from the parse's cell grid, whole even when chunking split the table. A per-row unit
   carries its row in `Unit.table_row`, so the extractor reads cells, not re-parsed text.

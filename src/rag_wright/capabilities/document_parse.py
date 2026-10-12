@@ -116,12 +116,16 @@ def parsed_source_document(
     document to the engine; a plain-text `SourceDocument` (no `.parsed`) still uses the text fallback.
 
     ING-4a: a spreadsheet's HIDDEN sheets are ingested by default; `include_hidden_sheets=False` skips them and lists
-    them in `skipped_hidden_sheets`. The choice is part of the parse cache key."""
+    them in `skipped_hidden_sheets`. The choice is part of the parse cache key.
+
+    PS-26 (ADR-0136): a spreadsheet table the parse cut at its blank rows is glued back together where the piece
+    below continues it, on a fresh parse and once on a parse cached before the fix."""
     import hashlib
     import json
     from pathlib import Path
 
     from rag_wright.capabilities.parsing import TieredOCRParser, load_document
+    from rag_wright.capabilities.sheet_tables import merge_continuations
     from rag_wright.corpus.document_parser import document_to_text, parse_document_bytes
 
     cache_dir = Path(cache_dir)
@@ -135,13 +139,15 @@ def parsed_source_document(
     if manifest_path.exists():  # content-hash gate: parse once (restore the OCR verdict from the sidecar)
         document = load_document(parsed)
         unreadable = json.loads(ocr_sidecar.read_text()) if ocr_sidecar.exists() else []
-        if include_hidden_sheets and _include_hidden_sheets(document):
-            document.save_as_json(manifest_path)  # a cache written before ING-4a: normalize it once
+        hidden = include_hidden_sheets and _include_hidden_sheets(document)
+        if merge_continuations(document, data) or hidden:  # a cache written before ING-4a / PS-26: normalize once
+            document.save_as_json(manifest_path)
     else:  # 0009-WIRE2: tiered OCR -- capture which pages stayed unreadable even after VLM, so they surface PARTIAL
         tiered = TieredOCRParser()
         document = parse_document_bytes(name, data, parser=tiered)
         if include_hidden_sheets:
             _include_hidden_sheets(document)
+        merge_continuations(document, data)
         document.save_as_json(manifest_path)
         unreadable = list(tiered.report.unreadable_pages)
         ocr_sidecar.write_text(json.dumps(unreadable))
@@ -165,7 +171,8 @@ _MEDIA_SUFFIX = {
 
 def _table_at(document: Any, sheet: Optional[str], row: Optional[int], col: Optional[int]) -> tuple:
     """ING-6: the parsed table (self-ref) on `sheet` whose sheet-coordinate box holds cell (row, col), and the
-    0-based table row -- docling records a spreadsheet table's position in cells (`prov[0].bbox`)."""
+    0-based table row -- docling records a spreadsheet table's position in cells (`prov[0].bbox`; a table glued back
+    across blank rows carries one rectangle per block, in grid order, PS-26)."""
     if sheet is None or row is None or col is None:
         return None, None
     for group in getattr(document, "groups", []) or []:
@@ -175,9 +182,12 @@ def _table_at(document: Any, sheet: Optional[str], row: Optional[int], col: Opti
             item = ref.resolve(document)
             if getattr(item.label, "value", item.label) != "table" or not item.prov:
                 continue
-            box = item.prov[0].bbox
-            if box.l <= col < box.r and box.t <= row < box.b:
-                return item.self_ref, row - int(box.t)
+            offset = 0
+            for prov in item.prov:
+                box = prov.bbox
+                if box.l <= col < box.r and box.t <= row < box.b:
+                    return item.self_ref, offset + row - int(box.t)
+                offset += int(box.b - box.t)
     return None, None
 
 

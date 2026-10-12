@@ -19,7 +19,9 @@ It runs parse + chunk (deterministic structural boundaries, no model) + segment 
                  A snippet that finds no unit or several, and a unit whose snippets carry different labels, are
                  failures (that gold cannot be scored); accuracy is a measure, not a check.
 
-`passed` is True when every check holds; `failures` says which did not. `aevaluate_ingestion` is the same eval for a
+`passed` is True when every check holds; `failures` says which did not. `warnings` are what the eval cannot decide
+and a person should look at (PS-26: a text-only spreadsheet table, with no formatting, that may continue past a
+blank row); they do not fail the eval. `aevaluate_ingestion` is the same eval for a
 running event loop (a web backend): documents run `tuning.document_concurrency` at a time, the parse and segment steps
 off the loop, with `i/N` progress; `IngestionEvaluation.to_dict()` is the JSON-ready result (EV-1).
 """
@@ -55,7 +57,8 @@ class DocumentEvaluation:
     layout item), `bare_heading_spans`. Grouping: `headings_start_units` (share of headings that start a unit),
     `tables_whole` (share of tables kept whole or split by the record/header rule), `furniture_in_units` (page
     furniture that leaked into units), `coverage` (share of content spans in some unit), `cap_ok` (every unit within
-    `max_unit_chars`). `table_modes`: the mode chosen per table. `error`: why the document could not be evaluated."""
+    `max_unit_chars`). `table_modes`: the mode chosen per table. `unsure_continuations`: sheet tables that may
+    continue past a blank row (PS-26). `error`: why the document could not be evaluated."""
 
     doc: str
     tiles: bool = True
@@ -74,6 +77,7 @@ class DocumentEvaluation:
     table_modes: list[dict] = field(default_factory=list)
     embedded_children: int = 0
     label_results: list[dict] = field(default_factory=list)
+    unsure_continuations: list[str] = field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -101,13 +105,14 @@ class LabelEvaluation:
 @dataclass
 class IngestionEvaluation:
     """The result of `evaluate_ingestion`: per-document measures, the `failures` (each check that did not hold, by
-    document) and `unlabelled_tables` (tables no `table_labels` pattern matched). `passed` (property) is True when
-    there are no failures."""
+    document), `unlabelled_tables` (tables no `table_labels` pattern matched) and `warnings` (what a person should
+    check; never a failure). `passed` (property) is True when there are no failures."""
 
     documents: list[DocumentEvaluation] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
     unlabelled_tables: list[str] = field(default_factory=list)
     labels: Optional[LabelEvaluation] = None
+    warnings: list[str] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
@@ -178,16 +183,19 @@ def _segment_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
     from rag_wright.api.documents import parse_document_bytes
     from rag_wright.capabilities.parsing import load_document
     from rag_wright.capabilities.rlm_chunking import StructuralBoundaryDiscoverer, chunk_texts
+    from rag_wright.capabilities.sheet_tables import continuations
     from rag_wright.ingestion.layout import chunk_layouts
     from rag_wright.ingestion.segment import segment_layout
 
     name = src.display_name
     ev = DocumentEvaluation(doc=name)
-    sd = parse_document_bytes(re.sub(r"[^A-Za-z0-9._-]+", "_", Path(name).stem)[:80] or "doc", name,
-                              src.read_bytes(), cache_dir=cache, include_hidden_sheets=src.include_hidden_sheets,
-                              tuning=tuning)
+    data = src.read_bytes()
+    sd = parse_document_bytes(re.sub(r"[^A-Za-z0-9._-]+", "_", Path(name).stem)[:80] or "doc", name, data,
+                              cache_dir=cache, include_hidden_sheets=src.include_hidden_sheets, tuning=tuning)
     ev.embedded_children = len(sd.embedded)
     document = load_document(sd.parsed)
+    ev.unsure_continuations = [f"sheet {c.sheet!r} row {c.sheet_row}" for c in continuations(document, data)
+                               if c.verdict == "unsure"]
     texts = chunk_texts(document, discoverer=StructuralBoundaryDiscoverer())
     layouts = chunk_layouts(document, texts)
     segment = segmenter or (lambda cid, text, layout: segment_layout(cid, text, layout, tuning=tuning))
@@ -336,6 +344,9 @@ def _judge(out: IngestionEvaluation, tuning: IngestionTuning, table_labels: Opti
     """Turn the per-document measures into `failures`, `unlabelled_tables` and `labels`."""
     docs = out.documents
     f = out.failures
+    out.warnings += [f"{d.doc}: a table on {where} may continue past a blank row (text only, no formatting to tell "
+                     f"a header from data): check it, or format the table's header row" for d in docs
+                     for where in d.unsure_continuations]
     f += [f"{d.doc}: {d.error}" for d in docs if d.error]
     f += [f"{d.doc}: spans do not tile the text" for d in docs if not d.error and not d.tiles]
     rows = sum(d.table_rows for d in docs)
