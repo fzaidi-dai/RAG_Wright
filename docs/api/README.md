@@ -494,6 +494,18 @@ Read a gold set from an expert's CSV, XLSX or JSONL file (a path, or an `IngestS
 
 `load_gold_set` off the event loop, for a web backend.
 
+### `score_classification(gold: 'Gold', predictions: 'Mapping[str, Any]', *, floor: 'float', k: 'int' = 1, top1_floor: 'Optional[float]' = None, exclude: 'Collection[str]' = (), name: 'str' = 'classification') -> 'ScorerResult'`
+
+Scorer 1. `expected`: a label, or several (multi-label). A prediction: a label, a ranked list or `{label: score}`. Gate: every class's recall@k reaches `floor` (classes in `exclude`, e.g. a no-label class, are reported but not gated) and, with `top1_floor`, top-1 accuracy reaches it. Diagnostics: per-class recall@k, their mean, top-1 accuracy, tags per item (the precision cost of k), confusion pairs (gold vs top prediction), errors.
+
+### `score_candidate_choice(gold: 'Gold', predictions: 'Mapping[str, Any]', *, recall: 'float', precision: 'float', coverage: 'float', match: 'Callable[[Any, Any], bool]' = lenient_match, name: 'str' = 'candidate_choice') -> 'ScorerResult'`
+
+Scorer 8. `expected`: `{"values": [[key, value], ...], "ignore": [value, ...]}` (`ignore`: values the gold cannot settle, dropped from the output before scoring), or just the list of `[key, value]`. A prediction: `{"candidates": [value, ...], "values": [[key, value], ...]}`. Gate: coverage (expected values found among the candidates), value-level recall (an expected value chosen under its key) and precision (a chosen value that is expected under that key). Diagnostics: the counts, values per item, coverage misses, errors.
+
+### `lenient_match(a: 'Any', b: 'Any') -> 'bool'`
+
+Normalised (spaces collapsed, case and edge punctuation ignored), either one containing the other.
+
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 
 Every data row of every table in a parsed document (`parse_document` output), in document order.
