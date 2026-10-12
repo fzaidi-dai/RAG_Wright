@@ -160,16 +160,22 @@ _TAG_INSTRUCTIONS = (
     "id shown for that item).\n</answer>\n"
     "<citations>\nThe chunk_id of every evidence item you used, one per line; use only ids present in the "
     "evidence above.\n</citations>\n"
-    "If the evidence does not support an answer at all, output exactly <abstain/> and nothing else. If the "
-    "evidence only PARTIALLY or TANGENTIALLY addresses the question -- it mentions related material but does "
-    "not actually state the answer -- give what the evidence does support with citations, add the marker "
-    "<partial/>, and say plainly what the evidence does not establish (do NOT present a tangential mention as a "
-    "confident answer)."
+    "<support>\nfull, partial or none: how far the evidence supports your answer.\n</support>\n"
+    "Always give <support>, and judge it by meaning, not by labels: text that serves the purpose the question "
+    "asks about answers it even when the question's wording or category name never appears in it. Use full when "
+    "the evidence states the answer; cite it. Use partial when the evidence answers only part of the question, or "
+    "only indirectly: give what it supports with citations and say plainly what it does not establish (do NOT "
+    "present a tangential mention as a confident answer). Use none only when nothing in the evidence answers any "
+    "part of the question -- including when your reply would be that the evidence has no such provision, term or "
+    "statement: say so in one sentence in <answer>, cite nothing, and never present the absence as an answer."
 )
 _ANSWER_RE = re.compile(r"<answer>(.*?)</answer>", re.DOTALL | re.IGNORECASE)
 _CITE_BLOCK_RE = re.compile(r"<citations>(.*?)</citations>", re.DOTALL | re.IGNORECASE)
 _ABSTAIN_RE = re.compile(r"<abstain\s*/?>", re.IGNORECASE)
 _PARTIAL_RE = re.compile(r"<partial\s*/?>", re.IGNORECASE)
+# PS-28: the support the evidence gives, stated every time (`none` = an abstention; an optional `<abstain/>` alone
+# let the model "answer" that the evidence lacks something, which read as answered)
+_SUPPORT_RE = re.compile(r"<support>\s*(full|partial|none)\s*</support>", re.IGNORECASE)
 # an inline citation: [<contract_id>:<index>:<hex hash>]; contract_id is delimiter-safe (no brackets).
 _INLINE_CITE_RE = re.compile(r"\[([^\[\]]+:\d+:[0-9a-fA-F]{8,})\]")
 
@@ -178,7 +184,9 @@ def parse_tagged_answer(text: str) -> GeneratedAnswer:
     """Parse a free-text tagged response into a GeneratedAnswer (Pydantic then validates the contract; the
     capability's _finalize drops any citation not in the evidence). Tolerant: <answer> tag -> its body; else an
     <abstain/> marker -> abstain; else the whole text is the answer. Citations come from the <citations> block
-    AND the inline [chunk_id]s in the answer body (deduped), so a missing block still yields citations."""
+    AND the inline [chunk_id]s in the answer body (deduped), so a missing block still yields citations.
+    PS-28: `<support>none</support>` is an abstention that keeps the model's sentence as its reason; `partial` /
+    `full` set the kind. A response without the tag reads as before (`<partial/>`, else answered)."""
     t = text.strip()
     if not t:
         return _abstain()
@@ -188,7 +196,7 @@ def parse_tagged_answer(text: str) -> GeneratedAnswer:
     elif _ABSTAIN_RE.search(t):
         return _abstain()
     else:
-        answer = _PARTIAL_RE.sub("", t).strip()  # no tags -> prose (with inline [chunk_id]s); drop any marker
+        answer = _SUPPORT_RE.sub("", _PARTIAL_RE.sub("", t)).strip()  # no tags -> prose; drop any marker
     if not answer:
         return _abstain()
     citations: list[str] = []
@@ -198,7 +206,13 @@ def parse_tagged_answer(text: str) -> GeneratedAnswer:
     for cid in _INLINE_CITE_RE.findall(answer):  # supplement with inline ids (dedup, order-preserving)
         if cid not in citations:
             citations.append(cid)
-    kind = AnswerKind.PARTIAL if _PARTIAL_RE.search(t) else AnswerKind.ANSWERED  # a flagged partial/hedge
+    support = _SUPPORT_RE.search(t)
+    if support is not None and support.group(1).lower() == "none":
+        return _abstain(answer)  # the evidence does not contain it: an abstention, with the model's reason
+    if support is not None:
+        kind = AnswerKind.PARTIAL if support.group(1).lower() == "partial" else AnswerKind.ANSWERED
+    else:
+        kind = AnswerKind.PARTIAL if _PARTIAL_RE.search(t) else AnswerKind.ANSWERED  # a flagged partial/hedge
     return GeneratedAnswer(answer=answer, citations=citations, answer_kind=kind)
 
 
@@ -294,6 +308,7 @@ _PROSE_ANNOTATION_RES = [
     # reach the reader, so it lives here explicitly. Placed before the whitespace/punctuation passes so an inline
     # marker's orphaned space/comma (issue 0022) is tidied after removal.
     _PARTIAL_RE,
+    _SUPPORT_RE,
 ]
 
 
@@ -327,8 +342,8 @@ def _finalize(raw: GeneratedAnswer, evidence: list[EvidenceItem]) -> GeneratedAn
     an answer left with no valid citation is coerced to an abstention (no claim without a citation, FR-Q.6);
     and the answer prose is scrubbed of internal annotations/ids (issue 0001) -- if that leaves no readable
     prose, abstain rather than return an empty answer."""
-    if raw.abstained:
-        return _abstain(raw.answer or _ABSTENTION)
+    if raw.abstained:  # its reason, scrubbed like any prose the reader sees (PS-28)
+        return _abstain(_scrub_prose(raw.answer, evidence) or _ABSTENTION)
     valid_ids = {item.chunk_id for item in evidence}
     citations = [chunk_id for chunk_id in raw.citations if chunk_id in valid_ids]  # drop fabricated
     if not citations:

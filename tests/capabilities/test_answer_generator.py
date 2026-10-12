@@ -519,3 +519,42 @@ def test_finalize_propagates_partial_and_coerces_uncited_partial_to_abstain():
     raw2 = GeneratedAnswer(answer="related [Y:9:ffff0000a]", citations=["Y:9:ffff0000a"],
                            abstained=False, answer_kind=AnswerKind.PARTIAL)
     assert _finalize(raw2, ev).answer_kind is AnswerKind.ABSTAINED
+
+
+# --- PS-28: the support the evidence gives is stated every time; "none" is an abstention ------------------------------
+
+# a real output from the EV-3d live check (a question asked of a contract that lacks the clause), with the tag
+_NOT_THERE = ("<answer>\nThe provided evidence does not contain any provisions regarding a \"Minimum Commitment\" "
+              f"[{_C1}].\n</answer>\n<citations>\n{_C1}\n</citations>\n")
+
+
+def test_support_none_is_an_abstention_that_keeps_its_reason():
+    from rag_wright.capabilities.answer_generator import AnswerKind, _finalize, parse_tagged_answer
+
+    raw = parse_tagged_answer(_NOT_THERE + "<support>none</support>")
+    assert raw.abstained and raw.answer_kind is AnswerKind.ABSTAINED and raw.citations == []
+    assert "does not contain" in raw.answer  # why it abstained, for the reader
+    final = _finalize(raw, [EvidenceItem(chunk_id=_C1, text="Site responsibilities and pricing.")])
+    assert final.abstained and "does not contain" in final.answer and _C1 not in final.answer  # ids scrubbed
+
+
+def test_support_partial_and_full_set_the_kind():
+    from rag_wright.capabilities.answer_generator import AnswerKind, parse_tagged_answer
+
+    body = f"<answer>Capped at fees [{_C1}].</answer><citations>{_C1}</citations>"
+    assert parse_tagged_answer(body + "<support>partial</support>").answer_kind is AnswerKind.PARTIAL
+    assert parse_tagged_answer(body + "<support> Full </support>").answer_kind is AnswerKind.ANSWERED
+
+
+def test_a_response_without_the_support_tag_parses_as_before():
+    from rag_wright.capabilities.answer_generator import AnswerKind, parse_tagged_answer
+
+    assert parse_tagged_answer(_NOT_THERE).answer_kind is AnswerKind.ANSWERED  # older outputs keep their meaning
+    assert parse_tagged_answer(_NOT_THERE + "<partial/>").answer_kind is AnswerKind.PARTIAL
+
+
+def test_the_instructions_require_the_support_tag_and_say_what_none_covers():
+    from rag_wright.capabilities.answer_generator import _TAG_INSTRUCTIONS
+
+    assert "<support>" in _TAG_INSTRUCTIONS and "none" in _TAG_INSTRUCTIONS
+    assert "no such provision" in _TAG_INSTRUCTIONS

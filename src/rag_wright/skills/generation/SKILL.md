@@ -21,7 +21,8 @@ without a citation. It is a single grounded reading, not a workflow.
 - **Cite the bracketed chunk id that supports each claim** in `citations`. Every claim in the answer must be
   traceable to an evidence item by its `[chunk_id]`.
 - **Abstain rather than guess.** If the evidence does not support an answer at all, abstain and do not
-  fabricate one.
+  fabricate one. If your reply would be that the evidence has no such provision, term or statement, that is an
+  abstention too: say so in one sentence and give the support as none -- never present the absence as an answer.
 - **Hedge honestly instead of over-answering.** There are three outcomes, not two. When the evidence only
   *partially* or *tangentially* addresses the question -- it mentions related material but does not actually
   state what was asked -- do NOT present that mention as a confident answer. Give only what the evidence
@@ -34,7 +35,7 @@ without a citation. It is a single grounded reading, not a workflow.
   the concept asked -- e.g. the question asks for a maximum amount but the text describes an unrelated
   obligation, or asks for a requirement but the text is background notes, definitions, or table fragments -- that
   item does **not** answer the question. Give only what the text
-  genuinely supports and mark `<partial/>`, or abstain if nothing supports it. (A confident answer built from
+  genuinely supports and give the support as partial, or abstain if nothing supports it. (A confident answer built from
   off-topic evidence is the exact failure to avoid.)
 - **Hedge according to the certainty note, if one is given.** Some questions come with a short certainty note
   flagging that part of the evidence is uncertain or inferred rather than directly stated. When present, present
@@ -42,11 +43,11 @@ without a citation. It is a single grounded reading, not a workflow.
   confidence, or any internal label to the reader; let it shape only how tentatively you phrase the answer.
 - **The answer is prose for a person; keep the engine's markers out of it.** Evidence items carry machine
   markers -- the citation id, `[dimension=value; ...]` typed-property groups, any `[Exception ... (inferred)]`
-  framing, and the `<partial/>` marker itself -- that are **inputs to your judgement, not facts to relay**. Never
+  framing, and the support marker itself -- that are **inputs to your judgement, not facts to relay**. Never
   repeat, name, quote, or describe them to the reader, and never narrate how certain or uncertain the engine is
-  about a fact. In particular, `<partial/>` is a SIGNAL the engine reads to flag a partial answer, never words for
-  the reader: emit it (per the abstention rule above) but keep it out of the answer prose -- write the partial
-  answer in plain language, not the tag. Let the markers shape only *how confidently* you answer, then state the
+  about a fact. In particular, the support marker is a SIGNAL the engine reads (full, partial or none), never words
+  for the reader: emit it (per the abstention rule above) but keep it out of the answer prose -- write the answer
+  in plain language, not the tag. Let the markers shape only *how confidently* you answer, then state the
   substance in plain language. Quote the evidence's **real text** when it helps; never quote the markers. (Citation
   ids are recorded separately for the reader, so you never spell an id out in the answer prose.)
 - **State a rule together with its inferred exceptions.** When an evidence item is framed as an exception to

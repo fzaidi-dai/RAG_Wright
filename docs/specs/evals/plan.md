@@ -5,7 +5,7 @@ Langfuse as an optional backend. Each task runs the working loop (contract, red,
 commit). Target release: **0.8.0** (the exports are `feat:`; nothing existing is removed).
 
 **Status: plan approved (2026-10-11).** Scope: all eight scorer kinds, release 0.8.0, TexWright as the first consumer.
-EV-0 done 2026-10-12 (findings below). The event-loop fix (finding 5) is PS-24, done. EV-1 done; PS-25 and PS-26 done. EV-3d done (all eight scorers). Next: PS-28 (found in EV-3d), then EV-4.
+EV-0 done 2026-10-12 (findings below). The event-loop fix (finding 5) is PS-24, done. EV-1 done; PS-25 and PS-26 done. EV-3d done (all eight scorers); PS-28 done. Next: EV-4.
 
 **Why.** A product needs an "Evals" area behind its backend: domain experts' labelled data becomes gold sets,
 developers run them against a capability, and everyone sees the result and how it moves between versions. Today the
