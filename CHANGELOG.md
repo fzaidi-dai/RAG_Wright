@@ -4,6 +4,30 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.7.0...0.8.0) (2026-10-12)
+
+
+### Features
+
+* **EV-1:** aevaluate_ingestion for a web backend, with progress and a JSON-ready result ([7e6377a](https://github.com/fzaidi-dai/RAG_Wright/commit/7e6377a8994764c11f08dcf8cdb47633e6f4660c))
+* **EV-2:** gold-set and report contracts, and gold import from CSV, XLSX and JSONL ([4e72d36](https://github.com/fzaidi-dai/RAG_Wright/commit/4e72d368a24045df2a09f0fc3a221c15985cbf73))
+* **EV-3a:** classification and candidate-then-choose scorers, with parity on saved engine outputs ([977f9a8](https://github.com/fzaidi-dai/RAG_Wright/commit/977f9a8aa59b932d4cc1325bb93ffc6edf4b36a1))
+* **EV-3b:** retrieval and relational scorers, with parity on the ACORD bar and the EDGAR graph leg ([b27b86f](https://github.com/fzaidi-dai/RAG_Wright/commit/b27b86f90d79c68f173f1842b99201a73e634870))
+* **EV-3c:** extraction and judgment scorers, with parity on party extraction, ContractNLI and the semantic judge ([f1fc319](https://github.com/fzaidi-dai/RAG_Wright/commit/f1fc31973dd1d65d20d07578d7d41d6b6e91565f))
+* **EV-3d:** generation and ingestion scorers; all eight scorer kinds done ([b082938](https://github.com/fzaidi-dai/RAG_Wright/commit/b082938db3bc42d81584840d63bc79f0a0ec1d65))
+* **EV-4:** the eval runner (arun_eval, run_eval, rescore_eval) ([a1c0512](https://github.com/fzaidi-dai/RAG_Wright/commit/a1c0512b24fdef245869c854494b42ab8040e5b3))
+* **EV-5:** the optional Langfuse backend; model calls nest under their eval item ([fbbc729](https://github.com/fzaidi-dai/RAG_Wright/commit/fbbc72911733392837bae52ac105ab80d2a922a2))
+* **PS-27:** a missing database is created visibly, or refused with create=False ([2e404f2](https://github.com/fzaidi-dai/RAG_Wright/commit/2e404f2bd44bacf278c2314e6ccf412e72b336c9))
+* **PS-31:** rag_wright.api.pdf_page_count, a locked PDF page count for products ([bf83f57](https://github.com/fzaidi-dai/RAG_Wright/commit/bf83f57905f8c9480c2f7890633b7ba3e474cd09))
+
+
+### Bug Fixes
+
+* **PS-24:** async model calls work on every event loop in a process (ADR-0135) ([ebd72b2](https://github.com/fzaidi-dai/RAG_Wright/commit/ebd72b2b8b962e20dadb48158d2fb429430038e3))
+* **PS-26:** spreadsheet tables are glued back across blank rows, so no record is read as a header (ADR-0136) ([d0f31ac](https://github.com/fzaidi-dai/RAG_Wright/commit/d0f31ac7628a9aabd079630f18fc86a8da617cfb))
+* **PS-28:** a generated answer states the evidence's support, and "none" is an abstention (ADR-0137) ([cb98642](https://github.com/fzaidi-dai/RAG_Wright/commit/cb9864236d076aea7bf31e09cab18a8eb4575dc2))
+* **PS-29:** PDF parses run one at a time and the engine reaches pdfium through one locked door (ADR-0138) ([f7a17ad](https://github.com/fzaidi-dai/RAG_Wright/commit/f7a17ad7645d0bd269f955e51059a431ce5bad17))
+
 ## [0.7.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.6.0...0.7.0) (2026-10-11)
 
 
