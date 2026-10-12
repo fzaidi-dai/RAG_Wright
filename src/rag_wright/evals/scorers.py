@@ -8,6 +8,10 @@ prediction is an error -- counted wrong, and reported apart (ADR-0133: a failed 
                             never the average); top-1 accuracy too when something acts on the main label.
   score_retrieval        2. retrieval: mean recall@k (relevant = grade at or above a floor) as the gate; graded nDCG@k
                             (exponential gain) reported, never gated.
+  score_extraction       3. extraction: recall and precision of the extracted items, gated APART (under- and
+                            over-extraction are different failures); F1, extras, misses, recall by input length.
+  score_judgment         4. judgment / verdict: precision and recall of the actionable class, gated apart; accuracy,
+                            false-alarm rate, per-class recall, a breakdown by provenance, calibration of a score.
   score_relational       6. graph / relational: recall over the answer set (reachability, not ranking), broken down
                             by a metadata key; over-reach reported as precision.
   score_candidate_choice 8. candidate-then-choose: the generator's coverage of the expected values (it caps recall)
@@ -187,6 +191,147 @@ def lenient_match(a: Any, b: Any) -> bool:
     return bool(x) and bool(y) and (x in y or y in x)
 
 
+def score_extraction(gold: Gold, predictions: Mapping[str, Any], *, recall: float, precision: float,
+                     average: str = "micro", normalize: Optional[Callable[[Any], str]] = None,
+                     match: Optional[Callable[[str, str], bool]] = None, name: str = "extraction") -> ScorerResult:
+    """Scorer 3. `expected` and a prediction: the items (e.g. names, requirements). Items are normalised
+    (`normalize`, default: spaces collapsed, case and edge punctuation ignored) and matched (`match`, default:
+    either one containing the other); an item listed twice after normalising counts once. Gate: recall (expected items extracted) and precision (extracted items that
+    are expected), APART; `average` "micro" pools the counts, "macro" averages per item (an item that extracted
+    nothing has precision 0). Diagnostics: F1, misses, extras, recall by input length (up to four equal groups,
+    shortest first). An item with no expected items is left out and listed in `no_gold`."""
+    norm = normalize or _norm
+    same = match or (lambda a, b: bool(a) and bool(b) and (a in b or b in a))
+    items = _items(gold)
+    rec_hits = n_gold = prec_hits = n_out = errors = 0
+    per_r: list[float] = []
+    per_p: list[float] = []
+    misses, extras, no_gold = [], [], []
+    by_len: list[tuple[int, int, int]] = []
+    for item in items:
+        if item.id not in predictions:
+            errors += 1
+        truth = _distinct((x, norm(x)) for x in item.expected)
+        if not truth:
+            no_gold.append(item.id)
+            continue
+        out = _distinct((x, norm(x)) for x in (predictions.get(item.id) or []))
+        found = [x for x, n in truth if any(same(n, o) for _ox, o in out)]
+        kept = [x for x, o in out if any(same(n, o) for _tx, n in truth)]
+        misses += [f"{item.id}: {x}" for x, n in truth if x not in found]
+        extras += [f"{item.id}: {x}" for x, o in out if x not in kept]
+        rec_hits += len(found)
+        n_gold += len(truth)
+        prec_hits += len(kept)
+        n_out += len(out)
+        per_r.append(len(found) / len(truth))
+        per_p.append(len(kept) / len(out) if out else 0.0)
+        by_len.append((len(str(item.input)), len(found), len(truth)))
+    if average == "macro":
+        r_val = sum(per_r) / len(per_r) if per_r else None
+        p_val = sum(per_p) / len(per_p) if per_p else None
+    else:
+        r_val = rec_hits / n_gold if n_gold else None
+        p_val = prec_hits / n_out if n_out else None
+    gate = {"recall": r_val, "precision": p_val}
+    thresholds = {"recall": recall, "precision": precision}
+    passed = all(v is not None and v >= thresholds[m] for m, v in gate.items())
+    f1 = 2 * r_val * p_val / (r_val + p_val) if r_val and p_val else 0.0
+    return ScorerResult(scorer=name, passed=passed, gate=gate, thresholds=thresholds, diagnostics={
+        "n": len(items), "scored": len(per_r), "errors": errors, "no_gold": no_gold, "average": average, "f1": f1,
+        "recall_hits": rec_hits, "expected_items": n_gold, "precision_hits": prec_hits, "extracted_items": n_out,
+        "recall_by_input_length": _length_groups(by_len), "misses": misses[:50], "extras": extras[:50]})
+
+
+def _distinct(pairs: Any) -> list[tuple[Any, str]]:
+    """(item, normalised) pairs, empty and repeated normalised forms dropped, first spelling kept."""
+    seen: dict[str, Any] = {}
+    for x, n in pairs:
+        if n and n not in seen:
+            seen[n] = x
+    return [(x, n) for n, x in seen.items()]
+
+
+def _length_groups(rows: list[tuple[int, int, int]]) -> list[dict]:
+    """Recall over up to four equal groups of items by input length, shortest first."""
+    rows = sorted(rows)
+    groups = min(4, len(rows))
+    out = []
+    for g in range(groups):
+        part = rows[g * len(rows) // groups:(g + 1) * len(rows) // groups]
+        gold_n = sum(r[2] for r in part)
+        out.append({"chars": f"{part[0][0]}-{part[-1][0]}", "n": len(part),
+                    "recall": sum(r[1] for r in part) / gold_n if gold_n else None})
+    return out
+
+
+def _verdict(prediction: Any) -> tuple[Any, Optional[float]]:
+    if isinstance(prediction, Mapping) and "verdict" in prediction:
+        score = prediction.get("score")
+        return prediction["verdict"], float(score) if score is not None else None
+    return prediction, None
+
+
+def _rates(pairs: list[tuple[Any, Any, bool]], actionable: Any) -> dict[str, Optional[float]]:
+    """(gold, predicted, answered) -> precision and recall of the actionable class, accuracy."""
+    tp = sum(ok and g == actionable and p == actionable for g, p, ok in pairs)
+    pred_a = sum(ok and p == actionable for _g, p, ok in pairs)
+    gold_a = sum(g == actionable for g, _p, _ok in pairs)
+    return {"accuracy": sum(ok and g == p for g, p, ok in pairs) / len(pairs) if pairs else None,
+            "precision": tp / pred_a if pred_a else None, "recall": tp / gold_a if gold_a else None}
+
+
+def score_judgment(gold: Gold, predictions: Mapping[str, Any], *, actionable: Any, precision: float,
+                   recall: float, by: Optional[str] = None, score_label: Any = None,
+                   name: str = "judgment") -> ScorerResult:
+    """Scorer 4. `expected`: the verdict. A prediction: the verdict, or `{"verdict": ..., "score": p}` with `p` the
+    probability that the verdict is `score_label`. Gate: precision (alert fatigue) and recall (missed) of the
+    `actionable` verdict, APART -- for a judge that refutes other outputs, recall is its error-catch rate.
+    Diagnostics: accuracy, false-alarm rate (actionable called on a non-actionable item -- a judge's false refutes),
+    per-class recall, the same rates per value of the metadata key `by` (e.g. provenance), and with `score_label`
+    calibration: per score bin, how often the expected verdict is `score_label`. A missing verdict is an error:
+    wrong, and never the actionable verdict."""
+    items = _items(gold)
+    pairs: list[tuple[Any, Any, bool]] = []
+    groups: dict[str, list[tuple[Any, Any, bool]]] = {}
+    scored: list[tuple[float, Any]] = []
+    errors = 0
+    for item in items:
+        answered = item.id in predictions
+        errors += not answered
+        verdict, score = _verdict(predictions.get(item.id)) if answered else (None, None)
+        row = (item.expected, verdict, answered)
+        pairs.append(row)
+        if by is not None:
+            groups.setdefault(str(item.metadata.get(by)), []).append(row)
+        if score is not None:
+            scored.append((score, item.expected))
+    rates = _rates(pairs, actionable)
+    gate = {"precision": rates["precision"], "recall": rates["recall"]}
+    thresholds = {"precision": precision, "recall": recall}
+    passed = all(v is not None and v >= thresholds[m] for m, v in gate.items())
+    negatives = [(g, p, ok) for g, p, ok in pairs if g != actionable]
+    labels = list(dict.fromkeys(g for g, _p, _ok in pairs))
+    diagnostics: dict[str, Any] = {
+        "n": len(items), "errors": errors, "accuracy": rates["accuracy"],
+        "false_alarm_rate": (sum(ok and p == actionable for _g, p, ok in negatives) / len(negatives)
+                             if negatives else None),
+        "per_class_recall": {str(lab): sum(ok and g == p for g, p, ok in pairs if g == lab)
+                             / sum(g == lab for g, _p, _ok in pairs) for lab in labels}}
+    if by is not None:
+        diagnostics[f"by_{by}"] = {k: {"n": len(v), **_rates(v, actionable)} for k, v in sorted(groups.items())}
+    if score_label is not None and scored:
+        bins = []
+        for lo in (0.0, 0.2, 0.4, 0.6, 0.8):
+            inside = [g for s, g in scored if lo <= s < lo + 0.2 or (lo == 0.8 and s == 1.0)]
+            if inside:
+                label = f"[{lo:.1f},{lo + 0.2:.1f}" + ("]" if lo == 0.8 else ")")
+                bins.append({"bin": label, "n": len(inside), "share": sum(g == score_label for g in inside)
+                             / len(inside)})
+        diagnostics["calibration"] = bins
+    return ScorerResult(scorer=name, passed=passed, gate=gate, thresholds=thresholds, diagnostics=diagnostics)
+
+
 def score_candidate_choice(gold: Gold, predictions: Mapping[str, Any], *, recall: float, precision: float,
                            coverage: float, match: Callable[[Any, Any], bool] = lenient_match,
                            name: str = "candidate_choice") -> ScorerResult:
@@ -228,5 +373,5 @@ def score_candidate_choice(gold: Gold, predictions: Mapping[str, Any], *, recall
         "values_per_item": n_emitted / len(items) if items else None, "coverage_misses": misses[:50]})
 
 
-__all__ = ["lenient_match", "score_candidate_choice", "score_classification", "score_relational",
-           "score_retrieval"]
+__all__ = ["lenient_match", "score_candidate_choice", "score_classification", "score_extraction", "score_judgment",
+           "score_relational", "score_retrieval"]

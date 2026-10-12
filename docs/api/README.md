@@ -514,6 +514,14 @@ Scorer 2. `expected`: the relevant ids, or `{id: grade}`. A prediction: ids, bes
 
 Scorer 6. `expected`: the answer set (ids). A prediction: the ids reached (`k` keeps only the first k of a ranked answer; None = all). Gate: mean recall over the answer sets. Diagnostics: the mean per value of the item metadata key `by` (e.g. hops), precision (reached ids that are answers; over-reach, never gated), the answers not reached. An item with an empty answer set is left out and listed in `no_answers`.
 
+### `score_extraction(gold: 'Gold', predictions: 'Mapping[str, Any]', *, recall: 'float', precision: 'float', average: 'str' = 'micro', normalize: 'Optional[Callable[[Any], str]]' = None, match: 'Optional[Callable[[str, str], bool]]' = None, name: 'str' = 'extraction') -> 'ScorerResult'`
+
+Scorer 3. `expected` and a prediction: the items (e.g. names, requirements). Items are normalised (`normalize`, default: spaces collapsed, case and edge punctuation ignored) and matched (`match`, default: either one containing the other); an item listed twice after normalising counts once. Gate: recall (expected items extracted) and precision (extracted items that are expected), APART; `average` "micro" pools the counts, "macro" averages per item (an item that extracted nothing has precision 0). Diagnostics: F1, misses, extras, recall by input length (up to four equal groups, shortest first). An item with no expected items is left out and listed in `no_gold`.
+
+### `score_judgment(gold: 'Gold', predictions: 'Mapping[str, Any]', *, actionable: 'Any', precision: 'float', recall: 'float', by: 'Optional[str]' = None, score_label: 'Any' = None, name: 'str' = 'judgment') -> 'ScorerResult'`
+
+Scorer 4. `expected`: the verdict. A prediction: the verdict, or `{"verdict": ..., "score": p}` with `p` the probability that the verdict is `score_label`. Gate: precision (alert fatigue) and recall (missed) of the `actionable` verdict, APART -- for a judge that refutes other outputs, recall is its error-catch rate. Diagnostics: accuracy, false-alarm rate (actionable called on a non-actionable item -- a judge's false refutes), per-class recall, the same rates per value of the metadata key `by` (e.g. provenance), and with `score_label` calibration: per score bin, how often the expected verdict is `score_label`. A missing verdict is an error: wrong, and never the actionable verdict.
+
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 
 Every data row of every table in a parsed document (`parse_document` output), in document order.

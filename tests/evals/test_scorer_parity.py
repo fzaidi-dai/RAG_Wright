@@ -9,8 +9,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from rag_wright.api import (GoldItem, GoldSet, score_candidate_choice, score_classification, score_relational,
-                            score_retrieval)
+from rag_wright.api import (GoldItem, GoldSet, score_candidate_choice, score_classification, score_extraction,
+                            score_judgment, score_relational, score_retrieval)
 
 ROOT = Path(__file__).resolve().parents[2]
 HOLDOUT = ROOT / "data" / "cache" / "legalbert_holdout_eval.json"
@@ -180,3 +180,101 @@ def test_relational_matches_the_graph_leg_live(monkeypatch):
         assert cut.diagnostics["per_item_recall"] == pytest.approx(per, abs=1e-12)
         for hop, row in cut.diagnostics["by_hops"].items():
             assert row["recall"] == pytest.approx(mean(per[q.qid] for q in questions if str(q.hop_count) == hop))
+
+
+# --- 3. extraction: party extraction (scripts/dg_model_ab.py score_parties) on real extractions ---------------------
+
+@pytest.mark.ner
+def test_extraction_matches_the_party_eval_on_real_extractions():
+    """No extraction run kept its outputs, so real ones are made here without a model call: spaCy's named entities
+    (organisations and people) in each CUAD contract's opening, against CUAD's Parties gold. The engine's eval
+    (`score_parties`, averaged per contract) and the scorer (macro) score the same extractions."""
+    _need(ROOT / "data" / "cuad" / "extracted" / "CUAD_v1.json")
+    import spacy
+
+    from scripts.dg_model_ab import CUAD, _is_name, _norm_name, score_parties
+    from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
+
+    nlp = spacy.load("en_core_web_sm")
+    contracts = []
+    for c in parse_cuad(ROOT / CUAD):
+        gold = [a.text for a in c.answers if a.clause_type == "Parties"]
+        if gold and c.context:
+            contracts.append((c.contract_id, c.context, gold))
+        if len(contracts) >= 100:
+            break
+    extracted = {cid: [e.text for e in nlp(text[:4000]).ents if e.label_ in ("ORG", "PERSON")]
+                 for cid, text, _g in contracts}
+    ref = [score_parties(set(extracted[cid]), set(g)) for cid, _t, g in contracts]
+    ref = [s for s in ref if s is not None]
+    gold = GoldSet(name="cuad-parties", version="1", items=[
+        GoldItem(id=cid, input=text[:4000], expected=[x for x in g if _is_name(x)]) for cid, text, g in contracts])
+    r = score_extraction(gold, extracted, recall=0.0, precision=0.0, average="macro", normalize=_norm_name)
+    assert r.diagnostics["scored"] == len(ref)
+    assert r.gate["recall"] == pytest.approx(sum(s[0] for s in ref) / len(ref), abs=1e-12)
+    assert r.gate["precision"] == pytest.approx(sum(s[1] for s in ref) / len(ref), abs=1e-12)
+
+
+# --- 4. judgment: ContractNLI (eval/contractnli_judge.py, EV-0's two runs) and the semantic judge ------------------
+
+def test_judgment_matches_the_contractnli_runs():
+    runs_file = ROOT / "data" / "eval" / "contractnli_ev0_runs.json"
+    _need(runs_file, ROOT / "data" / "eval" / "contractnli_slice.jsonl")
+    rows = [json.loads(x) for x in (ROOT / "data" / "eval" / "contractnli_slice.jsonl").read_text().splitlines()
+            if x.strip()]
+    gold = GoldSet(name="contractnli", version="slice-150", items=[
+        GoldItem(id=str(i), input="", expected=r["gold"]) for i, r in enumerate(rows)])
+    runs = json.loads(runs_file.read_text())
+    for run in ("run1", "run2"):
+        saved = runs[run]["run_evaluations"]
+        r = score_judgment(gold, runs[run]["preds"], actionable="contradiction", precision=0.0, recall=0.0)
+        assert r.diagnostics["accuracy"] == pytest.approx(saved["accuracy"], abs=1e-12)
+        for label in ("entailment", "contradiction", "neutral"):
+            assert r.diagnostics["per_class_recall"][label] == pytest.approx(saved[f"recall_{label}"], abs=1e-12)
+        assert r.gate["recall"] == pytest.approx(saved["recall_contradiction"], abs=1e-12)
+
+
+JUDGE = ROOT / "data" / "eval" / "judge_gold"
+
+
+def _judge_verdicts():
+    qwen = {(r["item"], r["case"]): r["supported"] for r in json.loads((JUDGE / "qwen.json").read_text())}
+    jev = {(r["item"], k): s for r in json.loads((JUDGE / "jev.json").read_text()) for k, s in enumerate(r["scores"])}
+    return qwen, jev
+
+
+@pytest.mark.parametrize("judge, counts", [("qwen", (173, 138, 154, 35, 38)), ("jev", (183, 149, 154, 34, 38))])
+def test_judgment_matches_the_semantic_judge_on_the_blind_sample(judge, counts):
+    _need(JUDGE / "blind_sample.json", JUDGE / "blind_labels.json", JUDGE / "qwen.json", JUDGE / "jev.json")
+    sample = json.loads((JUDGE / "blind_sample.json").read_text())
+    labels = json.loads((JUDGE / "blind_labels.json").read_text())
+    truth = {n: n in set(labels["supported"]) for n in range(len(sample)) if n not in set(labels["ambiguous"])}
+    qwen, jev = _judge_verdicts()
+    verdict = {"qwen": lambda key: qwen[key], "jev": lambda key: jev[key] >= 0.5}[judge]
+    gold = GoldSet(name="blind", version="1", items=[GoldItem(id=str(n), input="", expected=y)
+                                                      for n, y in truth.items()])
+    r = score_judgment(gold, {str(n): verdict(tuple(sample[n])) for n in truth}, actionable=False,
+                       precision=0.0, recall=0.0)
+    ok, caught, bad, kept, good = counts
+    assert r.diagnostics["accuracy"] == pytest.approx(ok / len(truth))
+    assert r.gate["recall"] == pytest.approx(caught / bad)  # unsupported values caught
+    assert r.diagnostics["false_alarm_rate"] == pytest.approx((good - kept) / good)  # supported values refuted
+
+
+def test_judgment_matches_the_semantic_judge_silver_run_and_its_calibration():
+    _need(JUDGE / "cases.json", JUDGE / "qwen.json", JUDGE / "jev.json")
+    items = json.loads((JUDGE / "cases.json").read_text())
+    truth = {(i, k): c["supported"] for i, it in enumerate(items) for k, c in enumerate(it["cases"])}
+    qwen, jev = _judge_verdicts()
+    gold = GoldSet(name="silver", version="1", items=[GoldItem(id=f"{i}:{k}", input="", expected=y)
+                                                       for (i, k), y in truth.items()])
+    q = score_judgment(gold, {f"{i}:{k}": qwen[(i, k)] for (i, k) in truth}, actionable=False, precision=0.0,
+                       recall=0.0)
+    assert (round(q.diagnostics["accuracy"] * 601), round(q.gate["recall"] * 235),
+            round(q.diagnostics["false_alarm_rate"] * 366)) == (359, 191, 198)
+    j = score_judgment(gold, {f"{i}:{k}": {"verdict": jev[(i, k)] >= 0.5, "score": jev[(i, k)]} for (i, k) in truth},
+                       actionable=False, precision=0.0, recall=0.0, score_label=True)
+    assert (round(j.diagnostics["accuracy"] * 601), round(j.gate["recall"] * 235),
+            round(j.diagnostics["false_alarm_rate"] * 366)) == (372, 215, 209)
+    assert [(b["n"], round(b["share"], 2)) for b in j.diagnostics["calibration"]] == [
+        (374, 0.46), (38, 0.74), (29, 0.79), (40, 0.80), (125, 0.93)]
