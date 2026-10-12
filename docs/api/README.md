@@ -506,6 +506,14 @@ Scorer 8. `expected`: `{"values": [[key, value], ...], "ignore": [value, ...]}` 
 
 Normalised (spaces collapsed, case and edge punctuation ignored), either one containing the other.
 
+### `score_retrieval(gold: 'Gold', predictions: 'Mapping[str, Any]', *, k: 'int', recall: 'float', relevant_grade: 'int' = 1, ndcg_k: 'int' = 10, also_recall_at: 'Sequence[int]' = (), name: 'str' = 'retrieval') -> 'ScorerResult'`
+
+Scorer 2. `expected`: the relevant ids, or `{id: grade}`. A prediction: ids, best first. Gate: mean recall@k, relevant = grade >= `relevant_grade`. Diagnostics: graded nDCG@`ndcg_k` (never gated), recall at each of `also_recall_at`, per-item recall@k. An item with nothing relevant is left out of the means and listed in `no_relevant` (recall is undefined, not perfect).
+
+### `score_relational(gold: 'Gold', predictions: 'Mapping[str, Any]', *, recall: 'float', k: 'Optional[int]' = None, by: 'Optional[str]' = None, name: 'str' = 'relational') -> 'ScorerResult'`
+
+Scorer 6. `expected`: the answer set (ids). A prediction: the ids reached (`k` keeps only the first k of a ranked answer; None = all). Gate: mean recall over the answer sets. Diagnostics: the mean per value of the item metadata key `by` (e.g. hops), precision (reached ids that are answers; over-reach, never gated), the answers not reached. An item with an empty answer set is left out and listed in `no_answers`.
+
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 
 Every data row of every table in a parsed document (`parse_document` output), in document order.

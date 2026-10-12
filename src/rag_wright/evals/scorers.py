@@ -6,6 +6,10 @@ prediction is an error -- counted wrong, and reported apart (ADR-0133: a failed 
 
   score_classification   1. classification / typed decision: per-class recall@k against a floor (the weakest class,
                             never the average); top-1 accuracy too when something acts on the main label.
+  score_retrieval        2. retrieval: mean recall@k (relevant = grade at or above a floor) as the gate; graded nDCG@k
+                            (exponential gain) reported, never gated.
+  score_relational       6. graph / relational: recall over the answer set (reachability, not ranking), broken down
+                            by a metadata key; over-reach reported as precision.
   score_candidate_choice 8. candidate-then-choose: the generator's coverage of the expected values (it caps recall)
                             and value-level recall and precision of the choices (emitting more is not a win).
 
@@ -13,6 +17,7 @@ Each is verified against an engine eval's published numbers (`tests/evals/test_s
 """
 from __future__ import annotations
 
+import math
 from collections import Counter
 from typing import Any, Callable, Collection, Mapping, Optional, Sequence, Union
 
@@ -84,6 +89,94 @@ def score_classification(gold: Gold, predictions: Mapping[str, Any], *, floor: f
                        for (g, p), n in sorted(confusions.items(), key=lambda kv: (-kv[1], kv[0]))][:50]})
 
 
+def _graded(expected: Any) -> dict[str, int]:
+    """Expected relevance as `{id: grade}`: a graded map as is, a plain list of ids as grade 1."""
+    if isinstance(expected, Mapping):
+        return {str(k): int(v) for k, v in expected.items()}
+    return {str(i): 1 for i in expected}
+
+
+def _ndcg(ranked: Sequence[str], graded: Mapping[str, int], k: int) -> float:
+    """Graded nDCG@k, exponential gain (2^grade - 1), ideal over every graded id."""
+    dcg = sum((2.0 ** graded.get(cid, 0) - 1.0) / math.log2(r + 1) for r, cid in enumerate(ranked[:k], start=1))
+    ideal = sorted(graded.values(), reverse=True)[:k]
+    idcg = sum((2.0 ** g - 1.0) / math.log2(r + 1) for r, g in enumerate(ideal, start=1))
+    return dcg / idcg if idcg > 0 else 0.0
+
+
+def score_retrieval(gold: Gold, predictions: Mapping[str, Any], *, k: int, recall: float,
+                    relevant_grade: int = 1, ndcg_k: int = 10, also_recall_at: Sequence[int] = (),
+                    name: str = "retrieval") -> ScorerResult:
+    """Scorer 2. `expected`: the relevant ids, or `{id: grade}`. A prediction: ids, best first. Gate: mean recall@k,
+    relevant = grade >= `relevant_grade`. Diagnostics: graded nDCG@`ndcg_k` (never gated), recall at each of
+    `also_recall_at`, per-item recall@k. An item with nothing relevant is left out of the means and listed in
+    `no_relevant` (recall is undefined, not perfect)."""
+    items = _items(gold)
+    per_item: dict[str, float] = {}
+    extra: dict[int, list[float]] = {kk: [] for kk in also_recall_at}
+    ndcgs: list[float] = []
+    no_relevant, errors = [], 0
+    for item in items:
+        graded = _graded(item.expected)
+        relevant = {cid for cid, g in graded.items() if g >= relevant_grade}
+        if item.id not in predictions:
+            errors += 1
+        if not relevant:
+            no_relevant.append(item.id)
+            continue
+        ranked = [str(c) for c in (predictions.get(item.id) or [])]
+        per_item[item.id] = len(set(ranked[:k]) & relevant) / len(relevant)
+        for kk in also_recall_at:
+            extra[kk].append(len(set(ranked[:kk]) & relevant) / len(relevant))
+        ndcgs.append(_ndcg(ranked, graded, ndcg_k))
+    mean = (lambda xs: sum(xs) / len(xs) if xs else None)  # noqa: E731
+    gate = {f"recall@{k}": mean(list(per_item.values()))}
+    thresholds = {f"recall@{k}": recall}
+    passed = all(v is not None and v >= thresholds[m] for m, v in gate.items())
+    return ScorerResult(scorer=name, passed=passed, gate=gate, thresholds=thresholds, diagnostics={
+        "n": len(items), "scored": len(per_item), "errors": errors, "no_relevant": no_relevant,
+        f"ndcg@{ndcg_k}": mean(ndcgs), **{f"recall@{kk}": mean(v) for kk, v in extra.items()},
+        f"per_item_recall@{k}": per_item})
+
+
+def score_relational(gold: Gold, predictions: Mapping[str, Any], *, recall: float, k: Optional[int] = None,
+                     by: Optional[str] = None, name: str = "relational") -> ScorerResult:
+    """Scorer 6. `expected`: the answer set (ids). A prediction: the ids reached (`k` keeps only the first k of a
+    ranked answer; None = all). Gate: mean recall over the answer sets. Diagnostics: the mean per value of the
+    item metadata key `by` (e.g. hops), precision (reached ids that are answers; over-reach, never gated), the
+    answers not reached. An item with an empty answer set is left out and listed in `no_answers`."""
+    items = _items(gold)
+    per_item: dict[str, float] = {}
+    groups: dict[str, list[float]] = {}
+    hits = reached_n = errors = 0
+    misses, no_answers = [], []
+    for item in items:
+        answers = [str(a) for a in item.expected]
+        if item.id not in predictions:
+            errors += 1
+        if not answers:
+            no_answers.append(item.id)
+            continue
+        reached = [str(r) for r in (predictions.get(item.id) or [])]
+        reached = reached[:k] if k is not None else reached
+        found = set(reached) & set(answers)
+        per_item[item.id] = len(found) / len(set(answers))
+        hits += len(found)
+        reached_n += len(set(reached))
+        misses += [f"{item.id}: {a}" for a in answers if a not in found]
+        if by is not None:
+            groups.setdefault(str(item.metadata.get(by)), []).append(per_item[item.id])
+    value = sum(per_item.values()) / len(per_item) if per_item else None
+    passed = value is not None and value >= recall
+    diagnostics: dict[str, Any] = {
+        "n": len(items), "scored": len(per_item), "errors": errors, "no_answers": no_answers,
+        "precision": hits / reached_n if reached_n else None, "per_item_recall": per_item, "misses": misses[:50]}
+    if by is not None:
+        diagnostics[f"by_{by}"] = {g: {"n": len(v), "recall": sum(v) / len(v)} for g, v in sorted(groups.items())}
+    return ScorerResult(scorer=name, passed=passed, gate={"recall": value}, thresholds={"recall": recall},
+                        diagnostics=diagnostics)
+
+
 def _norm(value: Any) -> str:
     return " ".join(str(value).split()).lower().strip(" .,;:")
 
@@ -135,4 +228,5 @@ def score_candidate_choice(gold: Gold, predictions: Mapping[str, Any], *, recall
         "values_per_item": n_emitted / len(items) if items else None, "coverage_misses": misses[:50]})
 
 
-__all__ = ["lenient_match", "score_candidate_choice", "score_classification"]
+__all__ = ["lenient_match", "score_candidate_choice", "score_classification", "score_relational",
+           "score_retrieval"]
