@@ -79,13 +79,14 @@ errors kept apart from the scored items.
 | EV-3d | Scorer 5 (generation / QA) and 7 (ingestion, wrapping EV-1) | same | todo |
 | EV-4 | The runner `arun_eval` (local): concurrency, `progress`, repeats and flips, errors apart, through the capability layer | hermetic tests; live: ContractNLI through the runner matches the script | todo |
 | EV-5 | The Langfuse backend: gold set to a versioned dataset (schema from the contract), `run_experiment` with the scorers as evaluators, the report carrying the dataset version and run link; `local_only` respected | hermetic tests with a fake client; live against the local Langfuse | todo |
-| EV-6 | Worked example and docs: an engine example on public data (ContractNLI) through the toolkit; the `creating-evals` skill pointing at the API; `docs/` updated; a guide for a new product (TexWright) on building its evals from its experts' labelled files | doc-reference tests; the example runs | todo |
+| EV-6 | Worked example, skills and docs. One evals skill, rewritten rather than a second one beside it (two copies of the method would drift): `creating-evals` section 2 names each kind's packaged scorer, section 4 becomes "call `arun_eval`" (a hand-built script only for a kind the toolkit does not cover), section 5 is replaced by what EV-0 and EV-5 verified (the backend switch, `local_only`, only a self-hosted Langfuse may receive client data, scorers run in our process); it gains a worked example on public data (ContractNLI) executed by a test, as the ingestion skill's is, and a section on building gold from experts' labelled files (the column mapping, kept local). The consumer skill `using-the-rag-wright-engine` gains an evals section: evals behind a product backend (a background job, progress to the UI, `EvalReport` as the response, where run history lives). `docs/` updated; a guide for a new product (TexWright) | doc-reference tests; the skill example runs under a test; the shipped-skills test | todo |
 | EV-7 | (optional, later unless TexWright needs it) Human labels from a Langfuse annotation queue into a gold set, with an agreement report between annotators | hermetic tests; live with two labellers on a small queue | todo |
 
 ## Engine and product
 
 - **Engine (this workstream):** the contracts, gold import, the eight scorers, the runner, `EvalReport`, the
-  optional Langfuse backend, the ingestion eval's web-ready form, and the docs and skill.
+  optional Langfuse backend, the ingestion eval's web-ready form, the docs, and the two skills (`creating-evals`,
+  `using-the-rag-wright-engine`).
 - **TexWright (its repo):** its gold sets from its experts' files (kept local), the tasks that call its capabilities,
   any backend routes and UI, and where run history is kept.
 - **RuleWright (later):** the same, plus a migration guide when it adopts the toolkit.
