@@ -70,7 +70,8 @@ _EXT_ALIASES = {"xlsm": "xlsx"}
 def parse_document_bytes(name: str, data: bytes, *, parser: Any = None) -> Any:
     """Parse raw document BYTES into a `DoclingDocument`. `.txt`/`.md` bytes are wrapped directly; binary docs
     (PDF/DOCX/HTML) go through docling. `parser` defaults to the tiered OCR parser (0009-WIRE2), injectable for
-    tests. `name` supplies the file extension docling needs to pick a backend."""
+    tests. `name` supplies the file extension docling needs to pick a backend. A PDF is parsed alone in the process
+    (PS-29, `util.pdfium.pdf_work`): concurrent PDF parses crash libpdfium."""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
     ext = _EXT_ALIASES.get(ext, ext)
     parser = parser or _default_document_parser()
@@ -78,6 +79,11 @@ def parse_document_bytes(name: str, data: bytes, *, parser: Any = None) -> Any:
     suffix = f".{ext}" if ext else ".txt"
     tmp = Path(tempfile.mkdtemp(prefix="docparse_")) / f"doc{suffix}"
     tmp.write_bytes(data)
+    if ext == "pdf" or data[:5] == b"%PDF-":  # PS-29: one PDF parse at a time (pdfium is not thread-safe)
+        from rag_wright.util.pdfium import pdf_work
+
+        with pdf_work(name):
+            return parser.convert(tmp)
     return parser.convert(tmp)
 
 

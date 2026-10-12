@@ -15,3 +15,17 @@ does not contain any provisions regarding a minimum commitment."
   of a fixed "no answer" message.
 - Any count of answered questions, or any check that treats "answered" as "found", now excludes these: re-baseline
   such numbers after upgrading.
+
+## 2. PDFs can be ingested concurrently again (PS-29, ADR-0138; your engine issue 0052)
+
+**What changed.** Reproduced here (15 CUAD PDFs, 4 in flight: 3 of 3 runs crashed in libpdfium). Two causes: the
+engine's own pdfium calls took no lock and left documents for the garbage collector, and pdfium objects created
+during a docling conversion can be freed later, outside any lock, beside another document's parse. The engine now
+parses one PDF at a time (a process-wide lock, ending with a garbage collection inside it), and its own pdfium use
+goes through one locked helper. Everything after the parse -- chunking, embedding, extraction, model calls -- stays
+concurrent. Measured: 0 of 5 runs crashed, and the parse of the 15 PDFs took 127 s against 143 s concurrent
+(concurrent parses never helped on that machine: docling's CPU-bound models contend).
+
+**What to do in RuleWright.** After upgrading, put `scripts/t710_corpus_run.py` back to several documents in flight
+(and remove the comment at the knob), and close engine issue 0052. A log line now says when a PDF waited more than
+10 s for another PDF's parse. If a pdfium crash ever reappears, send the crash report.

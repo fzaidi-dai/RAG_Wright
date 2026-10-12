@@ -464,7 +464,7 @@ text -> a `ParsedDocument` (one TextItem per non-blank line), cached -- so the s
 
 ### `parse_docling_bytes(name: 'str', data: 'bytes', *, parser: 'Any' = None) -> 'Any'`
 
-Parse raw document BYTES into a `DoclingDocument`. `.txt`/`.md` bytes are wrapped directly; binary docs (PDF/DOCX/HTML) go through docling. `parser` defaults to the tiered OCR parser (0009-WIRE2), injectable for tests. `name` supplies the file extension docling needs to pick a backend.
+Parse raw document BYTES into a `DoclingDocument`. `.txt`/`.md` bytes are wrapped directly; binary docs (PDF/DOCX/HTML) go through docling. `parser` defaults to the tiered OCR parser (0009-WIRE2), injectable for tests. `name` supplies the file extension docling needs to pick a backend. A PDF is parsed alone in the process (PS-29, `util.pdfium.pdf_work`): concurrent PDF parses crash libpdfium.
 
 ### `aparse_docling_bytes(name: 'str', data: 'bytes', *, parser: 'Any' = None, deadline_s: 'float' = 600.0) -> 'Any'`
 

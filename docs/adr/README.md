@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-135 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
-and 0121–0137). ADRs are an
+136 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+and 0121–0138). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -193,4 +193,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0134 Skills for product developers are linked into each product repo, never installed globally ·
 0135 The model seam gives each event loop its own async HTTP client ·
 0136 A spreadsheet table cut at its blank rows is glued back together after the parse ·
-0137 A generated answer states the evidence's support every time, and "none" is an abstention
+0137 A generated answer states the evidence's support every time, and "none" is an abstention ·
+0138 PDF parses run one at a time, and the engine reaches pdfium through one locked door

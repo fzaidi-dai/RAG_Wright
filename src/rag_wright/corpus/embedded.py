@@ -220,37 +220,34 @@ def _is_empty_flate(payload: bytes) -> bool:
 def _pdf_attachments(data: bytes) -> EmbeddedExtraction:
     """ING-6b: the files attached to a PDF (its embedded-files name tree). An attachment has no position in the
     page content, so it carries no anchor -- the child links to the parent document only."""
-    import pypdfium2
+    from rag_wright.util.pdfium import open_pdf
 
     out = EmbeddedExtraction()
     by_hash: dict[str, EmbeddedFile] = {}
     try:
-        pdf = pypdfium2.PdfDocument(data)
+        with open_pdf(data) as pdf:  # PS-29: under docling's pdfium lock, closed before it is released
+            for i in range(pdf.count_attachments()):
+                out.found += 1
+                name = f"attachment {i}"
+                try:
+                    att = pdf.get_attachment(i)
+                    name = att.get_name() or name
+                    payload = bytes(att.get_data())
+                except Exception as exc:  # noqa: BLE001 - one unreadable attachment is reported, the rest extracted
+                    out.skipped.append(f"{name}: {type(exc).__name__}: {exc}")
+                    continue
+                if not payload or _is_empty_flate(payload):
+                    out.skipped.append(f"{name}: empty attachment")
+                    continue
+                sha = hashlib.sha256(payload).hexdigest()
+                if sha in by_hash:
+                    out.duplicates += 1
+                    continue
+                by_hash[sha] = EmbeddedFile(data=payload, filename=PureWindowsPath(name).name,
+                                            media_type=_media_type(payload), sha256=sha)
     except Exception as exc:  # noqa: BLE001 - an unreadable PDF has no attachments we can list; say so
         out.skipped.append(f"attachments: {type(exc).__name__}: {exc}")
         return out
-    try:
-        for i in range(pdf.count_attachments()):
-            out.found += 1
-            name = f"attachment {i}"
-            try:
-                att = pdf.get_attachment(i)
-                name = att.get_name() or name
-                payload = bytes(att.get_data())
-            except Exception as exc:  # noqa: BLE001 - one unreadable attachment is reported, the rest extracted
-                out.skipped.append(f"{name}: {type(exc).__name__}: {exc}")
-                continue
-            if not payload or _is_empty_flate(payload):
-                out.skipped.append(f"{name}: empty attachment")
-                continue
-            sha = hashlib.sha256(payload).hexdigest()
-            if sha in by_hash:
-                out.duplicates += 1
-                continue
-            by_hash[sha] = EmbeddedFile(data=payload, filename=PureWindowsPath(name).name,
-                                        media_type=_media_type(payload), sha256=sha)
-    finally:
-        pdf.close()
     out.files = list(by_hash.values())
     return out
 
@@ -298,13 +295,10 @@ def file_text(data: bytes, media_type: str) -> str:
     """The text of an embedded file, for link evidence (a PDF's text layer; empty when unreadable or another type)."""
     if media_type != "application/pdf":
         return ""
-    try:
-        import pypdfium2
+    from rag_wright.util.pdfium import open_pdf
 
-        pdf = pypdfium2.PdfDocument(data)
-        try:
+    try:
+        with open_pdf(data) as pdf:  # PS-29: under docling's pdfium lock, closed before it is released
             return " ".join(pdf[i].get_textpage().get_text_range() for i in range(len(pdf)))
-        finally:
-            pdf.close()
     except Exception:  # noqa: BLE001 - an unreadable PDF is still extracted; it just offers no link evidence
         return ""

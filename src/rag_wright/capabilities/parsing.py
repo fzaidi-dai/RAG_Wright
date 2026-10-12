@@ -165,10 +165,11 @@ def _default_vlm_parser() -> Parser:
 def _page_count(source: Path) -> int:
     """Total page count of a PDF (pypdfium2, no parse). 0 for a non-PDF or any read error -> the caller falls
     back to whole-document escalation."""
-    try:
-        import pypdfium2 as pdfium
+    from rag_wright.util.pdfium import open_pdf
 
-        return len(pdfium.PdfDocument(str(source)))
+    try:
+        with open_pdf(source) as pdf:  # PS-29: under docling's pdfium lock, closed before it is released
+            return len(pdf)
     except Exception:  # noqa: BLE001 - best-effort; unknown page count -> whole-doc fallback
         return 0
 
@@ -219,16 +220,16 @@ def _text_layer_pages(source: Path, *, min_chars: int = _MIN_TEXT_LAYER_CHARS) -
     DIRECTLY from the PDF (pypdfium2, no OCR). A page here is authoritative and must never be OCR-quality-assessed
     or VLM-escalated. Best-effort: a non-PDF or any read error -> empty set (no override -> the tiered OCR path is
     unchanged), so a scan / text / office source is never affected."""
-    try:
-        import pypdfium2 as pdfium
+    from rag_wright.util.pdfium import open_pdf
 
-        pdf = pdfium.PdfDocument(str(source))
-        pages: set[int] = set()
-        for i in range(len(pdf)):
-            text = pdf[i].get_textpage().get_text_range()
-            if len(text.strip()) >= min_chars:
-                pages.add(i + 1)
-        return pages
+    try:
+        with open_pdf(source) as pdf:  # PS-29: under docling's pdfium lock, closed before it is released
+            pages: set[int] = set()
+            for i in range(len(pdf)):
+                text = pdf[i].get_textpage().get_text_range()
+                if len(text.strip()) >= min_chars:
+                    pages.add(i + 1)
+            return pages
     except Exception:  # noqa: BLE001 - the text-layer probe is an optional authority signal; never fail the parse
         return set()
 
@@ -237,12 +238,14 @@ def _render_gray_pages(source: Path, dpi: int = 200) -> dict:
     """Render each PDF page to a grayscale image {page_no(1-based): ndarray} for the scan-quality gate's image
     metrics. 200 DPI to match the validated Laplacian/dark_frac thresholds. Best-effort: a non-PDF or any render
     error -> {} (the gate falls back to text-only), so a text/office source never breaks the parse."""
+    from rag_wright.util.pdfium import open_pdf
+
     try:
         import numpy as np
-        import pypdfium2 as pdfium
 
-        pdf = pdfium.PdfDocument(str(source))
-        return {i + 1: np.asarray(pdf[i].render(scale=dpi / 72.0).to_pil().convert("L")) for i in range(len(pdf))}
+        with open_pdf(source) as pdf:  # PS-29: under docling's pdfium lock; the arrays are copies, safe after close
+            return {i + 1: np.asarray(pdf[i].render(scale=dpi / 72.0).to_pil().convert("L"))
+                    for i in range(len(pdf))}
     except Exception:  # noqa: BLE001 - image metrics are an optional gate signal; never fail the parse over them
         return {}
 
