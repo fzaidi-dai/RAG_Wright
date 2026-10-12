@@ -55,7 +55,16 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-11): the public-surface workstream is COMPLETE and released as `rag-wright` 0.7.0** (ledger
+> **CURRENT STATE (2026-10-12): the evals workstream is COMPLETE; `rag-wright` 0.8.0 is ready to release** (ledger
+> `docs/specs/evals/plan.md`, EV-0..EV-6; EV-7 optional): gold sets from experts' files, a scorer per capability kind,
+> the runner `arun_eval` with an optional Langfuse backend, `EvalReport`, `aevaluate_ingestion`; the reference is
+> `docs/evals.md`. With it in 0.8.0: PS-24 (async calls on every event loop, ADR-0135), PS-25 (the release PR bumps
+> `uv.lock`), PS-26 (spreadsheet tables glued across blank rows, ADR-0136), PS-27 (a missing database created
+> visibly, or refused with `create=False`), PS-28 (answers state their support; "none" abstains, ADR-0137), PS-29 and
+> PS-31 (one PDF parse at a time and one locked door to pdfium, `pdf_page_count`; RuleWright issue 0052, ADR-0138).
+> RuleWright's guide: `docs/specs/public-surface/rulewright-migration-0.8.0.md`. Open: PS-30 (a process-pool parse,
+> later). Before it:
+> **The public-surface workstream is COMPLETE and released as `rag-wright` 0.7.0** (ledger
 > `docs/specs/public-surface/plan.md`, ADR-0128: two public tiers, `rag_wright.api` for a product's seam and
 > `rag_wright.pack_sdk` for a pack's code, enforced by import contracts and a domain-vocabulary guard). Next:
 > RuleWright moves from `docs/specs/public-surface/rulewright-migration-0.3.0.md` then `rulewright-migration-0.4.0.md`, `-0.5.0.md`, `-0.6.0.md` and `-0.7.0.md`; PS-R4 (the unit-labelling eval) is done, unreleased. 0.7.0 adds PS-20 (the model server cold-starts from a GPU snapshot, ADR-0132) and PS-22 (the model-call deadline follows the timeout; a token cap on thinking models' structured calls, ADR-0133). Before it,

@@ -3,7 +3,13 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ RESUME / NEXT UP (2026-10-11, NEWEST): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.7.0**
+> **⇒ RESUME / NEXT UP (2026-10-12, NEWEST): evals workstream COMPLETE (`docs/specs/evals/plan.md`, EV-0..EV-6;
+> EV-7 optional); `rag-wright` 0.8.0 ready to release** -- push, then merge release-please's 0.8.0 PR, then verify on
+> PyPI. 0.8.0 also carries PS-24..PS-29 and PS-31 (ledger `docs/specs/public-surface/plan.md`); RuleWright's guide is
+> `rulewright-migration-0.8.0.md` (section 2: PDFs concurrent again + `pdf_page_count`; section 4: `create=False`).
+> Open: PS-30 (process-pool parse, later).
+>
+> **Previous (2026-10-11): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.7.0**
 > (PyPI; 0.3.1 fixed 0.3.0's missing skills; 0.4.0 adds PS-R4, PS-12..PS-17: labelling eval, document metadata,
 > per-workspace models, config changes without restart, the workspaces guide, no Gemma default); 0.5.0 adds
 > PS-18 (scikit-learn 1.9.1, Laya temperatures ADR-0129) and PS-19 (deploy the Qwen/Modal server from the engine,
