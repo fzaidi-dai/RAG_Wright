@@ -21,7 +21,10 @@
   ],
   "packages": {
     ".": {
-      "package-name": "rag-wright"
+      "package-name": "rag-wright",
+      "extra-files": [
+        {"type": "toml", "path": "uv.lock", "jsonpath": "$.package[?(@.name.value==='rag-wright')].version"}
+      ]
     }
   }
 }

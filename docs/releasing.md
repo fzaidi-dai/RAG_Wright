@@ -9,7 +9,7 @@ release" below). ADR-0123.
 
 ```
 merged PRs (conventional titles: feat:/fix:/...)
-   └─► release-please.yml keeps ONE open "release PR" (bumps pyproject version + CHANGELOG.md)
+   └─► release-please.yml keeps ONE open "release PR" (bumps pyproject + uv.lock version + CHANGELOG.md)
           └─► you merge the release PR when the batch is ready
                  └─► release-please tags X.Y.Z + creates the GitHub Release
                         └─► publish.yml: tag == pyproject version guard → uv build → PyPI (OIDC)
