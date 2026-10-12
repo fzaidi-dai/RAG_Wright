@@ -61,7 +61,8 @@ from rag_wright.ingestion.builder import (
 from rag_wright.capabilities.rlm_chunking import BoundaryDiscoverer
 from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, LabelEvaluation, aevaluate_ingestion, evaluate_ingestion
 from rag_wright.contracts.evals import EvalReport, GoldItem, GoldSet, ItemResult, ScorerResult
-from rag_wright.evals import (GoldImportError, GoldMapping, aload_gold_set, lenient_match, load_gold_set,
+from rag_wright.evals import (GoldImportError, GoldMapping, aload_gold_set, arun_eval, lenient_match, load_gold_set,
+                              rescore_eval, run_eval,
                               score_candidate_choice, score_classification, score_extraction, score_generation,
                               score_ingestion, score_judgment, score_relational, score_retrieval)
 from rag_wright.ingestion.tables import table_rows
@@ -114,6 +115,6 @@ __all__ = [
     "GoldItem", "GoldSet", "GoldMapping", "GoldImportError", "load_gold_set", "aload_gold_set", "EvalReport",
     "ItemResult", "ScorerResult", "score_classification", "score_candidate_choice", "lenient_match",
     "score_retrieval", "score_relational", "score_extraction", "score_judgment",
-    "score_generation", "score_ingestion",
+    "score_generation", "score_ingestion", "arun_eval", "run_eval", "rescore_eval",
     "table_rows", "TableRow",
 ]

@@ -530,6 +530,18 @@ Scorer 5. `expected`: the gold answer texts (or `{"answers": [...]}`); none = th
 
 Scorer 7: an `evaluate_ingestion` result as a scorer result. Gate: every structural check held and, with `label_accuracy`, the unit-labelling accuracy reaches it. Diagnostics: the failures, the warnings, a line per document, the unlabelled tables and the labelling results (per label, confusions).
 
+### `arun_eval(gold: 'GoldSet', task: 'Task', scorers: 'Sequence[Scorer]', *, repeats: 'int' = 1, concurrency: 'int' = 8, progress: 'Optional[Callable[[str], Any]]' = None, task_name: 'Optional[str]' = None, models: 'Sequence[str]' = ()) -> 'EvalReport'`
+
+Run `task` on every item of `gold`, `repeats` times, `concurrency` jobs at a time, and score each repeat with `scorers` (`(gold, {item id: output}) -> ScorerResult`, e.g. `functools.partial(score_judgment, ...)`). `progress` receives `[eval] start N=<jobs> (...)`, `[eval] <i>/<N> <item id> r<k> ok|error: <reason>` and `[eval] done passed=<bool> errors=<n> flips=<n>`. `task_name` and `models` are recorded in the report. Returns the `EvalReport`.
+
+### `run_eval(gold: 'GoldSet', task: 'Task', scorers: 'Sequence[Scorer]', **kwargs: 'Any') -> 'EvalReport'`
+
+`arun_eval` from synchronous code. Inside a running event loop (a web backend), await `arun_eval`.
+
+### `rescore_eval(report: 'EvalReport', gold: 'GoldSet', scorers: 'Sequence[Scorer]') -> 'EvalReport'`
+
+Score a saved report's outputs again (new scorers, thresholds or a corrected gold) without calling the task.
+
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 
 Every data row of every table in a parsed document (`parse_document` output), in document order.
