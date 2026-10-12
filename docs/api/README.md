@@ -522,6 +522,14 @@ Scorer 3. `expected` and a prediction: the items (e.g. names, requirements). Ite
 
 Scorer 4. `expected`: the verdict. A prediction: the verdict, or `{"verdict": ..., "score": p}` with `p` the probability that the verdict is `score_label`. Gate: precision (alert fatigue) and recall (missed) of the `actionable` verdict, APART -- for a judge that refutes other outputs, recall is its error-catch rate. Diagnostics: accuracy, false-alarm rate (actionable called on a non-actionable item -- a judge's false refutes), per-class recall, the same rates per value of the metadata key `by` (e.g. provenance), and with `score_label` calibration: per score bin, how often the expected verdict is `score_label`. A missing verdict is an error: wrong, and never the actionable verdict.
 
+### `score_generation(gold: 'Gold', predictions: 'Mapping[str, Any]', *, citation_recall: 'float', abstention: 'float', grounded: 'float', judgments: 'Optional[Mapping[str, bool]]' = None, name: 'str' = 'generation') -> 'ScorerResult'`
+
+Scorer 5. `expected`: the gold answer texts (or `{"answers": [...]}`); none = the right response is to abstain. A prediction: the generated answer (`answer`, `citations` = evidence ids, `abstained` or `answer_kind`) with the `evidence` it was given (`{id: text}`). Gates: citation recall over the answerable items (gold answers whose normalised text is inside the cited evidence; an abstention recalls nothing), correct abstention (abstained iff nothing to answer), groundedness over the answers (citations that point at the given evidence; an answer with no citation is ungrounded). `judgments` (`{id: supported}`, from an LLM judge the caller ran) are reported, never gated. A missing prediction is an error: wrong, never an abstention.
+
+### `score_ingestion(evaluation: "'IngestionEvaluation'", *, label_accuracy: 'Optional[float]' = None, name: 'str' = 'ingestion') -> 'ScorerResult'`
+
+Scorer 7: an `evaluate_ingestion` result as a scorer result. Gate: every structural check held and, with `label_accuracy`, the unit-labelling accuracy reaches it. Diagnostics: the failures, the warnings, a line per document, the unlabelled tables and the labelling results (per label, confusions).
+
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 
 Every data row of every table in a parsed document (`parse_document` output), in document order.

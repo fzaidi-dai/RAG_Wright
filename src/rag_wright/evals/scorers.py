@@ -12,8 +12,13 @@ prediction is an error -- counted wrong, and reported apart (ADR-0133: a failed 
                             over-extraction are different failures); F1, extras, misses, recall by input length.
   score_judgment         4. judgment / verdict: precision and recall of the actionable class, gated apart; accuracy,
                             false-alarm rate, per-class recall, a breakdown by provenance, calibration of a score.
+  score_generation       5. generation / QA: citation recall (the gold answers inside the cited evidence), correct
+                            abstention and groundedness (citations point at the given evidence) as gates; an LLM
+                            judge's verdicts, computed by the caller, reported and never gated.
   score_relational       6. graph / relational: recall over the answer set (reachability, not ranking), broken down
                             by a metadata key; over-reach reported as precision.
+  score_ingestion        7. ingestion structure and unit labelling: `evaluate_ingestion`'s checks (and label accuracy
+                            when a floor is given) as one scorer result.
   score_candidate_choice 8. candidate-then-choose: the generator's coverage of the expected values (it caps recall)
                             and value-level recall and precision of the choices (emitting more is not a win).
 
@@ -22,10 +27,15 @@ Each is verified against an engine eval's published numbers (`tests/evals/test_s
 from __future__ import annotations
 
 import math
+import re
 from collections import Counter
-from typing import Any, Callable, Collection, Mapping, Optional, Sequence, Union
+from dataclasses import asdict
+from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Optional, Sequence, Union
 
 from rag_wright.contracts.evals import GoldItem, GoldSet, ScorerResult
+
+if TYPE_CHECKING:
+    from rag_wright.ingestion.evaluate import IngestionEvaluation
 
 Gold = Union[GoldSet, Sequence[GoldItem]]
 
@@ -332,6 +342,96 @@ def score_judgment(gold: Gold, predictions: Mapping[str, Any], *, actionable: An
     return ScorerResult(scorer=name, passed=passed, gate=gate, thresholds=thresholds, diagnostics=diagnostics)
 
 
+_PUNCT = re.compile(r"[^\w\s]")
+
+
+def _squad(text: Any) -> str:
+    """SQuAD-style: lower case, punctuation dropped, spaces collapsed."""
+    return " ".join(_PUNCT.sub(" ", str(text).lower()).split())
+
+
+def _abstained(pred: Mapping[str, Any]) -> bool:
+    kind = pred.get("answer_kind")
+    return str(getattr(kind, "value", kind)) == "abstained" if kind is not None else bool(pred.get("abstained"))
+
+
+def score_generation(gold: Gold, predictions: Mapping[str, Any], *, citation_recall: float, abstention: float,
+                     grounded: float, judgments: Optional[Mapping[str, bool]] = None,
+                     name: str = "generation") -> ScorerResult:
+    """Scorer 5. `expected`: the gold answer texts (or `{"answers": [...]}`); none = the right response is to abstain.
+    A prediction: the generated answer (`answer`, `citations` = evidence ids, `abstained` or `answer_kind`) with the
+    `evidence` it was given (`{id: text}`). Gates: citation recall over the answerable items (gold answers whose
+    normalised text is inside the cited evidence; an abstention recalls nothing), correct abstention (abstained iff
+    nothing to answer), groundedness over the answers (citations that point at the given evidence; an answer with
+    no citation is ungrounded). `judgments` (`{id: supported}`, from an LLM judge the caller ran) are reported,
+    never gated. A missing prediction is an error: wrong, never an abstention."""
+    items = _items(gold)
+    recalls: list[float] = []
+    grounded_parts: list[float] = []
+    right = errors = cites = answered_n = 0
+    false_abstain = answerable_n = false_answer = unanswerable_n = 0
+    misses: list[str] = []
+    for item in items:
+        exp = item.expected.get("answers", []) if isinstance(item.expected, Mapping) else item.expected
+        answers = [a for a in (exp or []) if _squad(a)]
+        answerable = bool(answers)
+        answerable_n += answerable
+        unanswerable_n += not answerable
+        if item.id not in predictions:
+            errors += 1
+            if answerable:
+                recalls.append(0.0)
+                misses += [f"{item.id}: {a}" for a in answers]
+            continue
+        pred = predictions[item.id] or {}
+        abstained = _abstained(pred)
+        right += abstained != answerable
+        false_abstain += answerable and abstained
+        false_answer += (not answerable) and not abstained
+        evidence = {str(k): v for k, v in (pred.get("evidence") or {}).items()}
+        citations = [str(c) for c in pred.get("citations") or []]
+        if not abstained:
+            answered_n += 1
+            cites += len(citations)
+            grounded_parts.append(sum(c in evidence for c in citations) / len(citations) if citations else 0.0)
+        if answerable:
+            cited = _squad(" ".join(str(evidence.get(c, "")) for c in citations)) if not abstained else ""
+            found = [a for a in answers if _squad(a) in cited]
+            recalls.append(len(found) / len(answers))
+            misses += [f"{item.id}: {a}" for a in answers if a not in found]
+    mean = (lambda xs: sum(xs) / len(xs) if xs else None)  # noqa: E731
+    gate = {"citation_recall": mean(recalls), "abstention": right / len(items) if items else None,
+            "grounded": mean(grounded_parts)}
+    thresholds = {"citation_recall": citation_recall, "abstention": abstention, "grounded": grounded}
+    passed = all(v is not None and v >= thresholds[m] for m, v in gate.items())
+    judged = [bool(v) for k, v in (judgments or {}).items()]
+    return ScorerResult(scorer=name, passed=passed, gate=gate, thresholds=thresholds, diagnostics={
+        "n": len(items), "errors": errors, "answerable": answerable_n,
+        "false_abstain_rate": false_abstain / answerable_n if answerable_n else None,
+        "false_answer_rate": false_answer / unanswerable_n if unanswerable_n else None,
+        "citations_per_answer": cites / answered_n if answered_n else None,
+        "judge_supported": mean([float(v) for v in judged]), "misses": misses[:50]})
+
+
+def score_ingestion(evaluation: "IngestionEvaluation", *, label_accuracy: Optional[float] = None,
+                    name: str = "ingestion") -> ScorerResult:
+    """Scorer 7: an `evaluate_ingestion` result as a scorer result. Gate: every structural check held and, with
+    `label_accuracy`, the unit-labelling accuracy reaches it. Diagnostics: the failures, the warnings, a line per
+    document, the unlabelled tables and the labelling results (per label, confusions)."""
+    gate: dict[str, Optional[float]] = {"structural_checks": 1.0 if evaluation.passed else 0.0}
+    thresholds = {"structural_checks": 1.0}
+    if label_accuracy is not None:
+        gate["label_accuracy"] = evaluation.labels.accuracy if evaluation.labels is not None else None
+        thresholds["label_accuracy"] = label_accuracy
+    passed = all(v is not None and v >= thresholds[m] for m, v in gate.items())
+    return ScorerResult(scorer=name, passed=passed, gate=gate, thresholds=thresholds, diagnostics={
+        "failures": list(evaluation.failures), "warnings": list(evaluation.warnings),
+        "unlabelled_tables": list(evaluation.unlabelled_tables),
+        "documents": [{"doc": d.doc, "spans": d.spans, "units": d.units, "error": d.error}
+                      for d in evaluation.documents],
+        "labels": asdict(evaluation.labels) if evaluation.labels is not None else None})
+
+
 def score_candidate_choice(gold: Gold, predictions: Mapping[str, Any], *, recall: float, precision: float,
                            coverage: float, match: Callable[[Any, Any], bool] = lenient_match,
                            name: str = "candidate_choice") -> ScorerResult:
@@ -373,5 +473,5 @@ def score_candidate_choice(gold: Gold, predictions: Mapping[str, Any], *, recall
         "values_per_item": n_emitted / len(items) if items else None, "coverage_misses": misses[:50]})
 
 
-__all__ = ["lenient_match", "score_candidate_choice", "score_classification", "score_extraction", "score_judgment",
-           "score_relational", "score_retrieval"]
+__all__ = ["lenient_match", "score_candidate_choice", "score_classification", "score_extraction", "score_generation",
+           "score_ingestion", "score_judgment", "score_relational", "score_retrieval"]

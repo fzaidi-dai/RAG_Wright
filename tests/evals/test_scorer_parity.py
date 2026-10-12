@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from rag_wright.api import (GoldItem, GoldSet, score_candidate_choice, score_classification, score_extraction,
-                            score_judgment, score_relational, score_retrieval)
+                            score_generation, score_judgment, score_relational, score_retrieval)
 
 ROOT = Path(__file__).resolve().parents[2]
 HOLDOUT = ROOT / "data" / "cache" / "legalbert_holdout_eval.json"
@@ -278,3 +278,34 @@ def test_judgment_matches_the_semantic_judge_silver_run_and_its_calibration():
             round(j.diagnostics["false_alarm_rate"] * 366)) == (372, 215, 209)
     assert [(b["n"], round(b["share"], 2)) for b in j.diagnostics["calibration"]] == [
         (374, 0.46), (38, 0.74), (29, 0.79), (40, 0.80), (125, 0.93)]
+
+
+# --- 5. generation: citation recall uses the CUAD highlight eval's coverage rule (eval/cuad_highlight.covers) --------
+
+def test_citation_recall_matches_the_cuad_coverage_rule_on_real_answers():
+    """No generation eval kept outputs with citations, so the rule is checked on real CUAD answers and contract
+    text: for each golden question with answers, the cited text is the window around the first answer, the same
+    window cut short of it, and an unrelated window of the same contract (no model)."""
+    _need(ROOT / "data" / "eval" / "golden.json", ROOT / "data" / "cuad" / "extracted" / "CUAD_v1.json")
+    from eval.cuad_highlight import covers
+    from rag_wright.packs.contracts.spans.cuad_labels import parse_cuad
+
+    texts = {c.contract_id: c.context for c in parse_cuad(ROOT / "data" / "cuad" / "extracted" / "CUAD_v1.json")}
+    questions = [q for q in json.loads((ROOT / "data" / "eval" / "golden.json").read_text())["questions"]
+                 if q["answer_spans"] and texts.get(q["source_doc_id"])][:200]
+    items, preds, ref = [], {}, {}
+    for q in questions:
+        text, first = texts[q["source_doc_id"]], q["answer_spans"][0]
+        at = max(text.find(first), 0)
+        windows = {"around": text[max(at - 300, 0):at + len(first) + 300],
+                   "short": text[max(at - 300, 0):at + len(first) // 2],
+                   "elsewhere": text[(at + 5000) % max(len(text) - 600, 1):][:600]}
+        for kind, window in windows.items():
+            qid = f"{q['qid']}::{kind}"
+            items.append(GoldItem(id=qid, input=q["question"], expected=q["answer_spans"]))
+            preds[qid] = {"answer": "x", "citations": ["w"], "abstained": False, "evidence": {"w": window}}
+            ref[qid] = sum(covers(a, window) for a in q["answer_spans"]) / len(q["answer_spans"])
+    r = score_generation(GoldSet(name="cuad-qa", version="1", items=items), preds, citation_recall=0.0,
+                         abstention=0.0, grounded=0.0)
+    assert r.gate["citation_recall"] == pytest.approx(sum(ref.values()) / len(ref), abs=1e-12)
+    assert 0.0 < r.gate["citation_recall"] < 1.0  # the windows give a real mix of covered and missed answers
