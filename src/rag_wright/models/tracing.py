@@ -147,6 +147,25 @@ def traced_step(name: str, *, metadata: Optional[dict[str, Any]] = None) -> Iter
 
 
 @contextmanager
+def traced_item(name: str, *, metadata: Optional[dict[str, Any]] = None) -> Iterator[None]:
+    """A span that is the CURRENT context, so every generation emitted inside it (any client, any coroutine of this
+    task) nests under it -- one eval item's model calls under that item (EV-5). No-op unless tracing is on.
+    Unlike `traced_step`, whose span is not current and so groups nothing."""
+    lf = _get_client()
+    cm = None
+    if lf is not None:
+        try:
+            cm = lf.start_as_current_observation(name=name, as_type="span", metadata=metadata or None)
+        except Exception:  # noqa: BLE001 - never let tracing break the item
+            cm = None
+    if cm is None:
+        yield
+        return
+    with cm:
+        yield
+
+
+@contextmanager
 def traced_run(*, document_id: Optional[str] = None, job_id: Optional[str] = None,
                name: Optional[str] = None, metadata: Optional[dict[str, Any]] = None) -> Iterator[None]:
     """Group every generation emitted inside the block under one trace/session -- the caller's correlation id

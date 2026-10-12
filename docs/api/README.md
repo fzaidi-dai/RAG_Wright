@@ -212,7 +212,7 @@ _(no docstring)_
 
 The file cannot be read into a correct gold set; the message says where and why.
 
-### `EvalReport(*, gold_set: str, gold_version: str, task: str, engine_version: str, models: list[str] = <factory>, repeats: Annotated[int, Ge(ge=1)] = 1, items: list[rag_wright.contracts.evals.ItemResult], scores: list[rag_wright.contracts.evals.ScorerResult], created_at: datetime.datetime = <factory>, run_url: Optional[str] = None) -> None`
+### `EvalReport(*, gold_set: str, gold_version: str, task: str, engine_version: str, models: list[str] = <factory>, repeats: Annotated[int, Ge(ge=1)] = 1, items: list[rag_wright.contracts.evals.ItemResult], scores: list[rag_wright.contracts.evals.ScorerResult], created_at: datetime.datetime = <factory>, run_url: Optional[str] = None, run_urls: list[str] = <factory>, dataset_version: Optional[str] = None) -> None`
 
 The JSON-ready result of an eval run: what was measured, per item, per scorer.
 
@@ -530,9 +530,9 @@ Scorer 5. `expected`: the gold answer texts (or `{"answers": [...]}`); none = th
 
 Scorer 7: an `evaluate_ingestion` result as a scorer result. Gate: every structural check held and, with `label_accuracy`, the unit-labelling accuracy reaches it. Diagnostics: the failures, the warnings, a line per document, the unlabelled tables and the labelling results (per label, confusions).
 
-### `arun_eval(gold: 'GoldSet', task: 'Task', scorers: 'Sequence[Scorer]', *, repeats: 'int' = 1, concurrency: 'int' = 8, progress: 'Optional[Callable[[str], Any]]' = None, task_name: 'Optional[str]' = None, models: 'Sequence[str]' = ()) -> 'EvalReport'`
+### `arun_eval(gold: 'GoldSet', task: 'Task', scorers: 'Sequence[Scorer]', *, repeats: 'int' = 1, concurrency: 'int' = 8, progress: 'Optional[Callable[[str], Any]]' = None, task_name: 'Optional[str]' = None, models: 'Sequence[str]' = (), langfuse: 'Optional[bool]' = None, langfuse_client: 'Any' = None, run_name: 'Optional[str]' = None) -> 'EvalReport'`
 
-Run `task` on every item of `gold`, `repeats` times, `concurrency` jobs at a time, and score each repeat with `scorers` (`(gold, {item id: output}) -> ScorerResult`, e.g. `functools.partial(score_judgment, ...)`). `progress` receives `[eval] start N=<jobs> (...)`, `[eval] <i>/<N> <item id> r<k> ok|error: <reason>` and `[eval] done passed=<bool> errors=<n> flips=<n>`. `task_name` and `models` are recorded in the report. Returns the `EvalReport`.
+Run `task` on every item of `gold`, `repeats` times, `concurrency` jobs at a time, and score each repeat with `scorers` (`(gold, {item id: output}) -> ScorerResult`, e.g. `functools.partial(score_judgment, ...)`). `progress` receives `[eval] start N=<jobs> (...)`, `[eval] <i>/<N> <item id> r<k> ok|error: <reason>` and `[eval] done passed=<bool> errors=<n> flips=<n>`. `task_name` and `models` are recorded in the report. `langfuse` (None = `RAG_EVAL_BACKEND`, default local) runs it on the Langfuse backend, with `langfuse_client` (default: a client from the environment) and `run_name` (default: the task name and the time). Returns the `EvalReport`.
 
 ### `run_eval(gold: 'GoldSet', task: 'Task', scorers: 'Sequence[Scorer]', **kwargs: 'Any') -> 'EvalReport'`
 

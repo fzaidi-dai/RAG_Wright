@@ -8,16 +8,24 @@ repeats each repeat's gate is listed (`per_repeat_gate`) -- a pass that flips be
 report keeps every output, so `rescore_eval` scores it again later without calling the task.
 
 The task is where a product calls its capability, through the capability layer (`ainvoke_subgraph`,
-`ainvoke_model`, or its own coroutine that does), so the eval measures what production runs.
+`ainvoke_model`, or its own coroutine that does), so the eval measures what production runs. With tracing on, each
+job is a span that is the current context, so the model calls it makes nest under it (EV-5).
+
+EV-5: with `langfuse=True` (or `RAG_EVAL_BACKEND=langfuse`) the run goes through the optional Langfuse backend
+(`langfuse_backend.py`): the gold set as a versioned dataset, each repeat a `run_experiment`, the scorers' gates as
+run scores; the report is the same, plus the run links and the dataset version. A `local_only` gold set is refused
+before anything is sent.
 """
 from __future__ import annotations
 
 import asyncio
 import inspect
+import os
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, Awaitable, Callable, Iterable, Optional, Sequence, Union
 
 from rag_wright.contracts.evals import EvalReport, GoldItem, GoldSet, ItemResult, ScorerResult
+from rag_wright.models import tracing
 
 Task = Callable[[GoldItem], Union[Any, Awaitable[Any]]]
 Scorer = Callable[[GoldSet, dict], ScorerResult]
@@ -55,15 +63,36 @@ def _score(gold: GoldSet, items: list[ItemResult], repeats: int, scorers: Iterab
 
 async def arun_eval(gold: GoldSet, task: Task, scorers: Sequence[Scorer], *, repeats: int = 1,
                     concurrency: int = 8, progress: Optional[Callable[[str], Any]] = None,
-                    task_name: Optional[str] = None, models: Sequence[str] = ()) -> EvalReport:
+                    task_name: Optional[str] = None, models: Sequence[str] = (), langfuse: Optional[bool] = None,
+                    langfuse_client: Any = None, run_name: Optional[str] = None) -> EvalReport:
     """Run `task` on every item of `gold`, `repeats` times, `concurrency` jobs at a time, and score each repeat with
     `scorers` (`(gold, {item id: output}) -> ScorerResult`, e.g. `functools.partial(score_judgment, ...)`).
     `progress` receives `[eval] start N=<jobs> (...)`, `[eval] <i>/<N> <item id> r<k> ok|error: <reason>` and
-    `[eval] done passed=<bool> errors=<n> flips=<n>`. `task_name` and `models` are recorded in the report. Returns
-    the `EvalReport`."""
+    `[eval] done passed=<bool> errors=<n> flips=<n>`. `task_name` and `models` are recorded in the report.
+    `langfuse` (None = `RAG_EVAL_BACKEND`, default local) runs it on the Langfuse backend, with `langfuse_client`
+    (default: a client from the environment) and `run_name` (default: the task name and the time). Returns the
+    `EvalReport`."""
     if repeats < 1 or concurrency < 1:
         raise ValueError("repeats and concurrency must be >= 1")
     say = progress or (lambda _line: None)
+    name = task_name or getattr(task, "__name__", type(task).__name__)
+    if langfuse is None:
+        langfuse = os.environ.get("RAG_EVAL_BACKEND", "local").strip().lower() == "langfuse"
+    if langfuse:
+        if gold.local_only:
+            raise ValueError(f"gold set {gold.name!r} is local_only: it is never sent to Langfuse (set local_only="
+                             "False only for data that may leave the machine)")
+        if langfuse_client is None:
+            if not tracing._configured():
+                raise RuntimeError("the Langfuse backend needs LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY")
+            from langfuse import Langfuse
+
+            langfuse_client = Langfuse()
+        from rag_wright.evals.langfuse_backend import arun_on_langfuse
+
+        return await arun_on_langfuse(gold, task, scorers, repeats=repeats, concurrency=concurrency, say=say,
+                                      task_name=name, models=models, run_name=run_name, client=langfuse_client,
+                                      call=_call, score=_score, engine_version=_engine_version())
     items = gold.items
     n = len(items) * repeats
     outputs: dict[str, list[Any]] = {i.id: [None] * repeats for i in items}
@@ -76,7 +105,9 @@ async def arun_eval(gold: GoldSet, task: Task, scorers: Sequence[Scorer], *, rep
         nonlocal done
         async with sem:
             try:
-                outputs[item.id][r] = await _call(task, item)
+                with tracing.traced_item(f"eval {gold.name} {item.id} r{r + 1}",
+                                         metadata={"gold_version": gold.version, "item_id": item.id}):
+                    outputs[item.id][r] = await _call(task, item)
             except Exception as exc:  # noqa: BLE001 - a failed call is an error in its slot, never an answer
                 errors[item.id][r] = f"{type(exc).__name__}: {exc}"
         done += 1
@@ -86,7 +117,7 @@ async def arun_eval(gold: GoldSet, task: Task, scorers: Sequence[Scorer], *, rep
     await asyncio.gather(*(job(item, r) for r in range(repeats) for item in items))
     results = [ItemResult(item_id=i.id, outputs=outputs[i.id], errors=errors[i.id]) for i in items]
     report = EvalReport(gold_set=gold.name, gold_version=gold.version,
-                        task=task_name or getattr(task, "__name__", type(task).__name__),
+                        task=name,
                         engine_version=_engine_version(), models=list(models), repeats=repeats, items=results,
                         scores=_score(gold, results, repeats, scorers))
     say(f"[eval] done passed={report.passed} errors={report.errors} flips={len(report.flips)}")

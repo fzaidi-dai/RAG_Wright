@@ -244,6 +244,7 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `RAG_MODELS_DIR` | the models root every trained classifier loads its weights from (default: the engine checkout's `data/models` when it exists, else `./data/models`); fill it with `scripts/fetch_reference_models.py` for the reference pack |
 | `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs (`RAG_SETFIT_CLAUSE_DIR` overrides `<models root>/setfit_clause`) |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` / `RAG_TRACE_LEVEL` | observability (Langfuse tracing; see [`OBSERVABILITY.md`](OBSERVABILITY.md)) |
+| `RAG_EVAL_BACKEND` | `local` (default) or `langfuse`: where `arun_eval` runs when its `langfuse` argument is not given. `langfuse` needs the Langfuse keys and a gold set with `local_only=False`; a `local_only` gold set is refused before anything is sent |
 
 Secrets belong only in a gitignored `.env`. See [`installation.md`](installation.md) for the minimal set and
 [`concepts.md`](concepts.md) for the seams in context.

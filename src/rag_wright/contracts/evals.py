@@ -109,7 +109,9 @@ class EvalReport(BaseModel):
     items: list[ItemResult]
     scores: list[ScorerResult]
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    run_url: Optional[str] = None
+    run_url: Optional[str] = None  # the first repeat's run on an eval backend (EV-5)
+    run_urls: list[str] = Field(default_factory=list)  # every repeat's run, in order
+    dataset_version: Optional[str] = None  # the backend dataset version the run read (a server timestamp)
 
     @model_validator(mode="after")
     def _one_slot_per_repeat(self) -> "EvalReport":
