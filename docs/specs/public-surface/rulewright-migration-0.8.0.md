@@ -46,3 +46,17 @@ was removed or changed; the reference is `docs/evals.md`.
 section 5 ("Evals behind your product's backend"); your own eval scripts can move onto `arun_eval` and the scorers
 when you next touch them.
 
+## 4. A wrong database name can fail loudly instead of opening an empty graph (PS-27)
+
+**What changed.** Opening a store on a database that does not exist still creates it by default -- your
+provisioning relies on that (`provisioning.py`: a customer's derived name is created on first open) -- and the engine
+now logs `created database '<name>' (it did not exist)` whenever it does. New: `open_workspace(..., create=False)`
+(and `ArcadeDBStore.from_env` / `from_config(..., create=False)`) raises `LookupError` naming the databases that
+exist, and creates nothing. The engine's reference MCP servers now open their corpus with `create=False`.
+
+**What to do in RuleWright.** Keep the default where you provision a customer. Pass `create=False` wherever the
+database must already exist: an explicit `customer.contract_database` override, and the query-only services
+(your copies of the MCP servers, any read path). That turns `tenancy/routing.py`'s "a wrong but UNIQUE name creates an
+empty database" case into an error at the point of the mistake. Watch the log for unexpected `created database`
+lines after you deploy.
+

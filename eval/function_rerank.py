@@ -62,7 +62,7 @@ def _clauses_in_functions(store: ArcadeDBStore, functions: list[str]) -> list[st
 
 def main() -> None:
     load_dotenv()
-    store = ArcadeDBStore.from_env(database=DB, reset=False)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     corpus = {c.clause_id: c.text for c in load_corpus()}
     queries = load_test_queries()
     _progress(f"[setup] corpus={len(corpus)} queries={len(queries)}  loading BGE reranker (first use downloads)...")

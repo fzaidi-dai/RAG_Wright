@@ -88,7 +88,7 @@ def _grade_prompt(test: str, clause: str) -> str:
 
 def main() -> None:
     load_dotenv()
-    store = ArcadeDBStore.from_env(database=DB, reset=False)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     corpus = {c.clause_id: c.text for c in load_corpus()}
     q = next(x for x in load_test_queries() if x.text.strip().lower() == QUERY.lower())
     gold = set(q.relevant)

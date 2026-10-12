@@ -29,7 +29,7 @@ DB = os.environ.get("PIVOT_DB", "ragwright_acord_pivot")
 
 def main() -> None:
     load_dotenv()
-    store = ArcadeDBStore.from_env(database=DB, reset=False)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     queries = load_test_queries()
 
     fn_cache: dict[str, set[str]] = {}

@@ -27,9 +27,12 @@ ws = open_workspace(config, corpus="my_corpus", reset=False)   # corpus = the ba
 | `options` | `EngineOptions` | defaults | the options catalog: `ingest` (an `IngestOptions`) and `packs` (each domain pack's options, keyed by pack name) |
 | `pack` | `str \| None` | `None` | path to the domain `.ttl` pack, whose types are created on top of the engine's; `None` = the neutral engine schema only (`Chunk`, `Entity`, `Span`, `Document` vertices; `Relationship`, `Mentions`, `EmbeddedIn`, `AttachedTo` edges). The reference contract pipeline ensures its own pack schema on first use. |
 
-`open_workspace(config, *, corpus, reset=False)` resolves and caches a workspace and ensures the schema. `corpus`
-is the backend database name (tenancy is the product's concern); `reset=True` drops and recreates it and bypasses
-the cache. Opening a cached corpus with a different config returns a new handle that replaces the cached one, so a
+`open_workspace(config, *, corpus, reset=False, create=True)` resolves and caches a workspace and ensures the schema.
+`corpus` is the backend database name (tenancy is the product's concern); `reset=True` drops and recreates it and
+bypasses the cache. A corpus that does not exist is created, and the creation is logged -- that is how a new corpus
+(a new tenant) is provisioned. Pass `create=False` wherever the corpus must already exist (a query service, an
+override name, an eval reading an existing graph): a missing database then raises `LookupError` naming the
+databases that exist, instead of opening an empty graph (PS-27). Opening a cached corpus with a different config returns a new handle that replaces the cached one, so a
 configuration change takes effect without a restart ([`workspaces.md`](workspaces.md)).
 
 ### `StoreConfig`

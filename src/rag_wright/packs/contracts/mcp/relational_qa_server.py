@@ -128,7 +128,7 @@ def production_env_store() -> Store:
     from rag_wright.api import EngineConfig, StoreConfig, open_workspace, pack_store
 
     # PS-8c: the pack opens a WORKSPACE (never the backend) and takes its Store through the public accessor
-    ws = open_workspace(EngineConfig(store=StoreConfig.from_env()), corpus=os.environ.get("QA_DB", "ragwright_cuad_full"))
+    ws = open_workspace(EngineConfig(store=StoreConfig.from_env()), corpus=os.environ.get("QA_DB", "ragwright_cuad_full"), create=False)
     return pack_store(ws, lambda store: store)
 
 

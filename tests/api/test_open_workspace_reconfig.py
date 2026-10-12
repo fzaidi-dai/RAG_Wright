@@ -24,7 +24,7 @@ class _Store:
 def fakes(monkeypatch):
     built = {"stores": [], "embedders": []}
 
-    def build_store(config, corpus, *, reset):
+    def build_store(config, corpus, *, reset, create=True):
         built["stores"].append(_Store(corpus, reset))
         return built["stores"][-1]
 

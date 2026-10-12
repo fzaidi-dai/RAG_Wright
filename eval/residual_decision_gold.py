@@ -35,7 +35,7 @@ def build() -> None:
     from rag_wright.packs.contracts.spans.property_extractor import RESIDUAL_LLM_DIMS
     from rag_wright.store.arcadedb import ArcadeDBStore
 
-    s = ArcadeDBStore.from_env(database="rw_scratch_contract_ref")
+    s = ArcadeDBStore.from_env(database="rw_scratch_contract_ref", create=False)
 
     def key(sid: str):
         head, idx = sid.rsplit("#", 1)

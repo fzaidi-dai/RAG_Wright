@@ -67,11 +67,14 @@ def use_workspace_models(ws: Any) -> Iterator[None]:
         yield
 
 
-def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False) -> WorkspaceHandle:
+def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False, create: bool = True) -> WorkspaceHandle:
     """Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema:
     the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose
     `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an
     opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
+    A missing database is created (logged): that is how a new corpus is provisioned. `create=False` raises
+    `LookupError` instead (PS-27) -- use it wherever the corpus must already exist, so a wrong name fails loudly
+    rather than opening an empty graph.
 
     One handle per store and corpus is cached for the process. An equal `config` returns it; a different one (new
     models, options, credentials or pack) returns a new handle that replaces it from then on, so a configuration
@@ -90,21 +93,21 @@ def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False) ->
                 handle._share_embedder(cached)
             _WORKSPACES[cache_key] = handle
             return handle
-    store = _build_store(config, corpus, reset=reset)
+    store = _build_store(config, corpus, reset=reset, create=create)
     store.ensure_schema()
     handle = WorkspaceHandle(store, config, corpus)
     _WORKSPACES[cache_key] = handle
     return handle
 
 
-def _build_store(config: EngineConfig, corpus: str, *, reset: bool) -> Any:
+def _build_store(config: EngineConfig, corpus: str, *, reset: bool, create: bool = True) -> Any:
     sc = config.store
     if sc.backend != "arcadedb":
         raise ValueError(f"unsupported store backend: {sc.backend!r}")  # a new backend plugs in here (DD)
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     return ArcadeDBStore.from_config(sc.host, sc.port, sc.user, sc.password, database=corpus,
-                                     protocol=sc.protocol, reset=reset, pack_ttl=config.pack)
+                                     protocol=sc.protocol, reset=reset, pack_ttl=config.pack, create=create)
 
 
 def _build_embedder(config: EngineConfig) -> Optional[Any]:

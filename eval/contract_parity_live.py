@@ -80,7 +80,7 @@ def _guard_provisions(variance: dict) -> None:
     import rag_wright.packs.contracts.subgraphs.contract_ingestion_pipeline as cip
     from rag_wright.store.arcadedb import ArcadeDBStore
 
-    ref = ArcadeDBStore.from_env(database=DB["reference"])
+    ref = ArcadeDBStore.from_env(database=DB["reference"], create=False)
     original = cip.provision_units
 
     async def guarded(spans, *, decider=None):
@@ -184,7 +184,7 @@ def run_diff(set_name: str) -> dict:
 
     from rag_wright.store.arcadedb import ArcadeDBStore
 
-    a, b = (ArcadeDBStore.from_env(database=DB[p]) for p in ("reference", "rebuilt"))
+    a, b = (ArcadeDBStore.from_env(database=DB[p], create=False) for p in ("reference", "rebuilt"))
     edge_types = {r["name"] for s in (a, b) for r in s._query("SELECT name FROM schema:types WHERE type = 'edge'")}
     types = sorted(a.type_names() | b.type_names())
     rebuilt = json.loads((OUT / f"rebuilt_{set_name}.json").read_text())

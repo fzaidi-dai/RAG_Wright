@@ -63,7 +63,7 @@ def property_match(query_constraints: set, typed_edges: list[dict], *, grounded_
 
 def main() -> None:
     load_dotenv()
-    store = ArcadeDBStore.from_env(database=DB, reset=False)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     corpus = {c.clause_id: c.text for c in load_corpus()}
     queries = load_test_queries()
     reranker = BGEReranker()

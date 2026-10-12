@@ -17,6 +17,7 @@ introspection: create only what is absent.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import random
 import time
@@ -29,6 +30,8 @@ from rag_wright.corpus.canonicalize import normalize_entity_name  # issue 0030: 
 from rag_wright.ontology.pack_schema import load_kg_schema  # ADR-0067 P5b: a pack's declared KG schema (generic)
 from rag_wright.contracts.span import SpanRecord
 from rag_wright.store.seam import NOT_NULL, GraphEdge, GraphNode
+
+_log = logging.getLogger(__name__)
 
 CHUNK_TYPE = "Chunk"
 ENTITY_TYPE = "Entity"
@@ -236,8 +239,9 @@ class ArcadeDBStore:
 
     @classmethod
     def from_env(cls, *, database: str | None = None, reset: bool = False,
-                 pack_ttl: str | None = None) -> "ArcadeDBStore":
-        """Build a store from `ARCADEDB_*` env, creating the database if absent.
+                 pack_ttl: str | None = None, create: bool = True) -> "ArcadeDBStore":
+        """Build a store from `ARCADEDB_*` env, creating the database if absent (logged); `create=False` raises
+        `LookupError` instead (PS-27), for a path where the database must already exist.
 
         `database` overrides `ARCADEDB_DATABASE` (used to point tests at a scratch database).
         `reset=True` drops and recreates the database first, for a clean-slate test.
@@ -248,20 +252,29 @@ class ArcadeDBStore:
             os.environ["ARCADEDB_USER"], os.environ["ARCADEDB_PASSWORD"],
             database=database or os.environ["ARCADEDB_DATABASE"],
             protocol=os.getenv("ARCADEDB_PROTOCOL", "http"),  # `https` for the Modal-hosted KG (EC-2)
-            reset=reset, pack_ttl=pack_ttl)
+            reset=reset, pack_ttl=pack_ttl, create=create)
 
     @classmethod
     def from_config(cls, host: str, port: str, user: str, password: str, *, database: str,
                     protocol: str = "http", reset: bool = False,
-                    pack_ttl: str | None = None) -> "ArcadeDBStore":
+                    pack_ttl: str | None = None, create: bool = True) -> "ArcadeDBStore":
         """Build a store from EXPLICIT connection params (EP-API-1: the de-env'd twin of `from_env`, so engine
-        config flows as data, not `os.environ`). Creates the database if absent; `reset=True` drops + recreates it.
-        `pack_ttl` selects the domain pack schema (None = the neutral engine schema, no domain pack)."""
+        config flows as data, not `os.environ`). Creates the database if absent, and logs that it did (a product
+        provisions a new corpus this way); `create=False` raises `LookupError` naming the databases that exist,
+        and creates nothing (PS-27: a wrong name otherwise yields an empty graph, silently). `reset=True` drops +
+        recreates it, so it cannot be combined with `create=False`. `pack_ttl` selects the domain pack schema
+        (None = the neutral engine schema, no domain pack)."""
+        if reset and not create:
+            raise ValueError("reset=True drops and recreates the database; it cannot be combined with create=False")
         client = SyncClient(host, port, protocol=protocol, username=user, password=password)
         if reset and DatabaseDao.exists(client, database):
             DatabaseDao.delete(client, database)
         if not DatabaseDao.exists(client, database):
+            if not create:
+                existing = ", ".join(sorted(DatabaseDao.list_databases(client))) or "none"
+                raise LookupError(f"database {database!r} does not exist (create=False); existing: {existing}")
             DatabaseDao.create(client, database)
+            _log.info("created database %r (it did not exist)", database)
         return cls(client, database, pack_ttl=pack_ttl)
 
     # --- seam surface ---------------------------------------------------------------------------

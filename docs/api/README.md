@@ -284,9 +284,9 @@ The semantic boundary-discovery seam: decide chunk boundaries as a partition of 
 
 ## Functions
 
-### `open_workspace(config: 'EngineConfig', *, corpus: 'str', reset: 'bool' = False) -> 'WorkspaceHandle'`
+### `open_workspace(config: 'EngineConfig', *, corpus: 'str', reset: 'bool' = False, create: 'bool' = True) -> 'WorkspaceHandle'`
 
-Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
+Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache. A missing database is created (logged): that is how a new corpus is provisioned. `create=False` raises `LookupError` instead (PS-27) -- use it wherever the corpus must already exist, so a wrong name fails loudly rather than opening an empty graph.
 
 One handle per store and corpus is cached for the process. An equal `config` returns it; a different one (new models, options, credentials or pack) returns a new handle that replaces it from then on, so a configuration change takes effect without a restart (PS-16). The new handle reuses the store when the store settings and the pack are unchanged, and the query embedder when the embedding profile is unchanged; a call still holding the old handle finishes on the old config.
 

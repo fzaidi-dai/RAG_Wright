@@ -71,7 +71,7 @@ def main() -> None:
     if os.environ.get("FRESH") == "1":
         for p in (DISC_CACHE, SCORE_CACHE, ORDER_CACHE):
             p.unlink(missing_ok=True)
-    store = ArcadeDBStore.from_env(database=DB, reset=False)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     corpus = {c.clause_id: c.text for c in load_corpus()}
     queries = load_test_queries()
 

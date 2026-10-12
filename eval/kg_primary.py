@@ -162,7 +162,7 @@ def query_functions(queries) -> dict[str, list]:
 
 def main() -> None:
     load_dotenv()
-    store = ArcadeDBStore.from_env(database=DB, reset=False)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     corpus = {c.clause_id: c.text for c in load_corpus()}
     queries = load_test_queries()
     constraints = query_constraints(queries)

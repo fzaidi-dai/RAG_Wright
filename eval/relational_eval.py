@@ -80,7 +80,7 @@ def main() -> None:
     importlib.import_module("scripts.populate_entity_graph").main()
     vset = json.loads(Path("data/edgar/verification_set.json").read_text(encoding="utf-8"))
     questions = build_relational(vset)  # rebuilt from the same source the graph was populated from
-    store = ArcadeDBStore.from_env(database=os.environ["DB"])
+    store = ArcadeDBStore.from_env(database=os.environ["DB"], create=False)
     try:
         res = graph_leg_recall(questions, store)
     finally:

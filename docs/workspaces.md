@@ -74,3 +74,8 @@ convenient; an unchanged config returns the cached handle. An option object of y
 should compare by value (a dataclass or a pydantic model does); one that compares by identity looks changed every
 time, and each call then builds a new handle (still reusing the store and the embedder). `reset=True` drops and
 recreates the database, so it is not a way to change configuration.
+
+A corpus that does not exist is created on first open (logged), which is how a product provisions a tenant whose
+database name it derives. Where a corpus must already exist -- a tenant's explicit override name, a query-only
+service -- open it with `create=False`: a wrong name then raises `LookupError` rather than giving that tenant an
+empty graph (PS-27).

@@ -89,7 +89,7 @@ def main() -> None:
     load_dotenv()
     from rag_wright.store.arcadedb import ArcadeDBStore
 
-    store = ArcadeDBStore.from_env(database=DB)
+    store = ArcadeDBStore.from_env(database=DB, create=False)
     holdout = _holdout()
     _progress(f"[setup] holdout={len(holdout)} contracts x {len(CATEGORIES)} categories (given-type)")
 
