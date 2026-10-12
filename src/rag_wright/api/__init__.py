@@ -21,7 +21,7 @@ from rag_wright.capabilities.registry import canonical_capability_slugs, registe
 from rag_wright.api.answers import (AnswerKind, Condition, EvidenceItem, GeneratedAnswer, Relevance,
                                     RelevanceVerdict, agenerate_answer, ajudge_spans)
 from rag_wright.api.documents import (aparse_document, aparse_document_bytes, parse_document,
-                                      parse_document_bytes, source_document)
+                                      parse_document_bytes, source_document, pdf_page_count)
 from rag_wright.api.ids import decode_bbox, document_of
 from rag_wright.api.discover import Discovered, discover
 from rag_wright.contracts.ingestion import (
@@ -96,7 +96,7 @@ __all__ = [
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
     "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",
     "document_of", "decode_bbox",
-    "source_document", "parse_document", "aparse_document", "parse_document_bytes", "aparse_document_bytes",
+    "source_document", "parse_document", "aparse_document", "parse_document_bytes", "pdf_page_count", "aparse_document_bytes",
     "agenerate_answer", "ajudge_spans", "EvidenceItem", "GeneratedAnswer", "AnswerKind",
     "RelevanceVerdict", "Relevance", "Condition",
     "measure_usage", "record_usage", "UsageTotals", "ModelUsage", "traced_run", "traced_step",

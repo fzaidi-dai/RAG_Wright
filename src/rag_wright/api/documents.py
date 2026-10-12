@@ -65,3 +65,17 @@ async def aparse_document_bytes(document_id: str, name: str, data: bytes, *, cac
 
     return await aparsed_source_document(document_id, name, data, cache_dir=cache_dir, metadata=metadata,
                                          include_hidden_sheets=include_hidden_sheets, tuning=tuning)
+
+
+def pdf_page_count(source: Any) -> int:
+    """The number of pages in a PDF (a path or the PDF's bytes), read under the engine's PDF lock and closed before it
+    is released (PS-31, ADR-0138): pdfium is not thread-safe, so a product must not call pypdfium2 itself beside the
+    engine's parses. Raises `ValueError` when the PDF cannot be read."""
+    from rag_wright.util.pdfium import open_pdf
+
+    try:
+        with open_pdf(source if isinstance(source, bytes) else str(source)) as pdf:
+            return len(pdf)
+    except Exception as exc:  # noqa: BLE001 - pypdfium2 raises its own error types; one clear error for callers
+        raise ValueError(f"not a readable PDF: {type(exc).__name__}: {exc}") from exc
+

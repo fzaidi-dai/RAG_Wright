@@ -27,5 +27,9 @@ concurrent. Measured: 0 of 5 runs crashed, and the parse of the 15 PDFs took 127
 (concurrent parses never helped on that machine: docling's CPU-bound models contend).
 
 **What to do in RuleWright.** After upgrading, put `scripts/t710_corpus_run.py` back to several documents in flight
-(and remove the comment at the knob), and close engine issue 0052. A log line now says when a PDF waited more than
+(and remove the comment at the knob), and close engine issue 0052. Also replace RuleWright's own pdfium call: `src/rulewright/sizing.py` counts an upload's pages with
+`pypdfium2.PdfDocument(data)` (no lock, never closed), which can run beside a worker's PDF parse in the same process
+-- the same race. Use `rag_wright.api.pdf_page_count(data)` (PS-31): it reads under the engine's PDF lock and closes
+before releasing it, and raises `ValueError` on an unreadable PDF, so `estimated_pages` keeps returning
+`UNKNOWN_PAGES` there. After that no RuleWright code should import pypdfium2. A log line now says when a PDF waited more than
 10 s for another PDF's parse. If a pdfium crash ever reappears, send the crash report.

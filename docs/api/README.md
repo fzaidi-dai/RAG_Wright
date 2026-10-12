@@ -398,6 +398,10 @@ The async, deadline-bounded twin of `parse_document` (ADR-0057): runs the doclin
 
 `parse_document` from in-memory BYTES (an upload read from object storage), no temp file. `name` is the file name; its extension picks the format (`.pdf`, `.docx`, `.xlsx`, `.md`, ...). The parse is content-hash gated and cached under `cache_dir` exactly like the path form, and returns the same `SourceDocument`. The docling parse blocks; use `aparse_document_bytes` on an event loop.
 
+### `pdf_page_count(source: 'Any') -> 'int'`
+
+The number of pages in a PDF (a path or the PDF's bytes), read under the engine's PDF lock and closed before it is released (PS-31, ADR-0138): pdfium is not thread-safe, so a product must not call pypdfium2 itself beside the engine's parses. Raises `ValueError` when the PDF cannot be read.
+
 ### `aparse_document_bytes(document_id: 'str', name: 'str', data: 'bytes', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
 The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the docling parse off the event loop.
