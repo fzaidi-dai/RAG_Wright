@@ -126,6 +126,36 @@ the run goes on. Every node and edge type your extractor returns must be declare
                              unit_labels=gold)
   print(baseline.labels.accuracy, voted.labels.accuracy, voted.labels.confusions[:5])
   ```
+- **From a web backend, `aevaluate_ingestion`** takes the same arguments plus `progress`, and runs inside the
+  backend's event loop: documents run `IngestionTuning.document_concurrency` at a time, the parse and segment steps
+  off the loop, and `progress` receives `[evaluate] start N=<n>`, `[evaluate] <i>/<n> <document> ok|error: ...` and
+  `[evaluate] done passed=<bool> failures=<k>`. `evaluate_ingestion` raises inside a running loop. Run it as a
+  background job and let the UI poll; `to_dict()` is the JSON-ready result, `passed` included:
+
+  ```python
+  import asyncio
+  from rag_wright.api import aevaluate_ingestion
+
+  jobs: dict[str, dict] = {}
+  running: set[asyncio.Task] = set()  # keep a reference, or the task can be collected mid-run
+
+  async def run_evaluation(job_id: str, samples: list[str]) -> None:
+      job = jobs[job_id] = {"progress": [], "result": None, "error": None}
+      try:
+          result = await aevaluate_ingestion(samples, cache_dir="cache/", progress=job["progress"].append)
+          job["result"] = result.to_dict()
+      except Exception as exc:
+          job["error"] = f"{type(exc).__name__}: {exc}"
+
+  def start_evaluation(job_id: str, samples: list[str]) -> str:  # call from the request handler, return at once
+      task = asyncio.get_running_loop().create_task(run_evaluation(job_id, samples))
+      running.add(task)
+      task.add_done_callback(running.discard)
+      return job_id
+  ```
+
+  A job store that outlives the process (a table, a queue worker) is the product's choice; the engine only needs to
+  be awaited.
 - **`table_rows(source_document)`** returns every parsed table's data rows (`TableRow`: `columns`, `values`,
   `cell(name)`, table ref, sheet or page, row index), read from the parse's cell grid, so a table split across chunks
   comes back whole. What a column means is your domain's decision.

@@ -59,7 +59,7 @@ from rag_wright.ingestion.builder import (
     default_chunk_discoverer,
 )
 from rag_wright.capabilities.rlm_chunking import BoundaryDiscoverer
-from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, LabelEvaluation, evaluate_ingestion
+from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, LabelEvaluation, aevaluate_ingestion, evaluate_ingestion
 from rag_wright.ingestion.tables import table_rows
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
@@ -106,6 +106,6 @@ __all__ = [
     "IngestionTuning", "RecordTableRule", "IdentifierRule", "IngestSource", "TableMode",
     "build_ingestion", "default_chunk_discoverer", "BoundaryDiscoverer", "IngestionPipeline", "DocumentHook",
     "IngestionReport", "DocumentReport",
-    "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation", "LabelEvaluation",
+    "aevaluate_ingestion", "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation", "LabelEvaluation",
     "table_rows", "TableRow",
 ]

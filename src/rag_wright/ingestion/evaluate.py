@@ -19,15 +19,17 @@ It runs parse + chunk (deterministic structural boundaries, no model) + segment 
                  A snippet that finds no unit or several, and a unit whose snippets carry different labels, are
                  failures (that gold cannot be scored); accuracy is a measure, not a check.
 
-`passed` is True when every check holds; `failures` says which did not.
+`passed` is True when every check holds; `failures` says which did not. `aevaluate_ingestion` is the same eval for a
+running event loop (a web backend): documents run `tuning.document_concurrency` at a time, the parse and segment steps
+off the loop, with `i/N` progress; `IngestionEvaluation.to_dict()` is the JSON-ready result (EV-1).
 """
 from __future__ import annotations
 
 import asyncio
 import re
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Sequence, Union
+from typing import Any, Callable, Optional, Sequence, Union
 
 from rag_wright.contracts.ingestion import (
     IngestionContractError,
@@ -111,6 +113,10 @@ class IngestionEvaluation:
     def passed(self) -> bool:
         return not self.failures
 
+    def to_dict(self) -> dict[str, Any]:
+        """The result as JSON-ready data, `passed` included (EV-1: a backend returns it as is)."""
+        return {**asdict(self), "passed": self.passed}
+
 
 def _alnum(s: str) -> int:
     return sum(c.isalnum() for c in s)
@@ -151,14 +157,27 @@ def _label_results(units: list, gold: list[dict]) -> list[dict]:
     return out
 
 
-def _evaluate_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
-                       segmenter: Optional[Segmenter], grouper: Optional[UnitGrouper],
-                       tagger: Optional[SpanTagger] = None, representative: Optional[UnitRepresentative] = None,
-                       gold: Optional[list[dict]] = None) -> DocumentEvaluation:
+async def _evaluate_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
+                             segmenter: Optional[Segmenter], grouper: Optional[UnitGrouper],
+                             tagger: Optional[SpanTagger] = None,
+                             representative: Optional[UnitRepresentative] = None,
+                             gold: Optional[list[dict]] = None) -> DocumentEvaluation:
+    from rag_wright.ingestion.group import group_units
+
+    ev, spans, per_chunk = await asyncio.to_thread(_segment_document, src, tuning, cache, segmenter)
+    group = grouper or (lambda tagged, decider=None: group_units(tagged, decider=decider, tuning=tuning,
+                                                                  table_mode=src.table_mode))
+    units = await _tag_and_group(per_chunk, tagger, group, representative)
+    _measure_units(ev, spans, units, tuning, gold)
+    return ev
+
+
+def _segment_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
+                      segmenter: Optional[Segmenter]) -> tuple[DocumentEvaluation, list, list]:
+    """Parse, chunk and segment one document, with the segmentation measures (blocking: run off the loop)."""
     from rag_wright.api.documents import parse_document_bytes
     from rag_wright.capabilities.parsing import load_document
     from rag_wright.capabilities.rlm_chunking import StructuralBoundaryDiscoverer, chunk_texts
-    from rag_wright.ingestion.group import group_units
     from rag_wright.ingestion.layout import chunk_layouts
     from rag_wright.ingestion.segment import segment_layout
 
@@ -202,10 +221,12 @@ def _evaluate_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
     ev.spans = len(spans)
     ev.table_row_integrity = rows_ok / ev.table_rows if ev.table_rows else None
     ev.layout_respect = respect / len(spans) if spans else None
+    return ev, spans, per_chunk
 
-    group = grouper or (lambda tagged, decider=None: group_units(tagged, decider=decider, tuning=tuning,
-                                                                  table_mode=src.table_mode))
-    units = asyncio.run(_tag_and_group(per_chunk, tagger, group, representative))
+
+def _measure_units(ev: DocumentEvaluation, spans: list, units: list, tuning: IngestionTuning,
+                   gold: Optional[list[dict]]) -> None:
+    """The grouping and table measures of one document's units."""
     check_units(spans, units)
     if gold is not None:
         ev.label_results = _label_results(units, gold)
@@ -238,7 +259,45 @@ def _evaluate_document(src: IngestSource, tuning: IngestionTuning, cache: Path,
                                "rows": len(t) - 1, "split": len(parts) == len(t) - 1 and len(parts) > 1})
     ev.tables = len(tables)
     ev.tables_whole = whole / len(tables) if tables else None
-    return ev
+
+
+async def aevaluate_ingestion(sources: Sequence[Union[str, Path, IngestSource]], *, cache_dir: Union[str, Path],
+                              tuning: Optional[IngestionTuning] = None, segmenter: Optional[Segmenter] = None,
+                              unit_grouper: Optional[UnitGrouper] = None,
+                              table_labels: Optional[list[dict[str, Any]]] = None,
+                              span_tagger: Optional[SpanTagger] = None,
+                              unit_representative: Optional[UnitRepresentative] = None,
+                              unit_labels: Optional[dict[str, list[dict[str, str]]]] = None,
+                              progress: Optional[Callable[[str], Any]] = None) -> IngestionEvaluation:
+    """`evaluate_ingestion` for a running event loop (a web backend, a worker): the same checks and result, with
+    documents run `tuning.document_concurrency` at a time (parse and segment off the loop) and, when `progress` is
+    given, `[evaluate] start N=<n>`, `[evaluate] <i>/<n> <document> ok|error: <reason>` and `[evaluate] done
+    passed=<bool> failures=<k>` lines. Results keep the order of `sources`; `IngestionEvaluation.to_dict()` is the
+    JSON-ready result."""
+    tuning = tuning or IngestionTuning()
+    say = progress or (lambda _line: None)
+    items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
+    sem = asyncio.Semaphore(tuning.document_concurrency)
+    done = 0
+    say(f"[evaluate] start N={len(items)}")
+
+    async def one(src: IngestSource) -> DocumentEvaluation:
+        nonlocal done
+        async with sem:
+            try:
+                gold = None if unit_labels is None else unit_labels.get(src.display_name, [])
+                ev = await _evaluate_document(src, tuning, Path(cache_dir), segmenter, unit_grouper, span_tagger,
+                                              unit_representative, gold)
+            except Exception as exc:  # noqa: BLE001 - a document the hooks cannot handle is a reported failure
+                ev = DocumentEvaluation(doc=src.display_name, error=f"{type(exc).__name__}: {exc}")
+        done += 1
+        say(f"[evaluate] {done}/{len(items)} {ev.doc} " + (f"error: {ev.error}" if ev.error else "ok"))
+        return ev
+
+    out = IngestionEvaluation(documents=list(await asyncio.gather(*(one(s) for s in items))))
+    _judge(out, tuning, table_labels, unit_labels)
+    say(f"[evaluate] done passed={out.passed} failures={len(out.failures)}")
+    return out
 
 
 def evaluate_ingestion(sources: Sequence[Union[str, Path, IngestSource]], *, cache_dir: Union[str, Path],
@@ -259,17 +318,22 @@ def evaluate_ingestion(sources: Sequence[Union[str, Path, IngestSource]], *, cac
     Labelling (PS-R4): pass your `span_tagger` (and any `unit_representative`) with `unit_labels`, the gold
     `{<document file name>: [{"text": <a snippet that occurs in exactly one unit>, "label": <expected label, "" for
     none>}]}`, and `labels` (a `LabelEvaluation`) reports each gold unit's label against it: accuracy, per-label
-    results, confusion pairs. The tagger is yours, so it may call models; nothing else does."""
-    tuning = tuning or IngestionTuning()
-    out = IngestionEvaluation()
-    for s in sources:
-        src = s if isinstance(s, IngestSource) else IngestSource(path=str(s))
-        try:
-            gold = None if unit_labels is None else unit_labels.get(src.display_name, [])
-            out.documents.append(_evaluate_document(src, tuning, Path(cache_dir), segmenter, unit_grouper,
-                                                    span_tagger, unit_representative, gold))
-        except Exception as exc:  # noqa: BLE001 - a document the hooks cannot handle is a reported failure
-            out.documents.append(DocumentEvaluation(doc=src.display_name, error=f"{type(exc).__name__}: {exc}"))
+    results, confusion pairs. The tagger is yours, so it may call models; nothing else does.
+
+    Inside a running event loop (a web backend), await `aevaluate_ingestion` instead."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(aevaluate_ingestion(
+            sources, cache_dir=cache_dir, tuning=tuning, segmenter=segmenter, unit_grouper=unit_grouper,
+            table_labels=table_labels, span_tagger=span_tagger, unit_representative=unit_representative,
+            unit_labels=unit_labels))
+    raise RuntimeError("evaluate_ingestion was called inside a running event loop; await aevaluate_ingestion")
+
+
+def _judge(out: IngestionEvaluation, tuning: IngestionTuning, table_labels: Optional[list[dict[str, Any]]],
+           unit_labels: Optional[dict[str, list[dict[str, str]]]]) -> None:
+    """Turn the per-document measures into `failures`, `unlabelled_tables` and `labels`."""
     docs = out.documents
     f = out.failures
     f += [f"{d.doc}: {d.error}" for d in docs if d.error]
@@ -313,7 +377,6 @@ def evaluate_ingestion(sources: Sequence[Union[str, Path, IngestSource]], *, cac
         out.labels = _score_labels(docs, f)
         names = {d.doc for d in docs}
         f += [f"gold for {name!r}: not among the sources" for name in unit_labels if name not in names]
-    return out
 
 
 def _score_labels(docs: list[DocumentEvaluation], failures: list[str]) -> LabelEvaluation:

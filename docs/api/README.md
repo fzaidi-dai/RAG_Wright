@@ -176,6 +176,10 @@ What ingesting one document did. Counts: `chunks`, `spans` (indexed), `units` (e
 
 The result of `evaluate_ingestion`: per-document measures, the `failures` (each check that did not hold, by document) and `unlabelled_tables` (tables no `table_labels` pattern matched). `passed` (property) is True when there are no failures.
 
+#### `IngestionEvaluation.to_dict(self) -> 'dict[str, Any]'`
+
+The result as JSON-ready data, `passed` included (EV-1: a backend returns it as is).
+
 ### `DocumentEvaluation(doc: 'str', tiles: 'bool' = True, spans: 'int' = 0, units: 'int' = 0, table_rows: 'int' = 0, table_row_integrity: 'Optional[float]' = None, layout_respect: 'Optional[float]' = None, bare_heading_spans: 'int' = 0, headings_start_units: 'Optional[float]' = None, tables: 'int' = 0, tables_whole: 'Optional[float]' = None, furniture_in_units: 'int' = 0, coverage: 'Optional[float]' = None, cap_ok: 'bool' = True, table_modes: 'list[dict]' = <factory>, embedded_children: 'int' = 0, label_results: 'list[dict]' = <factory>, error: 'Optional[str]' = None) -> None`
 
 One sample document's structural measures. Segmentation: `tiles` (spans tile every chunk), `table_row_integrity` (share of table rows that are their own span), `layout_respect` (share of spans inside one layout item), `bare_heading_spans`. Grouping: `headings_start_units` (share of headings that start a unit), `tables_whole` (share of tables kept whole or split by the record/header rule), `furniture_in_units` (page furniture that leaked into units), `coverage` (share of content spans in some unit), `cap_ok` (every unit within `max_unit_chars`). `table_modes`: the mode chosen per table. `error`: why the document could not be evaluated.
@@ -434,11 +438,17 @@ The engine's generic ingestion pipeline: pass your `extractor` (a `Unit` -> `Uni
 
 PS-R5b: the engine's default chunk-boundary rule (structural boundaries first; `chunk_model` refines only an over-cap section, through a domain-neutral prompt) with your domain's `guidance` added to that prompt (e.g. what a coherent unit is in your documents). Pass it as `build_ingestion(chunk_discoverer=...)`.
 
+### `aevaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_representative: 'Optional[UnitRepresentative]' = None, unit_labels: 'Optional[dict[str, list[dict[str, str]]]]' = None, progress: 'Optional[Callable[[str], Any]]' = None) -> 'IngestionEvaluation'`
+
+`evaluate_ingestion` for a running event loop (a web backend, a worker): the same checks and result, with documents run `tuning.document_concurrency` at a time (parse and segment off the loop) and, when `progress` is given, `[evaluate] start N=<n>`, `[evaluate] <i>/<n> <document> ok|error: <reason>` and `[evaluate] done passed=<bool> failures=<k>` lines. Results keep the order of `sources`; `IngestionEvaluation.to_dict()` is the JSON-ready result.
+
 ### `evaluate_ingestion(sources: 'Sequence[Union[str, Path, IngestSource]]', *, cache_dir: 'Union[str, Path]', tuning: 'Optional[IngestionTuning]' = None, segmenter: 'Optional[Segmenter]' = None, unit_grouper: 'Optional[UnitGrouper]' = None, table_labels: 'Optional[list[dict[str, Any]]]' = None, span_tagger: 'Optional[SpanTagger]' = None, unit_representative: 'Optional[UnitRepresentative]' = None, unit_labels: 'Optional[dict[str, list[dict[str, str]]]]' = None) -> 'IngestionEvaluation'`
 
 Measure the ingestion hooks' structural fidelity on YOUR sample documents, before trusting them. Runs parse, chunk, segment and group only (no store, no model calls) with the default hooks or the `segmenter` / `unit_grouper` you pass, under `tuning`. Checks: spans tile the text, table rows stay whole, spans respect layout items, no bare-heading spans, headings start units, tables stay whole (or split per row for a record table), no page furniture in units, full coverage, units within the cap. `table_labels` (`[{"pattern": <regex on the header row>, "label": "record" | "block"}]`, first match wins) also checks each table's mode. Returns an `IngestionEvaluation`; tune `IngestionTuning` until `passed`.
 
 Labelling (PS-R4): pass your `span_tagger` (and any `unit_representative`) with `unit_labels`, the gold `{<document file name>: [{"text": <a snippet that occurs in exactly one unit>, "label": <expected label, "" for none>}]}`, and `labels` (a `LabelEvaluation`) reports each gold unit's label against it: accuracy, per-label results, confusion pairs. The tagger is yours, so it may call models; nothing else does.
+
+Inside a running event loop (a web backend), await `aevaluate_ingestion` instead.
 
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 

@@ -5,7 +5,7 @@ Langfuse as an optional backend. Each task runs the working loop (contract, red,
 commit). Target release: **0.8.0** (the exports are `feat:`; nothing existing is removed).
 
 **Status: plan approved (2026-10-11).** Scope: all eight scorer kinds, release 0.8.0, TexWright as the first consumer.
-EV-0 done 2026-10-12 (findings below). The event-loop fix (finding 5) is PS-24, done. Next: EV-1.
+EV-0 done 2026-10-12 (findings below). The event-loop fix (finding 5) is PS-24, done. EV-1 done. Next: EV-2.
 
 **Why.** A product needs an "Evals" area behind its backend: domain experts' labelled data becomes gold sets,
 developers run them against a capability, and everyone sees the result and how it moves between versions. Today the
@@ -97,7 +97,7 @@ calls under two `asyncio.run`s and sees no connection error.
 | id | what | verify | status |
 |---|---|---|---|
 | EV-0 | Grounding spike, no engine code: the ContractNLI eval (150 pairs, our A100, greedy) through `run_experiment` against the local Langfuse, with a dataset, an item evaluator and a run evaluator; record what SDK 4.15.1 actually does (dataset versions, async task and concurrency, scores, run comparison, failures) | findings written into this plan; decisions adjusted if needed | done (2026-10-12): the findings above; the decisions hold, with the runner rules in findings 2-6, 9 and 10 |
-| EV-1 | `evaluate_ingestion` ready for a web backend: `aevaluate_ingestion` with a `progress` callback (`i/N`) and a JSON-ready result that includes `passed`; the background-job pattern in the docs | hermetic tests; live on sample documents | todo |
+| EV-1 | `evaluate_ingestion` ready for a web backend: `aevaluate_ingestion` with a `progress` callback (`i/N`) and a JSON-ready result that includes `passed`; the background-job pattern in the docs | hermetic tests; live on sample documents | done (2026-10-12): `aevaluate_ingestion` (documents `document_concurrency` at a time, parse and segment off the loop, `[evaluate] i/N` progress), `evaluate_ingestion` a wrapper over it that names the async form inside a running loop, `IngestionEvaluation.to_dict()`; the job pattern in `docs/domain-adaptation/kg-construction.md`. Live: 9 PDFs as a polled background task, 24 s, the loop free (220 of ~242 heartbeats), identical to the sync result |
 | EV-2 | The contracts (`GoldItem`, `GoldSet`, `EvalReport`) and gold import from CSV / XLSX / JSONL through a column mapping | hermetic tests; round trip; a spreadsheet fixture with messy cells | todo |
 | EV-3a | Scorers 1 (classification) and 8 (candidate-then-choose) | hermetic tests; parity with the engine evals named above | todo |
 | EV-3b | Scorers 2 (retrieval) and 6 (graph / relational) | same | todo |
