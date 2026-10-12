@@ -5,7 +5,7 @@ Langfuse as an optional backend. Each task runs the working loop (contract, red,
 commit). Target release: **0.8.0** (the exports are `feat:`; nothing existing is removed).
 
 **Status: plan approved (2026-10-11).** Scope: all eight scorer kinds, release 0.8.0, TexWright as the first consumer.
-No task has started; EV-0 waits for the user's go-ahead.
+EV-0 done 2026-10-12 (findings below). Next: the event-loop fix (finding 5), then EV-1.
 
 **Why.** A product needs an "Evals" area behind its backend: domain experts' labelled data becomes gold sets,
 developers run them against a capability, and everyone sees the result and how it moves between versions. Today the
@@ -66,11 +66,37 @@ errors kept apart from the scored items.
    its own LLM connection, and the Jev one is documented for Langfuse Cloud only), UI prompt experiments (they test a
    prompt, not our pipeline) and the CI GitHub Action (the engine's CI stays hermetic). A product may still use them.
 
+## EV-0 findings (2026-10-12, Langfuse 4.15.1, local server)
+
+Phase 1 used a 6-item dataset and a fake task (no model). Phase 2 ran the ContractNLI slice (150 pairs, greedy, Qwen
+on our A100, concurrency 16) twice through `DatasetClient.run_experiment`.
+
+| # | what the SDK does | so the toolkit does this |
+|---|---|---|
+| 1 | Run evaluators gave the same numbers as the script's own formula: accuracy 0.667 and 0.660, 0 errors (earlier greedy runs: 0.693, 0.667, 0.680). Two greedy runs disagreed on 8 of 150 pairs, pair 88 among them (it took 228 s and still answered, no timeout) | the packaged scorers can be the evaluators; repeats and flips stay a runner feature (decision 6 holds) |
+| 2 | A task that raises is dropped: missing from `item_results` and from what run evaluators see (4 of 6 reached them), only logged; the server still stores the run item | the runner's task wrapper never raises: a failed call becomes an error output, and rates divide by the gold-set size, not by the results returned (decision 5) |
+| 3 | An item evaluator that raises leaves that item without a score, only logged | scorers are total functions; the backend wraps each one and records a scorer error explicitly |
+| 4 | `run_experiment` is synchronous. Called inside a running event loop it runs the experiment on a new thread and joins it: the loop got 0 of ~24 heartbeats in 2.4 s. Through `asyncio.to_thread` it got 24 of 24 | `arun_eval` calls it through `asyncio.to_thread`; the backend docs say never to call it directly from a request handler |
+| 5 | Each run gets a fresh event loop that is closed at the end. langchain_openai shares one cached async HTTP client per base URL and timeout across the process (`_cached_async_httpx_client`), so the next run's first calls reuse connections from the closed loop and fail at once with `APIConnectionError` (2 in run 2, recovered by the seam's retry) | see the finding below |
+| 6 | Versions are timestamps: `get_dataset(name, version=t)` returns the items as they were at `t` (an item edited or archived later shows its old value), and a run on that client works. `run_experiment`'s own `_dataset_version` argument is private | the backend fetches the dataset at a timestamp and records it in the report; it never passes the private argument |
+| 7 | A dataset's input and expected-output JSON schemas are enforced: a non-conforming item is refused with a 400 | `GoldSet` turns its contract into the two schemas (EV-5) |
+| 8 | Run metadata, run-level scores (the run evaluators' values) and one item score per trace are stored; each item trace holds the task and evaluator spans. Whether the engine's own model-call spans nest inside the item trace was not checked (engine tracing was off, `RAG_TRACE_LEVEL=off`) | EV-5 checks the nesting with tracing on |
+| 9 | Result order follows the dataset's item order, which is not insertion order | the runner keys results by item id, never by position |
+| 10 | Running on local items (no dataset) works but still sends every input and output to Langfuse as traces | a `local_only` gold set never goes through `run_experiment` at all, not even as local items (decision 4) |
+| 11 | A server deployed under a new app name built its snapshot first: ready in 348 s instead of ~13 s | eval runs reuse the usual server name |
+
+**Finding (from 5): async model calls across event loops.** Any caller that runs async seam calls on more than one
+event loop in a process (two `asyncio.run` calls, or a web backend plus a worker thread) has its first calls on a
+new loop fail on dead connections. The seam's retry hides it today at the cost of a retry, and a burst at the start
+of a run could exhaust the retries. **Owner:** engine. **Do:** before EV-4, a small fix task: the seam gives each
+event loop its own async HTTP client (passed to `ChatOpenAI` as `http_async_client`), with a red test that makes
+calls under two `asyncio.run`s and sees no connection error.
+
 ## Tasks
 
 | id | what | verify | status |
 |---|---|---|---|
-| EV-0 | Grounding spike, no engine code: the ContractNLI eval (150 pairs, our A100, greedy) through `run_experiment` against the local Langfuse, with a dataset, an item evaluator and a run evaluator; record what SDK 4.15.1 actually does (dataset versions, async task and concurrency, scores, run comparison, failures) | findings written into this plan; decisions adjusted if needed | todo |
+| EV-0 | Grounding spike, no engine code: the ContractNLI eval (150 pairs, our A100, greedy) through `run_experiment` against the local Langfuse, with a dataset, an item evaluator and a run evaluator; record what SDK 4.15.1 actually does (dataset versions, async task and concurrency, scores, run comparison, failures) | findings written into this plan; decisions adjusted if needed | done (2026-10-12): the findings above; the decisions hold, with the runner rules in findings 2-6, 9 and 10 |
 | EV-1 | `evaluate_ingestion` ready for a web backend: `aevaluate_ingestion` with a `progress` callback (`i/N`) and a JSON-ready result that includes `passed`; the background-job pattern in the docs | hermetic tests; live on sample documents | todo |
 | EV-2 | The contracts (`GoldItem`, `GoldSet`, `EvalReport`) and gold import from CSV / XLSX / JSONL through a column mapping | hermetic tests; round trip; a spreadsheet fixture with messy cells | todo |
 | EV-3a | Scorers 1 (classification) and 8 (candidate-then-choose) | hermetic tests; parity with the engine evals named above | todo |
