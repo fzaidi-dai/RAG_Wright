@@ -85,8 +85,11 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
    mkdir -p .claude/skills && for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; done
    ```
 
-   Link the shared generic skills from their source. Load **`using-the-rag-wright-engine`** first on any engine
-   work.
+   Link the product-building skills other repos write for product developers (`{{PRODUCT_DEV_SKILL_SOURCES}}`, for
+   example another product's folder of generic UI, backend and tenancy skills) the same way, into this repo's
+   `.claude/skills/`. Never link any of them into your global Claude Code skills: they would then apply in every repo
+   on the machine (ADR-0134). Only your own way-of-working skills (TDD, planning, debugging) belong there. Load
+   **`using-the-rag-wright-engine`** first on any engine work.
 7. **Engine-release automation** (released-product mode): copy the starter's `dependabot.yml` to
    `.github/dependabot.yml`, so each new `rag-wright` release arrives as a PR gated by your CI (section 5, "Keeping
    the engine current").

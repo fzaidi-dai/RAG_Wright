@@ -56,7 +56,8 @@ to reach the network (mock the call, or mark the test). The live markers, declar
 The engine ships its Claude Code skills (`using-the-rag-wright-engine`, `building-an-ingestion-capability`,
 `authoring-a-capability`, `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`)
 inside the package, at `rag_wright/.agents/skills/`, so they match the installed version. Link them into a product
-repo's `.claude/skills/`, and re-run this after every engine upgrade:
+repo's `.claude/skills/`, never into your global Claude Code skills, so they apply only in the repo that depends on
+this engine version (ADR-0134). Re-run this after every engine upgrade:
 
 ```sh
 SKILLS=$(uv run python -c "import pathlib, rag_wright; print(pathlib.Path(rag_wright.__file__).parent / '.agents' / 'skills')")

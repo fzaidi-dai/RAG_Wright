@@ -70,3 +70,24 @@ def test_the_release_build_ships_the_skills(tmp_path):
     with tarfile.open(sdist) as tar:
         in_sdist = {n.split("/", 1)[1] for n in tar.getnames()}
     assert {f"src/{s}" for s in shipped} - in_sdist == set()
+
+
+# ADR-0134: skills for product developers are linked into a repo's `.claude/skills/`, never into the global one.
+_GLOBAL_LINK = re.compile(r"\bln\b[^\n]*(~|\$HOME|\$\{HOME\})/\.claude/skills")
+_LINK_GUIDES = (
+    "README.md", "CLAUDE.md", "docs/installation.md", "docs/playbook.md",
+    "docs/templates/product-starter/README.md", "docs/templates/product-starter/CLAUDE.md.template",
+    "docs/templates/product-starter/playbook.md.template",
+)
+
+
+def test_no_guide_links_skills_into_the_global_claude_skills():
+    texts = {p: (_ROOT / p).read_text(encoding="utf-8") for p in _LINK_GUIDES}
+    texts |= {f"skill {n}": (_PACKAGED / n / "SKILL.md").read_text(encoding="utf-8") for n in SHIPPED}
+    assert [name for name, text in texts.items() if _GLOBAL_LINK.search(text)] == []
+
+
+def test_the_global_link_check_bites():
+    assert _GLOBAL_LINK.search('for d in "$SKILLS"/*/; do ln -sfn "$d" ~/.claude/skills/; done')
+    assert _GLOBAL_LINK.search('ln -s "$d" "$HOME/.claude/skills/x"')
+    assert not _GLOBAL_LINK.search('ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"')

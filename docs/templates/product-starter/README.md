@@ -39,6 +39,7 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 | `{{SPEC}}` / `{{PLAN}}` / `{{TASKS}}` | your spec, plan, and task-ledger filenames |
 | `{{REQ_SCHEME}}` / `{{AC_SCHEME}}` | your requirement / acceptance id schemes (e.g. `PR-N` / `AC-N`) |
 | `{{PROJECT_FRONTEND_SKILL}}` | your project-scoped UI skill name, or `none` |
+| `{{PRODUCT_DEV_SKILL_SOURCES}}` | the folders of product-building skills you link from other repos (e.g. another product's generic UI, backend and tenancy skills), or `none`; linked into this repo's `.claude/skills/`, never globally (ADR-0134) |
 
 ## What the templates assume
 

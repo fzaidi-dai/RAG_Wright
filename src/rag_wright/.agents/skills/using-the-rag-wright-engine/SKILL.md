@@ -185,7 +185,8 @@ mkdir -p .claude/skills && for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/s
 ```
 
 Re-run it after every engine upgrade (a symlink follows the installed version, but a newly added skill needs a new
-link). The Addy-Osmani spec-driven/TDD/planning skills come from their own source, as the product template says.
+link). Link these, and any product-building skills another repo writes for product developers, into this repo's
+`.claude/skills/` only, never into the global Claude Code skills, where they would apply in every repo on the machine. The Addy-Osmani spec-driven/TDD/planning skills come from their own source, as the product template says.
 
 ## Anti-patterns
 

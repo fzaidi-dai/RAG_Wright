@@ -68,12 +68,12 @@ This repo is the ENGINE/platform (open-core candidate): it builds and registers 
 | debugging-and-error-recovery | Addy Osmani | Systematic debugging. | Keep, on demand only |
 | using-agent-skills | Addy Osmani | Meta-skill so Claude Code discovers and invokes the rest. | Keep |
 | library-grounding | Custom | Mandatory: query the index for the exact API before using a library. | Add (section 5) |
-| authoring-a-capability | Custom (`.claude/skills/`) | How to author a new engine capability of any kind (subgraph/function/model/agent_skill/mcp_tool): the shared registration + ARD + invocation contract, per-kind specifics, and the conformance guardrail. | Add (ADR-0117) |
-| creating-evals | Custom (`.claude/skills/`) | Write a capability's eval FIRST (eval-first/TDD): gold-set design, per-capability-kind metrics, gate-vs-diagnostic. | Add |
-| classifier-opportunity-analysis | Custom (`.claude/skills/`) | Find where an LLM call can become a deterministic rule / trained classifier / routing decision (upstream of setfit). | Add |
-| setfit / laya | Custom (`.claude/skills/`) | Build a trained classifier (SetFit) or fine-tune the open System-1 decision model (Laya); A/B the managed Jev decision model (ADR-0119). | Add |
-| qwen-vllm-modal | Custom (`.claude/skills/`) | The self-hosted Qwen3 vLLM substrate on Modal for bulk teacher-labeling / production inference (ADR-0110). | Add |
-| using-the-rag-wright-engine | Custom (`.claude/skills/`) | The CONSUMER-side playbook for a product repo building on the engine — kept here, version-matched; the product links it in. | Add |
+| authoring-a-capability | Custom (`src/rag_wright/.agents/skills/`, shipped; linked per project, ADR-0134) | How to author a new engine capability of any kind (subgraph/function/model/agent_skill/mcp_tool): the shared registration + ARD + invocation contract, per-kind specifics, and the conformance guardrail. | Add (ADR-0117) |
+| creating-evals | Custom (`src/rag_wright/.agents/skills/`, shipped; linked per project, ADR-0134) | Write a capability's eval FIRST (eval-first/TDD): gold-set design, per-capability-kind metrics, gate-vs-diagnostic. | Add |
+| classifier-opportunity-analysis | Custom (`src/rag_wright/.agents/skills/`, shipped; linked per project, ADR-0134) | Find where an LLM call can become a deterministic rule / trained classifier / routing decision (upstream of setfit). | Add |
+| setfit / laya | Custom (`src/rag_wright/.agents/skills/`, shipped; linked per project, ADR-0134) | Build a trained classifier (SetFit) or fine-tune the open System-1 decision model (Laya); A/B the managed Jev decision model (ADR-0119). | Add |
+| qwen-vllm-modal | Custom (`src/rag_wright/.agents/skills/`, shipped; linked per project, ADR-0134) | The self-hosted Qwen3 vLLM substrate on Modal for bulk teacher-labeling / production inference (ADR-0110). | Add |
+| using-the-rag-wright-engine | Custom (`src/rag_wright/.agents/skills/`, shipped; linked per project, ADR-0134) | The CONSUMER-side playbook for a product repo building on the engine — kept here, version-matched; the product links it in. | Add |
 | `Graphify` | for example safishamsi/graphify | Builds the queryable knowledge graphs the agent consults. | Install |
 
 Contracts-first is folded into the TDD skill rather than added as a separate skill, to keep the active set small.
