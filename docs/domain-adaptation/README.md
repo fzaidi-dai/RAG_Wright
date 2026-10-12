@@ -42,8 +42,9 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 5. **Write each capability's EVAL first (TDD).** As soon as a capability is *defined* (contract + acceptance),
    before you implement it, write its eval: a reproducible gold set + the metric + a pass/fail gate. It's the red
    the implementation turns green, the permanent regression guard, and it fixes the data design (a classifier's
-   training data IS its eval). → the **`creating-evals`** skill. Do this per capability, interleaved with building
-   — not as a later phase.
+   training data IS its eval). → the **`creating-evals`** skill, the toolkit reference [Evals](../evals.md), and,
+   when your experts label in spreadsheets, [Evals from your experts' files](evals-from-expert-files.md). Do this per
+   capability, interleaved with building — not as a later phase.
 
 6. **Ingest the corpus → populate the KG.** Build the pipeline with `build_ingestion(extractor, ...)` and run
    `await pipeline.aingest(ws, sources, cache_dir=...)` over your files (paths, or `IngestSource` for a per-source

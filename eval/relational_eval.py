@@ -70,10 +70,22 @@ def main() -> None:
     from eval.multihop import build_relational
     from rag_wright.store.arcadedb import ArcadeDBStore
 
+    import importlib
+    import os
+
+    # EV-6 (found in EV-3b): no standing database holds the EDGAR graph, and opening a missing one creates it empty.
+    # Build the graph (deterministic, no model) into a throwaway database, score it, drop it (KEEP=1 keeps it).
+    os.environ.setdefault("DB", "edgar_relational_live")
+    os.environ["RESET"] = "1"
+    importlib.import_module("scripts.populate_entity_graph").main()
     vset = json.loads(Path("data/edgar/verification_set.json").read_text(encoding="utf-8"))
     questions = build_relational(vset)  # rebuilt from the same source the graph was populated from
-    store = ArcadeDBStore.from_env(database="ragwright_cuad")
-    res = graph_leg_recall(questions, store)
+    store = ArcadeDBStore.from_env(database=os.environ["DB"])
+    try:
+        res = graph_leg_recall(questions, store)
+    finally:
+        if os.environ.get("KEEP") != "1":
+            store.drop()
 
     print(f"[relational/graph] counts: {res['counts']}", flush=True)
     for hop in ("1hop", "2hop"):

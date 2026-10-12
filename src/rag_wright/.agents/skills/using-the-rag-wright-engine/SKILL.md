@@ -157,7 +157,24 @@ unset. Check both before trusting a run's numbers.
 Read the engine's **reference pack** (`load_reference_pack()`) as a worked template — but the contract/compliance
 domain is only an example; your pack and capabilities are your own.
 
-## 5. Keep the engine current
+## 5. Evals behind your product's backend
+Domain experts own the gold; your UI lets them upload it, run it and compare runs. The engine gives you the pieces
+(the `creating-evals` skill has the method and a complete example):
+- **Upload a gold set**: `aload_gold_set(IngestSource(data=uploaded_bytes, name=filename), GoldMapping(...),
+  name=..., version=...)` -- CSV / XLSX / JSONL as the expert wrote it; a `GoldImportError` says where the file is
+  wrong, which you show as is. Client data stays `local_only` (the default).
+- **Run it as a background job**, never inside the request: start `arun_eval(gold, task, scorers, repeats=...,
+  progress=...)` as a task you keep a reference to, return a job id at once, and let the UI poll. `progress` receives
+  `[eval] i/N <item> r<k> ok|error` lines; `evaluate_ingestion`'s async form `aevaluate_ingestion` works the same
+  way for ingestion structure. The synchronous `run_eval` raises inside a running event loop.
+- **Return the `EvalReport`** (`report.model_dump(mode="json")`): `passed`, each scorer's gate against its
+  thresholds and its diagnostics, errors and flips kept apart, every item's outputs.
+- **Keep run history in your store**: save each report with its gold version; `rescore_eval` scores a saved report
+  again (new thresholds, a corrected gold) without calling anything. With `langfuse=True` the runs also appear in
+  Langfuse with their links (`report.run_urls`), for teams that use it.
+- **The task is your capability through the capability layer**, so the eval measures what production runs.
+
+## 6. Keep the engine current
 
 The engine releases in batches (release-please; the engine's `docs/releasing.md`), so you never chase every
 engine PR:

@@ -33,3 +33,16 @@ concurrent. Measured: 0 of 5 runs crashed, and the parse of the 15 PDFs took 127
 before releasing it, and raises `ValueError` on an unreadable PDF, so `estimated_pages` keeps returning
 `UNKNOWN_PAGES` there. After that no RuleWright code should import pypdfium2. A log line now says when a PDF waited more than
 10 s for another PDF's parse. If a pdfium crash ever reappears, send the crash report.
+
+## 3. An eval toolkit (EV-1 to EV-6; nothing to change now)
+
+**What changed.** `rag_wright.api` gains a toolkit for evals: gold sets from expert files (`load_gold_set`), a scorer
+per capability kind, the runner `arun_eval` (repeats, errors kept apart, progress) returning a JSON-ready
+`EvalReport`, `rescore_eval`, and an optional Langfuse backend (`langfuse=True`). `evaluate_ingestion` gains an
+async form for a backend (`aevaluate_ingestion`, with progress) and `IngestionEvaluation.to_dict()`. Nothing existing
+was removed or changed; the reference is `docs/evals.md`.
+
+**What to do in RuleWright.** Nothing now. When you put evals behind your backend, follow the consumer skill's
+section 5 ("Evals behind your product's backend"); your own eval scripts can move onto `arun_eval` and the scorers
+when you next touch them.
+

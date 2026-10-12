@@ -16,6 +16,11 @@ ADR-0110 and the other `docs/` paths are in the engine repository: read them the
 matching your installed engine.
 This skill is the operational checklist that ties them together.
 
+**Which route.** A product deploys and reaches the server through the engine API, `adeploy_model_server` (the
+section after the locked config). The raw `modal deploy` of the bundled script further down is the engine
+developer's route, and what the API runs underneath. **When to stop it** is one rule, in "Cold start & cost": deploy
+once, let it scale to zero between uses, never stop it between runs.
+
 ## The LOCKED production config (ADR-0110) — do not re-litigate
 **Config B: `Qwen/Qwen3.8-27B-FP8` weights + `--kv-cache-dtype fp8`, on 1× A100-80GB, TP=1, `--max-model-len 16384`, `--gpu-memory-utilization 0.95`.**
 - Config B (FP8 weights) is the **locked deploy** — 52.71× concurrency @16K (ADR-0110 rounds it to 53×), ~23% higher throughput, ~31 GB weights (30.9 GB on disk, 28.9 GiB in VRAM);
@@ -38,7 +43,7 @@ from rag_wright.api import EngineConfig, ModelServerSpec, adeploy_model_server, 
 server = await adeploy_model_server(ModelServerSpec(name="acme-qwen", max_num_seqs=32))  # key from VLLM_API_KEY
 config = EngineConfig(store=..., models={"general": server.model_id})   # or any model= argument
 ...
-stop_model_server("acme-qwen")                                            # stop billing
+stop_model_server("acme-qwen")  # only to retire it: stopping discards the snapshots (see "Cold start & cost")
 ```
 
 `amodel_server(spec)` reconnects to a server deployed earlier (a restart, another process) without redeploying.
@@ -46,7 +51,7 @@ The API key comes from the variable `ModelServerSpec.api_key_env` names (default
 key, so set a real one. Needs `rag-wright[modal]` and a Modal login. One app per server name: different names give
 different servers (and URLs), for example one per tenant.
 
-**The exact working deploy (this succeeded):**
+**The engine developer's route: the raw deploy (this succeeded):**
 ```
 VLLM_API_KEY=<a long random string> MODAL_IMAGE_BUILDER_VERSION=2025.06 \
   APP_NAME=rw-qwen3-modal MODEL=Qwen/Qwen3.8-27B-FP8 KV_CACHE_DTYPE=fp8 \
@@ -58,8 +63,7 @@ VLLM_API_KEY=<a long random string> MODAL_IMAGE_BUILDER_VERSION=2025.06 \
 The script refuses to deploy without `VLLM_API_KEY`: Modal's web endpoint is public and unauthenticated, so vLLM's
 `--api-key` is the only gate on a billing A100, and there is no default key. Then wire the engine: `.env`
 `VLLM_BASE_URL=https://<workspace>--rw-qwen3-modal-serve.modal.run/v1` and the same `VLLM_API_KEY`; the profile
-`qwen3.8-27b-modal` routes there (the seam also refuses an unset key). **Stop billing when done:**
-`uv run --no-sync modal app stop rw-qwen3-modal --yes` (A100 is expensive).
+`qwen3.8-27b-modal` routes there (the seam also refuses an unset key). When to stop it: "Cold start & cost" below.
 
 **The engine does NOT reach Modal by default.** Every role's default is `_PRODUCT_LLM = "qwen3.8-27b-modal-or"`,
 the same model routed through OpenRouter (a Modal cold start can still take minutes when Modal builds a snapshot). To send calls to the Modal server, set
@@ -123,14 +127,22 @@ the OFFICIAL prebuilt vLLM image** rather than pip-building vLLM:
   a weight read of 12-154 s from the Volume (9P), then compile-cache load + CUDA-graph capture. Measured and NOT
   worth adopting (ADR-0109 addendum): `--load-format runai_streamer`, precompiled `.pyc`, `HF_HUB_OFFLINE=1` (it
   changes vLLM's compile-cache key every container, so each start recompiles). Poll `/health` for readiness.
-- **A100 is billed while up — `modal app stop <app> --yes` the moment you're done.** Verify with `modal app list`
-  (state `stopped`, 0 tasks) + endpoint 404.
-- **Do NOT warm the GPU before the consumer is ready, and do NOT trust auto-scaledown to protect billing** (burned
-  2026-10-04: a smoke-warmed A100 sat idle ~20 min while unrelated work ran, because "scaledown_window will handle
-  it" was assumed — it did not, fast enough). RULE: build the bulk/label/eval consumer FIRST (while the app is
-  stopped/cold), THEN warm → smoke → run → **`modal app stop` immediately after**, in one continuous go. If you warm
-  only to prove stand-up and the consumer is not next, STOP it right after the smoke. Treat the explicit stop as
-  mandatory, not the scaledown as sufficient; verify stopped with `modal app list`.
+- **When to stop it -- one rule (EV-6; it used to contradict the line above).** The A100 is billed only while a
+  container runs; the server scales to zero after 10 idle minutes (`scaledown_window=600`, no warm minimum) and then
+  costs nothing and KEEPS its snapshots, so the next request is back in ~13 s. `modal app stop` saves at most those
+  10 minutes and makes the next deploy pay a 9-15 min snapshot-building boot (2026-10-12: a stop after a failed smoke
+  run, then a redeploy, cost a 911 s boot).
+  1. **Deploy once per server name**; reuse the name (a new name builds new snapshots).
+  2. **Build the consumer first** (the bulk / label / eval script, its smoke test, its progress logging) while no
+     container runs, then warm, smoke and run in one go. Do not warm a GPU before its consumer is ready (2026-10-04:
+     a smoke-warmed A100 sat idle ~20 min while unrelated work ran).
+  3. **Between runs, and when you are done, let it scale to zero.** Never stop it between runs; a script's error
+     path must not stop it either when a fix-and-rerun is likely.
+  4. **Check it reached zero**: `modal app list` shows the app `deployed` with 0 tasks about 10 minutes after the
+     last call. If tasks remain past the window, find out why (that is the 2026-10-04 burn) and stop it.
+  5. **Stop (`modal app stop <app> --yes`, or `stop_model_server`) only to retire a server**: you will not use it
+     for a long time and do not want its endpoint up, or you are replacing its deployment. Expect the next deploy to
+     rebuild the snapshots.
 
 ## The meta-lesson
 Config + recipe live in **ADR-0110 + the script + this skill**. Before any Qwen/Modal work: read them, don't

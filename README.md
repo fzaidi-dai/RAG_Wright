@@ -57,6 +57,8 @@ The whole doc set is under [`docs/`](docs/). Pick your path:
 - **Building a product on the engine?** The [domain-adaptation guide](docs/domain-adaptation/) walks the whole
   sequence (author a `.ttl` pack → build & register capabilities → eval-first → ingest → entity resolution → the
   product seam); a coding agent should drive it with the `using-the-rag-wright-engine` skill.
+- **Measuring a capability?** [Evals](docs/evals.md): gold sets from your experts' files, a scorer per capability
+  kind, a runner with repeats, a report your backend can return, optional Langfuse runs.
 - **Going deep?** [Architecture](docs/architecture.md), the generated [API reference](docs/api/), the
   [Reference pack](docs/reference-pack.md), and the [ADR index](docs/adr/README.md).
 - **Releases?** See the [CHANGELOG](CHANGELOG.md) and [how releases work](docs/releasing.md) (batched via

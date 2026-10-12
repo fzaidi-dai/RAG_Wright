@@ -40,6 +40,19 @@ _MAX_WORKERS = 3  # LOW on purpose: a single A100 inflates every request's laten
 # pushing calls past the 120s seam timeout into a 6x retry cascade. At ~3 concurrent, calls stay ~10-80s.
 
 
+def strategy_summary(per_query: list[list[tuple]]) -> dict:
+    """One strategy's results: per query, `(abstained, citations)` per repeat, `abstained=None` for a failed call.
+    A failed call is an ERROR, never an abstention (ADR-0133): it is counted apart and left out of the abstain rate,
+    the flips (a query whose answered runs disagree) and the citations."""
+    runs = [rec for recs in per_query for rec in recs]
+    answered = [(a, c) for a, c in runs if a is not None]
+    flips = sum(len({a for a, _ in recs if a is not None}) > 1 for recs in per_query)
+    cites = [c for a, c in answered if not a]
+    return {"runs": len(runs), "errors": len(runs) - len(answered), "answered_runs": len(answered),
+            "abstains": sum(a for a, _ in answered), "flip_queries": flips,
+            "mean_cites": sum(cites) / len(cites) if cites else 0.0}
+
+
 def _log(s: str = "") -> None:
     print(s, flush=True)
 
@@ -130,32 +143,29 @@ def main() -> None:
         try:
             ans = strategies[name](queries[qi])
             return (name, qi, r, ans.abstained, len(ans.citations), time.time() - t0)
-        except Exception as exc:  # noqa: BLE001 - a stuck/failed call counts as an abstain, never kills the run
+        except Exception as exc:  # noqa: BLE001 - a failed call is an ERROR (never an abstain); the run goes on
             _log(f"[error] {name} {queries[qi]['function']} r{r}: {type(exc).__name__}: {str(exc)[:80]}")
-            return (name, qi, r, True, 0, time.time() - t0)
+            return (name, qi, r, None, 0, time.time() - t0)
 
     with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as pool:
         for name, qi, r, abstained, ncit, dt in pool.map(run_one, combos):
             results.setdefault((name, qi), []).append((abstained, ncit))
             lock_done[0] += 1
             # per-combo HEARTBEAT: a visible line as each finishes (abstain/cites/latency), not sparse ticks
-            verdict = "ABSTAIN" if abstained else f"answer({ncit}c)"
+            verdict = "ERROR" if abstained is None else "ABSTAIN" if abstained else f"answer({ncit}c)"
             _log(f"[{lock_done[0]:>2}/{total}] {name:<14} {queries[qi]['function']:<28} "
                  f"r{r} -> {verdict:<11} {dt:>5.0f}s")
 
     # 3. report
     _log("\n" + "=" * 90)
-    _log(f"{'strategy':<16} {'abstain_rate':>13} {'flip_queries':>13} {'mean_cites':>11}")
+    _log(f"{'strategy':<16} {'abstain_rate':>13} {'errors':>8} {'flip_queries':>13} {'mean_cites':>11}")
     _log("-" * 90)
     for name in strategies:
-        runs = [rec for qi in range(len(queries)) for rec in results.get((name, qi), [])]
-        abstains = sum(a for a, _ in runs)
-        flips = sum(
-            0 < sum(a for a, _ in results.get((name, qi), [])) < repeats for qi in range(len(queries)))
-        cites = [c for a, c in runs if not a]
-        _log(f"{name:<16} {abstains}/{len(runs)} ({abstains/len(runs):>4.0%})   "
-             f"{flips}/{len(queries)} ({flips/len(queries):>4.0%})   "
-             f"{(sum(cites)/len(cites) if cites else 0):>8.1f}")
+        s = strategy_summary([results.get((name, qi), []) for qi in range(len(queries))])
+        rate = s["abstains"] / s["answered_runs"] if s["answered_runs"] else 0.0
+        _log(f"{name:<16} {s['abstains']}/{s['answered_runs']} ({rate:>4.0%})   {s['errors']:>5}   "
+             f"{s['flip_queries']}/{len(queries)} ({s['flip_queries']/len(queries):>4.0%})   "
+             f"{s['mean_cites']:>8.1f}")
     _log("=" * 90)
     _log("\nPer-query abstain counts (out of %d repeats):" % repeats)
     _log(f"{'query':<30} " + "  ".join(f"{n:>13}" for n in strategies))
@@ -163,7 +173,8 @@ def main() -> None:
         cells = []
         for name in strategies:
             recs = results.get((name, qi), [])
-            cells.append(f"{sum(a for a, _ in recs):>2}/{len(recs):<2} abst")
+            done = [a for a, _ in recs if a is not None]
+            cells.append(f"{sum(done):>2}/{len(done):<2} abst" + (f" {len(recs) - len(done)}err" if len(done) < len(recs) else ""))
         _log(f"{q['function']:<30} " + "  ".join(f"{c:>13}" for c in cells))
     store.close()
 
