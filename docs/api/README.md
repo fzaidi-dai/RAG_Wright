@@ -188,6 +188,42 @@ One sample document's structural measures. Segmentation: `tiles` (spans tile eve
 
 Unit labelling against the gold (`evaluate_ingestion(unit_labels=...)`), scored per UNIT: snippets that land in the same unit with the same label count once. `gold`: units scored; `correct`: those whose label matches; `accuracy`: correct / gold. `per_label`: `{label: {gold, predicted, correct, recall, precision}}` over the gold units (precision is among the gold units predicted with that label; `None` when none were). `confusions`: `{gold, predicted, count}` for every wrong pair, most frequent first. `unmatched` / `ambiguous`: `"<doc>: <snippet>"` for a snippet found in no unit / in several. `conflicting`: `"<doc>: unit <i>: <labels>"` for a unit whose snippets carry different labels (not scored: one label cannot match them all). An empty label means the unit should carry none.
 
+### `GoldItem(*, id: Annotated[str, MinLen(min_length=1)], input: Any, expected: Any, group: Optional[str] = None, provenance: Literal['hand', 'silver', 'generated'] = 'hand', metadata: dict[str, typing.Any] = <factory>) -> None`
+
+One gold case. `id` is stable across versions (a backend keys runs on it).
+
+### `GoldSet(*, name: Annotated[str, MinLen(min_length=1)], version: Annotated[str, MinLen(min_length=1)], items: Annotated[list[rag_wright.contracts.evals.GoldItem], MinLen(min_length=1)], local_only: bool = True, description: str = '') -> None`
+
+A named, versioned set of gold items. `local_only` (default True) keeps it off any hosted backend.
+
+#### `GoldSet.groups(self) -> 'dict[Optional[str], list[str]]'`
+
+Item ids by grouping key, in item order (split on these, never on items).
+
+### `GoldMapping(*, input: Union[str, list[str]], expected: Union[str, list[str]], id: Optional[str] = None, group: Optional[str] = None, provenance: Optional[str] = None, metadata: list[str] = <factory>) -> None`
+
+Which columns (or JSONL keys) hold what. `input` / `expected`: one column gives its value, several give a `{column: value}` record. `id`: the column with a stable item id (None = where the row is). `group`: the leakage-safe grouping key's column. `provenance`: a column of `hand` / `silver` / `generated` (blank = the default). `metadata`: columns copied onto each item.
+
+#### `GoldMapping.columns(self) -> 'list[str]'`
+
+_(no docstring)_
+
+### `GoldImportError`
+
+The file cannot be read into a correct gold set; the message says where and why.
+
+### `EvalReport(*, gold_set: str, gold_version: str, task: str, engine_version: str, models: list[str] = <factory>, repeats: Annotated[int, Ge(ge=1)] = 1, items: list[rag_wright.contracts.evals.ItemResult], scores: list[rag_wright.contracts.evals.ScorerResult], created_at: datetime.datetime = <factory>, run_url: Optional[str] = None) -> None`
+
+The JSON-ready result of an eval run: what was measured, per item, per scorer.
+
+### `ItemResult(*, item_id: str, outputs: list[typing.Any], errors: list[typing.Optional[str]]) -> None`
+
+One gold item's outputs and errors, one slot per repeat (`None` error = the call answered).
+
+### `ScorerResult(*, scorer: str, passed: bool, gate: dict[str, typing.Optional[float]] = <factory>, thresholds: dict[str, float] = <factory>, diagnostics: dict[str, typing.Any] = <factory>) -> None`
+
+One scorer's verdict: `gate` holds the gated measures, `thresholds` what they must reach, `diagnostics` what is reported and never gated.
+
 ### `TableRow(*, table_ref: str, sheet: Optional[str] = None, page: Optional[int] = None, row_index: int, columns: list[str], values: list[str]) -> None`
 
 ING-7: one data row of a parsed table, read from the parse's cell GRID (exact cell text, whitespace collapsed) -- whole even when the chunker split the table. `columns` is the table's first row as parsed; `row_index` is the 0-based grid row (data rows start at 1). Domain-neutral: what a column MEANS is the domain's decision.
@@ -449,6 +485,14 @@ Measure the ingestion hooks' structural fidelity on YOUR sample documents, befor
 Labelling (PS-R4): pass your `span_tagger` (and any `unit_representative`) with `unit_labels`, the gold `{<document file name>: [{"text": <a snippet that occurs in exactly one unit>, "label": <expected label, "" for none>}]}`, and `labels` (a `LabelEvaluation`) reports each gold unit's label against it: accuracy, per-label results, confusion pairs. The tagger is yours, so it may call models; nothing else does.
 
 Inside a running event loop (a web backend), await `aevaluate_ingestion` instead.
+
+### `load_gold_set(source: 'Union[str, Path, IngestSource]', mapping: 'GoldMapping', *, name: 'str', version: 'str', provenance: 'Provenance' = 'hand', local_only: 'bool' = True, sheet: 'Optional[str]' = None, description: 'str' = '') -> 'GoldSet'`
+
+Read a gold set from an expert's CSV, XLSX or JSONL file (a path, or an `IngestSource` holding an upload's bytes) through `mapping`. `provenance` is every item's unless the mapping names a provenance column; `sheet` reads one XLSX sheet (hidden ones too). Raises `GoldImportError` on anything that would make the gold wrong.
+
+### `aload_gold_set(source: 'Union[str, Path, IngestSource]', mapping: 'GoldMapping', *, name: 'str', version: 'str', provenance: 'Provenance' = 'hand', local_only: 'bool' = True, sheet: 'Optional[str]' = None, description: 'str' = '') -> 'GoldSet'`
+
+`load_gold_set` off the event loop, for a web backend.
 
 ### `table_rows(source_document: 'Any') -> 'list[TableRow]'`
 

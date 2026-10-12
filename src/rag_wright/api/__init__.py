@@ -60,6 +60,8 @@ from rag_wright.ingestion.builder import (
 )
 from rag_wright.capabilities.rlm_chunking import BoundaryDiscoverer
 from rag_wright.ingestion.evaluate import DocumentEvaluation, IngestionEvaluation, LabelEvaluation, aevaluate_ingestion, evaluate_ingestion
+from rag_wright.contracts.evals import EvalReport, GoldItem, GoldSet, ItemResult, ScorerResult
+from rag_wright.evals import GoldImportError, GoldMapping, aload_gold_set, load_gold_set
 from rag_wright.ingestion.tables import table_rows
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
@@ -107,5 +109,7 @@ __all__ = [
     "build_ingestion", "default_chunk_discoverer", "BoundaryDiscoverer", "IngestionPipeline", "DocumentHook",
     "IngestionReport", "DocumentReport",
     "aevaluate_ingestion", "evaluate_ingestion", "IngestionEvaluation", "DocumentEvaluation", "LabelEvaluation",
+    "GoldItem", "GoldSet", "GoldMapping", "GoldImportError", "load_gold_set", "aload_gold_set", "EvalReport",
+    "ItemResult", "ScorerResult",
     "table_rows", "TableRow",
 ]
