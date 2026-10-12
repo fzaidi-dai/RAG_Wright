@@ -76,8 +76,8 @@ from git or a local path to get them (see [`docs/installation.md`](docs/installa
 0.1.0 migrates with the
 [breaking-changes record](docs/specs/ingestion-hooks/ing8-breaking-changes.md).
 
-Runtime prerequisites: **ArcadeDB** (the store — run it locally with Docker, see
-[`docs/installation.md`](docs/installation.md)); **a model provider** (an OpenRouter key by default, or a self-hosted
+Runtime prerequisites: **ArcadeDB** (the store: your product runs its own instance and owns its data, including
+the knowledge graph; see [`docs/installation.md`](docs/installation.md)); **a model provider** (an OpenRouter key by default, or a self-hosted
 endpoint); and, only for NER (named entity recognition), the optional extra `uv add 'rag-wright[ner]'` +
 `uv run python -m spacy download en_core_web_sm`.
 

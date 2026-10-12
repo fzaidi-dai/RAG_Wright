@@ -50,7 +50,9 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
 uv add 'rag-wright>=0.3.0'              # released-product mode (PyPI); see below for local co-development
 ```
 
-Stand up the runtime prerequisites you provide: ArcadeDB (the store), a model provider (OpenRouter or self-hosted
+Stand up the runtime prerequisites you provide: ArcadeDB (the store; your product runs its own instance and owns
+its data, the retrieval index and the knowledge graph, in a data directory your product keeps and gitignores; never
+the engine checkout's), a model provider (OpenRouter or self-hosted
 vLLM), and — only for NER — `uv add 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`.
 Read the engine's **installation** + **configuration** docs for the exact `.env` and `EngineConfig` fields.
 

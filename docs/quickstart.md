@@ -5,7 +5,7 @@ source is [`examples/quickstart.py`](../examples/quickstart.py); this page walks
 
 ## Prerequisites
 
-- **ArcadeDB running** with `ARCADEDB_*` in a `.env` at the repo root — see [`installation.md`](installation.md).
+- **Your product's ArcadeDB running** with `ARCADEDB_*` in a `.env` at your product's repo root — see [`installation.md`](installation.md).
 - **A model provider** — `OPENROUTER_API_KEY` in `.env` (default), or `RAG_SERVING=vllm` + `VLLM_BASE_URL`/`VLLM_API_KEY`.
 
 Run it:
