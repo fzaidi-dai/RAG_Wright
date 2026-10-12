@@ -7,7 +7,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > EV-7 optional); RELEASED as `rag-wright` 0.8.0** (PyPI wheel + sdist, GitHub release `0.8.0`, PR #10; the
 > release PR bumped `uv.lock`, PS-25 confirmed). 0.8.0 also carries PS-24..PS-29 and PS-31 (ledger `docs/specs/public-surface/plan.md`); RuleWright's guide is
 > `rulewright-migration-0.8.0.md` (section 2: PDFs concurrent again + `pdf_page_count`; section 4: `create=False`).
-> Open: PS-30 (process-pool parse, later).
+> Open: PS-30 (process-pool parse, later); PS-32 (adopt the agent harness substrate, ADR-0139; waits on
+> RuleWright's separation); PS-33 (agentic capabilities, a later workstream).
 >
 > **Previous (2026-10-11): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.7.0**
 > (PyPI; 0.3.1 fixed 0.3.0's missing skills; 0.4.0 adds PS-R4, PS-12..PS-17: labelling eval, document metadata,
