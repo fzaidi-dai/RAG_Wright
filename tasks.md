@@ -4,8 +4,8 @@ Phase 2 output. The persistent, cross-session task ledger and shared memory of p
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
 > **⇒ RESUME / NEXT UP (2026-10-12, NEWEST): evals workstream COMPLETE (`docs/specs/evals/plan.md`, EV-0..EV-6;
-> EV-7 optional); `rag-wright` 0.8.0 ready to release** -- push, then merge release-please's 0.8.0 PR, then verify on
-> PyPI. 0.8.0 also carries PS-24..PS-29 and PS-31 (ledger `docs/specs/public-surface/plan.md`); RuleWright's guide is
+> EV-7 optional); RELEASED as `rag-wright` 0.8.0** (PyPI wheel + sdist, GitHub release `0.8.0`, PR #10; the
+> release PR bumped `uv.lock`, PS-25 confirmed). 0.8.0 also carries PS-24..PS-29 and PS-31 (ledger `docs/specs/public-surface/plan.md`); RuleWright's guide is
 > `rulewright-migration-0.8.0.md` (section 2: PDFs concurrent again + `pdf_page_count`; section 4: `create=False`).
 > Open: PS-30 (process-pool parse, later).
 >

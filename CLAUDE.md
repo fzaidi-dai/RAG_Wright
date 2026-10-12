@@ -55,7 +55,7 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-12): the evals workstream is COMPLETE; `rag-wright` 0.8.0 is ready to release** (ledger
+> **CURRENT STATE (2026-10-12): the evals workstream is COMPLETE and RELEASED as `rag-wright` 0.8.0** (PyPI + GitHub release `0.8.0`; ledger
 > `docs/specs/evals/plan.md`, EV-0..EV-6; EV-7 optional): gold sets from experts' files, a scorer per capability kind,
 > the runner `arun_eval` with an optional Langfuse backend, `EvalReport`, `aevaluate_ingestion`; the reference is
 > `docs/evals.md`. With it in 0.8.0: PS-24 (async calls on every event loop, ADR-0135), PS-25 (the release PR bumps
