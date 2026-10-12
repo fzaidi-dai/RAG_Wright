@@ -18,12 +18,16 @@ import logging
 import os
 import random
 import time
+import weakref
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Optional
 
+import httpx
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_openai import ChatOpenAI
+from langchain_openai.chat_models._client_utils import _build_async_httpx_client, _resolve_socket_options
 from openai import APIConnectionError, APITimeoutError, BadRequestError, InternalServerError, RateLimitError
 from pydantic import PrivateAttr
 
@@ -217,6 +221,49 @@ class _CostCapturingChatOpenAI(ChatOpenAI):
         return super()._convert_chunk_to_generation_chunk(chunk, default_chunk_class, base_generation_info)
 
 
+class _LoopLocalAsyncClient(httpx.AsyncClient):
+    """PS-24: sends each request through an async client of the running event loop.
+
+    langchain_openai's default async client is shared across the process, and its pooled connections belong to
+    the loop that opened them, so a call on a second loop (a second `asyncio.run`, a backend's loop beside a
+    worker's) reuses a dead connection and fails with `APIConnectionError`. Each loop here gets its own client,
+    built as langchain_openai builds its default, and dropped with the loop.
+    """
+
+    def __init__(self, base_url: str, timeout: Any) -> None:
+        super().__init__()
+        self._key = (base_url, timeout)
+        self._per_loop: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient] = (
+            weakref.WeakKeyDictionary())
+        _LOOP_LOCAL_CLIENTS.add(self)
+
+    def _current(self) -> httpx.AsyncClient:
+        loop = asyncio.get_running_loop()
+        client = self._per_loop.get(loop)
+        if client is None:
+            client = _build_async_httpx_client(*self._key, _resolve_socket_options(None))
+            self._per_loop[loop] = client
+        return client
+
+    async def send(self, request: httpx.Request, **kwargs: Any) -> httpx.Response:  # type: ignore[override]
+        return await self._current().send(request, **kwargs)
+
+
+@lru_cache
+def _loop_local_client(base_url: str, timeout: Any) -> _LoopLocalAsyncClient:
+    """One per base URL and timeout, as langchain_openai caches its default, so a loop's connections are shared."""
+    return _LoopLocalAsyncClient(base_url, timeout)
+
+
+def _loop_clients_in_use() -> int:
+    """How many per-loop clients the running loop holds (tests)."""
+    loop = asyncio.get_running_loop()
+    return sum(loop in c._per_loop for c in _LOOP_LOCAL_CLIENTS)
+
+
+_LOOP_LOCAL_CLIENTS: weakref.WeakSet[_LoopLocalAsyncClient] = weakref.WeakSet()
+
+
 def build_model(model_id: str, *, temperature: float = 0.0, _client_cls: type[ChatOpenAI] | None = None,
                 **overrides: Any) -> ChatOpenAI:
     """Construct the base client for `model_id`, carrying the profile's base `extra_body` (request-level
@@ -237,6 +284,11 @@ def build_model(model_id: str, *, temperature: float = 0.0, _client_cls: type[Ch
     params.update(overrides)  # caller overrides win
     cls = _client_cls or ChatOpenAI  # resolve at call time so a monkeypatched `seam.ChatOpenAI` (tests) is honored
     conn = resolve_connection(model_id)  # ADR-0100: backend + base_url + key + served id, from the profile
+    if "http_async_client" not in params and not os.getenv("OPENAI_PROXY"):  # a proxy builds its own client
+        try:  # PS-24; an unhashable timeout (an `httpx.Timeout`) gets its own client, as langchain_openai does
+            params["http_async_client"] = _loop_local_client(conn.base_url, params["timeout"])
+        except TypeError:
+            params["http_async_client"] = _LoopLocalAsyncClient(conn.base_url, params["timeout"])
     return cls(
         model=conn.served_model_id,  # the id the backend expects (== model_id for an un-pinned string)
         temperature=temperature,

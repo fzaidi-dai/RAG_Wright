@@ -1,7 +1,7 @@
 # Architecture Decision Records — index
 
-132 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
-and 0121–0134). ADRs are an
+133 ADR files (0001–0119, plus 0120 — the former duplicate `0015`, renumbered 2026-10-05 to repair the collision —
+and 0121–0135). ADRs are an
 immutable, cross-referenced decision log: nothing here is moved or renumbered — legacy records carry a `Status:`
 banner pointing to what replaced them. This index groups them so a newcomer isn't drowned.
 
@@ -190,4 +190,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0131 No default server key anywhere; a model's concurrency ceiling travels with its id ·
 0132 The model server cold-starts from a Modal GPU memory snapshot, behind a public-route gate ·
 0133 The model-call deadline follows the configured timeout; a thinking model's structured output is capped by its profile ·
-0134 Skills for product developers are linked into each product repo, never installed globally
+0134 Skills for product developers are linked into each product repo, never installed globally ·
+0135 The model seam gives each event loop its own async HTTP client
