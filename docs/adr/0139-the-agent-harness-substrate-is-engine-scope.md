@@ -77,9 +77,11 @@ only the engine can make that a supported pattern.
 
 RuleWright re-measured its harness before starting the separation (its engine request
 `2026-10-12-correction-to-the-harness-measurement.md`). The Context's figures were wrong: **13** modules import
-something from the product (6 of them a domain package), not three; **18** name no domain concept once comments and
-docstrings are stripped, not 21; **12 modules (2,193 lines) lift unchanged and 20 modules (5,321 lines) need work**,
-so the separation is staged work, not three imports turned into protocols. A third axis, invisible to both of those
+something from the product (6 of them a domain package), not three; **16 to 19** name no domain concept once comments
+and docstrings are stripped, not 21; **10 modules (1,092 lines) lift unchanged and 22 modules (6,422 lines) need
+work** (32 modules, 7,514 lines), so the separation is staged work, not three imports turned into protocols. (These
+three figures were first published here as 18, and as 12 / 2,193 lifting against 20 / 5,321; RuleWright's committed
+measurement script corrected them the same day, see below.) A third axis, invisible to both of those
 measurements, also keeps code product-shaped: deployment choice, vendor names and tenancy shape (a model id and an
 `is_openrouter()` helper in code, a direct `psycopg` import, a `(customer, workspace)` memory namespace).
 
@@ -93,3 +95,22 @@ The decision is unchanged; its reasons did not rest on these figures. Two detail
   `rag_wright.harness` in the engine's suite, and the engine repeats all three measurements itself at handover.
   Building an agent's chat model from a model profile, with tracing and usage metering, goes on `rag_wright.api`
   first (PS-36), so the product's model code is deleted rather than moved.
+
+### The measurement, as RuleWright's committed script reports it (2026-10-13)
+
+- **The lift/work split counts all three axes.** The first 12 / 2,193 counted only the product-import and
+  domain-vocabulary axes, so it credited `models.py` (a vendor named in code) and `checkpoints.py` (a `psycopg`
+  import) as lifting unchanged. With the deployment, vendor and tenancy axis, 10 modules (1,092 lines) lift and 22
+  (6,422 lines) need work: less lifts for free than first written.
+- **The domain-vocabulary count is a band, 16 to 19.** The stem list is curated (14 stems), because a list derived
+  from the ontology (173 tokens) holds generic English such as "change" and "available" and would wrongly mark
+  generic code as domain-bound. Six stems (audit, document, matter, party, policy, requirement) are both a domain
+  term and an ordinary word in a generic harness, so they are counted both ways.
+- **The third guard is RuleWright's `tests/test_harness_genericity.py`**, which PS-32 runs over `rag_wright.harness`
+  from adoption. It is a ratchet: the known violations may only shrink, a new violation fails, and a stale exemption
+  fails, so a finished stage cannot go unrecorded. A re-implementation must read tokens, not lines: four tenancy hits
+  (the `customer_id=…, workspace_id=…` pairs in `accounting.py`, `composition.py`, `runs.py` and `tools.py`) span
+  source lines and are invisible to `grep`.
+- **Progress since:** `models.py` went from 538 to 448 lines (PS-36 adopted: the default model id, `is_openrouter()`,
+  both `extra_body` dialects, the provider pin and the profile registration deleted), and `checkpoints.py` left the
+  harness as product deployment code, so the deployment axis is 0 and the harness is 31 modules.
