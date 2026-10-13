@@ -51,7 +51,7 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
 ## 1. Install
 
 ```sh
-uv add 'rag-wright>=0.9.0'              # released-product mode (PyPI); see below for local co-development
+uv add 'rag-wright>=0.10.0'              # released-product mode (PyPI); see below for local co-development
 ```
 
 Stand up the runtime prerequisites you provide: ArcadeDB (the store), a model provider (OpenRouter or self-hosted

@@ -1,6 +1,6 @@
 # RuleWright: moving to rag-wright 0.10
 
-What 0.10.0 changes for RuleWright (not yet released; the engine holds it until you are ready to move). Do the 0.9
+What 0.10.0 (released 2026-10-14: PyPI and GitHub release `0.10.0`) changes for RuleWright. Do the 0.9
 guide first. Nothing here is edited from the engine repo. Section 1 is the big one: the harness is now the engine's.
 
 ## 1. The agent harness is `rag_wright.harness` (PS-32, ADR-0139)
