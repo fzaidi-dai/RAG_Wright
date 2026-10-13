@@ -330,6 +330,10 @@ Look, without deploying or waking anything: is the server deployed, is a contain
 
 `stop_model_server` for async code.
 
+### `agent_chat_model(model: 'Optional[str]' = None, *, temperature: 'float' = 0.0, **overrides: 'Any') -> 'BaseChatModel'`
+
+The chat model for an agent: `model` is an engine model id (a registered profile's key, or any served id); `None` takes the GENERAL role's model. `overrides` are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`, `callbacks`, ...). Retries are the caller's to place: an agent harness usually keeps them in its middleware and passes `max_retries=0`.
+
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 
 Invoke a subgraph-kind capability by name over the workspace, inside a trace span. The implementation is resolved lazily from the manifest `impl_ref` (no central adapter dict). Retry/dead-letter comes from the LangGraph scaffold the subgraph is built on; usage is captured by the caller's `measure_usage()` (EP-API-5).

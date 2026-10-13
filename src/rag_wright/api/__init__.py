@@ -18,6 +18,7 @@ from rag_wright.capabilities.manifests import (
     register_capability,
 )
 from rag_wright.capabilities.registry import canonical_capability_slugs, register_canonical_slugs
+from rag_wright.api.agents import agent_chat_model
 from rag_wright.api.answers import (AnswerKind, Condition, EvidenceItem, GeneratedAnswer, Relevance,
                                     RelevanceVerdict, agenerate_answer, ajudge_spans)
 from rag_wright.api.documents import (aparse_document, aparse_document_bytes, parse_document,
@@ -99,6 +100,7 @@ __all__ = [
     # PS-19: deploy the self-hosted model server and use it like any model
     "ModelServerSpec", "ModelServer", "adeploy_model_server", "amodel_server", "await_model_server", "stop_model_server",
     "ModelServerNotDeployed", "ModelServerStatus", "amodel_server_status", "astop_model_server",
+    "agent_chat_model",  # PS-36: an agent's chat model from a profile, metered and traced
     "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
     "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL",

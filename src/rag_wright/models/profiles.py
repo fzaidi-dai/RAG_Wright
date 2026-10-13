@@ -50,6 +50,9 @@ class ModelProfile(BaseModel):
     # `structured_extra_body` does not reach here (it binds only to `with_structured_output`), so this is a separate
     # slot; it also lets the free-text extraction use a DIFFERENT reasoning setting than the forced-structured judge.
     text_extra_body: Optional[dict[str, Any]] = Field(default=None)
+    # PS-36: the agent-turn counterpart: applied by the seam to an agent's chat model (`build_agent_model`), whose
+    # turns decide which tool to call, so a product names no vendor's reasoning flag in code. None = base body only.
+    agent_extra_body: Optional[dict[str, Any]] = Field(default=None)
     # PS-22: the default `max_tokens` for a forced structured call (a caller's own `max_tokens` wins). A thinking
     # model can loop in its reasoning; the cap ends that at `finish_reason=length`, a parse failure the seam's
     # bounded retry handles, instead of running into the wall-clock deadline. None = no cap.
@@ -193,6 +196,7 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
+        agent_extra_body={"reasoning": {"enabled": True}},  # PS-36: an agent turn reasons about its tool call
     ),
     # ADR-0100: backend-PINNED strings for the same Qwen3.8-27B -- pick the string, get the backend. `-or` routes
     # to OpenRouter (slug qwen/qwen3.8-27b, its provider-routing + reasoning-field flags); `-modal` routes to the
@@ -202,6 +206,7 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="qwen3.8-27b-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
+        agent_extra_body={"reasoning": {"enabled": True}},  # PS-36: an agent turn reasons about its tool call
     ),
     "qwen3.8-27b-modal": ModelProfile(
         model_id="qwen3.8-27b-modal", backend="vllm", served_model_id="Qwen/Qwen3.8-27B",
@@ -210,6 +215,7 @@ PROFILES: dict[str, ModelProfile] = {
         structured_extra_body={"chat_template_kwargs": {"enable_thinking": True}},
         structured_max_tokens=_THINKING_CAP,
         text_extra_body={"chat_template_kwargs": {"enable_thinking": False}},
+        agent_extra_body={"chat_template_kwargs": {"enable_thinking": True}},  # PS-36
     ),
     # Reasoning-OFF variant of `qwen3.8-27b-modal` for BULK closed-vocab classification (e.g. silver mining): the
     # forced structured pick needs no chain-of-thought, and thinking-on is ~5-10x slower/costlier per call on the
@@ -243,6 +249,7 @@ PROFILES: dict[str, ModelProfile] = {
         model_id="qwen3.8-27b-modal-or", backend="openrouter", served_model_id="qwen/qwen3.8-27b",
         structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
+        agent_extra_body={"reasoning": {"enabled": True}},  # PS-36: an agent turn reasons about its tool call
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not

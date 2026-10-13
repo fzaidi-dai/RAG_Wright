@@ -25,6 +25,7 @@ from functools import lru_cache
 from typing import Any, Optional
 
 import httpx
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_openai import ChatOpenAI
 from langchain_openai.chat_models._client_utils import _build_async_httpx_client, _resolve_socket_options
@@ -586,6 +587,83 @@ async def astream_text(model_id: str, prompt: Any, *, temperature: float = 0.0,
                                   completion_start_time=(ttft[0] if ttft else None),
                                   metadata=({"openrouter_generation_id": gid[0]} if gid else None))
     return result
+
+
+class _AgentChatOpenAI(ChatOpenAI):
+    """PS-36: keeps OpenRouter's per-call `cost` on a streamed call. LangChain's streaming normalization drops it
+    (issue 0021); here it rides on the chunk's `generation_info`, which merges into the call's final generation, so
+    each call carries its own cost and concurrent calls on one model never share a holder."""
+
+    def _convert_chunk_to_generation_chunk(self, chunk: dict, default_chunk_class: type,
+                                           base_generation_info: dict | None) -> Any:
+        gen = super()._convert_chunk_to_generation_chunk(chunk, default_chunk_class, base_generation_info)
+        cost = (chunk.get("usage") or {}).get("cost")
+        if gen is not None and cost is not None:
+            gen.generation_info = {**(gen.generation_info or {}), "cost": cost}
+        return gen
+
+
+def _call_usage(response: Any) -> tuple[int, int, Optional[float]]:
+    """Input tokens, output tokens and the provider's cost (None when it reported none) of one completed call,
+    from either shape: `llm_output.token_usage` (a plain call) or the generation itself (a streamed call)."""
+    token_usage = (response.llm_output or {}).get("token_usage") or {}
+    inp, out, cost = token_usage.get("prompt_tokens", 0), token_usage.get("completion_tokens", 0), token_usage.get("cost")
+    for batch in response.generations:
+        for generation in batch:
+            um = getattr(getattr(generation, "message", None), "usage_metadata", None) or {}
+            inp, out = inp or um.get("input_tokens", 0), out or um.get("output_tokens", 0)
+            if cost is None:
+                cost = (generation.generation_info or {}).get("cost")
+    return int(inp or 0), int(out or 0), (float(cost) if cost is not None else None)
+
+
+class _AgentCallMeter(BaseCallbackHandler):
+    """PS-36: meters and traces every call an agent's chat model makes, whoever makes it (the agent loop, a
+    subagent, a tool-bound runnable). Inline, so the caller's `usage_scope` and trace context are the ones in force.
+    It never breaks a call: LangChain logs and swallows a handler's error."""
+
+    run_inline = True
+
+    def __init__(self, model_id: str) -> None:
+        self.model_id = model_id
+        self._open: dict[Any, tuple[float, Any]] = {}
+
+    def on_chat_model_start(self, serialized: dict[str, Any], messages: list, *, run_id: Any, **kwargs: Any) -> None:
+        from rag_wright.models import tracing
+        gen = (tracing.start_generation(model=self.model_id, input=messages[0] if messages else None, stage="agent")
+               if tracing.tracing_on() else None)
+        self._open[run_id] = (time.monotonic(), gen)
+
+    def on_llm_end(self, response: Any, *, run_id: Any, **kwargs: Any) -> None:
+        from rag_wright.models import tracing
+        from rag_wright.models import usage as usage_acct
+        t0, gen = self._open.pop(run_id, (time.monotonic(), None))
+        latency_ms = (time.monotonic() - t0) * 1000.0
+        inp, out, cost = _call_usage(response)
+        usage_acct.record_usage(self.model_id, input_tokens=inp, output_tokens=out, cost=cost, latency_ms=latency_ms)
+        if gen is not None:
+            tracing.finish_generation(gen, output=response.generations[0][0].text if response.generations else None,
+                                      usage={"input": inp, "output": out}, cost=cost, latency_ms=latency_ms)
+
+    def on_llm_error(self, error: BaseException, *, run_id: Any, **kwargs: Any) -> None:
+        from rag_wright.models import tracing
+        t0, gen = self._open.pop(run_id, (time.monotonic(), None))
+        if gen is not None:
+            tracing.finish_generation(gen, latency_ms=(time.monotonic() - t0) * 1000.0,
+                                      metadata={"error": type(error).__name__})
+
+
+def build_agent_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
+    """PS-36: an agent's chat model for `model_id`, from its profile: the backend, endpoint, key and served id, the
+    profile's base `extra_body` with its `agent_extra_body` over it, usage on streamed calls, and a meter that records
+    every call into the active usage scopes and traces it. `overrides` are `ChatOpenAI` fields (`timeout`,
+    `max_retries`, `max_tokens`, ...); a caller's `extra_body` keys win and its `callbacks` run beside the meter."""
+    agent_body = profile_for(model_id).agent_extra_body
+    if agent_body:
+        overrides["extra_body"] = {**agent_body, **(overrides.get("extra_body") or {})}
+    overrides.setdefault("stream_usage", True)
+    overrides["callbacks"] = [_AgentCallMeter(model_id), *(overrides.get("callbacks") or [])]
+    return build_model(model_id, temperature=temperature, _client_cls=_AgentChatOpenAI, **overrides)
 
 
 def _with_bounded_retry(runnable: Runnable, model_id: str) -> Runnable:

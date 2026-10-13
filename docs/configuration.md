@@ -118,6 +118,28 @@ and how to manage workspaces.
   (deterministic boundaries; the LLM judge and residual call). `RAG_SEMANTIC_JUDGE=llm` / `RAG_RESIDUAL_EXTRACTOR=llm`
   switch the judge / the residual values back to the LLM.
 
+### An agent's chat model
+
+A product's agents (Deep Agents or LangGraph) get the model they reason with from the engine, by model id, so the
+product names no model, vendor or vendor flag in code:
+
+```python
+from deepagents import create_deep_agent
+from rag_wright.api import agent_chat_model, measure_usage
+
+model = agent_chat_model("qwen3.8-27b-modal-or", max_retries=0)  # None: the GENERAL role's model
+agent = create_deep_agent(model=model, tools=[...])
+with measure_usage() as usage:
+    await agent.ainvoke({"messages": [{"role": "user", "content": "..."}]})
+```
+
+The profile decides the backend, endpoint, key and served id, and its `agent_extra_body` carries the agent turn's
+reasoning flag in the backend's own spelling (OpenRouter's `reasoning`, vLLM's `chat_template_kwargs`). Every call
+the model makes, including a subagent's, a streamed one and a tool-bound one, is recorded into the active
+`measure_usage()` scopes with the provider's real per-call cost, and traced as one Langfuse generation when tracing
+is on. Other keyword arguments are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`,
+`callbacks`); an agent harness that retries in its middleware passes `max_retries=0`.
+
 ## A self-hosted model server (Qwen on Modal)
 
 By default every role uses Qwen3.8-27B through OpenRouter. A product can instead run its own Qwen server on Modal,
