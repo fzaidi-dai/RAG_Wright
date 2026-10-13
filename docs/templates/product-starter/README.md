@@ -33,7 +33,7 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 | `{{PRODUCT_DOMAIN}}` | one line — what the product does |
 | `{{ENGINE_DEP}}` | how you depend on the engine, per the mode in playbook section 5: local co-development = `rag-wright>={{ENGINE_FLOOR}}` + an editable `[tool.uv.sources]` path; released product = `uv add 'rag-wright>={{ENGINE_FLOOR}}'` from PyPI |
 | `{{ENGINE_PATH}}` | where the engine repo/package is (e.g. `../RAG_Wright`) — for reading its docs/source |
-| `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.8.0`): a `>=` floor, never `==`; it moves only for a released symbol |
+| `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.9.0`): a `>=` floor, never `==`; it moves only for a released symbol |
 | `{{ENGINE_LANE_PATH}}` / `{{ENGINE_DOCS_LANE_PATH}}` / `{{PROJECT_LANE_PATH}}` | your `graphify-out/` lane paths (engine = the installed `rag_wright` package; engine-docs = the engine repo's `docs/` at the installed version's tag + the engine skills linked in `.claude/skills/`; project = this repo) |
 | `{{STACK}}` | your backend / frontend / model / infra choices |
 | `{{SPEC}}` / `{{PLAN}}` / `{{TASKS}}` | your spec, plan, and task-ledger filenames |

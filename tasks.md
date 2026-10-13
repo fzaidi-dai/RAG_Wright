@@ -3,7 +3,13 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ RESUME / NEXT UP (2026-10-12, NEWEST): evals workstream COMPLETE (`docs/specs/evals/plan.md`, EV-0..EV-6;
+> **⇒ RESUME / NEXT UP (2026-10-13, NEWEST): `rag-wright` 0.9.0 RELEASED** (PyPI wheel + sdist, GitHub release
+> `0.9.0`, PR #11): PS-36 (`agent_chat_model`), PS-37 (`drop_workspace`/`temporary_workspace`), PS-38 (the public
+> gaps a new product hits: ARD publish, profile registration, manifest types, `workspace_embedder`, `ARCADEDB_PORT`
+> required), plus the product-starter / skills review for TexWright. RuleWright's guide:
+> `docs/specs/public-surface/rulewright-migration-0.9.0.md`. TexWright starts from the product-starter templates
+> with a `>=0.9.0` floor.
+> Before it (2026-10-12): evals workstream COMPLETE (`docs/specs/evals/plan.md`, EV-0..EV-6;
 > EV-7 optional); RELEASED as `rag-wright` 0.8.0** (PyPI wheel + sdist, GitHub release `0.8.0`, PR #10; the
 > release PR bumped `uv.lock`, PS-25 confirmed). 0.8.0 also carries PS-24..PS-29 and PS-31 (ledger `docs/specs/public-surface/plan.md`); RuleWright's guide is
 > `rulewright-migration-0.8.0.md` (section 2: PDFs concurrent again + `pdf_page_count`; section 4: `create=False`).
