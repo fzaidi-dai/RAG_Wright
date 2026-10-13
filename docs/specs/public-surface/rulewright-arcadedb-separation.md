@@ -14,14 +14,14 @@ instance only). RuleWright's `CLAUDE.md` already says the same and lists this mo
 
 - One Docker container, `arcadedb-ragwright`, serves both repos' databases from the **engine checkout's**
   `RAG_Wright/data/arcadedb`, on port 2480.
-- That directory holds **25 RuleWright databases**: `rulewright_dev` (113 MB), `rulewright_compliance`, and 23
-  `rw_*` databases (test and run databases, including the two `rw_<id>_contract` / `rw_<id>_compliance` tenant
-  databases). It also holds the engine's own: `ragwright_cuad_full` (1.1 GB), `ragwright_prod1`,
-  `ragwright_prod1_async`, `ragwright_journey_incidents`, `quickstart_demo`, `model_server_example`, `some-db`.
+- That directory holds RuleWright's databases, matched by pattern (`rulewright_*`, `rw_*`; the count moves with
+  every run, 21 on 2026-10-13): its two keepers `rulewright_dev` and `rulewright_compliance`, 15 finished-task
+  scratch databases, two test fixtures live tests recreate, and two leftover test tenants. It also holds the
+  engine's own: `ragwright_cuad_full` (1.1 GB), `ragwright_prod1`, `ragwright_prod1_async`,
+  `ragwright_journey_incidents`, `quickstart_demo`, `model_server_example`.
 - **`scripts/arcadedb.sh` defaults to the same container name** (`ARCADEDB_CONTAINER` defaults to
-  `arcadedb-ragwright`), so RuleWright's script manages the engine's container. Its memory settings (a 3 GiB
-  container cap, `-Xms1G -Xmx2G`) are the ones live on that container now; the engine's docs assume a 6 GB heap for
-  its 1.1 GB evaluation graph.
+  `arcadedb-ragwright`), so RuleWright's script managed the engine's container and set its memory (a 3 GiB
+  container cap, `-Xms1G -Xmx2G`). The engine restored its own settings on 2026-10-13 (below).
 
 ## The move (owner: RuleWright, in its repo)
 
@@ -29,9 +29,10 @@ instance only). RuleWright's `CLAUDE.md` already says the same and lists this mo
    example `arcadedb-rulewright`) and give it its own host port (for example 2481), so both instances can exist
    side by side. Its data directory stays its own `data/arcadedb/` (the script's default already).
 2. **Copy with the engine's container stopped**, so the copy is consistent:
-   `docker stop arcadedb-ragwright`, then copy each `rulewright_*` and `rw_*` directory from
-   `RAG_Wright/data/arcadedb/` into RuleWright's `data/arcadedb/` (a copy, not a move: the engine deletes its
-   copies only after step 4).
+   `docker stop arcadedb-ragwright`, then copy each `rulewright_*` and `rw_*` directory you keep from
+   `RAG_Wright/data/arcadedb/` into RuleWright's `data/arcadedb/`, matched by pattern, never from a list (a copy,
+   not a move: the engine deletes its copies only after step 4). The scratch and disposable databases are dropped
+   instead of copied, through the engine: `drop_workspace(config, corpus=...)` (PS-37; in the next release, or now through a path dependency).
 3. **Point RuleWright at it:** its `.env` takes the new port (and container name if anything reads it); start it
    with `./scripts/arcadedb.sh up`. The script's guard against an empty data directory then passes because the
    data is there.
@@ -42,12 +43,12 @@ instance only). RuleWright's `CLAUDE.md` already says the same and lists this mo
 ## Then (owner: engine)
 
 - Delete the RuleWright databases from `RAG_Wright/data/arcadedb/` (after the user's go-ahead: it cannot be undone).
-- Decide `some-db` (1.8 MB, looks like a leftover).
-- Restore the engine container's own settings from `docs/ArcadeDB_Local.md`, recreating it if needed.
 
-## One constraint to plan for
+Done on 2026-10-13: `some-db` (empty; the engine's, from before PS-27) dropped; the engine's container recreated on
+its own settings (6 GB heap, no container cap); the two stopped containers removed.
 
-Docker's VM on this machine has about 7.65 GiB, and the Langfuse stack takes about 4.1 GiB of it. Two ArcadeDB
-containers at a 3 GiB cap each plus Langfuse do not fit at once. Run one ArcadeDB at a time locally (stop the
-engine's while working on RuleWright, and the other way round), or size both down together; never run one with a
-container limit below its `-Xmx` (RuleWright's script explains why).
+## So it does not regrow
+
+PS-37 adds `drop_workspace` and `temporary_workspace` to `rag_wright.api`. A probe or measurement that needs its own
+database opens it with `with temporary_workspace(config, prefix="probe") as ws:`, and the database is dropped when
+the block exits, also on error; see `docs/workspaces.md`, "Removing a workspace".

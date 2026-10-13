@@ -8,6 +8,7 @@ store extension is built over the workspace store with `pack_store(ws, cls)` (PS
 from __future__ import annotations
 
 import logging
+import uuid
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, Optional, TypeVar
 
@@ -108,6 +109,47 @@ def _build_store(config: EngineConfig, corpus: str, *, reset: bool, create: bool
 
     return ArcadeDBStore.from_config(sc.host, sc.port, sc.user, sc.password, database=corpus,
                                      protocol=sc.protocol, reset=reset, pack_ttl=config.pack, create=create)
+
+
+def drop_workspace(config: EngineConfig, *, corpus: str) -> bool:
+    """Drop the database `corpus` (PS-37): everything in it, the retrieval index and the knowledge graph, is deleted
+    and cannot be recovered. Returns True if it existed, False if there was nothing to drop. A cached handle for it
+    is closed and forgotten, so a later `open_workspace` starts fresh. A missing or blank `corpus` raises
+    `ValueError`: the name is always explicit, never a default database."""
+    if not corpus or not corpus.strip():
+        raise ValueError("drop_workspace needs the corpus to drop; it never falls back to a default database")
+    sc = config.store
+    cached = _WORKSPACES.pop((sc.backend, sc.host, sc.port, corpus), None)
+    if cached is not None and hasattr(cached._store, "close"):
+        cached._store.close()
+    existed = _drop_database(config, corpus)
+    if existed:
+        logger.info("dropped database %r", corpus)
+    return existed
+
+
+@contextmanager
+def temporary_workspace(config: EngineConfig, *, prefix: str = "tmp") -> Iterator[WorkspaceHandle]:
+    """A workspace on a fresh database, `<prefix>_<12 hex>`, dropped when the block exits, whether it succeeds or
+    raises (PS-37). For a probe or a measurement whose database must not outlive it:
+    `with temporary_workspace(config, prefix="probe") as ws: ...`."""
+    if not prefix or not prefix.strip():
+        raise ValueError("temporary_workspace needs a non-blank prefix")
+    corpus = f"{prefix}_{uuid.uuid4().hex[:12]}"
+    try:
+        yield open_workspace(config, corpus=corpus)
+    finally:
+        drop_workspace(config, corpus=corpus)
+
+
+def _drop_database(config: EngineConfig, corpus: str) -> bool:
+    sc = config.store
+    if sc.backend != "arcadedb":
+        raise ValueError(f"unsupported store backend: {sc.backend!r}")
+    from rag_wright.store.arcadedb import ArcadeDBStore
+
+    return ArcadeDBStore.drop_database(sc.host, sc.port, sc.user, sc.password, database=corpus,
+                                       protocol=sc.protocol)
 
 
 def _build_embedder(config: EngineConfig) -> Optional[Any]:

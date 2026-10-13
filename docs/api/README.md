@@ -290,6 +290,14 @@ Resolve (and cache) the workspace for `corpus` (the backend database name) from 
 
 One handle per store and corpus is cached for the process. An equal `config` returns it; a different one (new models, options, credentials or pack) returns a new handle that replaces it from then on, so a configuration change takes effect without a restart (PS-16). The new handle reuses the store when the store settings and the pack are unchanged, and the query embedder when the embedding profile is unchanged; a call still holding the old handle finishes on the old config.
 
+### `drop_workspace(config: 'EngineConfig', *, corpus: 'str') -> 'bool'`
+
+Drop the database `corpus` (PS-37): everything in it, the retrieval index and the knowledge graph, is deleted and cannot be recovered. Returns True if it existed, False if there was nothing to drop. A cached handle for it is closed and forgotten, so a later `open_workspace` starts fresh. A missing or blank `corpus` raises `ValueError`: the name is always explicit, never a default database.
+
+### `temporary_workspace(config: 'EngineConfig', *, prefix: 'str' = 'tmp') -> 'Iterator[WorkspaceHandle]'`
+
+A workspace on a fresh database, `<prefix>_<12 hex>`, dropped when the block exits, whether it succeeds or raises (PS-37). For a probe or a measurement whose database must not outlive it: `with temporary_workspace(config, prefix="probe") as ws: ...`.
+
 ### `pack_store(ws: 'WorkspaceHandle', cls: 'Callable[..., _T]', *args: 'Any', **kwargs: 'Any') -> '_T'`
 
 Build a pack's store extension (or any object that wraps the workspace store) over the workspace's store: `cls(<store>, *args, **kwargs)`, e.g. `pack_store(ws, MyPackStore)`. The store it receives implements the engine's `Store` protocol (`kg_read` / `kg_write` / `kg_edges` / `kg_count` / `kg_delete` / `kg_update` and the rest); the workspace keeps the store itself private, so this is the one way a product hands it to a pack.

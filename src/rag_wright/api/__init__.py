@@ -73,7 +73,14 @@ from rag_wright.api.kg import (entities_by_name, kg_count, kg_delete, kg_edges, 
 from rag_wright.api.tracing import traced_run, traced_step
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage, record_usage
 from rag_wright.models.profiles import ModelRole
-from rag_wright.api.workspace import WorkspaceHandle, open_workspace, pack_store, use_workspace_models
+from rag_wright.api.workspace import (
+    WorkspaceHandle,
+    drop_workspace,
+    open_workspace,
+    pack_store,
+    temporary_workspace,
+    use_workspace_models,
+)
 from rag_wright.models.model_servers import (
     ModelServer,
     ModelServerNotDeployed,
@@ -88,7 +95,7 @@ from rag_wright.models.model_servers import (
 )
 
 __all__ = [
-    "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace", "pack_store", "use_workspace_models",
+    "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace", "drop_workspace", "temporary_workspace", "pack_store", "use_workspace_models",
     # PS-19: deploy the self-hosted model server and use it like any model
     "ModelServerSpec", "ModelServer", "adeploy_model_server", "amodel_server", "await_model_server", "stop_model_server",
     "ModelServerNotDeployed", "ModelServerStatus", "amodel_server_status", "astop_model_server",

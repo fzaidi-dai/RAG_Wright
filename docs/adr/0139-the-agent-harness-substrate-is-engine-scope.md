@@ -72,3 +72,24 @@ only the engine can make that a supported pattern.
   capability layer, which is the engine's.
 - **A private shared package:** right only if the harness were where a product's value lies; RuleWright's
   measurement says it is not.
+
+## Correction, 2026-10-13
+
+RuleWright re-measured its harness before starting the separation (its engine request
+`2026-10-12-correction-to-the-harness-measurement.md`). The Context's figures were wrong: **13** modules import
+something from the product (6 of them a domain package), not three; **18** name no domain concept once comments and
+docstrings are stripped, not 21; **12 modules (2,193 lines) lift unchanged and 20 modules (5,321 lines) need work**,
+so the separation is staged work, not three imports turned into protocols. A third axis, invisible to both of those
+measurements, also keeps code product-shaped: deployment choice, vendor names and tenancy shape (a model id and an
+`is_openrouter()` helper in code, a direct `psycopg` import, a `(customer, workspace)` memory namespace).
+
+The decision is unchanged; its reasons did not rest on these figures. Two details of it are sharpened:
+
+- **The substrate's seams are the agent framework's own types**, not new protocols: it accepts a LangGraph
+  checkpointer, a memory namespace prefix from the caller, and a chat model (or a model profile name), and names no
+  model, vendor, database driver or tenancy shape. The product builds the Postgres checkpointer and passes it in, so
+  **the engine needs no `rag-wright[harness]` Postgres extra** (Decision 3's extra is withdrawn).
+- **PS-32's acceptance gains two checks:** RuleWright's third guard (deployment, vendor and tenancy shape) runs over
+  `rag_wright.harness` in the engine's suite, and the engine repeats all three measurements itself at handover.
+  Building an agent's chat model from a model profile, with tracing and usage metering, goes on `rag_wright.api`
+  first (PS-36), so the product's model code is deleted rather than moved.

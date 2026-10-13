@@ -277,6 +277,16 @@ class ArcadeDBStore:
             _log.info("created database %r (it did not exist)", database)
         return cls(client, database, pack_ttl=pack_ttl)
 
+    @staticmethod
+    def drop_database(host: str, port: str, user: str, password: str, *, database: str,
+                      protocol: str = "http") -> bool:
+        """Delete the database `database` if it exists (PS-37: `drop_workspace`). Returns whether it existed."""
+        client = SyncClient(host, port, protocol=protocol, username=user, password=password)
+        if not DatabaseDao.exists(client, database):
+            return False
+        DatabaseDao.delete(client, database)
+        return True
+
     # --- seam surface ---------------------------------------------------------------------------
 
     def ensure_schema(self) -> None:

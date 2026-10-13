@@ -79,3 +79,21 @@ A corpus that does not exist is created on first open (logged), which is how a p
 database name it derives. Where a corpus must already exist -- a tenant's explicit override name, a query-only
 service -- open it with `create=False`: a wrong name then raises `LookupError` rather than giving that tenant an
 empty graph (PS-27).
+
+## Removing a workspace
+
+`drop_workspace(config, corpus=...)` deletes a corpus's database: its retrieval index and knowledge graph, with no
+undo. It returns whether the database existed, and forgets the cached handle so a later `open_workspace` starts
+fresh. The name is always explicit; a missing or blank `corpus` raises `ValueError` rather than reaching a default
+database. Use it when a tenant leaves, or to clear a corpus your product created and no longer needs.
+
+For a probe, a measurement or a test that needs a database of its own, use `temporary_workspace`: it opens a fresh,
+uniquely named corpus and drops it when the block exits, whether the block succeeds or raises, so the database
+cannot outlive the work.
+
+```python
+from rag_wright.api import temporary_workspace
+
+with temporary_workspace(config, prefix="probe") as ws:
+    ...  # ingest, query, measure; the corpus is named probe_<12 hex>
+```

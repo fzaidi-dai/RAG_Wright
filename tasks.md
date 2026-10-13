@@ -9,7 +9,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > `rulewright-migration-0.8.0.md` (section 2: PDFs concurrent again + `pdf_page_count`; section 4: `create=False`).
 > Open: PS-30 (process-pool parse, later); PS-32 (adopt the agent harness substrate, ADR-0139; waits on
 > RuleWright's separation); PS-33 (agentic capabilities, a later workstream); PS-34 (RuleWright's databases move to its own
-> ArcadeDB, `rulewright-arcadedb-separation.md`; waits on RuleWright); PS-35 (the span migration on `rag_wright.api`).
+> ArcadeDB, `rulewright-arcadedb-separation.md`; waits on RuleWright); PS-35 (the span migration on `rag_wright.api`); PS-36 (an agent's chat model from a profile on
+> `rag_wright.api`, before RuleWright's `models.py` stage). PS-37 done (`drop_workspace`, `temporary_workspace`).
 >
 > **Previous (2026-10-11): public-surface workstream COMPLETE and RELEASED as `rag-wright` 0.7.0**
 > (PyPI; 0.3.1 fixed 0.3.0's missing skills; 0.4.0 adds PS-R4, PS-12..PS-17: labelling eval, document metadata,
