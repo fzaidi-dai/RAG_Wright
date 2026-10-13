@@ -114,3 +114,27 @@ The decision is unchanged; its reasons did not rest on these figures. Two detail
 - **Progress since:** `models.py` went from 538 to 448 lines (PS-36 adopted: the default model id, `is_openrouter()`,
   both `extra_body` dialects, the provider pin and the profile registration deleted), and `checkpoints.py` left the
   harness as product deployment code, so the deployment axis is 0 and the harness is 31 modules.
+
+## Addendum, 2026-10-13: the run context is the product's, against a protocol
+
+RuleWright found that the substrate's central type, `AgentContext(customer_id, workspace_id, user_id)` (every
+agent's `context_schema`), encodes its own two-level tenancy plus a user, so a product scoped any other way cannot
+fill it (its engine request `2026-10-13-agentcontext-encodes-our-tenancy-and-our-guard-was-blind.md`). The substrate
+reads those fields in two places only: the memory namespace and the run's session key.
+
+**Decision.** The product supplies its own context type; the substrate defines one `runtime_checkable` protocol
+whose single member is `scope: tuple[str, ...]`, the caller's namespace prefix this ADR already prescribes. Memory
+uses `scope + (<leaf>,)`; the session key is built from `scope` and the run id; an empty scope, or a part containing
+the key separator, is refused, so two scopes cannot collide. Starting a run takes the built context, and still
+refuses an agent compiled without a `context_schema`, or whose context does not satisfy the protocol. The product's
+own fields, typing and construction rules (for RuleWright: frozen, built only from an authenticated session) stay
+in the product. Not chosen: a generic `AgentContext[S]` (type machinery for no gain as a `context_schema`) and an
+opaque `scope: Any` (loses typing in the product's tools and moves the same question into the prefix).
+
+**PS-32's acceptance gains two items.** RuleWright's `tests/test_greenfield_conformance.py` (a second, different
+product implementing the seams, its open gaps as strict expected failures that may only shrink) is a fourth check,
+the only one that tests reuse rather than a proxy for it; and the genericity guard is taken at handover in its
+updated form (it now also matches field declarations such as `customer_id: <type>`, which it missed before). At
+handover this ADR also states that the lift figures above measure decoupling (the substrate imports no product
+code), not reusability.
+
