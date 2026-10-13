@@ -4,6 +4,15 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.8.0...0.9.0) (2026-10-13)
+
+
+### Features
+
+* **PS-36:** agent_chat_model, an agent's chat model from a model profile, metered and traced ([f1af92a](https://github.com/fzaidi-dai/RAG_Wright/commit/f1af92a848c2de7dd02cf1d99ce61cd3df8d20d9))
+* **PS-37:** drop_workspace and temporary_workspace, so a product removes the databases it creates ([44c0c78](https://github.com/fzaidi-dai/RAG_Wright/commit/44c0c78b0b8dd02724920391a564f3cda006c41c))
+* **PS-38:** close the public-surface gaps a new product hits (G12, G14, G22, G23) and require ARCADEDB_PORT ([0d0c1f1](https://github.com/fzaidi-dai/RAG_Wright/commit/0d0c1f16b95bc763dec348a59965de2e8b4a22c9))
+
 ## [0.8.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.7.0...0.8.0) (2026-10-12)
 
 
