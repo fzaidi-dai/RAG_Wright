@@ -33,21 +33,27 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 | `{{PRODUCT_DOMAIN}}` | one line — what the product does |
 | `{{ENGINE_DEP}}` | how you depend on the engine, per the mode in playbook section 5: local co-development = `rag-wright>={{ENGINE_FLOOR}}` + an editable `[tool.uv.sources]` path; released product = `uv add 'rag-wright>={{ENGINE_FLOOR}}'` from PyPI |
 | `{{ENGINE_PATH}}` | where the engine repo/package is (e.g. `../RAG_Wright`) — for reading its docs/source |
-| `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.3.0`): a `>=` floor, never `==` |
+| `{{ENGINE_FLOOR}}` | the minimum engine version you depend on (e.g. `0.8.0`): a `>=` floor, never `==`; it moves only for a released symbol |
 | `{{ENGINE_LANE_PATH}}` / `{{ENGINE_DOCS_LANE_PATH}}` / `{{PROJECT_LANE_PATH}}` | your `graphify-out/` lane paths (engine = the installed `rag_wright` package; engine-docs = the engine repo's `docs/` at the installed version's tag + the engine skills linked in `.claude/skills/`; project = this repo) |
 | `{{STACK}}` | your backend / frontend / model / infra choices |
 | `{{SPEC}}` / `{{PLAN}}` / `{{TASKS}}` | your spec, plan, and task-ledger filenames |
 | `{{REQ_SCHEME}}` / `{{AC_SCHEME}}` | your requirement / acceptance id schemes (e.g. `PR-N` / `AC-N`) |
 | `{{PROJECT_FRONTEND_SKILL}}` | your project-scoped UI skill name, or `none` |
+| `{{ARCADEDB_CONTAINER}}` | your product's ArcadeDB container name (e.g. `arcadedb-<your-product>`) |
+| `{{ARCADEDB_HTTP_PORT}}` / `{{ARCADEDB_BINARY_PORT}}` | the host ports your instance publishes: a pair no other instance on the machine uses (the engine's test instance uses 2480/2424) |
 | `{{PRODUCT_DEV_SKILL_SOURCES}}` | the folders of product-building skills you link from other repos (e.g. another product's generic UI, backend and tenancy skills), or `none`; linked into this repo's `.claude/skills/`, never globally (ADR-0134) |
 
 ## What the templates assume
 
-- **Product → Engine, one way.** You consume the engine through `rag_wright.api`; you never fork it or touch the
-  store directly. One set of helpers is not on `rag_wright.api` yet (the
-  entity-resolution building blocks, their contracts and the entity registry); the templates list it as an engine
-  gap to flag. The contract/compliance
-  **reference pack** is the engine's worked example — a template, never your domain.
+- **Product → Engine, one way.** You consume the engine through `rag_wright.api` (and your pack's code through
+  `rag_wright.pack_sdk`, which carries the entity-resolution building blocks); you never fork it or touch the store
+  directly. A need neither covers is an engine request, written in your repo's `docs/engine-requests/`. The
+  contract/compliance **reference pack** is the engine's worked example — a template, never your domain.
+- **Your product owns its store.** It runs its own ArcadeDB instance and owns every database in it; the engine
+  only mediates access.
+- **The agent harness substrate is the engine's** (engine ADR-0139). Your product writes its agents, tools,
+  prompts and guardrails on it; until the installed engine ships it (engine PS-32), keep agents thin and order the
+  plan so harness-dependent work comes after it.
 - The engine's documentation lives in the engine repo (not the wheel): concepts, architecture, installation,
   configuration, quickstart, the domain-adaptation guide, reference pack, and the generated API reference. Read it
   there or on GitHub.

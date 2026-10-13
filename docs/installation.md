@@ -82,7 +82,7 @@ engine is tested on (do not use `:latest`; it is a moving snapshot). For local d
 
 ```bash
 docker run -d --name <your-product>-arcadedb \
-  -p 2480:2480 -p 2424:2424 \
+  -p <http-port>:2480 -p <binary-port>:2424 \
   -v "$PWD/data/arcadedb:/home/arcadedb/databases" \
   -e JAVA_OPTS="-Darcadedb.server.rootPassword=<DEV_PASSWORD> -Darcadedb.server.mode=development" \
   -e ARCADEDB_OPTS_MEMORY="-Xms2G -Xmx6G" \
@@ -91,14 +91,19 @@ docker run -d --name <your-product>-arcadedb \
 
 - `$PWD/data/arcadedb` is your product's data directory; add it to your product's `.gitignore`. Any path you own
   works; back it up as your product's data.
-- Port **2480** is the HTTP API the client uses (2424 is the binary protocol).
+- Inside the container, port 2480 is the HTTP API the client uses (2424 is the binary protocol). On the host,
+  publish a pair **no other instance on the machine uses** (the engine's own test instance uses 2480/2424; one
+  product used 2481/2425), set `ARCADEDB_PORT` to your HTTP port, and make your product's settings default to it: a
+  setting that defaults to another instance's port reaches that instance and appears to work.
+- Give Docker enough memory for the heaps of every instance you run (Docker Desktop's memory setting is a cap on
+  all containers together).
 - **JVM heap is the capacity cap.** It is set by the container's `ARCADEDB_OPTS_MEMORY` (read at container start,
   so changing it means recreating the container). The image's default 2 GB ran out of memory part-way through a
   510-document knowledge graph; `-Xmx6G` above holds it. Raise it for a larger corpus. An under-sized heap shows up
   as a read-lock error mid-write (an out-of-memory error, OOM, in `docker logs`) on a full ingest.
 - Verify it is up:
   ```bash
-  curl -s -u root:<DEV_PASSWORD> http://localhost:2480/api/v1/databases
+  curl -s -u root:<DEV_PASSWORD> http://localhost:<http-port>/api/v1/databases
   ```
 
 ## Configure access (`.env`)
@@ -108,7 +113,7 @@ Secrets and connection details live in a gitignored `.env` in your product's rep
 ```sh
 # store
 ARCADEDB_HOST=localhost
-ARCADEDB_PORT=2480
+ARCADEDB_PORT=<http-port>
 ARCADEDB_USER=root
 ARCADEDB_PASSWORD=<DEV_PASSWORD>
 ARCADEDB_DATABASE=<your-database>

@@ -46,7 +46,13 @@ config = EngineConfig(store=..., models={"general": server.model_id})   # or any
 stop_model_server("acme-qwen")  # only to retire it: stopping discards the snapshots (see "Cold start & cost")
 ```
 
-`amodel_server(spec)` reconnects to a server deployed earlier (a restart, another process) without redeploying.
+`server.model_id` is `qwen3.8-27b-modal@<name>`: a copy of the `qwen3.8-27b-modal` profile pointed at this server
+(reasoning on for structured calls and agent turns, off for free text). Use that id, never `VLLM_BASE_URL`. A
+reasoning-off structured pick (bulk closed-vocab labeling) has no `@<name>` variant: point `VLLM_BASE_URL` at
+`server.base_url` and use the `qwen3.8-27b-modal-nothink` profile.
+`amodel_server(spec)` reconnects to a server deployed earlier (a restart, another process) without redeploying;
+`await_model_server(server, timeout_s=...)` waits for readiness; `amodel_server_status(spec)` looks without waking it
+(`deployed`, `running` (a container bills), `healthy`, `weights_cached`); `astop_model_server(name)` is the async stop.
 The API key comes from the variable `ModelServerSpec.api_key_env` names (default `VLLM_API_KEY`); there is no default
 key, so set a real one. Needs `rag-wright[modal]` and a Modal login. One app per server name: different names give
 different servers (and URLs), for example one per tenant.
@@ -66,8 +72,9 @@ The script refuses to deploy without `VLLM_API_KEY`: Modal's web endpoint is pub
 `qwen3.8-27b-modal` routes there (the seam also refuses an unset key). When to stop it: "Cold start & cost" below.
 
 **The engine does NOT reach Modal by default.** Every role's default is `_PRODUCT_LLM = "qwen3.8-27b-modal-or"`,
-the same model routed through OpenRouter (a Modal cold start can still take minutes when Modal builds a snapshot). To send calls to the Modal server, set
-`RAG_MODEL_ALL=qwen3.8-27b-modal` (all roles), a per-role `RAG_MODEL_<ROLE>`, or `EngineConfig.models`. For bulk
+the same model routed through OpenRouter (a Modal cold start can still take minutes when Modal builds a snapshot). To send calls to the Modal server, put
+`server.model_id` in `EngineConfig.models` (the API route), or on the raw route set `RAG_MODEL_ALL=qwen3.8-27b-modal`
+(all roles) or a per-role `RAG_MODEL_<ROLE>`. For bulk
 closed-vocab labeling, the reasoning-off profile `qwen3.8-27b-modal-nothink` exists (opt-in; see the reasoning
 caveat below). `VISION_OCR` now defaults to the product LLM too, but image inputs through the Modal vLLM server are
 UNVERIFIED (the serve script passes no multimodal flags): confirm an image call works before pointing
@@ -130,7 +137,7 @@ the OFFICIAL prebuilt vLLM image** rather than pip-building vLLM:
 - **When to stop it -- one rule (EV-6; it used to contradict the line above).** The A100 is billed only while a
   container runs; the server scales to zero after 10 idle minutes (`scaledown_window=600`, no warm minimum) and then
   costs nothing and KEEPS its snapshots, so the next request is back in ~13 s. `modal app stop` saves at most those
-  10 minutes and makes the next deploy pay a 9-15 min snapshot-building boot (2026-10-12: a stop after a failed smoke
+  10 minutes and makes the next deploy pay a snapshot-building boot (usually 4-9 min; 15 min seen once) (2026-10-12: a stop after a failed smoke
   run, then a redeploy, cost a 911 s boot).
   1. **Deploy once per server name**; reuse the name (a new name builds new snapshots).
   2. **Build the consumer first** (the bulk / label / eval script, its smoke test, its progress logging) while no
@@ -138,8 +145,8 @@ the OFFICIAL prebuilt vLLM image** rather than pip-building vLLM:
      a smoke-warmed A100 sat idle ~20 min while unrelated work ran).
   3. **Between runs, and when you are done, let it scale to zero.** Never stop it between runs; a script's error
      path must not stop it either when a fix-and-rerun is likely.
-  4. **Check it reached zero**: `modal app list` shows the app `deployed` with 0 tasks about 10 minutes after the
-     last call. If tasks remain past the window, find out why (that is the 2026-10-04 burn) and stop it.
+  4. **Check it reached zero**: `amodel_server_status(spec).running` is False (or `modal app list` shows the app
+     `deployed` with 0 tasks) about 10 minutes after the last call. If tasks remain past the window, find out why (that is the 2026-10-04 burn) and stop it.
   5. **Stop (`modal app stop <app> --yes`, or `stop_model_server`) only to retire a server**: you will not use it
      for a long time and do not want its endpoint up, or you are replacing its deployment. Expect the next deploy to
      rebuild the snapshots.

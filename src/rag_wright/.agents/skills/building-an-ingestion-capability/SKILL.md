@@ -149,12 +149,32 @@ network-bound work inside it; the engine runs up to `IngestionTuning.extract_con
   to its parent, and an `AttachedTo` edge from the child to the table-row span it belongs to, with a confidence and
   the identifier evidence (`IngestionTuning.identifier` sets what counts as an identifier). The report lists them in
   `DocumentReport.children`, `links` and `unmapped_links`.
+- **Record table or form, decided per table.** In `auto` mode a table is a database (one unit per row) when its
+  header has `RecordTableRule.min_header_cols`+ named columns, `distinct_ratio`+ of them distinct, and either a serial
+  first column in `serial_ratio`+ of the rows or `min_cols`+ columns; anything else stays whole (a form). A test log
+  or results sheet judged wrongly is fixed with `IngestionTuning(record_table=RecordTableRule(...))`, or per source
+  with `IngestSource(table_mode="record"|"block")`. Check the decision on your samples with
+  `evaluate_ingestion(..., table_labels=[{"pattern": <regex on the header row>, "label": "record"|"block"}])`
+  (first match wins): a block table split per row, or a wide record table not split, is a failure, and tables no
+  pattern matched are listed in `unlabelled_tables`.
+- **How an embedded file finds its row.** An identifier is a token of 4+ characters containing a digit that appears
+  on at most `IdentifierRule.max_rows` table rows and in at most `max_files` embedded files (defaults 3 and 3; set
+  them with `IngestionTuning(identifier=IdentifierRule(...))`). A file whose identifiers match no row, or too many,
+  stays a child document with no `AttachedTo` edge and is listed in `unmapped_links`: for a workbook with dozens of
+  embedded lab reports, check `links` against what you expect before trusting the graph.
+- **Nesting.** A file embedded in an embedded file is ingested; anything deeper is listed in
+  `DocumentReport.embedded_skipped`, not walked.
+- **Stable ids.** `IngestSource(doc_id=...)` gives a document your own id (an upload's record id, say), so a re-ingest
+  of the same file lands on the same `Document`.
 
 ## 6. Verify (definition of done)
 
-1. `evaluate_ingestion` passes on a representative sample of YOUR documents (not a hand-picked easy one). If your
-   units carry labels, its `labels` report on your gold meets the bar you set, with the confusions understood.
-2. A live ingest of that sample: no dead letters, `extraction_failures` explained, records cite spans
+1. `evaluate_ingestion` passes on a representative sample of YOUR documents (not a hand-picked easy one), with
+   `table_labels` covering every table type you have. If your units carry labels, its `labels` report on your gold
+   meets the bar you set, with the confusions understood. Inside a web backend use `aevaluate_ingestion` (with
+   `progress`) as a background job.
+2. A live ingest of that sample, in a disposable database (`with temporary_workspace(config, prefix="trial") as ws:`),
+   no dead letters, `extraction_failures` explained, records cite spans
    (`kg_read(ws, "<your type>", fields=["span_id"])`), and `span_positions(ws, doc_id)` gives the citation positions.
 3. A hermetic test of your extractor on fixed units (no model calls in the default suite; the engine's test network
    guard fails any unmarked test that reaches the network).

@@ -63,8 +63,10 @@ worked examples; your evals live in your repo.
   GoldMapping(id=..., input=..., expected=..., group=...), name=..., version=...)` reads them as written -- the header
   found under a title, blank rows skipped, values kept exactly, each item's place recorded -- and refuses anything
   that would make the gold wrong (a missing column, a row without its id, a duplicate id) with where it is. Map
-  `group` to the source document so splits stay leakage-safe. A gold set is `local_only` by default: client data
-  never leaves the machine.
+  `group` to the source document so splits stay leakage-safe. A workbook with several sheets: name one with
+  `sheet=`. Say how the gold was made with `provenance=` (`hand`, `silver` or `generated`; or a per-row column through
+  `GoldMapping(provenance=...)`), so silver is never conflated with gold. A gold set is `local_only` by default:
+  client data never leaves the machine.
 - **Gold stays local when the corpus is restrictively licensed** (CUAD/ACORD-derived gold lives under the
   gitignored `data/eval/`); commit the builder and the scorer, never the data.
 
@@ -145,10 +147,10 @@ or a plain function, which runs off the event loop) on every item, `repeats` tim
 answer), scores each repeat, and passes a scorer only if it passes on every repeat (its gate is the worst repeat;
 `per_repeat_gate` lists each). `run_eval` is the synchronous form; inside a web backend, await `arun_eval` as a
 background job. What is still yours:
-- **Isolate the capability under test**: the task calls ONE capability, injected (a seam / `extract_override` / an
-  injected `retrieve`), so the eval measures it, not the whole pipeline. Invoke production code THROUGH the
+- **Isolate the capability under test**: the task calls ONE capability, injected (a seam, such as the reference pack's
+  `extract_override` or an injected `retrieve`), so the eval measures it, not the whole pipeline. Invoke production code THROUGH the
   capability layer (`ainvoke_subgraph`/`ainvoke_model`), never a hand-built copy. Score the **shipped request** (the
-  exact prompt/question builder production uses, e.g. `judge_request`), not a copy of it re-typed in the eval.
+  exact prompt/question builder production uses, e.g. the reference pack's `judge_request`), not a copy of it re-typed in the eval.
 - **Repeatability for non-deterministic models.** Use `repeats` and read `report.flips`; flips cluster near the
   threshold and usually mean the QUESTION is ambiguous: fix the question, do not vote it away (Jev flipped 5/181
   answers at scores 0.47-0.56; temperature/seed did not help, majority voting barely helped, rewriting the ambiguous
@@ -160,7 +162,7 @@ background job. What is still yours:
 - **Keep the report.** `report.model_dump_json()` holds every item's outputs; save it next to the gold version.
   `rescore_eval(report, gold, scorers)` re-scores it with new thresholds, a new scorer or a corrected gold, free. An
   eval kept only as aggregate numbers can never be checked again.
-- **Pre-flight paid bulk** (>~50 paid calls): print the exact count + cost and wait (`warn-before-bulk` rule).
+- **Pre-flight paid bulk** (>~50 paid calls): print the exact count + cost and wait for approval before launching.
 - **Hermetic tests never touch the network**: `tests/conftest.py` fails a test that resolves a non-local host unless
   it carries a live marker (`model`, `store`, ...). Live evals run as scripts (outside pytest) or carry a live
   marker.

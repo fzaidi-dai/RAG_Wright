@@ -7,7 +7,8 @@ orchestration compiler, is PARKED per engine ADR-0052).
 
 > **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}`,
 > `{{ENGINE_DEP}}`, `{{ENGINE_FLOOR}}`, `{{STACK}}`, the `{{SPEC}}`/`{{PLAN}}`/`{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme,
-> the grounding-lane paths, and `{{PROJECT_FRONTEND_SKILL}}`. The boundary, skills, phases, per-task loop,
+> the grounding-lane paths, `{{PROJECT_FRONTEND_SKILL}}`, and the ArcadeDB slots `{{ARCADEDB_CONTAINER}}`,
+> `{{ARCADEDB_HTTP_PORT}}`/`{{ARCADEDB_BINARY_PORT}}`. The boundary, skills, phases, per-task loop,
 > grounding discipline, and memory/commit rules stay as written. Companion to this repo's `CLAUDE.md`.
 
 > Conventions: acronyms expanded on first use, no em dashes, plain phrasing.
@@ -28,13 +29,17 @@ orchestration compiler, is PARKED per engine ADR-0052).
 
 ### The engine / product boundary (mirrors engine ADR-0052)
 
-This repo is the **PRODUCT**: UI/UX, the product tool surface, orchestration, data-source integrations, guardrails,
-and the user loops. The **RAG_Wright ENGINE** (open-core) owns the capabilities, ingestion/query pipelines, MCP
-servers, ARD, and the ontology machinery. Dependency is strict and one-way: **Product → Engine.** Never modify the
-engine from this repo; flag needed engine changes and make them in the engine project. The product consumes the
+This repo is the **PRODUCT**: UI/UX, the product tool surface, its agents (roster, tools, prompts, skills),
+orchestration, data-source integrations, guardrails, decision models, tenancy, and the user loops. The **RAG_Wright
+ENGINE** (open-core) owns the capabilities, ingestion/query pipelines, MCP servers, ARD, the ontology machinery and
+(engine ADR-0139) the generic agent harness substrate. Dependency is strict and one-way: **Product → Engine.** Never
+modify the engine from this repo; a needed engine change is an engine request (`docs/engine-requests/`, CLAUDE.md),
+made in the engine's own repo and session. The product owns its ArcadeDB instance and all its data; the engine
+mediates access to it. The product consumes the
 engine **only through `rag_wright.api`** (the seam) and **`rag_wright.pack_sdk`** (the pack's own capability code), and
 never touches the store (ArcadeDB) directly (`pack_store(ws, cls)` builds a pack store over the workspace). A need
-neither tier covers is an engine gap: flag it in the engine's `docs/domain-adaptation/_engine-gaps.md`. Your domain is a `.ttl`
+neither tier covers is an engine gap: check the engine's `docs/domain-adaptation/_engine-gaps.md`, and if it is not
+there, write an engine request. Your domain is a `.ttl`
 pack + capabilities authored here against the engine; the contract/compliance **reference pack** is only the
 engine's worked example — a template, never your domain.
 
@@ -52,6 +57,7 @@ engine's worked example — a template, never your domain.
 | **creating-evals** | Write a capability's eval FIRST (TDD) |
 | **classifier-opportunity-analysis** → **setfit** / **laya** | Find + build a classifier / System-1 decision model |
 | **qwen-vllm-modal** | The flat-GPU substrate for bulk teacher-labeling |
+| **building-an-agent-harness** | Build an agent on the engine's harness substrate (ships with it, engine PS-32; not in the installed engine until then) |
 
 **Generic** (the shared Addy-Osmani set): interview-me, idea-refine, spec-driven-development,
 planning-and-task-breakdown, incremental-implementation, test-driven-development, context-engineering,
@@ -68,7 +74,8 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 2. Choose the engine dependency mode (section 5: local co-development or released product) and depend on the engine
    (`{{ENGINE_DEP}}`); wire the engine repo as a read/reference additional directory (`.claude/settings.local.json`)
    so its docs + source are reachable.
-3. `.gitignore` covers `.env`, environments, caches, `graphify-out/`, and `.claude/skills/`.
+3. `.gitignore` covers `.env`, environments, caches, `graphify-out/`, `.claude/skills/`, and `data/` (the store's
+   data directory among it).
 4. Create the uv project, pin Python `>=3.12,<3.13` (match the engine), declare deps with `uv add`, commit
    `uv.lock`.
 5. **Build the grounding lanes:** index the installed `rag_wright` package as the `engine` lane, the engine repo's
@@ -100,8 +107,26 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
    if you build on the engine's contract/compliance worked example. Model the seam on the engine's
    `src/rag_wright/packs/reference_seam.py`, which registers in its constructor. Without it `ainvoke_subgraph` raises
    `KeyError` and the decision-model paths fall back silently to the LLM.
-9. Remaining Phase 0: the rest of the engine seam, config/secrets, any front-end scaffold, observability, and
-   repaying the `{{SPEC}}` placeholders.
+9. **Run this product's own ArcadeDB** (the engine's `docs/installation.md`, "Run your product's ArcadeDB"): a
+   container named `{{ARCADEDB_CONTAINER}}`, published on `{{ARCADEDB_HTTP_PORT}}`/`{{ARCADEDB_BINARY_PORT}}` (a pair
+   no other instance on the machine uses; the engine's test instance uses 2480/2424), data under `data/arcadedb/`.
+   Keep its run command in a script in this repo, and make the product's settings default to this port, so an unset
+   variable can never reach another instance. Give Docker enough memory for every instance's heap together.
+10. **Phase 0 guard tests**, each a few lines, each one failing loudly on a mistake that otherwise stays silent:
+    - **the boundary**: an AST walk of `src/` and `scripts/` that fails on any `rag_wright` import outside
+      `rag_wright.api` and `rag_wright.pack_sdk`;
+    - **the store is ours**: the configured ArcadeDB port and container are this product's, never another
+      instance's;
+    - **the environment**: the running interpreter is this repo's `.venv`;
+    - **the engine skills are linked**: every skill in the installed engine's `.agents/skills/` has its link in
+      `.claude/skills/` (resolve the engine by import, which also finds an editable path dependency);
+    - **the surface**: a committed snapshot of the installed `rag_wright.api.__all__` (and `pack_sdk`), so a change to
+      the public surface you build on is named the day it arrives;
+    - **hermetic**: a `tests/conftest.py` that fails any non-live test reaching a non-local host.
+11. `docs/engine-requests/` exists (with a README saying what a request holds: what, the evidence, what you want,
+    what you do meanwhile).
+12. Remaining Phase 0: the rest of the engine seam, config/secrets, any front-end scaffold, observability, and
+    repaying the `{{SPEC}}` placeholders.
 
 ---
 
@@ -109,8 +134,17 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 
 ```
 - {{SPEC}} is the single source of truth. Do not invent requirements; if unspecified, ask.
-- Product -> Engine, one way. Never modify the engine from this repo. Consume it only through
-  rag_wright.api; never access the store (ArcadeDB) directly.
+- Product -> Engine, one way. Never modify the engine from this repo; a needed change is an engine
+  request (docs/engine-requests/). Never work around an engine defect in product code.
+- Consume the engine only through rag_wright.api (+ rag_wright.pack_sdk in pack code); never access
+  the store (ArcadeDB) directly. The instance and its data are ours: own container, own ports.
+- Databases: open existing ones with create=False; probes and measurements use temporary_workspace;
+  remove with drop_workspace (ask first: it cannot be undone).
+- Agents: model from agent_chat_model(<engine model id>); no model, vendor or vendor flag in code.
+  The harness substrate is the engine's (ADR-0139); never write one here.
+- Classify each operation D / A / N before building it; never a model in the path of an
+  unambiguous button click.
+- Hermetic tests stub the door the code opens; live tests are sized and asked for before they spend.
 - INDEX BEFORE CODE. No code calling a library is written before it is in a graph. Declaring/
   installing is not calling: declare+install -> refresh graph -> write the grounded call.
 - Ground engine API calls against the `engine` lane (the installed rag_wright package); ground
@@ -189,8 +223,11 @@ Why the release check runs without `--locked`: with the path source, `uv.lock` r
 when the product gets CI, deploys or other developers: drop the path source, `uv lock`, commit, and add Dependabot. In
 the co-development mode a breaking engine change breaks the product at once; that is useful feedback when deliberate,
 so the engine runs the product's suite against its working tree before changing a public symbol or store method.
-- Engine bugs found here are fixed **in the engine repo** (a PR with a conventional `fix:` title), never patched
-  around in this repo.
+- Engine bugs found here go to the engine as an engine request and are fixed **in the engine repo** (a
+  conventional `fix:` commit, so the next release carries the fix), never patched around in this repo.
+- **The surface guard** (Phase 0) compares the installed `rag_wright.api.__all__` with the committed snapshot. When it
+  fails, adopt deliberately: use the new names, drop any interim fallback, and regenerate the snapshot in the same
+  commit. A move of the engine that does not touch the public surface needs nothing from you.
 
 ---
 
@@ -210,7 +247,10 @@ Adding a dependency:
 
 ## 7. What not to do
 
-- Do not do engine work here; flag a needed engine change and make it in the engine repo.
+- Do not do engine work here; write the engine request, and let the engine make the change in its repo.
+- Do not patch around an engine defect in product code; it hides the defect from every other product.
+- Do not stand up an ArcadeDB client, point at another instance, or delete a database's files by hand.
+- Do not build an agent harness substrate (loop, retries, deadlines, human-in-the-loop, memory, metering) here.
 - Do not call a `rag_wright.api` symbol without grounding it against the `engine` lane first.
 - Do not reach past `rag_wright.api` into engine internals, or access the store directly.
 - Do not treat the reference pack as your domain, or copy its vocabulary — author your own `.ttl`.

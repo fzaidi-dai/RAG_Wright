@@ -8,7 +8,9 @@ engine — a separate repo that depends on the open-core engine, one way.
 > the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it, per the dependency mode in the playbook's section 5), `{{ENGINE_FLOOR}}`
 > (the minimum engine version, a `>=` floor such as `0.3.0`),
 > `{{STACK}}` (your backend/frontend/model/infra choices), the grounding-lane paths, the `{{SPEC}}`/`{{PLAN}}`/
-> `{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme, and `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill, if any). The generic core
+> `{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme, `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill,
+> if any), and this product's ArcadeDB: `{{ARCADEDB_CONTAINER}}`, `{{ARCADEDB_HTTP_PORT}}`/`{{ARCADEDB_BINARY_PORT}}`
+> (a pair no other instance on the machine uses). The generic core
 > below — the boundary, grounding discipline, skills, working loop, memory, version control, boundaries — stays as
 > written.
 
@@ -28,17 +30,53 @@ engine — a separate repo that depends on the open-core engine, one way.
 | Stack | {{STACK}} · Python 3.12 + uv (pinned `>=3.12,<3.13` to match the engine). | Environment |
 | Grounding | **Graphify lanes** (section "Grounding"): `engine` · `engine-docs` · `project`. | Grounding |
 
-### The engine / product boundary (read this first) — mirrors engine ADR-0052
+### The engine / product boundary (read this first) — mirrors engine ADR-0052 and ADR-0139
 
 - **This repo is the PRODUCT.** The **RAG_Wright ENGINE** (open-core) is a separate repo it depends on. The engine
-  owns the capabilities, ingestion/query pipelines, MCP servers, ARD, and the ontology machinery. This repo owns
-  UI/UX, the product tool surface, orchestration, data-source integrations, guardrails, and the user loops.
+  owns the capabilities, ingestion/query pipelines, MCP servers, ARD, the ontology machinery, and (engine ADR-0139)
+  the generic agent harness substrate. This repo owns UI/UX, the product tool surface, its agents (their roster,
+  tools, prompts and skills), orchestration, data-source integrations, guardrails, its decision models, tenancy,
+  and the user loops.
 - **Dependency is strict and one-way: Product → Engine, never the reverse.** Consume the engine; do not fork it.
-  **Never modify the engine from this repo or session.** If the product needs an engine capability or change, FLAG
-  it and make that change in the engine repo (`{{ENGINE_PATH}}`), where the engine's own CLAUDE.md governs.
-- **The engine surface is `rag_wright.api` (your seam) plus `rag_wright.pack_sdk` (your pack's own code).** Import `EngineConfig`/`StoreConfig`/`open_workspace`, the
+  **Never modify the engine from this repo or session.** If the product needs an engine capability or change, write
+  an **engine request** (below); the change is made in the engine repo (`{{ENGINE_PATH}}`), in its own session,
+  where the engine's own CLAUDE.md governs.
+- **Engine requests.** One file per request in `docs/engine-requests/YYYY-MM-DD-<slug>.md`, in this repo: what you
+  need or found, the evidence (a reproduction, a measurement, the exact error), what you want from the engine, and
+  what you are doing meanwhile. Corrections to an earlier request are appended to it, dated, never edited away.
+  **Never work around an engine defect in product code**: a product-side patch hides the defect from every other
+  product built on the engine. Wait for the fix, or adopt it early (the dependency modes below).
+- **Open/closed hygiene.** Never copy the engine's open-source code into this repo (depend on it), and never put
+  this product's code, data or domain vocabulary into an engine request or the engine repo beyond what the request
+  needs.
+- **The store is this product's; access to it is the engine's.** This product runs its **own** ArcadeDB instance
+  (container `{{ARCADEDB_CONTAINER}}`, ports `{{ARCADEDB_HTTP_PORT}}`/`{{ARCADEDB_BINARY_PORT}}`, data under
+  `data/arcadedb/` here, gitignored) and owns every database in it, the knowledge graph included. Never point it at
+  another instance on the machine (the engine's own test instance, another product's), and never let a setting
+  default to another instance's port. Product code has **no ArcadeDB client**: every read and write goes through
+  `rag_wright.api` (`open_workspace`, the invokers, `kg_*`, `pack_store`). Open a database that must already exist
+  with `open_workspace(..., create=False)` (a wrong name raises `LookupError` instead of creating an empty graph);
+  give a probe or measurement its own disposable database with `temporary_workspace(config, prefix=...)` (dropped
+  on exit, also on error); remove a database with `drop_workspace(config, corpus=...)`, never by deleting files.
+- **Agents.** An agent's chat model comes from the engine by model id: `agent_chat_model(...)` (the engine profile
+  decides endpoint, key and reasoning flag; every call is metered into `measure_usage()` and traced). Never name a
+  model, a vendor or a vendor's flag in product code; a model id is configuration. The harness substrate (the loop,
+  error levels and deadlines, retries, interrupts and human-in-the-loop, replay on resume, memory practice,
+  metering) is engine scope (a third public tier, the harness, engine PS-32, with the `building-an-agent-harness` skill). Until
+  the installed engine has it, order the plan so substrate-dependent work comes after it, and never write a
+  substrate of your own: an early agent is a thin `create_deep_agent(model=agent_chat_model(...), tools=...)`.
+- **Classify every operation's orchestration mode before building it**: **D** (deterministic: a pre-wired workflow
+  the backend calls directly), **A** (agent-fronted: a fixed workflow reached through an agent, for an authorization
+  loop, a suspended run to resume, or conversational state), or **N** (non-deterministic: a model composes the
+  workflow at run time). An LLM inside a node is not an LLM orchestrating. Build each workflow **once**, as a tool:
+  chat reaches it through the agent, the UI calls it directly. **Never put a model in the path of an unambiguous
+  button click.**
+- **The engine surface is `rag_wright.api` (your seam) plus `rag_wright.pack_sdk` (your pack's own code).** Import `EngineConfig`/`StoreConfig`/`open_workspace`
+  (and `temporary_workspace`/`drop_workspace`), the
   invokers, discovery (`capability_index`/`discover` — `discover(task, resources=ws)` embedding-ranks the catalog
   for an agent planning over the engine), `kg_read`/`kg_write`/`kg_edges`/`measure_usage`,
+  `agent_chat_model`, answers (`agenerate_answer`/`ajudge_spans`), the eval toolkit (`aload_gold_set`/`arun_eval`/
+  `EvalReport`), the document helpers (`aparse_document_bytes`, `pdf_page_count`),
   `register_capability`/`load_reference_pack`,
   and the ingestion surface (`build_ingestion` -> `IngestionPipeline.aingest` -> `IngestionReport`,
   `IngestionTuning`, `IngestSource`, `evaluate_ingestion`, `table_rows`/`TableRow`, the hook contracts
@@ -50,8 +88,9 @@ engine — a separate repo that depends on the open-core engine, one way.
   parsing and chunking); the generated `docs/api/pack_sdk.md` lists it. Nothing else in the engine is stable.
 - **Pack authoring is on the API too:** `CapabilityManifest`, `load_pack`, `engine_capabilities`,
   `register_canonical_slugs`, `canonical_capability_slugs`.
-- **Engine gaps** are listed in the engine's `docs/domain-adaptation/_engine-gaps.md`; if you need something that is
-  on neither tier, flag it there (an engine change), never import an engine internal to work around it.
+- **Engine gaps** are listed in the engine's `docs/domain-adaptation/_engine-gaps.md`; read it before designing
+  around a missing piece. If you need something that is on neither tier and not listed, write an engine request;
+  never import an engine internal to work around it.
 - **Your domain is a `.ttl` pack + capabilities, authored HERE against the engine** (the engine is
   domain-neutral; the contract/compliance **reference pack** is only the engine's worked example — read it as a
   template, never as your domain). Follow the engine's domain-adaptation guide.
@@ -73,7 +112,13 @@ engine — a separate repo that depends on the open-core engine, one way.
   deploys or other developers): `rag-wright>={{ENGINE_FLOOR}}` from PyPI with a committed `uv.lock`; engine upgrades
   arrive as Dependabot PRs (`.github/dependabot.yml`) gated by CI incl. the live engine-seam tests, and an unreleased
   engine fix is adopted with a temporary `[tool.uv.sources]` git `rev` pin, removed when the release lands. Engine
-  bugs found here are fixed in the engine repo via a PR with a conventional `fix:` title.
+  bugs found here go to the engine as an engine request; the engine fixes them in its repo (a conventional `fix:`
+  commit, so the next release carries them). A symbol on the engine's main branch but not yet released is
+  reached only through the editable path, never through an internal import, and the version floor moves only
+  for a released symbol.
+- **The engine moving is normal, not a finding.** The engine changes continuously; most of it cannot reach a
+  product that uses only the two public tiers. Do not stop product work to report a move. What does stop the line
+  is a change to the public surface you use, which the surface guard (Phase 0) names.
 
 ---
 
@@ -110,6 +155,7 @@ relevant one.** Skills are workflows — follow their steps and verification, do
 | Writing a capability's eval (do it first, TDD) | **`creating-evals`** |
 | Deciding rule vs classifier vs decision-model vs LLM | **`classifier-opportunity-analysis`** → **`setfit`** / **`laya`** |
 | Bulk teacher-labeling for training data | **`qwen-vllm-modal`** |
+| Building or changing an agent (once the installed engine ships it, engine PS-32) | **`building-an-agent-harness`** |
 | Before writing any library call | `library-grounding` (mandatory) |
 | Implementing anything | `incremental-implementation` + `test-driven-development` |
 | Loading the right context per task | `context-engineering` |
@@ -147,7 +193,23 @@ engine-skill links are re-made after every engine upgrade.
   "module not found" almost always means a missing `uv run` prefix or an undeclared dep — re-run with `uv run` or
   `uv add`, never reinstall/recreate the env.
 - **This product has its OWN environment** (its own `.venv`, interpreter, site-packages); it consumes the engine
-  through the package/seam, not a shared interpreter.
+  through the package/seam, not a shared interpreter. Hazard: when the launching shell activated the engine's
+  venv, a bare `python` here resolves to the engine's interpreter and tests run green against the engine's
+  packages. A Phase 0 guard test fails when the running interpreter is not this repo's `.venv`.
+
+## Tests: three tiers, and the hermetic tier never reaches anything real
+
+- **Fast (hermetic):** the default `uv run pytest -q`. It never reaches the store, a model or the network. A
+  `tests/conftest.py` guard fails any non-live test that looks up a non-local host (the engine's own conftest is
+  the pattern). **Stub the door the code actually opens**: product code reaches the store through
+  `open_workspace`, so a test stubs that, not an older entry point the code no longer calls; a stub on a door
+  nobody opens lets the test reach a real store and create databases on every run, silently.
+- **Store:** marked (for example `-m store`); runs against this product's own ArcadeDB, in disposable databases
+  (`temporary_workspace`), never against a keeper.
+- **Live:** marked (for example `-m live`); real models and the real engine, spending real money. Every engine-seam
+  task has one. **Size it first**: count the items, price one, state the total, and ask before launching anything
+  over ~5 minutes, anything that spends money, or anything destructive. Run one named test, not a whole file, when
+  one is what the task needs.
 
 ## Source of truth
 
@@ -160,12 +222,13 @@ requirements; if something is unspecified or ambiguous, ask, do not assume.
 2. **The `RESUME / NEXT UP` block at the top of `{{TASKS}}`** — the authoritative handoff (last/next task, the
    skills it needs, open questions, hazards). Read only the entries it names.
 3. **Load the skills the resume block names** (Skill tool), before writing code — `library-grounding` and
-   `using-the-rag-wright-engine` on any engine/library task.
+   `using-the-rag-wright-engine` on any engine/library task. A cleared session has no skill loaded, and a skill
+   not loaded is a check nobody runs.
 4. **Only the ADRs the resume block cites**, plus any the task touches (engine-side decisions are cited from the
    engine repo's ADRs).
 5. **Verify state:** `git log --oneline -5 && git status --short && uv run pytest -q`.
-6. **Confirm grounding is available** (the engine lane resolves; `{{ENGINE_PATH}}` reachable) and any engine
-   services the task needs (ArcadeDB, a model provider) are up.
+6. **Confirm grounding is available** (the engine lane resolves; `{{ENGINE_PATH}}` reachable) and any services
+   the task needs are up: this product's own ArcadeDB (`{{ARCADEDB_CONTAINER}}`), a model provider.
 7. **Say where we are in two or three lines**, then wait.
 
 End a session by updating the resume block before context clears.
@@ -208,24 +271,32 @@ Start each task from a clean, committed tree. After approval, commit once atomic
 any ADR + docs), naming the task + its requirement/acceptance. Every main-line commit is green and reviewed. Never
 commit secrets or generated data (`.env`, caches, `graphify-out/` stay gitignored). Commits are local; ask before
 pushing to a shared remote. Keep changes small (~100 lines; ~300 max for one logical change); when a change grows,
-land the small one and stack the next on top — don't widen.
+land the small one and stack the next on top — don't widen. A change that both moves existing code and adds
+behaviour is two changes: separate refactoring from feature work.
 
 ## Boundaries
 
 - **Always:** a LIVE engine-seam test on every engine integration; ground engine/library calls before writing them,
-  against the right lane; cite every claim; run the task's tests before presenting; stream `X/N` + monitor
-  long-running work; stop for approval after each task; commit each approved task from a clean tree.
+  against the right lane; classify a new operation's orchestration mode before building it; cite every claim;
+  state coverage alongside any result (what was measured, on how many, what was left out); run the task's tests
+  before presenting; stream `X/N` + monitor long-running work; stop for approval after each task; commit each
+  approved task from a clean tree.
 - **Ask first:** changing `{{SPEC}}`; adding a dependency; changing a data model/schema; anything that needs an
-  **engine** change (flag it, do it in the engine repo).
-- **Never:** modify the engine from this repo/session; fork or copy engine code wholesale; reach past
-  `rag_wright.api` into engine internals; treat the reference pack as your domain; mark a task done or start a new
-  one without approval; run bare `python`/`pip`; commit secrets; let a claim out without a citation; suggest
-  pausing/stopping as a recommendation (we decide when to pause — propose only substantive next steps, or state
-  done and wait).
+  **engine** change (write the engine request); a run that spends money, runs over ~5 minutes, or deletes data
+  (dropping a database cannot be undone).
+- **Never:** modify the engine from this repo/session; work around an engine defect in product code; fork or copy
+  engine code wholesale; reach past `rag_wright.api` / `rag_wright.pack_sdk` into engine internals; give product
+  code an ArcadeDB client or point it at another product's or the engine's instance; name a model, vendor or vendor
+  flag in code; put a model in the path of an unambiguous button click; treat the reference pack as your domain;
+  silently omit a document from a sweep; mark a task done or start a new one without approval; run bare
+  `python`/`pip`; commit secrets; let a claim out without a citation; suggest pausing/stopping as a recommendation
+  (we decide when to pause — propose only substantive next steps, or state done and wait).
 
 ## Phases (each ends with our review gate)
 
-- Phase 0, setup: repo scaffold, environment, grounding lanes, the engine seam, `{{SPEC}}` placeholders repaid.
+- Phase 0, setup: repo scaffold, environment, this product's own ArcadeDB, grounding lanes, the engine seam
+  (capability registration at startup), the Phase 0 guard tests (the playbook lists them), `{{SPEC}}` placeholders
+  repaid.
 - Phase 1, Plan: produce `{{PLAN}}` (read-only plan mode). We review.
 - Phase 2, Tasks: produce `{{TASKS}}`, each mapped to its requirement/acceptance. We review.
 - Phase 3, Contracts: define the product contracts. We review.

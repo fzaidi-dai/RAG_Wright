@@ -17,14 +17,18 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
 - **You own your capabilities.** The engine's catalog starts empty; your seam registers everything you invoke, at
   startup (section 1). The contract/compliance capabilities are the engine's reference pack, not the engine.
 - **Product → Engine, one way.** Never fork, edit, or reach into engine internals. If the engine needs a change,
-  flag it upstream — don't work around it here.
+  write an engine request (section 6) — don't work around it here: a product-side patch hides the defect from
+  every other product built on the engine.
+- **Your product owns its store and its data; the engine mediates access.** Your product runs its own ArcadeDB and
+  has no ArcadeDB client of its own (section 1).
 - **The public surface is `rag_wright.api`; a pack also uses `rag_wright.pack_sdk`.** From `rag_wright.api` import
-  `EngineConfig`/`StoreConfig` (`StoreConfig.from_env()` reads `ARCADEDB_*`)/`open_workspace`, the invokers
+  `EngineConfig`/`StoreConfig` (`StoreConfig.from_env()` reads `ARCADEDB_*`)/`open_workspace`
+  (`temporary_workspace`/`drop_workspace` for disposable and removed databases), the invokers
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`), the KG accessors
   (`kg_read` with `key_range`, `kg_write`, `kg_edges` with `NOT_NULL`, `kg_count`/`kg_delete`/`kg_update`,
   `entities_by_name`, `span_positions`), `pack_store(ws, cls)` (build your pack's store extension over the
   workspace's store; the store itself stays private), metering and tracing (`measure_usage`, `record_usage`,
-  `traced_run`/`traced_step`), answers (`agenerate_answer`, `ajudge_spans` with `EvidenceItem`/`Condition`, the
+  `traced_run`/`traced_step`), `agent_chat_model` (an agent's chat model from an engine model id), answers (`agenerate_answer`, `ajudge_spans` with `EvidenceItem`/`Condition`, the
   models from the workspace's roles, your domain wording via `guidance=`), `ModelRole`, pack loading
   (`register_capability`/`load_pack`/`engine_capabilities`/`load_reference_pack`), the document helpers
   (`parse_document`/`aparse_document`, `parse_document_bytes`/`aparse_document_bytes` for uploads,
@@ -47,14 +51,18 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
 ## 1. Install
 
 ```sh
-uv add 'rag-wright>=0.3.0'              # released-product mode (PyPI); see below for local co-development
+uv add 'rag-wright>=0.8.0'              # released-product mode (PyPI); see below for local co-development
 ```
 
-Stand up the runtime prerequisites you provide: ArcadeDB (the store; your product runs its own instance and owns
-its data, the retrieval index and the knowledge graph, in a data directory your product keeps and gitignores; never
-the engine checkout's), a model provider (OpenRouter or self-hosted
+Stand up the runtime prerequisites you provide: ArcadeDB (the store), a model provider (OpenRouter or self-hosted
 vLLM), and — only for NER — `uv add 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`.
 Read the engine's **installation** + **configuration** docs for the exact `.env` and `EngineConfig` fields.
+
+**ArcadeDB is your product's, all of it.** Run your own instance (installation, "Run your product's ArcadeDB"): its
+own container name, its own host ports (a pair no other instance on the machine uses; the engine's test instance
+uses 2480/2424), its data directory in your repo (gitignored) or on storage you manage. Make your settings default
+to your own port, so an unset variable cannot reach another instance and appear to work. Your product code has no
+ArcadeDB client: every read and write goes through `rag_wright.api`.
 
 **Local co-development** (engine and product developed together on one machine): keep the floor and add an editable
 source so engine changes are picked up immediately: `[tool.uv.sources] rag-wright = { path = "<engine checkout>",
@@ -79,6 +87,18 @@ per implementation chosen per tenant in your code.
 `IngestSource(metadata=...)`; models follow the workspace's `EngineConfig.models` in every call that takes it
 (`use_workspace_models(ws)` for a call that does not). To change a tenant's config, open its corpus again with the
 new config: a different config replaces the cached handle, no restart needed. `docs/workspaces.md` lists what applies per workspace, per call and per process.
+
+**Databases.** `open_workspace(config, corpus=...)` creates a missing database by default (and logs
+`created database '<name>'`); where the database must already exist (a read path, a query service, an explicit
+override), pass `create=False`, which raises `LookupError` naming the databases that do exist instead of opening an
+empty graph. A probe, measurement or test that needs its own database uses
+`with temporary_workspace(config, prefix="probe") as ws:`; the database is dropped when the block exits, also when it
+raises. Remove a database with `drop_workspace(config, corpus=...)` (it refuses a blank name and cannot be undone);
+never delete its files or call the ArcadeDB server yourself.
+
+**Hermetic tests stub the door the code opens.** Your code reaches the store through `open_workspace`; a fast test
+stubs that. A stub on an entry point the code no longer calls lets the test reach a real store and create a database
+on every run, without failing.
 
 Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
 
@@ -137,7 +157,25 @@ Work the domain-adaptation guide, grounding each engine call (step 2) and writin
    `build_ingestion(document_hook=...)`, which runs once per document after its records are written; a
    first-class resolver config is still engine gap G1. → `kg-construction.md`, `entity-resolution.md`.
 6. **Build the product seam** — your thin layer over the engine API + registered caps (tenancy, orchestration,
-   the product tool surface). Wrap `open_workspace`/the invokers/`kg_read`/`measure_usage`.
+   the product tool surface). Wrap `open_workspace`/the invokers/`kg_read`/`measure_usage`. Classify each operation
+   before building it: deterministic (the backend calls a pre-wired workflow), agent-fronted (a fixed workflow
+   reached through an agent), or composed by a model at run time; build each workflow once, as a tool that both the
+   UI and an agent call, and never put a model in the path of an unambiguous button click.
+
+**PDFs.** Call the parse and ingest functions concurrently as you like: the engine parses one PDF at a time inside
+the process (a crash in the PDF library otherwise, engine ADR-0138) and keeps everything after the parse concurrent.
+Count an upload's pages with `pdf_page_count(data)`, which reads under the same lock; product code never imports the
+PDF library itself.
+
+**Agents.** Build a product agent (Deep Agents or LangGraph) on the model the engine gives it, by engine model id:
+`create_deep_agent(model=agent_chat_model("<model id>", max_retries=0), tools=[...])` (`None` takes the `GENERAL`
+role's model). The profile decides endpoint, key and the agent turn's reasoning flag, so your code names no model,
+vendor or vendor flag; every call, a subagent's included, is recorded into `measure_usage()` with the provider's
+real cost and traced when tracing is on. The generic harness substrate (the loop, error levels and deadlines,
+retries, interrupts and human-in-the-loop, replay on resume, memory practice, metering) is engine scope (engine
+ADR-0139, PS-32): it arrives as a third public tier with the `building-an-agent-harness` skill. Until your installed
+engine has it, keep agents thin and never write a substrate of your own; your product keeps its agents, tools,
+prompts, skills, guardrails and decision models.
 
 **Using a self-hosted model (Qwen on Modal).** Deploy it from the engine and use its model id like any model:
 `server = await adeploy_model_server(ModelServerSpec(name="<app>", max_num_seqs=<concurrency target>))` (the locked
@@ -183,8 +221,15 @@ engine PR:
 
 - Depend on a floor (`rag-wright>=X.Y.Z`, never `==`); `uv.lock` holds the exact version. Dependabot (uv ecosystem)
   opens a PR per new release; your CI — with a LIVE engine-seam test — gates it.
-- Found an engine bug? Fix it **in the engine repo** (PR titled `fix(scope): …` so it lands in the next release),
-  not by patching around it in the product.
+- Found an engine bug, or need something the engine does not have? Write an **engine request** in your repo,
+  `docs/engine-requests/YYYY-MM-DD-<slug>.md`: what you found, the evidence (a reproduction, a measurement, the
+  exact error), what you want, and what you do meanwhile. The engine fixes it in its own repo (a `fix(scope): …`
+  commit, so the next release carries it); never patch around it in the product. Read the engine's
+  `docs/domain-adaptation/_engine-gaps.md` first: the gap may be known.
+- An engine symbol on the engine's main branch but not yet released is reached through the editable path
+  (local co-development), never through an internal import; move your floor only for a released symbol.
+- Keep a committed snapshot of the installed `rag_wright.api.__all__` and a test that compares them: a change to the
+  surface you build on is then named the day it arrives, and any other engine change needs nothing from you.
 - Need that fix before the next release? Temporarily pin
   `[tool.uv.sources] rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<merged-sha>" }` and
   `uv lock`; drop the override when the release containing it arrives.
@@ -216,3 +261,7 @@ link). Link these, and any product-building skills another repo writes for produ
   domain instead of authoring your own `.ttl`.
 - Hand-constructing a capability's logic instead of invoking it by name through the invoker.
 - Skipping the eval: write it before the implementation.
+- Patching around an engine defect in product code instead of writing the engine request.
+- Giving product code an ArcadeDB client, pointing it at another product's or the engine's instance, or deleting a
+  database's files by hand (`drop_workspace` removes one; `temporary_workspace` keeps scratch from piling up).
+- Naming a model, vendor or vendor flag in product code; writing your own agent harness substrate.

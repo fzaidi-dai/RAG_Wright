@@ -219,11 +219,14 @@ after the 21-classifier runs — each one cost real time and each is avoidable w
 order before you fan out any bulk job.
 
 1. **Resolve the model from the engine, never hardcode a model id.** A hardcoded id rots: `ibm-granite/granite-4.1-8b`
-   now 404s on OpenRouter ("No endpoints found"). Use the engine resolver (`models.profiles.model_for(ModelRole.<ROLE>)`,
+   now 404s on OpenRouter ("No endpoints found"). Use the engine resolver (`rag_wright.pack_sdk.model_for(ModelRole.<ROLE>)`,
    or `ws.model_id(role)` on a workspace; the model-profile seam) so the id and backend come from config, and **confirm it with a one-call smoke before any
    bulk run**. Bulk teacher labeling runs on **self-hosted Qwen on Modal** (`qwen-vllm-modal` skill + ADR-0110), NOT
-   OpenRouter (flat-GPU = the warn-before-bulk rule); reasoning ON for label fidelity; client concurrency ≤16; raise
-   the structured timeout for reasoning-ON bulk; `modal app stop` when done.
+   OpenRouter (a flat GPU rate, not a per-call bill: before more than ~50 paid calls, print the exact count and cost
+   and wait for approval); reasoning ON for label fidelity; client concurrency below the server's `max_num_seqs`
+   (counting every concurrent run); raise the structured timeout for reasoning-ON bulk; between runs let the server
+   scale to zero, and stop it only to retire it (`qwen-vllm-modal`, "Cold start & cost": a stop discards its
+   snapshots).
 2. **Load `.env` by EXPLICIT path in any script run from outside the repo root** (a scratchpad / one-off script).
    `load_dotenv()` with no path searches the CALLING SCRIPT's directory, so a script in `/tmp/...` silently misses
    the project `.env` → `KeyError` or wrong creds. Pass the repo `.env` path (`load_dotenv("/abs/repo/.env")`) or
@@ -257,7 +260,7 @@ Concrete tool gotchas from a real run; following them saves real time.
   per-run progress log on the volume. A run whose app shows `stopped / 0 tasks` seconds after launch did NOT train —
   confirm via the platform task count and the registry, not by assuming.
 - **Mind the ACCOUNT CONTAINER CAP when sizing the fan-out.** A workspace has a max concurrent-container count (10 on
-  the fzaidi2014 account). Spawning more than that does NOT run them all at once — the excess QUEUES and runs in waves
+  the engine authors' account; check your own workspace's limit). Spawning more than that does NOT run them all at once — the excess QUEUES and runs in waves
   (correct + no double-spend, but ~N/cap× the wall-clock, and only `cap` show as running). Size the wave to ≤ the cap
   (chunk spawns + gather between waves) or report the wave count honestly. Distinct from any in-container concurrency.
 - **When multiple entrypoints exist, name the one to run** (`script.py::entrypoint`) and use the FULL script path;

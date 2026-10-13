@@ -11,13 +11,16 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 
 ## The sequence
 
-1. **Install the engine.** `uv add rag-wright` (or a path/git dep pre-publish), plus ArcadeDB and a model provider.
+1. **Install the engine.** `uv add rag-wright` (or a path/git dep pre-publish), plus a model provider and your
+   product's **own** ArcadeDB instance: its own container, ports and data directory. The store and all its data,
+   the knowledge graph included, are your product's; the engine only mediates access to them.
    → [Installation](../installation.md).
 
 2. **Configure the engine.** Construct an `EngineConfig` (store, model roles, embedding profile, and the options
    catalog: the generic ingest `tuning`, plus your pack's own options under `EngineOptions.packs`) and
-   `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name; tenancy is
-   product-side: one corpus and one config per tenant, with the settings that stay per process listed in
+   `open_workspace(config, corpus=…) -> WorkspaceHandle`. `corpus` is the backend DB name (pass `create=False` where
+   it must already exist; a probe or trial uses `temporary_workspace`, and `drop_workspace` removes a database);
+   tenancy is product-side: one corpus and one config per tenant, with the settings that stay per process listed in
    [Workspaces](../workspaces.md). To run on your own Qwen server instead of OpenRouter, deploy it from the engine
    and use its model id in `EngineConfig.models` ([A self-hosted model server](../configuration.md#a-self-hosted-model-server-qwen-on-modal)).
    → [Configuration](../configuration.md).
@@ -64,8 +67,11 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 
 8. **Build the product seam.** Your thin layer over the engine API + registered caps: tenancy/scoping, product
    orchestration, the product-named tool surface, and domain/app logic. It wraps `open_workspace` / the invokers /
-   `kg_read` / `measure_usage` — never `ArcadeDBStore` / `query_embedder` / engine id formats. (Product-repo work,
-   not engine.)
+   `kg_read` / `measure_usage` — never `ArcadeDBStore` / `query_embedder` / engine id formats. Build each workflow
+   once, as a tool the UI and an agent both call. A product agent takes its model from `agent_chat_model(<model id>)`
+   (metered and traced; no model or vendor named in your code); the generic agent harness substrate is engine scope
+   (ADR-0139) and arrives as its own public tier, so your product writes its agents, tools, prompts and guardrails,
+   not a harness. (Product-repo work, not engine.)
 
 9. **(Optional) a product demo** for your users. (Distinct from the engine's [reference pack](../reference-pack.md),
    which is the engine's own worked example — your domain pack is steps 3–4.)

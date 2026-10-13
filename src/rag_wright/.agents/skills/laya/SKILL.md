@@ -28,7 +28,10 @@ default, and `jev-latest`). A Laya swap needs (1) a server that speaks the Decis
 `{model, state, questions}`, return `{answers: {<id>: {type, noul|choice|score}}}`), and (2) a `DecisionModelProfile`
 entry in `DECISION_PROFILES` with its `endpoint`, `served_model_id` and `api_key_env` (an unknown id falls back to
 the OpenRouter endpoint). Then select it with `RAG_DECISION_MODEL=<profile id>`;
-`RAG_JEV_TIMEOUT_S` overrides the request timeout.
+`RAG_JEV_TIMEOUT_S` overrides the request timeout. **From a product, step (2) is not possible yet:**
+`DECISION_PROFILES` and `DecisionModelProfile` are engine internals and there is no public way to register a
+decision profile (engine gap G12). Write an engine request before you plan a Laya swap; until it closes, a product
+runs Laya behind its own `kind="model"` capability that calls the server directly.
 
 **Batch the questions.** One call carries one `state` and many keyed questions, so ask everything about a unit in
 ONE call (the reference pack judges all of a provision's values, and labels all of its residual candidates, in one
@@ -68,7 +71,7 @@ server you swap in.
 ## Data — the JSONL schema + criteria (the differentiator)
 One JSONL line per case (`research/scripts/finetune_single_device.py` reads this exact shape):
 ```
-{"state": "<clause text>",
+{"state": "<unit text>",
  "questions": {"<dim>": {"type":"choice","instructions":"<the question>","criteria":{"<value>":"<description>", ...}}},
  "gold": {"<dim>": {"probabilities": {"<value>": <p>, ...}, "label": "<value>"}}}
 ```
@@ -78,7 +81,7 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
 - **`gold` is a DISTRIBUTION (soft targets), not a hard label** — RLCD trains on the teacher's probability per option.
   One-hot (`{gold:1.0, other:0.0}`) works and is the pragmatic start; true soft targets (teacher per-option probs)
   are the design-intended enhancement.
-- Reuse your existing **contract-disjoint, symmetric splits** so floors are directly comparable to SetFit. Silver
+- Reuse your existing **document-disjoint, symmetric splits** so floors are directly comparable to SetFit. Silver
   goes in TRAIN only; val/test stay gold.
 
 ## Fine-tune — single T4, RLCD, calibration built in
@@ -116,11 +119,12 @@ One JSONL line per case (`research/scripts/finetune_single_device.py` reads this
   the model from the engine (never a hardcoded/stale id; bulk teacher labeling on Modal Qwen, not OpenRouter), load
   `.env` by EXPLICIT path from an out-of-repo script, SMOKE one item before the fan-out, and stream X/N to a log you
   actively monitor. Those exact mistakes cost runs on 2026-10-04.
-- **Modal harness = reuse the [[setfit]] hardened pattern:** `.uv_pip_install("laya")` + `.add_local_file` the
+- **Modal harness = follow the [[setfit]] hardened pattern** (the pattern described there; that harness's code is
+  not shipped): `.uv_pip_install("laya")` + `.add_local_file` the
   finetune script; launcher BLOCKS on `.get()` per spawn (no spawn-and-return), stamps + verifies a `data_sha`,
   writes a manifest, streams X/N; snapshot keepers server-side to a `/checkpoints/<name>` path (a small copy fn) —
   the laya volume has no built-in snapshot, add one. Never lose a fine-tune.
-- **ACCOUNT CONTAINER CAP = 10 (fzaidi2014).** Spawning more than 10 fine-tunes at once does NOT run them all —
+- **ACCOUNT CONTAINER CAP (10 on the engine authors' account; check your workspace's).** Spawning more than 10 fine-tunes at once does NOT run them all —
   Modal queues the rest and runs ~10 at a time (correct, but ~N/10 waves of wall-clock, and a "why only 10 running?"
   surprise). Size a `groupbake`/dimbatch fan-out to ≤10 in flight (chunk into waves + gather between), or state the
   wave count honestly. This is a DIFFERENT knob from the vLLM `max_containers=1` + `@modal.concurrent` batching in the

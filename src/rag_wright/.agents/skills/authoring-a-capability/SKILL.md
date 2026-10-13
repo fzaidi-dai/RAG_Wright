@@ -37,9 +37,12 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 1. **Implementation** — the real code, in that kind's home (see per-kind below).
 2. **The invoke factory + `impl_ref`** (invokable kinds: subgraph/model) — write a co-located
    `async def ainvoke(resources, inputs)` (subgraph) / `def <name>(resources, inputs)` (model) in the capability's
-   own module. A subgraph factory builds over the opaque `WorkspaceHandle` (`resources._store`,
-   `resources._embedder`, `resources.model_id(role)`), never env; a model factory is store-independent and ignores
-   `resources`. The manifest's `impl_ref="module:attr"` points to it. The invoker imports
+   own module. A subgraph factory builds over the opaque `WorkspaceHandle`, never env: its store access with
+   `pack_store(resources, YourStore)` (your pack's store extension over the workspace's store) and its models with
+   `resources.model_id(role)`; a model factory is store-independent and ignores `resources`. The handle's `_store` /
+   `_embedder` are engine-internal (the engine's own reference pack still reads them; do not copy that). The
+   workspace's configured embedder has no public accessor yet (engine gap G22): a pack that embeds queries itself
+   writes an engine request rather than reaching for `_embedder`. The manifest's `impl_ref="module:attr"` points to it. The invoker imports
    it LAZILY and calls it — there is **NO central adapter dict** (EP-CORE-2). A plain function/agent_skill/mcp_tool
    declares no `impl_ref`.
 3. **ARD manifest + register it** — a `CapabilityManifest(slug, kind, display_name, description,
@@ -57,8 +60,10 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
    A downstream product can register without touching the canonical set (`register_capability` does not check
    slugs), BUT `manifests.author()` rejects a non-canonical slug, so a product that publishes ARD JSON must call
    `register_canonical_slugs` for its slugs first.
-   Publish to `~/.air/registry` with `uv run python scripts/publish_manifests.py`; that script publishes only the
-   engine's reference pack (it calls `load_reference_pack()`), so a product publishes its own with `publish_all`.
+   Publishing ARD JSON (`urn:air`) to `~/.air/registry` is engine-side today: the engine's
+   `scripts/publish_manifests.py` publishes its reference pack, and `publish` / `publish_all` are not on either public
+   tier yet (engine gap G14). A product registers its capabilities at runtime (above), which is what discovery and
+   the invokers use; ARD JSON publication for a product's own capabilities waits on G14.
    Callable kinds get `ResponseBounds` (defaulted); `agent_skill` must NOT declare bounds (loaded, not called).
 4. **Invocable + MCP for free** — once registered with an `impl_ref`, the capability is callable as
    `ainvoke_subgraph(slug, inputs, resources=ws)` / `invoke_model(slug, inputs, resources=ws)` (or
@@ -78,8 +83,9 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
   add nodes/edges with `START`/`END`, `return g.compile()`. Nodes call functions/models (compose).
 - **Invoke:** the co-located `async def ainvoke(resources, inputs)` factory (impl_ref target) builds + awaits the graph.
 - Retry/dead-letter come from the graph scaffold, not the invoker. `CapabilityManifest` has no contract field (only
-  the internal `CapabilityRegistry.register(contract=...)` takes one); where the typed I/O must be declared, set
-  `capability_interface` on the manifest.
+  the internal `CapabilityRegistry.register(contract=...)` takes one); where the typed I/O must be declared, the
+  manifest has a `capability_interface` field, but its type is not on either public tier yet (engine gap G23), so a
+  product documents its I/O contract in its own Pydantic models for now.
 
 ### function — a plain, typed callable
 - **Home:** `capabilities/<slug>.py` (generic) or `packs/<pack>/capabilities/<slug>.py` (domain). A deterministic or model-backed callable with a Pydantic in/out contract.
@@ -102,8 +108,10 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
 ### agent_skill — authored SKILL.md + the Deep Agents runtime
 - **Home:** `skills/<slug>/SKILL.md` (generic) or `packs/<pack>/skills/<slug>/SKILL.md` (domain, e.g.
   `packs/compliance/skills/compliance_judgment/SKILL.md`) + the agent runtime (e.g. `skills/rlm/`). It is LOADED (progressive
-  disclosure), not called: no `ResponseBounds`. Declare `requires=(...)` for a closure over other skills and
-  `skill_runtime` for its intrinsic runtime.
+  disclosure), not called: no `ResponseBounds`. Declare `requires=(...)` for a closure over other skills (the
+  manifest's `skill_runtime` field takes a type not yet on the public tiers, engine gap G23).
+- A product's agent (a Deep Agents harness) is not a capability kind yet: an `agent` kind is a later engine workstream
+  (PS-33, engine ADR-0139). Build agents in the product, on `agent_chat_model` for their model.
 
 ### mcp_tool — a capability exposed over MCP
 - A distinct ARD identity (`<slug>_mcp`) for the same underlying capability exposed as a cross-agent MCP tool.
@@ -129,7 +137,7 @@ add it to `_RESERVED_WITHOUT_MANIFEST` with a one-line reason. The engine's `tes
 pack, so these tests see its slugs.
 
 **The import boundary (engine repo).** `pyproject.toml` `[tool.importlinter]` has three forbidden contracts: every
-generic engine package (`source_modules`: `rag_wright.api`, `capabilities`, `contracts`, `corpus`, `ingestion`,
+generic engine package (`source_modules`: `rag_wright.api`, `capabilities`, `contracts`, `corpus`, `evals`, `ingestion`,
 `models`, `ontology`, `pack_sdk`, `skills`, `spans`, `store`, `subgraphs`, `util`) must never import
 `rag_wright.packs`; pack code (`rag_wright.packs`) imports only `rag_wright.api` and `rag_wright.pack_sdk` (plus
 itself), never another engine package directly; and `rag_wright.packs.contracts` must never import

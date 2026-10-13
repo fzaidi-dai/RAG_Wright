@@ -84,6 +84,8 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Impact:** swapping in an on-premises decision model (Laya, or any server speaking the Decisions API) needs an
   engine code edit, or mutating the module-level dict from product code (an engine internal).
 - **Proposed:** a public way to register a `DecisionModelProfile` (on `EngineConfig`, or an `rag_wright.api` helper).
+  The same holds for model profiles: `register_model_profile` is not public, so a product's own endpoint for a
+  chat model is reachable only through a deployed model server (`adeploy_model_server`) or the `VLLM_*` variables.
 
 ### G13: Entity disambiguation is tuned for contract parties and not injectable (mostly closed)
 - **Closed by PS-R5b:** the contract role words and phrases moved out of `rag_wright.corpus.canonicalize` into the
@@ -102,6 +104,23 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   through an engine module.
 - **Proposed:** export `publish` (with a target root) from `rag_wright.api`.
 - Surfaced: ING-5 doc audit.
+
+### G22: No public accessor for a workspace's embedder
+- **Where:** a pack subgraph gets its store with `pack_store(resources, cls)` and its models with
+  `resources.model_id(role)`, but the workspace's configured embedder is only `WorkspaceHandle._embedder`
+  (engine-internal). `pack_sdk.query_embedder` builds one from the environment, not from the workspace's config.
+- **Impact:** a pack capability that embeds its own queries either reads a private attribute (the reference pack
+  does) or may embed with a different model than the workspace was indexed with.
+- **Proposed:** a public accessor (for example `WorkspaceHandle.embedder()`, or a `pack_sdk` helper taking the
+  handle), and move the reference pack onto it and onto `pack_store`.
+- Surfaced: the 2026-10-13 product-starter review.
+
+### G23: Two manifest fields take types that are not public
+- **Where:** `CapabilityManifest.capability_interface` (`CapabilityInterface`) and `skill_runtime` (`SkillRuntime`) are
+  typed with classes on neither `rag_wright.api` nor `rag_wright.pack_sdk`.
+- **Impact:** a product cannot declare a capability's typed I/O, or an agent skill's runtime, on its manifest.
+- **Proposed:** export both types on `rag_wright.pack_sdk`.
+- Surfaced: the 2026-10-13 product-starter review.
 
 ### G15: No public accessor for the workspace store (pack store extensions take `ws._store`) (closed)
 - Closed by PS-7: `pack_store(ws, cls, *args, **kwargs)` (in `rag_wright.api`) builds `cls(<workspace store>, ...)`,
