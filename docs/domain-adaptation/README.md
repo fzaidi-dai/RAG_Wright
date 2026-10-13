@@ -67,7 +67,8 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 
 8. **Build the product seam.** Your thin layer over the engine API + registered caps: tenancy/scoping, product
    orchestration, the product-named tool surface, and domain/app logic. It wraps `open_workspace` / the invokers /
-   `kg_read` / `measure_usage` — never `ArcadeDBStore` / `query_embedder` / engine id formats. Build each workflow
+   `kg_read` / `measure_usage` — never `ArcadeDBStore` or engine id formats; it embeds a query with `ws.embedder` (or
+   `query_embedder()` from `rag_wright.api` where it holds no workspace). Build each workflow
    once, as a tool the UI and an agent both call. A product agent takes its model from `agent_chat_model(<model id>)`
    (metered and traced; no model or vendor named in your code); the generic agent harness substrate is engine scope
    (ADR-0139) and arrives as its own public tier, so your product writes its agents, tools, prompts and guardrails,

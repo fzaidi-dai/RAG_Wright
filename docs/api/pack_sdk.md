@@ -434,10 +434,6 @@ Every edge on every path is surfaced with its `chunk_id` and confidence tag; no 
 
 `documents` (issue 0031): scope the traversal to a workspace's source documents -- EVERY edge on a path must belong to one of them (so a multi-hop path cannot route through an out-of-scope document). `None` = the whole graph; an unknown id RAISES (`UnknownDocumentError`); `[]` = scope-to-nothing (no evidence).
 
-### `query_embedder(*, post: 'Callable[..., dict]' = post_json) -> 'Any'`
-
-The query-side embedder: the remote A100 `/embed` adapter when `STACK_URL` is set, else the local in-process `BGEM3Embedder` (dev/default). One env (`STACK_URL`) moves the query's embed onto the A100.
-
 ### `build_ingest_embedder(profile: 'str' = 'bge-m3') -> 'Any'`
 
 The ingest-side SPAN embedder for `profile` (default BGE-M3; `encode_batch`). Raises on an unknown profile.

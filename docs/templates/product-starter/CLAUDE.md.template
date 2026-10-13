@@ -82,7 +82,8 @@ engine — a separate repo that depends on the open-core engine, one way.
   `IngestionTuning`, `IngestSource`, `evaluate_ingestion`, `table_rows`/`TableRow`, the hook contracts
   `Unit`/`UnitExtraction`/`KgNode`/`KgEdge`, the hook protocols and `DocumentHook`, and the checks
   `check_tiling`/`check_units`/`check_extraction`; `NOT_NULL` for `kg_edges` presence filters) — never engine internals (`ArcadeDBStore`,
-  `query_embedder`, engine id formats). The product never touches the store directly: a pack store extension is
+  engine id formats); a query is embedded with `ws.embedder`, or `query_embedder()` from `rag_wright.api` where no
+  workspace is held. The product never touches the store directly: a pack store extension is
   built with `pack_store(ws, YourPackStore)`. Your pack's capability code also imports `rag_wright.pack_sdk`
   (identifiers, the model seam, the LangGraph scaffold, the `Store` protocol, the entity-graph building blocks,
   parsing and chunking); the generated `docs/api/pack_sdk.md` lists it. Nothing else in the engine is stable.

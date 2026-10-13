@@ -115,7 +115,9 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Proposed:** a public accessor (for example `WorkspaceHandle.embedder()`, or a `pack_sdk` helper taking the
   handle), and move the reference pack onto it and onto `pack_store`.
 - **Closed by PS-38:** `workspace_embedder(ws)` on `rag_wright.pack_sdk`, `WorkspaceHandle.config` (read-only), and the
-  reference pack's factories moved onto them and onto `pack_store`.
+  reference pack's factories moved onto them and onto `pack_store`. PS-39 put the same embedder on `rag_wright.api`
+  as the read-only `WorkspaceHandle.embedder`, with `query_embedder()` for code that holds no workspace, because a
+  product's seam may not import the pack tier.
 - Surfaced: the 2026-10-13 product-starter review.
 
 ### G23: Two manifest fields take types that are not public (closed)

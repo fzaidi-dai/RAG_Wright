@@ -3,8 +3,8 @@
 The product names a `corpus` (the logical KG = the backend database name; the product maps its own tenant -> db-name,
 so tenancy stays product-owned) and gets back an opaque handle that resolves + caches the store (and lazily the
 embedder) from the `EngineConfig`. The handle is what the engine's per-kind invokers (EP-API-2) take as resources.
-The product never imports `ArcadeDBStore`/`query_embedder` and the handle exposes no public store accessor; a pack's
-store extension is built over the workspace store with `pack_store(ws, cls)` (PS-7)."""
+The product never imports `ArcadeDBStore`; it reaches the query embedder as `ws.embedder` (PS-39). The handle exposes no
+public store accessor; a pack's store extension is built over the workspace store with `pack_store(ws, cls)` (PS-7)."""
 from __future__ import annotations
 
 import logging
@@ -27,8 +27,8 @@ _WORKSPACES: dict[tuple, "WorkspaceHandle"] = {}
 
 class WorkspaceHandle:
     """An opaque handle to a resolved engine workspace. Public surface: `model_id(role)` and the read-only `config`
-    (a pack reads its options from `config.options.packs`). The resolved store + embedder are engine-internal
-    (`_store` / `_embedder`); pack code reaches them with `pack_store(ws, cls)` and `workspace_embedder(ws)`."""
+    (a pack reads its options from `config.options.packs`) and `embedder` (PS-39). The resolved store is
+    engine-internal (`_store`); pack code reaches it with `pack_store(ws, cls)`."""
 
     def __init__(self, store: Any, config: EngineConfig, corpus: str) -> None:
         self._store = store
@@ -55,6 +55,12 @@ class WorkspaceHandle:
     def config(self) -> EngineConfig:
         """The `EngineConfig` this workspace was opened with (read-only; open the corpus again to change it)."""
         return self._config
+
+    @property
+    def embedder(self) -> Any:
+        """PS-39: the workspace's query embedder, from its `EngineConfig.embeddings` profile (the model the corpus was
+        indexed with), built on first use and cached on the handle. None when no embedder backend is available."""
+        return self._embedder
 
     def model_id(self, role: ModelRole) -> str:
         """Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default."""

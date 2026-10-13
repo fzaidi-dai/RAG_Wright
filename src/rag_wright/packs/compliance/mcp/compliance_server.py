@@ -170,7 +170,7 @@ def production_check_fn(*, k: int = 5) -> CheckFn:
 
     load_dotenv()
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import query_embedder
     from rag_wright.api import ModelRole
     from rag_wright.pack_sdk import model_for
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_ad_compliance_check
@@ -193,7 +193,7 @@ def production_generic_check_fn(*, k: int = 8) -> CheckFn:
     from dotenv import load_dotenv
 
     load_dotenv()
-    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import query_embedder
     from rag_wright.api import ModelRole
     from rag_wright.pack_sdk import model_for
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_generic_compliance_verdict
@@ -215,7 +215,7 @@ def production_document_check_fn(*, k: int = 8) -> "DocumentCheckFn":
     from dotenv import load_dotenv
 
     load_dotenv()
-    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import query_embedder
     from rag_wright.api import ModelRole
     from rag_wright.pack_sdk import model_for
     from rag_wright.packs.compliance.subgraphs.compliance_check import run_compliance_document_verdict

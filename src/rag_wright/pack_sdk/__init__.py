@@ -39,7 +39,10 @@ from rag_wright.capabilities.invoke import capability_impl
 from rag_wright.capabilities.manifests import RLM_GRANTED_SUBAGENTS
 from rag_wright.capabilities.parsing import TieredOCRParser
 from rag_wright.capabilities.registry import CapabilityRegistry
-from rag_wright.capabilities.remote_encoders import post_json, query_embedder, stack_url
+from rag_wright.capabilities.remote_encoders import post_json, stack_url
+# PS-39: `query_embedder` is public on `rag_wright.api` (a product seam may not import this tier); it stays importable
+# here, outside `__all__`, so packs written against 0.7 to 0.9 keep working.
+from rag_wright.capabilities.remote_encoders import query_embedder  # noqa: F401
 from rag_wright.capabilities.reranking import BGEReranker
 from rag_wright.capabilities.retrieval_core import cosine, typed_constraint_match_rank
 from rag_wright.capabilities.rlm_chunking import StructuralModelFallbackDiscoverer, achunk_texts
@@ -100,7 +103,7 @@ __all__ = [
     # generic capabilities a pack composes
     "agenerate_answer_with_model", "answer_model_for", "ajudge_spans_with_judge", "build_arelevance_judge_fn",
     "finalize_verdict", "disambiguate", "resolve_entities", "ResolutionResult", "EntityRules", "EntityRegistry",
-    "RegistryRecord", "to_graph", "GraphWriter", "build_graph_extraction", "graph_query", "GraphAnswer", "BGEReranker", "query_embedder",
+    "RegistryRecord", "to_graph", "GraphWriter", "build_graph_extraction", "graph_query", "GraphAnswer", "BGEReranker",
     "build_ingest_embedder", "typed_constraint_match_rank", "cosine", "post_json", "stack_url",
     # documents, parsing and chunking
     "SourceDocument", "parsed_source_document", "aparsed_source_document", "parsed_text_document",

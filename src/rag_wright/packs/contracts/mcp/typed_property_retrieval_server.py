@@ -113,7 +113,7 @@ def production_retrieval_fn(*, k: int = 8) -> RetrievalFn:
 
     load_dotenv()
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.pack_sdk import query_embedder
+    from rag_wright.api import query_embedder
     from rag_wright.packs.contracts.subgraphs.typed_property_retrieval import production_typed_property_retrieval
 
     embedder = query_embedder()  # tenant-independent, built once

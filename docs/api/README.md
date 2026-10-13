@@ -22,7 +22,7 @@ The engine's generic ingest knobs, settable through config instead of environmen
 
 ### `WorkspaceHandle(store: 'Any', config: 'EngineConfig', corpus: 'str') -> 'None'`
 
-An opaque handle to a resolved engine workspace. Public surface: `model_id(role)` and the read-only `config` (a pack reads its options from `config.options.packs`). The resolved store + embedder are engine-internal (`_store` / `_embedder`); pack code reaches them with `pack_store(ws, cls)` and `workspace_embedder(ws)`.
+An opaque handle to a resolved engine workspace. Public surface: `model_id(role)` and the read-only `config` (a pack reads its options from `config.options.packs`) and `embedder` (PS-39). The resolved store is engine-internal (`_store`); pack code reaches it with `pack_store(ws, cls)`.
 
 #### `WorkspaceHandle.model_id(self, role: 'ModelRole') -> 'str'`
 
@@ -359,6 +359,10 @@ Add (or replace) the profile for `profile.model_id`, process-wide, so that model
 ### `agent_chat_model(model: 'Optional[str]' = None, *, temperature: 'float' = 0.0, **overrides: 'Any') -> 'BaseChatModel'`
 
 The chat model for an agent: `model` is an engine model id (a registered profile's key, or any served id); `None` takes the GENERAL role's model. `overrides` are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`, `callbacks`, ...). Retries are the caller's to place: an agent harness usually keeps them in its middleware and passes `max_retries=0`.
+
+### `query_embedder(*, post: 'Callable[..., dict]' = post_json) -> 'Any'`
+
+The query-side embedder: the remote A100 `/embed` adapter when `STACK_URL` is set, else the local in-process `BGEM3Embedder` (dev/default). One env (`STACK_URL`) moves the query's embed onto the A100.
 
 ### `ainvoke_subgraph(name: 'str', inputs: 'dict', *, resources: 'WorkspaceHandle') -> 'Any'`
 

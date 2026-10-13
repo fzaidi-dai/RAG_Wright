@@ -39,8 +39,8 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
    `async def ainvoke(resources, inputs)` (subgraph) / `def <name>(resources, inputs)` (model) in the capability's
    own module. A subgraph factory builds over the opaque `WorkspaceHandle`, never env: its store access with
    `pack_store(resources, YourStore)` (your pack's store extension over the workspace's store) and its models with
-   `resources.model_id(role)`; its query embedder with `workspace_embedder(resources)` (`rag_wright.pack_sdk`, built
-   from the workspace's embedding profile) and its options with `resources.config`; a model factory is
+   `resources.model_id(role)`; its query embedder with `resources.embedder` (or `workspace_embedder(resources)`, its
+   `rag_wright.pack_sdk` twin; built from the workspace's embedding profile) and its options with `resources.config`; a model factory is
    store-independent and ignores `resources`. A builder that takes the store as a keyword goes through `pack_store`
    too: `pack_store(resources, lambda store: production_x(store=store, ...))`. The handle's underscored attributes
    are engine-internal; the reference pack's factories show the public form. The manifest's `impl_ref="module:attr"` points to it. The invoker imports
