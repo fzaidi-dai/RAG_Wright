@@ -4,6 +4,14 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.9.0...0.10.0) (2026-10-13)
+
+
+### Features
+
+* **PS-32:** adopt the agent harness substrate as rag_wright.harness, the third public tier (ADR-0139) ([c265c8a](https://github.com/fzaidi-dai/RAG_Wright/commit/c265c8ad352ac939496e0c20dee82bb2d6da341a))
+* **PS-39:** an embedder on rag_wright.api (WorkspaceHandle.embedder, query_embedder) for a product seam that may not import pack_sdk ([4158640](https://github.com/fzaidi-dai/RAG_Wright/commit/4158640f456cb512a2dcf6b99db83aeb6f6e2c0f))
+
 ## [0.9.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.8.0...0.9.0) (2026-10-13)
 
 
