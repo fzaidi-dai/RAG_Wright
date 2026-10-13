@@ -46,7 +46,8 @@ configuration change takes effect without a restart ([`workspaces.md`](workspace
 | `backend` | `str` | `"arcadedb"` | store implementation (only `arcadedb` today) |
 | `protocol` | `str` | `"http"` | `http` locally; `https` for a remote/Modal store |
 
-`StoreConfig.from_env()` builds one from `ARCADEDB_HOST` (default `localhost`), `ARCADEDB_PORT` (`2480`),
+`StoreConfig.from_env()` builds one from `ARCADEDB_HOST` (default `localhost`), `ARCADEDB_PORT` (required: no
+default, so an unset variable cannot reach another instance on the machine),
 `ARCADEDB_USER` (`root`), `ARCADEDB_PASSWORD` (required) and `ARCADEDB_PROTOCOL` (`http`), for a standalone
 entrypoint (a script, an MCP server) that opens a workspace without its own config.
 

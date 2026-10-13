@@ -76,7 +76,7 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 ### G11: Dead reference-pipeline knobs (closed)
 - `IngestOptions.list_model` / `clause_samples` and the pipeline's `list_model=` / `samples=` were removed (ING-8d).
 
-### G12: No config route to register a decision-model profile
+### G12: No config route to register a decision-model profile (closed)
 - **Where:** `DECISION_PROFILES` (`rag_wright.models.profiles`) holds only `jev-1.13` and `jev-latest`. An unknown id
   (from `RAG_DECISION_MODEL` or the `model` input of `jev_decision`) gets a default profile that still points at the
   OpenRouter Decisions endpoint with `OPENROUTER_API_KEY`. There is no `EngineConfig` field or env setting for a
@@ -84,8 +84,9 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Impact:** swapping in an on-premises decision model (Laya, or any server speaking the Decisions API) needs an
   engine code edit, or mutating the module-level dict from product code (an engine internal).
 - **Proposed:** a public way to register a `DecisionModelProfile` (on `EngineConfig`, or an `rag_wright.api` helper).
-  The same holds for model profiles: `register_model_profile` is not public, so a product's own endpoint for a
-  chat model is reachable only through a deployed model server (`adeploy_model_server`) or the `VLLM_*` variables.
+  The same held for model profiles.
+- **Closed by PS-38:** `register_decision_profile` and `DecisionModelProfile`, and `register_model_profile` and
+  `ModelProfile`, are on `rag_wright.api`.
 
 ### G13: Entity disambiguation is tuned for contract parties and not injectable (mostly closed)
 - **Closed by PS-R5b:** the contract role words and phrases moved out of `rag_wright.corpus.canonicalize` into the
@@ -96,16 +97,16 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   generic `RegistryRecord` still carries `ticker` (the reference domain's SEC alias).
 - Surfaced: ING-5 doc audit.
 
-### G14: ARD publication is not on `rag_wright.api`
+### G14: ARD publication is not on `rag_wright.api` (closed)
 - **Where:** a product registers its capabilities through `rag_wright.api` (`register_capability`, `load_pack`), but
   writing a capability's ARD manifest (`urn:air`) is `rag_wright.capabilities.manifests.publish` / `publish_all`,
   which are not exported. `publish` requires the slug in `canonical_capability_slugs()`.
 - **Impact:** ARD registration is part of every capability's definition of done, but a product reaches it only
   through an engine module.
-- **Proposed:** export `publish` (with a target root) from `rag_wright.api`.
+- **Closed by PS-38:** `publish(slug, root=...)` and `publish_all(root=...)` are on `rag_wright.api`.
 - Surfaced: ING-5 doc audit.
 
-### G22: No public accessor for a workspace's embedder
+### G22: No public accessor for a workspace's embedder (closed)
 - **Where:** a pack subgraph gets its store with `pack_store(resources, cls)` and its models with
   `resources.model_id(role)`, but the workspace's configured embedder is only `WorkspaceHandle._embedder`
   (engine-internal). `pack_sdk.query_embedder` builds one from the environment, not from the workspace's config.
@@ -113,13 +114,15 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   does) or may embed with a different model than the workspace was indexed with.
 - **Proposed:** a public accessor (for example `WorkspaceHandle.embedder()`, or a `pack_sdk` helper taking the
   handle), and move the reference pack onto it and onto `pack_store`.
+- **Closed by PS-38:** `workspace_embedder(ws)` on `rag_wright.pack_sdk`, `WorkspaceHandle.config` (read-only), and the
+  reference pack's factories moved onto them and onto `pack_store`.
 - Surfaced: the 2026-10-13 product-starter review.
 
-### G23: Two manifest fields take types that are not public
+### G23: Two manifest fields take types that are not public (closed)
 - **Where:** `CapabilityManifest.capability_interface` (`CapabilityInterface`) and `skill_runtime` (`SkillRuntime`) are
   typed with classes on neither `rag_wright.api` nor `rag_wright.pack_sdk`.
 - **Impact:** a product cannot declare a capability's typed I/O, or an agent skill's runtime, on its manifest.
-- **Proposed:** export both types on `rag_wright.pack_sdk`.
+- **Closed by PS-38:** both are exported from `rag_wright.pack_sdk`.
 - Surfaced: the 2026-10-13 product-starter review.
 
 ### G15: No public accessor for the workspace store (pack store extensions take `ws._store`) (closed)

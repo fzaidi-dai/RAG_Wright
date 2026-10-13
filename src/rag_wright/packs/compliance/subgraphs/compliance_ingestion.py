@@ -297,11 +297,11 @@ async def ainvoke(resources, inputs: dict):
     handle; the policy from `inputs`. Two source shapes: `{source, sections_path}` (a pre-sectioned eCFR-style
     `sections.json`) or `{source, doc_name, data}` (a policy DOCUMENT's raw bytes, split at its headings)."""
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.api import ModelRole
+    from rag_wright.api import ModelRole, pack_store
 
     model = default_extraction_model("requirement-extract", resources.model_id(ModelRole.STRUCTURED_REASONING))
     if inputs.get("data") is not None:  # a policy DOCUMENT (bytes)
-        return await run_compliance_document_ingestion(
-            inputs["doc_name"], inputs["data"], resources._store, model=model, source=inputs["source"])
-    return await run_compliance_ingestion(  # a pre-sectioned sections.json
-        inputs["sections_path"], resources._store, model=model, source=inputs["source"])
+        return await pack_store(resources, lambda store: run_compliance_document_ingestion(
+            inputs["doc_name"], inputs["data"], store, model=model, source=inputs["source"]))
+    return await pack_store(resources, lambda store: run_compliance_ingestion(  # a pre-sectioned sections.json
+        inputs["sections_path"], store, model=model, source=inputs["source"]))

@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from rag_wright.capabilities.answer_generator import agenerate_answer as agenerate_answer_with_model
 from rag_wright.capabilities.answer_generator import answer_model_for
-from rag_wright.capabilities.ard import ResponseBounds
+from rag_wright.api.workspace import workspace_embedder
+from rag_wright.capabilities.ard import CapabilityInterface, ResponseBounds, SkillRuntime
 from rag_wright.capabilities.disambiguation import disambiguate
 from rag_wright.capabilities.document_parse import (
     INGEST_PARSE_DEADLINE_S,
@@ -108,6 +109,8 @@ __all__ = [
     "achunk_texts", "IngestionStages", "UnknownDocumentError", "validate_documents",
     # capability plumbing
     "capability_impl", "CapabilityRegistry", "ResponseBounds", "RLM_GRANTED_SUBAGENTS",
+    "CapabilityInterface", "SkillRuntime",  # PS-38 (G23): the manifest's typed-interface and skill-runtime fields
+    "workspace_embedder",  # PS-38 (G22): the workspace's query embedder, from its embedding profile
     # pack schema + concurrency
     "KgVertexType", "load_kg_schema", "map_concurrent",
 ]

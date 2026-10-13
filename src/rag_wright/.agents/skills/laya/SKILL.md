@@ -25,13 +25,11 @@ you can fine-tune. In RAG_Wright a decision model is wired as a `kind="model"` c
 
 **Swapping Jev for Laya is config, but not free.** `DECISION_PROFILES` has only Jev entries (`jev-1.13`, the
 default, and `jev-latest`). A Laya swap needs (1) a server that speaks the Decisions API (POST
-`{model, state, questions}`, return `{answers: {<id>: {type, noul|choice|score}}}`), and (2) a `DecisionModelProfile`
-entry in `DECISION_PROFILES` with its `endpoint`, `served_model_id` and `api_key_env` (an unknown id falls back to
-the OpenRouter endpoint). Then select it with `RAG_DECISION_MODEL=<profile id>`;
-`RAG_JEV_TIMEOUT_S` overrides the request timeout. **From a product, step (2) is not possible yet:**
-`DECISION_PROFILES` and `DecisionModelProfile` are engine internals and there is no public way to register a
-decision profile (engine gap G12). Write an engine request before you plan a Laya swap; until it closes, a product
-runs Laya behind its own `kind="model"` capability that calls the server directly.
+`{model, state, questions}`, return `{answers: {<id>: {type, noul|choice|score}}}`), and (2) its profile, registered
+at startup from your product: `register_decision_profile(DecisionModelProfile(model_id="laya-onprem",
+served_model_id=..., endpoint=..., api_key_env=...))`, both on `rag_wright.api` (an unregistered id falls back to the
+OpenRouter endpoint). Then select it with `RAG_DECISION_MODEL=<profile id>` (or the `jev_decision` input `model`);
+`RAG_JEV_TIMEOUT_S` overrides the request timeout.
 
 **Batch the questions.** One call carries one `state` and many keyed questions, so ask everything about a unit in
 ONE call (the reference pack judges all of a provision's values, and labels all of its residual candidates, in one

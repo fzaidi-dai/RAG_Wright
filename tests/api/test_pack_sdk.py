@@ -37,7 +37,10 @@ def test_store_config_from_the_environment(monkeypatch):
     for k in ("ARCADEDB_HOST", "ARCADEDB_PORT", "ARCADEDB_USER", "ARCADEDB_PROTOCOL"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("ARCADEDB_PASSWORD", "pw")
-    assert api.StoreConfig.from_env() == api.StoreConfig("localhost", "2480", "root", "pw")
+    with pytest.raises(KeyError, match="ARCADEDB_PORT"):  # PS-38: no default port, so it cannot reach another instance
+        api.StoreConfig.from_env()
+    monkeypatch.setenv("ARCADEDB_PORT", "2481")
+    assert api.StoreConfig.from_env() == api.StoreConfig("localhost", "2481", "root", "pw")
     monkeypatch.setenv("ARCADEDB_HOST", "db.internal")
     monkeypatch.setenv("ARCADEDB_PROTOCOL", "https")
     cfg = api.StoreConfig.from_env()

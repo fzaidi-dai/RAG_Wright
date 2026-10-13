@@ -27,10 +27,15 @@ class StoreConfig:
     @classmethod
     def from_env(cls) -> "StoreConfig":
         """PS-8b: the store connection from the environment -- `ARCADEDB_HOST` (default `localhost`),
-        `ARCADEDB_PORT` (default `2480`), `ARCADEDB_USER` (default `root`), `ARCADEDB_PASSWORD` (required) and
+        `ARCADEDB_PORT` (required), `ARCADEDB_USER` (default `root`), `ARCADEDB_PASSWORD` (required) and
         `ARCADEDB_PROTOCOL` (default `http`) -- for a standalone entrypoint (a script, an MCP server) that opens a
-        workspace without its own config file."""
-        return cls(host=os.environ.get("ARCADEDB_HOST", "localhost"), port=os.environ.get("ARCADEDB_PORT", "2480"),
+        workspace without its own config file. PS-38: the port has no default, so an unset variable cannot reach
+        another ArcadeDB instance on the machine and appear to work; it raises `KeyError` naming the variable."""
+        port = os.environ.get("ARCADEDB_PORT")
+        if not port:
+            raise KeyError("ARCADEDB_PORT: set it to your ArcadeDB instance's HTTP port (there is no default, so an "
+                           "unset variable cannot reach another instance)")
+        return cls(host=os.environ.get("ARCADEDB_HOST", "localhost"), port=port,
                    user=os.environ.get("ARCADEDB_USER", "root"), password=os.environ["ARCADEDB_PASSWORD"],
                    protocol=os.environ.get("ARCADEDB_PROTOCOL", "http"))
 

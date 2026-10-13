@@ -323,9 +323,9 @@ def register_intra_document_qa(registry) -> None:
 async def ainvoke(resources, inputs: dict):
     """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target)."""
     from rag_wright.pack_sdk import answer_model_for
-    from rag_wright.api import ModelRole
+    from rag_wright.api import ModelRole, pack_store
 
-    graph = production_intra_document_qa(store=resources._store,
-                                         answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)),
-                                         top_k=inputs.get("top_k", 12))
+    graph = pack_store(resources, lambda store: production_intra_document_qa(
+        store=store, answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)),
+        top_k=inputs.get("top_k", 12)))
     return await graph.ainvoke({"contract_id": inputs["contract_id"], "question": inputs["question"]})

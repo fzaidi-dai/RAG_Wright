@@ -65,10 +65,11 @@ register_capability(CapabilityManifest(
 
 `register_capability` places the manifest in the runtime ARD catalog (ship-empty) and imposes **no canonical-slug
 restriction** on registering or invoking it: use your domain's names. Publishing its ARD manifest
-(`rag_wright.capabilities.manifests.publish`, the `urn:air` entry) does check the slug: it must be in
+(`publish(slug, root=...)` or `publish_all(root=...)` from `rag_wright.api`, the `urn:air` entry; the root
+defaults to `ARD_REGISTRY_ROOT`, else `~/.air/registry`) does check the slug: it must be in
 `canonical_capability_slugs()` (the engine's generic slugs plus those each loaded pack adds with
 `register_canonical_slugs`), else `ValueError`. That is why a pack's `register()` adds its slugs first (below).
-`publish` is not on `rag_wright.api` yet (engine gap G14). Expose a capability over MCP by registering an
+Expose a capability over MCP by registering an
 `mcp_tool` surface.
 
 **Packaging your capabilities as a pack.** Put your manifests in one module that exposes `register()`, and load it

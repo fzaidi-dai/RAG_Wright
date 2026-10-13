@@ -1027,15 +1027,17 @@ async def ainvoke(resources, inputs: dict):
     judge model (STRUCTURED_REASONING), and the embedder come from the workspace handle; the subject + scope from
     `inputs`. Two subject shapes: `{subject_text, source_doc}` (text) or `{doc_name, data}` (raw document bytes).
     `inputs` may also carry `k` (retrieval depth) and `sources` (scope to named policies)."""
-    from rag_wright.api import ModelRole
+    from rag_wright.api import ModelRole, pack_store
+    from rag_wright.pack_sdk import workspace_embedder
 
     judge = resources.model_id(ModelRole.STRUCTURED_REASONING)
     k = inputs.get("k", 8)
     sources = inputs.get("sources")
+    embedder = workspace_embedder(resources)
     if inputs.get("data") is not None:  # a subject DOCUMENT (bytes)
-        return await run_compliance_document_verdict(
-            inputs["doc_name"], inputs["data"], store=resources._store, judge_model_id=judge,
-            embedder=resources._embedder, k=k, sources=sources)
-    return await run_generic_compliance_verdict(  # a subject TEXT
-        inputs["subject_text"], inputs["source_doc"], store=resources._store, judge_model_id=judge,
-        embedder=resources._embedder, k=k, sources=sources)
+        return await pack_store(resources, lambda store: run_compliance_document_verdict(
+            inputs["doc_name"], inputs["data"], store=store, judge_model_id=judge,
+            embedder=embedder, k=k, sources=sources))
+    return await pack_store(resources, lambda store: run_generic_compliance_verdict(  # a subject TEXT
+        inputs["subject_text"], inputs["source_doc"], store=store, judge_model_id=judge,
+        embedder=embedder, k=k, sources=sources))

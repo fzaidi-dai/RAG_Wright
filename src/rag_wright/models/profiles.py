@@ -359,6 +359,14 @@ DECISION_PROFILES: dict[str, DecisionModelProfile] = {
 _DEFAULT_DECISION_MODEL = "jev-1.13"
 
 
+def register_decision_profile(profile: DecisionModelProfile) -> DecisionModelProfile:
+    """PS-38 (G12): add (or replace) the decision-model profile for `profile.model_id`, process-wide, so that id
+    (named by `RAG_DECISION_MODEL` or the `jev_decision` input `model`) reaches its own endpoint and key from now on:
+    an on-premises Laya server, or any server speaking the Decisions API, is configuration."""
+    DECISION_PROFILES[profile.model_id] = profile
+    return profile
+
+
 def decision_profile(model_id: Optional[str] = None) -> DecisionModelProfile:
     """The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `jev-1.13`).
     An unregistered id gets a default profile using that id as its served id (so a raw slug still works)."""

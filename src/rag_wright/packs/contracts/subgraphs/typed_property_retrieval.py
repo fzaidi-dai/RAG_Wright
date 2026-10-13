@@ -272,10 +272,11 @@ async def ainvoke(resources, inputs: dict):
     """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target) -- build Leg B over the opaque
     workspace handle and run it. `inputs`: query (+ optional k/pool_k/documents)."""
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.api import ModelRole
+    from rag_wright.api import ModelRole, pack_store
+    from rag_wright.pack_sdk import workspace_embedder
 
-    graph = production_typed_property_retrieval(
-        store=resources._store, embedder=resources._embedder,
+    graph = pack_store(resources, lambda store: production_typed_property_retrieval(
+        store=store, embedder=workspace_embedder(resources),
         extract_model=default_extraction_model(model=resources.model_id(ModelRole.STRUCTURED_REASONING)),
-        k=inputs.get("k", 8), pool_k=inputs.get("pool_k", 30), documents=inputs.get("documents"))
+        k=inputs.get("k", 8), pool_k=inputs.get("pool_k", 30), documents=inputs.get("documents")))
     return await graph.ainvoke({"query": inputs["query"]})

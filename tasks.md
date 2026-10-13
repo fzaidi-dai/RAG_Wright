@@ -8,7 +8,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > release PR bumped `uv.lock`, PS-25 confirmed). 0.8.0 also carries PS-24..PS-29 and PS-31 (ledger `docs/specs/public-surface/plan.md`); RuleWright's guide is
 > `rulewright-migration-0.8.0.md` (section 2: PDFs concurrent again + `pdf_page_count`; section 4: `create=False`).
 > Open: PS-30 (process-pool parse, later); PS-32 (adopt the agent harness substrate, ADR-0139; waits on
-> RuleWright's separation); PS-33 (agentic capabilities, a later workstream); PS-35 (the span migration on `rag_wright.api`); PS-38 (close the gaps a new product hits: ARD publish, manifest types, decision/model profile registration, the workspace embedder, no default store port); PS-36 done (`agent_chat_model`, an agent's chat model from a
+> RuleWright's separation); PS-33 (agentic capabilities, a later workstream); PS-35 (the span migration on `rag_wright.api`); PS-38 done (the gaps a new product hits: ARD publish, manifest types, profile registration, the workspace embedder, no default store port); PS-36 done (`agent_chat_model`, an agent's chat model from a
 > profile, metered and traced; RuleWright's `models.py` stage can use it). PS-37 done (`drop_workspace`, `temporary_workspace`). PS-34 done (RuleWright's databases moved to its own ArcadeDB;
 > the engine's `data/arcadedb` holds engine databases only).
 >

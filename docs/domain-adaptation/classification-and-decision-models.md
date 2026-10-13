@@ -92,10 +92,11 @@ the eval. This is the engine's "identify → **eval-first** → build" chain.
   ```
 
   Question types are `noul` (yes/no, a score in `noul`), `choice` (one of the criteria keys) and `score`.
-- A **decision model rides a `DecisionModelProfile`** (`rag_wright.models.profiles`, ADR-0119): the model id,
-  served id, endpoint, `api_key_env` and timeout live in the profile. `RAG_DECISION_MODEL` (or the `model` input)
-  picks a profile; the default is `jev-1.13`. Only the built-in profiles exist today, so pointing at an on-premises
-  decision server (Laya) still needs an engine change (engine gap G12).
+- A **decision model rides a `DecisionModelProfile`** (ADR-0119): the model id, served id, endpoint, `api_key_env`
+  and timeout live in the profile. `RAG_DECISION_MODEL` (or the `model` input) picks a profile; the default is
+  `jev-1.13`. Point at an on-premises decision server (Laya) by registering its profile at startup:
+  `register_decision_profile(DecisionModelProfile(model_id="laya-onprem", served_model_id=..., endpoint=...,
+  api_key_env=...))`, both from `rag_wright.api`, then select it by that id.
 - The decision **questions/criteria live in the `.ttl`** (ADR-0066), not in the capability code — the ontology is
   the knowledge, the capability is the mechanism. Author an option criterion, an option order and one instructions
   string, as the reference pack does with `cbr:ResidualRole` + `cbr:decisionCriterion` + `cbr:roleOrder`
@@ -227,8 +228,8 @@ Before you choose an arm:
 - **A long label list is a harder question.** A `choice` over dozens of options may lose accuracy; measure it. If it
   does, try a two-step question (the group first, then the label within it), and measure that too: a cascade
   multiplies the two steps' errors.
-- **The open-weight decision model (Laya)** fits behind the same slug once its server is reachable through a
-  `DecisionModelProfile` (engine gap G12).
+- **The open-weight decision model (Laya)** fits behind the same slug: register its server's
+  `DecisionModelProfile` with `register_decision_profile` and select it by id.
 
 ## Skills
 

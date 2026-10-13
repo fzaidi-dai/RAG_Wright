@@ -14,6 +14,8 @@ from rag_wright.capabilities.manifests import (
     engine_capabilities,
     load_pack,
     load_reference_pack,
+    publish,
+    publish_all,
     reference_pack,
     register_capability,
 )
@@ -73,7 +75,8 @@ from rag_wright.api.kg import (entities_by_name, kg_count, kg_delete, kg_edges, 
                                span_positions)
 from rag_wright.api.tracing import traced_run, traced_step
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage, record_usage
-from rag_wright.models.profiles import ModelRole
+from rag_wright.models.profiles import (DecisionModelProfile, ModelProfile, ModelRole, register_decision_profile,
+                                      register_model_profile)
 from rag_wright.api.workspace import (
     WorkspaceHandle,
     drop_workspace,
@@ -100,6 +103,8 @@ __all__ = [
     # PS-19: deploy the self-hosted model server and use it like any model
     "ModelServerSpec", "ModelServer", "adeploy_model_server", "amodel_server", "await_model_server", "stop_model_server",
     "ModelServerNotDeployed", "ModelServerStatus", "amodel_server_status", "astop_model_server",
+    "publish", "publish_all",  # PS-38 (G14): write registered capabilities' ARD manifests to a registry root
+    "DecisionModelProfile", "register_decision_profile", "ModelProfile", "register_model_profile",  # PS-38 (G12)
     "agent_chat_model",  # PS-36: an agent's chat model from a profile, metered and traced
     "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",

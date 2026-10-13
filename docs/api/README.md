@@ -22,7 +22,7 @@ The engine's generic ingest knobs, settable through config instead of environmen
 
 ### `WorkspaceHandle(store: 'Any', config: 'EngineConfig', corpus: 'str') -> 'None'`
 
-An opaque handle to a resolved engine workspace. Public surface: `model_id(role)`. The resolved store + embedder are engine-internal (`_store` / `_embedder`), used by the invokers -- NOT a product accessor.
+An opaque handle to a resolved engine workspace. Public surface: `model_id(role)` and the read-only `config` (a pack reads its options from `config.options.packs`). The resolved store + embedder are engine-internal (`_store` / `_embedder`); pack code reaches them with `pack_store(ws, cls)` and `workspace_embedder(ws)`.
 
 #### `WorkspaceHandle.model_id(self, role: 'ModelRole') -> 'str'`
 
@@ -47,6 +47,16 @@ No deployed model server has this name (never deployed, or stopped).
 ### `ModelServerStatus(name: 'str', deployed: 'bool', running: 'bool', healthy: 'bool', weights_cached: 'bool') -> None`
 
 What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips the ~31 GB download (an empty `modal app list` says nothing about this).
+
+### `DecisionModelProfile(*, model_id: str, served_model_id: Optional[str] = None, endpoint: str = 'https://openrouter.ai/api/alpha/decisions', api_key_env: str = 'OPENROUTER_API_KEY', timeout_s: float = 60.0, op_threshold: float = 0.5, multilabel_threshold: float = 0.6) -> None`
+
+How to reach a typed-DECISION model (TypeSafe Jev, or an on-prem Laya decisions server). This is a DIFFERENT API surface from `ModelProfile`: a decision model POSTs a `state` + typed `questions` to a Decisions endpoint and returns calibrated typed answers (`noul`/`choice`/`score`), not chat completions -- so it needs its own profile shape (endpoint + served id + key env + default thresholds), not the structured-output fields.
+
+Keyed by model id so swapping `jev-1.13` -> `jev-latest`, or Jev -> an on-prem Laya decisions endpoint, is a config change, not a code edit (the Laya fallback, ADR-0119). The capability (`capabilities/jev_decision.py`) reads this; the model id is never hardcoded in capability/node code (the model-neutrality rule).
+
+### `ModelProfile(*, model_id: str, structured_method: Literal['function_calling', 'json_mode', 'json_schema'] = 'function_calling', client_side_structured: bool = False, structured_extra_body: Optional[dict[str, Any]] = None, text_extra_body: Optional[dict[str, Any]] = None, agent_extra_body: Optional[dict[str, Any]] = None, structured_max_tokens: Optional[int] = None, extra_body: Optional[dict[str, Any]] = None, backend: Optional[Literal['openrouter', 'vllm', 'ollama']] = None, served_model_id: Optional[str] = None, base_url: Optional[str] = None, base_url_env: Optional[str] = None, api_key_env: Optional[str] = None, max_concurrency: Optional[int] = None) -> None`
+
+How a given model id must be driven for a forced structured-output call.
 
 ### `ModelRole(*values)`
 
@@ -329,6 +339,22 @@ Look, without deploying or waking anything: is the server deployed, is a contain
 ### `astop_model_server(name: 'str') -> 'None'`
 
 `stop_model_server` for async code.
+
+### `publish(slug: 'str', *, root: 'Optional[Path]' = None) -> 'Path'`
+
+Author `slug` and write its manifest to `<root>/<slug>.json` (default: the shared root).
+
+### `publish_all(*, root: 'Optional[Path]' = None) -> 'list[Path]'`
+
+Author and write every specified manifest into the root. Returns the written paths.
+
+### `register_decision_profile(profile: 'DecisionModelProfile') -> 'DecisionModelProfile'`
+
+PS-38 (G12): add (or replace) the decision-model profile for `profile.model_id`, process-wide, so that id (named by `RAG_DECISION_MODEL` or the `jev_decision` input `model`) reaches its own endpoint and key from now on: an on-premises Laya server, or any server speaking the Decisions API, is configuration.
+
+### `register_model_profile(profile: 'ModelProfile') -> 'ModelProfile'`
+
+Add (or replace) the profile for `profile.model_id`, process-wide, so that model id resolves to it from now on (PS-19: a deployed server registers its own profile).
 
 ### `agent_chat_model(model: 'Optional[str]' = None, *, temperature: 'float' = 0.0, **overrides: 'Any') -> 'BaseChatModel'`
 

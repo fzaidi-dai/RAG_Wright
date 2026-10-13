@@ -216,6 +216,18 @@ _(no docstring)_
 
 Internal-only response bounds a callable entry declares (caps tool responses ~25,000 tokens).
 
+### `CapabilityInterface(*, inputs: dict[str, str], outputs: dict[str, str], success_criterion: str) -> None`
+
+The governed typed I/O interface GraphWright's lowering checker verifies a realization against (GraphWright ADR-0030; our T43). A GraphWright VENDOR EXTENSION, not part of the ARD envelope: it rides on the `RegistryEntry` beside the internal governance blocks, so ARD-standard consumers ignore it. It is the DATA that flows between orchestration steps as named channels (the query, chunk references, the answer) — NOT the callable's config (model, keys, thresholds, top-k), which is deployment config.
+
+Nominal typing: the checker compares the SET of input/output type NAMES (opaque strings from `NOMINAL_TYPE_VOCABULARY`); port names are for readability only. So `inputs`/`outputs` are flat `port -> typeName` maps, and cardinality (list vs scalar) is NOT encoded — a port carrying many candidates and one carrying a single value both use the element name (`chunk_id`, never `chunk_id[]`).
+
+Plain `BaseModel`, NOT `_ArdModel`: the inner keys stay snake_case (`success_criterion`) even though the surrounding manifest is camelCase, because GraphWright's mirror (`TypedInterface`) carries no ARD alias and its `extra="forbid"` loader rejects camelCased inner keys. `extra="forbid"` here mirrors that — exactly the three keys, nothing else (GraphWright ADR-0030 section 2).
+
+### `SkillRuntime(*, needsInterpreter: bool = False, rlm: bool = False, grantedSubagents: list[str] = <factory>, requiresDynamicDispatch: bool = False) -> None`
+
+An agent skill's intrinsic runtime requirements, so the compiler can hydrate an interpreter node without fabricating anything (GraphWright RegistryEntry; mirrored per ADR-0003). Internal-only, never the ARD envelope; `agent_skill` only (validated like `requires`); absent when a skill has no special runtime needs. Intrinsic requirements only — the model is deployment config and stays out.
+
 ### `KgVertexType(name: 'str', properties: 'tuple[tuple[str, str], ...]', unique_index: 'str | None') -> None`
 
 ADR-0067 P5b: a domain KG vertex-type declaration the store creates -- name, its `(property, SQL type)` pairs, and the property to build a UNIQUE index on (if any).
@@ -495,6 +507,10 @@ Validate a `documents` scope against `store.known_document_ids()` BEFORE any ret
 ### `capability_impl(name: 'str') -> 'Callable[..., Any]'`
 
 Resolve a capability name to its invoke factory via the manifest `impl_ref`. Raises `KeyError` if the name is unknown to the ARD catalog, `NotImplementedError` if it declares no `impl_ref` (not invokable by name).
+
+### `workspace_embedder(ws: 'WorkspaceHandle') -> 'Any'`
+
+PS-38 (G22): the workspace's query embedder, built from its `EngineConfig.embeddings` profile on first use, so a pack capability embeds its queries with the model the corpus was indexed with. None when no embedder backend is available (the caller reports it).
 
 ### `load_kg_schema(path: 'str') -> 'tuple[tuple[KgVertexType, ...], frozenset[str]]'`
 

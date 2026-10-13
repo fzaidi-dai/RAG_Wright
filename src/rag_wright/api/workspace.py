@@ -26,8 +26,9 @@ _WORKSPACES: dict[tuple, "WorkspaceHandle"] = {}
 
 
 class WorkspaceHandle:
-    """An opaque handle to a resolved engine workspace. Public surface: `model_id(role)`. The resolved store +
-    embedder are engine-internal (`_store` / `_embedder`), used by the invokers -- NOT a product accessor."""
+    """An opaque handle to a resolved engine workspace. Public surface: `model_id(role)` and the read-only `config`
+    (a pack reads its options from `config.options.packs`). The resolved store + embedder are engine-internal
+    (`_store` / `_embedder`); pack code reaches them with `pack_store(ws, cls)` and `workspace_embedder(ws)`."""
 
     def __init__(self, store: Any, config: EngineConfig, corpus: str) -> None:
         self._store = store
@@ -49,6 +50,11 @@ class WorkspaceHandle:
         """Reuse `other`'s query embedder (same embedding profile) instead of building a second one."""
         if other.__embedder_built:
             self.__embedder, self.__embedder_built = other.__embedder, True
+
+    @property
+    def config(self) -> EngineConfig:
+        """The `EngineConfig` this workspace was opened with (read-only; open the corpus again to change it)."""
+        return self._config
 
     def model_id(self, role: ModelRole) -> str:
         """Resolve a model role to its id: the `EngineConfig.models` override wins, else the profile default."""
@@ -165,6 +171,13 @@ def _build_embedder(config: EngineConfig) -> Optional[Any]:
     except Exception:  # noqa: BLE001 - embedder backend unavailable -> None; the retrieval consumer surfaces it
         logger.warning("engine_embedder_unavailable", exc_info=True)
         return None
+
+
+def workspace_embedder(ws: WorkspaceHandle) -> Any:
+    """PS-38 (G22): the workspace's query embedder, built from its `EngineConfig.embeddings` profile on first use, so a
+    pack capability embeds its queries with the model the corpus was indexed with. None when no embedder backend is
+    available (the caller reports it)."""
+    return ws._embedder
 
 
 def pack_store(ws: WorkspaceHandle, cls: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:

@@ -160,9 +160,9 @@ def register_relational_qa(registry) -> None:
 async def ainvoke(resources, inputs: dict):
     """EP-CORE-2 (ADR-0118): the capability invoke factory (impl_ref target)."""
     from rag_wright.pack_sdk import answer_model_for
-    from rag_wright.api import ModelRole
+    from rag_wright.api import ModelRole, pack_store
 
-    graph = production_relational_qa(store=resources._store,
-                                     answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL)))
+    graph = pack_store(resources, lambda store: production_relational_qa(
+        store=store, answer_model=answer_model_for(resources.model_id(ModelRole.GENERAL))))
     return await graph.ainvoke({"query": inputs["query"], "start_entity_id": inputs["start_entity_id"],
                                 "max_hops": inputs.get("max_hops", 1)})

@@ -1058,15 +1058,15 @@ async def ainvoke(resources, inputs: dict):
     SourceDocument) + cache_dir. Ingest knobs + embedder come from EngineConfig.options/embeddings (EP-API-4a/4b);
     the entity resolver is the generic closed-world default (DD-3)."""
     from rag_wright.packs.contracts.capabilities.dg_extraction import default_extraction_model
-    from rag_wright.api import ModelRole
+    from rag_wright.api import ModelRole, pack_store
     from rag_wright.pack_sdk import EntityRegistry
     from rag_wright.packs.contracts.options import contract_ingest_options
 
-    opts = contract_ingest_options(resources._config)
-    graph = aproduction_document_ingest(
-        resources._store, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
+    opts = contract_ingest_options(resources.config)
+    graph = pack_store(
+        resources, aproduction_document_ingest, cache_dir=inputs["cache_dir"], registry=EntityRegistry(),
         extract_model=default_extraction_model(model=resources.model_id(ModelRole.STRUCTURED_REASONING)),
-        embedding_profile=resources._config.embeddings.get("text", "bge-m3"),
+        embedding_profile=resources.config.embeddings.get("text", "bge-m3"),
         classify_concurrency=opts.classify_concurrency, clause_concurrency=opts.clause_concurrency,
         affiliations=opts.affiliations, function_classifier=opts.function_classifier)
     return await graph.ainvoke({"document": inputs["document"]})
