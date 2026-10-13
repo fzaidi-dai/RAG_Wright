@@ -131,6 +131,21 @@ own fields, typing and construction rules (for RuleWright: frozen, built only fr
 in the product. Not chosen: a generic `AgentContext[S]` (type machinery for no gain as a `context_schema`) and an
 opaque `scope: Any` (loses typing in the product's tools and moves the same question into the prefix).
 
+**Memory has three mounts, and the substrate enforces which a run may learn into** (RuleWright's follow-up, the
+same day: its memory is a deliberate hierarchy, its AR-10). The protocol gains an optional
+`shared_scope: tuple[str, ...] | None`, the one wider scope a run may promote learned facts into:
+
+- `scope` (required): the run's own writable memory, `scope + (<leaf>,)`, mounted at `/memories/scope/`.
+- `shared_scope` (optional): writable, mounted at `/memories/shared/`; it must be a strict, non-empty prefix of
+  `scope` (an ancestor in the run's own chain), so it is never sideways, never the root and never outside the run's
+  chain. A one-part scope therefore has none; a deeper scope chooses which ancestor, and the substrate checks it.
+- the authored, everyone-wide mount (`/memories/product/`): a fixed namespace the substrate owns, read-only by
+  construction; the product supplies its contents. A writable scope shared by every tenant cannot be configured.
+
+Not chosen: deriving the parent as `scope[:-1]` (it silently decides which scope learning may promote into, which is
+product policy) and caller-supplied prefixes (the substrate could no longer enforce the three rules). The mount
+names are neutral; a product names them in its own terms in its prompts.
+
 **PS-32's acceptance gains two items.** RuleWright's `tests/test_greenfield_conformance.py` (a second, different
 product implementing the seams, its open gaps as strict expected failures that may only shrink) is a fourth check,
 the only one that tests reuse rather than a proxy for it; and the genericity guard is taken at handover in its
