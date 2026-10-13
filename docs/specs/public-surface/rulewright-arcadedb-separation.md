@@ -44,8 +44,21 @@ instance only). RuleWright's `CLAUDE.md` already says the same and lists this mo
 
 - Delete the RuleWright databases from `RAG_Wright/data/arcadedb/` (after the user's go-ahead: it cannot be undone).
 
-Done on 2026-10-13: `some-db` (empty; the engine's, from before PS-27) dropped; the engine's container recreated on
-its own settings (6 GB heap, no container cap); the two stopped containers removed.
+Done on 2026-10-13: the engine's container recreated on its own settings (6 GB heap, no container cap); the two
+stopped containers removed; `some-db` (empty) dropped.
+
+**Correction, 2026-10-13: `some-db` was RuleWright's, not the engine's.** RuleWright showed it: one of its unit
+tests stubbed `ArcadeDBStore.from_env`, but its code had moved to `open_workspace(..., corpus=...)`, which creates by
+default, so the test reached the real store on every run and created `some-db` there. Its fast suite ran against the
+engine's instance until the move, which explains the 2026-10-10 date and the empty neutral schema. The database
+reappeared in the engine's directory at 10:09 that day, after the first drop and before the move. RuleWright has fixed
+the test.
+
+RuleWright's move is done (2026-10-13): 19 scratch and disposable databases dropped with `drop_workspace`, its two
+keepers copied with the engine's container stopped, its own `arcadedb-rulewright` on 2481/2425, both keepers opening
+with `create=False`, and a live retrieval passing against the moved store. The engine then dropped its copies,
+`rulewright_dev` and `rulewright_compliance`, and the reappeared `some-db`, with `drop_workspace` (user's go-ahead,
+2026-10-13); its `data/arcadedb` holds its six own databases only. PS-34 is done.
 
 ## So it does not regrow
 
