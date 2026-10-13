@@ -35,6 +35,8 @@ dependencies = [
     "fastmcp>=3.4.6",
     "flagembedding>=1.4.0",
     "google-cloud-storage>=3.13.1",
+    "langchain>=1.4.2",
+    "langchain-core>=1.6.3",
     "langchain-mcp-adapters>=0.3.2",
     "langchain-openai>=1.3.3",
     "langchain-quickjs>=0.3.2", # floor, not a hard pin (no-== rule); MIT (quickjs-rs); used by the RLM interpreter agent (parked surface, ADR-0015/0052)
@@ -138,6 +140,7 @@ source_modules = [
     "rag_wright.contracts",
     "rag_wright.corpus",
     "rag_wright.evals",
+    "rag_wright.harness",
     "rag_wright.ingestion",
     "rag_wright.models",
     "rag_wright.ontology",
@@ -172,6 +175,51 @@ forbidden_modules = [
 ]
 # the public tiers themselves re-export internals; only a DIRECT import from a pack is the violation
 allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "The agent harness reaches the engine only through rag_wright.api (PS-32, ADR-0139)"
+type = "forbidden"
+source_modules = ["rag_wright.harness"]
+forbidden_modules = [
+    "rag_wright.capabilities",
+    "rag_wright.contracts",
+    "rag_wright.corpus",
+    "rag_wright.evals",
+    "rag_wright.ingestion",
+    "rag_wright.models",
+    "rag_wright.ontology",
+    "rag_wright.pack_sdk",
+    "rag_wright.packs",
+    "rag_wright.skills",
+    "rag_wright.spans",
+    "rag_wright.store",
+    "rag_wright.subgraphs",
+    "rag_wright.util",
+]
+# rag_wright.api re-exports internals; only a DIRECT import from the harness is the violation
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "Nothing else in the engine imports the agent harness (PS-32, ADR-0139)"
+type = "forbidden"
+source_modules = [
+    "rag_wright.api",
+    "rag_wright.capabilities",
+    "rag_wright.contracts",
+    "rag_wright.corpus",
+    "rag_wright.evals",
+    "rag_wright.ingestion",
+    "rag_wright.models",
+    "rag_wright.ontology",
+    "rag_wright.pack_sdk",
+    "rag_wright.packs",
+    "rag_wright.skills",
+    "rag_wright.spans",
+    "rag_wright.store",
+    "rag_wright.subgraphs",
+    "rag_wright.util",
+]
+forbidden_modules = ["rag_wright.harness"]
 
 [[tool.importlinter.contracts]]
 name = "The contracts pack does not depend on the compliance pack built on it (ING-8c)"

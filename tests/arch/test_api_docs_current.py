@@ -23,3 +23,11 @@ def test_the_pack_sdk_reference_matches_the_live_pack_sdk():
     spec.loader.exec_module(gen)
     committed = (_ROOT / "docs" / "api" / "pack_sdk.md").read_text(encoding="utf-8")
     assert committed == gen.render_sdk(), "docs/api/pack_sdk.md is stale -- run `bash scripts/build_api_docs.sh`"
+
+
+def test_the_harness_reference_matches_the_live_harness():
+    spec = importlib.util.spec_from_file_location("build_api_docs", _ROOT / "scripts" / "build_api_docs.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    committed = (_ROOT / "docs" / "api" / "harness.md").read_text(encoding="utf-8")
+    assert committed == gen.render_harness(), "docs/api/harness.md is stale -- run `bash scripts/build_api_docs.sh`"

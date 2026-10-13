@@ -19,6 +19,7 @@ _LINKED = _ROOT / ".claude" / "skills"
 SHIPPED = (
     "using-the-rag-wright-engine",
     "authoring-a-capability",
+    "building-an-agent-harness",
     "building-an-ingestion-capability",
     "creating-evals",
     "classifier-opportunity-analysis",

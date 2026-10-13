@@ -55,7 +55,10 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-13): `rag-wright` 0.9.0 is RELEASED** (PS-36 `agent_chat_model`, PS-37 drop/temporary
+> **CURRENT STATE (2026-10-14): PS-32 done: the agent harness is the engine's third public tier `rag_wright.harness`**
+> (ADR-0139 handover; with PS-39 `ws.embedder` / `api.query_embedder`; RuleWright's guide
+> `docs/specs/public-surface/rulewright-migration-0.10.0.md`; releasing as 0.10.0). Before it,
+> **(2026-10-13): `rag-wright` 0.9.0 is RELEASED** (PS-36 `agent_chat_model`, PS-37 drop/temporary
 > workspaces, PS-38 the public gaps a new product hits; the product-starter templates and shipped skills reviewed for
 > TexWright; RuleWright's guide `docs/specs/public-surface/rulewright-migration-0.9.0.md`). Harness: ADR-0139, PS-32
 > waits on RuleWright's separation. Before it,

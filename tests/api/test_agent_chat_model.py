@@ -211,3 +211,13 @@ async def test_a_deep_agent_runs_on_it_and_every_turn_is_metered():
         out = await agent.ainvoke({"messages": [{"role": "user", "content": "find x"}]})
     assert out["messages"][-1].content == "the answer"
     assert usage.calls == 2 and usage.cost_usd == pytest.approx(0.0024)
+
+
+def test_trace_false_meters_the_call_and_opens_no_generation(monkeypatch):
+    """PS-32: a caller that emits its own generations (the agent harness) turns the engine's off, so a call is
+    traced once, never twice; it is still metered."""
+    monkeypatch.setattr(tracing, "tracing_on", lambda: True)
+    monkeypatch.setattr(tracing, "start_generation", lambda **kw: pytest.fail("traced although trace=False"))
+    with measure_usage() as usage:
+        _model(_Server(), "qwen3.8-27b-modal-or", trace=False).invoke("hi")
+    assert usage.calls == 1 and usage.cost_usd == pytest.approx(0.0012)

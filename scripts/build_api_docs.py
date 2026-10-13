@@ -14,10 +14,12 @@ import re
 from pathlib import Path
 
 import rag_wright.api as api
+import rag_wright.harness as harness
 import rag_wright.pack_sdk as pack_sdk
 
 OUT = Path(__file__).resolve().parent.parent / "docs" / "api" / "README.md"
 OUT_SDK = OUT.with_name("pack_sdk.md")  # PS-8b: the pack-author tier, generated the same way
+OUT_HARNESS = OUT.with_name("harness.md")  # PS-32: the agent harness tier
 
 
 def _summary(obj: object) -> str:
@@ -68,6 +70,10 @@ _SDK_INTRO = ("> **Generated** from the live `rag_wright.pack_sdk.__all__` by `s
               "by hand. The pack-author tier: what a domain pack's code needs beyond `rag_wright.api` (a pack imports "
               "only these two), with the same compatibility promise. See the module docstring for what belongs here.")
 
+_HARNESS_INTRO = ("> **Generated** from the live `rag_wright.harness.__all__` by `scripts/build_api_docs.py` — do not "
+                  "edit by hand. The agent harness tier (ADR-0139): what a product builds its agent on. It reaches "
+                  "the rest of the engine only through `rag_wright.api`. See the package docstring.")
+
 
 def render(module=api, title: str = "API reference — `rag_wright.api`", intro: str = _API_INTRO) -> str:
     """The reference's full text, from the live `module.__all__` (the drift test compares it to the file)."""
@@ -109,10 +115,16 @@ def render_sdk() -> str:
     return render(pack_sdk, "Pack SDK reference — `rag_wright.pack_sdk`", _SDK_INTRO)
 
 
+def render_harness() -> str:
+    """The agent harness reference (`docs/api/harness.md`)."""
+    return render(harness, "Agent harness reference — `rag_wright.harness`", _HARNESS_INTRO)
+
+
 def main() -> None:
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(render(), encoding="utf-8")
     OUT_SDK.write_text(render_sdk(), encoding="utf-8")
+    OUT_HARNESS.write_text(render_harness(), encoding="utf-8")
     print(f"wrote {OUT} ({len(api.__all__)} public symbols) and {OUT_SDK} ({len(pack_sdk.__all__)} symbols)")
 
 

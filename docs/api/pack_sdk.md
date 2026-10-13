@@ -350,18 +350,6 @@ PS-22: `RAG_MODEL_DEADLINE_S` when set; otherwise long enough for every try at t
 
 The model-call description used in the deadline/retry warnings + the timeout message. ADR-0058 side-fix (issue 0004): include the STAGE/call-site (`label`) when the caller supplies it, so a timeout names WHICH stage was cancelled (e.g. `granite-4.2-8b for semantic_chunking.discover`), not just the model.
 
-### `start_generation(*, model: 'str', input: 'Any' = None, label: 'Optional[str]' = None, role: 'Optional[str]' = None, stage: 'Optional[str]' = None, metadata: 'Optional[dict[str, Any]]' = None) -> 'Any'`
-
-Open a Langfuse generation AT THE CALL START and return the observation (or None when tracing is off). Its `start_time` is the moment this is called, so pairing it with `finish_generation` after the call makes the span's OWN duration the real wall-clock latency. This matters because langfuse v4 has no way to back-date a start: a post-hoc emit (open + immediately end) reports a ~0s duration and the real figure survives only in metadata -- the defect engine issue 0048 hit (Langfuse's latency column read 0 for `astream_text`/`span-relevance`). `input` is captured only at `verbose`; label/role/stage go into metadata. Document/job grouping comes from the ambient `traced_run`.
-
-### `finish_generation(gen: 'Any', *, output: 'Any' = None, usage: 'Optional[dict[str, int]]' = None, cost: 'Optional[float]' = None, latency_ms: 'Optional[float]' = None, completion_start_time: 'Any' = None, metadata: 'Optional[dict[str, Any]]' = None) -> 'None'`
-
-Attach a completed call's results to a generation opened by `start_generation` and END it (end_time = now), so the observation's duration is the true latency. No-op when `gen` is None (tracing off). `output` captured only at `verbose`; `usage` = {"input": n, "output": n}; `cost` is the provider's ACTUAL total USD (OpenRouter pass-through, not an engine price table) -> `cost_details` (None when the backend omits it, e.g. self-hosted vLLM, so Langfuse prices from its own table). `completion_start_time` (time to first token) lets Langfuse split queue+prefill from decode -- the attribution engine issue 0048 asked for. `latency_ms` is also kept in metadata (redundant with the now-correct span duration, but exact).
-
-### `tracing_on() -> 'bool'`
-
-_(no docstring)_
-
 ### `usage_capturing() -> 'bool'`
 
 True when at least one usage scope is active — the seam checks this to decide whether to capture usage (e.g. request `stream_usage`) on a call that would otherwise not need it.

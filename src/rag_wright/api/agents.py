@@ -23,9 +23,12 @@ from rag_wright.models.seam import build_agent_model
 __all__ = ["agent_chat_model"]
 
 
-def agent_chat_model(model: Optional[str] = None, *, temperature: float = 0.0, **overrides: Any) -> BaseChatModel:
+def agent_chat_model(model: Optional[str] = None, *, temperature: float = 0.0, trace: bool = True,
+                     **overrides: Any) -> BaseChatModel:
     """The chat model for an agent: `model` is an engine model id (a registered profile's key, or any served id);
     `None` takes the GENERAL role's model. `overrides` are the chat model's own settings (`timeout`, `max_retries`,
     `max_tokens`, `callbacks`, ...). Retries are the caller's to place: an agent harness usually keeps them in its
-    middleware and passes `max_retries=0`."""
-    return build_agent_model(model or model_for(ModelRole.GENERAL), temperature=temperature, **overrides)
+    middleware and passes `max_retries=0`. `trace=False` keeps the metering and emits no Langfuse generation, for a
+    caller that emits its own (so a call is never traced twice)."""
+    return build_agent_model(model or model_for(ModelRole.GENERAL), temperature=temperature, trace=trace,
+                             **overrides)

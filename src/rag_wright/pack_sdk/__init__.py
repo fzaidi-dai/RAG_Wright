@@ -75,7 +75,9 @@ from rag_wright.models.seam import (
     resolve_connection,
 )
 from rag_wright.models.tag_structured import build_tag_structured, field_kind
-from rag_wright.models.tracing import finish_generation, start_generation, tracing_on
+# PS-32: `start_generation` / `finish_generation` / `tracing_on` are public on `rag_wright.api` (the agent harness may
+# import only `api`); they stay importable here, outside `__all__`, so packs written against 0.7 to 0.9 keep working.
+from rag_wright.models.tracing import finish_generation, start_generation, tracing_on  # noqa: F401
 from rag_wright.models.usage import usage_capturing
 from rag_wright.models.weights import models_dir
 from rag_wright.ontology.pack_schema import KgVertexType, load_kg_schema
@@ -96,7 +98,7 @@ __all__ = [
     # the model seam + its observability
     "model_for", "profile_for", "decision_profile", "build_model", "build_structured",
     "build_tag_structured", "field_kind", "astream_text", "resolve_connection", "ModelCallTimeout",
-    "model_deadline_s", "call_description", "start_generation", "finish_generation", "tracing_on", "usage_capturing",
+    "model_deadline_s", "call_description", "usage_capturing",
     "models_dir",
     # the LangGraph scaffold
     "DEFAULT_RETRY", "TransientExtraction", "business_span", "dead_letter", "raw_llm_span",

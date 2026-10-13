@@ -173,9 +173,10 @@ role's model). The profile decides endpoint, key and the agent turn's reasoning 
 vendor or vendor flag; every call, a subagent's included, is recorded into `measure_usage()` with the provider's
 real cost and traced when tracing is on. The generic harness substrate (the loop, error levels and deadlines,
 retries, interrupts and human-in-the-loop, replay on resume, memory practice, metering) is engine scope (engine
-ADR-0139, PS-32): it arrives as a third public tier with the `building-an-agent-harness` skill. Until your installed
-engine has it, keep agents thin and never write a substrate of your own; your product keeps its agents, tools,
-prompts, skills, guardrails and decision models.
+ADR-0139, PS-32): the third public tier `rag_wright.harness` (engine 0.10.0 and later; reference
+`docs/api/harness.md`, practice in the `building-an-agent-harness` skill). Declare an `AgentDefinition` and run it
+with `start_run` / `resume_run`; never write a substrate of your own (on an older engine, keep agents thin). Your
+product keeps its agents, tools, prompts, skills, guardrails and decision models.
 
 **Using a self-hosted model (Qwen on Modal).** Deploy it from the engine and use its model id like any model:
 `server = await adeploy_model_server(ModelServerSpec(name="<app>", max_num_seqs=<concurrency target>))` (the locked

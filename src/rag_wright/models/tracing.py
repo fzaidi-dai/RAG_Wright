@@ -121,6 +121,18 @@ def record_generation(*, model: str, input: Any = None, output: Any = None,
     finish_generation(gen, output=output, usage=usage, cost=cost, latency_ms=latency_ms)
 
 
+def flush_tracing() -> None:
+    """PS-32: hand the engine client's buffered spans to the exporter now (a caller emitting its own generations
+    wants a stalled run visible while it stalls). A no-op when tracing is off; never raises."""
+    lf = _get_client()
+    if lf is None:
+        return
+    try:
+        lf.flush()
+    except Exception:  # noqa: BLE001 - tracing must never break the engine
+        pass
+
+
 @contextmanager
 def traced_step(name: str, *, metadata: Optional[dict[str, Any]] = None) -> Iterator[None]:
     """Time a NON-generation sub-step (e.g. retrieval: ArcadeDB + embedding + rerank) as its OWN Langfuse span,

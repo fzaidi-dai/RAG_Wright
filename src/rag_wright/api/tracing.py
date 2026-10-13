@@ -14,6 +14,10 @@ the traced code: any Langfuse error degrades to a no-op.
 """
 from __future__ import annotations
 
-from rag_wright.models.tracing import traced_run, traced_step
+from rag_wright.models.tracing import (finish_generation, flush_tracing, start_generation, trace_level, traced_run,
+                                       traced_step, tracing_on)
 
-__all__ = ["traced_run", "traced_step"]
+# PS-32: the switch, the level, open/close one generation around a call, and a flush, for a caller that emits its
+# own generations (the agent harness, which builds its model with `agent_chat_model(..., trace=False)`).
+__all__ = ["traced_run", "traced_step", "tracing_on", "trace_level", "start_generation", "finish_generation",
+           "flush_tracing"]

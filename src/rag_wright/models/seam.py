@@ -624,14 +624,15 @@ class _AgentCallMeter(BaseCallbackHandler):
 
     run_inline = True
 
-    def __init__(self, model_id: str) -> None:
+    def __init__(self, model_id: str, *, trace: bool = True) -> None:
         self.model_id = model_id
+        self.trace = trace
         self._open: dict[Any, tuple[float, Any]] = {}
 
     def on_chat_model_start(self, serialized: dict[str, Any], messages: list, *, run_id: Any, **kwargs: Any) -> None:
         from rag_wright.models import tracing
         gen = (tracing.start_generation(model=self.model_id, input=messages[0] if messages else None, stage="agent")
-               if tracing.tracing_on() else None)
+               if self.trace and tracing.tracing_on() else None)
         self._open[run_id] = (time.monotonic(), gen)
 
     def on_llm_end(self, response: Any, *, run_id: Any, **kwargs: Any) -> None:
@@ -653,16 +654,17 @@ class _AgentCallMeter(BaseCallbackHandler):
                                       metadata={"error": type(error).__name__})
 
 
-def build_agent_model(model_id: str, *, temperature: float = 0.0, **overrides: Any) -> ChatOpenAI:
+def build_agent_model(model_id: str, *, temperature: float = 0.0, trace: bool = True, **overrides: Any) -> ChatOpenAI:
     """PS-36: an agent's chat model for `model_id`, from its profile: the backend, endpoint, key and served id, the
     profile's base `extra_body` with its `agent_extra_body` over it, usage on streamed calls, and a meter that records
-    every call into the active usage scopes and traces it. `overrides` are `ChatOpenAI` fields (`timeout`,
-    `max_retries`, `max_tokens`, ...); a caller's `extra_body` keys win and its `callbacks` run beside the meter."""
+    every call into the active usage scopes and traces it (`trace=False`: metered only, for a caller that emits its own
+    generations). `overrides` are `ChatOpenAI` fields (`timeout`, `max_retries`, `max_tokens`, ...); a caller's
+    `extra_body` keys win and its `callbacks` run beside the meter."""
     agent_body = profile_for(model_id).agent_extra_body
     if agent_body:
         overrides["extra_body"] = {**agent_body, **(overrides.get("extra_body") or {})}
     overrides.setdefault("stream_usage", True)
-    overrides["callbacks"] = [_AgentCallMeter(model_id), *(overrides.get("callbacks") or [])]
+    overrides["callbacks"] = [_AgentCallMeter(model_id, trace=trace), *(overrides.get("callbacks") or [])]
     return build_model(model_id, temperature=temperature, _client_cls=_AgentChatOpenAI, **overrides)
 
 

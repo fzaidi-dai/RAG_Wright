@@ -388,7 +388,8 @@ def _deadline_bounded_client_class() -> type:
             # unless reasoning is disabled (ADR-0079). The seam applies both via the model profile; the
             # docling-graph path uses litellm, so it is added here. Skipped for a non-OpenRouter (vLLM / local) base.
             from rag_wright.api import record_usage
-            from rag_wright.pack_sdk import finish_generation, start_generation, tracing_on, usage_capturing
+            from rag_wright.api import finish_generation, start_generation, tracing_on
+            from rag_wright.pack_sdk import usage_capturing
             traced = tracing_on()
             capture = traced or usage_capturing()  # issue 0042: also capture into an active usage scope
             if "openrouter" in (getattr(self, "_base_url", "") or "").lower():

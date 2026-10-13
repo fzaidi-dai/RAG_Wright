@@ -356,9 +356,9 @@ PS-38 (G12): add (or replace) the decision-model profile for `profile.model_id`,
 
 Add (or replace) the profile for `profile.model_id`, process-wide, so that model id resolves to it from now on (PS-19: a deployed server registers its own profile).
 
-### `agent_chat_model(model: 'Optional[str]' = None, *, temperature: 'float' = 0.0, **overrides: 'Any') -> 'BaseChatModel'`
+### `agent_chat_model(model: 'Optional[str]' = None, *, temperature: 'float' = 0.0, trace: 'bool' = True, **overrides: 'Any') -> 'BaseChatModel'`
 
-The chat model for an agent: `model` is an engine model id (a registered profile's key, or any served id); `None` takes the GENERAL role's model. `overrides` are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`, `callbacks`, ...). Retries are the caller's to place: an agent harness usually keeps them in its middleware and passes `max_retries=0`.
+The chat model for an agent: `model` is an engine model id (a registered profile's key, or any served id); `None` takes the GENERAL role's model. `overrides` are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`, `callbacks`, ...). Retries are the caller's to place: an agent harness usually keeps them in its middleware and passes `max_retries=0`. `trace=False` keeps the metering and emits no Langfuse generation, for a caller that emits its own (so a call is never traced twice).
 
 ### `query_embedder(*, post: 'Callable[..., dict]' = post_json) -> 'Any'`
 
@@ -471,6 +471,26 @@ Group every generation emitted inside the block under one trace/session -- the c
 ### `traced_step(name: 'str', *, metadata: 'Optional[dict[str, Any]]' = None) -> 'Iterator[None]'`
 
 Time a NON-generation sub-step (e.g. retrieval: ArcadeDB + embedding + rerank) as its OWN Langfuse span, so its duration is separable from the generation in the same trace -- the retrieval/generation split engine issue 0048 asked for. No-op unless tracing is on. (Distinct from `subgraphs.observability.business_span`, which is an OTel-ambient span that no-ops under a Langfuse-only setup -- this one emits to Langfuse.)
+
+### `tracing_on() -> 'bool'`
+
+_(no docstring)_
+
+### `trace_level() -> 'str'`
+
+_(no docstring)_
+
+### `start_generation(*, model: 'str', input: 'Any' = None, label: 'Optional[str]' = None, role: 'Optional[str]' = None, stage: 'Optional[str]' = None, metadata: 'Optional[dict[str, Any]]' = None) -> 'Any'`
+
+Open a Langfuse generation AT THE CALL START and return the observation (or None when tracing is off). Its `start_time` is the moment this is called, so pairing it with `finish_generation` after the call makes the span's OWN duration the real wall-clock latency. This matters because langfuse v4 has no way to back-date a start: a post-hoc emit (open + immediately end) reports a ~0s duration and the real figure survives only in metadata -- the defect engine issue 0048 hit (Langfuse's latency column read 0 for `astream_text`/`span-relevance`). `input` is captured only at `verbose`; label/role/stage go into metadata. Document/job grouping comes from the ambient `traced_run`.
+
+### `finish_generation(gen: 'Any', *, output: 'Any' = None, usage: 'Optional[dict[str, int]]' = None, cost: 'Optional[float]' = None, latency_ms: 'Optional[float]' = None, completion_start_time: 'Any' = None, metadata: 'Optional[dict[str, Any]]' = None) -> 'None'`
+
+Attach a completed call's results to a generation opened by `start_generation` and END it (end_time = now), so the observation's duration is the true latency. No-op when `gen` is None (tracing off). `output` captured only at `verbose`; `usage` = {"input": n, "output": n}; `cost` is the provider's ACTUAL total USD (OpenRouter pass-through, not an engine price table) -> `cost_details` (None when the backend omits it, e.g. self-hosted vLLM, so Langfuse prices from its own table). `completion_start_time` (time to first token) lets Langfuse split queue+prefill from decode -- the attribution engine issue 0048 asked for. `latency_ms` is also kept in metadata (redundant with the now-correct span duration, but exact).
+
+### `flush_tracing() -> 'None'`
+
+PS-32: hand the engine client's buffered spans to the exporter now (a caller emitting its own generations wants a stalled run visible while it stalls). A no-op when tracing is off; never raises.
 
 ### `register_capability(manifest: 'CapabilityManifest') -> 'None'`
 

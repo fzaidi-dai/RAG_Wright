@@ -57,7 +57,7 @@ engine's worked example — a template, never your domain.
 | **creating-evals** | Write a capability's eval FIRST (TDD) |
 | **classifier-opportunity-analysis** → **setfit** / **laya** | Find + build a classifier / System-1 decision model |
 | **qwen-vllm-modal** | The flat-GPU substrate for bulk teacher-labeling |
-| **building-an-agent-harness** | Build an agent on the engine's harness substrate (ships with it, engine PS-32; not in the installed engine until then) |
+| **building-an-agent-harness** | Build an agent on the engine's harness substrate (`rag_wright.harness`, engine 0.10.0 and later) |
 
 **Generic** (the shared Addy-Osmani set): interview-me, idea-refine, spec-driven-development,
 planning-and-task-breakdown, incremental-implementation, test-driven-development, context-engineering,

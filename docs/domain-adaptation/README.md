@@ -71,7 +71,7 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
    `query_embedder()` from `rag_wright.api` where it holds no workspace). Build each workflow
    once, as a tool the UI and an agent both call. A product agent takes its model from `agent_chat_model(<model id>)`
    (metered and traced; no model or vendor named in your code); the generic agent harness substrate is engine scope
-   (ADR-0139) and arrives as its own public tier, so your product writes its agents, tools, prompts and guardrails,
+   (ADR-0139), the public tier `rag_wright.harness`, so your product writes its agents, tools, prompts and guardrails,
    not a harness. (Product-repo work, not engine.)
 
 9. **(Optional) a product demo** for your users. (Distinct from the engine's [reference pack](../reference-pack.md),

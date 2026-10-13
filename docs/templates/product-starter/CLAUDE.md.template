@@ -62,9 +62,10 @@ engine — a separate repo that depends on the open-core engine, one way.
   decides endpoint, key and reasoning flag; every call is metered into `measure_usage()` and traced). Never name a
   model, a vendor or a vendor's flag in product code; a model id is configuration. The harness substrate (the loop,
   error levels and deadlines, retries, interrupts and human-in-the-loop, replay on resume, memory practice,
-  metering) is engine scope (a third public tier, the harness, engine PS-32, with the `building-an-agent-harness` skill). Until
-  the installed engine has it, order the plan so substrate-dependent work comes after it, and never write a
-  substrate of your own: an early agent is a thin `create_deep_agent(model=agent_chat_model(...), tools=...)`.
+  metering) is engine scope: the third public tier `rag_wright.harness` (engine 0.10.0 and later, with the
+  `building-an-agent-harness` skill). Declare an `AgentDefinition` and run it with `start_run` / `resume_run`; never
+  write a substrate of your own. On an older engine an agent stays a thin
+  `create_deep_agent(model=agent_chat_model(...), tools=...)`.
 - **Classify every operation's orchestration mode before building it**: **D** (deterministic: a pre-wired workflow
   the backend calls directly), **A** (agent-fronted: a fixed workflow reached through an agent, for an authorization
   loop, a suspended run to resume, or conversational state), or **N** (non-deterministic: a model composes the
@@ -118,7 +119,7 @@ engine — a separate repo that depends on the open-core engine, one way.
   reached only through the editable path, never through an internal import, and the version floor moves only
   for a released symbol.
 - **The engine moving is normal, not a finding.** The engine changes continuously; most of it cannot reach a
-  product that uses only the two public tiers. Do not stop product work to report a move. What does stop the line
+  product that uses only the public tiers. Do not stop product work to report a move. What does stop the line
   is a change to the public surface you use, which the surface guard (Phase 0) names.
 
 ---

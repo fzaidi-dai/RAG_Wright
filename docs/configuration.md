@@ -139,7 +139,27 @@ reasoning flag in the backend's own spelling (OpenRouter's `reasoning`, vLLM's `
 the model makes, including a subagent's, a streamed one and a tool-bound one, is recorded into the active
 `measure_usage()` scopes with the provider's real per-call cost, and traced as one Langfuse generation when tracing
 is on. Other keyword arguments are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`,
-`callbacks`); an agent harness that retries in its middleware passes `max_retries=0`.
+`callbacks`); an agent harness that retries in its middleware passes `max_retries=0`. A caller that emits its own
+Langfuse generations passes `trace=False`: the call is still metered, and traced once, by the caller. Such a caller
+uses the same switch and client as the engine through `tracing_on()`, `trace_level()`, `start_generation(...)` /
+`finish_generation(...)` and `flush_tracing()` on `rag_wright.api`.
+
+## The agent harness (`rag_wright.harness`)
+
+The engine's third public tier (ADR-0139) is the agent harness substrate a product builds its agent on: a
+chat-manager tier, an orchestrator and dispatched workers on Deep Agents, with the error levels and deadlines,
+retries, interrupts and resume, memory, metering and run grading. The product declares an `AgentDefinition` (its
+`ToolSurface`, planning split, workers, a context type satisfying `RunScope`, retry set, model id and `AgentPrompts`)
+and runs it with `start_run` / `resume_run` / `stream_run`; it passes its own checkpointer and memory store. The
+reference is `docs/api/harness.md`, and the `building-an-agent-harness` skill is the practice behind it.
+
+Its configuration is the engine's: the model by engine profile id (the definition's `model_id_for`), tracing by
+`RAG_TRACE_LEVEL` and the Langfuse keys (each agent turn is one generation, labelled `agent-llm`, grouped under the
+run id), and one switch of its own:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `RAG_QUESTION_ENCODER` | on | `off` stops the harness from embedding tool questions to recognise a repeated ask (it then runs every call); the encoder is `query_embedder()`, built once per process |
 
 ## A self-hosted model server (Qwen on Modal)
 

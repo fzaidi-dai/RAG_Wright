@@ -55,7 +55,9 @@ test (`tests/arch/test_import_contracts.py`); a re-coupling import fails the bui
 modules (its domain graphs and stores) are the importers, not the imported: they build on the generic engine
 through its two public tiers (`rag_wright.api` and `rag_wright.pack_sdk`), because a domain pipeline is domain-shaped
 by construction. This is the primitives-vs-domain
-distinction: generic primitives stay pure; domain graphs compose them.
+distinction: generic primitives stay pure; domain graphs compose them. The third public tier, the agent harness
+(`rag_wright.harness`, ADR-0139), has two contracts of its own: it reaches the engine only through `rag_wright.api`,
+and nothing else in the engine imports it.
 
 ## Data flow
 
