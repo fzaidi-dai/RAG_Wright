@@ -6,7 +6,8 @@ description: >-
   the engine's domain-adaptation guide to configure the engine, author + ingest a domain .ttl pack, run entity
   resolution, register domain capabilities, and build the product seam. Use it at the start of a new-domain build
   (e.g. TexWright) and whenever calling the engine. Dependency is one-way: Product → Engine, never the reverse;
-  the whole public surface is `rag_wright.api`.
+  the public surface is three tiers: `rag_wright.api` (the seam), `rag_wright.pack_sdk` (your pack's code) and
+  `rag_wright.harness` (your agent).
 ---
 
 # Using the RAG_Wright engine (consumer-side playbook)
@@ -21,14 +22,17 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   every other product built on the engine.
 - **Your product owns its store and its data; the engine mediates access.** Your product runs its own ArcadeDB and
   has no ArcadeDB client of its own (section 1).
-- **The public surface is `rag_wright.api`; a pack also uses `rag_wright.pack_sdk`.** From `rag_wright.api` import
+- **The public surface is three tiers: `rag_wright.api` (your seam), `rag_wright.pack_sdk` (your pack's capability
+  code) and `rag_wright.harness` (your agent).** From `rag_wright.api` import
   `EngineConfig`/`StoreConfig` (`StoreConfig.from_env()` reads `ARCADEDB_*`)/`open_workspace`
   (`temporary_workspace`/`drop_workspace` for disposable and removed databases), the invokers
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`), the KG accessors
   (`kg_read` with `key_range`, `kg_write`, `kg_edges` with `NOT_NULL`, `kg_count`/`kg_delete`/`kg_update`,
   `entities_by_name`, `span_positions`), `pack_store(ws, cls)` (build your pack's store extension over the
   workspace's store; the store itself stays private), metering and tracing (`measure_usage`, `record_usage`,
-  `traced_run`/`traced_step`), `agent_chat_model` (an agent's chat model from an engine model id), answers (`agenerate_answer`, `ajudge_spans` with `EvidenceItem`/`Condition`, the
+  `traced_run`/`traced_step`, and for code emitting its own generations `tracing_on`/`trace_level`/
+  `start_generation`/`finish_generation`/`flush_tracing`), the query embedder (`ws.embedder` where you hold a
+  workspace, `query_embedder()` where you do not), `agent_chat_model` (an agent's chat model from an engine model id), answers (`agenerate_answer`, `ajudge_spans` with `EvidenceItem`/`Condition`, the
   models from the workspace's roles, your domain wording via `guidance=`), `ModelRole`, pack loading
   (`register_capability`/`load_pack`/`engine_capabilities`/`load_reference_pack`), the document helpers
   (`parse_document`/`aparse_document`, `parse_document_bytes`/`aparse_document_bytes` for uploads,
@@ -42,9 +46,11 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   `evaluate_ingestion`. Your **pack's own code** (its capabilities, stores, graphs) also imports
   `rag_wright.pack_sdk`: identifiers and provenance, the model seam, the LangGraph scaffold, the `Store` protocol, the
   entity-graph building blocks (`build_graph_extraction`, `disambiguate`, `resolve_entities`, `EntityRules`,
-  `GraphWriter`, `EntityRegistry`), reranking, embedding, parsing and chunking. Nothing deeper: anything else in the
+  `GraphWriter`, `EntityRegistry`), reranking, embedding, parsing and chunking. Your **agent** imports
+  `rag_wright.harness` (`AgentDefinition`, `AgentPrompts`, `ToolSurface`, `RunScope`, `start_run` / `resume_run` /
+  `stream_run`; `docs/api/harness.md`). Nothing deeper: anything else in the
   engine (`ArcadeDBStore`, `rag_wright.capabilities.*`, engine id formats) is internal and may change. The generated
-  `docs/api/README.md` and `docs/api/pack_sdk.md` list both tiers. To **plan** over the engine for a task,
+  `docs/api/README.md`, `docs/api/pack_sdk.md` and `docs/api/harness.md` list the three tiers. To **plan** over the engine for a task,
   `discover(task, resources=ws)` returns the best-matching capabilities (embedding-ranked); then invoke the top ones
   by slug.
 
@@ -102,6 +108,11 @@ on every run, without failing.
 
 Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) are in the engine repository: read them there or on GitHub, at the tag matching your installed engine.
 
+**Client data.** Your customer's files and everything derived from them (instance data, logs, labelled gold, the
+store's data directory) stay out of version control and leave the machine only to the model endpoints the customer
+approved. Write the `.gitignore` before anything else is added, track only what you wrote and your schema, and keep
+committed test fixtures anonymized. A gold set is `local_only` by default for the same reason.
+
 ## 2. Ground before you write (graphify)
 
 Never call an engine API you have not confirmed against the index. Build the grounding lanes and query them first:
@@ -137,6 +148,9 @@ pack**, and the generated **API reference** (`docs/api/`).
 
 Work the domain-adaptation guide, grounding each engine call (step 2) and writing each capability's eval first:
 
+0. **Specify first** — turn the product's high-level spec into its low-level spec with the
+   `specifying-a-product-on-the-engine` skill (every requirement mapped to an engine route, the capability catalog,
+   the gaps it lands on). The steps below are the build order it implies.
 1. **Configure** — construct `EngineConfig` (+ your domain `.ttl` via `pack=`) and `open_workspace(config, corpus=…)`.
    With `pack=None` the workspace gets only the neutral schema (`Chunk`, `Entity`, `Relationship`, `Mentions`,
    `Span`, `Document`, `EmbeddedIn`, `AttachedTo`); your pack's types exist only if you pass `pack=` (the path to your
@@ -167,9 +181,12 @@ the process (a crash in the PDF library otherwise, engine ADR-0138) and keeps ev
 Count an upload's pages with `pdf_page_count(data)`, which reads under the same lock; product code never imports the
 PDF library itself.
 
-**Agents.** Build a product agent (Deep Agents or LangGraph) on the model the engine gives it, by engine model id:
-`create_deep_agent(model=agent_chat_model("<model id>", max_retries=0), tools=[...])` (`None` takes the `GENERAL`
-role's model). The profile decides endpoint, key and the agent turn's reasoning flag, so your code names no model,
+**Agents.** Build the product's agent on the engine's harness tier: declare an `AgentDefinition` (your
+`ToolSurface`, the planning split, workers, a context type satisfying `RunScope`, the retry set, the model id,
+`AgentPrompts`, rules) and run it with `start_run` / `resume_run` / `stream_run`, passing your own checkpointer and
+memory store (the `building-an-agent-harness` skill). Its tools are your product's operations, the same ones your UI
+calls; an operation that writes is not a tool unless the spec says so. Underneath, the model comes from
+`agent_chat_model("<model id>", max_retries=0)` (`None` takes the `GENERAL` role's model). The profile decides endpoint, key and the agent turn's reasoning flag, so your code names no model,
 vendor or vendor flag; every call, a subagent's included, is recorded into `measure_usage()` with the provider's
 real cost and traced when tracing is on. The generic harness substrate (the loop, error levels and deadlines,
 retries, interrupts and human-in-the-loop, replay on resume, memory practice, metering) is engine scope (engine
@@ -229,7 +246,8 @@ engine PR:
   `docs/domain-adaptation/_engine-gaps.md` first: the gap may be known.
 - An engine symbol on the engine's main branch but not yet released is reached through the editable path
   (local co-development), never through an internal import; move your floor only for a released symbol.
-- Keep a committed snapshot of the installed `rag_wright.api.__all__` and a test that compares them: a change to the
+- Keep a committed snapshot of the installed `__all__` of the tiers you use (`rag_wright.api`, `rag_wright.pack_sdk`,
+  `rag_wright.harness`) and a test that compares them: a change to the
   surface you build on is then named the day it arrives, and any other engine change needs nothing from you.
 - Need that fix before the next release? Temporarily pin
   `[tool.uv.sources] rag-wright = { git = "https://github.com/fzaidi-dai/RAG_Wright", rev = "<merged-sha>" }` and

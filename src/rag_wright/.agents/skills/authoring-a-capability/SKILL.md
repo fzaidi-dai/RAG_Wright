@@ -28,6 +28,13 @@ authoring surface from `rag_wright.api`: `CapabilityManifest`, `register_capabil
 `engine_capabilities`, `register_canonical_slugs`, `canonical_capability_slugs`, `load_reference_pack`,
 `reference_pack` (the same objects as in `capabilities/manifests.py` and `capabilities/registry.py`).
 
+**In a product** (the usual case for a new domain): your capabilities live in your own pack package, for example
+`src/<product>/pack/subgraphs/<slug>.py` and `src/<product>/pack/capabilities/<slug>.py`, with a
+`src/<product>/pack/__init__.py` exposing `register()`; everything below applies unchanged, with your pack module in
+place of the engine's `packs/...` paths. Name your slugs with your product's prefix (`<product>_<capability>`), so they
+can never collide with the engine's or the reference pack's. If your subgraph imports `langgraph` directly, declare it
+in your own dependencies (`uv add langgraph`): a transitive dependency of the engine is not yours to rely on.
+
 ## The four surfaces (the definition of done)
 
 A finished capability touches these: 1 (implementation) is for EVERY kind; 2 (the invoke factory + `impl_ref`) is
@@ -71,6 +78,10 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
    kind that invoker serves (`KeyError` / `ValueError` otherwise), then imports the `impl_ref` via
    `capabilities.invoke.capability_impl` — AND exposable over MCP (surface 4b), with **zero engine edits**.
 
+5. **The eval, written first** (`creating-evals`): the capability's executable acceptance, run through the
+   capability layer (`ainvoke_subgraph` / `ainvoke_model`), so it measures what production runs. A capability without
+   one is not done.
+
 4b. **MCP exposure** (optional) — any invokable capability is already an MCP tool with zero extra code via
    `api/mcp.py::build_capability_mcp(slug, resources=ws)` (EP-RT-2). Write a bespoke FastMCP server only
    when you want a CURATED, typed tool signature instead of the generic opaque-`inputs` surface.
@@ -109,8 +120,9 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
   `packs/compliance/skills/compliance_judgment/SKILL.md`) + the agent runtime (e.g. `skills/rlm/`). It is LOADED (progressive
   disclosure), not called: no `ResponseBounds`. Declare `requires=(...)` for a closure over other skills and
   `skill_runtime` (`SkillRuntime`, from `rag_wright.pack_sdk`) for its intrinsic runtime.
-- A product's agent (a Deep Agents harness) is not a capability kind yet: an `agent` kind is a later engine workstream
-  (PS-33, engine ADR-0139). Build agents in the product, on `agent_chat_model` for their model.
+- A product's agent is not a capability kind yet (an `agent` kind is a later engine workstream, PS-33). Build it on the
+  engine's harness tier, `rag_wright.harness` (an `AgentDefinition` run with `start_run` / `resume_run`; the
+  `building-an-agent-harness` skill); its tools call your capabilities by name, through your operations.
 
 ### mcp_tool — a capability exposed over MCP
 - A distinct ARD identity (`<slug>_mcp`) for the same underlying capability exposed as a cross-agent MCP tool.

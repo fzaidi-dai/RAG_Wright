@@ -20,7 +20,7 @@ Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) 
 
 | stage | owner | default (engine) | override with |
 |---|---|---|---|
-| parse (PDF, Office, spreadsheets incl. hidden sheets, HTML, Markdown; embedded files) | engine | docling, content-hash cached | (none) |
+| parse (PDF, Office, spreadsheets incl. hidden sheets, HTML, Markdown, images and scans; embedded files) | engine | docling, content-hash cached; images and scanned pages are OCR'd, and only degraded pages escalate to the vision model (the `VISION_OCR` role) | (none) |
 | chunk | engine default, domain may override | structural boundaries; a model refines only an over-cap section (domain-neutral prompt) | `chunk_model=`, `chunk_discoverer=` (e.g. `default_chunk_discoverer(guidance=...)` to say what a coherent unit is in your documents) |
 | segment a chunk into spans | engine default, domain may override | layout-driven: a table row per span, sentences for prose, a heading joins what follows | `segmenter=` |
 | tag spans (soft tags) | domain, optional | none | `span_tagger=` (to compare models behind it, see section 5 of `docs/domain-adaptation/classification-and-decision-models.md`) |
@@ -132,6 +132,26 @@ Iterate on `evaluation.failures` (and the `DocumentEvaluation` measures: `tables
 `coverage`, `cap_ok`, ...) by changing `IngestionTuning` before you override a hook. Keep `extract` async and
 network-bound work inside it; the engine runs up to `IngestionTuning.extract_concurrency` units at once.
 
+### An extractor that calls a model
+
+The extractor receives a `Unit` and the document id, not the workspace, so build it as a closure over what it needs
+when you build the pipeline. Take the model id from the workspace (`ws.model_id(ModelRole.STRUCTURED_REASONING)`,
+never a literal), build the structured-output runnable once with `build_tag_structured(model_id, YourSchema)` from
+`rag_wright.pack_sdk` (tags parsed into your Pydantic schema, retried, model-neutral), and `await
+runnable.ainvoke(prompt)` inside the extractor. A typed choice among options your pack authors goes to the decision
+model instead: `await ainvoke_model("jev_decision", inputs, resources=ws)` (register `jev_decision` from
+`engine_capabilities()` first; the options and their criteria live in your pack, read with `rdflib`, with a "none"
+option so it can decline). Read exact values from `unit.table_row` before asking a model anything, and ask a model
+only for what the cells and your pack's vocabulary cannot settle.
+
+### Interpretations are records too
+
+When the extractor interprets a value (a range stored as its midpoint, a spelling variant mapped to a canonical
+value, a missing field inferred), return the interpretation as a record of its own type (declared in your pack,
+citing the span it came from) beside the records it shaped, so every interpretation is reviewable and nothing is
+read silently. Values the extractor cannot map stay as literals and are logged the same way: never guessed into a
+category.
+
 ## 5. Spreadsheets, tables and embedded files
 
 - **Hidden sheets** are ingested by default; `IngestSource(include_hidden_sheets=False)` skips them (listed in
@@ -166,6 +186,16 @@ network-bound work inside it; the engine runs up to `IngestionTuning.extract_con
   `DocumentReport.embedded_skipped`, not walked.
 - **Stable ids.** `IngestSource(doc_id=...)` gives a document your own id (an upload's record id, say), so a re-ingest
   of the same file lands on the same `Document`.
+- **Several sheets with different roles.** A per-row unit's `unit.table_row.sheet` names its sheet, so one extractor
+  dispatches per sheet. When two sources describe the same record (an authoritative sheet and a supplemental log, say),
+  give each its own provenance on the records and decide precedence per field in your own code, explicitly.
+- **One record over several rows, or one entity over many units.** The extractor sees one unit at a time. A record
+  whose continuation rows sit under its main row needs a `unit_grouper=` that keeps them together, or a
+  `document_hook=` that reads the whole table with `table_rows` and writes the grouped record. An entity several units
+  mention (a case its trial rows share) is emitted by its key from each unit and upserted by that key.
+- **Re-ingest.** Parsing is cached by content hash, so re-running is cheap. The default writer upserts nodes by their
+  key but is not fully idempotent for edges (engine gap G8): when a source is re-run, remove its previous records
+  first (`kg_delete` on the provenance your records carry, such as a per-source property) and write again.
 
 ## 6. Verify (definition of done)
 
@@ -180,6 +210,11 @@ network-bound work inside it; the engine runs up to `IngestionTuning.extract_con
    guard fails any unmarked test that reaches the network).
 4. If the extractor calls a model, meter it: run the ingest inside `measure_usage()` and check the call count and
    cost per document before a bulk run.
+5. **Register the pipeline as a capability** (`authoring-a-capability`): a subgraph whose `ainvoke(resources, inputs)`
+   builds it with `build_ingestion` over the workspace and runs `aingest`, so your product's ingest workflow, an
+   agent and an eval all invoke it by name.
+6. **Field-level accuracy, not only structure**: `evaluate_ingestion` checks units; the records' values are checked
+   against gold records (`creating-evals`, extraction scoring over what `kg_read` returns).
 
 ## Anti-patterns
 

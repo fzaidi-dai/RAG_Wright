@@ -108,9 +108,12 @@ slug. Write good `representative_queries` (2–5, phrased like real tasks) — t
 
 ## Compose the engine's primitives — don't re-register them
 
-Your capabilities **compose the engine's generic primitives by direct import** (hybrid search, graph query, fusion,
-embedding, parsing, chunking, reranking); you register only your OWN domain graphs/models/skills. Don't wrap or
-re-register an engine primitive.
+Your capabilities **compose the engine's generic primitives from the public tiers** (`rag_wright.api` and
+`rag_wright.pack_sdk`: the knowledge-graph reads `kg_read` / `kg_edges`, graph query, embedding (`ws.embedder`,
+`cosine`), typed ranking (`typed_constraint_match_rank`), reranking (`BGEReranker`), answers (`agenerate_answer`,
+`ajudge_spans`), parsing and chunking); you register only your OWN domain graphs/models/skills. Don't wrap or
+re-register an engine primitive. Hybrid (dense + sparse) span search and rank fusion are not public yet (engine gap
+G24): check a primitive is on a tier before designing around it.
 
 ## Definition of done
 

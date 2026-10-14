@@ -190,8 +190,19 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Table rows:** `table_rows(source_document)` returns every parsed table's rows as exact cells (`TableRow`), and a
   one-row unit carries its row as `Unit.table_row` (ING-7).
 
+### G24: No public hybrid search or fusion primitive
+- **Where:** the engine's own retrieval legs run hybrid (dense + sparse) span search and rank fusion internally, and
+  the authoring guide used to say a capability composes them "by direct import"; neither is on `rag_wright.api` or
+  `rag_wright.pack_sdk`.
+- **Impact:** a domain's own retrieval capability (similar records, cited answers over its corpus) cannot reuse the
+  engine's hybrid index through the public tiers; it falls back to dense similarity (`ws.embedder` + `cosine`) over
+  what it embeds itself, beside a structured leg (`kg_read`, `typed_constraint_match_rank`).
+- **Proposed:** a public hybrid span search over a workspace (query text, filters, k) returning cited spans, with the
+  fusion and reranking it already applies; on `rag_wright.pack_sdk` for pack capabilities.
+- Surfaced: the TexWright specification (2026-10-14).
+
 ## Prerequisites a domain provides (not engine gaps)
 
 - **ArcadeDB** (the store), **a model provider** (OpenRouter or self-hosted vLLM), and — only for the NER path —
-  the spaCy model (`uv pip install 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`). See
+  the spaCy model (`uv add 'rag-wright[ner]'` + `uv run python -m spacy download en_core_web_sm`). See
   [installation](../installation.md).

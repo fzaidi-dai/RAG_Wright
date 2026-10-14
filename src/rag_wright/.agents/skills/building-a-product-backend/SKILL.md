@@ -106,6 +106,13 @@ user clicked or typed, and the chat answer would be the one with no grading poli
 **Enforce it:** a route module may not import the primitives. It reaches them only through an operation.
 That one import rule is what makes the layer real.
 
+**Make the operations a registry, and prove the two callers agree.** Give each operation an id, a version, typed
+parameters (with the sources of their dropdown values), a result shape and whether it writes; the UI's menu and the
+agent's tool surface are both built from it. Then a **parity test** invokes each read-only operation both ways (the
+route, the agent's tool) on fixed data and asserts identical results, and a second test asserts no operation that
+writes is on the agent's tool surface unless the spec says so: a store write reached from chat is a write no person
+confirmed.
+
 ## The API is the product, so make the claim CHECKABLE
 
 Saying "the API is the product" changes nothing. Two ratchets do:
@@ -296,6 +303,8 @@ fail with the correct code in front of you.
 
 - [ ] Product code imports the engine only through `rag_wright.api`, `rag_wright.pack_sdk` and `rag_wright.harness` (tested)
 - [ ] No route module imports a primitive; it reaches them through an operation (tested)
+- [ ] Each read-only operation returns the same result from the route and from the agent's tool (a parity test)
+- [ ] No store-writing operation is on the agent's tool surface unless the spec says so (tested)
 - [ ] Every table is reachable by a route (tested)
 - [ ] Every route in the published schema is named by a test, exemption map EMPTY, and the guard excludes
       its own file

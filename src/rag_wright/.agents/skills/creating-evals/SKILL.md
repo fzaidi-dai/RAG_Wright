@@ -67,6 +67,10 @@ worked examples; your evals live in your repo.
   `sheet=`. Say how the gold was made with `provenance=` (`hand`, `silver` or `generated`; or a per-row column through
   `GoldMapping(provenance=...)`), so silver is never conflated with gold. A gold set is `local_only` by default:
   client data never leaves the machine.
+- **Gold from data you were given** (instance graphs, a legacy system's export, a hand-built reference mapping): write
+  a small builder that turns it into the gold format (JSONL, one item per record or per question), commit the builder,
+  keep its output local, and record `provenance=` honestly (`hand` only if a person checked it). Counts, keys and a
+  handful of hand-checked records are a gold before any expert sample exists.
 - **Gold stays local when the corpus is restrictively licensed** (CUAD/ACORD-derived gold lives under the
   gitignored `data/eval/`); commit the builder and the scorer, never the data.
 
@@ -116,6 +120,12 @@ on a diagnostic). Each kind has its scorer on `rag_wright.api`, checked against 
   separately, because it caps recall (ING-9b residual values: candidate coverage 0.93, 188/203 recomputed from the saved outputs; value-level recall 0.83 /
   precision 0.88 vs the LLM's 0.60 / 0.79. Pattern: `eval/residual_decision_gold.py`). **Count is not accuracy**:
   emitting more values is not a win without precision.
+- **Ingestion content (field-level accuracy)**: structure passing is not values being right. Read the ingested records
+  back (`kg_read`) and score them against gold records with `score_extraction`, each record's fields given as items
+  `"<field>=<value>"` (the gold's `expected`, the record's predictions) with an exact `match=` (its default matches
+  when one item contains the other, which is too lenient for values). Report per field as well (run it once per field,
+  or count misses by field prefix), because one badly read column hides in an average. This is the number a
+  customer's "fields correct" criterion asks for.
 - **Ingestion structure**: `evaluate_ingestion` (in `rag_wright.api`) is the packaged structural eval of the
   ingestion hooks (tiling, table-row integrity, layout respect, coverage) on your own sample documents. Gate
   patterns: `eval/segmenter_eval.py`, `eval/unit_grouper_eval.py`.
@@ -130,6 +140,16 @@ on a diagnostic). Each kind has its scorer on `rag_wright.api`, checked against 
   Compare candidate representatives (and the first-member baseline) on the same gold. Reference example, numbers
   only: the reference pack chose its rule this way on 510 documents with gold (ADR-0126): a vote over the non-heading
   members labelled 56.6% of units correctly, against 46.8% for the first member (usually the heading).
+
+- **Judged by a person** (is this result a useful starting point?): the judgments ARE the gold. Capture each
+  judgment as a gold item (the query, the result id, the judge, the verdict, the date) in a file the judge fills, load
+  it with `load_gold_set`, score retrieval against it, and keep every version: a later system is scored on the same
+  judgments with `rescore_eval`, and only new results need a new judgment.
+- **An agent's behavior classes** (answered with citations, refused because the records do not say, declined as out
+  of scope, answered with precedent only): label each gold question with its expected class and score the class the
+  agent's response falls in (`score_classification`, the weakest class's recall as the gate), beside the answer's own
+  generation scores. A refusal counted as a wrong answer, or a confident answer to an unanswerable question counted as
+  right, is the failure this catches.
 
 ## 3. Build the gold cheaply (without faking it)
 - **Silver bootstrapping**: a higher-capability teacher (LLM, or a decision model) labels candidate items; CURATE

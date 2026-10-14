@@ -103,6 +103,24 @@ them with a few lines of `rdflib` (labels and criteria in order) and builds the 
 `jev_decision` ([classification & decision models](classification-and-decision-models.md)). Include a `none`
 option so the model can decline.
 
+## Starting from an existing domain ontology (a bridge pack)
+
+A domain often arrives with its own ontology (OWL/RDFS classes, object and datatype properties, annotations), written
+for meaning rather than for this engine. Keep it as the authority for meaning, untouched, and put a **bridge** `.ttl`
+beside it that declares the graph types the store creates over it:
+
+- each class you store becomes an `eng:KgVertexType` (its typed datatype properties as `eng:kgProperty`, a unique
+  key from the domain's own identifiers, and `span_id` / `confidence` for provenance, plus any per-source provenance
+  your product needs);
+- each object property you traverse becomes an `eng:KgStructuralEdge`;
+- constraints the ontology states as annotations (allowed values, ranges, units) become SHACL shapes in a separate
+  shapes file, so the domain ontology is never edited by you.
+
+Prefer **generating** the bridge from the domain ontology plus a small reviewed mapping table (which classes, which
+key, which literals), with a CI drift check (regenerate, diff, fail on any delta), over hand-maintaining a second
+copy. The reference pack's bridges over their source ontologies are the pattern. `EngineConfig.pack` takes the
+bridge; your capabilities read meaning from the domain ontology with `rdflib`.
+
 ## How the pack is loaded
 
 ```python

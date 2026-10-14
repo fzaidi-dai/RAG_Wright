@@ -11,6 +11,11 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 
 ## The sequence
 
+0. **Specify the product against the engine first.** Turn the product's high-level spec into its low-level spec with
+   the `specifying-a-product-on-the-engine` skill: every requirement classified into the shapes below (pack,
+   ingestion, query capability, operation, agent, screen, eval), with the public route, skill and doc to ground
+   against, the capability catalog, and the engine gaps it lands on. The steps below are then the build order.
+
 1. **Install the engine.** `uv add rag-wright` (or a path/git dep pre-publish), plus a model provider and your
    product's **own** ArcadeDB instance: its own container, ports and data directory. The store and all its data,
    the knowledge graph included, are your product's; the engine only mediates access to them.
@@ -36,8 +41,8 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
    `build_ingestion` owns the pipeline, and your domain supplies an **extractor** plus any optional hooks
    (segmenter, span tagger, unit grouper, boundary decider, writer, a per-document hook)
    → [KG construction](kg-construction.md) and the `building-an-ingestion-capability` skill. Your query graphs, domain functions, and skills **compose the engine's
-   generic primitives by direct import** (hybrid search, graph query, fusion, embedding, parsing, chunking,
-   reranking) and register only your OWN domain graphs/models/skills via `register_capability(manifest)` with an
+   generic primitives from the public tiers** (graph reads and query, embedding, typed ranking, reranking,
+   answers, parsing, chunking; hybrid search and fusion are not public yet, gap G24) and register only your OWN domain graphs/models/skills via `register_capability(manifest)` with an
    `impl_ref`, invocable (and MCP-exposable) with zero engine edits. Package them as a pack module that exposes
    `register()` and load it with `load_pack("<your module>")`.
    → [Authoring capabilities](authoring-capabilities.md).

@@ -62,8 +62,10 @@ Every product item lands in one or more of these. The route column is where the 
 | **A cited answer, or a refusal** | "every answer cites its source", "say when it is not in the records" | `agenerate_answer` over `EvidenceItem`s (an answer states its support; "none" abstains), `ajudge_spans` | `authoring-a-capability` | concepts (answers) |
 | **A typed decision or classification** | "classify the structure", "which of these is it" | `classifier-opportunity-analysis` first; then rules, a trained classifier, or the decision model (`jev_decision` from `engine_capabilities()`, criteria in the pack) | `classifier-opportunity-analysis` → `setfit` / `laya` | classification and decision models |
 | **A deterministic workflow behind a button** (mode **D**) | "upload, confirm, save", "export CSV" | a product **operation** (one function per user operation) calling your capabilities; the route calls the operation | `building-a-product-backend` | domain-adaptation step 8 |
+| **The user-facing operations themselves** | "a menu of queries", "the same answers in chat and on screen" | a product **operations registry** (id, version, typed parameters, result shape, kind, whether it writes) that both the routes and the agent's tools call; a **parity test** that each returns the same result from both; write operations never on the agent's tool surface | `building-a-product-backend` | none |
 | **The same workflow reached from chat** (mode **A**) | "ask about this case", "continue in chat" | the operation exposed as a tool on your `ToolSurface`; the agent is an `AgentDefinition` run with `start_run` / `resume_run` / `stream_run`; its model from `agent_chat_model` | `building-an-agent-harness` | the harness reference |
 | **An open-ended question** (mode **N**) | "investigate", "ask anything about the records" | the agent's orchestrator composing the tools at run time, with citations | `building-an-agent-harness` | the harness reference |
+| **The agent's scope and guardrails** | "only answer from the records", "decline off-topic", "never recommend" | the agent's `AgentPrompts` and rules, the refusal through `agenerate_answer` ("none" abstains), the wording kept as reviewable data, never code; behavior tests per request class | `building-an-agent-harness`, `creating-evals` | the harness reference |
 | **A screen or interaction rule** | "the dossier screen", "the chat panel", "citations open the record" | the front end over the generated API client | `building-a-product-frontend` + `frontend-ui-engineering` | none |
 | **A success criterion** | "95% of fields correct", "top-3 useful", "20-question set" | an eval written FIRST: `aload_gold_set`, `arun_eval`, `EvalReport`; `aevaluate_ingestion` for extraction | `creating-evals` | `docs/evals.md`, evals from experts' files |
 | **Cost and usage** | "log cost per case and per query" | `measure_usage`, `traced_run`; every engine model call is metered | none | configuration (tracing) |
@@ -107,8 +109,16 @@ example, is usually asking for per-source separation and provenance; state how t
 `Document` per source, provenance on every record, or one database per source) and let the reviewer approve the
 reading.
 
+**Name the models.** The engine fixes HOW models are reached, not WHICH: state the engine model id per role the
+product uses (the engine's defaults, or registered profiles), whether a decision model (`jev_decision`) handles typed
+choices, the self-hosted path if on-premises matters, and when trained classifiers would replace model calls
+(`classifier-opportunity-analysis`). A model is configuration; the spec records the choice, the code never names it.
+
 **Check `_engine-gaps.md` against every route you chose.** A requirement that lands on an open gap is marked with
-the gap id and what the product does meanwhile (and an engine request if the gap is not listed).
+the gap id and what the product does meanwhile (and an engine request if the gap is not listed). **And confirm every
+primitive on a tier before designing around it**: a doc sentence saying a capability "composes X" is not proof that X
+is public; check `docs/api/` (or `__all__` on the installed engine). An unlisted missing primitive is an engine
+request the spec names.
 
 ## Step 5: write the SPEC
 
@@ -132,7 +142,21 @@ Add these sections beyond the generic ones:
 - **Engine dependency and boundary**: the floor version, the dependency mode, `rag_wright.api` / `pack_sdk` /
   `harness` as the only doors, engine requests for gaps.
 - **The domain pack**: the ontology files, the bridge, the value sets and constraints, and who may change them.
-- **Orchestration**: every operation with its D / A / N mode and the one implementation both callers share.
+- **The capability catalog and its definition of done**: every capability the pack registers (slug, kind, what it
+  does, which operations use it, the engine capabilities it builds on), and one requirement binding all of them to
+  the `authoring-a-capability` definition of done: an `ainvoke` factory over the workspace handle, a
+  `CapabilityManifest` registered by the pack's `register()` through `load_pack`, invocation by name only (never a
+  direct import of the implementation), the ARD manifests published, a product-side conformance test, and the eval
+  first. Deterministic product functions with no model (a rules layer, a filter) stay plain functions.
+- **Models**: the model per role and the decision model (Step 4), and when classifiers come in.
+- **Orchestration**: every operation with its D / A / N mode and the one implementation both callers share; the two
+  registries kept apart (the engine's capability registry, the product's operations registry).
+- **The agent's guardrails**: what is in scope, what is refused and how, what is declined, and any request class the
+  product answers only with cited precedent; which operations the agent may call (read-only unless the spec says
+  otherwise).
+- **Settled data semantics**: every interpretation the data inventory or the provided loaders settled (how a value
+  range, a unit, a code or a verdict is read) as its own tested requirement, so production encodes it rather than
+  rediscovering it.
 - **Evals**: one per success criterion and one per capability, with its gold set's source and size.
 - **Data handling**: which files are client data, where they live, what may be committed, what may leave the
   machine (model endpoints only).
@@ -156,6 +180,10 @@ visible:
 8. **The success-criteria evals** end to end, then the findings.
 
 Tasks follow this order; the plan may interleave where a dependency allows.
+
+**Keep the reconciliation live.** When the high-level spec changes (a fuller version arrives, a section is
+renumbered), re-walk it and update the table before anything else: a requirement that silently lost its source, or
+a new high-level item with no requirement, is how a spec drifts from what was agreed.
 
 ## Step 7: hand off to planning
 
@@ -185,6 +213,11 @@ grounding instead of searching.
 - [ ] The stack section separates what the engine fixes from the product's open choices, each with a rationale
 - [ ] Every mismatch between the high-level spec's assumptions and the engine is a decision with options
 - [ ] The domain pack, the bridge and the ingestion gold are their own requirements
+- [ ] The capability catalog is in the spec, with one requirement binding every capability to the definition of done
+- [ ] The model per role and the decision-model choice are stated
+- [ ] User-facing operations are one registry both tiers call, with a parity test; write operations are not agent tools
+- [ ] The agent's guardrail policy is a requirement with behavior tests
+- [ ] Every settled data semantic is a tested requirement
 - [ ] Every success criterion and every capability has an eval, written first
 - [ ] Client data handling is explicit: where it lives, what is committed, what leaves the machine
 - [ ] The requirements' dependency order is the build process above
