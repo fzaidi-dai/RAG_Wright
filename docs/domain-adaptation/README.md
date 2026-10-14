@@ -91,5 +91,7 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
 - [Ontology authoring](ontology-authoring.md) · [KG construction](kg-construction.md) ·
   [Entity resolution](entity-resolution.md) · [Authoring capabilities](authoring-capabilities.md) ·
   [Classification & decision models](classification-and-decision-models.md)
-- Skills (coding-agent playbooks): `building-an-ingestion-capability`, `creating-evals`,
-  `classifier-opportunity-analysis`, `setfit`, `laya`, `authoring-a-capability`.
+- Skills (coding-agent playbooks): `specifying-a-product-on-the-engine` (before step 1: the product's spec mapped
+  to these steps), `building-an-ingestion-capability`, `creating-evals`, `classifier-opportunity-analysis`, `setfit`,
+  `laya`, `authoring-a-capability`, `building-an-agent-harness`, `building-a-product-backend`,
+  `building-a-product-frontend`.

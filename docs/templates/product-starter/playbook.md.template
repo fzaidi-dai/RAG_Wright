@@ -57,7 +57,10 @@ engine's worked example — a template, never your domain.
 | **creating-evals** | Write a capability's eval FIRST (TDD) |
 | **classifier-opportunity-analysis** → **setfit** / **laya** | Find + build a classifier / System-1 decision model |
 | **qwen-vllm-modal** | The flat-GPU substrate for bulk teacher-labeling |
+| **specifying-a-product-on-the-engine** | Turn the product's high-level spec into its low-level spec, every item mapped to the engine's APIs, skills and docs |
 | **building-an-agent-harness** | Build an agent on the engine's harness substrate (`rag_wright.harness`, engine 0.10.0 and later) |
+| **building-a-product-backend** | The backend's architecture: the operation layer one route and one agent tool share, tenancy, jobs, the API ratchets |
+| **building-a-product-frontend** | The front end's architecture and build order: the core/product seam, the generated client, the three test tiers |
 
 **Generic** (the shared Addy-Osmani set): interview-me, idea-refine, spec-driven-development,
 planning-and-task-breakdown, incremental-implementation, test-driven-development, context-engineering,
@@ -92,9 +95,9 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
    mkdir -p .claude/skills && for d in "$SKILLS"/*/; do ln -sfn "${d%/}" ".claude/skills/$(basename "$d")"; done
    ```
 
-   Link the product-building skills other repos write for product developers (`{{PRODUCT_DEV_SKILL_SOURCES}}`, for
-   example another product's folder of generic UI, backend and tenancy skills) the same way, into this repo's
-   `.claude/skills/`. Never link any of them into your global Claude Code skills: they would then apply in every repo
+   The engine ships the product-building skills too (specifying, backend, front end, agent), so this one link step
+   brings them all. Link any further product-building skills from other repos (`{{PRODUCT_DEV_SKILL_SOURCES}}`) the
+   same way, into this repo's `.claude/skills/`. Never link any of them into your global Claude Code skills: they would then apply in every repo
    on the machine (ADR-0134). Only your own way-of-working skills (TDD, planning, debugging) belong there. Load
    **`using-the-rag-wright-engine`** first on any engine work.
 7. **Engine-release automation** (released-product mode): copy the starter's `dependabot.yml` to
@@ -167,7 +170,8 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 
 Each phase has a human review gate; do not advance until approved.
 
-- **Phase 1, Plan.** `interview-me`/`idea-refine` → the discovery set → author `{{SPEC}}` → `{{PLAN}}` (read-only
+- **Phase 1, Plan.** `interview-me`/`idea-refine` → the discovery set → author `{{SPEC}}` with
+  `specifying-a-product-on-the-engine` (every requirement mapped to the engine) → `{{PLAN}}` (read-only
   Plan Mode).
 - **Phase 2, Tasks.** `{{TASKS}}`, each task mapped to its requirement + acceptance, with a verify step and files
   (early phases in full; later phases as headlines, expanded when reached).

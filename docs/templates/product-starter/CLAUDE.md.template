@@ -6,7 +6,7 @@ engine — a separate repo that depends on the open-core engine, one way.
 
 > **FILL THESE FIRST** (then delete this block): `{{PRODUCT_NAME}}`, `{{PRODUCT_DOMAIN}}`, `{{ENGINE_PATH}}` (where
 > the engine repo/package is), `{{ENGINE_DEP}}` (how you depend on it, per the dependency mode in the playbook's section 5), `{{ENGINE_FLOOR}}`
-> (the minimum engine version, a `>=` floor such as `0.3.0`),
+> (the minimum engine version, a `>=` floor such as `0.10.0`),
 > `{{STACK}}` (your backend/frontend/model/infra choices), the grounding-lane paths, the `{{SPEC}}`/`{{PLAN}}`/
 > `{{TASKS}}` + `{{REQ_SCHEME}}`/`{{AC_SCHEME}}` scheme, `{{PROJECT_FRONTEND_SKILL}}` (your project-scoped UI skill,
 > if any), and this product's ArcadeDB: `{{ARCADEDB_CONTAINER}}`, `{{ARCADEDB_HTTP_PORT}}`/`{{ARCADEDB_BINARY_PORT}}`
@@ -157,7 +157,10 @@ relevant one.** Skills are workflows — follow their steps and verification, do
 | Writing a capability's eval (do it first, TDD) | **`creating-evals`** |
 | Deciding rule vs classifier vs decision-model vs LLM | **`classifier-opportunity-analysis`** → **`setfit`** / **`laya`** |
 | Bulk teacher-labeling for training data | **`qwen-vllm-modal`** |
-| Building or changing an agent (once the installed engine ships it, engine PS-32) | **`building-an-agent-harness`** |
+| Building or changing an agent on `rag_wright.harness` | **`building-an-agent-harness`** |
+| Building the product backend (operations, routes, tenancy, jobs) | **`building-a-product-backend`** |
+| Building the product front end (core/product seam, generated client, test tiers) | **`building-a-product-frontend`** |
+| Turning the high-level spec into this repo's low-level spec | **`specifying-a-product-on-the-engine`** (on `spec-driven-development`) |
 | Before writing any library call | `library-grounding` (mandatory) |
 | Implementing anything | `incremental-implementation` + `test-driven-development` |
 | Loading the right context per task | `context-engineering` |
@@ -168,9 +171,10 @@ relevant one.** Skills are workflows — follow their steps and verification, do
 | Requirements are vague | `interview-me`, then `idea-refine` |
 | UI work (if any) | `{{PROJECT_FRONTEND_SKILL}}` + `frontend-ui-engineering` |
 
-The engine-authored skills (`using-the-rag-wright-engine`, `authoring-a-capability`,
-`building-an-ingestion-capability`, `creating-evals`,
-`classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`) ship inside the installed engine, at
+The engine-authored skills (`using-the-rag-wright-engine`, `specifying-a-product-on-the-engine`,
+`authoring-a-capability`, `building-an-ingestion-capability`, `creating-evals`, `building-an-agent-harness`,
+`building-a-product-backend`, `building-a-product-frontend`, `classifier-opportunity-analysis`, `setfit`, `laya`,
+`qwen-vllm-modal`) ship inside the installed engine, at
 `rag_wright/.agents/skills/`, so they always match the engine version; the generic ones are the shared (Addy Osmani)
 set. The one-time setup links the engine's skills and any product-building skills from `{{PRODUCT_DEV_SKILL_SOURCES}}`
 into this repo's `.claude/skills/` (see the playbook), never into the global Claude Code skills (ADR-0134), and the

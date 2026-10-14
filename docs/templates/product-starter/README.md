@@ -41,7 +41,7 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
 | `{{PROJECT_FRONTEND_SKILL}}` | your project-scoped UI skill name, or `none` |
 | `{{ARCADEDB_CONTAINER}}` | your product's ArcadeDB container name (e.g. `arcadedb-<your-product>`) |
 | `{{ARCADEDB_HTTP_PORT}}` / `{{ARCADEDB_BINARY_PORT}}` | the host ports your instance publishes: a pair no other instance on the machine uses (the engine's test instance uses 2480/2424) |
-| `{{PRODUCT_DEV_SKILL_SOURCES}}` | the folders of product-building skills you link from other repos (e.g. another product's generic UI, backend and tenancy skills), or `none`; linked into this repo's `.claude/skills/`, never globally (ADR-0134) |
+| `{{PRODUCT_DEV_SKILL_SOURCES}}` | any further folders of product-building skills you link from other repos, or `none` (the engine itself ships the specifying, backend, front-end and agent skills); linked into this repo's `.claude/skills/`, never globally (ADR-0134) |
 
 ## What the templates assume
 
@@ -51,9 +51,11 @@ Confirm nothing is left unfilled: `rg '\{\{' CLAUDE.md docs/playbook.md` should 
   contract/compliance **reference pack** is the engine's worked example — a template, never your domain.
 - **Your product owns its store.** It runs its own ArcadeDB instance and owns every database in it; the engine
   only mediates access.
-- **The agent harness substrate is the engine's** (engine ADR-0139). Your product writes its agents, tools,
-  prompts and guardrails on it; until the installed engine ships it (engine PS-32), keep agents thin and order the
-  plan so harness-dependent work comes after it.
+- **The agent harness substrate is the engine's** (engine ADR-0139): the public tier `rag_wright.harness`
+  (0.10.0 and later). Your product declares its agents, tools, prompts and guardrails on it and never writes a
+  substrate of its own.
+- **The product-building skills ship with the engine**: specifying the product, its backend, its front end and its
+  agent, beside the ingestion, capability and eval skills. Link them all from the installed engine.
 - The engine's documentation lives in the engine repo (not the wheel): concepts, architecture, installation,
   configuration, quickstart, the domain-adaptation guide, reference pack, and the generated API reference. Read it
   there or on GitHub.

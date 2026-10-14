@@ -237,10 +237,12 @@ engine PR:
 
 ## Engine skills to use
 
+`specifying-a-product-on-the-engine` (your high-level spec into a SPEC mapped to the engine, first),
 `creating-evals` (eval-first), `building-an-ingestion-capability` (your ingestion hooks),
 `classifier-opportunity-analysis` → `setfit`/`laya` (build a decision),
-`authoring-a-capability` (register a cap), `qwen-vllm-modal` (bulk teacher-labeling substrate, with its Modal
-deploy script). They ship inside the installed engine, at `rag_wright/.agents/skills/<name>/` (the convention
+`authoring-a-capability` (register a cap), `building-an-agent-harness` (your agent on `rag_wright.harness`),
+`building-a-product-backend` and `building-a-product-frontend` (the backend's operation layer and the front end's
+architecture), `qwen-vllm-modal` (bulk teacher-labeling substrate, with its Modal deploy script). They ship inside the installed engine, at `rag_wright/.agents/skills/<name>/` (the convention
 docling and fastapi use), so they always match your engine version. Link them into your repo's `.claude/skills/`
 (gitignored) from the installed package, which works for a PyPI install and an editable path dependency alike:
 

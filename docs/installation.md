@@ -57,8 +57,10 @@ to reach the network (mock the call, or mark the test). The live markers, declar
 
 ### Skills for coding agents
 
-The engine ships its Claude Code skills (`using-the-rag-wright-engine`, `building-an-ingestion-capability`,
-`authoring-a-capability`, `creating-evals`, `classifier-opportunity-analysis`, `setfit`, `laya`, `qwen-vllm-modal`)
+The engine ships its Claude Code skills (`using-the-rag-wright-engine`, `specifying-a-product-on-the-engine`,
+`building-an-ingestion-capability`, `authoring-a-capability`, `creating-evals`, `building-an-agent-harness`,
+`building-a-product-backend`, `building-a-product-frontend`, `classifier-opportunity-analysis`, `setfit`, `laya`,
+`qwen-vllm-modal`)
 inside the package, at `rag_wright/.agents/skills/`, so they match the installed version. Link them into a product
 repo's `.claude/skills/`, never into your global Claude Code skills, so they apply only in the repo that depends on
 this engine version (ADR-0134). Re-run this after every engine upgrade:
