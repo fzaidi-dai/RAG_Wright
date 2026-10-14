@@ -104,7 +104,7 @@ engine — a separate repo that depends on the open-core engine, one way.
   reference pack (`load_reference_pack()`), only for a product that builds on that worked example; the engine's 7
   domain-neutral capabilities (`jev_decision`, `generation`, `vision_to_text`, `span_relevance_judgment`, the RLM
   skills) are offered as definitions by `engine_capabilities()` and registered by the product if it uses them
-  (`for m in engine_capabilities(): register_capability(m)`). Registration is the engine seam's first job, once,
+  (only the slugs you use: `for m in engine_capabilities(): if m.slug in USED: register_capability(m)`, and fail loudly when a slug you use is no longer offered). Registration is the engine seam's first job, once,
   before any ingest or query; the engine's `src/rag_wright/packs/reference_seam.py` shows the shape. Without it
   `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back silently to many more LLM calls.
 - **The engine dependency follows the mode in playbook section 5.** *Local co-development* (engine and product

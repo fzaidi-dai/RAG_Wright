@@ -106,7 +106,7 @@ code-review-and-quality, using-agent-skills · plus **Graphify** (builds/queries
 8. **Own the capabilities: register them in the engine seam at startup**, before any ingest or query. The engine
    starts with an EMPTY catalog and never registers anything for you. Register your own pack
    (`load_pack("<your pack module>")`) and the engine capabilities you use
-   (`for m in engine_capabilities(): register_capability(m)`), all from `rag_wright.api`; `load_reference_pack()` only
+   (only the slugs you use: `for m in engine_capabilities(): if m.slug in USED: register_capability(m)`, and fail loudly when a slug you use is no longer offered), all from `rag_wright.api`; `load_reference_pack()` only
    if you build on the engine's contract/compliance worked example. Model the seam on the engine's
    `src/rag_wright/packs/reference_seam.py`, which registers in its constructor. Without it `ainvoke_subgraph` raises
    `KeyError` and the decision-model paths fall back silently to the LLM.

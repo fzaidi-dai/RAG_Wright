@@ -90,9 +90,12 @@ def register() -> None:
 ```
 
 **Engine capabilities are opt-in too.** The engine's generic capabilities (`jev_decision`, `generation`,
-`vision_to_text`, `span_relevance_judgment`, and the RLM skills) are not in the empty catalog. Register them with
-`for m in engine_capabilities(): register_capability(m)` (or from your pack's `register()`, as above);
-otherwise `ainvoke_model("jev_decision", ...)` raises `KeyError` (unknown capability).
+`vision_to_text`, `span_relevance_judgment`, and the RLM skills) are not in the empty catalog. Register the ones you
+use, by slug: `for m in engine_capabilities(): if m.slug in USED: register_capability(m)` (or from your pack's
+`register()`, as above), and raise naming any slug in `USED` the installed engine no longer offers, so an engine
+change is named at startup rather than as a `KeyError` at invoke time. Registering all of them also puts the ones you
+never call into `discover()`'s ranking pool, where an agent planning over the catalog can pick them. Unregistered,
+`ainvoke_model("jev_decision", ...)` raises `KeyError` (unknown capability).
 
 **One catalog per process (a known limitation).** The catalog is shared by every workspace in the process:
 registering a slug replaces it for all of them, including the later steps of a run already in progress, so register

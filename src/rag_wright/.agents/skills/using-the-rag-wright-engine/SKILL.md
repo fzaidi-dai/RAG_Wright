@@ -79,7 +79,7 @@ The product-starter playbook (section 5) has both modes.
 **The product owns its capabilities.** The engine starts with an EMPTY catalog and never registers anything on your
 behalf. In your engine seam, once, at startup, before any ingest or query: register your own pack
 (`load_pack("<your pack module>")`) and the engine capabilities you use
-(`for m in engine_capabilities(): register_capability(m)`); `load_reference_pack()` only if you build on the engine's
+(only the slugs you use: `for m in engine_capabilities(): if m.slug in USED: register_capability(m)`, and fail loudly when a slug you use is no longer offered); `load_reference_pack()` only if you build on the engine's
 contract/compliance worked example. The engine's `src/rag_wright/packs/reference_seam.py` shows the shape (it
 registers in its constructor). Without it `ainvoke_subgraph` raises `KeyError` and the decision-model paths fall back
 silently to the LLM.

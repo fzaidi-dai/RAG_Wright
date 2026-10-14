@@ -184,8 +184,10 @@ def register_span_labelling(impl):
     ))
 
 
+USED = {"jev_decision"}                                  # the engine capabilities this product calls
 for m in engine_capabilities():
-    register_capability(m)
+    if m.slug in USED:
+        register_capability(m)
 register_span_labelling("classifier_span_labelling")   # the current arm
 register_span_labelling("jev_span_labelling")          # the other arm: the same slug, replaced
 ```
