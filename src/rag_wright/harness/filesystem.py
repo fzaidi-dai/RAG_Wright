@@ -1,25 +1,25 @@
-"""The matter's documents are not files (T-5a.11e, found by T-5a.11d's routing eval).
+"""The subject documents are not files (found by a routing eval).
 
 **The trace is the whole explanation:**
 
 ```
-list_matter_documents()      -> {"documents":[{"ref":"acme-msa.pdf","document_id":"doc-1"}, ...]}
-read_file("/acme-msa.pdf")   -> Error: File '/acme-msa.pdf' not found
+list_documents()             -> {"documents":[{"ref":"report-1.pdf","document_id":"doc-1"}, ...]}
+read_file("/report-1.pdf")   -> Error: File '/report-1.pdf' not found
 glob("**/*")                 -> []
 ls("/")                      -> []
-read_file("/matter/acme-msa.pdf") -> not found
+read_file("/docs/report-1.pdf") -> not found
 task(...)                    <- only now delegates
 ```
 
 **A NAMESPACE COLLISION, not a description-similarity problem.** `create_deep_agent` always installs
 `FilesystemMiddleware`, whose prompt tells the model *"You have access to a filesystem … All file paths
-must start with a /"* — and our own listing hands back things called `acme-msa.pdf`. Opening them is the
+must start with a /"* — and our own listing hands back things called `report-1.pdf`. Opening them is the
 obvious next move; `ls`'s description then says *"you should almost ALWAYS use this tool before
 read_file"*, so it explores an empty filesystem and guesses more paths.
 
 **Removing the filesystem tools was considered and rejected**, for two reasons that are worth keeping.
 Memory recall is `glob` and `grep` over `/memories/`, not a single `read_file`, so removal would break
-`AR-9`. And it would not have worked: the first wrong move was `read_file`, which would still happen with
+memory. And it would not have worked: the first wrong move was `read_file`, which would still happen with
 fewer tools to flail with afterwards.
 
 **Overriding the library's tool descriptions was also rejected**, though `HarnessProfileConfig` supports
@@ -57,7 +57,7 @@ _PATH_ARGUMENTS = {
     # **`grep`'s `pattern` is a REGEX, not a path**, and treating it as one broke the library's own
     # recovery route: `grep(path="/large_tool_results", pattern="x")` supplied two "paths", the regex was
     # not inside a memory root, and the signpost fired on a call DeepAgents tells the model to make.
-    # Found by a test written for the cause-aware signpost (T-5a.12g), not by anything that ran before.
+    # Found by a test written for the cause-aware signpost, not by anything that ran before.
     "grep": ("path",),
 }
 
@@ -117,7 +117,7 @@ def _is_the_agents_own(value: str) -> bool:
     **`/` is NOT the agent's own space**, and getting that wrong is how the first version passed the tests
     while leaving the real failure in place: `"/memories/".startswith("/")` is true, so a naive
     prefix-either-way check let `ls("/")` through -- the exact call the trace shows, returning `[]`, which
-    reads as "the matter is empty".
+    reads as "there are no documents".
 
     A parent of a memory root is allowed (`ls("/memories")`), because that is how recall starts.
     """
@@ -130,18 +130,18 @@ def _is_the_agents_own(value: str) -> bool:
 class TheSubjectIsNotAFilesystem(AgentMiddleware):
     """Turn a wrong filesystem call into a signpost instead of a silent `not found`.
 
-    **It reads what the dispatch has already asked** (T-5a.12h), because the eleven filesystem calls we
+    **It reads what the dispatch has already asked**, because the eleven filesystem calls we
     have recorded split into two causes and only one is visible in the call itself. A glob carrying a
     document extension is a model hunting the documents it was shown. The rest follow a product tool that
-    came back empty -- `grep('Acme')` arrived straight after `trace_party_exposure` reported
+    came back empty -- `grep('Northwind')` arrived straight after a lookup tool reported
     `resolved: False` -- and nothing in the `grep` says so. One signpost said the same sentence to both.
     """
 
     def __init__(self, seen: Any = None, *, signposts: Any = None) -> None:
         super().__init__()
         self._seen = seen
-        #: The PRODUCT's signpost text (T-7.58). Ours named `ask_contract_question`, `sweep_matter` and
-        #: `list_matter_documents`, so a second product's model was redirected to tools it does not have.
+        #: The PRODUCT's signpost text. A built-in one would name tools such as `ask_a_question`, `sweep_scope`
+        #: and `list_documents`, so a second product's model was redirected to tools it does not have.
         #: `None` falls back to the generic refusal below, which names no tool at all.
         self._signposts = signposts
 

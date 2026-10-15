@@ -205,3 +205,47 @@ def test_THE_AMBIGUOUS_STEMS_ARE_DECLARED_SEPARATELY() -> None:
         f"a stem is in both lists, so the band is incoherent: {sorted(DOMAIN_STEMS & AMBIGUOUS_STEMS)}"
     )
     assert AMBIGUOUS_STEMS, "the ambiguous list is empty, so axis 2 is reporting a point estimate again"
+
+
+#: **The product the harness came from, as TEXT** (PS-43). The axes above read code; the handover left the
+#: source's prose speaking that product: its name, its task and requirement ids, its ADR numbers (which
+#: collide with the engine's own, so `ADR-0019` here pointed a reader at the wrong decision), its context
+#: type, its example scope and its tool names. Docstrings are what `docs/api/harness.md` and
+#: `docs/harness.md` are generated from, so prose here is public text. A wall, not a ratchet.
+_PRODUCT_TEXT = (
+    r"rulewright",
+    r"\bT-\d+[a-z]?\.\d",                      # the product's task ids
+    r"\b(?:AR|ANFR|NFR)-\d+",                  # the product's requirement ids
+    r"\bAgentContext\b", r"\bfor_tenant\b", r"\bacme\b",
+    r"\b(?:the|a|one|this|that|another|each|every|whole|same)\s+matter\b", r"\bmatter's\b",
+    r"\bmatters\b(?=\s*(?:\)|,|\.|$))",       # "a customer's matters" (the noun, not the verb)
+    r"[/_-]matter\b|\bmatter[/_-]",
+    r"\bcustomer_id\b", r"\bworkspace_id\b",
+    r"\bcompliance_worker\b", r"\bask_contract_question\b", r"\bparty_exposure\b", r"list my contracts",
+    r"§ ?\d", r"\bADP-\d", r"run-contract\.md", r"\bSPEC\.md\b",   # the product's spec and its sections
+    r"(?<!harness/)\btests/test_",            # the product's test files (the engine's are tests/harness/)
+)
+#: The engine ADRs the harness may cite. Any other number is the product's, or a citation nobody checked.
+_ENGINE_ADRS = {"ADR-0125", "ADR-0139"}
+
+
+def _product_text(text: str) -> list[str]:
+    import re
+
+    pattern = re.compile("|".join(_PRODUCT_TEXT), re.IGNORECASE)
+    hits = [line.strip() for line in text.splitlines() if pattern.search(line)]
+    hits += [line.strip() for line in text.splitlines()
+             if set(re.findall(r"ADR-\d+", line)) - _ENGINE_ADRS]
+    return hits
+
+
+def test_THE_SUBSTRATE_SPEAKS_NO_PRODUCTS_LANGUAGE() -> None:
+    offenders = {path.name: hits for path in sorted(PACKAGE.glob("*.py"))
+                 if (hits := _product_text(path.read_text(encoding="utf-8")))}
+    assert offenders == {}, f"product vocabulary in the harness source: {offenders}"
+
+
+def test_THE_PRODUCT_TEXT_GUARD_SEES_A_PLANTED_LEAK() -> None:
+    assert _product_text('"""Bound to that run\'s matter (T-5a.4c-iii, ADR-0019)."""')
+    assert _product_text("#: Narrowest first: `(\"acme\", \"matter-7\")`.")
+    assert not _product_text("#: **Trailing slashes matter**: no matter what (engine ADR-0139).")

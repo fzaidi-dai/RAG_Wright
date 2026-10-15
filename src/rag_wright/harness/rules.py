@@ -1,18 +1,18 @@
-"""The warnings we write into prompts, as things that can be CHECKED (T-5a.12f, AR-14, ANFR-6).
+"""The warnings we write into prompts, as things that can be CHECKED.
 
 **A warning nobody checks is a warning nobody follows, and this phase has the evidence twice.** The
 instruction to call `read_the_question` first sat in both tool descriptions, the system prompt and the
 dispatch — four places — and across four runs the model obeyed it **zero** times; removing the parameter
-fixed what a fifth instruction would not (T-5a.12d). Then `CODED_PROMPT_SUFFIX` said in bold that a worker
-covering the whole matter *"must be dispatched ONCE, not once per document"*, and a run fanned
-`clause_worker` out per document anyway: 40 model calls and **230,002 input tokens, 10.6x its isolated
-cost** (T-5a.12e).
+fixed what a fifth instruction would not. Then `CODED_PROMPT_SUFFIX` said in bold that a worker
+covering the whole scope *"must be dispatched ONCE, not once per document"*, and a run fanned
+that worker out per document anyway: 40 model calls and **230,002 input tokens, 10.6x its isolated
+cost**.
 
 **One bad run in five proves nothing about which arm is more prone to it.** The same misreading is
 available to the prompted arm; it simply did not happen in a sample of five. So what this module produces
 is a **frequency**, measured the same way in both arms, rather than an anecdote.
 
-**One source, two consumers** (ADR-0019 §5). A `Rule` carries the sentence the MODEL reads and the
+**One source, two consumers.** A `Rule` carries the sentence the MODEL reads and the
 criterion a GRADER checks, and both are rendered from it. A warning therefore cannot exist in a prompt
 without something that checks it — `test_harness_rules.py` fails if a rule's instruction is missing from
 the prompt it applies to, which is the drift this codebase has watched go stale six times in fixtures
@@ -60,10 +60,10 @@ class Rule:
     #: WHERE the instruction is actually delivered to the model. Resolved and checked by
     #: `test_harness_rules.py`, so a rule cannot claim to be told to anybody without being told to them.
     #:
-    #: **Not always a prompt, and that is deliberate.** `the-matter-is-not-a-filesystem` is delivered as a
-    #: SIGNPOST returned on the wrong call, because T-5a.11e decided prompt text was the weaker mechanism
-    #: there. A registry that assumed "instruction == prompt line" would have quietly misrepresented that
-    #: decision.
+    #: **Not always a prompt, and that is deliberate.** A rule that the subject documents are not a
+    #: filesystem is delivered as a SIGNPOST returned on the wrong call, because prompt text was measured to
+    #: be the weaker mechanism there. A registry that assumed "instruction == prompt line" would have quietly
+    #: misrepresented that decision.
     carried_by: tuple[str, ...] = ()
     #: What was actually observed, so a rule can never be added on a hunch.
     observed: str = ""
@@ -111,7 +111,7 @@ def _calls(recording: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def dispatched_more_than_once(recording: dict[str, Any]) -> str | None:
-    """A worker covering the whole matter, run once per document."""
+    """A worker covering the whole scope, run once per document."""
     briefs = _dispatches(recording)
     if len(briefs) <= 1:
         return None
@@ -119,22 +119,22 @@ def dispatched_more_than_once(recording: dict[str, Any]) -> str | None:
             f"job. The briefs began: {[b[:60] for b in briefs[:4]]}")
 
 
-#: The filesystem tools. The matter's documents are not files, and every one of these on a matter path is
+#: The filesystem tools. The subject documents are not files, and every one of these on a subject path is
 #: a wrong turn that `TheSubjectIsNotAFilesystem` catches -- catches, but never counted.
 FILE_TOOLS = ("ls", "glob", "grep", "read_file", "write_file", "edit_file")
 
 #: The roots that really ARE the agent's own filesystem, mirrored from `harness.filesystem`.
 #: The agent's OWN paths. A filesystem call against one of these is the agent using its own notes, its
-#: own skills or its own spill-over -- not treating the matter as a filesystem, which is what this rule
-#: is about. **`/skills` joined the list when the orchestrator's skill was built (T-5a.12ab):** the
-#: criterion is "no filesystem tool against the matter's DOCUMENTS", and a skill we authored is not a
-#: matter document, so reading one must not read as a violation. Without it the skill would have been
+#: own skills or its own spill-over -- not treating the subject documents as a filesystem, which is what
+#: this rule is about. **`/skills` joined the list when the orchestrator's skill was built:** the
+#: criterion is "no filesystem tool against the subject DOCUMENTS", and a skill we authored is not a
+#: subject document, so reading one must not read as a violation. Without it the skill would have been
 #: unreadable in practice -- every read scoring against the tier that read it.
 OWN_FILESYSTEM = ("/memories", "/large_tool_results", "/skills")
 
 
 def reached_for_the_filesystem(recording: dict[str, Any]) -> str | None:
-    """Tried to open the matter's documents as files."""
+    """Tried to open the subject documents as files."""
     def on_a_subject_path(args: dict[str, Any]) -> bool:
         paths = [str(v) for k, v in args.items() if "path" in k or k == "pattern"]
         return bool(paths) and not any(p.startswith(OWN_FILESYSTEM) for p in paths)
@@ -142,7 +142,7 @@ def reached_for_the_filesystem(recording: dict[str, Any]) -> str | None:
     wrong = [c for c in _calls(recording) if c["tool"] in FILE_TOOLS and on_a_subject_path(c["args"])]
     if not wrong:
         return None
-    return (f"{len(wrong)} filesystem call(s) against the matter rather than this agent's own notes: "
+    return (f"{len(wrong)} filesystem call(s) against the subject documents rather than this agent's own notes: "
             f"{[(c['tool'], c['args']) for c in wrong[:3]]}")
 
 
@@ -210,9 +210,9 @@ def blocked_without_saying_what_it_needs(recording: dict[str, Any]) -> str | Non
 
 
 def rules_for(tier: Tier, rules: tuple[Rule, ...] = ()) -> tuple[Rule, ...]:
-    """The rules that apply to one tier. **`rules` is the PRODUCT's registry** (T-7.58): this read a
-    module-level `RULES` naming `clause_worker` and this product's dispatch discipline, so a second
-    product's grader was handed our rubric. An empty registry grades nothing, which is honest.
+    """The rules that apply to one tier. **`rules` is the PRODUCT's registry.** A module-level
+    registry naming one product's workers and dispatch discipline would hand every other product's
+    grader that rubric. An empty registry grades nothing, which is honest.
     """
     return tuple(rule for rule in rules if tier in rule.applies_to)
 

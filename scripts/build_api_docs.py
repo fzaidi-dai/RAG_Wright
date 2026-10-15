@@ -72,7 +72,8 @@ _SDK_INTRO = ("> **Generated** from the live `rag_wright.pack_sdk.__all__` by `s
 
 _HARNESS_INTRO = ("> **Generated** from the live `rag_wright.harness.__all__` by `scripts/build_api_docs.py` — do not "
                   "edit by hand. The agent harness tier (ADR-0139): what a product builds its agent on. It reaches "
-                  "the rest of the engine only through `rag_wright.api`. See the package docstring.")
+                  "the rest of the engine only through `rag_wright.api`. The design reference, with what a product "
+                  "declares and why, is `docs/harness.md`.")
 
 
 def render(module=api, title: str = "API reference — `rag_wright.api`", intro: str = _API_INTRO) -> str:

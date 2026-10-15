@@ -1,21 +1,21 @@
-"""What a run tells the client while it runs (T-5a.4c-ii, AR-17, AR-18).
+"""What a run tells the client while it runs.
 
 **Streamed from FastAPI, not from an Agent Server.** `astream(subgraphs=True, stream_mode=[…])` yields
 `(namespace, mode, chunk)` — verified against the installed version rather than assumed, because the tuple
 is a 2-tuple with one stream mode and a 3-tuple with several, and reading the wrong arity produces events
 that look plausible and carry the wrong field. The namespace is `()` for the main agent and
 `("tools:<call-id>", …)` inside a subagent, which is what lets the client route without a second service
-or a second auth story (`NFR-7`).
+or a second auth story.
 
 **The contract is ours, not langgraph's**, and that is deliberate. Forwarding raw chunks would make the
 client depend on node names — `PatchToolCallsMiddleware.before_agent` is real output — and every middleware
 change would become a front-end change. So this translates: a small, named set of events the surface can
-be written against, with the namespace carried so `AR-18`'s subagent cards can index on it.
+be written against, with the namespace carried so a client's per-subagent cards can index on it.
 
-**What is deliberately NOT in an event.** No tenancy: `AR-5` keeps it out of everything the model can
+**What is deliberately NOT in an event.** No tenancy: it is kept out of everything the model can
 reach, and an SSE frame is more exposed than a prompt. No raw tool arguments either, for now — a tool call
 naming a document handle is fine, but arguments are model-authored text and the surface has no need to
-render them until `AR-18`'s cards exist.
+render them until per-subagent cards exist.
 """
 
 from __future__ import annotations
@@ -78,7 +78,7 @@ def _message_events(chunk: Any, where: str) -> list[RunEvent]:
 def _update_events(chunk: Any, where: str) -> list[RunEvent]:
     """Node completions, of which exactly one kind matters to a user: a tool ran.
 
-    **`AR-18`'s two progress surfaces start here.** A tool call is the unit a card is drawn for, and the
+    **A client's progress surfaces start here.** A tool call is the unit a card is drawn for, and the
     namespace is the index those cards are kept under — which is why it travels with the event rather than
     being inferred from arrival order, since two subagents interleave.
     """
@@ -103,7 +103,7 @@ NEEDS_EXPLAINING = ("partial", "nothing_came_back")
 
 
 def what_was_finished(result: Any) -> list[RunEvent]:
-    """What to tell the client about a run that did not finish (T-5a.15b).
+    """What to tell the client about a run that did not finish.
 
     **The route already stated the principle and did not honour it for failures:** *"a stream that stops is
     not a stream that finished. Without a terminal event a client cannot tell a completed answer from a
@@ -139,7 +139,7 @@ def _results_in(state: dict[str, Any]) -> list[dict[str, str]]:
 
     **A `ToolMessage` is the evidence that work finished**, which is exactly what the reproduced failures
     differed on -- and it is read from the stored state rather than inferred from timing or from an
-    exception type, because that type was itself wrong until T-5a.13c.
+    exception type, because that type was itself once wrong.
     """
     return [
         {"tool": str(getattr(message, "name", "") or ""), "result": str(getattr(message, "content", ""))}

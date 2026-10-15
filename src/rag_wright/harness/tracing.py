@@ -1,4 +1,4 @@
-"""Langfuse for the harness's own model calls (T-5a.4a, ANFR-3, NFR-3).
+"""Langfuse for the harness's own model calls.
 
 **In the engine (PS-32) this module emits through the engine's tracing on `rag_wright.api`**: one Langfuse client,
 one configuration (`RAG_TRACE_LEVEL` = `generations` or `verbose`, AND `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY`),
@@ -48,7 +48,7 @@ def harness_tracing_on(settings: Any = None) -> bool:
 
 
 def open_generation(settings: Any, *, model: str | None, input: Any = None) -> Any:
-    """Open the observation BEFORE the model call, so its duration is the call's (T-5a.12ad).
+    """Open the observation BEFORE the model call, so its duration is the call's.
 
     **An observation created after the call has a duration of zero**, so a 900s run's generations each looked
     instant. Returns the observation, or `None` when tracing is off or Langfuse is unreachable; `None` is a normal

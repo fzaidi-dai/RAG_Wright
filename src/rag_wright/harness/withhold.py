@@ -1,7 +1,7 @@
-"""Taking a tool away from one tier (T-5a.11f, §2.1, ANFR-1).
+"""Taking a tool away from one tier.
 
-**The user's decision, 2026-09-17:** *"of course we want interpreter available for T-5a.12's programmatic
-orchestration … But chat-manager should not have the interpreter."*
+**The decision:** the interpreter is available for programmatic orchestration, but the chat-manager does
+not have it.
 
 **The obvious mechanism does not work, and knowing why is most of this module.**
 `HarnessProfileConfig.excluded_tools` exists and is supported — but `_harness_profile_for_model(model,
@@ -29,24 +29,24 @@ from langchain.agents.middleware.types import AgentMiddleware
 WITHHELD_FROM_CHAT: dict[str, str] = {
     "execute": (
         "A shell tool that CANNOT WORK here: `StateBackend` is not a `SandboxBackendProtocol`, so every "
-        "call returns 'Execution not available' (T-5a.12a, measured). An advertised tool that can only "
+        "call returns 'Execution not available' (measured). An advertised tool that can only "
         "fail spends a call and returns an error that reads like a temporary problem."
     ),
     "eval": (
-        "The JavaScript interpreter. It belongs to programmatic orchestration (T-5a.12) and the "
-        "conversation tier has nothing to compute -- `ANFR-1`, and one fewer thing for a model to reach "
+        "The JavaScript interpreter. It belongs to programmatic orchestration and the "
+        "conversation tier has nothing to compute, and one fewer thing for a model to reach "
         "for while flailing, which the routing eval showed it does."
     ),
 }
 
-#: What the PLANNING tier does not get. It keeps `eval`, which is the whole point of T-5a.12.
+#: What the PLANNING tier does not get. It keeps `eval`, which is the whole point of programmatic orchestration.
 WITHHELD_FROM_ORCHESTRATOR: dict[str, str] = {
     "execute": WITHHELD_FROM_CHAT["execute"],
 }
 
 
 #: What a WORKER does not get. It keeps everything else the base stack offers, including the filesystem
-#: tools -- recall is `glob`/`grep` over `/memories` (`AR-9`), and the wrong turns were cured with a
+#: tools -- recall is `glob`/`grep` over `/memories`, and the wrong turns were cured with a
 #: signpost and a prompt line rather than a removal.
 #:
 #: **`execute` is deliberately absent from this list.** It is withheld from the two tiers above, and the
@@ -55,12 +55,12 @@ WITHHELD_FROM_ORCHESTRATOR: dict[str, str] = {
 #: that names tools nobody has is a list nobody can trust.
 #: **`write_todos` was here until `deepagents` 0.7, and it left for the reason stated just above.**
 #: The framework used to force a todo list onto every agent, so keeping it off a worker meant withholding
-#: the tool by hand -- justified by a live `three_ways` run where `compliance_worker` made 56 calls, 35 of
+#: the tool by hand -- justified by a live `three_ways` run where one worker made 56 calls, 35 of
 #: them `write_todos`, rewriting a task list until the run hit its ceiling, while the two workers that
 #: finished used it zero times. 0.7 stopped auto-adding the middleware, so a worker is no longer offered
 #: the tool at all and withholding it would name a tool nobody has. The DECISION did not change and is not
 #: lost: it moved to `NOT_ON_WORKERS["TodoListMiddleware"]`, where the audit guard enforces it, and the
-#: orchestrator now asks for the middleware explicitly (`AR-18`).
+#: orchestrator now asks for the middleware explicitly (a product's TODO panel renders its list).
 WITHHELD_FROM_WORKERS: dict[str, str] = {}
 
 

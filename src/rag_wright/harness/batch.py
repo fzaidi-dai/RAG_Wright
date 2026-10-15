@@ -1,10 +1,10 @@
-"""One question, not five (T-5a.11c, AR-16).
+"""One question, not five.
 
-**A user-experience requirement, and the honest framing matters.** T-5a.1 verified that a sibling subagent
+**A user-experience requirement, and the honest framing counts.** It is verified that a sibling subagent
 *does* complete when its peer interrupts — an earlier design claim to the contrary was wrong — so five
 separate questions would be **correct**. They would also arrive one at a time, each stopping everything,
-with no sign that another was behind it. `AR-16`: *"a worker that would ask instead returns 'I need X', and
-the orchestrator asks once rather than five times."*
+with no sign that another was behind it. The requirement: *"a worker that would ask instead returns 'I need X',
+and the orchestrator asks once rather than five times."*
 
 **The second benefit is the less obvious one.** A need that reaches the orchestrator can sometimes be
 answered *by the orchestrator* — it already knows which document the conversation settled on — and never

@@ -1,14 +1,13 @@
-"""What a run is scoped to, as the substrate sees it (engine ADR-0139 addendum, T-7.58).
+"""What a run is scoped to, as the substrate sees it (engine ADR-0139 addendum).
 
-**The substrate asks for a tuple of strings and nothing else.** It used to read `context.customer_id` and
-`context.workspace_id` -- so `AgentContext`, the type every agent receives as `context_schema`, encoded
-this product's two-level tenancy, and a product with one level or three could not fill it. The engine's
-decision (option (c), after our finding) is a `runtime_checkable` protocol whose members are a scope and
-an optional wider scope a run may promote into. The product keeps its own context type, its typed ids and
-its `for_tenant` rule; it adds these two.
+**The substrate asks for a tuple of strings and nothing else.** A context type with named tenancy fields
+would encode one product's tenancy depth, and a product with one level or three could not fill it. So the
+substrate reads a `runtime_checkable` protocol whose members are a scope and an optional wider scope a run
+may promote into. The product keeps its own context type, its typed ids and its own construction rule; it
+adds these two.
 
 **The three rules below are the substrate's to ENFORCE, not the product's to honour**, which is the whole
-difference between `AR-10` as a guarantee and `AR-10` as a convention:
+difference between scoped memory as a guarantee and scoped memory as a convention:
 
 1. `scope` is required and non-empty, and no part may contain the key separator -- otherwise two different
    scopes can produce one key.
@@ -40,10 +39,10 @@ class RunScope(Protocol):
     """The only thing the substrate needs to know about a run's tenancy.
 
     A product's own context type satisfies this by having the two members; it keeps whatever else it wants
-    (`AgentContext` keeps typed ids, a user id and `for_tenant`).
+    (typed ids, a user id, its own construction rule).
     """
 
-    #: Narrowest first: `("acme", "matter-7")`. Required, non-empty.
+    #: Narrowest first: `("org-1", "project-7")`. Required, non-empty.
     scope: tuple[str, ...]
     #: The one wider scope a run may promote a learned fact into, or `None` when there is none.
     shared_scope: tuple[str, ...] | None

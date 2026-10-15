@@ -31,3 +31,14 @@ def test_the_harness_reference_matches_the_live_harness():
     spec.loader.exec_module(gen)
     committed = (_ROOT / "docs" / "api" / "harness.md").read_text(encoding="utf-8")
     assert committed == gen.render_harness(), "docs/api/harness.md is stale -- run `bash scripts/build_api_docs.sh`"
+
+
+def test_the_harness_design_tables_match_the_live_harness():
+    """PS-43: docs/harness.md's prose is written, its tables generated; a field added to `AgentDefinition` must
+    reach the reference."""
+    spec = importlib.util.spec_from_file_location("build_harness_doc", _ROOT / "scripts" / "build_harness_doc.py")
+    gen = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gen)
+    committed = (_ROOT / "docs" / "harness.md").read_text(encoding="utf-8")
+    assert gen._BLOCK.findall(committed), "docs/harness.md has no generated blocks -- the guard reads nothing"
+    assert committed == gen.render(committed), "docs/harness.md is stale -- run `bash scripts/build_api_docs.sh`"

@@ -1,4 +1,4 @@
-"""The only way to invoke an agent (T-5a.1, AR-6 / ANFR-2 / ANFR-4).
+"""The only way to invoke an agent.
 
 **Why an entry point rather than a convention.** Runtime context is per-INVOCATION, not per-thread: a
 resume that omits `context=` wakes every tool with `runtime.context is None`. That is a framework fact,
@@ -10,8 +10,8 @@ silently, at the moment a human approved an action.
 A rule saying "always pass `context=`" would be obeyed until the first refactor. So the call site is made
 incapable of omitting it: these two functions take the authenticated tenant, build the context themselves,
 and there is no parameter through which a caller could supply a different one.
-`tests/test_harness_entry_point_guard.py` is the other half -- nothing else may invoke an agent, and
-nothing outside this package may build one.
+The other half is the product's to guard: nothing else in it may invoke an agent, and nothing outside
+this package may build one.
 
 Grounded (`library-grounding`, product lane, then the installed signature):
 
@@ -19,11 +19,10 @@ Grounded (`library-grounding`, product lane, then the installed signature):
     Command(resume=...)                                                 langgraph.types
     agent.context_schema                                                the compiled graph exposes it
 
-**Async because ANFR-2 asks for the event loop, not OS threads.** Note that `deepagents.AsyncSubAgent` is
+**Async because the requirement is the event loop, not OS threads.** Note that `deepagents.AsyncSubAgent` is
 NOT the mechanism for that: it specifies a subagent running on a REMOTE Agent Protocol server
 (`deepagents/middleware/async_subagents.py:L34` -- its keys are `graph_id`, `url`, `headers`). In-process
-async is `async def` tools, the `a*` middleware hooks, and `ainvoke`/`astream`. See the T-5a.1 design note
-in `agent-tasks.md`.
+async is `async def` tools, the `a*` middleware hooks, and `ainvoke`/`astream`.
 """
 
 from __future__ import annotations
@@ -44,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 
 class RunOutcome(StrEnum):
-    """What became of a run, named in CODE because none of it is a judgement (T-5a.15).
+    """What became of a run, named in CODE because none of it is a judgement.
 
     **Every transition here is decidable from the state alone**, which is why it is not in a prompt: the
     project's own rule is that a warning in a prompt is not a constraint, and `read_the_question` was
@@ -107,7 +106,7 @@ def outcome_of(snapshot: Any) -> RunOutcome:
         return RunOutcome.COMPLETE
     # **A `ToolMessage` is the evidence that work finished**, and it is what the three reproduced failures
     # differed on. Counted rather than inferred from timing or from the exception type -- the exception
-    # type was itself wrong until T-5a.13c.
+    # type was itself wrong once (a deadline expiry and a provider timeout shared one type).
     returned = [m for m in messages if type(m).__name__ == "ToolMessage"]
     return RunOutcome.PARTIAL if returned else RunOutcome.NOTHING_CAME_BACK
 
@@ -125,7 +124,7 @@ def _is_an_answer(message: Any) -> bool:
 class RunResult:
     """One user-initiated agent turn, and the scope it ran under.
 
-    `run_id` is the run's identity: `run-contract.md` obligation 1 requires a run to outlive the view that
+    `run_id` is the run's identity: a run must outlive the view that
     started it, so it is returned rather than held in memory, and it is what `resume_run` addresses.
     """
 
@@ -150,7 +149,7 @@ def _require_context_schema(agent: Any) -> None:
 
     schema = getattr(agent, "context_schema", None)
     # **A PROTOCOL check, not an identity one** (engine ADR-0139 addendum). This was
-    # `schema is not AgentContext` -- identity against the PRODUCT's own type -- so no other product could
+    # an identity check against the PRODUCT's own context type -- so no other product could
     # satisfy it however correct its own context was. What the substrate actually needs is that the schema
     # carries a scope; `validate_scope` then checks the value when a run begins.
     if schema is None or not carries_scope(schema):
@@ -173,7 +172,7 @@ def _opening_turn(message: str, continuation: Any,
     """
     from rag_wright.harness.skills import skill_files
 
-    # **Seeded at the ONE DOOR** (`AR-4`). `StateBackend` serves the virtual filesystem out of graph
+    # **Seeded at the ONE DOOR.** `StateBackend` serves the virtual filesystem out of graph
     # state, so a skill that is not in the opening turn does not exist for that run -- and a skill the
     # orchestrator is advertised but cannot read is worse than no skill, because it spends a `read_file`
     # to find out. Every tier is seeded rather than only the one with `SkillsMiddleware`: the cost is a
@@ -183,7 +182,7 @@ def _opening_turn(message: str, continuation: Any,
         "files": skill_files(skills or {}),
     }
     if continuation is not None:
-        # **Asked of the continuation, not imported from the product** (T-7.58): the substrate puts a
+        # **Asked of the continuation, not imported from the product**: the substrate puts a
         # `viewing` field on the turn and does not know what a subject reads like.
         turn["viewing"] = {"surface": continuation.surface, "subject": continuation.subject()}
     return turn
@@ -211,8 +210,8 @@ async def start_run(
     message: str,
     continuation: Any = None,
     #: `{published path: text}` -- the product's authored skills, seeded into the run's virtual
-    #: filesystem. **Passed in (T-7.58)**: this read `ORCHESTRATING_SKILL` out of the substrate, so every
-    #: product got RuleWright's procedure for batching a clarification. `None` seeds none.
+    #: filesystem. **Passed in**, so the substrate ships no product's procedure for batching a
+    #: clarification. `None` seeds none.
     skills: dict[str, str] | None = None,
     run_id: str | None = None,
     settings: Any = None,
@@ -224,21 +223,21 @@ async def start_run(
     PRODUCT's to derive** (engine ADR-0139): the substrate must not know what authenticated this run, so
     it takes the resolved scope rather than three identity rows it would have to re-read.
 
-    **The obligation `AR-6` placed here therefore moves to the caller, and is not weaker for it**: the
-    context must come from the authenticated session of THIS request, never from one remembered across
-    requests. On the route that is structural -- `tenant: TenantDep` is a per-request dependency and
-    the product's own `for_tenant` rule runs in the handler body -- which is why the door is still impossible to
+    **The obligation to bind the context per invocation therefore moves to the caller, and is not weaker
+    for it**: the context must come from the authenticated session of THIS request, never from one
+    remembered across requests. On a route that is structural -- the tenant is a per-request dependency
+    and the product's own construction rule runs in the handler body -- which is why the door is still impossible to
     forget rather than merely documented.
 
     A `run_id` is minted when the caller has none, so a run is addressable from the moment it exists
-    rather than from whenever somebody remembers to name it (`run-contract.md` obligation 1).
+    rather than from whenever somebody remembers to name it.
 
-    **Tracing and accounting attach HERE, for the same reason the context does** (T-5a.4b): this is the
+    **Tracing and accounting attach HERE, for the same reason the context does**: this is the
     only door, so it is the only place that cannot be forgotten. `settings=None` leaves both off and
     `accounting=None` is a no-op — the precedent `recording_usage` set, because accounting must never be
     the reason a user's work does not happen.
 
-    **`continuation` must already be RESOLVED** (`AR-12`, T-5a.10). It is typed `Any` only because the
+    **`continuation` must already be RESOLVED.** It is typed `Any` only because the
     harness must not import its own models into this module's signature dance; `render_continuation`
     refuses anything but a `ResolvedContinuation` by name, so a caller that skipped the workspace check
     gets `UnresolvedContinuation` here rather than a prompt full of the browser's claims.
@@ -252,10 +251,10 @@ async def start_run(
             state = await agent.ainvoke(
                 _opening_turn(message, continuation, skills), config=config, context=context)
         finally:
-            # **The LAST abandoned attempt has nothing following it** (T-5a.14b), so the recorder's
+            # **The LAST abandoned attempt has nothing following it**, so the recorder's
             # close-on-next-start never reaches it -- and it is the interesting one, because on a failed
             # run it is the attempt the run died on. `finally`, for the same reason: a run that raised is
-            # exactly when the record matters.
+            # exactly when the record is needed.
             _close_abandoned_attempts(config)
     return RunResult(run_id=identity, context=context, state=state)
 
@@ -300,8 +299,8 @@ async def stream_run(
     message: str,
     continuation: Any = None,
     #: `{published path: text}` -- the product's authored skills, seeded into the run's virtual
-    #: filesystem. **Passed in (T-7.58)**: this read `ORCHESTRATING_SKILL` out of the substrate, so every
-    #: product got RuleWright's procedure for batching a clarification. `None` seeds none.
+    #: filesystem. **Passed in**, so the substrate ships no product's procedure for batching a
+    #: clarification. `None` seeds none.
     skills: dict[str, str] | None = None,
     run_id: str | None = None,
     settings: Any = None,
@@ -314,12 +313,12 @@ async def stream_run(
     through `agent.astream` directly would lose all three and look like it worked.
 
     `subgraphs=True` is what makes a subagent's output distinguishable from the main agent's; without it
-    every event arrives flat and `AR-18`'s cards have nothing to index on. Two stream modes are requested,
+    every event arrives flat and a client's per-subagent cards have nothing to index on. Two stream modes are requested,
     so langgraph yields **3-tuples** rather than 2 — verified, not assumed.
 
     **`continuation` is built the same way `start_run` builds it**, through `_opening_turn`. Two doors
     would mean two chances to forget the view, and the streaming one is the door the product actually uses
-    — so a continuation that only worked on `start_run` would be a feature with no users (`AR-12`).
+    — so a continuation that only worked on `start_run` would be a feature with no users.
     """
     _require_context_schema(agent)
     identity = run_id or uuid.uuid4().hex
@@ -341,15 +340,15 @@ async def read_run(
     *,
     run_id: str,
 ) -> RunResult | None:
-    """Where a run got to, by its id alone — or `None` if it is not this matter's (T-5a.4c-iii).
+    """Where a run got to, by its id alone — or `None` if it is not this scope's.
 
-    **`run-contract.md` obligation 1, cashed:** *"the run is addressable, and its region renders from an
+    **The run is addressable, cashed:** *"the run is addressable, and its region renders from an
     id alone, never from in-memory state that a reload destroys."* A reload, a second tab, or a deploy all
     arrive here.
 
-    **`None` covers three cases deliberately** — no such run, another matter's run, and a run id that was
-    never started. Not by comparing afterwards: the thread id is derived from the workspace, so another
-    matter's run does not resolve to a thread at all. The checkpointer itself has no tenancy and cannot be
+    **`None` covers three cases deliberately** — no such run, another scope's run, and a run id that was
+    never started. Not by comparing afterwards: the thread id is derived from the scope, so another
+    scope's run does not resolve to a thread at all. The checkpointer itself has no tenancy and cannot be
     given any, so the isolation has to be in the key.
 
     **State, not replay.** This returns where the run got to; it does not re-emit the events that got it
@@ -371,15 +370,15 @@ async def read_run(
 
 
 def thread_for(context: RunScope, run_id: str) -> str:
-    """The checkpointer thread a run lives in, **scoped to its matter**.
+    """The checkpointer thread a run lives in, **keyed by its scope**.
 
     **The checkpointer has no tenancy and cannot be given any.** `aget_tuple` keys on `thread_id` and
     `checkpoint_ns` alone — verified in the installed saver — so a bare run id is readable by anybody who
-    can name it. That is exactly the hole T-2.4d closed on the jobs route, where a UUID in a URL was the
-    whole access control and anybody holding a job id read its result across customers.
+    can name it. That is exactly the hole a jobs route can have, where a UUID in a URL is the
+    whole access control and anybody holding a job id reads its result across customers.
 
-    So the workspace is part of the key rather than a comparison somebody must remember afterwards.
-    Another matter's run id does not resolve to a thread at all, which makes "not yours" and "no such run"
+    So the scope is part of the key rather than a comparison somebody must remember afterwards.
+    Another scope's run id does not resolve to a thread at all, which makes "not yours" and "no such run"
     the same non-answer **by construction** — the non-oracle property this codebase applies to documents,
     jobs, workspaces, sessions and checks, arrived at structurally for once instead of by a check.
 
@@ -424,8 +423,8 @@ def _close_abandoned_attempts(config: dict[str, Any]) -> None:
 async def _accounted(settings: Any, *, accounting: Any, run_id: str):
     """Trace, time and record the run -- or do nothing at all when no settings were supplied.
 
-    **No `context` argument any more** (T-7.58 stage 4b). This used to pass
-    `context.customer_id, context.workspace_id` through to the accounting, which put our tenancy pair in
+    **No `context` argument any more.** This used to pass
+    two named tenancy ids through to the accounting, which put one product's tenancy pair in
     the substrate's signature; the caller now supplies an `accounting` that already knows its own scope.
     That removed one of this module's two tenancy references, and all of `accounting.py`'s.
     """

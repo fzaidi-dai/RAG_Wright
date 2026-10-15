@@ -53,13 +53,17 @@ class AgentPrompts:
     skills: dict[str, str]
     #: The paragraph that introduces the skills above.
     skills_preamble: str
-    #: The signposts a wrong filesystem call is answered with (they name the product's own tools).
+    #: The signpost a wrong filesystem call is answered with by default (it names the product's own tools).
     not_a_filesystem: str
+    #: The signpost for a filesystem search plainly hunting the subject documents (a path or pattern ending in
+    #: one of `subject_file_endings`): it says where those documents ARE, rather than where they are not.
     looking_for_subjects: str
     #: File extensions that mean "this model is hunting the subject documents it was shown", not notes.
     subject_file_endings: tuple[str, ...]
-    #: What a worker is told about its own filesystem, and how the orchestrator is described to its parent.
+    #: What a worker is told about its own filesystem.
     worker_filesystem_note: str
+    #: How the orchestrator is described to the chat-manager: the `description` of its compiled subagent, which
+    #: is what the chat-manager reads when deciding whether to hand a request down.
     orchestrator_description: str
     #: What the model is shown as the SOURCE of the skills: the product's name.
     label: str

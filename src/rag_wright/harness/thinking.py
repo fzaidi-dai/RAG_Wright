@@ -1,18 +1,18 @@
-"""How much a tier thinks, decided per TIER (T-5a.14d, ANFR-3, ANFR-1).
+"""How much a tier thinks, decided per TIER.
 
 **The measurement this exists for.** Same question, same 10 tools, same model, only the `reasoning` flag
 differing:
 
 | | duration | output tokens | reasoning tokens | tool call chosen |
 |---|---|---|---|---|
-| reasoning ON | **34.8s** | 1,812 | **1,905** | `list_matter_documents` |
-| reasoning OFF | **4.3s** | 42 | 0 | `list_matter_documents` |
+| reasoning ON | **34.8s** | 1,812 | **1,905** | `list_documents` |
+| reasoning OFF | **4.3s** | 42 | 0 | `list_documents` |
 
 **Identical decision, 8x the wall clock, 43x the output.** With no `max_tokens` cap the reasoning is
 unbounded, so a chat-manager turn can outlive its own 60s attempt deadline -- and the retry reasons just
 as long, so it fails again. That is how one eval item burned three consecutive attempts and died, and why
 **68% of a run's wall clock** was attempts abandoned before they returned. The cost was invisible until
-T-5a.14b-i made abandoned attempts appear in the trace at all.
+abandoned attempts were made to appear in the trace at all.
 
 **A profile cannot express this and a middleware can**, which is `withhold.py`'s lesson verbatim.
 `register_provider_profile` keys on the MODEL, and every tier runs the same one -- so turning reasoning
@@ -22,13 +22,13 @@ to a tier, so this is the one seam that can say *"this TIER thinks less"*.
 
 **It MERGES `extra_body` rather than replacing it, and that is not tidiness.** `bind` replaces the whole
 value, so writing `{"reasoning": ...}` alone would drop `provider.order` and `allow_fallbacks: False` --
-unpinning the endpoint T-5a.12w pinned after measuring two different plans from a byte-identical prompt --
+unpinning the endpoint that was pinned after measuring two different plans from a byte-identical prompt --
 and drop `usage.include`, after which no per-call cost is reported at all. Nothing would fail. The
 variance would simply come back wearing the pin's name.
 
 **What this does NOT claim.** One question, one sample per arm, one tier. The orchestrator is left
-thinking: its job is decomposition, §2a's hardest decisions live there, and turning it off on this
-evidence would be the unmeasured change T-5a.12af was reverted for.
+thinking: its job is decomposition, the run's hardest decisions live there, and turning it off on this
+evidence would be exactly the kind of unmeasured change that has had to be reverted before.
 """
 
 from __future__ import annotations

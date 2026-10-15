@@ -1,13 +1,13 @@
-"""What this run has already asked, and what came back (T-5a.12h, AR-2, ANFR-6).
+"""What this run has already asked, and what came back.
 
 **Three things in this harness had started remembering the run separately**: a bespoke closure inside
-`sweep_matter` so a later sweep could not unfind an earlier one, a signpost that remembered nothing and so
+a sweep tool so a later sweep could not unfind an earlier one, a signpost that remembered nothing and so
 said the same sentence to every wrong turn, and the eval's recorder. Each new symptom would have added a
 fourth. This is the one record, and the others read it.
 
 **It removes work rather than commenting on it.** Across every run we have recorded — 194 tool calls —
 **25 were byte-identical repeats**: same tool, same arguments, a second real retrieval for an answer
-already in the transcript. `ask_contract_question` was called again 34 times beyond its first use of each
+already in the transcript. One question tool was called again 34 times beyond its first use of each
 document. An identical call is answered from the record, so the operation never runs and the payload never
 re-enters the context.
 
@@ -101,9 +101,9 @@ class RunRecord:
     """Every tool call one run has made, in order, across all of its dispatches."""
 
     calls: list[Call] = field(default_factory=list)
-    #: The PRODUCT's tool facts (T-7.58): which tools answer the same twice in one run, and which
+    #: The PRODUCT's tool facts: which tools answer the same twice in one run, and which
     #: argument of each carries a question. **Empty means "know nothing"**, which disables repeat
-    #: suppression rather than guessing -- the substrate had this product's twelve tool names hardcoded.
+    #: suppression rather than guessing, because a substrate that hardcoded tool names would know one product's.
     repeatable: frozenset[str] = frozenset()
     question_argument: dict[str, str] = field(default_factory=dict)
 
@@ -124,8 +124,8 @@ class RunRecord:
         """The most recent product tool that came back empty.
 
         **This is the second cause of a filesystem wrong turn**, and the one no gate could see before:
-        `grep('Acme')` came straight after `trace_party_exposure` reported `resolved: False,
-        contracts: []`. The model was not confused about what a filesystem is; it was looking for a second
+        a `grep` for an entity's name came straight after a product tool reported that entity unresolved
+        with nothing found. The model was not confused about what a filesystem is; it was looking for a second
         opinion after the first answer was empty.
         """
         for call in reversed(self.calls):
@@ -138,7 +138,7 @@ def answered_nothing(result: Any) -> bool:
     """Whether a tool result is empty in the sense a model would notice.
 
     **Declared in ONE place rather than inferred per caller.** Each product tool says "nothing" in its own
-    shape -- an unresolved party, a sweep with no spans, an empty policy list -- and a second opinion about
+    shape -- an unresolved entity, a sweep with no spans, an empty list -- and a second opinion about
     emptiness scattered across callers is how two of them come to disagree.
     """
     if result in (None, "", [], {}):
@@ -151,10 +151,9 @@ def answered_nothing(result: Any) -> bool:
         return True
     if "matched_count" in result:
         return not (result.get("matched_count") or result.get("possible_count"))
-    # **Generic, and better than the list it replaced** (T-7.58). This enumerated six of THIS product's
-    # container keys -- documents, citations, agreements, contracts, findings, policies -- so a second
-    # product's empty result was never recognised as empty, and OUR seventh container would not have been
-    # either. A result whose every collection is empty is empty, whatever the collections are called.
+    # **Generic, deliberately.** A list of known container keys would recognise one product's empty
+    # results and nobody else's, and miss that product's next container too. A result whose every
+    # collection is empty is empty, whatever the collections are called.
     collections = [value for value in result.values() if isinstance(value, (list, tuple, set, dict))]
     if collections:
         return not any(collections)
@@ -165,7 +164,7 @@ def answered_nothing(result: Any) -> bool:
 class WhatTheRunHasSeen:
     """One record per dispatch, and one object that holds them all.
 
-    **One record with several readers** (ADR-0019 section 5). `RememberWhatWasCalled` writes it, the
+    **One record with several readers** (one implementation, several callers). `RememberWhatWasCalled` writes it, the
     filesystem signpost reads it to answer the wrong turn that follows an empty result, and a later sweep
     reads it so it cannot unfind what an earlier one matched.
     """
@@ -195,7 +194,7 @@ def run_key(request: Any) -> str:
     `tools:98601b2c…` and `tools:cf1dfe0e…`. So the prefix is what identifies an invocation, and an agent
     invoked with no thread at all falls back to that.
 
-    **`runtime.config` exists on a TOOL request and NOT on a model one** (found at T-5a.13a, measured on
+    **`runtime.config` exists on a TOOL request and NOT on a model one** (measured on
     langchain 1.4.2). `ModelRequest.runtime` carries no `config` attribute at all, so every model-seam
     caller got `""` back -- a run identity that silently collapses every run in the process into one
     record. Nothing was broken by it, because both readers were tool-side; the next caller was the
@@ -227,7 +226,7 @@ _QUESTION_ENCODER: list[Any] = []
 def question_encoder() -> Any:
     """The engine's own query embedder (`rag_wright.api.query_embedder`), built once per process, or `None`.
 
-    **Used to tell whether a question has already been asked** (T-5a.12h): two phrasings of one question should
+    **Used to tell whether a question has already been asked**: two phrasings of one question should
     not cost two retrievals and two answer-model calls. It is the encoder retrieval itself embeds queries with, so
     "these two questions are alike" means the same here as inside a search.
 
@@ -266,10 +265,9 @@ class RememberWhatWasCalled(AgentMiddleware):
         #: are repeatable -- one fact, one place.
         self._facts = seen
         #: `(record, tool, content) -> content | None`: the PRODUCT's chance to amend a result in the
-        #: light of what this run already saw. **It was `_carry_matches_forward` in this module**, which
-        #: knew the tool name `sweep_matter`, the key `matched_count`, and the path
-        #: `graded.conditions[].groups.matched[].document_name` -- one product's result shape, three
-        #: levels deep, in generic machinery. `None` amends nothing.
+        #: light of what this run already saw. **Passed in rather than written here**, because amending a
+        #: result means knowing a tool's name and its result shape, several levels deep -- one product's
+        #: knowledge, which has no place in generic machinery. `None` amends nothing.
         self._carry_forward = carry_forward
         self._vectors: dict[str, Any] = {}
 

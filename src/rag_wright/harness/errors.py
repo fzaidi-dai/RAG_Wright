@@ -1,17 +1,17 @@
-"""The error middleware a run is wrapped in (T-5a.8, AR-14, AR-19).
+"""The error middleware a run is wrapped in.
 
-**Four levels, by who fixes it** (`AR-14`): transient failures retry, tool failures reach the model as a
+**Four levels, by who fixes it**: transient failures retry, tool failures reach the model as a
 message it can act on, missing information interrupts for a human, and anything unexpected bubbles to a
 developer. Runaway loops are capped.
 
 **The composition order is load-bearing and documented by the library**: *"This middleware does not retry.
 For retries, compose with `ToolRetryMiddleware` placed **inner** and configured with `on_failure="error"`
 so exceptions reach this middleware."* Placed the other way round, a tool failure would be converted to a
-message before the retry ever saw it, and the transient row of `AR-14` would quietly never fire.
+message before the retry ever saw it, and the transient row of the four levels would quietly never fire.
 
-**The taxonomy lives in `rulewright.errors`**, not here: `UnknownSubjectClass` is in
-`rulewright.workflows`, which no harness module may import (`AR-4`). Which failures are recoverable is
-product knowledge; wrapping middleware around them is this module's job.
+**The taxonomy lives in the product**, not here: its error types sit beside its own workflows, which no
+harness module may import. Which failures are recoverable is product knowledge; wrapping middleware around
+them is this module's job.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class ModelTooSlow(TimeoutError):
     """A model call passed a wall-clock ceiling. **Never raised directly** -- one of the two below is.
 
     There are two ceilings with OPPOSITE retry semantics, and they had one exception type between them
-    until T-5a.12q. That cost a live run `compliance_worker` SEVEN identical dispatches: the whole-turn
+    at first. That cost one worker in a live run SEVEN identical dispatches: the whole-turn
     breach escaped the worker, arrived at the parent as a failed `task` tool call, and
     `ToolRetryMiddleware(retry_on=TRANSIENT)` re-ran the worker's entire job. Catch this base when you
     mean "some deadline fired"; never put it in a retry set.
@@ -105,7 +105,7 @@ class ADeadlineForOneModelTurn(AgentMiddleware):
         self._seconds = seconds
         self._bounds = bounds
         # **Which ceiling this is, expressed as the exception it raises.** The two have opposite retry
-        # semantics and shared one type until T-5a.12q; a parent cannot tell them apart from a message.
+        # semantics and once shared one type; a parent cannot tell them apart from a message.
         self._raises = raises
 
     @property
@@ -124,15 +124,15 @@ class ADeadlineForOneModelTurn(AgentMiddleware):
             async with asyncio.timeout(self._seconds) as bound:
                 return await handler(request)
         except TimeoutError as expired:
-            # **Relabel ONLY our own expiry** (T-5a.13c). `ModelTooSlow` subclasses `TimeoutError`, so
+            # **Relabel ONLY our own expiry**. `ModelTooSlow` subclasses `TimeoutError`, so
             # without this check the OUTER clock caught the INNER one's `ModelAttemptTooSlow` and reissued
             # it as `ModelTurnTooSlow` -- measured by the fault injector at **3.6s against a 30s turn
             # deadline**, with a message naming a bound that was never reached.
             #
-            # **It inverted the very split T-5a.12q created.** The two types exist because they have
+            # **It inverted the very split the two types were created for.** The two types exist because they have
             # opposite retry semantics: an attempt breach is transient and retryable, a turn breach is
             # terminal by construction. Relabelling turned the retryable one into the terminal one, which
-            # is the type that cost `compliance_worker` SEVEN identical dispatches -- and left a parent
+            # is the type that cost one worker SEVEN identical dispatches -- and left a parent
             # tier unable to tell which bound fired.
             #
             # `asyncio.timeout`'s own `.expired()` is the discriminator: `False` when a `TimeoutError` is
@@ -153,7 +153,7 @@ def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: 
     exception the error middleware can see — rather than a message the model receives without anybody
     having retried.
 
-    **Both arguments are the PRODUCT's and are required (T-7.58).** This imported
+    **Both arguments are the PRODUCT's and are required.** This imported
     one product's retry set and `message_for` directly, so the substrate held that product's judgement
     about what is recoverable -- and a greenfield product retrying a mill feed got the first product's
     client exception types and its domain errors. **No defaults**, deliberately: a default
@@ -196,7 +196,7 @@ def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: 
         ADeadlineForOneModelTurn(MODEL_ATTEMPT_DEADLINE_S, bounds="one attempt",
                                  raises=ModelAttemptTooSlow),
         # Row two: the model's problem -- but only for failures it can actually act on. Everything else
-        # returns None from `message_for` and propagates, which is `AR-19`.
+        # returns None from `message_for` and propagates, which is the "bubbles to a developer" level.
         ToolErrorMiddleware(on_error=_what_the_model_is_told(message_for or _tell_nothing)),
         # Runaway loops. A cap is not a judgement about the work, it is a bound on the bill.
         ModelCallLimitMiddleware(run_limit=MODEL_CALLS_PER_RUN, exit_behavior="end"),
@@ -207,7 +207,7 @@ def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: 
 def _tell_nothing(error: BaseException) -> str | None:
     """The conservative default when a product names no recoverable failure: everything surfaces.
 
-    **`None` halts the run, which is `AR-19`.** A substrate that invented a message here would be deciding
+    **`None` halts the run: the "bubbles to a developer" level.** A substrate that invented a message here would be deciding
     that some failure is recoverable on a product's behalf -- exactly the judgement that had to leave.
     """
     return None
@@ -218,14 +218,14 @@ def _what_the_model_is_told(decide: Any) -> Any:
 
     **The library calls `on_error(exc, request)` — TWO arguments** — and `message_for(error)` takes one.
     Passing it directly raised `TypeError: message_for() takes 1 positional argument but 2 were given`
-    **from inside the error handler**, so the taxonomy never ran: `AR-14`'s "tool failure -> the model" row
+    **from inside the error handler**, so the taxonomy never ran: the "tool failure -> the model" level
     was dead, and the `TypeError` replaced whatever had actually gone wrong.
 
-    T-5a.8's tests called `message_for` directly, so they proved the taxonomy and never the wiring. Found
+    The first tests called `message_for` directly, so they proved the taxonomy and never the wiring. Found
     by the routing eval, on its first real run, because that was the first thing to drive a tool failure
     through the real middleware.
 
-    **The adapter lives here, not in `rulewright/errors.py`.** Which failures are recoverable is product
+    **The adapter lives here, not in the product's error module.** Which failures are recoverable is product
     knowledge; the shape a middleware wants is the harness's problem. Same split the module docstring
     already makes.
     """

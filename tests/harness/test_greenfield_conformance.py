@@ -430,3 +430,63 @@ def test_A_GREENFIELD_PRODUCT_DECLARES_WHAT_IS_WORTH_RETRYING() -> None:
     assert not any("rulewright" in getattr(e, "__module__", "") for s in retry_sets for e in tuple(s)), (
         f"RuleWright's exception types reached a greenfield product's retry middleware: {retry_sets}"
     )
+
+
+def _worker_policy(spec: dict) -> dict:
+    """What a built worker spec actually carries, read off its middleware rather than off the call."""
+    from rag_wright.harness.decisions import RecordTheDecisions
+    from rag_wright.harness.filesystem import TheSubjectIsNotAFilesystem
+    from rag_wright.harness.seen import RememberWhatWasCalled
+
+    stack = spec["middleware"]
+    remember = next(m for m in stack if isinstance(m, RememberWhatWasCalled))
+    signposted = next(m for m in stack if isinstance(m, TheSubjectIsNotAFilesystem))
+    recording = [m for m in stack if isinstance(m, RecordTheDecisions)]
+    return {
+        "retry_on": [tuple(m.retry_on) for m in stack if hasattr(m, "retry_on")],
+        "repeatable": remember._seen.repeatable,
+        "question_argument": remember._seen.question_argument,
+        "carry_forward": remember._carry_forward,
+        "signposts": signposted._signposts,
+        "framings": recording[0]._framings if recording else None,
+        "read_framing": recording[0]._read_framing if recording else None,
+    }
+
+
+def test_A_WORKER_TAKES_ITS_POLICY_FROM_THE_DEFINITION_IT_IS_GIVEN() -> None:
+    """**PS-43: the cause of the quiet defaults, fixed rather than documented.** Seven of `worker_spec`'s
+    optional parameters are fields of the `AgentDefinition` the product already declared; a worker built
+    without threading each one ran with no retries, no repeat suppression and no decision recording, and
+    nothing failed. `definition=` fills them all from the one object."""
+    from rag_wright.harness.workers import worker_spec
+
+    definition = _fabric()
+    spec = worker_spec("composition_worker", "d", "p", [], FabricFindings, ledger=object(),
+                       definition=definition)
+    policy = _worker_policy(spec)
+
+    assert policy["retry_on"] and all(MillIsOffline in r for r in policy["retry_on"])
+    assert policy["repeatable"] == definition.repeatable
+    assert policy["question_argument"] == definition.question_argument
+    assert policy["signposts"] is definition.prompts
+    assert policy["framings"] == definition.framings
+    assert policy["read_framing"] is definition.read_framing
+
+
+def test_AN_EXPLICIT_WORKER_ARGUMENT_STILL_WINS_OVER_THE_DEFINITION() -> None:
+    from rag_wright.harness.workers import worker_spec
+
+    spec = worker_spec("composition_worker", "d", "p", [], FabricFindings, definition=_fabric(),
+                       repeatable=frozenset({"list_mills"}))
+
+    assert _worker_policy(spec)["repeatable"] == frozenset({"list_mills"})
+
+
+def test_WITHOUT_A_DEFINITION_A_WORKER_IS_INERT_AS_BEFORE() -> None:
+    """The planted case for the guard above: the same worker, no definition, no policy."""
+    from rag_wright.harness.workers import worker_spec
+
+    policy = _worker_policy(worker_spec("composition_worker", "d", "p", [], FabricFindings))
+
+    assert policy["retry_on"] == [()] or not any(policy["retry_on"])
+    assert policy["repeatable"] == frozenset() and policy["signposts"] is None

@@ -1,4 +1,4 @@
-"""Grading a run against the rules it was given (T-5a.12f/T-5a.12k, AR-14, ANFR-5, ANFR-6).
+"""Grading a run against the rules it was given.
 
 **The detectors are the grader's TOOLS**, which is the whole design. The DeepAgents docs make the case
 better than I did: *"Rather than asking the grader to reason abstractly about correctness, the example
@@ -6,7 +6,7 @@ gives it a `run_test_suite` tool to verify behavior directly."* A grader asked *
 worker once per document?"* can be wrong; one that calls a function which counts cannot. So the rubric
 carries the criteria and `check_this_run` carries the evidence, and `rules.py` is the single source of both.
 
-**This is OUR middleware, not `RubricMiddleware`, and ADR-0023 records why.** The short version: we used
+**This is OUR middleware, not `RubricMiddleware`, and here is why.** We used
 about a quarter of it and fought the rest. It keeps the rubric on a public graph-state key, which two
 parallel workers cannot both write -- a hard `INVALID_CONCURRENT_GRAPH_UPDATE` that presented as a hang
 and cost three live runs to name. It builds its grader with a bare `create_agent`, so none of our
@@ -26,7 +26,7 @@ abandons the GRADE, never the run.
 
 **Detection only.** One pass, no revision: a verdict reaches `on_evaluation` and nothing about the run
 changes. Revision would cost a grader call PLUS a full re-run, which would change what every arm
-measurement in T-5a.12b means. When we want it, the mechanism is `hook_config(can_jump_to=["model"])` --
+measurement of coded against prompted orchestration means. When we want it, the mechanism is `hook_config(can_jump_to=["model"])` --
 public, and already used elsewhere in this file's history.
 
 **It attaches to workers as well as the orchestrator**, because a sandbox `task()` *"does not route
@@ -59,7 +59,7 @@ GRADER_MODEL_CALLS = 6
 #:
 #: **`RubricMiddleware` builds its grader with a bare `create_agent`, so none of our middleware reaches
 #: it** -- not the retry policy, not `ADeadlineForOneModelTurn`. A live `a_pair` run showed what that
-#: costs: `compliance_worker` finished all six of its turns, `aafter_agent` called the grader, and the
+#: costs: a worker finished all six of its turns, `aafter_agent` called the grader, and the
 #: run sat there until its outer ceiling. The pending-await dump named it in one line -- a model call
 #: with no middleware tasks above it is not an agent turn, it is the judge.
 #:
@@ -69,14 +69,14 @@ GRADING_DEADLINE_S = 120.0
 
 #: The clock on ONE grading attempt, inside the retry -- and it must be well under the pass ceiling.
 #:
-#: **T-5a.12k gave the grader no attempt clock and that was wrong.** The reasoning was that the main
+#: **The first version gave the grader no attempt clock and that was wrong.** The reasoning was that the main
 #: path's 190s clock inside a 120s pass would be decorative, which is true; the conclusion -- none at all
 #: -- left a slow call unabandonable. It simply ate the budget and the grade was lost, twice in one live
 #: coded run, both reported as "passed its 120s deadline".
 #:
 #: **25 seconds, chosen against the grader's OWN measured tail** rather than the main path's: across a
 #: full run the slowest `rubric_grader` call was 13.6s. It was 35s while the retry budget allowed three
-#: attempts; T-5a.12t raised that to four, and four attempts of 35s no longer fit inside 120s -- the
+#: attempts; raising it to four meant four attempts of 35s no longer fit inside 120s -- the
 #: arithmetic guard caught it rather than a live run doing so. Four of 25s plus backoff is 110s.
 GRADER_ATTEMPT_S = 25.0
 
@@ -149,7 +149,7 @@ class CriterionVerdict(BaseModel):
 class Verdict(BaseModel):
     """What the grader must return.
 
-    **The TYPE is structured; the TRANSPORT is a format we own (T-5a.12y).** This was
+    **The TYPE is structured; the TRANSPORT is a format we own.** This was
     `create_agent(response_format=Verdict)` until langchain 1.4, where a bare `response_format` resolves
     through `AutoStrategy` to `ToolStrategy` -- which makes the verdict an ORDINARY OPTIONAL TOOL the
     model may simply decline. Measured live on `a_pair`: all three graders ended normally, no call limit,
@@ -165,7 +165,7 @@ class Verdict(BaseModel):
     result: Literal["satisfied", "needs_revision"] = Field(
         description="`satisfied` only when every criterion passed; otherwise `needs_revision`")
     explanation: str = Field(description="One paragraph a person can act on")
-    #: **Required, and it had a default until T-5a.12s.** A default makes the field optional in the
+    #: **Required, and it once had a default.** A default makes the field optional in the
     #: schema the grader is handed, so the model may omit it -- and `rules_held` iterates
     #: `graded.get("criteria") or []`, so an omitted list scores nothing. Measured live: a coded
     #: `one_worker` verdict came back `needs_revision` with an accurate explanation naming the broken
@@ -231,7 +231,7 @@ class VerdictUnreadable(ValueError):
     """The grader answered, but not in the format it was asked for.
 
     Distinct from a grader that failed: the model is here and talking, so the complaint can go back to it
-    (`AR-14`) and be worth a second attempt. A `grader_error` is what we record only once that fails too.
+    (the "tool failure -> the model" level) and be worth a second attempt. A `grader_error` is what we record only once that fails too.
     """
 
 
@@ -335,7 +335,7 @@ def what_the_grader_is_asked(rubric: str, messages: list[Any]) -> tuple[str, str
 
 
 def _grader_model(model_id: str | None) -> str:
-    """Refuse to guess. The substrate has no default profile (T-7.58)."""
+    """Refuse to guess. The substrate has no default profile."""
     if not model_id:
         raise ValueError(
             "GradeThisTier needs either a built `model=` or a `model_id=`; the substrate no longer "
@@ -365,14 +365,14 @@ class GradeThisTier(AgentMiddleware):
                  consulted: list[dict[str, Any]] | None = None,
                  deadline: float = GRADING_DEADLINE_S,
                  attempt: float = GRADER_ATTEMPT_S,
-                 #: The PRODUCT's retry set and model profile (T-7.58). This imported
-                 #: `rulewright.errors.TRANSIENT` and called `agent_model_id(settings)`, so the grader
-                 #: carried one product's taxonomy and one product's setting name. Empty retries nothing,
+                 #: The PRODUCT's retry set and model profile. Importing a product's transient-error set and
+                 #: reading its model setting would make the grader carry one product's taxonomy and one
+                 #: product's setting name. Empty retries nothing,
                  #: which is the conservative default a substrate is entitled to.
                  retry_on: tuple[type[BaseException], ...] = (),
                  model_id: str | None = None,
-                 #: The PRODUCT's rule registry (T-7.58). `rubric_for` read a module-level `RULES` naming
-                 #: `clause_worker`, so a greenfield grader was handed our rubric. Empty grades nothing.
+                 #: The PRODUCT's rule registry. A module-level `RULES` naming one product's workers would hand
+                 #: a greenfield grader that product's rubric. Empty grades nothing.
                  rules: tuple[Any, ...] = ()) -> None:
         super().__init__()
         self._tier = tier
@@ -405,7 +405,7 @@ class GradeThisTier(AgentMiddleware):
         identical `check_this_run` calls in a single response, at 4,951 output tokens and 22,509 input
         tokens on the turn that read them back.
 
-        **Two clocks, as on the main path, and the inner one is what T-5a.12k left out.** The pass is
+        **Two clocks, as on the main path, and the inner one is what the first version left out.** The pass is
         bounded by `_deadline`; one ATTEMPT is bounded by `_attempt`, inside the retry, so a slow call is
         abandoned and tried again instead of eating the whole budget. A per-attempt clock longer than the
         pass would be decorative -- which is why this one is much shorter, and why the arithmetic is
@@ -432,7 +432,7 @@ class GradeThisTier(AgentMiddleware):
             tools=rule_tools(self._tier, self._recording, consulted=self._consulted,
                              rules=self._rules),
             name="rubric_grader",
-            # **No `response_format`, deliberately (T-5a.12y).** On langchain 1.4 a bare schema resolves
+            # **No `response_format`, deliberately.** On langchain 1.4 a bare schema resolves
             # through `AutoStrategy` to `ToolStrategy`, which makes the verdict a tool the model may
             # decline -- and ours did, on every tier of a run whose answer was correct. We ask for a
             # fenced block instead and parse it; `the_verdict_in` still builds `Verdict`, so validation
@@ -440,7 +440,7 @@ class GradeThisTier(AgentMiddleware):
             middleware=[
                 # The 307. Identity is (name, args), and `check_this_run` takes none.
                 OneAnswerPerTurn(),
-                # **`on_failure="error"`, not the default `"continue"` (T-5a.12y).** The default
+                # **`on_failure="error"`, not the default `"continue"`.** The default
                 # returns its failure as MESSAGE CONTENT -- "Model call failed after 3 attempts with
                 # ModelAttemptTooSlow..." -- which a parser looking for a verdict block cannot tell from
                 # a badly formatted answer. The grader then re-asked a model that had just timed out and
@@ -497,7 +497,7 @@ class GradeThisTier(AgentMiddleware):
     async def _graded(self, messages: list[Any]) -> dict[str, Any]:
         """One grading pass, with ONE second chance if the format came back wrong.
 
-        **The complaint goes back to the model** (`AR-14`), naming the defect rather than refusing. A
+        **The complaint goes back to the model**, naming the defect rather than refusing. A
         model that is present and talking can fix its own formatting; a second miss is a real
         `grader_error`.
         """

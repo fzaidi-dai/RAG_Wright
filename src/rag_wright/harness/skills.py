@@ -1,14 +1,13 @@
 """The orchestrator's skill: the procedure it needs OCCASIONALLY, kept out of every turn.
 
-**Why a skill and not more prompt.** `AGENT-SPEC.md` §13 names "the orchestrator's skill" as the
-mechanism for `AR-16` (batched clarifications) and `AR-10` (authored product knowledge), and nothing had
-ever built one -- `SkillsMiddleware` was unused anywhere in the repo. The distinction that earns it is
-frequency, not importance: the decomposition rules in `ORCHESTRATOR_PROMPT` are needed on EVERY turn and
-must stay there, because T-5a.12aa's whole point was that those rules have to be decisive at the margin.
+**Why a skill and not more prompt.** The orchestrator's skill is the mechanism for batched clarifications
+and for authored product knowledge. The distinction that earns it is frequency, not importance: the
+decomposition rules in `ORCHESTRATOR_PROMPT` are needed on EVERY turn and must stay there, because those
+rules have to be decisive at the margin.
 Batching a clarification is needed only when a worker comes back `blocked`, which is rare. Progressive
 disclosure means the model sees a name and one line until then, and reads the procedure when it applies.
 
-**`AR-10` is why this is authored rather than learned.** Product knowledge is written down and reviewed;
+**Authored rather than learned, deliberately.** Product knowledge is written down and reviewed;
 it is never promoted out of one customer's run into another's. A skill is a file we wrote. `/memories` is
 what an agent noticed. Keeping them in separate namespaces is the mechanism, not a tidiness preference.
 
@@ -24,9 +23,9 @@ from typing import Any
 
 #: Where the skill lives in the agent's own virtual filesystem.
 #:
-#: **Not under `/memories`, deliberately.** That is the memory namespace (`AR-9`), and `AR-10` draws the
-#: line this path keeps: authored knowledge and learned notes are different things. `rules.py` lists this
-#: prefix among the agent's OWN paths so reading it is not mistaken for treating the matter as a
+#: **Not under `/memories`, deliberately.** That is the memory namespace, and this path keeps the line
+#: between authored knowledge and learned notes, which are different things. `rules.py` lists this
+#: prefix among the agent's OWN paths so reading it is not mistaken for treating the run's documents as a
 #: filesystem -- see `OWN_FILESYSTEM`.
 SKILLS_ROOT = "/skills"
 ORCHESTRATING_PATH = f"{SKILLS_ROOT}/orchestrating/SKILL.md"
@@ -56,8 +55,8 @@ def orchestrator_skill(backend: Any = None, *, preamble: str = "", label: str = 
 
     return SkillsMiddleware(
         backend=backend if backend is not None else StateBackend(),
-        # **The label is the PRODUCT's name, passed in** (T-7.58). It was the literal `"RuleWright"`,
-        # which the library shows the model as the source of every skill it reads.
+        # **The label is the PRODUCT's name, passed in**: the library shows the model this label as the
+        # source of every skill it reads, so a literal here would name one product to every product.
         sources=[(f"{SKILLS_ROOT}/", label)],
         system_prompt=preamble,
     )

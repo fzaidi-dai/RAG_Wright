@@ -1,4 +1,4 @@
-"""The agent's own chat model: which one, how it is bounded, and what it really cost (T-5a.4a-ii).
+"""The agent's own chat model: which one, how it is bounded, and what it really cost.
 
 **The ENGINE builds it** (PS-36): `rag_wright.api.agent_chat_model` returns a chat model built from a model
 profile, and what comes back already carries the
@@ -108,7 +108,7 @@ MODEL_ATTEMPT_DEADLINE_S = 60.0
 def agent_chat_model(settings: Any, model_id: str) -> Any:
     """The agent's chat model, built by the engine and bounded by our clocks.
 
-    **`model_id` is a PARAMETER (T-7.58).** It used to be read from one product's setting name, in the
+    **`model_id` is a PARAMETER.** It used to be read from one product's setting name, in the
     substrate, so a second product's model could not be reached at all. Which profile to reason with is the product's
     declaration; bounding the call with our clocks is the substrate's job and is all that is left here.
 
@@ -247,7 +247,7 @@ THE_TOP_TIER = "the tier invoked directly"
 def _as_recorded(message: Any) -> dict[str, Any]:
     """One message, in a shape a person can read back weeks later.
 
-    **Tool calls keep their ARGUMENTS.** "It called `ask_matter_question` 23 times" is a symptom; the 23
+    **Tool calls keep their ARGUMENTS.** "It called `ask_a_question` 23 times" is a symptom; the 23
     argument values are the diagnosis, and they are what says whether a worker was rephrasing one question
     or asking twenty-three different ones.
     """
@@ -289,7 +289,7 @@ class GenerationRecorder(BaseCallbackHandler):
 
     def __init__(self, settings: Any, model_id: str | None = None) -> None:
         self._settings = settings
-        #: **Told, not derived** (T-7.58). This called `agent_model_id(settings)` at four points, which
+        #: **Told, not derived.** This called `agent_model_id(settings)` at four points, which
         #: put one product's setting name in the substrate four times over.
         #:
         #: **Optional, because the completed call reports its own model name and that is the better
@@ -313,7 +313,7 @@ class GenerationRecorder(BaseCallbackHandler):
         # **Both start hooks open a span, not just the chat one.** Our tiers drive CHAT models, so
         # `on_chat_model_start` is the hook production takes -- but a plain-LLM call that came through
         # here would otherwise fall back to the after-the-fact path and be the only zero-duration row
-        # left in the trace, which is exactly the kind of gap that misleads a reader (T-5a.12ad).
+        # left in the trace, which is exactly the kind of gap that misleads a reader.
         self._close_replaced_attempts(parent_run_id)
         self._started[run_id] = time.monotonic()
         self._turn[run_id] = parent_run_id
@@ -328,14 +328,14 @@ class GenerationRecorder(BaseCallbackHandler):
 
         The first version aliased this to `on_llm_start`, which takes `prompts` -- so the messages arrived
         and were discarded, and even at `verbose` the trace carried the reply and never the prompt. When a
-        worker took `ask_matter_question` 23 times under the orchestrator against 3 alone, nothing could
+        worker took `ask_a_question` 23 times under the orchestrator against 3 alone, nothing could
         say what it asked on those turns, and the cause had to be guessed at from tool counts.
 
         `metadata["lc_agent_name"]` names the subagent and is `None` for the tier invoked directly --
         confirmed by running a real two-tier agent, because a trace in which every row says `agent` cannot
         tell an orchestrator turn from a worker turn.
         """
-        # **A span still open for THIS turn is an attempt that was cancelled** (T-5a.14b): a completed call
+        # **A span still open for THIS turn is an attempt that was cancelled**: a completed call
         # closes its own in `on_llm_end`, a failed one in `on_llm_error`, and a cancelled one closes nothing,
         # because cancellation is a `BaseException` and reaches neither callback. **Only this turn's** (PS-32):
         # one recorder serves the whole run, so a parallel worker's call is open at the same time and is not
@@ -346,7 +346,7 @@ class GenerationRecorder(BaseCallbackHandler):
         self._by[run_id] = (metadata or {}).get("lc_agent_name") or THE_TOP_TIER
         turn = messages[0] if messages and isinstance(messages[0], list) else (messages or [])
         self._asked[run_id] = [_as_recorded(message) for message in turn]
-        # **Opened HERE so the observation spans the call** (T-5a.12ad). Emitting the whole thing in
+        # **Opened HERE so the observation spans the call.** Emitting the whole thing in
         # `on_llm_end` gave every generation a start equal to its end, so a 257s call and a 2s call were
         # indistinguishable in Langfuse and the latency lived only in metadata.
         self._spans[run_id] = open_generation(self._settings, model=self._model_id,
@@ -361,7 +361,7 @@ class GenerationRecorder(BaseCallbackHandler):
             self._close_one(run_id)
 
     def close_abandoned(self) -> None:
-        """Close every span this recorder opened and never finished (T-5a.14b).
+        """Close every span this recorder opened and never finished.
 
         **An abandoned attempt is work, and it was invisible.** When `ADeadlineForOneModelTurn` cancels a
         model call, the cancellation is a `BaseException`, so neither `on_llm_end` nor `on_llm_error`
@@ -437,7 +437,7 @@ class GenerationRecorder(BaseCallbackHandler):
                 generation=span,
                 metadata={
                     "role": "agent",
-                    # **The handle that makes a call answerable later** (T-5a.12w). OpenRouter's
+                    # **The handle that makes a call answerable later.** OpenRouter's
                     # serving endpoint is not reachable through this client, but its generation id is,
                     # and `/api/v1/generation?id=...` reports the endpoint for any id.
                     "openrouter_generation_id": generation_id_of(response),
@@ -447,7 +447,7 @@ class GenerationRecorder(BaseCallbackHandler):
                     # own; `per-second` means there is no per-call number and the latency is the input a
                     # rate is applied to later.
                     #
-                    # **Read off the OBSERVATION, not off the endpoint URL** (T-7.58 stage 2). This used to
+                    # **Read off the OBSERVATION, not off the endpoint URL.** This used to
                     # be `is_openrouter(base_url)`, which inferred the basis from a vendor name in the
                     # configured URL -- and inferred it WRONG whenever OpenRouter reported nothing, which it
                     # does when `usage.include` is missing. A reported cost IS the per-call basis; its

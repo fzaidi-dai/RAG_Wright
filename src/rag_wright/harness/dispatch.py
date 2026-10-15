@@ -1,4 +1,4 @@
-"""How many times one tier may hand the same work down (T-5a.14e, AR-14, ANFR-1).
+"""How many times one tier may hand the same work down.
 
 **Measured live, twice, and neither setting was right.** The chat-manager delegates to the orchestrator,
 reads back *"Complete -- nothing further is needed"*, and delegates again: **3 times** with reasoning on,
@@ -6,7 +6,7 @@ reads back *"Complete -- nothing further is needed"*, and delegates again: **3 t
 occasionally 2. Both numbers are the model's judgement, so choosing between the two reasoning settings
 picks which failure we prefer rather than fixing one.
 
-**So this is a count, not a request.** `withhold.py` states the principle and T-5a.12d paid for it: a
+**So this is a count, not a request.** `withhold.py` states the principle and a measured run paid for it: a
 warning repeated in four places was obeyed zero times, and taking the parameter away fixed what a fifth
 instruction would not. A dispatch past the bound never runs -- no model call, no subagent, no second copy
 of a reply the tier already has. Twenty-three of those twenty-four were pure waste.
@@ -48,8 +48,8 @@ DISPATCH = "task"
 #: **One also makes concurrency impossible, which is the load-bearing half.** Several tool calls in one
 #: turn become separate `Send`s (`factory.py:1964`) and run in PARALLEL in that superstep, so a tier
 #: emitting two `task` calls would start two orchestrators side by side. Nothing in the harness would
-#: notice: the only thing that ever did was `RubricMiddleware`, which crashed on it and was removed
-#: (ADR-0023). The check-and-increment below has no `await` between the read and the write, so two
+#: notice: the only thing that ever did was `RubricMiddleware`, which crashed on it and was removed.
+#: The check-and-increment below has no `await` between the read and the write, so two
 #: parallel tool tasks cannot both pass it.
 DISPATCHES_PER_RUN = 1
 

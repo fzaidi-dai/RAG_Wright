@@ -161,9 +161,20 @@ them later and each one is a refactor with its own test fallout:
 | resuming a suspended run | the continuation renders ITSELF; the substrate asks |
 | the agent's chat model | from the engine's model profile, never a string in the substrate |
 
-**Collect them into ONE object the substrate is handed** -- we called it `AgentDefinition`, carrying the
-tool surface, the planning classification, the worker roster and the context type. Four declared facts, and
-**the substrate derives everything else**.
+**Collect them into ONE object the substrate is handed** -- `AgentDefinition`, with FIFTEEN required
+fields, and **the substrate derives everything else**. Four are the shape: the tool surface (`surface`), the
+planning classification (`planning`), the worker roster (`workers`) and the context type (`context_schema`).
+The other eleven are the customization surface, and an agent without them runs but is quietly less capable:
+`retry_on`, `message_for`, `model_id_for`, `prompts` (an `AgentPrompts`, eleven fields of its own: every word
+the model reads), `repeatable`, `question_argument`, `framings`, `carry_forward`, `rules`, `decision_points` and
+`read_framing`. The field-by-field reference, generated from the tier, is `docs/harness.md` in the engine
+repository.
+
+**Build every worker with `worker_spec(..., definition=...)`.** `worker_spec`'s policy parameters default to
+inert values, and all but the ledger are fields of the definition you already declared; a worker built
+without threading them ran with no retries, no repeat suppression and no decision recording while every test
+passed. With `definition=`, each parameter you leave at its default is taken from the definition, and a value
+you pass still wins.
 
 That last clause is the whole trick. The alternative -- let the product pass the derived sets too -- is a
 smaller diff and scores perfectly on every axis, and it exports an invariant as a convention the next

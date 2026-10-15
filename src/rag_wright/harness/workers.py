@@ -1,4 +1,4 @@
-"""The workers: three skills, and what each hands back (T-5a.11b, T-5a.12c, §2.3, ADP-4).
+"""The workers: one skill each, and what each hands back.
 
 **A worker earns its place by ISOLATING CONTEXT, not by tidiness.** The docs are explicit: *"Subagents
 solve the context bloat problem. The main agent receives only the final result, not the dozens of tool
@@ -6,16 +6,17 @@ calls that produced it."* So the test for a worker is whether its job produces l
 the parent does not need — which is why the light tools (a document listing, a job status, a spend figure)
 stay on the tiers that plan, and only the content-heavy jobs become workers.
 
-**The division is by the QUESTION A USER ASKS**, not by the module a tool came from:
+**The division is by the QUESTION A USER ASKS**, not by the module a tool came from. The workers are the
+product's; an illustrative roster:
 
 | worker | tools | the question it answers |
 |---|---|---|
-| `clause_worker` | `read_the_question`, `sweep_matter`, `ask_contract_question` | *which contracts say X, and what exactly do they say* |
-| `matter_worker` | `ask_matter_question`, `trace_party_exposure` | *what about the matter as a whole; who are we exposed to* |
-| `compliance_worker` | `list_matter_policies`, `read_matter_policy`, `read_compliance_check` | *does this comply, what does the standard require, and what did we decide before* |
+| `finding_worker` | `read_the_question`, `sweep_scope`, `ask_a_question` | *which documents say X, and what exactly do they say* |
+| `overview_worker` | `ask_about_the_scope`, `trace_an_entity` | *what about the scope as a whole; which entities are involved* |
+| `checking_worker` | `list_standards`, `read_a_standard`, `read_a_check` | *does this meet the standard, and what did we decide before* |
 
 **`find` and `read` are ONE worker, on evidence.** A division by verb — find / read / judge — splits them,
-and T-5a.11g measured that failure: a worker that could find documents and not read them reported
+and that failure was measured: a worker that could find documents and not read them reported
 `status="blocked"` and asked the user *"is there a document-retrieval tool I should use?"*, a question no
 person can answer.
 
@@ -33,9 +34,9 @@ JS variable and never enters the model's context at all. Compression is then the
 the REPL prompt says so: *"Keep large intermediate sets in JS variables and return only a compact summary
 or a small slice, not the entire dataset"* — an instruction to the program, not to the subagent.
 
-**`AR-16` rides along.** Every report carries `status` and `need`, because a worker still cannot ask: it is
-never given `ask_the_user`, and `BatchTheQuestions` on the orchestrator collects what the workers could not
-decide and asks once.
+**Batched clarification rides along.** Every report carries `status` and `need`, because a worker still
+cannot ask: it is never given `ask_the_user`, and `BatchTheQuestions` on the orchestrator collects what the
+workers could not decide and asks once.
 """
 
 from __future__ import annotations
@@ -46,7 +47,7 @@ from pydantic import BaseModel, Field
 
 
 class WorkerReport(BaseModel):
-    """What every worker carries, whatever else it returns (`AR-16`).
+    """What every worker carries, whatever else it returns.
 
     **Structured, because the orchestrator chains it.** `status` lets a program branch; `need` is how a
     worker says it cannot finish without a person, since it has no way to ask.
@@ -94,42 +95,41 @@ again and again."""
 NOT_ON_WORKERS: dict[str, str] = {
     "ToolSurface": (
         "**Not middleware at all** -- it is the PRODUCT's tool surface, handed to the orchestrator's code "
-        "interpreter so the substrate does not import `harness/manifest.py` (T-7.58 stage 4c). It is here "
+        "interpreter so the substrate never imports the product's operations. It is here "
         "because the audit above reads CAPITALISED calls in a tier builder and cannot tell a middleware "
         "class from any other constructor, which is the right trade: it would rather make somebody "
         "classify a new name than miss a middleware. A worker has no code interpreter, so there is nothing "
-        "to hand one. **This entry goes when `tiers.py` RECEIVES the surface instead of constructing it** "
-        "(stage 4c-iii), at which point no tier builder names it."
+        "to hand one. **This entry goes when no tier builder names the surface any more.**"
     ),
     "OnlySoManyDispatches": (
         "There is nothing to bound: a worker has no `task` tool at all -- measured, it is bound the six "
         "filesystem tools and NOT `execute`, `eval` or `task` -- so it cannot hand work down. "
-        "**The ORCHESTRATOR is a different matter and this middleware does not fit it yet** (T-5a.14e): "
+        "**The ORCHESTRATOR is a different case and this middleware does not fit it yet**: "
         "it counts dispatches PER RUN, and an orchestrator legitimately dispatches three different "
         "workers, so this bound would forbid a correct plan. The fan-out it needs guarding against is "
-        "PER WORKER -- `compliance_worker` dispatched 7 times in one run, which scored "
+        "PER WORKER -- one worker was dispatched 7 times in one run, which scored "
         "`dispatched_once_each: 1.000` at the time -- and that is a per-subagent bound, raised rather "
         "than built here."
     ),
     "HowMuchToThink": (
         "A worker keeps the PROFILE's reasoning, which is on, and that is the current behaviour left "
-        "deliberately unchanged (T-5a.14d). The A/B that turned reasoning off measured ONE question on "
+        "deliberately unchanged. The A/B that turned reasoning off measured ONE question on "
         "the CHAT-MANAGER -- 1,905 reasoning tokens buying the same tool call as 42 -- and says nothing "
         "about a tier that reads source material and returns a structured report. Extending it here on that "
-        "evidence would be the unmeasured change T-5a.12af was reverted for. **The cost is real and "
+        "evidence would be the kind of unmeasured change that has had to be reverted before. **The cost is real and "
         "unmeasured on this tier**: a worker turn is uncapped and can outlive its own deadline the same "
         "way, which is what the 222.9s call (out=1,627) looks like."
     ),
     "ConfirmTheView": (
-        "The view belongs to the conversation (`AR-13`). A worker never talks to the user and has no "
+        "The view belongs to the conversation. A worker never talks to the user and has no "
         "screen to have moved, so it would be confirming something it cannot see."
     ),
     "BatchTheQuestions": (
-        "`AR-16` says the ORCHESTRATOR batches. A worker that batched would be asking, which is the one "
+        "Only the ORCHESTRATOR batches questions. A worker that batched would be asking, which is the one "
         "thing it must not do -- it reports `status=\"blocked\"` instead."
     ),
     "CodeInterpreterMiddleware": (
-        "§2.2 and `ANFR-1`: only the orchestrator gets an interpreter; workers use plain tool calls. One "
+        "Only the orchestrator gets an interpreter; workers use plain tool calls. One "
         "active interpreter per agent is easier to keep when only one tier has one."
     ),
     "WithheldTools": (
@@ -138,7 +138,7 @@ NOT_ON_WORKERS: dict[str, str] = {
         "true rather than trusting it."
     ),
     "TodoListMiddleware": (
-        "`AR-18`'s TODO panel renders the ORCHESTRATOR's list; a worker's would be a second, invisible "
+        "The product's TODO panel renders the ORCHESTRATOR's list; a worker's would be a second, invisible "
         "list competing with it. A worker does not plan -- it executes one brief and reports "
         "(`DO_WHAT_WAS_ASKED`). Measured on a live run: one worker made 56 calls "
         "and 35 of them were `write_todos`, rewriting a task list until the run hit its ceiling, while "
@@ -179,19 +179,19 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
 
     **The audit that produced this list, and the defect it closes.** Workers were never bare -- every deep
     agent carries `FRAMEWORK_DEFAULTS`, summarization included. What they lacked was OURS:
-    `error_middleware()`, the call caps and `AR-14`'s whole error model, which sat on the two tiers above
-    and not on the tier doing the work. Before T-5a.12c the orchestrator did that work itself, inside its own
+    `error_middleware()`, the call caps and the whole four-level error model, which sat on the two tiers above
+    and not on the tier doing the work. Before the worker split the orchestrator did that work itself, inside its own
     caps; after the split it delegates into a tier that had none. A worker that looped was unbounded, a
     transient 429 inside one was never retried, and a recoverable failure never became a message it could
     act on.
 
     **`TheSubjectIsNotAFilesystem` belongs here too**, and that is not obvious: a worker is bound the same
-    filesystem tools as a tier (measured), and it is the tier most likely to be handed `acme-msa.pdf` by a
-    sweep and try to open it. T-5a.11e's collision is *more* likely here, not less.
+    filesystem tools as a tier (measured), and it is the tier most likely to be handed `report-1.pdf` by a
+    sweep and try to open it. The namespace collision is *more* likely here, not less.
 
     See `NOT_ON_WORKERS` for what a tier has that a worker does not, and why.
     """
-    # **One record, two readers** (T-5a.12h): the first answers an identical repeat without running the
+    # **One record, two readers**: the first answers an identical repeat without running the
     # operation, the second uses it to say why a filesystem call is a wrong turn.
     from rag_wright.harness.decisions import DISPATCHER_OF_A_WORKER, RecordTheDecisions
     from rag_wright.harness.errors import error_middleware
@@ -206,7 +206,7 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
 
     seen = WhatTheRunHasSeen(repeatable=repeatable,
                              question_argument=question_argument or {})
-    # **The dispatch is recorded HERE, by the tier that was dispatched** (T-5a.13a). A sandbox `task()`
+    # **The dispatch is recorded HERE, by the tier that was dispatched.** A sandbox `task()`
     # never routes through the parent's `ToolNode`, so counting dispatches at the orchestrator is blind in
     # exactly the arm where the fan-out happened. A worker's opening turn is one human message in both.
     recording = ([RecordTheDecisions(ledger, tier=name, is_worker=True, framings=framings,
@@ -228,13 +228,41 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
             question_argument: dict[str, str] | None = None,
             framings: tuple[str, ...] = (),
             carry_forward: Any = None,
-            read_framing: Any = None) -> dict[str, Any]:
+            read_framing: Any = None,
+            definition: Any = None) -> dict[str, Any]:
     """A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`.
 
     A worker has no middleware and no subagents of its own, so letting the parent build it keeps one model
     resolution and one place that knows how a tier is compiled.
 
-    **No `ask_the_user` in any worker's tools**, and that absence is the mechanism (`AR-16`): a prompt
+    **Pass `definition=`, the product's `AgentDefinition`.** Every policy parameter after `ledger` defaults
+    to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its
+    `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed
+    explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no
+    decision recording, and nothing fails to say so.
+    """
+    if definition is not None:
+        retry_on = retry_on or definition.retry_on
+        message_for = message_for if message_for is not None else definition.message_for
+        signposts = signposts if signposts is not None else definition.prompts
+        repeatable = repeatable or definition.repeatable
+        question_argument = question_argument if question_argument is not None else definition.question_argument
+        framings = framings or definition.framings
+        carry_forward = carry_forward if carry_forward is not None else definition.carry_forward
+        read_framing = read_framing if read_framing is not None else definition.read_framing
+    return _spec(name, description, prompt, tools, report, ledger, retry_on=retry_on,
+                 message_for=message_for, signposts=signposts, repeatable=repeatable,
+                 question_argument=question_argument, framings=framings,
+                 carry_forward=carry_forward, read_framing=read_framing)
+
+
+def _spec(name: str, description: str, prompt: str, tools: list, report: type, ledger: Any, *,
+          retry_on: tuple[type[BaseException], ...], message_for: Any, signposts: Any,
+          repeatable: frozenset[str], question_argument: dict[str, str] | None,
+          framings: tuple[str, ...], carry_forward: Any, read_framing: Any) -> dict[str, Any]:
+    """The spec itself, once every policy value is settled.
+
+    **No `ask_the_user` in any worker's tools**, and that absence is the mechanism: a prompt
     saying "do not ask" is a suggestion; a tool the worker was never given is a fact.
     """
     return {"name": name, "description": description, "system_prompt": prompt,
@@ -279,12 +307,12 @@ def build_worker(spec: dict[str, Any], settings: Any, *, model: Any = None,
 
     **So the spec is handed to `create_deep_agent` as a SUBAGENT and the compiled child is taken back
     out.** There is no third way that does not amount to re-implementing the library's augmentation here,
-    and a second implementation of it is exactly what went stale twice (ADR-0019 section 5, one
+    and a second implementation of it is exactly what went stale twice (one
     implementation and two callers). `test_harness_workers.py` compares the result against a REAL
     orchestrator's compiled subagents -- tools, graph and system prompt -- so a throwaway parent that
     diverged from the real one would fail rather than mislead.
 
-    **Found by the isolated-versus-orchestrated context diff** (T-5a.12e), which is the only thing that
+    **Found by the isolated-versus-orchestrated context diff**, which is the only thing that
     could have seen either: both agents answer, both look healthy, and the difference shows up only as a
     token ratio that is slightly wrong in the wrong direction.
     """
@@ -308,8 +336,8 @@ def build_worker(spec: dict[str, Any], settings: Any, *, model: Any = None,
 
 
 def _required(model_id: str | None) -> str:
-    """Refuse to guess a model id. **The substrate has no default profile to fall back on** (T-7.58): one
-    product's setting name was what `agent_model_id` used to read from here."""
+    """Refuse to guess a model id. **The substrate has no default profile to fall back on**: reading one
+    from a setting would mean knowing one product's setting name."""
     if not model_id:
         raise ValueError(
             "build_worker needs either a built `model=` or a `model_id=`. The substrate no longer resolves "

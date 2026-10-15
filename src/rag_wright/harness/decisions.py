@@ -1,28 +1,28 @@
-"""What the run DECIDED, recorded as a decision (T-5a.13a, ANFR-3, ANFR-6).
+"""What the run DECIDED, recorded as a decision.
 
-**The cornerstone rests on this module.** `docs/design/robustness-before-speed.md` §2a says a wrong
+**The cornerstone rests on this module.** The principle is that a wrong
 decision -- routing, classification, dispatch, escalation, a guardrail verdict -- is a stop-the-line event,
-and rarity is not a defence. That is unenforceable today: of the ten decisions in its table, six are
-unjudged and most are *invisible*, taken inside a model turn that is also doing other work, with no record
+and rarity is not a defence. That is unenforceable without a record: most decisions are unjudged
+and *invisible*, taken inside a model turn that is also doing other work, with no record
 of what the options were or which was taken. **You cannot audit what was never written down**, and "rare"
 is exactly the regime where watching does not work.
 
 **A decision is DERIVED from what a tier did, never declared by the model.** Asking a model to announce
-its choice would change the prompt -- the thing T-5a.12af reverted a week of work for, because nothing
+its choice would change the prompt -- the kind of change that once cost a week of reverted work, because nothing
 could detect whether the change helped -- and it would ride `response_format`, which the model may simply
-decline (T-5a.12y: it declined on every tier of a run whose answer was right). So this mirrors `rules.py`:
+decline (measured: it declined on every tier of a run whose answer was right). So this mirrors `rules.py`:
 a registry of points, each with a deterministic observation at a seam we already own. *A grader asked "did
 it re-dispatch?" can be wrong. One that counts cannot.*
 
 **A dispatch is recorded by the tier that WAS dispatched, not by the parent's `task` call.** A sandbox
 `task()` does not route through the parent's `ToolNode`-managed tool, so a transcript-based count is blind
-in the coded arm -- which is the arm where the fan-out happened. Measured live: `compliance_worker`
+in the coded arm -- which is the arm where the fan-out happened. Measured live: one worker was
 dispatched **7 times**, recorded as 1, and `dispatched_once_each` returned 1.000 on that run. A dispatched
 tier's opening turn carries exactly one human message, and that is true in both arms. Same definition as
-`evals/recording.py`, for the same reason.
+the eval recorder's, for the same reason.
 
 **It records; it never judges.** Whether a decision was right is a property of an acceptable SET, held by
-the eval (§2a: *"wrong means outside the acceptable set, not different from a reference"*). Putting that
+the eval (*"wrong means outside the acceptable set, not different from a reference"*). Putting that
 here would collapse the very split that lets a wrong decision be seen: an agent can decide well and answer
 badly, or decide badly and answer well by luck.
 
@@ -41,8 +41,8 @@ from rag_wright.harness.seen import run_key
 
 #: The workers a dispatch can name, from the roster itself rather than a second copy of it. A list that
 #: **The option space D2 chooses from, when no roster is supplied.** A product's workers are its own, and
-#: this module is substrate: it used to derive `WORKER_NAMES` from `rulewright.agent.workers.WORKERS` at
-#: import, which put this product's roster in the decision taxonomy. `RecordTheDecisions` now takes the
+#: this module is substrate: it does not derive the worker names from any one product's roster, which
+#: would put that roster in the decision taxonomy. `RecordTheDecisions` takes the
 #: names it should record, and this is what a caller that supplies none gets.
 ANY_WORKER = "<worker>"
 
@@ -51,10 +51,10 @@ ANY_WORKER = "<worker>"
 #: to the tier that was told to run again blames the wrong decision-maker entirely.
 #:
 #: **The orchestrator was missing from the first version, and a 24-dispatch loop was invisible for it**
-#: (measured 2026-09-26). §2a's table assigns `D3` to the orchestrator, so the observer fired only for
+#: (measured 2026-09-26). `D3` was assigned to the orchestrator, so the observer fired only for
 #: workers -- and the chat-manager makes the same accept-or-re-dispatch decision about the orchestrator.
 #:
-#: **It is a CONSTRUCTOR argument now, not a table keyed by this product's worker names** (T-7.58). Every
+#: **It is a CONSTRUCTOR argument now, not a table keyed by one product's worker names**. Every
 #: site that builds the observer already knows what kind of tier it is building for: `workers.py` passes a
 #: worker's own name, `tiers.py` passes `"orchestrator"`, `agent.py` passes `"chat-manager"`. Looking the
 #: answer up in a roster was asking a question the caller had already answered.
@@ -62,14 +62,14 @@ DISPATCHER_OF_A_WORKER = "orchestrator"
 DISPATCHER_OF_THE_ORCHESTRATOR = "chat-manager"
 
 #: The only way a tier escalates to a person (`clarify.clarification_tool`). **Workers deliberately do not
-#: hold it** -- `AR-16`: *"a prompt saying 'do not ask' is a suggestion; a tool the worker was never given is
+#: hold it** -- *"a prompt saying 'do not ask' is a suggestion; a tool the worker was never given is
 #: a fact"* -- so an escalation is the orchestrator's decision and nobody else's.
 ESCALATION = "ask_the_user"
 
 
 
 #: Longest input value kept. A whole brief makes the ledger unreadable without saying more than its
-#: opening does; `evals/recording.py` keeps the brief in full for the diff, and this is the audit trail.
+#: opening does; the eval recorder keeps the brief in full for the diff, and this is the audit trail.
 KEEP_CHARS = 300
 #: How many bounced reports to keep the reason for. A worker that retried twenty times says the same thing
 #: twenty times; `tries` already carries the count, and the ledger rides a trace payload.
@@ -102,11 +102,10 @@ class DecisionPoint:
 
 
 
-#: **The four-way partition moved to the PRODUCT with the points themselves** (T-7.58).
-#: `DELIBERATELY_NOT_RECORDED`, `NO_DECIDER_YET` and `UNOBSERVED` were derived here from a module-level
-#: `POINTS`, so they described RuleWright's recording state as though it were any product's -- and `_BY_ID`
-#: gave every ledger this product's option spaces. They are `rulewright/agent/decision_points.py` now;
-#: `WhatTheRunDecided` takes the points and looks an option space up on the record it makes.
+#: **The four-way partition lives with the PRODUCT, beside the points themselves.**
+#: Which points are deliberately not recorded, have no decider yet, or are unobserved is one product's
+#: recording state, not any product's, and so are the option spaces. `WhatTheRunDecided` takes the
+#: points and looks an option space up on the record it makes.
 #:
 #: The CATEGORIES are the substrate's contribution and are worth restating, because collapsing them is how
 #: `D8` came to look like a small coding task and `D9` like a gap: a point is recorded, a real recording
@@ -119,7 +118,7 @@ class Decision:
     """One decision, as it was taken.
 
     **`confidence` is `None` for anything a model decided, and that is the finding rather than a missing
-    field** (§2a). An LLM turn returns a 51% call and a 99% call indistinguishably, which is precisely why
+    field**. An LLM turn returns a 51% call and a 99% call indistinguishably, which is precisely why
     a rare wrong decision stays silent until it bites; a classifier that returns a probability per option
     is what would buy a threshold to escalate below. Recording the absence is what makes it countable.
     """
@@ -200,10 +199,9 @@ class WhatTheRunDecided:
     """
 
     runs: dict[str, DecisionLedger] = field(default_factory=dict)
-    #: The PRODUCT's decision points (T-7.58). `record()` reads each point's option space from here; this
-    #: was a module-level `_BY_ID` over ten points phrased in RuleWright's vocabulary, so a second
-    #: product's ledger recorded its decisions against our options. A point nobody declared records with
-    #: no options rather than raising -- the CHOSEN value is the part that matters.
+    #: The PRODUCT's decision points. `record()` reads each point's option space from here, so each
+    #: product's ledger records its decisions against its own options. A point nobody declared records with
+    #: no options rather than raising -- the CHOSEN value is the part that counts.
     points: tuple[Any, ...] = ()
 
     def of(self, key: str) -> DecisionLedger:
@@ -250,7 +248,7 @@ class RecordTheDecisions(AgentMiddleware):
     """Write this tier's decisions into the run's ledger, changing nothing else.
 
     Attached per tier, because attribution is the point: *"an alarm that cannot name its cause is one we
-    will learn to ignore"* (§2a).
+    will learn to ignore"*.
     """
 
     def __init__(self, ledger: WhatTheRunDecided, *, tier: str, is_worker: bool = False,
@@ -260,18 +258,18 @@ class RecordTheDecisions(AgentMiddleware):
                  #: its OWN framing tool's reply. `None` records no `D5`, which is honest for a product
                  #: that has no such tool.
                  read_framing: Any = None) -> None:
-        """**What kind of tier this is, told rather than looked up** (T-7.58).
+        """**What kind of tier this is, told rather than looked up.**
 
-        `is_worker` and `dispatched_by` replaced membership in this product's roster: every caller already
-        knows which it is building for, so the lookup was asking a question the caller had answered.
+        `is_worker` and `dispatched_by` are passed rather than read off a roster: every caller already
+        knows which it is building for, so a lookup would ask a question the caller had answered.
         `worker_names` is only `D2`'s recorded option space, and a caller that supplies none gets
         `ANY_WORKER` -- the decision is still recorded, with its chosen value, which is the part that
-        matters.
+        counts.
 
-        **`framings` is the same shape of fact and was the last of this product's tool names in here.**
-        It was `FRAMINGS = ("sweep_matter", "ask_contract_question")`, so `D6` -- which framing a worker
-        chose for its task -- could only ever fire for RuleWright. A caller that supplies none records no
-        `D6`, which is honest: a product that does not distinguish framings has no such decision to make.
+        **`framings` is the same shape of fact.** They are the product's own tool names, so `D6` -- which
+        framing a worker chose for its task -- fires for any product that names them. A caller that supplies
+        none records no `D6`, which is honest: a product that does not distinguish framings has no such
+        decision to make.
         """
         super().__init__()
         self._framings = framings
@@ -378,11 +376,10 @@ class RecordTheDecisions(AgentMiddleware):
         if not isinstance(reading, dict):
             return
 
-        # **The product reads its own tool's reply** (T-7.58). This checked
-        # `call.get("name") != FRAMING_TOOL` against the literal `read_the_question` and then pulled
-        # `clause_types`, `semantic_fallback`, `confidence` and `summary` -- one product's tool and four of
-        # its payload keys, inside the registry. What stays here is generic and worth keeping: find the
-        # call, parse its JSON safely, DECLINE a malformed one visibly, and record the decision.
+        # **The product reads its own tool's reply.** Which tool frames a question, and which payload keys
+        # carry its answer, are one product's facts and stay out of the registry. What stays here
+        # is generic and worth keeping: find the call, parse its JSON safely, DECLINE a malformed one
+        # visibly, and record the decision.
         read = self._read_framing(str(call.get("name") or ""), reading)
         if not read:
             return
@@ -395,7 +392,7 @@ class RecordTheDecisions(AgentMiddleware):
         )
 
     def _framed(self, request, response) -> None:
-        """`D6`: sweep the matter, or read a named document.
+        """`D6`: sweep the whole scope, or read a named document.
 
         **Only the FIRST of the two is a decision.** A sweep followed by four reads is one framing choice and
         five tool calls -- reading the documents a sweep matched is executing the plan, not reconsidering it.

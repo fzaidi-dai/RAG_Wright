@@ -1,6 +1,6 @@
-"""A changed view is confirmed, never silently adopted (T-5a.10c, AR-13).
+"""A changed view is confirmed, never silently adopted .
 
-**The failure being prevented is named in the spec as this project's most frequent shape**: *"Silently
+**The failure being prevented is a frequent shape**: *"Silently
 switching subject produces a confident answer about the wrong object."* The user runs sweep #1, navigates to
 sweep #2, types "what about this one?", and every word of the answer is about the wrong sweep — fluent,
 cited, and wrong about which object it is describing.
@@ -10,9 +10,9 @@ subject is asking the failure to detect itself. The comparison happens in `befor
 runs at all, against the view the thread last confirmed — which lives in the checkpoint, so it survives the
 process that started the thread.
 
-**`before_agent` REPLAYS on resume, exactly as a tool does** (verified at T-5a.10a). So `AR-15` binds here
-too. The difference from `clarify.py` is that this node's pre-interrupt half **cannot** be empty: deciding
-whether to ask requires reading both views. So the rule is expressed as *nothing awaited* — every side
+**`before_agent` REPLAYS on resume, exactly as a tool does** (verified). So the replay rule binds
+here too. The difference from `clarify.py` is that this node's pre-interrupt half **cannot** be empty:
+deciding whether to ask requires reading both views. So the rule is expressed as *nothing awaited* — every side
 effect in this codebase is awaited — plus a small maintained allow-list of the synchronous calls, because
 a logger or a counter would slip past an `await` guard.
 

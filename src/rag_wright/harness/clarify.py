@@ -1,4 +1,4 @@
-"""Asking the user mid-run (T-5a.9, AR-15, AR-16).
+"""Asking the user mid-run.
 
 **One rule, and it comes from a verified fact rather than a principle.** `interrupt()` suspends the run;
 resuming **replays the node from the start**, so everything before the interrupt runs twice. Pinned in
@@ -16,13 +16,14 @@ right for "may I do this?", wrong for "which of these did you mean?". A clarific
 model decides it needs, so it has to be something the model can reach for.
 
 **Not an operation, and therefore not in the manifest.** The manifest is derived from
-`rulewright.operations` in exact equality (`AR-1`); a clarification touches no product state and has no
+the product's operations in exact equality; a clarification touches no product state and has no
 operation behind it. It joins the agent's tool surface beside the manifest, and the tenancy guards cover
-the whole surface rather than the manifest alone — which is what `AR-5` actually requires.
+the whole surface rather than the manifest alone — which is what keeping tenancy out of the model's
+reach actually requires.
 
-**`AR-16` is deliberately not here.** Batching clarifications belongs to the orchestrator: a worker that
+**Batching is deliberately not here.** Batching clarifications belongs to the orchestrator: a worker that
 would ask instead returns "I need X" and the orchestrator asks once rather than five times. That needs
-tiers, which is T-5a.11.
+tiers, which `batch.py` and the orchestrator provide.
 """
 
 from __future__ import annotations
@@ -36,7 +37,7 @@ def clarification_tool() -> BaseTool:
     """A tool whose entire body is a question.
 
     Returned from a factory for symmetry with the manifest's bindings, though it closes over nothing: a
-    clarification has no tenancy to bind, because it touches no matter's data.
+    clarification has no tenancy to bind, because it touches no scoped data.
     """
 
     @tool

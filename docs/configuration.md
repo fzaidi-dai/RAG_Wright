@@ -151,7 +151,8 @@ chat-manager tier, an orchestrator and dispatched workers on Deep Agents, with t
 retries, interrupts and resume, memory, metering and run grading. The product declares an `AgentDefinition` (its
 `ToolSurface`, planning split, workers, a context type satisfying `RunScope`, retry set, model id and `AgentPrompts`)
 and runs it with `start_run` / `resume_run` / `stream_run`; it passes its own checkpointer and memory store. The
-reference is `docs/api/harness.md`, and the `building-an-agent-harness` skill is the practice behind it.
+design reference, with every field a product declares, is [`harness.md`](harness.md); the generated
+signatures are `docs/api/harness.md`, and the `building-an-agent-harness` skill is the practice behind it.
 
 Its configuration is the engine's: the model by engine profile id (the definition's `model_id_for`), tracing by
 `RAG_TRACE_LEVEL` and the Langfuse keys (each agent turn is one generation, labelled `agent-llm`, grouped under the
