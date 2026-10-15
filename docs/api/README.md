@@ -68,6 +68,10 @@ Members: `STRUCTURED_REASONING` (`'structured_reasoning'`), `STRUCTURED_REASONIN
 
 One ranked capability match from `discover` — enough for an agent to pick and invoke it by `slug`.
 
+### `SpanHit(*, span_id: str, text: str, document_id: str, doc_start: Optional[int] = None, doc_end: Optional[int] = None, pages: list[int] = [], bbox: Optional[tuple[float, float, float, float]] = None, primary_tag: str = '', rank: int, found_by: tuple[str, ...]) -> None`
+
+One cited span from `span_search`, best first. `found_by` says which legs found it: `"hybrid"` (the fused dense + sparse search) and/or `"dense"` (the dense floor). `bbox` is `(l, t, r, b)` or None.
+
 ### `KgNode(type: 'str', key_field: 'str', props: 'dict[str, object]') -> None`
 
 A typed KG node to upsert (DD-1b, ADR-0117): `type` is the vertex type, `key_field` the identity field to upsert on, `props` the fields (including `key_field`) as DOMAIN-NATIVE values. The store encodes each prop by its pack-declared storage type -- the caller never serializes to the store's wire format.
@@ -427,6 +431,14 @@ Resolve an entity NAME to every entity node it matches: `[{entity_id, name, enti
 ### `span_positions(ws: 'WorkspaceHandle', document: 'str') -> 'list[dict]'`
 
 Every span of `document` with its position provenance, ordered by document position. Each row: `span_id`, `parent_chunk_id`, `span_index`, `text`, `primary_tag` (the span tagger's primary tag, "" if untagged), `document_id`, `doc_start` / `doc_end` (document-absolute offsets), `pages`, and `bbox` DECODED to a `(l, t, r, b)` tuple or None. The engine MECHANISM behind a product's citation/highlight types -- the product wraps these rows into its own presentation type (e.g. `SpanLocation`).
+
+### `span_search(ws: 'WorkspaceHandle', query: 'str', *, k: 'int' = 10, documents: 'Optional[list]' = None, tag: 'Optional[str]' = None, dense_floor: 'int' = 3) -> 'list'`
+
+Hybrid search over the workspace's span index (every ingested span, embedded dense and sparse): the two legs fused by Reciprocal Rank Fusion in the store, with the top `dense_floor` pure-dense spans guaranteed a place, so a strong semantic match a common-token query would push out of the fused pool is kept (0 turns it off). Returns up to `k` `SpanHit`s, best first, each citation-ready: `span_id`, `text`, `document_id`, `doc_start` / `doc_end`, `pages`, `bbox`, `primary_tag`, `rank`, and `found_by` (`"hybrid"` and/or `"dense"`). `documents` scopes it to those source documents in the store (`None` = all, `[]` = nothing); `tag` keeps one primary tag. No reranking: compose `BGEReranker` over the hits if you want one. Raises `RuntimeError` when the workspace has no embedder.
+
+### `aspan_search(ws: 'WorkspaceHandle', query: 'str', *, k: 'int' = 10, documents: 'Optional[list]' = None, tag: 'Optional[str]' = None, dense_floor: 'int' = 3) -> 'list'`
+
+`span_search` off the event loop (the query embedding and the store calls block), for an async caller.
 
 ### `document_of(entity_id: 'str') -> 'str'`
 

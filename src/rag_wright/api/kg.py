@@ -88,3 +88,30 @@ def span_positions(ws: WorkspaceHandle, document: str) -> list[dict]:
     rows = ws._store.kg_read(SPAN_TYPE, fields=_SPAN_POSITION_FIELDS, where={"document_id": document},
                              order_by="doc_start")
     return [{**r, "bbox": decode_bbox(r.get("bbox"))} for r in rows]
+
+
+def span_search(ws: WorkspaceHandle, query: str, *, k: int = 10, documents: Optional[list] = None,
+                tag: Optional[str] = None, dense_floor: int = 3) -> list:
+    """Hybrid search over the workspace's span index (every ingested span, embedded dense and sparse): the two legs
+    fused by Reciprocal Rank Fusion in the store, with the top `dense_floor` pure-dense spans guaranteed a place, so
+    a strong semantic match a common-token query would push out of the fused pool is kept (0 turns it off). Returns
+    up to `k` `SpanHit`s, best first, each citation-ready: `span_id`, `text`, `document_id`, `doc_start` /
+    `doc_end`, `pages`, `bbox`, `primary_tag`, `rank`, and `found_by` (`"hybrid"` and/or `"dense"`). `documents`
+    scopes it to those source documents in the store (`None` = all, `[]` = nothing); `tag` keeps one primary tag.
+    No reranking: compose `BGEReranker` over the hits if you want one. Raises `RuntimeError` when the workspace
+    has no embedder."""
+    from rag_wright.capabilities.span_search import span_search as _search
+
+    if ws.embedder is None:
+        raise RuntimeError("span_search needs the workspace's embedder; this workspace was opened without one")
+    return _search(query, store=ws._store, embedder=ws.embedder, k=k, documents=documents, tag=tag,
+                   dense_floor=dense_floor)
+
+
+async def aspan_search(ws: WorkspaceHandle, query: str, *, k: int = 10, documents: Optional[list] = None,
+                       tag: Optional[str] = None, dense_floor: int = 3) -> list:
+    """`span_search` off the event loop (the query embedding and the store calls block), for an async caller."""
+    import asyncio
+
+    return await asyncio.to_thread(span_search, ws, query, k=k, documents=documents, tag=tag,
+                                   dense_floor=dense_floor)

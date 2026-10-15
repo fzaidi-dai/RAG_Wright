@@ -190,7 +190,7 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Table rows:** `table_rows(source_document)` returns every parsed table's rows as exact cells (`TableRow`), and a
   one-row unit carries its row as `Unit.table_row` (ING-7).
 
-### G24: No public hybrid search or fusion primitive
+### G24: No public hybrid search or fusion primitive (closed)
 - **Where:** the engine's own retrieval legs run hybrid (dense + sparse) span search and rank fusion internally, and
   the authoring guide used to say a capability composes them "by direct import"; neither is on `rag_wright.api` or
   `rag_wright.pack_sdk`.
@@ -199,6 +199,10 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
   what it embeds itself, beside a structured leg (`kg_read`, `typed_constraint_match_rank`).
 - **Proposed:** a public hybrid span search over a workspace (query text, filters, k) returning cited spans, with the
   fusion and reranking it already applies; on `rag_wright.pack_sdk` for pack capabilities.
+- **Closed by PS-45:** `span_search(ws, query, *, k, documents, tag, dense_floor)` and `aspan_search` on
+  `rag_wright.api` (which pack code may also import): the store-side RRF fusion of the dense and sparse span
+  legs plus the dense floor (ADR-0104), returning citation-ready `SpanHit`s. Reranking stays the caller's
+  (`BGEReranker`), as it was in the engine's own leg.
 - Surfaced: the TexWright specification (2026-10-14).
 
 ## Prerequisites a domain provides (not engine gaps)

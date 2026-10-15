@@ -30,7 +30,8 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   (`kg_read`, `kg_write`, `kg_edges`, `kg_count`/`kg_delete`/`kg_update`, all filtering by `where` values that
   are equality, a list for membership, `NOT_NULL` or a `Range(gt=, ge=, lt=, le=)` on any number of fields,
   evaluated in the store;
-  `entities_by_name`, `span_positions`), `pack_store(ws, cls)` (build your pack's store extension over the
+  `entities_by_name`, `span_positions`), hybrid span search (`span_search` / `aspan_search`: cited spans from
+  the dense and sparse index, fused in the store), `pack_store(ws, cls)` (build your pack's store extension over the
   workspace's store; the store itself stays private), metering and tracing (`measure_usage`, `record_usage`,
   `traced_run`/`traced_step`, and for code emitting its own generations `tracing_on`/`trace_level`/
   `start_generation`/`finish_generation`/`flush_tracing`), the query embedder (`ws.embedder` where you hold a

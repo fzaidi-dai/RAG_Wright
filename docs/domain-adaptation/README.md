@@ -42,7 +42,7 @@ ADR-0117/0118 engine API + capability runtime). Read [Concepts](../concepts.md) 
    (segmenter, span tagger, unit grouper, boundary decider, writer, a per-document hook)
    → [KG construction](kg-construction.md) and the `building-an-ingestion-capability` skill. Your query graphs, domain functions, and skills **compose the engine's
    generic primitives from the public tiers** (graph reads and query, embedding, typed ranking, reranking,
-   answers, parsing, chunking; hybrid search and fusion are not public yet, gap G24) and register only your OWN domain graphs/models/skills via `register_capability(manifest)` with an
+   answers, parsing, chunking, and hybrid span search with `span_search`) and register only your OWN domain graphs/models/skills via `register_capability(manifest)` with an
    `impl_ref`, invocable (and MCP-exposable) with zero engine edits. Package them as a pack module that exposes
    `register()` and load it with `load_pack("<your module>")`.
    → [Authoring capabilities](authoring-capabilities.md).

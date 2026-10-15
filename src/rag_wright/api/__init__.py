@@ -72,8 +72,9 @@ from rag_wright.evals import (GoldImportError, GoldMapping, aload_gold_set, arun
 from rag_wright.ingestion.tables import table_rows
 from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode, Range
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
-from rag_wright.api.kg import (entities_by_name, kg_count, kg_delete, kg_edges, kg_read, kg_update, kg_write,
-                               span_positions)
+from rag_wright.api.kg import (aspan_search, entities_by_name, kg_count, kg_delete, kg_edges, kg_read, kg_update,
+                               kg_write, span_positions, span_search)
+from rag_wright.capabilities.span_search import SpanHit
 from rag_wright.api.tracing import (finish_generation, flush_tracing, start_generation, trace_level, traced_run,
                                     traced_step, tracing_on)
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage, record_usage
@@ -112,7 +113,7 @@ __all__ = [
     "query_embedder",  # PS-39: the process-wide query embedder, for a seam that holds no workspace
     "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
-    "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "KgNode", "KgEdge", "NOT_NULL", "Range",
+    "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "span_search", "aspan_search", "SpanHit", "KgNode", "KgEdge", "NOT_NULL", "Range",
     "document_of", "decode_bbox",
     "source_document", "parse_document", "aparse_document", "parse_document_bytes", "pdf_page_count", "aparse_document_bytes",
     "agenerate_answer", "ajudge_spans", "EvidenceItem", "GeneratedAnswer", "AnswerKind",
