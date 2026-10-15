@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.11.0...0.12.0) (2026-10-15)
+
+
+### Features
+
+* **PS-43:** worker_spec(definition=), the harness design reference, and the harness source cleared of its originating product's vocabulary ([c19ff4d](https://github.com/fzaidi-dai/RAG_Wright/commit/c19ff4da006611383c6a7bca07ba633e345b44d8))
+
 ## [0.11.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.10.0...0.11.0) (2026-10-15)
 
 
