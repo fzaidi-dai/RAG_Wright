@@ -12,6 +12,9 @@ Signals (any subset; the strongest DEGRADED/UNREADABLE verdict wins):
     unreadable page before OCR is even run.
   - docling `confidence` -- the parser's own per-page `PageConfidenceScores` (0..1), when available.
 
+A page with no ink at all (`ink_frac` ~0, no OCR text) is BLANK (PS-46): nothing to read, so it is neither
+escalated (a VLM asked to transcribe an empty page invents a document) nor flagged needs-rescan.
+
 Thresholds are the ones separated in the OCR benchmark (docs/eval/ocr_benchmark.md): clean/moderate scans read
 at word-hit ~0.2-0.4, Laplacian 2440/549, dark_frac 0.03/0.028; the heavy scan that defeats all OCR sits at
 word-hit ~0, Laplacian 54, dark_frac 0.003.
@@ -28,6 +31,8 @@ _WORD_HIT_DEGRADED = 0.08       # readable text >> this; garbage OCR ~ 0
 _LAPLACIAN_DEGRADED = 150.0     # heavy 54 (blur) vs moderate 549 / clean 2440
 _DARK_FRAC_FAINT = 0.008        # heavy 0.003 (almost no ink) vs ~0.03 readable
 _CONFIDENCE_DEGRADED = 0.5      # docling PageConfidenceScores below this -> distrust
+_INK_FRAC_BLANK = 1e-4          # PS-46: pixels < 200 at 200 DPI. A blank page 0; the heavy (faint) scan ~0.08 and
+#                                 the sparsest real fixture page 0.019, so faint ink is never read as blank.
 
 # a small, dependency-free set of the most common English words -- their hit rate in OCR text cleanly separates
 # real prose (dense with these) from OCR garbage (almost none). Deliberately generic, not domain-specific.
@@ -44,6 +49,7 @@ class ScanQuality(str, Enum):
     READABLE = "readable"        # trust the OCR text
     DEGRADED = "degraded"        # low-quality -> escalate to a VLM
     UNREADABLE = "unreadable"    # nothing recovered -> flag PARTIAL / needs-rescan
+    BLANK = "blank"              # PS-46: no ink on the page -> nothing to read, escalate or rescan
 
 
 class ScanAssessment(BaseModel):
@@ -52,6 +58,7 @@ class ScanAssessment(BaseModel):
     word_hit_rate: float | None = None
     laplacian_var: float | None = None
     dark_frac: float | None = None
+    ink_frac: float | None = None
     confidence: float | None = None
 
 
@@ -64,24 +71,31 @@ def text_readability(text: str) -> float:
 
 
 def image_quality(gray) -> dict:
-    """Pre-OCR page metrics from a grayscale image (numpy 2-D uint8): Laplacian variance (blur; higher = sharper)
-    and dark_frac (fraction of ink-dark pixels; a faint/washed-out scan is near zero)."""
+    """Pre-OCR page metrics from a grayscale image (numpy 2-D uint8): Laplacian variance (blur; higher = sharper),
+    dark_frac (fraction of ink-dark pixels; a faint/washed-out scan is near zero) and ink_frac (fraction of pixels
+    with any visible ink, faint grey included; zero only on a blank page)."""
     import cv2
     import numpy as np
 
     g = np.asarray(gray)
-    return {"laplacian_var": float(cv2.Laplacian(g, cv2.CV_64F).var()), "dark_frac": float((g < 128).mean())}
+    return {"laplacian_var": float(cv2.Laplacian(g, cv2.CV_64F).var()), "dark_frac": float((g < 128).mean()),
+            "ink_frac": float((g < 200).mean())}
 
 
 def assess_scan(text: str | None, *, laplacian_var: float | None = None, dark_frac: float | None = None,
-                confidence: float | None = None) -> ScanAssessment:
-    """Classify a page from whatever signals are available. The strongest negative verdict wins; if nothing at
-    all is recognised and no other signal is present, the page is UNREADABLE (a blank / failed scan)."""
+                ink_frac: float | None = None, confidence: float | None = None) -> ScanAssessment:
+    """Classify a page from whatever signals are available. A page with no OCR text and no ink is BLANK. Otherwise
+    the strongest negative verdict wins; if nothing at all is recognised and no other signal is present, the page is
+    UNREADABLE (a failed scan)."""
     whr = text_readability(text) if text is not None else None
 
     def _a(q: ScanQuality, reason: str) -> ScanAssessment:
         return ScanAssessment(quality=q, reason=reason, word_hit_rate=whr, laplacian_var=laplacian_var,
-                              dark_frac=dark_frac, confidence=confidence)
+                              dark_frac=dark_frac, ink_frac=ink_frac, confidence=confidence)
+
+    # BLANK (PS-46): no text and no ink -- nothing any OCR could recover, so nothing to escalate
+    if not (text or "").strip() and ink_frac is not None and ink_frac <= _INK_FRAC_BLANK:
+        return _a(ScanQuality.BLANK, f"no ink on the page (ink_frac {ink_frac:.6f})")
 
     # UNREADABLE: an empty/near-empty result with no positive evidence anywhere
     if text is not None and not (text or "").strip() and laplacian_var is None and confidence is None:

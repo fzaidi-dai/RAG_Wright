@@ -91,10 +91,12 @@ class DoclingParser:
 
 class TieredOCRReport(BaseModel):
     """0009-WIRE: which pages the tiered parser escalated to the VLM, and which remained unreadable even after
-    the VLM (genuine info loss -> the caller should flag PARTIAL / needs-rescan)."""
+    the VLM (genuine info loss -> the caller should flag PARTIAL / needs-rescan). `blank_pages` (PS-46) had no ink
+    at all: read as empty, never escalated or flagged."""
 
     escalated_pages: list[int] = []
     unreadable_pages: list[int] = []
+    blank_pages: list[int] = []
 
 
 class TieredOCRParser:
@@ -120,7 +122,10 @@ class TieredOCRParser:
         # 0009-GATE-CAL: fold in IMAGE metrics (blur/faintness) -- the strong signal a text-only gate misses when
         # the fast OCR is garbled-but-common-word. The VLM re-check below is text-only (the image stays blurry).
         assessed = assess_document(fast_doc, page_images=_render_gray_pages(source))
-        degraded = sorted(pg for pg, a in assessed.items() if a.quality is not ScanQuality.READABLE)
+        # PS-46: a BLANK page (no ink) has nothing to read: escalating it only lets the VLM invent a page
+        blank = sorted(pg for pg, a in assessed.items() if a.quality is ScanQuality.BLANK)
+        degraded = sorted(pg for pg, a in assessed.items()
+                          if a.quality not in (ScanQuality.READABLE, ScanQuality.BLANK))
         # PARSE-1: a page with a usable NATIVE text layer (born-digital) is authoritative -- the OCR word-hit gate
         # false-positives on legitimately sparse born-digital pages (a signature/joinder page: names, titles,
         # page numbers), which triggered an unnecessary whole-document VLM escalation (~minutes on OpenRouter) on
@@ -129,12 +134,12 @@ class TieredOCRParser:
         born_digital = _text_layer_pages(source)
         degraded = [pg for pg in degraded if pg not in born_digital]
         if not degraded:  # readable scan OR every "degraded" page was actually born-digital -> no VLM cost
-            self.report = TieredOCRReport()
+            self.report = TieredOCRReport(blank_pages=blank)
             return fast_doc
 
         vlm = self._vlm if self._vlm is not None else (_default_vlm_parser() if _vlm_available() else None)
         if vlm is None:  # GRACEFUL DEGRADE: no VLM configured -> cannot escalate; flag PARTIAL, keep the fast doc
-            self.report = TieredOCRReport(escalated_pages=[], unreadable_pages=degraded)
+            self.report = TieredOCRReport(escalated_pages=[], unreadable_pages=degraded, blank_pages=blank)
             _log_unreadable(source, degraded, "no VLM configured (set OPENROUTER_API_KEY)")
             return fast_doc
         try:
@@ -143,14 +148,14 @@ class TieredOCRParser:
             # image-only page used to VLM all 60+ pages (~30 min) and blow the 600s parse deadline.
             vlm_doc = _escalate_degraded_pages(source, fast, vlm, degraded)
         except Exception as exc:  # noqa: BLE001 - a VLM failure must not sink the parse; flag PARTIAL, keep fast doc
-            self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=degraded)
+            self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=degraded, blank_pages=blank)
             _log_unreadable(source, degraded, f"VLM escalation failed: {exc!r}")
             return fast_doc
 
         vlm_assessed = assess_document(vlm_doc)
         unreadable = sorted(pg for pg in degraded
                             if vlm_assessed.get(pg) is None or vlm_assessed[pg].quality is not ScanQuality.READABLE)
-        self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=unreadable)
+        self.report = TieredOCRReport(escalated_pages=degraded, unreadable_pages=unreadable, blank_pages=blank)
         if unreadable:  # even the VLM could not read these -> surface, never silently ingest gibberish
             _log_unreadable(source, unreadable, "unreadable even after VLM escalation")
         return vlm_doc

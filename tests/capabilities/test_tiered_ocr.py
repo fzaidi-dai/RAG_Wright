@@ -6,6 +6,8 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from rag_wright.capabilities.parsing import (
     TieredOCRParser,
     _escalate_degraded_pages,
@@ -239,3 +241,74 @@ def test_escalate_degraded_pages_falls_back_to_whole_doc_without_page_range(monk
     vlm = _FakeParser(_Doc([_item(_REAL, 1)]))                       # no parse_range -> fallback
     doc = _escalate_degraded_pages(Path("x.pdf"), fast, vlm, [1])
     assert doc is vlm.doc and vlm.calls == 1                         # whole-doc convert fallback
+
+
+# --- PS-46 (TexWright 2026-10-15): a blank page is never sent to the VLM -------------------------
+
+def _two_page_pdf_with_a_blank_second_page(text: str) -> bytes:
+    """A valid 2-page PDF: page 1 carries `text` as a text layer, page 2 has no content at all (pure white)."""
+    esc = text.replace("\\", "\\\\").replace("(", r"\(").replace(")", r"\)")
+    stream = f"BT /F1 12 Tf 72 720 Td ({esc}) Tj ET".encode("latin-1")
+    objs = [
+        b"<</Type/Catalog/Pages 2 0 R>>",
+        b"<</Type/Pages/Kids[3 0 R 6 0 R]/Count 2>>",
+        b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>",
+        b"<</Length %d>>\nstream\n%s\nendstream" % (len(stream), stream),
+        b"<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+        b"<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]>>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, obj in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n%s\nendobj\n" % (i, obj)
+    xref_pos = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objs) + 1)
+    for off in offsets:
+        out += b"%010d 00000 n \n" % off
+    out += b"trailer\n<</Size %d/Root 1 0 R>>\nstartxref\n%d\n%%%%EOF\n" % (len(objs) + 1, xref_pos)
+    return bytes(out)
+
+
+def test_a_blank_page_is_not_escalated_to_the_vlm(tmp_path):
+    # TexWright: a real PDF whose page 2 is pure white. The fast parse reads page 1 and nothing on page 2; the
+    # gate used to call page 2 degraded (a white page is "blurry"), send it to the VLM, and keep what the VLM
+    # invented. A page with no ink has nothing to read: never escalated, never flagged needs-rescan.
+    pdf = tmp_path / "blank-tail.pdf"
+    pdf.write_bytes(_two_page_pdf_with_a_blank_second_page(_REAL))
+    fast = _FakeParser(_Doc([_item(_REAL, 1)]))
+    vlm = _FakeParser(_Doc([_item(_REAL, 1), _item("Minutes of the annual meeting, attended by", 2)]))
+    p = TieredOCRParser(fast=fast, vlm=vlm)
+    doc = p.convert(pdf)
+    assert doc is fast.doc and vlm.calls == 0
+    assert p.report.escalated_pages == [] and p.report.unreadable_pages == []
+    assert p.report.blank_pages == [2]
+
+
+def test_a_blank_page_beside_a_degraded_page_escalates_only_the_degraded_one(tmp_path, monkeypatch):
+    # page 1 is a degraded scan (no text layer, garbage OCR), page 2 is blank: only page 1 goes to the VLM.
+    import rag_wright.capabilities.parsing as parsing
+    monkeypatch.setattr(parsing, "_text_layer_pages", lambda source: set())  # page 1 behaves as a scan
+    pdf = tmp_path / "scan-and-blank.pdf"
+    pdf.write_bytes(_two_page_pdf_with_a_blank_second_page(_REAL))
+    fast = _RangeParser({1: _GARBAGE})
+    vlm = _RangeParser({1: _REAL, 2: "Minutes of the annual meeting, attended by"})
+    p = TieredOCRParser(fast=fast, vlm=vlm)
+    doc = p.convert(pdf)
+    assert vlm.ranges == [(1, 1)]                                       # the blank page never reached the VLM
+    assert p.report.escalated_pages == [1] and p.report.blank_pages == [2]
+    assert not any("Minutes" in t.text for t in doc.texts)
+
+
+@pytest.mark.parse
+def test_a_real_parse_reports_a_blank_page_and_escalates_nothing(tmp_path, monkeypatch):
+    # live (docling): the real fast parse + page render of a PDF with a pure-white second page. No VLM is
+    # configured, so before PS-46 page 2 surfaced as unreadable (needs-rescan); with one, it was escalated.
+    for var in ("OPENROUTER_API_KEY", "VLLM_BASE_URL", "VLLM_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    pdf = tmp_path / "blank-tail.pdf"
+    pdf.write_bytes(_two_page_pdf_with_a_blank_second_page(_REAL))
+    p = TieredOCRParser()
+    p.convert(pdf)
+    assert p.report.blank_pages == [2]
+    assert p.report.escalated_pages == [] and p.report.unreadable_pages == []

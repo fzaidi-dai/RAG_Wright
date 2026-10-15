@@ -88,3 +88,35 @@ def test_assess_document_folds_in_image_metrics_0009_gate_cal():
     blurry = np.full((300, 300), 245, np.uint8)              # flat/faded -> laplacian ~0, dark_frac ~0
     assert assess_document(_Doc(), page_images={1: blurry})[1].quality is ScanQuality.DEGRADED
     assert assess_document(_Doc())[1].quality is ScanQuality.READABLE  # same text, no image -> passes
+
+
+# --- PS-46 (TexWright 2026-10-15): a page with no ink is BLANK, not degraded ----------------------
+
+def test_a_page_with_no_ink_is_blank_not_degraded():
+    # a pure-white page: no OCR text, no ink. Nothing to read, so nothing to escalate or rescan; a VLM asked to
+    # transcribe it invents a document (TexWright's report).
+    white = np.full((300, 300), 255, np.uint8)
+    a = assess_scan("", **image_quality(white))
+    assert a.quality is ScanQuality.BLANK and a.ink_frac == 0.0
+
+
+def test_a_faint_scan_has_ink_and_stays_degraded():
+    # the benchmark's heavy scan: dark_frac (< 128) 0.003, close to a blank page's 0 -- but light-grey ink is
+    # everywhere (ink_frac, < 200, ~0.08). It must still escalate, never be mistaken for blank.
+    faint = np.full((300, 300), 255, np.uint8)
+    faint[::10, :] = 170                                   # faint grey strokes, none darker than 128
+    a = assess_scan("", **image_quality(faint))
+    assert a.dark_frac == 0.0 and a.ink_frac > 0.05
+    assert a.quality is ScanQuality.DEGRADED
+
+
+def test_a_page_with_ink_but_no_ocr_text_is_not_blank():
+    # a few marks are enough to make it a page with content (a stamp, a short line): only no ink at all is blank.
+    page = np.full((300, 300), 255, np.uint8)
+    page[100:110, 100:200] = 0
+    assert assess_scan("", **image_quality(page)).quality is not ScanQuality.BLANK
+
+
+def test_ocr_text_on_a_page_is_never_blank():
+    white = np.full((300, 300), 255, np.uint8)
+    assert assess_scan(_REAL, **image_quality(white)).quality is not ScanQuality.BLANK

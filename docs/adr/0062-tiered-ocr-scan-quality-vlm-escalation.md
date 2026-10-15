@@ -84,3 +84,14 @@ now, a self-hosted vLLM-Gemma-4 later for data sovereignty (only `base_url` chan
   as the escalation provider for data sovereignty; (3) routing the vision call **through the async model seam**
   for true thread cancellation (today `to_thread` unblocks the caller at the deadline but the docling thread
   runs on); (4) classical preprocessing stays available as a cheap first pass but is not the heavy-scan fix.
+
+## Amendment (2026-10-15, PS-46): a blank page is not degraded
+
+A page with no ink read as both "blurry" (a white page has Laplacian variance 0) and "faint" (no pixel below 128),
+so it was escalated, and a VLM asked to transcribe an empty page invents one (TexWright: meeting minutes in another
+language, kept in the parse). The gate now measures `ink_frac` (pixels below 200, faint grey included) and returns
+`ScanQuality.BLANK` for a page with no OCR text and `ink_frac` at most 1e-4: never escalated, never flagged
+needs-rescan, listed in `TieredOCRReport.blank_pages`. Measured margin: blank 0; the heavy faint scan 0.077-0.082
+(its `dark_frac` is 0.0025, which is why `dark_frac` alone cannot separate it); the sparsest real fixture page
+0.019. The post-escalation check stays a flag rather than dropping the VLM text: it is an English word-rate test,
+and a correct transcription of a page with few common words (a number-heavy table) fails it.
