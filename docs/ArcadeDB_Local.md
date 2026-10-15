@@ -60,7 +60,7 @@ typed edges, and `ComplianceStore` creates `Requirement`, so they appear the fir
 
 A database created before the `Span` field rename (`contract_id`, `function`, `functions` became `document_id`,
 `primary_tag`, `tags`) is refused by `ensure_schema` with a `RuntimeError`; migrate it once with
-`uv run python -u scripts/migrate_span_fields.py <database>`.
+`migrate_span_fields(config, corpus=...)` from `rag_wright.api` ([installation](installation.md)).
 
 ## Stop / reset
 

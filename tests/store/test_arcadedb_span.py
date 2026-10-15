@@ -145,3 +145,19 @@ def test_migrate_span_fields_moves_values_and_is_idempotent(store):
     assert row["parent_okf_path"] == "acord/1"  # a legacy locator is left in place (no longer engine-declared)
     store.ensure_schema()  # migrated -> accepted
     assert not {"contract_id", "function", "functions"} & store.property_names("Span")
+
+
+@pytest.mark.store
+def test_the_public_migration_opens_an_unmigrated_database(store):
+    """PS-35: the product's door. `open_workspace` refuses this database; `migrate_span_fields` on
+    `rag_wright.api` migrates it, after which `open_workspace` accepts it."""
+    from rag_wright.api import EngineConfig, StoreConfig, drop_workspace, migrate_span_fields, open_workspace
+
+    _old_schema_span(store)
+    config = EngineConfig(store=StoreConfig.from_env())
+    with pytest.raises(RuntimeError, match="migrate_span_fields"):
+        open_workspace(config, corpus=_TEST_DB)
+    assert migrate_span_fields(config, corpus=_TEST_DB) == 1
+    assert migrate_span_fields(config, corpus=_TEST_DB) == 0
+    open_workspace(config, corpus=_TEST_DB, create=False)
+    drop_workspace(config, corpus=_TEST_DB)

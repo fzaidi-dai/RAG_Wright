@@ -83,7 +83,7 @@ def use_workspace_models(ws: Any) -> Iterator[None]:
 def open_workspace(config: EngineConfig, *, corpus: str, reset: bool = False, create: bool = True) -> WorkspaceHandle:
     """Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema:
     the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose
-    `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an
+    `Span` type still has the pre-ING-8d field names (migrate it with `migrate_span_fields`). Returns an
     opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache.
     A missing database is created (logged): that is how a new corpus is provisioned. `create=False` raises
     `LookupError` instead (PS-27) -- use it wherever the corpus must already exist, so a wrong name fails loudly
@@ -138,6 +138,27 @@ def drop_workspace(config: EngineConfig, *, corpus: str) -> bool:
     if existed:
         logger.info("dropped database %r", corpus)
     return existed
+
+
+def migrate_span_fields(config: EngineConfig, *, corpus: str, batch: int = 5000,
+                        progress: Optional[Callable[[int, int], None]] = None) -> int:
+    """Migrate the database `corpus` from the pre-0.2.0 `Span` field names (`contract_id`, `function`, `functions`)
+    to the generic ones (`document_id`, `primary_tag`, `tags`), the database `open_workspace` refuses until this
+    has run (PS-35). Values are copied in batches of `batch` and the old properties dropped; `progress(done, total)`
+    is called after each batch. Idempotent: returns the number of records moved, 0 when already migrated. The
+    database must exist (`LookupError` otherwise; it is never created), and a missing or blank `corpus` raises
+    `ValueError`. Afterwards the schema is checked, so a database this returns for opens with `open_workspace`."""
+    if not corpus or not corpus.strip():
+        raise ValueError("migrate_span_fields needs the corpus to migrate; it never falls back to a default database")
+    store = _build_store(config, corpus, reset=False, create=False)
+    try:
+        moved = store.migrate_span_fields(batch=batch, progress=progress)
+        store.ensure_schema()
+    finally:
+        store.close()
+    if moved:
+        logger.info("migrated %d spans in database %r to the generic field names", moved, corpus)
+    return moved
 
 
 @contextmanager

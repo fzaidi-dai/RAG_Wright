@@ -82,6 +82,7 @@ from rag_wright.models.profiles import (DecisionModelProfile, ModelProfile, Mode
 from rag_wright.api.workspace import (
     WorkspaceHandle,
     drop_workspace,
+    migrate_span_fields,
     open_workspace,
     pack_store,
     temporary_workspace,
@@ -101,7 +102,7 @@ from rag_wright.models.model_servers import (
 )
 
 __all__ = [
-    "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace", "drop_workspace", "temporary_workspace", "pack_store", "use_workspace_models",
+    "EngineConfig", "StoreConfig", "EngineOptions", "IngestOptions", "WorkspaceHandle", "open_workspace", "drop_workspace", "migrate_span_fields", "temporary_workspace", "pack_store", "use_workspace_models",
     # PS-19: deploy the self-hosted model server and use it like any model
     "ModelServerSpec", "ModelServer", "adeploy_model_server", "amodel_server", "await_model_server", "stop_model_server",
     "ModelServerNotDeployed", "ModelServerStatus", "amodel_server_status", "astop_model_server",

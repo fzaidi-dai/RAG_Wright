@@ -131,12 +131,19 @@ To serve open models yourself instead, set `RAG_SERVING=vllm` with `VLLM_BASE_UR
 
 `open_workspace` (through `ensure_schema`) refuses a database whose `Span` type still has the old field names
 (`contract_id`, `function`, `functions`; renamed to `document_id`, `primary_tag`, `tags`) and raises a `RuntimeError`
-naming the fix. Migrate each such database once, in place (it connects with the `ARCADEDB_*` settings in `.env`; it
-is idempotent and streams `X/N` progress):
+naming the fix. Migrate each such database once, in place, with `migrate_span_fields` from `rag_wright.api`. It is
+idempotent (it returns the number of spans moved, 0 when already migrated), never creates a database, and reports
+progress after each batch:
 
-```sh
-uv run python -u scripts/migrate_span_fields.py <database>
+```python
+from rag_wright.api import EngineConfig, StoreConfig, migrate_span_fields
+
+config = EngineConfig(store=StoreConfig.from_env())
+moved = migrate_span_fields(config, corpus="my_corpus",
+                            progress=lambda done, total: print(f"[migrate] {done}/{total}"))
 ```
+
+From an engine checkout, `uv run python -u scripts/migrate_span_fields.py <database>` does the same.
 
 Every other breaking change since 0.1.0, with the exact change a consumer makes, is in
 [`specs/ingestion-hooks/ing8-breaking-changes.md`](specs/ingestion-hooks/ing8-breaking-changes.md).

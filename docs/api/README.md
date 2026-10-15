@@ -296,13 +296,17 @@ The semantic boundary-discovery seam: decide chunk boundaries as a partition of 
 
 ### `open_workspace(config: 'EngineConfig', *, corpus: 'str', reset: 'bool' = False, create: 'bool' = True) -> 'WorkspaceHandle'`
 
-Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `scripts/migrate_span_fields.py`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache. A missing database is created (logged): that is how a new corpus is provisioned. `create=False` raises `LookupError` instead (PS-27) -- use it wherever the corpus must already exist, so a wrong name fails loudly rather than opening an empty graph.
+Resolve (and cache) the workspace for `corpus` (the backend database name) from `config`. Ensures the schema: the neutral engine types, plus `config.pack`'s declared types when set. Raises `RuntimeError` on a database whose `Span` type still has the pre-ING-8d field names (migrate it with `migrate_span_fields`). Returns an opaque `WorkspaceHandle`. `reset=True` drops + recreates the database (test/clean-slate) and bypasses the cache. A missing database is created (logged): that is how a new corpus is provisioned. `create=False` raises `LookupError` instead (PS-27) -- use it wherever the corpus must already exist, so a wrong name fails loudly rather than opening an empty graph.
 
 One handle per store and corpus is cached for the process. An equal `config` returns it; a different one (new models, options, credentials or pack) returns a new handle that replaces it from then on, so a configuration change takes effect without a restart (PS-16). The new handle reuses the store when the store settings and the pack are unchanged, and the query embedder when the embedding profile is unchanged; a call still holding the old handle finishes on the old config.
 
 ### `drop_workspace(config: 'EngineConfig', *, corpus: 'str') -> 'bool'`
 
 Drop the database `corpus` (PS-37): everything in it, the retrieval index and the knowledge graph, is deleted and cannot be recovered. Returns True if it existed, False if there was nothing to drop. A cached handle for it is closed and forgotten, so a later `open_workspace` starts fresh. A missing or blank `corpus` raises `ValueError`: the name is always explicit, never a default database.
+
+### `migrate_span_fields(config: 'EngineConfig', *, corpus: 'str', batch: 'int' = 5000, progress: 'Optional[Callable[[int, int], None]]' = None) -> 'int'`
+
+Migrate the database `corpus` from the pre-0.2.0 `Span` field names (`contract_id`, `function`, `functions`) to the generic ones (`document_id`, `primary_tag`, `tags`), the database `open_workspace` refuses until this has run (PS-35). Values are copied in batches of `batch` and the old properties dropped; `progress(done, total)` is called after each batch. Idempotent: returns the number of records moved, 0 when already migrated. The database must exist (`LookupError` otherwise; it is never created), and a missing or blank `corpus` raises `ValueError`. Afterwards the schema is checked, so a database this returns for opens with `open_workspace`.
 
 ### `temporary_workspace(config: 'EngineConfig', *, prefix: 'str' = 'tmp') -> 'Iterator[WorkspaceHandle]'`
 

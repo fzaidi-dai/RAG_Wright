@@ -297,7 +297,7 @@ class ArcadeDBStore:
         if SPAN_TYPE in types and (stale := sorted(set(_SPAN_FIELD_RENAMES) & self.property_names(SPAN_TYPE))):
             raise RuntimeError(
                 f"this database's {SPAN_TYPE} type still has the pre-ING-8d fields {stale}; migrate it first: "
-                f"`uv run python scripts/migrate_span_fields.py {self._database}` (ArcadeDBStore.migrate_span_fields)")
+                f"`rag_wright.api.migrate_span_fields(config, corpus={self._database!r})`")
         if CHUNK_TYPE not in types:
             self._command(f"CREATE VERTEX TYPE {CHUNK_TYPE}")
             self._command(f"CREATE PROPERTY {CHUNK_TYPE}.chunk_id STRING")
