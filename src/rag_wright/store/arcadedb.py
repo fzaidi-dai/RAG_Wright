@@ -29,7 +29,7 @@ from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataVa
 from rag_wright.corpus.canonicalize import normalize_entity_name  # issue 0030: name -> entity clustering key
 from rag_wright.ontology.pack_schema import load_kg_schema  # ADR-0067 P5b: a pack's declared KG schema (generic)
 from rag_wright.contracts.span import SpanRecord
-from rag_wright.store.seam import NOT_NULL, GraphEdge, GraphNode
+from rag_wright.store.seam import NOT_NULL, GraphEdge, GraphNode, Range
 
 _log = logging.getLogger(__name__)
 
@@ -147,14 +147,16 @@ def _kg_sql(value: object) -> str:
 
 def _kg_where_terms(where: Optional[dict[str, object]],
                     key_range: Optional[tuple[str, object, object]] = None) -> Optional[list[str]]:
-    """The shared KG filter grammar (`kg_read` key ranges, `kg_edges`, `kg_count` / `kg_delete` / `kg_update`): a
-    scalar is equality, a list is membership, `NOT_NULL` is presence; `key_range=(field, lo, hi)` adds
-    `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
+    """The shared KG filter grammar (`kg_read`, `kg_edges`, `kg_count` / `kg_delete` / `kg_update`): a scalar is
+    equality, a list is membership, `NOT_NULL` is presence, a `Range` is its comparisons (ER-1);
+    `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
     the caller returns without a statement)."""
     out: list[str] = []
     for field, value in (where or {}).items():
         if value is NOT_NULL:
             out.append(f"{field} IS NOT NULL")
+        elif isinstance(value, Range):
+            out += [f"{field} {op} {_kg_sql_value(bound)}" for op, bound in value.terms()]
         elif isinstance(value, (list, tuple, set)):
             vals = list(value)
             if not vals:
@@ -501,19 +503,11 @@ class ArcadeDBStore:
     ) -> list[dict]:
         """Read typed nodes of `node_type` (see `Store.kg_read`). A list `where` value that is empty is
         scope-to-nothing -> `[]` without a query (never an invalid `IN []`). Clauses AND-ed in insertion order,
-        then `key_range` (`field >= lo AND field < hi`)."""
-        clauses: list[str] = []
-        for field, value in (where or {}).items():
-            if isinstance(value, (list, tuple, set)):
-                vals = list(value)
-                if not vals:
-                    return []
-                clauses.append(f"{field} IN {_kg_sql_array(vals)}")
-            else:
-                clauses.append(f"{field} = {_kg_sql_value(value)}")
-        if key_range is not None:
-            f, lo, hi = key_range
-            clauses += [f"{f} >= {_kg_sql_value(lo)}", f"{f} < {_kg_sql_value(hi)}"]
+        then `key_range` (`field >= lo AND field < hi`). The filter grammar is `_kg_where_terms`, shared with the
+        other KG calls, so `NOT_NULL` and `Range` work here too."""
+        clauses = _kg_where_terms(where, key_range)
+        if clauses is None:
+            return []
         proj = f"DISTINCT({distinct}) AS {distinct}" if distinct else (", ".join(fields) if fields else "*")
         sql = f"SELECT {proj} FROM {node_type}"
         if clauses:

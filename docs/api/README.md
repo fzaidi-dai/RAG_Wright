@@ -76,6 +76,14 @@ A typed KG node to upsert (DD-1b, ADR-0117): `type` is the vertex type, `key_fie
 
 A typed KG edge to create between two nodes identified by (type, key_field, key). `props` are native values (edge properties are type-driven: edges declare no storage schema).
 
+### `Range(gt: 'Optional[object]' = None, ge: 'Optional[object]' = None, lt: 'Optional[object]' = None, le: 'Optional[object]' = None) -> None`
+
+A `where` value meaning a comparison, evaluated in the store (ER-1): `gt` (>), `ge` (>=), `lt` (<), `le` (<=), at most one lower and one upper bound, at least one bound. Bounds are scalars (numbers compare as numbers, strings lexically). Any number of fields may carry one, beside equality, membership and `NOT_NULL`, on every KG call that takes `where`: `where={"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`.
+
+#### `Range.terms(self) -> 'list[tuple[str, object]]'`
+
+`[(operator, bound), ...]`, lower bound first.
+
 ### `EvidenceItem(*, chunk_id: str, text: str, confidence: Optional[str] = None, properties: Optional[list[dict]] = None) -> None`
 
 One piece of grounding evidence: a chunk's text, its `chunk_id` (the citation), and — for a graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4).
@@ -390,7 +398,7 @@ Rank the live ARD catalog by semantic match to `query`; return the top `k` (opti
 
 ### `kg_read(ws: 'WorkspaceHandle', node_type: 'str', *, where: 'Optional[dict]' = None, fields: 'Optional[list]' = None, distinct: 'Optional[str]' = None, order_by: 'Optional[str]' = None, limit: 'Optional[int]' = None, key_range: 'Optional[tuple]' = None) -> 'list[dict]'`
 
-Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equality/`IN` filters, a `key_range=(field, lo, hi)` range, projection, distinct, order, limit; an empty list `where` value is scope-to-nothing -> `[]`.
+Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range` (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand (`lo <= field < hi`). Then projection, distinct, order and limit.
 
 ### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = ()) -> 'None'`
 
@@ -402,7 +410,7 @@ Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out
 
 ### `kg_count(ws: 'WorkspaceHandle', type_name: 'str', *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
 
-The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`).
+The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`); `where` as in `kg_read`, `Range` values included.
 
 ### `kg_delete(ws: 'WorkspaceHandle', type_name: 'str', *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
 

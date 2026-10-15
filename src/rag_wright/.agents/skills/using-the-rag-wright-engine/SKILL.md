@@ -27,7 +27,9 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   `EngineConfig`/`StoreConfig` (`StoreConfig.from_env()` reads `ARCADEDB_*`)/`open_workspace`
   (`temporary_workspace`/`drop_workspace` for disposable and removed databases), the invokers
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`), the KG accessors
-  (`kg_read` with `key_range`, `kg_write`, `kg_edges` with `NOT_NULL`, `kg_count`/`kg_delete`/`kg_update`,
+  (`kg_read`, `kg_write`, `kg_edges`, `kg_count`/`kg_delete`/`kg_update`, all filtering by `where` values that
+  are equality, a list for membership, `NOT_NULL` or a `Range(gt=, ge=, lt=, le=)` on any number of fields,
+  evaluated in the store;
   `entities_by_name`, `span_positions`), `pack_store(ws, cls)` (build your pack's store extension over the
   workspace's store; the store itself stays private), metering and tracing (`measure_usage`, `record_usage`,
   `traced_run`/`traced_step`, and for code emitting its own generations `tracing_on`/`trace_level`/

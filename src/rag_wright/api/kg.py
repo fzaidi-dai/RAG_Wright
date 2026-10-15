@@ -19,16 +19,19 @@ _SPAN_POSITION_FIELDS = [
 def kg_read(ws: WorkspaceHandle, node_type: str, *, where: Optional[dict] = None, fields: Optional[list] = None,
             distinct: Optional[str] = None, order_by: Optional[str] = None, limit: Optional[int] = None,
             key_range: Optional[tuple] = None) -> list[dict]:
-    """Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Equality/`IN` filters, a
-    `key_range=(field, lo, hi)` range, projection, distinct, order, limit; an empty list `where` value is
-    scope-to-nothing -> `[]`."""
+    """Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar
+    (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range`
+    (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all
+    filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand
+    (`lo <= field < hi`). Then projection, distinct, order and limit."""
     return ws._store.kg_read(node_type, where=where, fields=fields, distinct=distinct, order_by=order_by, limit=limit,
                              key_range=key_range)
 
 
 def kg_count(ws: WorkspaceHandle, type_name: str, *, where: Optional[dict] = None,
              key_range: Optional[tuple] = None) -> int:
-    """The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`)."""
+    """The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`); `where`
+    as in `kg_read`, `Range` values included."""
     return ws._store.kg_count(type_name, where=where, key_range=key_range)
 
 

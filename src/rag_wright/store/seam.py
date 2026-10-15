@@ -29,6 +29,37 @@ NOT_NULL = _NotNull()  # kg_edges where-value: presence test, e.g. edge_where={"
 
 
 @dataclass(frozen=True)
+class Range:
+    """A `where` value meaning a comparison, evaluated in the store (ER-1): `gt` (>), `ge` (>=), `lt` (<), `le`
+    (<=), at most one lower and one upper bound, at least one bound. Bounds are scalars (numbers compare as numbers,
+    strings lexically). Any number of fields may carry one, beside equality, membership and `NOT_NULL`, on every
+    KG call that takes `where`: `where={"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`."""
+
+    gt: Optional[object] = None
+    ge: Optional[object] = None
+    lt: Optional[object] = None
+    le: Optional[object] = None
+
+    def __post_init__(self) -> None:
+        bounds = {k: v for k, v in (("gt", self.gt), ("ge", self.ge), ("lt", self.lt), ("le", self.le))
+                  if v is not None}
+        if not bounds:
+            raise ValueError("Range needs at least one bound: gt, ge, lt or le")
+        if self.gt is not None and self.ge is not None:
+            raise ValueError("Range takes one lower bound: gt or ge, not both")
+        if self.lt is not None and self.le is not None:
+            raise ValueError("Range takes one upper bound: lt or le, not both")
+        for name, value in bounds.items():
+            if not isinstance(value, (int, float, str)):
+                raise TypeError(f"Range.{name} must be a number or a string, got {type(value).__name__}")
+
+    def terms(self) -> list[tuple[str, object]]:
+        """`[(operator, bound), ...]`, lower bound first."""
+        ops = (("gt", ">"), ("ge", ">="), ("lt", "<"), ("le", "<="))
+        return [(op, getattr(self, name)) for name, op in ops if getattr(self, name) is not None]
+
+
+@dataclass(frozen=True)
 class GraphNode:
     """A graph entity node to write (T25). `node_key` is the vertex identity (the resolver's canonical id when
     linked, an `UNLINKED:<key>` surrogate otherwise); `entity_id` is the canonical id, or empty when unlinked."""
@@ -180,12 +211,13 @@ class Store(Protocol):
     ) -> list[dict]:
         """Read typed nodes of `node_type`. `where` maps a field to a scalar (equality) or a list (membership);
         a list value that is EMPTY means scope-to-nothing and returns `[]` without a query. `distinct` returns the
-        distinct values of one field; `fields=None` returns all fields. Equality/membership clauses are AND-ed;
-        `key_range=(field, lo, hi)` adds `field >= lo AND field < hi` (e.g. every id with one prefix)."""
+        distinct values of one field; `fields=None` returns all fields. `NOT_NULL` is presence and a `Range` its
+        comparisons (ER-1); all clauses are AND-ed; `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`
+        (e.g. every id with one prefix)."""
 
     # --- generic count / delete / update (PS-6, G21): with kg_read / kg_edges / kg_write, everything a pack's store
     # extension needs, so it never emits store-native SQL. `where` / `key_range` as in `kg_edges` (scalar = equality,
-    # list = membership, `NOT_NULL` = presence); an EMPTY membership list scopes to nothing (0, no statement).
+    # list = membership, `NOT_NULL` = presence, `Range` = comparisons); an EMPTY membership list scopes to nothing.
 
     def kg_count(self, type_name: str, *, where: Optional[dict[str, object]] = None,
                  key_range: Optional[tuple[str, object, object]] = None) -> int:
