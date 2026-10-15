@@ -4,6 +4,21 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.12.0...0.13.0) (2026-10-15)
+
+
+### Features
+
+* **PS-35:** migrate a pre-0.2.0 database's Span fields through rag_wright.api ([856f956](https://github.com/fzaidi-dai/RAG_Wright/commit/856f956f674c731d170878d44ec3fef980a10ba9))
+* **PS-44:** range filters on any number of KG fields, evaluated in the store (TexWright ER-1) ([cc62c49](https://github.com/fzaidi-dai/RAG_Wright/commit/cc62c49000161567869d46127bb158db16106c28))
+* **PS-45:** a public hybrid span search on rag_wright.api (engine gap G24) ([4aa802f](https://github.com/fzaidi-dai/RAG_Wright/commit/4aa802fdc6cf12a3c732aa7a41e4de6240dd05da))
+* **PS-47:** find cached parses holding text a VLM invented for a blank page ([ff92d81](https://github.com/fzaidi-dai/RAG_Wright/commit/ff92d81956590002418ef50f41dee54e0b0b6ef8))
+
+
+### Bug Fixes
+
+* **PS-46:** a page with no ink is blank, never escalated to the VLM (TexWright 2026-10-15) ([fc633a8](https://github.com/fzaidi-dai/RAG_Wright/commit/fc633a84aa52a89de5b79d90b50d80f7d622d792))
+
 ## [0.12.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.11.0...0.12.0) (2026-10-15)
 
 
