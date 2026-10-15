@@ -1,7 +1,7 @@
 # RuleWright: moving to rag-wright 0.12
 
-What 0.12.0 changes for RuleWright (PS-43, from your note of 2026-10-15; unreleased until its release PR is
-merged). Do the 0.11 guide first. Nothing here is edited from the engine repo, and nothing breaks an existing
+What 0.12.0 changes for RuleWright (PS-43, from your note of 2026-10-15; released 2026-10-15: PyPI and GitHub
+release `0.12.0`). Do the 0.11 guide first. Nothing here is edited from the engine repo, and nothing breaks an existing
 call: every item is new or optional.
 
 ## 1. Build workers with `worker_spec(..., definition=...)` (PS-43)
