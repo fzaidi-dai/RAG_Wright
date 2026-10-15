@@ -26,6 +26,7 @@ from rag_wright.api.answers import (AnswerKind, Condition, EvidenceItem, Generat
                                     RelevanceVerdict, agenerate_answer, ajudge_spans)
 from rag_wright.api.documents import (aparse_document, aparse_document_bytes, parse_document,
                                       parse_document_bytes, source_document, pdf_page_count)
+from rag_wright.capabilities.parse_audit import BlankPageText, find_blank_pages_with_text
 from rag_wright.api.ids import decode_bbox, document_of
 from rag_wright.api.discover import Discovered, discover
 from rag_wright.contracts.ingestion import (
@@ -116,6 +117,7 @@ __all__ = [
     "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "span_search", "aspan_search", "SpanHit", "KgNode", "KgEdge", "NOT_NULL", "Range",
     "document_of", "decode_bbox",
     "source_document", "parse_document", "aparse_document", "parse_document_bytes", "pdf_page_count", "aparse_document_bytes",
+    "find_blank_pages_with_text", "BlankPageText",  # PS-47: cached parses holding text a VLM invented for a blank page
     "agenerate_answer", "ajudge_spans", "EvidenceItem", "GeneratedAnswer", "AnswerKind",
     "RelevanceVerdict", "Relevance", "Condition",
     "measure_usage", "record_usage", "UsageTotals", "ModelUsage", "traced_run", "traced_step",

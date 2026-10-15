@@ -154,6 +154,10 @@ category.
 
 ## 5. Spreadsheets, tables and embedded files
 
+- **Blank PDF pages** are read as empty, never sent to the vision model (engine 0.13.0). On a parse cache built
+  by an earlier engine with `VISION_OCR` configured, run `find_blank_pages_with_text(cache_dir, sources)` once:
+  delete each finding's `cache_files` and re-ingest that document (its blank pages may hold invented text).
+
 - **Hidden sheets** are ingested by default; `IngestSource(include_hidden_sheets=False)` skips them (listed in
   `DocumentReport.skipped_hidden_sheets`).
 - **Blank rows inside a table**: the parse cuts a sheet's table at every blank row; the engine glues a piece back

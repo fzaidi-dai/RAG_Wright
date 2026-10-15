@@ -109,6 +109,11 @@ and how to manage workspaces.
   deployment serves a single model; OCR resolves its endpoint and flags through the same profile as every other
   call. Override one role with `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_VISION_OCR`, `RAG_MODEL_GENERAL`), or every
   role at once with `RAG_MODEL_ALL`; the role-specific variable wins.
+- **Blank PDF pages** are never sent to `VISION_OCR` (0.13.0, PS-46): a page with no ink has nothing to read, and a
+  vision model asked to transcribe one invents a page. A parse cached by an earlier engine with `VISION_OCR`
+  configured may still hold such text: `find_blank_pages_with_text(cache_dir, sources)` lists every page that is
+  blank in the source PDF but has text in its cached parse (files embedded in a parsed package are found in the
+  cache without being passed). Delete each finding's `cache_files`, then re-ingest the document.
 - **Structured output** is client-side tag-parse (ADR-0045); any provider flags live in the profile.
 - **A self-hosted Qwen server**: see [A self-hosted model server](#a-self-hosted-model-server-qwen-on-modal) below.
 - **Decision models** (e.g. Jev) are reached through a `DecisionModelProfile` (default `jev-1.13`;

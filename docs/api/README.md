@@ -88,6 +88,10 @@ A `where` value meaning a comparison, evaluated in the store (ER-1): `gt` (>), `
 
 `[(operator, bound), ...]`, lower bound first.
 
+### `BlankPageText(*, source: str, pages: dict[int, str], cache_files: list[str]) -> None`
+
+One cached parse with text on blank pages. `source` is the PDF's path (or the name given with its bytes), `pages` maps each blank page to the text the cached parse holds there, and `cache_files` are the cached parse(s) and their OCR sidecar: delete them, then re-ingest the document so it is parsed again.
+
 ### `EvidenceItem(*, chunk_id: str, text: str, confidence: Optional[str] = None, properties: Optional[list[dict]] = None) -> None`
 
 One piece of grounding evidence: a chunk's text, its `chunk_id` (the citation), and — for a graph-derived fact — its confidence tag (surfaced to the generator, FR-S.4).
@@ -471,6 +475,10 @@ The number of pages in a PDF (a path or the PDF's bytes), read under the engine'
 ### `aparse_document_bytes(document_id: 'str', name: 'str', data: 'bytes', *, cache_dir: 'Any', metadata: 'dict | None' = None, include_hidden_sheets: 'bool' = True, tuning: 'Any' = None) -> 'Any'`
 
 The async, deadline-bounded twin of `parse_document_bytes` (ADR-0057): runs the docling parse off the event loop.
+
+### `find_blank_pages_with_text(cache_dir: 'Any', sources: 'Iterable[Source]' = (), *, progress: 'Optional[Callable[[int, int], None]]' = None) -> 'list[BlankPageText]'`
+
+Audit the parse cache under `cache_dir` (the one given to `parse_document`, or to `aingest`, which keeps its parses in `parsed/`; searched recursively) for text on blank pages. `sources` are the documents' PDFs, as paths or `(name, bytes)`; files embedded in a parsed package are stored in the cache and audited without being passed. A source that is not a PDF, or has no cached parse, is skipped. `progress(done, total)` is called after each PDF. Raises `FileNotFoundError` when `cache_dir` does not exist.
 
 ### `agenerate_answer(query: 'str', evidence: 'list[EvidenceItem]', *, ws: 'Any', guidance: 'Optional[str]' = None) -> 'GeneratedAnswer'`
 
