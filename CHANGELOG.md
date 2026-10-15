@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.10.0...0.11.0) (2026-10-15)
+
+
+### Features
+
+* **PS-40:** ship the product-building skills (specifying, backend, front end) and correct the product-starter templates for 0.10.0 ([68ec002](https://github.com/fzaidi-dai/RAG_Wright/commit/68ec002ba566da31ea09dc24e7e959fcb6515eb0))
+
 ## [0.10.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.9.0...0.10.0) (2026-10-13)
 
 
