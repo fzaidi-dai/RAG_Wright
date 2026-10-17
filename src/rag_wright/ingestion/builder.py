@@ -33,6 +33,7 @@ from rag_wright.contracts.ingestion import (
     Span,
     SpanTagger,
     TaggedSpan,
+    Unit,
     UnitExtraction,
     UnitGrouper,
     UnitRepresentative,
@@ -86,6 +87,11 @@ class IngestionReport:
     @property
     def succeeded(self) -> int:
         return len(self.documents) - self.failed
+
+    @classmethod
+    def from_dict(cls, value: dict) -> "IngestionReport":
+        """The report from its plain form (`dataclasses.asdict`), as the ingestion graph's output carries it."""
+        return cls(documents=[DocumentReport(**d) for d in value["documents"]])
 
 
 class _NoSummary:
@@ -318,53 +324,86 @@ class IngestionPipeline:
                                chunk_model=self._chunk_model, cache_dir=cache_dir)
 
     async def aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
-                      cache_dir: Union[str, Path]) -> IngestionReport:
+                      cache_dir: Union[str, Path], checkpointer: Any = None,
+                      run_id: Optional[str] = None) -> IngestionReport:
         """Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`).
         `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches
         (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to
         `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised.
         Returns the `IngestionReport`. Every model role resolves through the workspace's `EngineConfig.models`
-        (PS-14)."""
+        (PS-14).
+
+        LGI-3, resuming: pass a LangGraph `checkpointer` (yours, e.g. a Postgres saver) and a `run_id` naming the run.
+        If the process stops mid-run, call `aingest` again with the same sources, `cache_dir`, checkpointer and
+        `run_id`: it carries on from the last finished stage of each document, re-running none that finished. A
+        `run_id` whose run finished raises `ValueError` (start a new run with a new id), as do different sources."""
         from rag_wright.api.workspace import use_workspace_models
 
+        if (checkpointer is None) != (run_id is None):
+            raise ValueError("resuming needs both a checkpointer and a run_id (or neither)")
         with use_workspace_models(ws):
-            return await self._aingest(ws, sources, cache_dir=cache_dir)
+            return await self._aingest(ws, sources, cache_dir=cache_dir, checkpointer=checkpointer, run_id=run_id)
 
     async def _aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
-                       cache_dir: Union[str, Path]) -> IngestionReport:
-        state = await self.graph(ws, cache_dir=cache_dir).ainvoke({"sources": list(sources)})
-        return state["report"]
+                       cache_dir: Union[str, Path], checkpointer: Any, run_id: Optional[str]) -> IngestionReport:
+        items = _sources(sources)
+        if checkpointer is None:
+            return IngestionReport.from_dict(
+                (await self.graph(ws, cache_dir=cache_dir).ainvoke({"sources": items}))["report"])
+        config = {"configurable": {"thread_id": run_id}}
+        saved = await self.graph(ws, cache_dir=cache_dir, checkpointer=checkpointer).aget_state(config)
+        if not saved.values:
+            graph = self.graph(ws, cache_dir=cache_dir, checkpointer=checkpointer)
+            return IngestionReport.from_dict((await graph.ainvoke({"sources": items}, config))["report"])
+        if not saved.next:
+            raise ValueError(f"ingest run {run_id!r} already finished; start a new run with a new run_id")
+        if saved.values.get("sources") != _dump(list[IngestSource], items):
+            raise ValueError(f"ingest run {run_id!r} was started with different sources; resume it with the same "
+                             f"sources, or start a new run with a new run_id")
+        done = sum(t.name == "document" and t.result is not None for t in saved.tasks)
+        self._progress(f"[ingest] resume {run_id}: {done}/{len(items)} documents done")
+        graph = self._run_graph(ws, cache_dir=cache_dir, checkpointer=checkpointer, done=done)
+        return IngestionReport.from_dict((await graph.ainvoke(None, config))["report"])
 
-    def graph(self, ws: Any, *, cache_dir: Union[str, Path]) -> Any:
+    def graph(self, ws: Any, *, cache_dir: Union[str, Path], checkpointer: Any = None) -> Any:
         """LGI-2: the whole run as one compiled LangGraph `StateGraph`, bound to the workspace `ws`:
 
             start --(one Send per source)--> document --> finish
 
         `document` runs one source through `document_graph` (embedded files included); at most
         `tuning.document_concurrency` documents are in flight. The input is `{"sources": [...]}` (file paths or
-        `IngestSource`s); the output's `report` is the `IngestionReport`, its documents in source order. This is what
+        `IngestSource`s); the output's `report` is the `IngestionReport` as plain data (`IngestionReport.from_dict`
+        rebuilds it), its documents in source order. This is what
         `aingest` runs (without `aingest`'s workspace model scoping: wrap the call in `use_workspace_models(ws)` when
-        the workspace overrides model roles). Progress goes to the pipeline's `progress` callback."""
+        the workspace overrides model roles). Progress goes to the pipeline's `progress` callback. With a
+        `checkpointer`, every stage of every document is checkpointed on the thread named by the call's
+        `configurable.thread_id` (see `aingest` for resuming). The state holds only built-in values (dicts, lists,
+        strings, numbers, bytes, dates), so it round-trips through any saver, including LangGraph's strict
+        msgpack mode; a tuple inside a record's free-form `props` comes back from a checkpoint as a list."""
+        return self._run_graph(ws, cache_dir=cache_dir, checkpointer=checkpointer, done=0)
+
+    def _run_graph(self, ws: Any, *, cache_dir: Union[str, Path], checkpointer: Any, done: int) -> Any:
+        """The run graph; `done` = documents a resumed run already finished (its `i/N` lines continue from there)."""
         from langgraph.graph import END, START, StateGraph
         from langgraph.types import Send
 
         stages = self.stages(ws, cache_dir=cache_dir)
         document_graph = self.document_graph(ws, stages)
         sem = asyncio.Semaphore(stages.tuning.document_concurrency)
-        counter = {"done": 0}
+        counter = {"done": done}
 
         def start(state: _RunState) -> dict:
-            items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in state["sources"]]
+            items = _dump(list[IngestSource], _sources(state["sources"]))
             self._progress(f"[ingest] start N={len(items)}")
             _check_model_ceilings(stages.tuning, len(items), self._progress)
-            return {"items": items}
+            return {"sources": items}
 
         def send(state: _RunState) -> Any:
-            total = len(state["items"])
-            return [Send("document", {"source": src, "total": total}) for src in state["items"]] or "finish"
+            total = len(state["sources"])
+            return [Send("document", {"source": src, "total": total}) for src in state["sources"]] or "finish"
 
         async def document(state: _SourceState) -> dict:
-            src = state["source"]
+            src = _load(IngestSource, state["source"])
             async with sem:
                 docs = await self._ingest_file(ws, stages, src.doc_id or _doc_id(src.display_name), src,
                                                parent_id=None, child=None, depth=0, graph=document_graph)
@@ -374,12 +413,12 @@ class IngestionPipeline:
                            + (f"DEAD-LETTER: {top.dead_letter}" if top.dead_letter else
                               f"spans={top.spans} units={top.units} records={top.records} "
                               f"children={len(top.children)} failures={len(top.extraction_failures)}"))
-            return {"documents": [docs]}
+            return {"documents": [_dump(list[DocumentReport], docs)]}
 
         def finish(state: _RunState) -> dict:
-            report = IngestionReport(documents=[d for docs in state.get("documents", []) for d in docs])
+            report = IngestionReport.from_dict({"documents": [d for docs in state.get("documents", []) for d in docs]})
             self._progress(f"[ingest] done {report.succeeded} ok, {report.failed} dead-lettered")
-            return {"report": report}
+            return {"report": _dump(IngestionReport, report)}
 
         g = StateGraph(_RunState)
         g.add_node("start", start)
@@ -389,17 +428,19 @@ class IngestionPipeline:
         g.add_conditional_edges("start", send, ["document", "finish"])
         g.add_edge("document", "finish")
         g.add_edge("finish", END)
-        return g.compile(name="ingestion_run")
+        return g.compile(checkpointer=checkpointer, name="ingestion_run")
 
     async def _ingest_file(self, ws: Any, stages: IngestionStages, doc_id: str, src: IngestSource, *,
                            parent_id: Optional[str], child: Optional[Any], depth: int,
                            graph: Any = None) -> list[DocumentReport]:
         """Ingest one document (`child` = its `EmbeddedChild` record when it was extracted from `parent_id`), then
         its own embedded children, by running the per-document graph (`document_graph`)."""
+        from rag_wright.capabilities.document_parse import EmbeddedChild
+
         graph = graph or self.document_graph(ws, stages)
-        state = await graph.ainvoke({"doc_id": doc_id, "source": src, "parent_id": parent_id, "child": child,
-                                     "depth": depth})
-        return state["reports"]
+        state = await graph.ainvoke({"doc_id": doc_id, "source": _dump(IngestSource, src), "parent_id": parent_id,
+                                     "child": None if child is None else _dump(EmbeddedChild, child), "depth": depth})
+        return _load(list[DocumentReport], state["reports"])
 
     def document_graph(self, ws: Any, stages: IngestionStages) -> Any:
         """LGI-1: the per-document ingestion graph, a compiled LangGraph `StateGraph` over `stages` (bound to `ws`):
@@ -414,38 +455,54 @@ class IngestionPipeline:
 
         from rag_wright.api.documents import aparse_document_bytes
 
+        from rag_wright.capabilities.document_parse import EmbeddedChild, SourceDocument
+        from rag_wright.capabilities.rlm_chunking import Chunk
+
+        # Each node reads the typed values it needs from the state and writes built-in values back (`_dump`), so
+        # the state survives any checkpointer (LGI-3).
+        def document(state: _DocumentState) -> Any:
+            return _load(SourceDocument, state["document"])
+
+        def chunks_of(state: _DocumentState) -> list:
+            return _load(list[Chunk], state["chunks"])
+
+        def tagged_of(state: _DocumentState) -> list:
+            return _load(list[TaggedSpan], state["tagged"])
+
         async def parse(state: _DocumentState) -> dict:
-            src = state["source"]
+            src = _load(IngestSource, state["source"])
             data = src.read_bytes()
-            document = await aparse_document_bytes(state["doc_id"], src.display_name, data,
-                                                   cache_dir=stages.cache / "parsed",
-                                                   include_hidden_sheets=src.include_hidden_sheets,
-                                                   tuning=stages.tuning)
-            return {"document": document, "sha256": hashlib.sha256(data).hexdigest()}
+            parsed = await aparse_document_bytes(state["doc_id"], src.display_name, data,
+                                                 cache_dir=stages.cache / "parsed",
+                                                 include_hidden_sheets=src.include_hidden_sheets, tuning=stages.tuning)
+            return {"document": _dump(SourceDocument, parsed), "sha256": hashlib.sha256(data).hexdigest()}
 
         async def chunk(state: _DocumentState) -> dict:
-            return {"chunks": await stages.chunk(state["document"])}
+            return {"chunks": _dump(list[Chunk], await stages.chunk(document(state)))}
 
         async def segment(state: _DocumentState) -> dict:
-            return {"tagged": await stages.segment(state["document"], state["chunks"])}
+            return {"tagged": _dump(list[TaggedSpan], await stages.segment(document(state), chunks_of(state)))}
 
         async def index(state: _DocumentState) -> dict:
-            return {"indexed": await stages.index(state["document"], state["tagged"], state["chunks"])}
+            return {"indexed": await stages.index(document(state), tagged_of(state), chunks_of(state))}
 
         async def extract(state: _DocumentState) -> dict:
-            return {"extracted": await stages.extract(state["document"], state["tagged"],
-                                                      table_mode=state["source"].table_mode)}
+            stage = await stages.extract(document(state), tagged_of(state), table_mode=state["source"]["table_mode"])
+            return {"extracted": _dump_extract_stage(stage)}
 
         async def write(state: _DocumentState) -> dict:
-            return {"records": await stages.write(state["document"], state["extracted"].extractions)}
+            extracted = _load_extract_stage(state["extracted"])
+            return {"records": await stages.write(document(state), extracted.extractions)}
 
         async def document_hook(state: _DocumentState) -> dict:
             if self._document_hook is not None:
-                await self._document_hook(ws, state["document"], state["chunks"])
+                await self._document_hook(ws, document(state), chunks_of(state))
             return {}
 
         async def document_node(state: _DocumentState) -> dict:
-            src, child, name = state["source"], state.get("child"), state["source"].display_name
+            src = _load(IngestSource, state["source"])
+            child = None if state.get("child") is None else _load(EmbeddedChild, state["child"])
+            name = src.display_name
             await asyncio.to_thread(
                 stages.write_document_node, state["doc_id"], parent_id=state.get("parent_id"),
                 filename=(child.filename if child is not None else None) or name,
@@ -454,8 +511,9 @@ class IngestionPipeline:
             return {}
 
         async def children(state: _DocumentState) -> dict:
-            doc_id, src, sd, depth = state["doc_id"], state["source"], state["document"], state.get("depth", 0)
-            extracted, indexed = state["extracted"], state["indexed"]
+            doc_id, src, sd, depth = state["doc_id"], _load(IngestSource, state["source"]), document(state), \
+                state.get("depth", 0)
+            extracted, indexed = _load_extract_stage(state["extracted"]), state["indexed"]
             rep = _document_report(state)
             rep.chunks, rep.units = len(state["chunks"]), len(extracted.units)
             rep.spans, rep.span_failures = indexed["span_count"], indexed["span_failures"]
@@ -476,12 +534,12 @@ class IngestionPipeline:
                 self._progress(f"[ingest]   {doc_id} child {j}/{len(sd.embedded)} {emb.filename or emb.doc_id} "
                                + (f"DEAD-LETTER: {kids[0].dead_letter}" if kids[0].dead_letter else
                                   f"spans={kids[0].spans} units={kids[0].units}"))
-            return {"reports": reports}
+            return {"reports": _dump(list[DocumentReport], reports)}
 
         def dead_letter(state: _DocumentState) -> dict:
             rep = _document_report(state)
             rep.dead_letter = state["dead_letter"]
-            return {"reports": [rep]}
+            return {"reports": _dump(list[DocumentReport], [rep])}
 
         stages_in_order = [("parse", parse), ("chunk", chunk), ("segment", segment), ("index", index),
                            ("extract", extract), ("write", write), ("document_hook", document_hook),
@@ -499,39 +557,72 @@ class IngestionPipeline:
         return compiled
 
 
-class _RunState(TypedDict, total=False):
-    """The run graph's state: the sources, each document's reports (in source order) and the final report."""
+def _sources(sources: Sequence[Union[str, Path, IngestSource]]) -> list[IngestSource]:
+    return [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
 
-    sources: list
-    items: list
+
+@functools.cache
+def _adapter(kind: Any) -> Any:
+    from pydantic import TypeAdapter
+
+    return TypeAdapter(kind)
+
+
+def _dump(kind: Any, value: Any) -> Any:
+    """A typed value as built-in values, for the graph state (any checkpointer can store and load it)."""
+    return _adapter(kind).dump_python(value)
+
+
+def _load(kind: Any, value: Any) -> Any:
+    """The typed value back from the graph state."""
+    return _adapter(kind).validate_python(value)
+
+
+def _dump_extract_stage(stage: ExtractStage) -> dict:
+    return {"units": _dump(list[Unit], stage.units), "extractions": _dump(list[UnitExtraction], stage.extractions),
+            "failures": stage.failures, "row_spans": [[ref, row, span] for (ref, row), span in stage.row_spans.items()]}
+
+
+def _load_extract_stage(value: dict) -> ExtractStage:
+    return ExtractStage(units=_load(list[Unit], value["units"]),
+                        extractions=_load(list[UnitExtraction], value["extractions"]), failures=value["failures"],
+                        row_spans={(ref, row): span for ref, row, span in value["row_spans"]})
+
+
+class _RunState(TypedDict, total=False):
+    """The run graph's state, in built-in values: the sources, each document's reports (in source order) and the
+    final report."""
+
+    sources: list  # each an `IngestSource`
     documents: Annotated[list, operator.add]  # one entry per source: its document's reports, children included
-    report: IngestionReport
+    report: dict  # the `IngestionReport`
 
 
 class _SourceState(TypedDict):
     """What the run graph sends to `document`: one source, and the run's size for the `i/N` progress line."""
 
-    source: IngestSource
+    source: dict  # an `IngestSource`
     total: int
 
 
 class _DocumentState(TypedDict, total=False):
-    """The per-document graph's state. The parse itself stays in the parse cache: `document` holds its handle."""
+    """The per-document graph's state, in built-in values. The parse itself stays in the parse cache: `document`
+    holds its handle."""
 
     doc_id: str
-    source: IngestSource
+    source: dict  # the `IngestSource`
     parent_id: Optional[str]
-    child: Any  # the `EmbeddedChild` this document was extracted as (None for a top-level source)
+    child: Optional[dict]  # the `EmbeddedChild` this document was extracted as (None for a top-level source)
     depth: int
-    document: Any  # the `SourceDocument`
+    document: dict  # the `SourceDocument`
     sha256: str
-    chunks: list
-    tagged: list
+    chunks: list  # `Chunk`s
+    tagged: list  # `TaggedSpan`s
     indexed: dict
-    extracted: ExtractStage
+    extracted: dict  # the `ExtractStage`
     records: int
     dead_letter: Optional[str]
-    reports: list
+    reports: list  # `DocumentReport`s
 
 
 def _dead_lettering(fn: Callable[[Any], Awaitable[dict]]) -> Callable[[Any], Awaitable[dict]]:
@@ -556,8 +647,8 @@ def _document_report(state: Any) -> DocumentReport:
     sd = state.get("document")
     return DocumentReport(doc_id=state["doc_id"], parent_doc_id=state.get("parent_id"),
                           records=state.get("records", 0),
-                          skipped_hidden_sheets=list(sd.skipped_hidden_sheets) if sd is not None else [],
-                          embedded_skipped=list(sd.embedded_skipped) if sd is not None else [])
+                          skipped_hidden_sheets=list(sd["skipped_hidden_sheets"]) if sd is not None else [],
+                          embedded_skipped=list(sd["embedded_skipped"]) if sd is not None else [])
 
 
 def _with_pages(document: Any, chunks: list, chunk: Any, spans: list[Span]) -> list[Span]:

@@ -229,7 +229,9 @@ def test_the_run_is_one_langgraph_graph_that_sends_each_source_to_the_document_g
     assert isinstance(graph, CompiledStateGraph)
     out = asyncio.run(graph.ainvoke({"sources": [str(FIXTURES / "textile_spec_sheet.md"),
                                                  str(FIXTURES / "textile_test_report.md")]}))
-    report = out["report"]
+    from rag_wright.api import IngestionReport
+
+    report = IngestionReport.from_dict(out["report"])  # the graph's state is plain data (LGI-3)
     assert [d.doc_id for d in report.documents] == ["textile_spec_sheet_md", "textile_test_report_md"]
     assert report.succeeded == 2 and report.failed == 0
 
@@ -285,3 +287,138 @@ def test_a_run_with_no_sources_reports_nothing(tmp_path):
     pipe = build_ingestion(_extractor, embedder=_Embedder(), progress=lines.append)
     report = asyncio.run(pipe.aingest(_workspace(), [], cache_dir=tmp_path))
     assert report.documents == [] and lines == ["[ingest] start N=0", "[ingest] done 0 ok, 0 dead-lettered"]
+
+
+# --- LGI-3: resuming an interrupted run from a checkpoint ------------------------------------------------------------
+
+
+class _Crash(BaseException):
+    """Stands in for the process dying mid-run (a BaseException is never dead-lettered)."""
+
+
+class _CountingEmbedder(_Embedder):
+    def __init__(self):
+        self.batches = 0
+
+    def encode_batch(self, texts):
+        self.batches += 1
+        return super().encode_batch(texts)
+
+
+def _three_sources(tmp_path) -> list[str]:
+    out = []
+    for i in range(3):
+        path = tmp_path / f"sheet{i}.md"
+        path.write_text(f"# Sheet {i}\n\nGauge: {20 + i}G.\n\nStitch length: 2.{i} mm.\n")
+        out.append(str(path))
+    return out
+
+
+def _crashing_extractor(calls: list, crash_on: set):
+    async def extract(unit, *, source_doc_id):
+        calls.append(source_doc_id)
+        if source_doc_id in crash_on:
+            crash_on.discard(source_doc_id)
+            raise _Crash()
+        return await _extractor(unit, source_doc_id=source_doc_id)
+    return extract
+
+
+def _saver(strict: bool):
+    """An in-memory saver; `strict` = LangGraph's strict msgpack mode, which loads built-in types only."""
+    from langgraph.checkpoint.memory import InMemorySaver
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+
+    return InMemorySaver(serde=JsonPlusSerializer(allowed_msgpack_modules=None)) if strict else InMemorySaver()
+
+
+@pytest.mark.parametrize("strict", [False, True], ids=["default-serde", "strict-serde"])
+def test_a_crashed_run_resumes_where_it_stopped_and_reports_as_if_it_never_crashed(tmp_path, strict):
+
+    sources = _three_sources(tmp_path)
+    one_at_a_time = IngestionTuning(document_concurrency=1, extract_concurrency=1)
+    clean_ws = _workspace()
+    clean = asyncio.run(build_ingestion(_extractor, embedder=_Embedder(), progress=lambda _l: None,
+                                        tuning=one_at_a_time).aingest(clean_ws, sources, cache_dir=tmp_path / "c1"))
+
+    calls, crash_on, embedder, saver, ws = [], {"sheet1_md"}, _CountingEmbedder(), _saver(strict), _workspace()
+    pipe = build_ingestion(_crashing_extractor(calls, crash_on), embedder=embedder, progress=lambda _l: None,
+                           tuning=one_at_a_time)
+    with pytest.raises(_Crash):
+        asyncio.run(pipe.aingest(ws, sources, cache_dir=tmp_path / "c2", checkpointer=saver, run_id="r1"))
+    assert embedder.batches == 2 and "sheet2_md" not in calls  # sheet0 done, sheet1 indexed then crashed
+
+    calls.clear()
+    embedder.batches = 0
+    report = asyncio.run(pipe.aingest(ws, sources, cache_dir=tmp_path / "c2", checkpointer=saver, run_id="r1"))
+    assert "sheet0_md" not in calls and "sheet1_md" in calls and "sheet2_md" in calls  # finished work not redone
+    assert embedder.batches == 1  # only sheet2 is indexed: sheet1's index stage had finished before the crash
+    assert [_plain(d) for d in report.documents] == [_plain(d) for d in clean.documents]
+    assert sorted(map(json.dumps, map(_plain, ws._store.nodes))) == \
+        sorted(map(json.dumps, map(_plain, clean_ws._store.nodes)))
+
+
+def test_the_progress_of_a_resumed_run_continues_its_count(tmp_path):
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    sources, saver, lines = _three_sources(tmp_path), InMemorySaver(), []
+    pipe = build_ingestion(_crashing_extractor([], {"sheet1_md"}), embedder=_Embedder(), progress=lines.append,
+                           tuning=IngestionTuning(document_concurrency=1, extract_concurrency=1))
+    with pytest.raises(_Crash):
+        asyncio.run(pipe.aingest(_workspace(), sources, cache_dir=tmp_path, checkpointer=saver, run_id="r1"))
+    lines.clear()
+    asyncio.run(pipe.aingest(_workspace(), sources, cache_dir=tmp_path, checkpointer=saver, run_id="r1"))
+    assert lines[0] == "[ingest] resume r1: 1/3 documents done"
+    assert [ln.split()[1] for ln in lines[1:-1]] == ["2/3", "3/3"] and lines[-1].startswith("[ingest] done 3 ok")
+
+
+def test_a_finished_run_is_not_run_again(tmp_path):
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    sources, saver = _three_sources(tmp_path), InMemorySaver()
+    pipe = build_ingestion(_extractor, embedder=_Embedder(), progress=lambda _l: None)
+    asyncio.run(pipe.aingest(_workspace(), sources, cache_dir=tmp_path, checkpointer=saver, run_id="r1"))
+    with pytest.raises(ValueError, match="already finished"):
+        asyncio.run(pipe.aingest(_workspace(), sources, cache_dir=tmp_path, checkpointer=saver, run_id="r1"))
+
+
+def test_a_run_resumes_only_with_the_sources_it_started_with(tmp_path):
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    sources, saver = _three_sources(tmp_path), InMemorySaver()
+    pipe = build_ingestion(_crashing_extractor([], {"sheet1_md"}), embedder=_Embedder(), progress=lambda _l: None,
+                           tuning=IngestionTuning(document_concurrency=1))
+    with pytest.raises(_Crash):
+        asyncio.run(pipe.aingest(_workspace(), sources, cache_dir=tmp_path, checkpointer=saver, run_id="r1"))
+    with pytest.raises(ValueError, match="different sources"):
+        asyncio.run(pipe.aingest(_workspace(), sources[:2], cache_dir=tmp_path, checkpointer=saver, run_id="r1"))
+
+
+def test_a_checkpointer_and_a_run_id_come_together(tmp_path):
+    from langgraph.checkpoint.memory import InMemorySaver
+
+    pipe = build_ingestion(_extractor, embedder=_Embedder(), progress=lambda _l: None)
+    with pytest.raises(ValueError, match="run_id"):
+        asyncio.run(pipe.aingest(_workspace(), [], cache_dir=tmp_path, checkpointer=InMemorySaver()))
+    with pytest.raises(ValueError, match="checkpointer"):
+        asyncio.run(pipe.aingest(_workspace(), [], cache_dir=tmp_path, run_id="r1"))
+
+
+def test_a_run_that_crashed_inside_an_embedded_report_resumes_inside_it(tmp_path):
+    source = [IngestSource(path=str(FIXTURES / "parity_db_with_reports.xlsx"), doc_id="db")]
+    clean_ws = _workspace()
+    clean = asyncio.run(build_ingestion(_extractor, embedder=_Embedder(), progress=lambda _l: None)
+                        .aingest(clean_ws, source, cache_dir=tmp_path / "c1"))
+    second_child = clean.documents[2].doc_id  # the parent, then its two reports, in order
+
+    calls, saver, ws = [], _saver(strict=True), _workspace()
+    pipe = build_ingestion(_crashing_extractor(calls, {second_child}), embedder=_Embedder(),
+                           progress=lambda _l: None)
+    with pytest.raises(_Crash):
+        asyncio.run(pipe.aingest(ws, source, cache_dir=tmp_path / "c2", checkpointer=saver, run_id="r1"))
+    calls.clear()
+    report = asyncio.run(pipe.aingest(ws, source, cache_dir=tmp_path / "c2", checkpointer=saver, run_id="r1"))
+    assert set(calls) == {second_child}  # the parent and the first report are not extracted again
+    assert [_plain(d) for d in report.documents] == [_plain(d) for d in clean.documents]
+    assert sorted(map(json.dumps, map(_plain, ws._store.ensured))) == \
+        sorted(map(json.dumps, map(_plain, clean_ws._store.ensured)))

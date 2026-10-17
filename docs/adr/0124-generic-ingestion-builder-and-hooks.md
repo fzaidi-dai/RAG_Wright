@@ -272,3 +272,9 @@ writing to change one decision (engine gaps G3/G4).
   `start` sends each source to `document` (the per-document graph; at most `document_concurrency` in flight, by a
   semaphore in the node so a direct caller needs no config), `finish` builds the `IngestionReport`. `aingest` runs
   it. The report's documents are now in source order (they were in completion order, which varied run to run).
+- **LGI-3 (2026-10-17): an interrupted run resumes.** `aingest(..., checkpointer=, run_id=)` checkpoints every stage
+  of every document (embedded children included) on the thread `run_id`; calling it again with the same sources and
+  `run_id` resumes from each document's last finished stage. A finished run, different sources, or only one of the
+  two arguments raise `ValueError`. The graph state holds built-in values only (each node loads the typed values it
+  needs), because LangGraph's strict msgpack mode blocks the engine's types; a tuple in a record's free-form `props`
+  comes back as a list after a resume. `IngestionReport.from_dict` rebuilds the report from `graph()`'s output.
