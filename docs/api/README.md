@@ -190,6 +190,14 @@ Advanced: the individual stage functions bound to a workspace (its store, ingest
 
 Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`. Every model role resolves through the workspace's `EngineConfig.models` (PS-14).
 
+#### `IngestionPipeline.graph(self, ws: 'Any', *, cache_dir: 'Union[str, Path]') -> 'Any'`
+
+LGI-2: the whole run as one compiled LangGraph `StateGraph`, bound to the workspace `ws`:
+
+start --(one Send per source)--> document --> finish
+
+`document` runs one source through `document_graph` (embedded files included); at most `tuning.document_concurrency` documents are in flight. The input is `{"sources": [...]}` (file paths or `IngestSource`s); the output's `report` is the `IngestionReport`, its documents in source order. This is what `aingest` runs (without `aingest`'s workspace model scoping: wrap the call in `use_workspace_models(ws)` when the workspace overrides model roles). Progress goes to the pipeline's `progress` callback.
+
 #### `IngestionPipeline.document_graph(self, ws: 'Any', stages: 'IngestionStages') -> 'Any'`
 
 LGI-1: the per-document ingestion graph, a compiled LangGraph `StateGraph` over `stages` (bound to `ws`):

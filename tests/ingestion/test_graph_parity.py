@@ -215,3 +215,73 @@ def test_a_hook_that_fails_after_the_write_dead_letters_the_document_and_keeps_i
     assert doc.dead_letter == "RuntimeError: entity graph unavailable"
     assert doc.records == 5 and doc.spans == 0  # the records landed; the counts of a finished document are not set
     assert not any(n.type == "Document" for n in ws._store.nodes)  # it never got its Document node
+
+
+# --- LGI-2: the run graph --------------------------------------------------------------------------------------------
+
+
+def test_the_run_is_one_langgraph_graph_that_sends_each_source_to_the_document_graph(tmp_path):
+    from langgraph.graph.state import CompiledStateGraph
+
+    ws = _workspace()
+    pipe = build_ingestion(_extractor, embedder=_Embedder(), progress=lambda _l: None)
+    graph = pipe.graph(ws, cache_dir=tmp_path)
+    assert isinstance(graph, CompiledStateGraph)
+    out = asyncio.run(graph.ainvoke({"sources": [str(FIXTURES / "textile_spec_sheet.md"),
+                                                 str(FIXTURES / "textile_test_report.md")]}))
+    report = out["report"]
+    assert [d.doc_id for d in report.documents] == ["textile_spec_sheet_md", "textile_test_report_md"]
+    assert report.succeeded == 2 and report.failed == 0
+
+
+def test_the_report_lists_documents_in_source_order_whatever_order_they_finish_in(tmp_path):
+    async def slow_first(unit, *, source_doc_id):
+        if source_doc_id == "textile_spec_sheet_md":
+            await asyncio.sleep(0.05)
+        return await _extractor(unit, source_doc_id=source_doc_id)
+
+    pipe = build_ingestion(slow_first, embedder=_Embedder(), progress=lambda _l: None)
+    report = asyncio.run(pipe.aingest(_workspace(), [str(FIXTURES / "textile_spec_sheet.md"),
+                                                     str(FIXTURES / "textile_test_report.md")], cache_dir=tmp_path))
+    assert [d.doc_id for d in report.documents] == ["textile_spec_sheet_md", "textile_test_report_md"]
+
+
+@pytest.mark.parametrize("limit", [1, 2, 3])
+def test_no_more_documents_are_in_flight_than_document_concurrency(tmp_path, limit):
+    in_flight, peak = 0, 0
+
+    async def counting(unit, *, source_doc_id):
+        return await _extractor(unit, source_doc_id=source_doc_id)
+
+    async def hook(ws, sd, chunks):  # runs inside a document: count documents between parse and their hook
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0.02)
+        in_flight -= 1
+
+    sources = []
+    for i in range(5):
+        path = tmp_path / f"doc{i}.md"
+        path.write_text(f"# Sheet {i}\n\nGauge: {20 + i}G.\n")
+        sources.append(str(path))
+    pipe = build_ingestion(counting, embedder=_Embedder(), progress=lambda _l: None, document_hook=hook,
+                           tuning=IngestionTuning(document_concurrency=limit))
+    report = asyncio.run(pipe.aingest(_workspace(), sources, cache_dir=tmp_path / "cache"))
+    assert report.succeeded == 5 and peak == limit
+
+
+def test_the_progress_lines_bracket_the_run(tmp_path):
+    lines: list[str] = []
+    pipe = build_ingestion(_extractor, embedder=_Embedder(), progress=lines.append)
+    asyncio.run(pipe.aingest(_workspace(), [str(FIXTURES / "textile_spec_sheet.md"),
+                                            str(FIXTURES / "textile_test_report.md")], cache_dir=tmp_path))
+    assert lines[0] == "[ingest] start N=2" and lines[-1] == "[ingest] done 2 ok, 0 dead-lettered"
+    assert sorted(ln.split()[1] for ln in lines[1:-1]) == ["1/2", "2/2"]
+
+
+def test_a_run_with_no_sources_reports_nothing(tmp_path):
+    lines: list[str] = []
+    pipe = build_ingestion(_extractor, embedder=_Embedder(), progress=lines.append)
+    report = asyncio.run(pipe.aingest(_workspace(), [], cache_dir=tmp_path))
+    assert report.documents == [] and lines == ["[ingest] start N=0", "[ingest] done 0 ok, 0 dead-lettered"]

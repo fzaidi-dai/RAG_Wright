@@ -16,11 +16,12 @@ import asyncio
 import functools
 import hashlib
 import mimetypes
+import operator
 import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional, Sequence, TypedDict, Union
+from typing import Annotated, Any, Awaitable, Callable, Optional, Sequence, TypedDict, Union
 
 from rag_wright.contracts.ingestion import (
     BoundaryDecider,
@@ -331,31 +332,64 @@ class IngestionPipeline:
 
     async def _aingest(self, ws: Any, sources: Sequence[Union[str, Path, IngestSource]], *,
                        cache_dir: Union[str, Path]) -> IngestionReport:
-        stages = self.stages(ws, cache_dir=cache_dir)
-        items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
-        report = IngestionReport()
-        graph = self.document_graph(ws, stages)
-        sem = asyncio.Semaphore(stages.tuning.document_concurrency)
-        done = 0
-        self._progress(f"[ingest] start N={len(items)}")
-        _check_model_ceilings(stages.tuning, len(items), self._progress)
+        state = await self.graph(ws, cache_dir=cache_dir).ainvoke({"sources": list(sources)})
+        return state["report"]
 
-        async def one(src: IngestSource) -> None:
-            nonlocal done
+    def graph(self, ws: Any, *, cache_dir: Union[str, Path]) -> Any:
+        """LGI-2: the whole run as one compiled LangGraph `StateGraph`, bound to the workspace `ws`:
+
+            start --(one Send per source)--> document --> finish
+
+        `document` runs one source through `document_graph` (embedded files included); at most
+        `tuning.document_concurrency` documents are in flight. The input is `{"sources": [...]}` (file paths or
+        `IngestSource`s); the output's `report` is the `IngestionReport`, its documents in source order. This is what
+        `aingest` runs (without `aingest`'s workspace model scoping: wrap the call in `use_workspace_models(ws)` when
+        the workspace overrides model roles). Progress goes to the pipeline's `progress` callback."""
+        from langgraph.graph import END, START, StateGraph
+        from langgraph.types import Send
+
+        stages = self.stages(ws, cache_dir=cache_dir)
+        document_graph = self.document_graph(ws, stages)
+        sem = asyncio.Semaphore(stages.tuning.document_concurrency)
+        counter = {"done": 0}
+
+        def start(state: _RunState) -> dict:
+            items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in state["sources"]]
+            self._progress(f"[ingest] start N={len(items)}")
+            _check_model_ceilings(stages.tuning, len(items), self._progress)
+            return {"items": items}
+
+        def send(state: _RunState) -> Any:
+            total = len(state["items"])
+            return [Send("document", {"source": src, "total": total}) for src in state["items"]] or "finish"
+
+        async def document(state: _SourceState) -> dict:
+            src = state["source"]
             async with sem:
                 docs = await self._ingest_file(ws, stages, src.doc_id or _doc_id(src.display_name), src,
-                                               parent_id=None, child=None, depth=0, graph=graph)
-            report.documents.extend(docs)
-            done += 1
+                                               parent_id=None, child=None, depth=0, graph=document_graph)
+            counter["done"] += 1
             top = docs[0]
-            self._progress(f"[ingest] {done}/{len(items)} {top.doc_id} "
+            self._progress(f"[ingest] {counter['done']}/{state['total']} {top.doc_id} "
                            + (f"DEAD-LETTER: {top.dead_letter}" if top.dead_letter else
                               f"spans={top.spans} units={top.units} records={top.records} "
                               f"children={len(top.children)} failures={len(top.extraction_failures)}"))
+            return {"documents": [docs]}
 
-        await asyncio.gather(*(one(s) for s in items))
-        self._progress(f"[ingest] done {report.succeeded} ok, {report.failed} dead-lettered")
-        return report
+        def finish(state: _RunState) -> dict:
+            report = IngestionReport(documents=[d for docs in state.get("documents", []) for d in docs])
+            self._progress(f"[ingest] done {report.succeeded} ok, {report.failed} dead-lettered")
+            return {"report": report}
+
+        g = StateGraph(_RunState)
+        g.add_node("start", start)
+        g.add_node("document", document, input_schema=_SourceState)
+        g.add_node("finish", finish)
+        g.add_edge(START, "start")
+        g.add_conditional_edges("start", send, ["document", "finish"])
+        g.add_edge("document", "finish")
+        g.add_edge("finish", END)
+        return g.compile(name="ingestion_run")
 
     async def _ingest_file(self, ws: Any, stages: IngestionStages, doc_id: str, src: IngestSource, *,
                            parent_id: Optional[str], child: Optional[Any], depth: int,
@@ -463,6 +497,22 @@ class IngestionPipeline:
         g.add_edge("dead_letter", END)
         compiled = g.compile(name="document_ingestion")
         return compiled
+
+
+class _RunState(TypedDict, total=False):
+    """The run graph's state: the sources, each document's reports (in source order) and the final report."""
+
+    sources: list
+    items: list
+    documents: Annotated[list, operator.add]  # one entry per source: its document's reports, children included
+    report: IngestionReport
+
+
+class _SourceState(TypedDict):
+    """What the run graph sends to `document`: one source, and the run's size for the `i/N` progress line."""
+
+    source: IngestSource
+    total: int
 
 
 class _DocumentState(TypedDict, total=False):

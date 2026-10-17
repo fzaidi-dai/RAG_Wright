@@ -268,3 +268,7 @@ writing to change one decision (engine gaps G3/G4).
   the asyncio driver before the change (`tests/fixtures/ingestion/parity.json`, 11 scenarios: reports, store
   contents, hook calls, progress lines), with the scenario inputs committed because freshly built PDFs and OOXML
   files carry random ids and timestamps.
+- **LGI-2 (2026-10-17): the run is one graph.** `IngestionPipeline.graph(ws, *, cache_dir)` compiles the whole run:
+  `start` sends each source to `document` (the per-document graph; at most `document_concurrency` in flight, by a
+  semaphore in the node so a direct caller needs no config), `finish` builds the `IngestionReport`. `aingest` runs
+  it. The report's documents are now in source order (they were in completion order, which varied run to run).
