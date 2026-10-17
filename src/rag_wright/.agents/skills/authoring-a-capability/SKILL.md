@@ -93,6 +93,12 @@ MCP) follows automatically for invokable kinds; 4b (a bespoke MCP server) is opt
   (the reference pack: `packs/contracts/subgraphs/typed_property_retrieval.py`). A `production_<slug>(*, store, ...) -> CompiledGraph` builder: `g = StateGraph(_State)`,
   add nodes/edges with `START`/`END`, `return g.compile()`. Nodes call functions/models (compose).
 - **Invoke:** the co-located `async def ainvoke(resources, inputs)` factory (impl_ref target) builds + awaits the graph.
+- **An ingestion capability already has its graph.** `build_ingestion(...)` compiles one (LGI, ADR-0124): its
+  `production_<slug>` returns `pipeline.graph(ws, cache_dir=...)` (the whole run: each source through the
+  per-document graph parse -> chunk -> segment -> index -> extract -> write -> hooks -> children), and its `ainvoke`
+  runs `await pipeline.aingest(resources, sources, cache_dir=...)`. Do not wrap it in a second `StateGraph`. For a
+  long ingest, pass your own LangGraph checkpointer and a `run_id` to `aingest` so an interrupted run resumes
+  (`building-an-ingestion-capability`).
 - Retry/dead-letter come from the graph scaffold, not the invoker. `CapabilityManifest` has no contract field (only
   the internal `CapabilityRegistry.register(contract=...)` takes one); where the typed I/O must be declared, set
   `capability_interface` on the manifest (`CapabilityInterface`, from `rag_wright.pack_sdk`).

@@ -106,6 +106,12 @@ pipeline = build_ingestion(extractor, segmenter=None, span_tagger=None, unit_gro
 report = await pipeline.aingest(ws, sources, cache_dir="cache/")
 ```
 
+- **It is a LangGraph graph.** `pipeline.graph(ws, cache_dir=...)` is the compiled run: each source goes through the
+  per-document graph (parse, chunk, segment, index, extract, write, the document hook, the `Document` node, then its
+  embedded files through the same graph), at most `document_concurrency` documents at a time; a stage that fails
+  dead-letters its document, never the run. `aingest` runs it, and with `checkpointer=` and `run_id=` an interrupted
+  run resumes from each document's last finished stage.
+
 - **The engine owns the mechanism:** parse (PDF, Office, spreadsheets incl. hidden sheets), chunk, segment each chunk
   into spans that tile it, index the spans (dense + sparse), group spans into extraction **units**, run the
   extractor on each unit concurrently, write, and record one `Document` node per document. Embedded files and PDF

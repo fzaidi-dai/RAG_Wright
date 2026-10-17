@@ -197,6 +197,13 @@ category.
   whose continuation rows sit under its main row needs a `unit_grouper=` that keeps them together, or a
   `document_hook=` that reads the whole table with `table_rows` and writes the grouped record. An entity several units
   mention (a case its trial rows share) is emitted by its key from each unit and upserted by that key.
+- **Resume a long ingest instead of restarting it.** Pass a LangGraph checkpointer (yours, for example a Postgres
+  saver; the engine ships none) and a `run_id` naming the run:
+  `await pipeline.aingest(ws, sources, cache_dir=CACHE, checkpointer=saver, run_id=batch_id)`. If the process stops,
+  call it again with the same sources, `cache_dir`, checkpointer and `run_id`: each document carries on from its last
+  finished stage, and nothing that finished runs again (no repeat extractor calls). A finished `run_id`, or different
+  sources, raise `ValueError`: a new run gets a new id. The graph state is built-in values only, so it works under
+  LangGraph's strict msgpack mode; a tuple inside a record's free-form `props` comes back as a list after a resume.
 - **Re-ingest.** Parsing is cached by content hash, so re-running is cheap. The default writer upserts nodes by their
   key but is not fully idempotent for edges (engine gap G8): when a source is re-run, remove its previous records
   first (`kg_delete` on the provenance your records carry, such as a per-source property) and write again.
@@ -216,7 +223,9 @@ category.
    cost per document before a bulk run.
 5. **Register the pipeline as a capability** (`authoring-a-capability`): a subgraph whose `ainvoke(resources, inputs)`
    builds it with `build_ingestion` over the workspace and runs `aingest`, so your product's ingest workflow, an
-   agent and an eval all invoke it by name.
+   agent and an eval all invoke it by name. The pipeline IS a LangGraph graph: `pipeline.graph(ws, cache_dir=...)`
+   returns the compiled run (each source through the per-document graph), which is what your `production_<slug>`
+   returns; do not wrap it in another graph.
 6. **Field-level accuracy, not only structure**: `evaluate_ingestion` checks units; the records' values are checked
    against gold records (`creating-evals`, extraction scoring over what `kg_read` returns).
 

@@ -79,7 +79,8 @@ engine — a separate repo that depends on the open-core engine, one way.
   `agent_chat_model`, answers (`agenerate_answer`/`ajudge_spans`), the eval toolkit (`aload_gold_set`/`arun_eval`/
   `EvalReport`), the document helpers (`aparse_document_bytes`, `pdf_page_count`),
   `register_capability`/`load_reference_pack`,
-  and the ingestion surface (`build_ingestion` -> `IngestionPipeline.aingest` -> `IngestionReport`,
+  and the ingestion surface (`build_ingestion` -> `IngestionPipeline.aingest` -> `IngestionReport`; the pipeline is a
+  LangGraph graph, `IngestionPipeline.graph`, and `aingest(..., checkpointer=, run_id=)` resumes an interrupted run,
   `IngestionTuning`, `IngestSource`, `evaluate_ingestion`, `table_rows`/`TableRow`, the hook contracts
   `Unit`/`UnitExtraction`/`KgNode`/`KgEdge`, the hook protocols and `DocumentHook`, and the checks
   `check_tiling`/`check_units`/`check_extraction`; `NOT_NULL` for `kg_edges` presence filters) — never engine internals (`ArcadeDBStore`,

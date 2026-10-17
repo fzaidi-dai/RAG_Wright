@@ -30,7 +30,7 @@ Everything a product touches is re-exported from `rag_wright.api`; the packages 
 | `api/` | the stable, domain-agnostic public surface: config, workspace, invokers, KG accessors, ids, usage | **yes** (in the enforced source set) |
 | `pack_sdk/` | the pack-author tier (PS-8b): re-exports of the engine building blocks a domain pack's code needs beyond `api` (identifiers, the model seam, the LangGraph scaffold, the store protocol, the generic capabilities a pack composes); a pack imports only `api` and `pack_sdk` | **yes** |
 | `capabilities/` | the capability catalog + ARD runtime — `CapabilityManifest`, `registry`, `manifests`, the adapter-free `invoke` client; plus the generic primitives (graph query, retrieval core, embedding, disambiguation, entity resolution, the decision model) | **yes** |
-| `ingestion/` | the generic ingestion mechanism (ADR-0124): `build_ingestion` + the shared `IngestionStages`, the default layout segmenter and structural unit grouper, `table_rows`, `evaluate_ingestion` | **yes** |
+| `ingestion/` | the generic ingestion mechanism (ADR-0124): `build_ingestion` (a LangGraph graph over the shared `IngestionStages`, resumable), the default layout segmenter and structural unit grouper, `table_rows`, `evaluate_ingestion` | **yes** |
 | `subgraphs/` | the generic LangGraph scaffolding (`scaffold.py`), semantic chunking, graph extraction and observability; domain graphs live in their pack | **yes** |
 | `models/` | the model-profile seam: `ModelRole`, `profiles`, `seam`, `tag_structured`, usage/tracing | **yes** |
 | `store/` | the single ArcadeDB store behind the seam: `arcadedb` (only the engine types and generic reads/writes; a pack's own store methods live in the pack, e.g. `ContractKGStore`, `ComplianceStore`), `seam` (`KgNode`/`KgEdge`/`NOT_NULL`), `chunk_text` | **yes** |
@@ -76,7 +76,9 @@ expensive stages are content-hash gated so re-ingest is cheap. Entity extraction
 attachments become child documents linked by `EmbeddedIn` / `AttachedTo`).
 
 A new domain does not build this pipeline: it calls `build_ingestion(extractor, ...)` (in `rag_wright.ingestion`,
-re-exported from `rag_wright.api`) with its hooks. The engine owns parse, chunk, segment, index, group and write;
+re-exported from `rag_wright.api`) with its hooks. The pipeline is a LangGraph graph (`IngestionPipeline.graph`: one
+run graph sending each source to a per-document graph of the stages), so a product's ingestion capability is a real
+`subgraph`, and a run given a checkpointer and a `run_id` resumes where it stopped. The engine owns parse, chunk, segment, index, group and write;
 the domain supplies the extractor and overrides only the hooks it needs. The default segmenter follows the docling
 layout and the default unit grouper is structural. The reference `contract_ingestion_pipeline` drives the same
 shared `IngestionStages` with legal hooks (a legal segmenter, a clause-function span tagger, a provision grouper

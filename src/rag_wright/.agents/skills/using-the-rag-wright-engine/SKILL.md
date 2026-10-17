@@ -41,7 +41,8 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   (`parse_document`/`aparse_document`, `parse_document_bytes`/`aparse_document_bytes` for uploads,
   `source_document`/`table_rows`, `decode_bbox`, `document_of`), and the **ingestion surface**: `build_ingestion`
   (returns an `IngestionPipeline`; `await pipeline.aingest(ws, sources, cache_dir=...)` returns an
-  `IngestionReport`), its hook contracts (`Segmenter`, `SpanTagger`, `UnitGrouper`, `BoundaryDecider`,
+  `IngestionReport`; the pipeline is a LangGraph graph, `pipeline.graph(ws, cache_dir=...)`, and `aingest` with
+  `checkpointer=` and `run_id=` resumes an interrupted run), its hook contracts (`Segmenter`, `SpanTagger`, `UnitGrouper`, `BoundaryDecider`,
   `UnitRepresentative`, `BoundaryDiscoverer` with `default_chunk_discoverer(guidance=...)`, `Extractor`,
   `RecordWriter`, `DocumentHook`, checked by `check_tiling`/`check_units`/`check_extraction`), `IngestionTuning`,
   `IngestSource` (a `path`, or `data` + `name` for bytes; `table_mode`, `include_hidden_sheets`, your own `metadata`
