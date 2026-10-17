@@ -1,9 +1,9 @@
 ---
 name: authoring-a-capability
 description: >-
-  How to author a new RAG_Wright engine capability of any kind (subgraph, function, model, agent_skill, mcp_tool)
-  so it is registered, ARD-discoverable, and invokable by name through the engine API. Use it whenever you add a
-  new capability or a new-domain product/graph needs one: it gives the shared registration + ARD + invocation
+  How to author a new capability on RAG_Wright, in your product's own pack or in the engine, of any kind
+  (subgraph, function, model, agent_skill, mcp_tool), so it is registered, ARD-discoverable, and invokable by name
+  through the engine API. Use it whenever a product (or the engine) adds a capability: it gives the shared registration + ARD + invocation
   contract (the four surfaces + the definition of done), the per-kind implementation specifics, and the
   conformance guardrail that keeps the catalog honest. Grounded against the real code; keep it in step with it.
 ---
