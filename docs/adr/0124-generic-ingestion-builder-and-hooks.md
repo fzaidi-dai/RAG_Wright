@@ -253,3 +253,18 @@ writing to change one decision (engine gaps G3/G4).
   (7,297 blocks, 14,059 spans) fingerprint identically before and after; a live Aimmune re-ingest is record-identical
   to ING-8e. `tests/spans/test_segmentation_vocab.py` locks the vocabulary and checks the built patterns decide as the
   original literals did.
+
+## LGI-1 addendum (2026-10-17): each document runs through a LangGraph graph
+
+- **Context.** Products register their `build_ingestion` pipeline as a `subgraph` capability, but the generic path
+  was plain asyncio: no graph existed, so the capability kind's promise (a compiled `StateGraph`) did not hold, and
+  the graph version of ingestion (ADR-0050) lived only in the reference pack.
+- **Decision.** `IngestionPipeline.document_graph(ws, stages)` builds the per-document graph over the same
+  `IngestionStages`: parse -> chunk -> segment -> index -> extract -> write -> document_hook -> document_node ->
+  children, with every stage routing a failure to a `dead_letter` node (never raised). Embedded files run through the
+  same graph. `aingest` drives it, one compiled graph per run. Stages stay sequential per document (index before
+  extract), as before. Plan and ledger: `docs/specs/langgraph-ingestion/plan.md` (LGI-2 the run graph, LGI-3 resume).
+- **Consequences.** No public signature, report or progress line changed. Parity is held by a record captured from
+  the asyncio driver before the change (`tests/fixtures/ingestion/parity.json`, 11 scenarios: reports, store
+  contents, hook calls, progress lines), with the scenario inputs committed because freshly built PDFs and OOXML
+  files carry random ids and timestamps.

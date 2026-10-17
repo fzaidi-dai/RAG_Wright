@@ -190,6 +190,14 @@ Advanced: the individual stage functions bound to a workspace (its store, ingest
 
 Ingest every source (and its embedded children) into the workspace `ws` (from `open_workspace`). `sources` are file paths or `IngestSource`s (a path, or in-memory bytes with a file name); `cache_dir` holds the content-hash-gated parse and chunk caches (a re-ingest of an unchanged file re-uses them). Documents run concurrently up to `tuning.document_concurrency`; a document that fails is dead-lettered in its `DocumentReport`, never raised. Returns the `IngestionReport`. Every model role resolves through the workspace's `EngineConfig.models` (PS-14).
 
+#### `IngestionPipeline.document_graph(self, ws: 'Any', stages: 'IngestionStages') -> 'Any'`
+
+LGI-1: the per-document ingestion graph, a compiled LangGraph `StateGraph` over `stages` (bound to `ws`):
+
+parse -> chunk -> segment -> index -> extract -> write -> document_hook -> document_node -> children
+
+A stage that raises routes to `dead_letter`, which ends the document with its `DocumentReport.dead_letter` set (never raised, so one bad document never stops the run). `children` ingests each embedded file through this same graph, then links it to its parent. The input is `{doc_id, source, parent_id, child, depth}`; the output's `reports` is the document's `DocumentReport` followed by its children's.
+
 ### `IngestionReport(documents: 'list[DocumentReport]' = <factory>) -> None`
 
 The result of `IngestionPipeline.aingest`: one `DocumentReport` per document (embedded children included). `failed` counts the dead-lettered documents and `succeeded` the rest (properties).

@@ -1,0 +1,3195 @@
+{
+ "blank_pdf": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "blank",
+    0,
+    0
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "blank",
+     "filename": "parity_blank.pdf",
+     "media_type": "application/pdf",
+     "parent_doc_id": "",
+     "sha256": "0a86993bdee2bddf1e912d7b2f6c1589128e4eed98fbf4ea6aaadc7273e76b1c"
+    },
+    "type": "Document"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest] 1/1 blank spans=0 units=0 records=0 children=0 failures=0",
+   "[ingest] done 1 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 0,
+    "dead_letter": null,
+    "doc_id": "blank",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 0,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 0,
+    "units": 0,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {},
+  "succeeded": 1
+ },
+ "broken_and_good": {
+  "counters": [
+   1,
+   2
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 1,
+  "hook_calls": [
+   [
+    "textile_test_report_md",
+    4,
+    4
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "textile_test_report_md",
+     "filename": "textile_test_report.md",
+     "media_type": "text/markdown",
+     "parent_doc_id": "",
+     "sha256": "a94faa536d255a86d0b528fa826f520f17c02b816a760e6218f3316892880a1a"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:0",
+     "span_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#0",
+     "text": "Test Report TR-0398\n\nSample: knitted T-s"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:1",
+     "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#0",
+     "text": "Summary\n\nThe sample meets the dimensiona"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:2",
+     "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#0",
+     "text": "Results\n\n| Test                         "
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:3",
+     "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#0",
+     "text": "Recommendations\n\nRe-dye with a reactive "
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] #/2 broken_xlsx DEAD-LETTER: ConversionError: Conversion failed for: <tmp> with status: failure. Errors: MsExcelDocumentBackend could not load document with hash 2f66dc481a54c04e20e01bf7a084eb9f2b95f856219a0f1607b9df45294cc47c",
+   "[ingest] #/2 textile_test_report_md spans=12 units=4 records=4 children=0 failures=0",
+   "[ingest] done 1 ok, 1 dead-lettered",
+   "[ingest] start N=2"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 0,
+    "dead_letter": "ConversionError: Conversion failed for: <tmp> with status: failure. Errors: MsExcelDocumentBackend could not load document with hash 2f66dc481a54c04e20e01bf7a084eb9f2b95f856219a0f1607b9df45294cc47c",
+    "doc_id": "broken_xlsx",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 0,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 0,
+    "units": 0,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 4,
+    "dead_letter": null,
+    "doc_id": "textile_test_report_md",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 4,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 12,
+    "units": 4,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#0": {
+    "bbox": null,
+    "doc_end": 75,
+    "doc_start": 0,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Test Report TR-0398\n\nSample: knitted T-shirt, style 107-208, colour navy.\n\n"
+   },
+   "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#1": {
+    "bbox": null,
+    "doc_end": 125,
+    "doc_start": 75,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Fibre content claimed: 60% cotton / 40% polyester."
+   },
+   "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#0": {
+    "bbox": null,
+    "doc_end": 192,
+    "doc_start": 127,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Summary\n\nThe sample meets the dimensional stability requirement. "
+   },
+   "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#1": {
+    "bbox": null,
+    "doc_end": 281,
+    "doc_start": 192,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "It does not meet the colour fastness to laundering requirement (grade 3 vs. required 4). "
+   },
+   "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#2": {
+    "bbox": null,
+    "doc_end": 343,
+    "doc_start": 281,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Bursting strength was 412 kPa, i.e. above the 350 kPa minimum."
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#0": {
+    "bbox": null,
+    "doc_end": 550,
+    "doc_start": 345,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Results\n\n| Test                          | Method           | Result       | Requirement   | Pass/Fail   |\n|-------------------------------|------------------|--------------|---------------|-------------|\n"
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#1": {
+    "bbox": null,
+    "doc_end": 648,
+    "doc_start": 550,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "| Dimensional stability         | AATCC 135        | -3.1% length | max. -5%      | Pass        |\n"
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#2": {
+    "bbox": null,
+    "doc_end": 746,
+    "doc_start": 648,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "| Colour fastness to laundering | ISO 105-C06:2010 | Grade 3      | Grade 4       | Fail        |\n"
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#3": {
+    "bbox": null,
+    "doc_end": 843,
+    "doc_start": 746,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| Bursting strength             | ASTM D3786       | 412 kPa      | 350 kPa min.  | Pass        |"
+   },
+   "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#0": {
+    "bbox": null,
+    "doc_end": 925,
+    "doc_start": 845,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Recommendations\n\nRe-dye with a reactive dye recipe and re-test to ISO 105-C06.\n\n"
+   },
+   "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#1": {
+    "bbox": null,
+    "doc_end": 964,
+    "doc_start": 925,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Keep the current knitting parameters.\n\n"
+   },
+   "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#2": {
+    "bbox": null,
+    "doc_end": 1006,
+    "doc_start": 964,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Tested by: Lab No. 2, approved 2026-04-02."
+   }
+  },
+  "succeeded": 1
+ },
+ "broken_child": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [
+   {
+    "from_key": "db2.emb.e4d48bbb597e",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "anchors": 1,
+     "cell": "D2",
+     "col": 3,
+     "row": 1,
+     "sheet": "Results"
+    },
+    "to_key": "db2",
+    "to_key_field": "doc_id",
+    "to_type": "Document",
+    "type": "EmbeddedIn"
+   },
+   {
+    "from_key": "db2.emb.e4d48bbb597e",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "basis": "anchor",
+     "confidence": "EXTRACTED",
+     "evidence": "3101"
+    },
+    "to_key": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#1",
+    "to_key_field": "span_id",
+    "to_type": "Span",
+    "type": "AttachedTo"
+   },
+   {
+    "from_key": "db2.emb.e4d48bbb597e",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "basis": "content",
+     "confidence": "INFERRED",
+     "evidence": "3101"
+    },
+    "to_key": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2",
+    "to_key_field": "span_id",
+    "to_type": "Span",
+    "type": "AttachedTo"
+   }
+  ],
+  "failed": 1,
+  "hook_calls": [
+   [
+    "db2",
+    1,
+    6
+   ],
+   [
+    "db2.emb.e4d48bbb597e",
+    1,
+    1
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "db2",
+     "filename": "parity_db_with_a_broken_report.xlsx",
+     "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+     "parent_doc_id": "",
+     "sha256": "2dd6059b7fd6f8d3724634699e74c9e459f9bca7e26a51c8765b3c8d4015c924"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "db2.emb.e4d48bbb597e",
+     "filename": "SDP 3101 report.docx",
+     "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+     "parent_doc_id": "db2",
+     "sha256": "e4d48bbb597e26fed7403adb96e5b5a6f57e2a81de25f67086a276fce1ad5a7c"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2.emb.e4d48bbb597e:0",
+     "span_id": "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#0",
+     "text": "Test report\nTear strength results for th"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2:0",
+     "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#0",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2:1",
+     "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2:2",
+     "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#3",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2:3",
+     "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#4",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2:4",
+     "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db2:5",
+     "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest]   db2 child 1/2 SDP 3101 report.docx spans=2 units=1",
+   "[ingest]   db2 child 2/2 SDP 3102 report.docx DEAD-LETTER: ConversionError: Conversion failed for: <tmp> with status: failure. Errors: MsWordDocumentBackend could not load document with hash ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7",
+   "[ingest] 1/1 db2 spans=7 units=6 records=6 children=1 failures=0",
+   "[ingest] done 2 ok, 1 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [
+     "db2.emb.e4d48bbb597e"
+    ],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "db2",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {
+     "EXTRACTED": 1,
+     "INFERRED": 1
+    },
+    "parent_doc_id": null,
+    "records": 6,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 7,
+    "units": 6,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 0,
+    "dead_letter": "ConversionError: Conversion failed for: <tmp> with status: failure. Errors: MsWordDocumentBackend could not load document with hash ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7",
+    "doc_id": "db2.emb.ad7facb2586f",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": "db2",
+    "records": 0,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 0,
+    "units": 0,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "db2.emb.e4d48bbb597e",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": "db2",
+    "records": 1,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 2,
+    "units": 1,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#0": {
+    "bbox": null,
+    "doc_end": 13,
+    "doc_start": 0,
+    "document_id": "db2.emb.e4d48bbb597e",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0",
+    "primary_tag": "",
+    "span_id": "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Test report\n\n"
+   },
+   "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#1": {
+    "bbox": null,
+    "doc_end": 54,
+    "doc_start": 13,
+    "document_id": "db2.emb.e4d48bbb597e",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0",
+    "primary_tag": "",
+    "span_id": "db2.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Tear strength results for the 3101 trial."
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#0": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 53,
+    "doc_start": 0,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "| Sr# | Sample | Standard | Test |\n|---|---|---|---|\n"
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#1": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 88,
+    "doc_start": 53,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "| 1 | SDP 3101 | EN 17092 | Tear |\n"
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 127,
+    "doc_start": 88,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "| 1 | SDP 3101 | EN 17092 | Abrasion |\n"
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#3": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 162,
+    "doc_start": 127,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| 2 | SDP 3102 | EN 17092 | Tear |\n"
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#4": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 201,
+    "doc_start": 162,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#4",
+    "span_index": 4,
+    "tags": [],
+    "text": "| 2 | SDP 3102 | EN 17092 | Abrasion |\n"
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 236,
+    "doc_start": 201,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5",
+    "span_index": 5,
+    "tags": [],
+    "text": "| 3 | SDP 3103 | EN 17092 | Tear |\n"
+   },
+   "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 274,
+    "doc_start": 236,
+    "document_id": "db2",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db2:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6",
+    "span_index": 6,
+    "tags": [],
+    "text": "| 3 | SDP 3103 | EN 17092 | Abrasion |"
+   }
+  },
+  "succeeded": 2
+ },
+ "contract_breach": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 1,
+  "hook_calls": [],
+  "nodes": [],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest] 1/1 textile_spec_sheet_md DEAD-LETTER: IngestionContractError: spans end at 1, text has 112 chars (spans must tile the text)",
+   "[ingest] done 0 ok, 1 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 0,
+    "dead_letter": "IngestionContractError: spans end at 1, text has 112 chars (spans must tile the text)",
+    "doc_id": "textile_spec_sheet_md",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 0,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 0,
+    "units": 0,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {},
+  "succeeded": 0
+ },
+ "extraction_failures": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "textile_spec_sheet_md",
+    4,
+    3
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "textile_spec_sheet_md",
+     "filename": "textile_spec_sheet.md",
+     "media_type": "text/markdown",
+     "parent_doc_id": "",
+     "sha256": "bb5d742ae377313ce08dc504bf47875ef17fe3ce26739aae53d6ee1159c434d8"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:0",
+     "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+     "text": "Fabric Specification Sheet\n\nSpec No.: FS"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:3",
+     "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+     "text": "Composition\n\n95% cotton (combed, 40s Ne)"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:4",
+     "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+     "text": "Finishing route\n\nHeat-setting at 190 \u00b0C,"
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest] 1/1 textile_spec_sheet_md spans=18 units=5 records=3 children=0 failures=2",
+   "[ingest] done 1 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 4,
+    "dead_letter": null,
+    "doc_id": "textile_spec_sheet_md",
+    "embedded_skipped": [],
+    "extraction_failures": [
+     {
+      "anchor": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+      "reason": "RuntimeError: model timeout",
+      "unit": 1
+     },
+     {
+      "anchor": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+      "reason": "IngestionContractError: no provenance: no node or edge cites a span_id of unit 2",
+      "unit": 2
+     }
+    ],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 3,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 18,
+    "units": 5,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0": {
+    "bbox": null,
+    "doc_end": 49,
+    "doc_start": 0,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Fabric Specification Sheet\n\nSpec No.: FS-2041-B\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1": {
+    "bbox": null,
+    "doc_end": 96,
+    "doc_start": 49,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Customer: Northwind Apparel (ref. PO 77-1043)\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2": {
+    "bbox": null,
+    "doc_end": 112,
+    "doc_start": 96,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Date: 2026-03-14"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0": {
+    "bbox": null,
+    "doc_end": 180,
+    "doc_start": 114,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Construction\n\nFabric structure: single jersey, 1x1 lycra plated.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1": {
+    "bbox": null,
+    "doc_end": 275,
+    "doc_start": 180,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "The fabric is knitted on a 30\" dia. machine at 28 gauge; the stitch length is approx. 2.85 mm. "
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2": {
+    "bbox": null,
+    "doc_end": 349,
+    "doc_start": 275,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Lycra is fed on every feeder (i.e. full plating), not alternate feeders.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3": {
+    "bbox": null,
+    "doc_end": 433,
+    "doc_start": 349,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| Parameter     | Proposed   | Actual   |\n|---------------|------------|----------|\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4": {
+    "bbox": null,
+    "doc_end": 475,
+    "doc_start": 433,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4",
+    "span_index": 4,
+    "tags": [],
+    "text": "| Machine dia.  | 30\"        | 30\"      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5": {
+    "bbox": null,
+    "doc_end": 517,
+    "doc_start": 475,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5",
+    "span_index": 5,
+    "tags": [],
+    "text": "| Gauge         | 28G        | 28G      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6": {
+    "bbox": null,
+    "doc_end": 559,
+    "doc_start": 517,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6",
+    "span_index": 6,
+    "tags": [],
+    "text": "| Stitch length | 2.85 mm    | 2.9 mm   |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7": {
+    "bbox": null,
+    "doc_end": 600,
+    "doc_start": 559,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7",
+    "span_index": 7,
+    "tags": [],
+    "text": "| Lycra %       | 5          | 4.8      |"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0": {
+    "bbox": null,
+    "doc_end": 644,
+    "doc_start": 602,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Composition\n\n95% cotton (combed, 40s Ne)\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1": {
+    "bbox": null,
+    "doc_end": 669,
+    "doc_start": 644,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "5% elastane [Lycra 20D]\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2": {
+    "bbox": null,
+    "doc_end": 711,
+    "doc_start": 669,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Yarn supplier: e.g. Vardhman or equivalent"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0": {
+    "bbox": null,
+    "doc_end": 771,
+    "doc_start": 713,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Finishing route\n\nHeat-setting at 190 \u00b0C, speed 18 m/min.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1": {
+    "bbox": null,
+    "doc_end": 805,
+    "doc_start": 771,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Washing (soft flow), pH 5.5-6.0.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2": {
+    "bbox": null,
+    "doc_end": 849,
+    "doc_start": 805,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Drying, then compacting to finished width.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3": {
+    "bbox": null,
+    "doc_end": 904,
+    "doc_start": 849,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "Remarks: Req. finished GSM 180 \u00b1 5; finished width 68\"."
+   }
+  },
+  "succeeded": 1
+ },
+ "in_memory_and_record_mode": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "g",
+    1,
+    2
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "g",
+     "filename": "grid.xlsx",
+     "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+     "parent_doc_id": "",
+     "sha256": "449023d8e0f75dee3ace0dd8746dc7d766652eee41c7f2d8d2b2254891302e75"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "g:0",
+     "span_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#0",
+     "text": "| Parameter | Proposed | Actual |\n|---|-"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "g:1",
+     "span_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#2",
+     "text": "| Parameter | Proposed | Actual |\n|---|-"
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest] 1/1 g spans=3 units=2 records=2 children=0 failures=0",
+   "[ingest] done 1 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "g",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 2,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 3,
+    "units": 2,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#0": {
+    "bbox": [
+     0.0,
+     0.0,
+     3.0,
+     3.0
+    ],
+    "doc_end": 48,
+    "doc_start": 0,
+    "document_id": "g",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68",
+    "primary_tag": "",
+    "span_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "| Parameter | Proposed | Actual |\n|---|---|---|\n"
+   },
+   "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#1": {
+    "bbox": [
+     0.0,
+     0.0,
+     3.0,
+     3.0
+    ],
+    "doc_end": 70,
+    "doc_start": 48,
+    "document_id": "g",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68",
+    "primary_tag": "",
+    "span_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "| Gauge | 28G | 28G |\n"
+   },
+   "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#2": {
+    "bbox": [
+     0.0,
+     0.0,
+     3.0,
+     3.0
+    ],
+    "doc_end": 92,
+    "doc_start": 70,
+    "document_id": "g",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68",
+    "primary_tag": "",
+    "span_id": "g:0:66d3a01c59dd18b645969404242d407be5edd75ab2c5baaf96926aa6411b2a68#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "| Stitch | 2.8 | 2.9 |"
+   }
+  },
+  "succeeded": 1
+ },
+ "markdown": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "textile_spec_sheet_md",
+    4,
+    5
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "textile_spec_sheet_md",
+     "filename": "textile_spec_sheet.md",
+     "media_type": "text/markdown",
+     "parent_doc_id": "",
+     "sha256": "bb5d742ae377313ce08dc504bf47875ef17fe3ce26739aae53d6ee1159c434d8"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:0",
+     "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+     "text": "Fabric Specification Sheet\n\nSpec No.: FS"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:1",
+     "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+     "text": "Construction\n\nFabric structure: single j"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:2",
+     "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+     "text": "| Parameter     | Proposed   | Actual   "
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:3",
+     "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+     "text": "Composition\n\n95% cotton (combed, 40s Ne)"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:4",
+     "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+     "text": "Finishing route\n\nHeat-setting at 190 \u00b0C,"
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest] 1/1 textile_spec_sheet_md spans=18 units=5 records=5 children=0 failures=0",
+   "[ingest] done 1 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 4,
+    "dead_letter": null,
+    "doc_id": "textile_spec_sheet_md",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 5,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 18,
+    "units": 5,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0": {
+    "bbox": null,
+    "doc_end": 49,
+    "doc_start": 0,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Fabric Specification Sheet\n\nSpec No.: FS-2041-B\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1": {
+    "bbox": null,
+    "doc_end": 96,
+    "doc_start": 49,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Customer: Northwind Apparel (ref. PO 77-1043)\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2": {
+    "bbox": null,
+    "doc_end": 112,
+    "doc_start": 96,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Date: 2026-03-14"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0": {
+    "bbox": null,
+    "doc_end": 180,
+    "doc_start": 114,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Construction\n\nFabric structure: single jersey, 1x1 lycra plated.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1": {
+    "bbox": null,
+    "doc_end": 275,
+    "doc_start": 180,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "The fabric is knitted on a 30\" dia. machine at 28 gauge; the stitch length is approx. 2.85 mm. "
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2": {
+    "bbox": null,
+    "doc_end": 349,
+    "doc_start": 275,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Lycra is fed on every feeder (i.e. full plating), not alternate feeders.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3": {
+    "bbox": null,
+    "doc_end": 433,
+    "doc_start": 349,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| Parameter     | Proposed   | Actual   |\n|---------------|------------|----------|\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4": {
+    "bbox": null,
+    "doc_end": 475,
+    "doc_start": 433,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4",
+    "span_index": 4,
+    "tags": [],
+    "text": "| Machine dia.  | 30\"        | 30\"      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5": {
+    "bbox": null,
+    "doc_end": 517,
+    "doc_start": 475,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5",
+    "span_index": 5,
+    "tags": [],
+    "text": "| Gauge         | 28G        | 28G      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6": {
+    "bbox": null,
+    "doc_end": 559,
+    "doc_start": 517,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6",
+    "span_index": 6,
+    "tags": [],
+    "text": "| Stitch length | 2.85 mm    | 2.9 mm   |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7": {
+    "bbox": null,
+    "doc_end": 600,
+    "doc_start": 559,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7",
+    "span_index": 7,
+    "tags": [],
+    "text": "| Lycra %       | 5          | 4.8      |"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0": {
+    "bbox": null,
+    "doc_end": 644,
+    "doc_start": 602,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Composition\n\n95% cotton (combed, 40s Ne)\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1": {
+    "bbox": null,
+    "doc_end": 669,
+    "doc_start": 644,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "5% elastane [Lycra 20D]\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2": {
+    "bbox": null,
+    "doc_end": 711,
+    "doc_start": 669,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Yarn supplier: e.g. Vardhman or equivalent"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0": {
+    "bbox": null,
+    "doc_end": 771,
+    "doc_start": 713,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Finishing route\n\nHeat-setting at 190 \u00b0C, speed 18 m/min.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1": {
+    "bbox": null,
+    "doc_end": 805,
+    "doc_start": 771,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Washing (soft flow), pH 5.5-6.0.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2": {
+    "bbox": null,
+    "doc_end": 849,
+    "doc_start": 805,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Drying, then compacting to finished width.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3": {
+    "bbox": null,
+    "doc_end": 904,
+    "doc_start": 849,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "Remarks: Req. finished GSM 180 \u00b1 5; finished width 68\"."
+   }
+  },
+  "succeeded": 1
+ },
+ "pdf_attachment": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [
+   {
+    "from_key": "cover.emb.cad4ac9a8f05",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "anchors": 0
+    },
+    "to_key": "cover",
+    "to_key_field": "doc_id",
+    "to_type": "Document",
+    "type": "EmbeddedIn"
+   }
+  ],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "cover",
+    0,
+    0
+   ],
+   [
+    "cover.emb.cad4ac9a8f05",
+    1,
+    1
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "cover",
+     "filename": "parity_cover_with_attachment.pdf",
+     "media_type": "application/pdf",
+     "parent_doc_id": "",
+     "sha256": "26499d24bf91dcb343f71fb7c68541e6e5da7db56ad884fbf3574e5375f5a074"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "cover.emb.cad4ac9a8f05",
+     "filename": "results.docx",
+     "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+     "parent_doc_id": "cover",
+     "sha256": "cad4ac9a8f052135e469219eaec6890ecb7e5367665eada42cf5c9179b34fc29"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "cover.emb.cad4ac9a8f05:0",
+     "span_id": "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448#0",
+     "text": "Test report\nBursting strength 412 kPa."
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest]   cover child 1/1 results.docx spans=2 units=1",
+   "[ingest] 1/1 cover spans=0 units=0 records=0 children=1 failures=0",
+   "[ingest] done 2 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [
+     "cover.emb.cad4ac9a8f05"
+    ],
+    "chunks": 0,
+    "dead_letter": null,
+    "doc_id": "cover",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 0,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 0,
+    "units": 0,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "cover.emb.cad4ac9a8f05",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": "cover",
+    "records": 1,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 2,
+    "units": 1,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448#0": {
+    "bbox": null,
+    "doc_end": 13,
+    "doc_start": 0,
+    "document_id": "cover.emb.cad4ac9a8f05",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448",
+    "primary_tag": "",
+    "span_id": "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Test report\n\n"
+   },
+   "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448#1": {
+    "bbox": null,
+    "doc_end": 39,
+    "doc_start": 13,
+    "document_id": "cover.emb.cad4ac9a8f05",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448",
+    "primary_tag": "",
+    "span_id": "cover.emb.cad4ac9a8f05:0:df46e77f3c0ab1a5da810ab52b13e9071a0a5174d1d1188509ede411883d1448#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Bursting strength 412 kPa."
+   }
+  },
+  "succeeded": 2
+ },
+ "span_write_failure": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "textile_spec_sheet_md",
+    4,
+    5
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "textile_spec_sheet_md",
+     "filename": "textile_spec_sheet.md",
+     "media_type": "text/markdown",
+     "parent_doc_id": "",
+     "sha256": "bb5d742ae377313ce08dc504bf47875ef17fe3ce26739aae53d6ee1159c434d8"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:0",
+     "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+     "text": "Fabric Specification Sheet\n\nSpec No.: FS"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:1",
+     "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+     "text": "Construction\n\nFabric structure: single j"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:2",
+     "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+     "text": "| Parameter     | Proposed   | Actual   "
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:3",
+     "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+     "text": "Composition\n\n95% cotton (combed, 40s Ne)"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:4",
+     "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+     "text": "Finishing route\n\nHeat-setting at 190 \u00b0C,"
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest] 1/1 textile_spec_sheet_md spans=17 units=5 records=5 children=0 failures=0",
+   "[ingest] done 1 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 4,
+    "dead_letter": null,
+    "doc_id": "textile_spec_sheet_md",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 5,
+    "skipped_hidden_sheets": [],
+    "span_failures": [
+     {
+      "reason": "RuntimeError('span store unavailable')",
+      "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1"
+     }
+    ],
+    "spans": 17,
+    "units": 5,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0": {
+    "bbox": null,
+    "doc_end": 49,
+    "doc_start": 0,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Fabric Specification Sheet\n\nSpec No.: FS-2041-B\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2": {
+    "bbox": null,
+    "doc_end": 112,
+    "doc_start": 96,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Date: 2026-03-14"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0": {
+    "bbox": null,
+    "doc_end": 180,
+    "doc_start": 114,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Construction\n\nFabric structure: single jersey, 1x1 lycra plated.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1": {
+    "bbox": null,
+    "doc_end": 275,
+    "doc_start": 180,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "The fabric is knitted on a 30\" dia. machine at 28 gauge; the stitch length is approx. 2.85 mm. "
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2": {
+    "bbox": null,
+    "doc_end": 349,
+    "doc_start": 275,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Lycra is fed on every feeder (i.e. full plating), not alternate feeders.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3": {
+    "bbox": null,
+    "doc_end": 433,
+    "doc_start": 349,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| Parameter     | Proposed   | Actual   |\n|---------------|------------|----------|\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4": {
+    "bbox": null,
+    "doc_end": 475,
+    "doc_start": 433,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4",
+    "span_index": 4,
+    "tags": [],
+    "text": "| Machine dia.  | 30\"        | 30\"      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5": {
+    "bbox": null,
+    "doc_end": 517,
+    "doc_start": 475,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5",
+    "span_index": 5,
+    "tags": [],
+    "text": "| Gauge         | 28G        | 28G      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6": {
+    "bbox": null,
+    "doc_end": 559,
+    "doc_start": 517,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6",
+    "span_index": 6,
+    "tags": [],
+    "text": "| Stitch length | 2.85 mm    | 2.9 mm   |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7": {
+    "bbox": null,
+    "doc_end": 600,
+    "doc_start": 559,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7",
+    "span_index": 7,
+    "tags": [],
+    "text": "| Lycra %       | 5          | 4.8      |"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0": {
+    "bbox": null,
+    "doc_end": 644,
+    "doc_start": 602,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Composition\n\n95% cotton (combed, 40s Ne)\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1": {
+    "bbox": null,
+    "doc_end": 669,
+    "doc_start": 644,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "5% elastane [Lycra 20D]\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2": {
+    "bbox": null,
+    "doc_end": 711,
+    "doc_start": 669,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Yarn supplier: e.g. Vardhman or equivalent"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0": {
+    "bbox": null,
+    "doc_end": 771,
+    "doc_start": 713,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Finishing route\n\nHeat-setting at 190 \u00b0C, speed 18 m/min.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1": {
+    "bbox": null,
+    "doc_end": 805,
+    "doc_start": 771,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Washing (soft flow), pH 5.5-6.0.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2": {
+    "bbox": null,
+    "doc_end": 849,
+    "doc_start": 805,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Drying, then compacting to finished width.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3": {
+    "bbox": null,
+    "doc_end": 904,
+    "doc_start": 849,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "Remarks: Req. finished GSM 180 \u00b1 5; finished width 68\"."
+   }
+  },
+  "succeeded": 1
+ },
+ "two_documents": {
+  "counters": [
+   1,
+   2
+  ],
+  "edges": [],
+  "ensured": [],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "textile_spec_sheet_md",
+    4,
+    5
+   ],
+   [
+    "textile_test_report_md",
+    4,
+    4
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "textile_spec_sheet_md",
+     "filename": "textile_spec_sheet.md",
+     "media_type": "text/markdown",
+     "parent_doc_id": "",
+     "sha256": "bb5d742ae377313ce08dc504bf47875ef17fe3ce26739aae53d6ee1159c434d8"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "doc_id",
+    "props": {
+     "doc_id": "textile_test_report_md",
+     "filename": "textile_test_report.md",
+     "media_type": "text/markdown",
+     "parent_doc_id": "",
+     "sha256": "a94faa536d255a86d0b528fa826f520f17c02b816a760e6218f3316892880a1a"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:0",
+     "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+     "text": "Fabric Specification Sheet\n\nSpec No.: FS"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:1",
+     "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+     "text": "Construction\n\nFabric structure: single j"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:2",
+     "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+     "text": "| Parameter     | Proposed   | Actual   "
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:3",
+     "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+     "text": "Composition\n\n95% cotton (combed, 40s Ne)"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_spec_sheet_md:4",
+     "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+     "text": "Finishing route\n\nHeat-setting at 190 \u00b0C,"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:0",
+     "span_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#0",
+     "text": "Test Report TR-0398\n\nSample: knitted T-s"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:1",
+     "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#0",
+     "text": "Summary\n\nThe sample meets the dimensiona"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:2",
+     "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#0",
+     "text": "Results\n\n| Test                         "
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "textile_test_report_md:3",
+     "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#0",
+     "text": "Recommendations\n\nRe-dye with a reactive "
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] #/2 textile_spec_sheet_md spans=18 units=5 records=5 children=0 failures=0",
+   "[ingest] #/2 textile_test_report_md spans=12 units=4 records=4 children=0 failures=0",
+   "[ingest] done 2 ok, 0 dead-lettered",
+   "[ingest] start N=2"
+  ],
+  "report": [
+   {
+    "children": [],
+    "chunks": 4,
+    "dead_letter": null,
+    "doc_id": "textile_spec_sheet_md",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 5,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 18,
+    "units": 5,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 4,
+    "dead_letter": null,
+    "doc_id": "textile_test_report_md",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": null,
+    "records": 4,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 12,
+    "units": 4,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0": {
+    "bbox": null,
+    "doc_end": 49,
+    "doc_start": 0,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Fabric Specification Sheet\n\nSpec No.: FS-2041-B\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1": {
+    "bbox": null,
+    "doc_end": 96,
+    "doc_start": 49,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Customer: Northwind Apparel (ref. PO 77-1043)\n\n"
+   },
+   "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2": {
+    "bbox": null,
+    "doc_end": 112,
+    "doc_start": 96,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:0:ff88ebaba2bde5c15bc9ee4c8b114e2f8c235975913be91ed7d09ef92976d933#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Date: 2026-03-14"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0": {
+    "bbox": null,
+    "doc_end": 180,
+    "doc_start": 114,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Construction\n\nFabric structure: single jersey, 1x1 lycra plated.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1": {
+    "bbox": null,
+    "doc_end": 275,
+    "doc_start": 180,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "The fabric is knitted on a 30\" dia. machine at 28 gauge; the stitch length is approx. 2.85 mm. "
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2": {
+    "bbox": null,
+    "doc_end": 349,
+    "doc_start": 275,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Lycra is fed on every feeder (i.e. full plating), not alternate feeders.\n\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3": {
+    "bbox": null,
+    "doc_end": 433,
+    "doc_start": 349,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| Parameter     | Proposed   | Actual   |\n|---------------|------------|----------|\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4": {
+    "bbox": null,
+    "doc_end": 475,
+    "doc_start": 433,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#4",
+    "span_index": 4,
+    "tags": [],
+    "text": "| Machine dia.  | 30\"        | 30\"      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5": {
+    "bbox": null,
+    "doc_end": 517,
+    "doc_start": 475,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#5",
+    "span_index": 5,
+    "tags": [],
+    "text": "| Gauge         | 28G        | 28G      |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6": {
+    "bbox": null,
+    "doc_end": 559,
+    "doc_start": 517,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#6",
+    "span_index": 6,
+    "tags": [],
+    "text": "| Stitch length | 2.85 mm    | 2.9 mm   |\n"
+   },
+   "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7": {
+    "bbox": null,
+    "doc_end": 600,
+    "doc_start": 559,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:1:fdf320fa0b8c935064aea09ea82c241ad994766edb42abf794f38f0794fe82ce#7",
+    "span_index": 7,
+    "tags": [],
+    "text": "| Lycra %       | 5          | 4.8      |"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0": {
+    "bbox": null,
+    "doc_end": 644,
+    "doc_start": 602,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Composition\n\n95% cotton (combed, 40s Ne)\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1": {
+    "bbox": null,
+    "doc_end": 669,
+    "doc_start": 644,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "5% elastane [Lycra 20D]\n\n"
+   },
+   "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2": {
+    "bbox": null,
+    "doc_end": 711,
+    "doc_start": 669,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:2:c1605a9cc10bafe179e0e31cee3defe3d5812df55952b338baaf42c07c0f4a3c#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Yarn supplier: e.g. Vardhman or equivalent"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0": {
+    "bbox": null,
+    "doc_end": 771,
+    "doc_start": 713,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Finishing route\n\nHeat-setting at 190 \u00b0C, speed 18 m/min.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1": {
+    "bbox": null,
+    "doc_end": 805,
+    "doc_start": 771,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Washing (soft flow), pH 5.5-6.0.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2": {
+    "bbox": null,
+    "doc_end": 849,
+    "doc_start": 805,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Drying, then compacting to finished width.\n\n"
+   },
+   "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3": {
+    "bbox": null,
+    "doc_end": 904,
+    "doc_start": 849,
+    "document_id": "textile_spec_sheet_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba",
+    "primary_tag": "",
+    "span_id": "textile_spec_sheet_md:3:c819bf24496753e2317ac0c93366655a3c81f322c5d04c3dd1096cc2576289ba#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "Remarks: Req. finished GSM 180 \u00b1 5; finished width 68\"."
+   },
+   "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#0": {
+    "bbox": null,
+    "doc_end": 75,
+    "doc_start": 0,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Test Report TR-0398\n\nSample: knitted T-shirt, style 107-208, colour navy.\n\n"
+   },
+   "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#1": {
+    "bbox": null,
+    "doc_end": 125,
+    "doc_start": 75,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:0:8b63dd7af779e1e3026eb33f041aacac3cb68635d7e1b5d974e5a944830aba0b#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Fibre content claimed: 60% cotton / 40% polyester."
+   },
+   "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#0": {
+    "bbox": null,
+    "doc_end": 192,
+    "doc_start": 127,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Summary\n\nThe sample meets the dimensional stability requirement. "
+   },
+   "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#1": {
+    "bbox": null,
+    "doc_end": 281,
+    "doc_start": 192,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "It does not meet the colour fastness to laundering requirement (grade 3 vs. required 4). "
+   },
+   "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#2": {
+    "bbox": null,
+    "doc_end": 343,
+    "doc_start": 281,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:1:22a434f27541f02ee5cb22a647bf0f80d677ad158153924847cea8b33307b49d#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Bursting strength was 412 kPa, i.e. above the 350 kPa minimum."
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#0": {
+    "bbox": null,
+    "doc_end": 550,
+    "doc_start": 345,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Results\n\n| Test                          | Method           | Result       | Requirement   | Pass/Fail   |\n|-------------------------------|------------------|--------------|---------------|-------------|\n"
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#1": {
+    "bbox": null,
+    "doc_end": 648,
+    "doc_start": 550,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "| Dimensional stability         | AATCC 135        | -3.1% length | max. -5%      | Pass        |\n"
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#2": {
+    "bbox": null,
+    "doc_end": 746,
+    "doc_start": 648,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "| Colour fastness to laundering | ISO 105-C06:2010 | Grade 3      | Grade 4       | Fail        |\n"
+   },
+   "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#3": {
+    "bbox": null,
+    "doc_end": 843,
+    "doc_start": 746,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:2:7227740ceed27c41ce7adbc0139cf3c4250b9077571af8c7b3183b4f9c413fe1#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| Bursting strength             | ASTM D3786       | 412 kPa      | 350 kPa min.  | Pass        |"
+   },
+   "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#0": {
+    "bbox": null,
+    "doc_end": 925,
+    "doc_start": 845,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Recommendations\n\nRe-dye with a reactive dye recipe and re-test to ISO 105-C06.\n\n"
+   },
+   "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#1": {
+    "bbox": null,
+    "doc_end": 964,
+    "doc_start": 925,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Keep the current knitting parameters.\n\n"
+   },
+   "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#2": {
+    "bbox": null,
+    "doc_end": 1006,
+    "doc_start": 964,
+    "document_id": "textile_test_report_md",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1",
+    "primary_tag": "",
+    "span_id": "textile_test_report_md:3:b8405be6912c6bac07d4f914e216f4de78ae2ab03c6340fe149a5fb03439ffa1#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "Tested by: Lab No. 2, approved 2026-04-02."
+   }
+  },
+  "succeeded": 2
+ },
+ "workbook_with_children": {
+  "counters": [
+   1
+  ],
+  "edges": [],
+  "ensured": [
+   {
+    "from_key": "db.emb.e4d48bbb597e",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "anchors": 1,
+     "cell": "D2",
+     "col": 3,
+     "row": 1,
+     "sheet": "Results"
+    },
+    "to_key": "db",
+    "to_key_field": "doc_id",
+    "to_type": "Document",
+    "type": "EmbeddedIn"
+   },
+   {
+    "from_key": "db.emb.e4d48bbb597e",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "basis": "anchor",
+     "confidence": "EXTRACTED",
+     "evidence": "3101"
+    },
+    "to_key": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#1",
+    "to_key_field": "span_id",
+    "to_type": "Span",
+    "type": "AttachedTo"
+   },
+   {
+    "from_key": "db.emb.e4d48bbb597e",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "basis": "content",
+     "confidence": "INFERRED",
+     "evidence": "3101"
+    },
+    "to_key": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2",
+    "to_key_field": "span_id",
+    "to_type": "Span",
+    "type": "AttachedTo"
+   },
+   {
+    "from_key": "db.emb.ec285603e3a5",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "anchors": 1,
+     "cell": "D2",
+     "col": 3,
+     "row": 1,
+     "sheet": "Results"
+    },
+    "to_key": "db",
+    "to_key_field": "doc_id",
+    "to_type": "Document",
+    "type": "EmbeddedIn"
+   },
+   {
+    "from_key": "db.emb.ec285603e3a5",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "basis": "content",
+     "confidence": "INFERRED",
+     "evidence": "3103"
+    },
+    "to_key": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5",
+    "to_key_field": "span_id",
+    "to_type": "Span",
+    "type": "AttachedTo"
+   },
+   {
+    "from_key": "db.emb.ec285603e3a5",
+    "from_key_field": "doc_id",
+    "from_type": "Document",
+    "props": {
+     "basis": "content",
+     "confidence": "INFERRED",
+     "evidence": "3103"
+    },
+    "to_key": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6",
+    "to_key_field": "span_id",
+    "to_type": "Span",
+    "type": "AttachedTo"
+   }
+  ],
+  "failed": 0,
+  "hook_calls": [
+   [
+    "db",
+    1,
+    6
+   ],
+   [
+    "db.emb.e4d48bbb597e",
+    1,
+    1
+   ],
+   [
+    "db.emb.ec285603e3a5",
+    1,
+    1
+   ]
+  ],
+  "nodes": [
+   {
+    "key_field": "doc_id",
+    "props": {
+     "batch": "b1",
+     "doc_id": "db",
+     "filename": "parity_db_with_reports.xlsx",
+     "media_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+     "parent_doc_id": "",
+     "sha256": "d8741211c232b26d54b7410e72af70db6e385ba727ac0437086aeda91303758d"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "doc_id",
+    "props": {
+     "batch": "b1",
+     "doc_id": "db.emb.e4d48bbb597e",
+     "filename": "SDP 3101 report.docx",
+     "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+     "parent_doc_id": "db",
+     "sha256": "e4d48bbb597e26fed7403adb96e5b5a6f57e2a81de25f67086a276fce1ad5a7c"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "doc_id",
+    "props": {
+     "batch": "b1",
+     "doc_id": "db.emb.ec285603e3a5",
+     "filename": "SDP 3103 report.docx",
+     "media_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+     "parent_doc_id": "db",
+     "sha256": "ec285603e3a524db79865425609d70643361b6ab22177a40b2484eec49956692"
+    },
+    "type": "Document"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db.emb.e4d48bbb597e:0",
+     "span_id": "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#0",
+     "text": "Test report\nTear strength results for th"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db.emb.ec285603e3a5:0",
+     "span_id": "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b#0",
+     "text": "Test report\nAbrasion results for the 310"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db:0",
+     "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#0",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db:1",
+     "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db:2",
+     "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#3",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db:3",
+     "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#4",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db:4",
+     "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   },
+   {
+    "key_field": "record_id",
+    "props": {
+     "confidence": "EXTRACTED",
+     "record_id": "db:5",
+     "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6",
+     "text": "| Sr# | Sample | Standard | Test |\n|---|"
+    },
+    "type": "Record"
+   }
+  ],
+  "progress": [
+   "[ingest] start N=1",
+   "[ingest]   db child 1/2 SDP 3101 report.docx spans=2 units=1",
+   "[ingest]   db child 2/2 SDP 3103 report.docx spans=2 units=1",
+   "[ingest] 1/1 db spans=7 units=6 records=6 children=2 failures=0",
+   "[ingest] done 3 ok, 0 dead-lettered"
+  ],
+  "report": [
+   {
+    "children": [
+     "db.emb.e4d48bbb597e",
+     "db.emb.ec285603e3a5"
+    ],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "db",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {
+     "EXTRACTED": 1,
+     "INFERRED": 3
+    },
+    "parent_doc_id": null,
+    "records": 6,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 7,
+    "units": 6,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "db.emb.e4d48bbb597e",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": "db",
+    "records": 1,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 2,
+    "units": 1,
+    "unmapped_links": 0
+   },
+   {
+    "children": [],
+    "chunks": 1,
+    "dead_letter": null,
+    "doc_id": "db.emb.ec285603e3a5",
+    "embedded_skipped": [],
+    "extraction_failures": [],
+    "links": {},
+    "parent_doc_id": "db",
+    "records": 1,
+    "skipped_hidden_sheets": [],
+    "span_failures": [],
+    "spans": 2,
+    "units": 1,
+    "unmapped_links": 0
+   }
+  ],
+  "spans": {
+   "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#0": {
+    "bbox": null,
+    "doc_end": 13,
+    "doc_start": 0,
+    "document_id": "db.emb.e4d48bbb597e",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0",
+    "primary_tag": "",
+    "span_id": "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Test report\n\n"
+   },
+   "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#1": {
+    "bbox": null,
+    "doc_end": 54,
+    "doc_start": 13,
+    "document_id": "db.emb.e4d48bbb597e",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0",
+    "primary_tag": "",
+    "span_id": "db.emb.e4d48bbb597e:0:2ee439f8261cd72913882d4d901dcb4ea5910d4e6a9994b3ecf0afd2700f91d0#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Tear strength results for the 3101 trial."
+   },
+   "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b#0": {
+    "bbox": null,
+    "doc_end": 13,
+    "doc_start": 0,
+    "document_id": "db.emb.ec285603e3a5",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b",
+    "primary_tag": "",
+    "span_id": "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "Test report\n\n"
+   },
+   "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b#1": {
+    "bbox": null,
+    "doc_end": 49,
+    "doc_start": 13,
+    "document_id": "db.emb.ec285603e3a5",
+    "page": null,
+    "pages": [],
+    "parent_chunk_id": "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b",
+    "primary_tag": "",
+    "span_id": "db.emb.ec285603e3a5:0:ad4d0ca5820789efd538b6e7fcb5387b49b10dee211d0105ee91f11b8bc1d70b#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "Abrasion results for the 3103 trial."
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#0": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 53,
+    "doc_start": 0,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#0",
+    "span_index": 0,
+    "tags": [],
+    "text": "| Sr# | Sample | Standard | Test |\n|---|---|---|---|\n"
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#1": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 88,
+    "doc_start": 53,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#1",
+    "span_index": 1,
+    "tags": [],
+    "text": "| 1 | SDP 3101 | EN 17092 | Tear |\n"
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 127,
+    "doc_start": 88,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#2",
+    "span_index": 2,
+    "tags": [],
+    "text": "| 1 | SDP 3101 | EN 17092 | Abrasion |\n"
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#3": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 162,
+    "doc_start": 127,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#3",
+    "span_index": 3,
+    "tags": [],
+    "text": "| 2 | SDP 3102 | EN 17092 | Tear |\n"
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#4": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 201,
+    "doc_start": 162,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#4",
+    "span_index": 4,
+    "tags": [],
+    "text": "| 2 | SDP 3102 | EN 17092 | Abrasion |\n"
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 236,
+    "doc_start": 201,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#5",
+    "span_index": 5,
+    "tags": [],
+    "text": "| 3 | SDP 3103 | EN 17092 | Tear |\n"
+   },
+   "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6": {
+    "bbox": [
+     0.0,
+     0.0,
+     4.0,
+     7.0
+    ],
+    "doc_end": 274,
+    "doc_start": 236,
+    "document_id": "db",
+    "page": 1,
+    "pages": [
+     1
+    ],
+    "parent_chunk_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031",
+    "primary_tag": "",
+    "span_id": "db:0:277dbc9d006bbe3a8dad63cf506bb1e7a3543eb50a27fb10708ddb5a1f9f3031#6",
+    "span_index": 6,
+    "tags": [],
+    "text": "| 3 | SDP 3103 | EN 17092 | Abrasion |"
+   }
+  },
+  "succeeded": 3
+ }
+}

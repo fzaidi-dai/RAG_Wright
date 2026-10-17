@@ -20,7 +20,7 @@ import re
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Optional, Sequence, Union
+from typing import Any, Awaitable, Callable, Optional, Sequence, TypedDict, Union
 
 from rag_wright.contracts.ingestion import (
     BoundaryDecider,
@@ -334,6 +334,7 @@ class IngestionPipeline:
         stages = self.stages(ws, cache_dir=cache_dir)
         items = [s if isinstance(s, IngestSource) else IngestSource(path=str(s)) for s in sources]
         report = IngestionReport()
+        graph = self.document_graph(ws, stages)
         sem = asyncio.Semaphore(stages.tuning.document_concurrency)
         done = 0
         self._progress(f"[ingest] start N={len(items)}")
@@ -343,7 +344,7 @@ class IngestionPipeline:
             nonlocal done
             async with sem:
                 docs = await self._ingest_file(ws, stages, src.doc_id or _doc_id(src.display_name), src,
-                                               parent_id=None, child=None, depth=0)
+                                               parent_id=None, child=None, depth=0, graph=graph)
             report.documents.extend(docs)
             done += 1
             top = docs[0]
@@ -357,54 +358,156 @@ class IngestionPipeline:
         return report
 
     async def _ingest_file(self, ws: Any, stages: IngestionStages, doc_id: str, src: IngestSource, *,
-                           parent_id: Optional[str], child: Optional[Any], depth: int) -> list[DocumentReport]:
+                           parent_id: Optional[str], child: Optional[Any], depth: int,
+                           graph: Any = None) -> list[DocumentReport]:
         """Ingest one document (`child` = its `EmbeddedChild` record when it was extracted from `parent_id`), then
-        its own embedded children."""
+        its own embedded children, by running the per-document graph (`document_graph`)."""
+        graph = graph or self.document_graph(ws, stages)
+        state = await graph.ainvoke({"doc_id": doc_id, "source": src, "parent_id": parent_id, "child": child,
+                                     "depth": depth})
+        return state["reports"]
+
+    def document_graph(self, ws: Any, stages: IngestionStages) -> Any:
+        """LGI-1: the per-document ingestion graph, a compiled LangGraph `StateGraph` over `stages` (bound to `ws`):
+
+            parse -> chunk -> segment -> index -> extract -> write -> document_hook -> document_node -> children
+
+        A stage that raises routes to `dead_letter`, which ends the document with its `DocumentReport.dead_letter`
+        set (never raised, so one bad document never stops the run). `children` ingests each embedded file through
+        this same graph, then links it to its parent. The input is `{doc_id, source, parent_id, child, depth}`; the
+        output's `reports` is the document's `DocumentReport` followed by its children's."""
+        from langgraph.graph import END, START, StateGraph
+
         from rag_wright.api.documents import aparse_document_bytes
 
-        rep = DocumentReport(doc_id=doc_id, parent_doc_id=parent_id)
-        try:
-            name, data = src.display_name, src.read_bytes()
-            sd = await aparse_document_bytes(doc_id, name, data, cache_dir=stages.cache / "parsed",
-                                             include_hidden_sheets=src.include_hidden_sheets, tuning=stages.tuning)
-            rep.skipped_hidden_sheets = list(sd.skipped_hidden_sheets)
-            rep.embedded_skipped = list(sd.embedded_skipped)
-            chunks = await stages.chunk(sd)
-            tagged = await stages.segment(sd, chunks)
-            indexed = await stages.index(sd, tagged, chunks)
-            extracted = await stages.extract(sd, tagged, table_mode=src.table_mode)
-            rep.records = await stages.write(sd, extracted.extractions)
+        async def parse(state: _DocumentState) -> dict:
+            src = state["source"]
+            data = src.read_bytes()
+            document = await aparse_document_bytes(state["doc_id"], src.display_name, data,
+                                                   cache_dir=stages.cache / "parsed",
+                                                   include_hidden_sheets=src.include_hidden_sheets,
+                                                   tuning=stages.tuning)
+            return {"document": document, "sha256": hashlib.sha256(data).hexdigest()}
+
+        async def chunk(state: _DocumentState) -> dict:
+            return {"chunks": await stages.chunk(state["document"])}
+
+        async def segment(state: _DocumentState) -> dict:
+            return {"tagged": await stages.segment(state["document"], state["chunks"])}
+
+        async def index(state: _DocumentState) -> dict:
+            return {"indexed": await stages.index(state["document"], state["tagged"], state["chunks"])}
+
+        async def extract(state: _DocumentState) -> dict:
+            return {"extracted": await stages.extract(state["document"], state["tagged"],
+                                                      table_mode=state["source"].table_mode)}
+
+        async def write(state: _DocumentState) -> dict:
+            return {"records": await stages.write(state["document"], state["extracted"].extractions)}
+
+        async def document_hook(state: _DocumentState) -> dict:
             if self._document_hook is not None:
-                await self._document_hook(ws, sd, chunks)
+                await self._document_hook(ws, state["document"], state["chunks"])
+            return {}
+
+        async def document_node(state: _DocumentState) -> dict:
+            src, child, name = state["source"], state.get("child"), state["source"].display_name
             await asyncio.to_thread(
-                stages.write_document_node, doc_id, parent_id=parent_id,
+                stages.write_document_node, state["doc_id"], parent_id=state.get("parent_id"),
                 filename=(child.filename if child is not None else None) or name,
                 media_type=child.media_type if child is not None else (mimetypes.guess_type(name)[0] or ""),
-                sha256=child.sha256 if child is not None else hashlib.sha256(data).hexdigest(),
-                metadata=src.metadata)
+                sha256=child.sha256 if child is not None else state["sha256"], metadata=src.metadata)
+            return {}
+
+        async def children(state: _DocumentState) -> dict:
+            doc_id, src, sd, depth = state["doc_id"], state["source"], state["document"], state.get("depth", 0)
+            extracted, indexed = state["extracted"], state["indexed"]
+            rep = _document_report(state)
+            rep.chunks, rep.units = len(state["chunks"]), len(extracted.units)
+            rep.spans, rep.span_failures = indexed["span_count"], indexed["span_failures"]
+            rep.extraction_failures = extracted.failures
+            reports = [rep]
+            for j, emb in enumerate(sd.embedded, 1):
+                if depth + 1 > _MAX_CHILD_DEPTH:
+                    rep.embedded_skipped.append(f"{emb.doc_id}: nested deeper than {_MAX_CHILD_DEPTH}")
+                    continue
+                emb_src = IngestSource(path=emb.path, doc_id=emb.doc_id, table_mode=src.table_mode,
+                                       include_hidden_sheets=src.include_hidden_sheets, metadata=src.metadata)
+                kids = await self._ingest_file(ws, stages, emb.doc_id, emb_src, parent_id=doc_id, child=emb,
+                                               depth=depth + 1, graph=compiled)
+                reports.extend(kids)
+                if kids[0].dead_letter is None:
+                    rep.children.append(emb.doc_id)
+                    await asyncio.to_thread(stages.write_child_links, doc_id, emb, extracted.row_spans, rep)
+                self._progress(f"[ingest]   {doc_id} child {j}/{len(sd.embedded)} {emb.filename or emb.doc_id} "
+                               + (f"DEAD-LETTER: {kids[0].dead_letter}" if kids[0].dead_letter else
+                                  f"spans={kids[0].spans} units={kids[0].units}"))
+            return {"reports": reports}
+
+        def dead_letter(state: _DocumentState) -> dict:
+            rep = _document_report(state)
+            rep.dead_letter = state["dead_letter"]
+            return {"reports": [rep]}
+
+        stages_in_order = [("parse", parse), ("chunk", chunk), ("segment", segment), ("index", index),
+                           ("extract", extract), ("write", write), ("document_hook", document_hook),
+                           ("document_node", document_node)]
+        g = StateGraph(_DocumentState)
+        for (name, fn), nxt in zip(stages_in_order, [n for n, _ in stages_in_order[1:]] + ["children"]):
+            g.add_node(name, _dead_lettering(fn))
+            g.add_conditional_edges(name, functools.partial(_next_unless_dead, nxt), [nxt, "dead_letter"])
+        g.add_node("children", children)
+        g.add_node("dead_letter", dead_letter)
+        g.add_edge(START, "parse")
+        g.add_edge("children", END)
+        g.add_edge("dead_letter", END)
+        compiled = g.compile(name="document_ingestion")
+        return compiled
+
+
+class _DocumentState(TypedDict, total=False):
+    """The per-document graph's state. The parse itself stays in the parse cache: `document` holds its handle."""
+
+    doc_id: str
+    source: IngestSource
+    parent_id: Optional[str]
+    child: Any  # the `EmbeddedChild` this document was extracted as (None for a top-level source)
+    depth: int
+    document: Any  # the `SourceDocument`
+    sha256: str
+    chunks: list
+    tagged: list
+    indexed: dict
+    extracted: ExtractStage
+    records: int
+    dead_letter: Optional[str]
+    reports: list
+
+
+def _dead_lettering(fn: Callable[[Any], Awaitable[dict]]) -> Callable[[Any], Awaitable[dict]]:
+    """A stage node whose failure is recorded as the document's dead letter instead of raised."""
+
+    @functools.wraps(fn)
+    async def node(state: Any) -> dict:
+        try:
+            return await fn(state)
         except Exception as exc:  # noqa: BLE001 - one bad document is dead-lettered, never the whole run
-            rep.dead_letter = f"{type(exc).__name__}: {exc}"
-            return [rep]
-        rep.chunks, rep.units = len(chunks), len(extracted.units)
-        rep.spans, rep.span_failures = indexed["span_count"], indexed["span_failures"]
-        rep.extraction_failures = extracted.failures
-        reports = [rep]
-        for j, emb in enumerate(sd.embedded, 1):
-            if depth + 1 > _MAX_CHILD_DEPTH:
-                rep.embedded_skipped.append(f"{emb.doc_id}: nested deeper than {_MAX_CHILD_DEPTH}")
-                continue
-            emb_src = IngestSource(path=emb.path, doc_id=emb.doc_id, table_mode=src.table_mode,
-                                   include_hidden_sheets=src.include_hidden_sheets, metadata=src.metadata)
-            kids = await self._ingest_file(ws, stages, emb.doc_id, emb_src,
-                                           parent_id=doc_id, child=emb, depth=depth + 1)
-            reports.extend(kids)
-            if kids[0].dead_letter is None:
-                rep.children.append(emb.doc_id)
-                await asyncio.to_thread(stages.write_child_links, doc_id, emb, extracted.row_spans, rep)
-            self._progress(f"[ingest]   {doc_id} child {j}/{len(sd.embedded)} {emb.filename or emb.doc_id} "
-                           + (f"DEAD-LETTER: {kids[0].dead_letter}" if kids[0].dead_letter else
-                              f"spans={kids[0].spans} units={kids[0].units}"))
-        return reports
+            return {"dead_letter": f"{type(exc).__name__}: {exc}"}
+
+    return node
+
+
+def _next_unless_dead(nxt: str, state: Any) -> str:
+    return "dead_letter" if state.get("dead_letter") else nxt
+
+
+def _document_report(state: Any) -> DocumentReport:
+    """The document's report from what its stages recorded so far (a dead-lettered document keeps what landed)."""
+    sd = state.get("document")
+    return DocumentReport(doc_id=state["doc_id"], parent_doc_id=state.get("parent_id"),
+                          records=state.get("records", 0),
+                          skipped_hidden_sheets=list(sd.skipped_hidden_sheets) if sd is not None else [],
+                          embedded_skipped=list(sd.embedded_skipped) if sd is not None else [])
 
 
 def _with_pages(document: Any, chunks: list, chunk: Any, spans: list[Span]) -> list[Span]:
