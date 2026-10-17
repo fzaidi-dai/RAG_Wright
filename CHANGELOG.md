@@ -4,6 +4,15 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.13.0...0.14.0) (2026-10-17)
+
+
+### Features
+
+* **LGI-1:** each document is ingested through a LangGraph graph of the stages ([24c15df](https://github.com/fzaidi-dai/RAG_Wright/commit/24c15dfc692b463382f18b183c551127e7092c0c))
+* **LGI-2:** the whole ingest run is one LangGraph graph ([e38e9c8](https://github.com/fzaidi-dai/RAG_Wright/commit/e38e9c8733fb0bcb4da51e71e3e7093fbde4b9c3))
+* **LGI-3:** an interrupted ingest resumes from its last finished stage ([9970189](https://github.com/fzaidi-dai/RAG_Wright/commit/9970189d6d5759dc4a1eeaccb35d734cc05e886e))
+
 ## [0.13.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.12.0...0.13.0) (2026-10-15)
 
 
