@@ -16,6 +16,7 @@ introspection: create only what is absent.
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 import os
@@ -69,6 +70,18 @@ _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 # retry; the failed command or transaction is rolled back whole, so a bounded retry with jittered backoff is safe
 # (found by the ING-5 doc audit: unretried, concurrent ingestion silently lost spans and records).
 _CONFLICT_RETRIES = 10
+# PS-49 (TexWright, 2026-10-17): the client logs every error response at ERROR before raising, so a conflict the retry
+# absorbs printed exactly like a failure. While a retry is handling the call, that line is dropped; the retry says
+# itself what happened (INFO when the write landed after retrying, ERROR when it gave up).
+_RETRYING = contextvars.ContextVar("arcadedb_retrying", default=False)
+
+
+class _RetriedConflictFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not (_RETRYING.get() and _is_retryable_conflict(Exception(record.getMessage())))
+
+
+logging.getLogger("arcadedb_python.api.sync").addFilter(_RetriedConflictFilter())
 
 
 def _is_retryable_conflict(exc: BaseException) -> bool:
@@ -77,13 +90,24 @@ def _is_retryable_conflict(exc: BaseException) -> bool:
 
 
 def _retry_on_conflict(fn, *args, **kwargs):
-    for attempt in range(_CONFLICT_RETRIES):
-        try:
-            return fn(*args, **kwargs)
-        except Exception as exc:  # noqa: BLE001 - only the retryable conflict is retried; anything else re-raises
-            if attempt == _CONFLICT_RETRIES - 1 or not _is_retryable_conflict(exc):
-                raise
-            time.sleep(min(0.5, 0.01 * 2 ** attempt) + random.uniform(0, 0.01))
+    token = _RETRYING.set(True)
+    try:
+        for attempt in range(_CONFLICT_RETRIES):
+            try:
+                result = fn(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - only the retryable conflict is retried; anything else re-raises
+                if not _is_retryable_conflict(exc):
+                    raise
+                if attempt == _CONFLICT_RETRIES - 1:
+                    _log.error("ArcadeDB write conflict: gave up after %d attempts: %s", _CONFLICT_RETRIES, exc)
+                    raise
+                time.sleep(min(0.5, 0.01 * 2 ** attempt) + random.uniform(0, 0.01))
+            else:
+                if attempt:
+                    _log.info("ArcadeDB write conflict retried %d times; the write landed", attempt)
+                return result
+    finally:
+        _RETRYING.reset(token)
 
 
 def _sql_str(value: str) -> str:

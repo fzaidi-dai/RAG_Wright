@@ -5,7 +5,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 
 > **⇒ RESUME / NEXT UP (2026-10-17, NEWEST): the LangGraph ingestion workstream is RELEASED as `rag-wright` 0.14.0** (PR #16)
 > (`docs/specs/langgraph-ingestion/plan.md`, LGI-1..5; ADR-0124 amended; RuleWright guide
-> `docs/specs/public-surface/rulewright-migration-0.14.0.md`). Next: PS-48 (harness behaviour tests onto the fabric
+> `docs/specs/public-surface/rulewright-migration-0.14.0.md`). PS-49 done 2026-10-17 (a retried ArcadeDB write conflict no
+> longer prints as an error; TexWright's request; unreleased, lands as 0.14.1). Next: PS-48 (harness behaviour tests onto the fabric
 > fixture; proposed with sub-tasks PS-48a..g, awaiting go-ahead), EV-7, PS-30, PS-33. Before it,
 > **(2026-10-14): PS-32 done, the agent harness is `rag_wright.harness`** (third public
 > tier, ADR-0139; with PS-39); RELEASED as `rag-wright` 0.10.0 (PyPI + GitHub release, PR #12); RuleWright's guide `docs/specs/public-surface/rulewright-migration-0.10.0.md`.

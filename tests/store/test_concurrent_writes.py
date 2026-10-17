@@ -48,3 +48,61 @@ def test_concurrent_span_and_record_writes_all_land():
     finally:
         s.drop()
         s.close()
+
+
+_CONFLICT = ("Cannot execute command: Concurrent modification on page PageId(db/9/680) in file 'Span_0.9.65536.v0.bucket' "
+             "(current v.113 <> database v.114). Please retry the operation (threadId=65)")
+
+
+def _flaky(failures: int):
+    """A write that fails like the ArcadeDB client does: it logs the error response, then raises."""
+    import logging
+
+    client_log = logging.getLogger("arcadedb_python.api.sync")
+    calls = []
+
+    def write():
+        calls.append(1)
+        if len(calls) <= failures:
+            client_log.error("ArcadeDB Error Response: {'detail': %r, 'exception': "
+                             "'com.arcadedb.exception.ConcurrentModificationException'}", _CONFLICT)
+            raise Exception(_CONFLICT)
+        return "ok"
+    return write, calls
+
+
+def test_a_retried_conflict_prints_no_error_and_says_it_was_retried(caplog, monkeypatch):
+    # PS-49 (TexWright's 2026-10-17 request): a conflict the retry absorbs must not read like a failure.
+    from rag_wright.store import arcadedb
+
+    monkeypatch.setattr(arcadedb.time, "sleep", lambda _s: None)
+    write, calls = _flaky(failures=2)
+    with caplog.at_level("INFO"):
+        assert arcadedb._retry_on_conflict(write) == "ok"
+    assert len(calls) == 3
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+    retried = [r.getMessage() for r in caplog.records if r.name == arcadedb.__name__]
+    assert len(retried) == 1 and "retried 2 times" in retried[0] and "landed" in retried[0]
+
+
+def test_a_conflict_that_outlasts_the_retries_is_raised_and_logged(caplog, monkeypatch):
+    from rag_wright.store import arcadedb
+
+    monkeypatch.setattr(arcadedb.time, "sleep", lambda _s: None)
+    write, calls = _flaky(failures=arcadedb._CONFLICT_RETRIES)
+    with caplog.at_level("INFO"), pytest.raises(Exception, match="Concurrent modification"):
+        arcadedb._retry_on_conflict(write)
+    assert len(calls) == arcadedb._CONFLICT_RETRIES
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert len(errors) == 1 and errors[0].name == arcadedb.__name__ and "gave up" in errors[0].getMessage()
+
+
+def test_an_error_outside_a_retry_still_prints():
+    # The filter hides only conflicts the retry is handling; any other client error response still reaches the log.
+    import logging
+
+    from rag_wright.store import arcadedb  # noqa: F401 - installs the filter
+
+    record = logging.LogRecord("arcadedb_python.api.sync", logging.ERROR, __file__, 0,
+                               "ArcadeDB Error Response: %s", (_CONFLICT,), None)
+    assert all(f.filter(record) for f in logging.getLogger("arcadedb_python.api.sync").filters)
