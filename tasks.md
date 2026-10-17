@@ -3,7 +3,7 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **⇒ RESUME / NEXT UP (2026-10-17, NEWEST): the LangGraph ingestion workstream is COMPLETE, unreleased**
+> **⇒ RESUME / NEXT UP (2026-10-17, NEWEST): the LangGraph ingestion workstream is RELEASED as `rag-wright` 0.14.0** (PR #16)
 > (`docs/specs/langgraph-ingestion/plan.md`, LGI-1..5; ADR-0124 amended; RuleWright guide
 > `docs/specs/public-surface/rulewright-migration-0.14.0.md`). Next: PS-48 (harness behaviour tests onto the fabric
 > fixture; proposed with sub-tasks PS-48a..g, awaiting go-ahead), EV-7, PS-30, PS-33. Before it,

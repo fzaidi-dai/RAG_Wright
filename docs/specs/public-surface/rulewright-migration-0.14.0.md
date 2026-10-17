@@ -1,6 +1,6 @@
 # RuleWright: moving to rag-wright 0.14
 
-What 0.14.0 changes for RuleWright (the LangGraph ingestion workstream, `docs/specs/langgraph-ingestion/plan.md`,
+What 0.14.0 changes for RuleWright (released 2026-10-17: PyPI and GitHub release `0.14.0`, PR #16; the LangGraph ingestion workstream, `docs/specs/langgraph-ingestion/plan.md`,
 LGI-1 to LGI-5; ADR-0124 amended). Do the 0.13 guide first. Nothing here is edited from the engine repo, and nothing
 breaks an existing call.
 

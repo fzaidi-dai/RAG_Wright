@@ -55,11 +55,11 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-17): the LangGraph ingestion workstream is COMPLETE, unreleased** (LGI-1..5,
+> **CURRENT STATE (2026-10-17): the LangGraph ingestion workstream is RELEASED as `rag-wright` 0.14.0** (PR #16; LGI-1..5,
 > `docs/specs/langgraph-ingestion/plan.md`, ADR-0124 amended): `build_ingestion` is a LangGraph graph
 > (`IngestionPipeline.graph`, per-document `document_graph`), `aingest(..., checkpointer=, run_id=)` resumes an
 > interrupted run (built-in state, strict msgpack safe), `IngestionReport.from_dict`; live old-vs-new parity identical;
-> guide `rulewright-migration-0.14.0.md` (next release 0.14.0). Next: PS-48 (harness tests onto the fabric fixture,
+> guide `rulewright-migration-0.14.0.md`. Next: PS-48 (harness tests onto the fabric fixture,
 > proposed, not started), EV-7, PS-30, PS-33. Before it,
 > **(2026-10-15): `rag-wright` 0.13.0 is RELEASED** (PR #15): PS-35 `migrate_span_fields` on the API,
 > PS-44 `Range` KG filters (TexWright ER-1), PS-45 `span_search` (G24), PS-46 blank PDF pages never sent to the VLM
