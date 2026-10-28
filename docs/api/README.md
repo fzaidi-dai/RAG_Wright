@@ -424,7 +424,7 @@ Rank the live ARD catalog by semantic match to `query`; return the top `k` (opti
 
 ### `kg_read(ws: 'WorkspaceHandle', node_type: 'str', *, where: 'Optional[dict]' = None, fields: 'Optional[list]' = None, distinct: 'Optional[str]' = None, order_by: 'Optional[str]' = None, limit: 'Optional[int]' = None, key_range: 'Optional[tuple]' = None) -> 'list[dict]'`
 
-Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range` (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand (`lo <= field < hi`). Then projection, distinct, order and limit.
+Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range` (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand (`lo <= field < hi`). Then projection, distinct, order and limit. Every name is checked, never interpolated unchecked (the module docstring): a request-chosen field is safe, but an unknown one matches nothing.
 
 ### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = ()) -> 'None'`
 

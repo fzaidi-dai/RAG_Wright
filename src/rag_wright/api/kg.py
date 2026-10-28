@@ -2,7 +2,17 @@
 
 Thin wrappers that delegate to the handle's resolved store, so a product does generic typed-KG reads/writes (and
 span-position lookups for citations) WITHOUT importing `ArcadeDBStore` or touching `ws._store`. The generic
-`kg_read`/`kg_write` primitives already live on the store (DD-1a/b); this exposes them on the API."""
+`kg_read`/`kg_write` primitives already live on the store (DD-1a/b); this exposes them on the API.
+
+**Names and values (PS-53).** Filter VALUES are always escaped, so they may come from a request. Every NAME -- a type,
+a `where` / `key_range` / `set` / `fields` / `distinct` field, an `order_by` term, a `select` alias or expression,
+a `KgNode` / `KgEdge` property -- is checked before any SQL is built: an identifier (letters, digits, underscores;
+`@rid` / `@type` / `@in` / `@out` where a field is read), `order_by` as `field [ASC|DESC]` terms, a `kg_edges`
+select as a field optionally on `c.` / `e.` / `v.` / `inV().` / `outV().`. Anything else raises `ValueError` and
+nothing is sent, so a request-chosen field name cannot change the query. It CAN still name a field no record has:
+the store is schema-flexible (undeclared properties are stored and read, the engine's own types carry some), so an
+unknown field matches no rows rather than raising. A product that exposes a field choice checks it against the
+fields it means to offer."""
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -23,7 +33,8 @@ def kg_read(ws: WorkspaceHandle, node_type: str, *, where: Optional[dict] = None
     (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range`
     (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all
     filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand
-    (`lo <= field < hi`). Then projection, distinct, order and limit."""
+    (`lo <= field < hi`). Then projection, distinct, order and limit. Every name is checked, never interpolated
+    unchecked (the module docstring): a request-chosen field is safe, but an unknown one matches nothing."""
     return ws._store.kg_read(node_type, where=where, fields=fields, distinct=distinct, order_by=order_by, limit=limit,
                              key_range=key_range)
 

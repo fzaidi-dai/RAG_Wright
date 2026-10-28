@@ -21,6 +21,7 @@ import json
 import logging
 import os
 import random
+import re
 import time
 from typing import Any, Iterable, Optional
 
@@ -169,12 +170,67 @@ def _kg_sql(value: object) -> str:
     return _sql_str(str(value))
 
 
+# PS-53 (TexWright, 2026-10-21): filter VALUES were always escaped, but type and field NAMES went into the SQL raw, so a
+# caller-chosen field was injection (`where={"1=1 OR id": NOT_NULL}` returned every row). Every name a KG call puts into
+# SQL is checked here first; one that is not an identifier raises before any statement is built. A name is checked,
+# not quoted: the grammar is what every real caller uses, and a refusal says what was wrong.
+_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_RECORD_ATTRS = frozenset({"@rid", "@type", "@in", "@out"})  # ArcadeDB's record attributes, readable like fields
+_FIELD = r"(?:[A-Za-z_][A-Za-z0-9_]*|@rid|@type|@in|@out)"
+_ORDER_TERM = re.compile(rf"\s*{_FIELD}(?:\s+(?i:ASC|DESC))?\s*\Z")
+_SELECT_EXPR = re.compile(rf"(?:(?:[cev]|inV\(\)|outV\(\))\.)?{_FIELD}\Z")  # kg_edges: start, edge, far end
+
+
+def _ident(name: object, what: str = "a field name", *, record_attrs: bool = False) -> str:
+    """`name` if it is an identifier (letters, digits, underscore, not starting with a digit; with `record_attrs`
+    also `@rid` / `@type` / `@in` / `@out`), else `ValueError`."""
+    if isinstance(name, str) and (_IDENT.match(name) or (record_attrs and name in _RECORD_ATTRS)):
+        return name
+    raise ValueError(f"{what} must be an identifier (letters, digits and underscores); got {name!r}")
+
+
+def _kg_order_by(spec: str) -> str:
+    """`field`, `field ASC|DESC`, or a comma list of them; anything else raises `ValueError`."""
+    if not isinstance(spec, str) or not all(_ORDER_TERM.match(term) for term in spec.split(",")):
+        raise ValueError(f"order_by must be identifier [ASC|DESC] terms, comma-separated; got {spec!r}")
+    return spec
+
+
+def _kg_select_expr(expr: str) -> str:
+    """A `kg_edges` select expression: a field, optionally on `c.` / `e.` / `v.` / `inV().` / `outV().`."""
+    if not isinstance(expr, str) or not _SELECT_EXPR.match(expr):
+        raise ValueError(f"a kg_edges select expression must be an identifier, optionally prefixed by c., e., v., "
+                         f"inV(). or outV(); got {expr!r}")
+    return expr
+
+
+def _kg_check_node(n: Any) -> None:
+    _ident(n.type, "a node type")
+    _ident(n.key_field, "a key field")
+    for k in n.props:
+        _ident(k)
+
+
+def _kg_check_edge(e: Any) -> None:
+    _ident(e.type, "an edge type")
+    _ident(e.from_type, "a node type")
+    _ident(e.to_type, "a node type")
+    _ident(e.from_key_field, "a key field")
+    _ident(e.to_key_field, "a key field")
+    for k in e.props:
+        _ident(k)
+
+
 def _kg_where_terms(where: Optional[dict[str, object]],
                     key_range: Optional[tuple[str, object, object]] = None) -> Optional[list[str]]:
     """The shared KG filter grammar (`kg_read`, `kg_edges`, `kg_count` / `kg_delete` / `kg_update`): a scalar is
     equality, a list is membership, `NOT_NULL` is presence, a `Range` is its comparisons (ER-1);
     `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
     the caller returns without a statement)."""
+    for field in where or {}:
+        _ident(field, record_attrs=True)
+    if key_range is not None:
+        _ident(key_range[0])
     out: list[str] = []
     for field, value in (where or {}).items():
         if value is NOT_NULL:
@@ -557,6 +613,13 @@ class ArcadeDBStore:
         scope-to-nothing -> `[]` without a query (never an invalid `IN []`). Clauses AND-ed in insertion order,
         then `key_range` (`field >= lo AND field < hi`). The filter grammar is `_kg_where_terms`, shared with the
         other KG calls, so `NOT_NULL` and `Range` work here too."""
+        _ident(node_type, "a node type")
+        for f in fields or ():
+            _ident(f, record_attrs=True)
+        if distinct:
+            _ident(distinct)
+        if order_by:
+            _kg_order_by(order_by)
         clauses = _kg_where_terms(where, key_range)
         if clauses is None:
             return []
@@ -586,6 +649,13 @@ class ArcadeDBStore:
         """Generic edge traversal (see `Store.kg_edges`): node-start MATCH (out/in) when a start selector is
         given, else a direct edge-table scan. An empty membership anywhere scopes to nothing -> `[]`."""
 
+        if from_type is not None:
+            _ident(from_type, "a node type")
+        if edge_type:
+            _ident(edge_type, "an edge type")
+        for alias, expr in select.items():
+            _ident(alias, "a select alias")
+            _kg_select_expr(expr)
         c_terms = _kg_where_terms(where, key_range)
         e_terms, v_terms = _kg_where_terms(edge_where), _kg_where_terms(target_where)
         if c_terms is None or e_terms is None or v_terms is None:
@@ -622,6 +692,7 @@ class ArcadeDBStore:
     def kg_count(self, type_name: str, *, where: Optional[dict[str, object]] = None,
                  key_range: Optional[tuple[str, object, object]] = None) -> int:
         """Count the vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`)."""
+        _ident(type_name, "a type name")
         terms = _kg_where_terms(where, key_range)
         if terms is None:
             return 0
@@ -638,6 +709,7 @@ class ArcadeDBStore:
                   key_range: Optional[tuple[str, object, object]] = None) -> int:
         """Delete the vertices (with their edges) or edges of `type_name` matching `where` / `key_range` (see
         `Store.kg_delete`). Edge types delete `UNSAFE` (this dialect's edge-safety check). Returns the count."""
+        _ident(type_name, "a type name")
         terms = _kg_where_terms(where, key_range)
         if terms is None:
             return 0
@@ -653,6 +725,9 @@ class ArcadeDBStore:
         number of rows changed."""
         if not set:
             raise ValueError("kg_update needs at least one field to set")
+        _ident(type_name, "a type name")
+        for k in set:
+            _ident(k)
         terms = _kg_where_terms(where, key_range)
         if terms is None:
             return 0
@@ -679,6 +754,11 @@ class ArcadeDBStore:
     def kg_write(self, nodes, edges=()) -> None:
         """Upsert typed `nodes` (by `key_field`) then create typed `edges`, all in one transaction (see
         `Store.kg_write`). Node props encode by the type's pack-declared storage type; edge props are type-driven."""
+        nodes, edges = list(nodes), list(edges)
+        for n in nodes:
+            _kg_check_node(n)
+        for e in edges:
+            _kg_check_edge(e)
         statements: list[str] = []
         for n in nodes:
             types = self._property_types(n.type)
@@ -701,6 +781,9 @@ class ArcadeDBStore:
         the same two endpoints; an existing one has its props UPDATED in place (a re-ingest never duplicates an
         edge, and a changed link confidence lands). Endpoint keys are matched with `outV()`/`inV()` (a bare
         `out.<prop>` projects NULL on this ArcadeDB, issue 0029). Returns the number of edges created."""
+        edges = list(edges)
+        for e in edges:
+            _kg_check_edge(e)
         created = 0
         for e in edges:
             where = (f" WHERE outV().{e.from_key_field} = {_kg_sql(e.from_key)}"
