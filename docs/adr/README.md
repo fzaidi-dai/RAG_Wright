@@ -195,4 +195,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0136 A spreadsheet table cut at its blank rows is glued back together after the parse ·
 0137 A generated answer states the evidence's support every time, and "none" is an abstention ·
 0138 PDF parses run one at a time, and the engine reaches pdfium through one locked door ·
-0139 The agent harness substrate is engine scope
+0139 The agent harness substrate is engine scope ·
+0140 One model family on Metal, under one process lock

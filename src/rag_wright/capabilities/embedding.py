@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import asyncio
 import math
-import threading
 from typing import Protocol, runtime_checkable
 
 from pydantic import BaseModel, field_validator
@@ -63,49 +62,43 @@ class ChunkEmbedding(BaseModel):
 
 
 def _resolve_device(device: str | None) -> str:
-    """The device to run BGE-M3 on: explicit arg, else `EMBED_DEVICE`, else auto (Metal `mps` when available,
-    else `cpu`). Auto-MPS offloads embedding from the CPU (freeing it for LegalBERT + extraction during ingest)
-    and is ~2x faster; the vectors are bit-for-bit equivalent to CPU (verified cosine 1.0), so it is a pure
-    speed choice, not a semantic one."""
-    import os
+    """The device to run the BGE family (this embedder and `BGEReranker`) on: explicit arg, else `EMBED_DEVICE`,
+    else CUDA, else Metal `mps`, else `cpu`. Metal offloads embedding from the CPU and is ~2x faster; the vectors
+    are bit-for-bit equivalent to CPU (verified cosine 1.0), so it is a pure speed choice. The BGE family is the
+    ONE family the engine puts on Metal, and every call to it there holds the process-wide Metal lock (PS-55,
+    `rag_wright.util.devices`)."""
+    from rag_wright.util.devices import torch_device
 
-    chosen = device or os.environ.get("EMBED_DEVICE")
-    if chosen:
-        return chosen
-    try:
-        import torch
-
-        if torch.backends.mps.is_available():
-            return "mps"
-        if torch.cuda.is_available():  # a GPU box (e.g. the bulk-ingestion VM) -> use the GPU
-            return "cuda"
-    except Exception:  # noqa: BLE001 - torch/device probing must never break model construction
-        pass
-    return "cpu"
+    return torch_device(device, env="EMBED_DEVICE", metal=True)
 
 
 class BGEM3Embedder:
     """The real embedder: BGE-M3 via `FlagEmbedding.BGEM3FlagModel` (model loaded lazily).
 
-    THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model IN PLACE on every `encode`
+    THREAD-SAFE (engine issue 0016, PS-55): FlagEmbedding mutates the model IN PLACE on every `encode`
     (`self.model.float()` / `.to(device)` / `.eval()`), and those C++ conversions release the GIL, so two threads
     driving one shared model swap the same parameter-tensor storage under each other and SEGFAULT the interpreter
     (not a catchable exception). The engine SHARES one `Embedder` across concurrent-document ingestion
     (`run_job(max_concurrency=...)` -> per-document `encode_batch`) and across `embed_chunks`' per-chunk thread
     fan-out. So every model call is serialized by an instance lock. The lock guards ONLY `self._model.encode`
     (the numpy results are per-call, thread-local); the serialized section is the CPU/GPU encode, which is a small
-    slice of ingest time -- the concurrency worth overlapping is the network-bound extraction, not the encode."""
+    slice of ingest time -- the concurrency worth overlapping is the network-bound extraction, not the encode.
+    On Metal the lock is the process-wide `METAL_LOCK` instead (PS-55): Metal is not safe for concurrent use, and a
+    process can hold several embedders (the query embedder, each workspace's) plus the reranker."""
 
     def __init__(self, model_name: str = "BAAI/bge-m3", *, use_fp16: bool = False,
                  device: str | None = None, batch_size: int = 64, model: object | None = None) -> None:
         self._batch_size = batch_size  # cross-item independent, so batching never changes a vector, only speed
-        self._lock = threading.Lock()  # issue 0016: serialize the in-place-mutating BGE-M3 encode across threads
+        from rag_wright.util.devices import model_lock
+
+        resolved = _resolve_device(device)
+        self._lock = model_lock(resolved)  # issue 0016 per instance; on Metal one lock per process (PS-55)
         if model is not None:  # injected (hermetic tests) -- avoids loading the real model
             self._model = model
         else:
             from FlagEmbedding import BGEM3FlagModel
 
-            self._model = BGEM3FlagModel(model_name, use_fp16=use_fp16, devices=_resolve_device(device))
+            self._model = BGEM3FlagModel(model_name, use_fp16=use_fp16, devices=resolved)
 
     def encode_dense(self, text: str) -> list[float]:
         with self._lock:  # issue 0016

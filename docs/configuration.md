@@ -294,7 +294,8 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | `RAG_MODEL_DEADLINE_S` | total wall-clock limit for one model call across its retries (default: follows `RAG_STRUCTURED_TIMEOUT_S`, never under 180 s) |
 | `RAG_SPACY_MODEL` | the spaCy model name for the optional NER extra |
 | `RAG_MODELS_DIR` | the models root every trained classifier loads its weights from (default: the engine checkout's `data/models` when it exists, else `./data/models`); fill it with `scripts/fetch_reference_models.py` for the reference pack |
-| `EMBED_DEVICE` / `RAG_SETFIT_DEVICE` / `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | embedder / classifier device + fleet knobs (`RAG_SETFIT_CLAUSE_DIR` overrides `<models root>/setfit_clause`) |
+| `EMBED_DEVICE` / `DOCLING_DEVICE` / `RAG_SETFIT_DEVICE` | where the local models run. Unset: CUDA when present; on Apple Silicon the BGE embedder and reranker (`EMBED_DEVICE`) run on Metal under one process lock and Docling and the classifiers on CPU, because Metal is not safe for concurrent use (PS-55, `docs/workspaces.md`). An explicit value, `mps` included, always wins |
+| `RAG_SETFIT_CLAUSE_DIR` / `RAG_SETFIT_THRESHOLD` / `RAG_SETFIT_TOPK` | classifier fleet knobs (`RAG_SETFIT_CLAUSE_DIR` overrides `<models root>/setfit_clause`) |
 | `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` / `RAG_TRACE_LEVEL` | observability (Langfuse tracing; see [`OBSERVABILITY.md`](OBSERVABILITY.md)) |
 | `RAG_EVAL_BACKEND` | `local` (default) or `langfuse`: where `arun_eval` runs when its `langfuse` argument is not given. `langfuse` needs the Langfuse keys and a gold set with `local_only=False`; a `local_only` gold set is refused before anything is sent |
 

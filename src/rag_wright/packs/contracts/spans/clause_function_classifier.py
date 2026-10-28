@@ -513,9 +513,11 @@ def production_setfit_clause_classifier(model_root: str | None = None, **kwargs)
         raise FileNotFoundError(
             f"No SetFit clause checkpoints under {root} (expected cap128b_legalbert/bge/mpnet). "
             "Download them from the model store, or set RAG_FUNCTION_CLASSIFIER=llm to use the LLM classifier.")
+    from rag_wright.pack_sdk import torch_device
+
     return SetFitClauseAdapter(
         present,
         top_k=int(os.getenv("RAG_SETFIT_TOPK", str(kwargs.pop("top_k", 3)))),
         threshold=float(os.getenv("RAG_SETFIT_THRESHOLD", str(kwargs.pop("threshold", 0.0)))),
-        device=os.getenv("RAG_SETFIT_DEVICE") or kwargs.pop("device", None),
+        device=torch_device(os.getenv("RAG_SETFIT_DEVICE") or kwargs.pop("device", None)),  # never Metal unless asked (PS-55)
         **kwargs)

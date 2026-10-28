@@ -66,19 +66,23 @@ class BGEReranker:
 
     THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model in place on every call (the same in-place
     `.to()`/`.eval()` conversions that segfault the shared BGE-M3 embedder under thread concurrency), so a shared
-    reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller."""
+    reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller. It is in the
+    BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one
+    the embedders hold (PS-55), so a rerank never runs on Metal beside an embed."""
 
     def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, *, use_fp16: bool = False,
-                 model: object | None = None) -> None:
-        import threading
+                 device: str | None = None, model: object | None = None) -> None:
+        from rag_wright.capabilities.embedding import _resolve_device
+        from rag_wright.util.devices import model_lock
 
-        self._lock = threading.Lock()  # issue 0016: serialize the in-place-mutating compute_score across threads
+        resolved = _resolve_device(device)
+        self._lock = model_lock(resolved)  # issue 0016 per instance; on Metal one lock per process (PS-55)
         if model is not None:  # injected (hermetic tests)
             self._model = model
         else:
             from FlagEmbedding import FlagAutoReranker
 
-            self._model = FlagAutoReranker.from_finetuned(model_name, use_fp16=use_fp16)
+            self._model = FlagAutoReranker.from_finetuned(model_name, use_fp16=use_fp16, devices=resolved)
 
     def score(self, query: str, passages: list[str]) -> list[float]:
         if not passages:

@@ -31,11 +31,18 @@ crosses corpora: every read and write goes through the handle's store.
 | per process | the serving backend and endpoints, provider routing, call timeouts | `RAG_SERVING`, `VLLM_BASE_URL`, `OPENROUTER_*`, `RAG_*_TIMEOUT_S` |
 | per process | the decision model's profile (one call can name another in the `jev_decision` input `model`) | `RAG_DECISION_MODEL` |
 | per process | trained classifier weights and their knobs | `RAG_MODELS_DIR`, `RAG_SETFIT_*` |
+| per process | where the local models run (Metal, CUDA or CPU) | `EMBED_DEVICE`, `DOCLING_DEVICE`, `RAG_SETFIT_DEVICE` |
 | per process | one cached handle per corpus, replaced when the corpus is opened with a different config | see "Changing a workspace's configuration" |
 | per process | the reference pack's graph-extraction model and its standalone MCP servers (they read the environment when they start) | `RAG_GRAPH_EXTRACT_MODEL`; one server process per deployment |
 
 Concurrent calls for different workspaces in one process are safe: each call resolves its own workspace's models,
-and metering and trace scopes belong to the call that opened them.
+and metering and trace scopes belong to the call that opened them. That includes Apple Silicon, where it takes one
+rule (PS-55): PyTorch's Metal backend is not safe for concurrent use (two threads running models on it abort the
+process inside Metal, which no caller can catch), so the engine keeps only its BGE models (the embedder and the
+reranker) on Metal, every call to them under one process-wide lock, and runs Docling and the classifiers on CPU. A
+query embedding in a server and an upload's parse in the same process therefore never meet on Metal. Setting
+`DOCLING_DEVICE=mps` or `RAG_SETFIT_DEVICE=mps` puts a second family back on Metal and gives this up; a pack's own
+torch model takes its device from `pack_sdk.torch_device`, which never picks Metal unless asked.
 
 ## Managing workspaces
 

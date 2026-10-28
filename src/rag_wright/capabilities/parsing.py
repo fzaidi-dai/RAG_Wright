@@ -70,10 +70,27 @@ def _thread_converter():
     keep their own)."""
     converter = getattr(_THREAD, "converter", None)
     if converter is None:
-        from docling.document_converter import DocumentConverter
-
-        converter = _THREAD.converter = DocumentConverter()
+        converter = _THREAD.converter = _new_converter()
     return converter
+
+
+def _new_converter():
+    """Docling's converter with the engine's device for its layout, table and OCR models (PS-55): `cpu` where
+    Docling's `auto` would pick Metal, which is not safe for concurrent use and is kept for the BGE family;
+    `DOCLING_DEVICE` when set; else Docling's own choice. Passed explicitly because Docling's default options are
+    built once, at import. The output is identical on CPU and Metal (measured on the engine's fixtures)."""
+    from docling.datamodel.accelerator_options import AcceleratorOptions
+    from docling.datamodel.base_models import InputFormat
+    from docling.datamodel.pipeline_options import PdfPipelineOptions
+    from docling.document_converter import DocumentConverter, ImageFormatOption, PdfFormatOption
+
+    from rag_wright.util.devices import docling_device
+
+    def options() -> PdfPipelineOptions:
+        return PdfPipelineOptions(accelerator_options=AcceleratorOptions(device=docling_device()))
+
+    return DocumentConverter(format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options()),
+                                             InputFormat.IMAGE: ImageFormatOption(pipeline_options=options())})
 
 
 class DoclingParser:

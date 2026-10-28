@@ -21,18 +21,11 @@ from rag_wright.packs.contracts.schemas.property import PropertyDimension
 
 
 def auto_device(pref: Optional[str] = None) -> str:
-    """GPU-if-available-else-CPU: honor an explicit choice, else CUDA -> MPS -> CPU. Never pin a device in code."""
-    if pref:
-        return pref
-    try:
-        import torch
-        if torch.cuda.is_available():
-            return "cuda"
-        if getattr(torch.backends, "mps", None) is not None and torch.backends.mps.is_available():
-            return "mps"
-    except Exception:  # noqa: BLE001 - torch import/probe failure -> CPU is the safe floor
-        pass
-    return "cpu"
+    """An explicit choice, else `RAG_SETFIT_DEVICE`, else CUDA, else CPU: never Metal unless asked, because Metal
+    is not safe for concurrent use and the engine keeps it for the BGE family (PS-55, `rag_wright.util.devices`)."""
+    from rag_wright.pack_sdk import torch_device
+
+    return torch_device(pref, env="RAG_SETFIT_DEVICE")
 
 
 @runtime_checkable
@@ -90,8 +83,8 @@ class LayaDimClassifier:
         if agent is not None:
             self._agent = agent
         else:
-            import laya  # laya.load device=None -> CUDA else MPS else CPU; pass an explicit override if given.
-            self._agent = laya.load(str(model_dir), device=device)
+            import laya  # laya.load(device=None) would pick Metal itself, so the device is always resolved here
+            self._agent = laya.load(str(model_dir), device=auto_device(device))
 
     def classify(self, span_text: str) -> list[tuple[str, float]]:
         ans = self._agent.predict(span_text, self._q)["answers"][self.dim.value]
@@ -146,7 +139,7 @@ def load_dim_registry(config_path=None, *, models_dir=None, device: Optional[str
             agent = laya_agents.get(spec["model"])
             if agent is None:
                 import laya
-                agent = laya.load(str(mdir), device=device)  # device=None -> CUDA/MPS/CPU
+                agent = laya.load(str(mdir), device=auto_device(device))  # never Metal unless asked (PS-55)
                 laya_agents[spec["model"]] = agent
             q = spec["question"]
             classifiers[dim] = LayaDimClassifier(dim, mdir, instructions=q["instructions"],

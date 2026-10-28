@@ -116,11 +116,11 @@ Write the document's nodes/edges (one transaction), unless an unchanged run alre
 
 The graph query capability's output: candidate answers as evidence for fusion (FR-C.5, FR-Q.3).
 
-### `BGEReranker(model_name: 'str' = 'BAAI/bge-reranker-v2-m3', *, use_fp16: 'bool' = False, model: 'object | None' = None) -> 'None'`
+### `BGEReranker(model_name: 'str' = 'BAAI/bge-reranker-v2-m3', *, use_fp16: 'bool' = False, device: 'str | None' = None, model: 'object | None' = None) -> 'None'`
 
 The real reranker: `FlagEmbedding.FlagAutoReranker` (model loaded lazily).
 
-THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model in place on every call (the same in-place `.to()`/`.eval()` conversions that segfault the shared BGE-M3 embedder under thread concurrency), so a shared reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller.
+THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model in place on every call (the same in-place `.to()`/`.eval()` conversions that segfault the shared BGE-M3 embedder under thread concurrency), so a shared reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller. It is in the BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one the embedders hold (PS-55), so a rerank never runs on Metal beside an embed.
 
 #### `BGEReranker.score(self, query: 'str', passages: 'list[str]') -> 'list[float]'`
 
@@ -357,6 +357,10 @@ True when at least one usage scope is active — the seam checks this to decide 
 ### `models_dir() -> 'Path'`
 
 The models root (see the module docstring for the resolution order).
+
+### `torch_device(explicit: 'Optional[str]' = None, *, env: 'Optional[str]' = None, metal: 'bool' = False) -> 'str'`
+
+The device for one engine model: `explicit`, else the `env` variable, else CUDA when present, else Metal only for the family allowed on it (`metal=True`, the BGE family), else CPU.
 
 ### `business_span(name: 'str', **attributes: 'Any') -> 'Iterator[Any]'`
 

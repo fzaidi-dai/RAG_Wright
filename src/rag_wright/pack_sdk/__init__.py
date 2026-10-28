@@ -80,6 +80,7 @@ from rag_wright.models.tag_structured import build_tag_structured, field_kind
 from rag_wright.models.tracing import finish_generation, start_generation, tracing_on  # noqa: F401
 from rag_wright.models.usage import usage_capturing
 from rag_wright.models.weights import models_dir
+from rag_wright.util.devices import torch_device
 from rag_wright.ontology.pack_schema import KgVertexType, load_kg_schema
 from rag_wright.ontology.registry import EntityRegistry, RegistryRecord
 from rag_wright.store.arcadedb import SPAN_TYPE
@@ -100,6 +101,7 @@ __all__ = [
     "build_tag_structured", "field_kind", "astream_text", "resolve_connection", "ModelCallTimeout",
     "model_deadline_s", "call_description", "usage_capturing",
     "models_dir",
+    "torch_device",  # PS-55: a pack's own torch model never lands on Metal unless asked
     # the LangGraph scaffold
     "DEFAULT_RETRY", "TransientExtraction", "business_span", "dead_letter", "raw_llm_span",
     # generic capabilities a pack composes
