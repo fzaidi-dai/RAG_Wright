@@ -118,9 +118,9 @@ The graph query capability's output: candidate answers as evidence for fusion (F
 
 ### `BGEReranker(model_name: 'str' = 'BAAI/bge-reranker-v2-m3', *, use_fp16: 'bool' = False, device: 'str | None' = None, model: 'object | None' = None) -> 'None'`
 
-The real reranker: `FlagEmbedding.FlagAutoReranker` (model loaded lazily).
+The real reranker: a `sentence_transformers.CrossEncoder` over `bge-reranker-v2-m3` (PS-56), scoring raw logits (no activation), 512 tokens per pair as before.
 
-THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model in place on every call (the same in-place `.to()`/`.eval()` conversions that segfault the shared BGE-M3 embedder under thread concurrency), so a shared reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller. It is in the BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one the embedders hold (PS-55), so a rerank never runs on Metal beside an embed.
+THREAD-SAFE (engine issue 0016): a shared reranker is guarded by an instance lock -- defense-in-depth for any concurrent `score` caller (its FlagEmbedding predecessor mutated the model in place on every call). It is in the BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one the embedders hold (PS-55), so a rerank never runs on Metal beside an embed.
 
 #### `BGEReranker.score(self, query: 'str', passages: 'list[str]') -> 'list[float]'`
 

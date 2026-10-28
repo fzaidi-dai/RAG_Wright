@@ -79,7 +79,7 @@ class _SharedProbe:
         self._enter()
         return {"dense_vecs": [np.zeros(BGE_M3_DENSE_DIM) for _ in texts], "lexical_weights": [{"1": 0.5} for _ in texts]}
 
-    def compute_score(self, pairs):
+    def predict(self, pairs, **_kw):
         self._enter()
         return [0.5 for _ in pairs]
 

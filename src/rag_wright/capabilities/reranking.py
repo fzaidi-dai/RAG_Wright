@@ -10,8 +10,10 @@ This capability is a pure function of `(query, passage)` pairs: it is given the 
 passage text* and returns them reranked and cut. It deliberately does not fetch the text itself — the
 passage a candidate is scored on (the chunk summary, or the full chunk text from the parse manifest,
 FR-I.1) is a wiring choice the compiled query graph makes, not this capability's, so reranking stays
-decoupled from the store and the manifest. Grounded on `FlagEmbedding.FlagAutoReranker` (the public
-auto-reranker; `.compute_score` over sentence pairs).
+decoupled from the store and the manifest. Grounded on `sentence_transformers.CrossEncoder` (`.predict` over
+sentence pairs, raw logits). It replaced `FlagEmbedding.FlagAutoReranker` (PS-56), whose `compute_score` calls the
+tokenizer's `prepare_for_model`, which transformers 5 removed: every rerank failed. The scores are the model card's
+recipe exactly (measured: identical logits, a truncated long passage included).
 """
 
 from __future__ import annotations
@@ -62,11 +64,11 @@ class RerankResult(BaseModel):
 
 
 class BGEReranker:
-    """The real reranker: `FlagEmbedding.FlagAutoReranker` (model loaded lazily).
+    """The real reranker: a `sentence_transformers.CrossEncoder` over `bge-reranker-v2-m3` (PS-56), scoring raw
+    logits (no activation), 512 tokens per pair as before.
 
-    THREAD-SAFE (engine issue 0016): FlagEmbedding mutates the model in place on every call (the same in-place
-    `.to()`/`.eval()` conversions that segfault the shared BGE-M3 embedder under thread concurrency), so a shared
-    reranker is guarded by an instance lock too -- defense-in-depth for any concurrent `score` caller. It is in the
+    THREAD-SAFE (engine issue 0016): a shared reranker is guarded by an instance lock -- defense-in-depth for any
+    concurrent `score` caller (its FlagEmbedding predecessor mutated the model in place on every call). It is in the
     BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one
     the embedders hold (PS-55), so a rerank never runs on Metal beside an embed."""
 
@@ -80,19 +82,21 @@ class BGEReranker:
         if model is not None:  # injected (hermetic tests)
             self._model = model
         else:
-            from FlagEmbedding import FlagAutoReranker
+            import torch
+            from sentence_transformers import CrossEncoder
 
-            self._model = FlagAutoReranker.from_finetuned(model_name, use_fp16=use_fp16, devices=resolved)
+            self._model = CrossEncoder(model_name, device=resolved, max_length=512,
+                                       activation_fn=torch.nn.Identity())  # raw logits, as FlagEmbedding gave
+            if use_fp16 and resolved != "cpu":
+                self._model.model.half()
 
     def score(self, query: str, passages: list[str]) -> list[float]:
         if not passages:
             return []
         with self._lock:  # issue 0016
-            scores = self._model.compute_score([(query, passage) for passage in passages])
-        # compute_score returns a scalar for a single pair; normalize to a list of floats.
-        if not isinstance(scores, (list, tuple)):
-            scores = [scores]
-        return [float(s) for s in scores]
+            scores = self._model.predict([(query, passage) for passage in passages], convert_to_numpy=True,
+                                         show_progress_bar=False)
+        return [float(s) for s in list(scores)]
 
 
 def rerank(

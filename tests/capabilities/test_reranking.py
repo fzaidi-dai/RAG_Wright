@@ -130,11 +130,14 @@ def test_live_bge_reranker_ranks_relevant_above_irrelevant():
 
     assert result.candidates[0].chunk_id == "c_relevant"  # the cross-encoder puts the on-topic first
     assert result.candidates[0].score > result.candidates[1].score
+    one = reranker.score("How can this contract be terminated?", ["Either party may terminate on notice."])
+    assert len(one) == 1 and isinstance(one[0], float)  # a single pair still scores to a one-item list
+    assert len(reranker.score("termination", ["word " * 2000])) == 1  # a passage over 512 tokens is truncated
 
 
 # --- engine issue 0016: the shared reranker model must be serialized across threads too ---
 
-def test_bge_reranker_compute_score_is_serialized_across_threads():
+def test_bge_reranker_predict_is_serialized_across_threads():
     import concurrent.futures
     import threading
     import time
@@ -145,7 +148,7 @@ def test_bge_reranker_compute_score_is_serialized_across_threads():
             self.n = 0
             self.max_in_flight = 0
 
-        def compute_score(self, pairs):
+        def predict(self, pairs, **_kw):
             with self._l:
                 self.n += 1
                 self.max_in_flight = max(self.max_in_flight, self.n)
@@ -159,4 +162,4 @@ def test_bge_reranker_compute_score_is_serialized_across_threads():
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as ex:
         for f in [ex.submit(rr.score, "q", ["p1", "p2"]) for _ in range(40)]:
             f.result()
-    assert probe.max_in_flight == 1  # issue 0016: the instance lock serialized compute_score across threads
+    assert probe.max_in_flight == 1  # issue 0016: the instance lock serialized predict across threads
