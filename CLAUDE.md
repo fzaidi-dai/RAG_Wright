@@ -55,7 +55,9 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-28): `rag-wright` 0.15.0 is RELEASED** (PR #18; PS-51 the frontend skill draws the shell and
+> **CURRENT STATE (2026-10-29): `rag-wright` 0.16.0 is RELEASED** (PR #19; TexWright's requests: PS-54 a `Contains`
+> substring `where` value, PS-55 only the BGE models on Metal under one process lock (ADR-0140); PS-56 the BGE reranker
+> scores again on transformers 5). Before it, **`rag-wright` 0.15.0 is RELEASED** (PR #18; PS-51 the frontend skill draws the shell and
 > ships its scaffold, RuleWright's request; PS-52 one workspace embedder under concurrent first use and PS-53 KG calls refuse
 > a name that is not an identifier, TexWright's requests). Before it, **`rag-wright` 0.14.1 is RELEASED** (PR #17; TexWright's two requests: PS-49 a retried
 > ArcadeDB write conflict no longer prints as an error, PS-50 `ensure_pack_schema` declares a property a pack gains on an
