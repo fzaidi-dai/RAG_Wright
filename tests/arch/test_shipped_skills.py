@@ -31,6 +31,9 @@ SHIPPED = (
     "qwen-vllm-modal",
 )
 QWEN_SCRIPT = "qwen-vllm-modal/scripts/modal_qwen3_vllm_server.py"
+# PS-51: the frontend skill ships its shell scaffold, since a source scan cannot produce a layout.
+FRONTEND_SCAFFOLD = tuple(f"building-a-product-frontend/scaffold/{f}"
+                          for f in ("surfaces.tsx", "ShellLayout.tsx", "ShellLayout.test.tsx"))
 
 # The sentence a shipped skill carries when it names a path in the engine repository.
 ENGINE_REPO_NOTE = "are in the engine repository"
@@ -53,6 +56,13 @@ def test_the_qwen_skill_bundles_its_deploy_script():
     assert repo_path.is_symlink() and repo_path.resolve() == script.resolve()
 
 
+def test_the_frontend_skill_bundles_its_shell_scaffold():
+    skill = (_PACKAGED / "building-a-product-frontend" / "SKILL.md").read_text(encoding="utf-8")
+    for path in FRONTEND_SCAFFOLD:
+        assert (_PACKAGED / path).is_file(), path
+        assert path.split("/", 1)[1] in skill, f"the skill must name {path}"
+
+
 def test_engine_repo_paths_in_a_shipped_skill_are_marked():
     unmarked = []
     for name in SHIPPED:
@@ -70,6 +80,7 @@ def test_the_release_build_ships_the_skills(tmp_path):
     (wheel,) = tmp_path.glob("rag_wright-*.whl")
     (sdist,) = tmp_path.glob("rag_wright-*.tar.gz")
     shipped = [f"rag_wright/.agents/skills/{n}/SKILL.md" for n in SHIPPED] + [f"rag_wright/.agents/skills/{QWEN_SCRIPT}"]
+    shipped += [f"rag_wright/.agents/skills/{path}" for path in FRONTEND_SCAFFOLD]
     assert set(shipped) - set(zipfile.ZipFile(wheel).namelist()) == set()
     with tarfile.open(sdist) as tar:
         in_sdist = {n.split("/", 1)[1] for n in tar.getnames()}

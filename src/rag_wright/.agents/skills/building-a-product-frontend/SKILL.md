@@ -1,6 +1,6 @@
 ---
 name: building-a-product-frontend
-description: The architecture and build ORDER for a product front end over a retrieval/agent engine - the core/product seam, generating the API client from the schema, the URL as state of record, one data-access layer, and the three test tiers in the order you need them. Load at the START of a new product's UI, and before changing the shape of an existing one. Craft (composition, a11y, states) is frontend-ui-engineering, which still applies.
+description: The architecture and build ORDER for a product front end over a retrieval/agent engine - the core/product seam, the shell's regions (rail, main, detail, a reserved run row), generating the API client from the schema, the URL as state of record, one data-access layer, and the three test tiers in the order you need them. Load at the START of a new product's UI, and before changing the shape of an existing one. Craft (composition, a11y, states) is frontend-ui-engineering, which still applies.
 ---
 
 # Building a product front end over an engine
@@ -47,8 +47,12 @@ src/product/   the domain. Entity names, the operation surfaces, the copy, the r
 ```
 
 **The core reads registries the product populates.** Navigation is the first one: the product declares its
-surfaces (path, label, icon, which ones appear in nav) and the shell renders whatever it is given. The core
-never imports from the product; the product imports from the core.
+surfaces, and ONE entry carries both the route and the navigation, so routes and menu cannot drift into two
+lists: `path`, the `element`, and an optional `nav` of `label` and `end`. **`end` is the field that governs
+correct highlighting**: without it a parent path (`/intake`) also matches its child (`/intake/saved`) and the
+parent stays lit while the child is open. A surface with no `nav` is routed but not advertised (reached from
+an account badge, or a link handed out after a job). The shell renders whatever it is given. The core never
+imports from the product; the product imports from the core.
 
 **Enforce it with a scan, not with intent.** A test that greps the core directory for the domain's own words
 -- comments and docstrings included -- and fails on any hit. Two properties make it work:
@@ -83,7 +87,57 @@ decisions from. Or it can express it, and the configuration is now a programming
 checker, no tests and no reviewer. **Generalise the shell, the plumbing and the primitives; write the result
 surfaces.** They are the cheapest part and the part that carries the meaning.
 
-## Decision 2: GENERATE the API client from the schema
+## Decision 2: the shell has regions, and they follow from the shape
+
+The six things above are functional, but three of them fix the frame's geometry. Draw it before the first
+surface:
+
+```
+  rail  |  main    detail
+  rail  |  run     run
+```
+
+- **`main | detail`** is item 3: a per-item view with the source rendered and its extracted records **beside**
+  it. The detail panel is a region of the SHELL, not a page's private layout, so every surface that selects
+  something shows it in the same place.
+- **The rail, not a top bar**, is item 2: workspace switching, the library and the account are persistent
+  chrome that **grows with the corpus**, and **a horizontal bar cannot grow.** Full height, beside the content.
+- **The run docked BELOW, spanning `main` and `detail`**, is item 5: the agent picks up from a deterministic
+  result, so a run must hold a conversation **while the surface it is about stays visible**, and must be able to
+  put results into `main` and `detail`, not only into its own transcript. A run that is a mode of `main` fails
+  both. A run in its own column fails on width: tool calls need room, and **rail + main + detail + run as four
+  columns does not fit at 1440px.** Below, it is a sibling of both.
+- **Reserve the run row from the first commit, though nothing renders there.** One grid line; it buys that no
+  surface is written assuming nothing can ever dock below it. The regions themselves are a per-product decision
+  to record in your child skill; the argument for them is not.
+
+**Mark the current surface, by more than colour, and guard it.** The current navigation item carries
+`aria-current="page"` (a router's `NavLink` sets it; a plain `Link` never does), and its visual echo is not a
+colour swap alone (a border, a weight), because colour alone is the half of a contrast requirement a palette
+cannot satisfy. The guard is a jsdom test: *the current surface has `aria-current="page"`, and a parent with
+`end` does not while its child is open.*
+
+**Start from the scaffold; a scan cannot produce a layout.** Every other rule here is checkable by a source
+scan; the frame is the one decision a scan cannot make, so it is the one that defaults to the framework's
+`<header><nav>` above `<main>`. This skill ships the frame as three files in its own folder, `scaffold/` beside
+this file, to copy into your core directory (React, `react-router`, Tailwind with shadcn token names; the tokens
+are yours, the structure is the point):
+
+- `scaffold/surfaces.tsx`: the registry type (`path`, `element`, `nav: { label, end }`) and `navigable`
+- `scaffold/ShellLayout.tsx`: the frame -- skip link, the rail (`complementary`, named) holding a named `nav`,
+  `main` as its own scroll container, `detail` rendered only when something fills it (an empty landmark sends a
+  screen-reader user nowhere), the run row reserved
+- `scaffold/ShellLayout.test.tsx`: the jsdom guards -- the current surface, `end`, the rail, one `main`, no
+  empty detail
+
+Two things only the browser tier can assert, so assert them there: **the detail panel is BESIDE `main`, not
+under it** (the grid declares a third column only when `detail` exists; with two columns declared, the panel
+auto-places into the run row, full width under `main`, and jsdom computes no grid to notice), and **`main` is
+wider than the panel beside it** (the panel's width is capped; uncapped, it measured 608px against `main`'s 576px
+at 1440px). Copy, then customise. **Do not make the shell configurable**: Decision 1's argument against
+config-driven surfaces applies unchanged one level up.
+
+## Decision 3: GENERATE the API client from the schema
 
 If the backend publishes a machine-readable schema -- and a modern Python or TypeScript backend does, for
 free -- **the client is generated, never hand-mirrored.**
@@ -103,7 +157,7 @@ The discipline that makes generation work in practice:
 - **Change the client type in the SAME commit as the backend type.** A field that became optional while the
   client still types it as required is a dereference that survives a full green suite and a clean build.
 
-## Decision 3: the URL is the state of record
+## Decision 4: the URL is the state of record
 
 Page, filters, sort, selection, which panel is open, which tab is active -- all of it in the URL, none of it
 in component state.
@@ -117,7 +171,7 @@ cannot hand back.
 guard; what fails is the deferral with a named trigger that nobody checks. If you defer, write the trigger
 down where the next person will look, not only in the ticket.
 
-## Decision 4: one data-access layer, two guards
+## Decision 5: one data-access layer, two guards
 
 A query-key factory is the only place keys are built; no component calls `fetch` directly. Both guards are a
 source scan, both take minutes, and both are provable by planting their violation:
@@ -128,7 +182,7 @@ source scan, both take minutes, and both are provable by planting their violatio
 A library's own `refetch()` goes *through* the layer and is the opposite of a violation -- make sure the
 guard knows the difference, or it will be disabled by the first person it annoys.
 
-## Decision 5: one table primitive, and the allow-list that must not grow
+## Decision 6: one table primitive, and the allow-list that must not grow
 
 Build the table once, and allow a raw `<table>` element in exactly that one file. Everything else that needs
 a table uses the primitive; if the primitive cannot do it, extend the primitive.
@@ -224,10 +278,12 @@ Doing these out of order is what costs the rework:
    component exists.
 2. **Generate the client.** Before any surface. Everything downstream types against it.
 3. **The data-access layer and its two guards.** Cheap now, an audit later.
-4. **Identity and tenancy surfaces.** They are the most portable code you will write and they exercise the
+4. **The shell: the regions (Decision 2, from the scaffold), the navigation registry, theme tokens.** Before
+   any surface hangs on it, or the surfaces invent minimal chrome and the shell step reads as already done.
+   Resist centring the content region, since a detail panel sits beside it -- make each surface constrain its
+   own measure, and assert it.
+5. **Identity and tenancy surfaces.** They are the most portable code you will write and they exercise the
    shell, routing and the session end to end.
-5. **The shell: regions, navigation registry, theme tokens.** Resist centring the content region if a detail
-   panel will ever sit beside it -- then make each surface constrain its own measure, and assert it.
 6. **The table primitive**, with its allow-list guard, before the second listing.
 7. **The browser-tier harness** -- own database, real provisioning, build, serve, rebuild per run.
 8. **The first corpus surface** (upload, progress, library, detail). This is where ingestion contracts get
@@ -245,6 +301,7 @@ reader cannot derive:
 - your locked decisions, with what a violation looks like, and the fact that changing one needs a recorded
   decision rather than a judgement call
 - your primitives, by path: the table, the shell, the query-key factory, the states helper
+- which regions your shell has and what fills `detail` and the run row, as a locked decision
 - the commands: how to run each tier, where specs live, what the e2e server script does
 - the defects that have actually recurred in **your** codebase, with the evidence that makes them stick
 - current debts: a guard that was deferred, a decision made but not yet built
@@ -258,6 +315,9 @@ an architecture document is a decision that gets violated with the document alre
 - [ ] Nothing in the core imports from the product
 - [ ] The API client is generated from the published schema, committed, and regenerated in CI
 - [ ] Any client type mirroring a backend contract changed in the SAME commit as the backend
+- [ ] The regions (rail, main, detail, the reserved run row) are the SHELL's, not a page's own layout
+- [ ] The current surface carries `aria-current="page"` and is marked by more than colour; a parent with `end`
+      is not lit while its child is open
 - [ ] Navigation-shaped state is in the URL, not component state
 - [ ] Reads go through the query-key factory; no `fetch(` in a component
 - [ ] No raw table outside the primitive; the allow-list did not grow
