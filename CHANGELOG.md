@@ -4,6 +4,19 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.15.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.14.1...0.15.0) (2026-10-28)
+
+
+### Features
+
+* **PS-51:** building-a-product-frontend draws the shell and ships its scaffold ([a16df0e](https://github.com/fzaidi-dai/RAG_Wright/commit/a16df0e8903cd43bf639ec3e2be11ae2bb242b08))
+
+
+### Bug Fixes
+
+* **PS-52:** a workspace builds one embedder however many threads use it first ([8e1617c](https://github.com/fzaidi-dai/RAG_Wright/commit/8e1617cee110fd909634b818ae2b6850d26a5a53))
+* **PS-53:** KG calls refuse a type or field name that is not an identifier ([12e55fa](https://github.com/fzaidi-dai/RAG_Wright/commit/12e55fa58739d22a3e01ee6187c7efd2a932cb27))
+
 ## [0.14.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.14.0...0.14.1) (2026-10-28)
 
 
