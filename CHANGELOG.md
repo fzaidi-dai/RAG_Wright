@@ -4,6 +4,14 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.14.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.14.0...0.14.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **PS-49:** a retried ArcadeDB write conflict no longer prints as an error ([32f649f](https://github.com/fzaidi-dai/RAG_Wright/commit/32f649f94ac1b864ee5b22460d3ef401dabbbf6a))
+* **PS-50:** ensure_pack_schema declares a property a pack gains on an existing type ([c27cf40](https://github.com/fzaidi-dai/RAG_Wright/commit/c27cf40dba2512f809ba1ff06affc58d7f25f45f))
+
 ## [0.14.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.13.0...0.14.0) (2026-10-17)
 
 
