@@ -10,7 +10,7 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > existing type; TexWright's request); both RELEASED as `rag-wright` 0.14.1 (2026-10-28, PR #17). PS-51 done 2026-10-28 (the frontend skill draws the shell and ships
 > its scaffold; RuleWright's request). PS-52 done 2026-10-28 (a workspace builds one embedder under
 > concurrent first use; TexWright's 2026-10-24 request). **The open list, in order:** (1) TexWright's
-> engine requests: 2026-10-21 unescaped KG identifiers (PS-53 done 2026-10-28; PS-51..53 RELEASED as `rag-wright` 0.15.0, 2026-10-28, PR #18), 2026-10-19 substring filter, 2026-10-25 Metal abort;
+> engine requests: 2026-10-21 unescaped KG identifiers (PS-53 done 2026-10-28; PS-51..53 RELEASED as `rag-wright` 0.15.0, 2026-10-28, PR #18), 2026-10-19 substring filter (PS-54 `Contains` done 2026-10-29, unreleased, lands as 0.16.0), 2026-10-25 Metal abort;
 > (2) **PS-48**, port the harness substrate tests from RuleWright onto the fabric fixture (ledger row in
 > `docs/specs/public-surface/plan.md`, sub-tasks a..g, awaiting go-ahead); (3) EV-7, PS-30, PS-33. Before it,
 > **(2026-10-14): PS-32 done, the agent harness is `rag_wright.harness`** (third public

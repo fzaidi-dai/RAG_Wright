@@ -28,8 +28,8 @@ open-core and domain-neutral; your product brings the domain. Hard rules:
   (`temporary_workspace`/`drop_workspace` for disposable and removed databases), the invokers
   (`ainvoke_subgraph`/`invoke_model`/`ainvoke_model`), discovery (`capability_index`/`discover`), the KG accessors
   (`kg_read`, `kg_write`, `kg_edges`, `kg_count`/`kg_delete`/`kg_update`, all filtering by `where` values that
-  are equality, a list for membership, `NOT_NULL` or a `Range(gt=, ge=, lt=, le=)` on any number of fields,
-  evaluated in the store;
+  are equality, a list for membership, `NOT_NULL`, a `Range(gt=, ge=, lt=, le=)` or a `Contains(text, case_sensitive=False)` (a literal
+  substring; an empty field never matches) on any number of fields, evaluated in the store;
   `entities_by_name`, `span_positions`), hybrid span search (`span_search` / `aspan_search`: cited spans from
   the dense and sparse index, fused in the store), `pack_store(ws, cls)` (build your pack's store extension over the
   workspace's store; the store itself stays private), metering and tracing (`measure_usage`, `record_usage`,

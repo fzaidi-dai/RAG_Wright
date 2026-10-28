@@ -30,8 +30,10 @@ def kg_read(ws: WorkspaceHandle, node_type: str, *, where: Optional[dict] = None
             distinct: Optional[str] = None, order_by: Optional[str] = None, limit: Optional[int] = None,
             key_range: Optional[tuple] = None) -> list[dict]:
     """Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar
-    (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range`
-    (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all
+    (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence), a `Range`
+    (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`) or a
+    `Contains` (a literal substring, case-insensitive unless `case_sensitive=True`; an empty field never matches:
+    `{"composition": Contains("UHMWPE")}`); all
     filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand
     (`lo <= field < hi`). Then projection, distinct, order and limit. Every name is checked, never interpolated
     unchecked (the module docstring): a request-chosen field is safe, but an unknown one matches nothing."""
@@ -42,7 +44,7 @@ def kg_read(ws: WorkspaceHandle, node_type: str, *, where: Optional[dict] = None
 def kg_count(ws: WorkspaceHandle, type_name: str, *, where: Optional[dict] = None,
              key_range: Optional[tuple] = None) -> int:
     """The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`); `where`
-    as in `kg_read`, `Range` values included."""
+    as in `kg_read`, `Range` and `Contains` values included."""
     return ws._store.kg_count(type_name, where=where, key_range=key_range)
 
 

@@ -31,7 +31,7 @@ from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataVa
 from rag_wright.corpus.canonicalize import normalize_entity_name  # issue 0030: name -> entity clustering key
 from rag_wright.ontology.pack_schema import load_kg_schema  # ADR-0067 P5b: a pack's declared KG schema (generic)
 from rag_wright.contracts.span import SpanRecord
-from rag_wright.store.seam import NOT_NULL, GraphEdge, GraphNode, Range
+from rag_wright.store.seam import NOT_NULL, Contains, GraphEdge, GraphNode, Range
 
 _log = logging.getLogger(__name__)
 
@@ -224,7 +224,8 @@ def _kg_check_edge(e: Any) -> None:
 def _kg_where_terms(where: Optional[dict[str, object]],
                     key_range: Optional[tuple[str, object, object]] = None) -> Optional[list[str]]:
     """The shared KG filter grammar (`kg_read`, `kg_edges`, `kg_count` / `kg_delete` / `kg_update`): a scalar is
-    equality, a list is membership, `NOT_NULL` is presence, a `Range` is its comparisons (ER-1);
+    equality, a list is membership, `NOT_NULL` is presence, a `Range` is its comparisons (ER-1), a `Contains` is a
+    literal substring test (`indexOf`, not `LIKE`, whose `%` `_` `?` are wildcards; PS-54);
     `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
     the caller returns without a statement)."""
     for field in where or {}:
@@ -237,6 +238,10 @@ def _kg_where_terms(where: Optional[dict[str, object]],
             out.append(f"{field} IS NOT NULL")
         elif isinstance(value, Range):
             out += [f"{field} {op} {_kg_sql_value(bound)}" for op, bound in value.terms()]
+        elif isinstance(value, Contains):
+            text = _sql_str(value.text)
+            out.append(f"{field}.indexOf({text}) >= 0" if value.case_sensitive
+                       else f"{field}.toLowerCase().indexOf({text}.toLowerCase()) >= 0")
         elif isinstance(value, (list, tuple, set)):
             vals = list(value)
             if not vals:

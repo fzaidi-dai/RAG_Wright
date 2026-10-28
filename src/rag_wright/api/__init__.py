@@ -71,7 +71,7 @@ from rag_wright.evals import (GoldImportError, GoldMapping, aload_gold_set, arun
                               score_candidate_choice, score_classification, score_extraction, score_generation,
                               score_ingestion, score_judgment, score_relational, score_retrieval)
 from rag_wright.ingestion.tables import table_rows
-from rag_wright.store.seam import NOT_NULL, KgEdge, KgNode, Range
+from rag_wright.store.seam import NOT_NULL, Contains, KgEdge, KgNode, Range
 from rag_wright.api.invoke import ainvoke_model, ainvoke_subgraph, capability_index, invoke_model
 from rag_wright.api.kg import (aspan_search, entities_by_name, kg_count, kg_delete, kg_edges, kg_read, kg_update,
                                kg_write, span_positions, span_search)
@@ -114,7 +114,7 @@ __all__ = [
     "query_embedder",  # PS-39: the process-wide query embedder, for a seam that holds no workspace
     "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it
     "ainvoke_subgraph", "invoke_model", "ainvoke_model", "capability_index", "discover", "Discovered",
-    "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "span_search", "aspan_search", "SpanHit", "KgNode", "KgEdge", "NOT_NULL", "Range",
+    "kg_read", "kg_write", "kg_edges", "kg_count", "kg_delete", "kg_update", "entities_by_name", "span_positions", "span_search", "aspan_search", "SpanHit", "KgNode", "KgEdge", "NOT_NULL", "Range", "Contains",
     "document_of", "decode_bbox",
     "source_document", "parse_document", "aparse_document", "parse_document_bytes", "pdf_page_count", "aparse_document_bytes",
     "find_blank_pages_with_text", "BlankPageText",  # PS-47: cached parses holding text a VLM invented for a blank page

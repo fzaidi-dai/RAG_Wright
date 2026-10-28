@@ -88,6 +88,10 @@ A `where` value meaning a comparison, evaluated in the store (ER-1): `gt` (>), `
 
 `[(operator, bound), ...]`, lower bound first.
 
+### `Contains(text: 'str', case_sensitive: 'bool' = False) -> None`
+
+A `where` value meaning "this string field contains `text`", evaluated in the store (PS-54). The match is literal (`%`, `_` and `?` are ordinary characters), case-insensitive unless `case_sensitive=True`, and a field with no value never matches. It composes with equality, membership, `NOT_NULL` and `Range` on every KG call that takes `where`: `where={"composition": Contains("UHMWPE"), "gsm": Range(ge=250, le=320)}`.
+
 ### `BlankPageText(*, source: str, pages: dict[int, str], cache_files: list[str]) -> None`
 
 One cached parse with text on blank pages. `source` is the PDF's path (or the name given with its bytes), `pages` maps each blank page to the text the cached parse holds there, and `cache_files` are the cached parse(s) and their OCR sidecar: delete them, then re-ingest the document so it is parsed again.
@@ -424,7 +428,7 @@ Rank the live ARD catalog by semantic match to `query`; return the top `k` (opti
 
 ### `kg_read(ws: 'WorkspaceHandle', node_type: 'str', *, where: 'Optional[dict]' = None, fields: 'Optional[list]' = None, distinct: 'Optional[str]' = None, order_by: 'Optional[str]' = None, limit: 'Optional[int]' = None, key_range: 'Optional[tuple]' = None) -> 'list[dict]'`
 
-Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence) or a `Range` (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`); all filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand (`lo <= field < hi`). Then projection, distinct, order and limit. Every name is checked, never interpolated unchecked (the module docstring): a request-chosen field is safe, but an unknown one matches nothing.
+Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence), a `Range` (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`) or a `Contains` (a literal substring, case-insensitive unless `case_sensitive=True`; an empty field never matches: `{"composition": Contains("UHMWPE")}`); all filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand (`lo <= field < hi`). Then projection, distinct, order and limit. Every name is checked, never interpolated unchecked (the module docstring): a request-chosen field is safe, but an unknown one matches nothing.
 
 ### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = ()) -> 'None'`
 
@@ -436,7 +440,7 @@ Generic edge TRAVERSAL over the workspace (see `Store.kg_edges`): node-start out
 
 ### `kg_count(ws: 'WorkspaceHandle', type_name: 'str', *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
 
-The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`); `where` as in `kg_read`, `Range` values included.
+The number of vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`); `where` as in `kg_read`, `Range` and `Contains` values included.
 
 ### `kg_delete(ws: 'WorkspaceHandle', type_name: 'str', *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None) -> 'int'`
 

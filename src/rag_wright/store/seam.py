@@ -60,6 +60,23 @@ class Range:
 
 
 @dataclass(frozen=True)
+class Contains:
+    """A `where` value meaning "this string field contains `text`", evaluated in the store (PS-54). The match is
+    literal (`%`, `_` and `?` are ordinary characters), case-insensitive unless `case_sensitive=True`, and a field
+    with no value never matches. It composes with equality, membership, `NOT_NULL` and `Range` on every KG call that
+    takes `where`: `where={"composition": Contains("UHMWPE"), "gsm": Range(ge=250, le=320)}`."""
+
+    text: str
+    case_sensitive: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.text, str):
+            raise TypeError(f"Contains.text must be a string, got {type(self.text).__name__}")
+        if not self.text:
+            raise ValueError("Contains needs non-empty text (empty text would match every populated field)")
+
+
+@dataclass(frozen=True)
 class GraphNode:
     """A graph entity node to write (T25). `node_key` is the vertex identity (the resolver's canonical id when
     linked, an `UNLINKED:<key>` surrogate otherwise); `entity_id` is the canonical id, or empty when unlinked."""
@@ -211,13 +228,13 @@ class Store(Protocol):
     ) -> list[dict]:
         """Read typed nodes of `node_type`. `where` maps a field to a scalar (equality) or a list (membership);
         a list value that is EMPTY means scope-to-nothing and returns `[]` without a query. `distinct` returns the
-        distinct values of one field; `fields=None` returns all fields. `NOT_NULL` is presence and a `Range` its
-        comparisons (ER-1); all clauses are AND-ed; `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`
+        distinct values of one field; `fields=None` returns all fields. `NOT_NULL` is presence, a `Range` its
+        comparisons (ER-1) and a `Contains` a literal substring test (PS-54); all clauses are AND-ed; `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`
         (e.g. every id with one prefix)."""
 
     # --- generic count / delete / update (PS-6, G21): with kg_read / kg_edges / kg_write, everything a pack's store
     # extension needs, so it never emits store-native SQL. `where` / `key_range` as in `kg_edges` (scalar = equality,
-    # list = membership, `NOT_NULL` = presence, `Range` = comparisons); an EMPTY membership list scopes to nothing.
+    # list = membership, `NOT_NULL` = presence, `Range` = comparisons, `Contains` = substring); an EMPTY membership list scopes to nothing.
 
     def kg_count(self, type_name: str, *, where: Optional[dict[str, object]] = None,
                  key_range: Optional[tuple[str, object, object]] = None) -> int:
