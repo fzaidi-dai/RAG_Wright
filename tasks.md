@@ -8,9 +8,9 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > `docs/specs/public-surface/rulewright-migration-0.14.0.md`). PS-49 done 2026-10-17 (a retried ArcadeDB write conflict no
 > longer prints as an error; TexWright's request) and PS-50 done 2026-10-28 (`ensure_pack_schema` declares a property a pack gains on an
 > existing type; TexWright's request); both RELEASED as `rag-wright` 0.14.1 (2026-10-28, PR #17). PS-51 done 2026-10-28 (the frontend skill draws the shell and ships
-> its scaffold; RuleWright's request; unreleased, lands as 0.15.0). PS-52 done 2026-10-28 (a workspace builds one embedder under
+> its scaffold; RuleWright's request). PS-52 done 2026-10-28 (a workspace builds one embedder under
 > concurrent first use; TexWright's 2026-10-24 request). **The open list, in order:** (1) TexWright's
-> engine requests: 2026-10-21 unescaped KG identifiers (PS-53 done 2026-10-28), 2026-10-19 substring filter, 2026-10-25 Metal abort;
+> engine requests: 2026-10-21 unescaped KG identifiers (PS-53 done 2026-10-28; PS-51..53 RELEASED as `rag-wright` 0.15.0, 2026-10-28, PR #18), 2026-10-19 substring filter, 2026-10-25 Metal abort;
 > (2) **PS-48**, port the harness substrate tests from RuleWright onto the fabric fixture (ledger row in
 > `docs/specs/public-surface/plan.md`, sub-tasks a..g, awaiting go-ahead); (3) EV-7, PS-30, PS-33. Before it,
 > **(2026-10-14): PS-32 done, the agent harness is `rag_wright.harness`** (third public

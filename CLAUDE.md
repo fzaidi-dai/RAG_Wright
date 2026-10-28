@@ -55,7 +55,9 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-28): `rag-wright` 0.14.1 is RELEASED** (PR #17; TexWright's two requests: PS-49 a retried
+> **CURRENT STATE (2026-10-28): `rag-wright` 0.15.0 is RELEASED** (PR #18; PS-51 the frontend skill draws the shell and
+> ships its scaffold, RuleWright's request; PS-52 one workspace embedder under concurrent first use and PS-53 KG calls refuse
+> a name that is not an identifier, TexWright's requests). Before it, **`rag-wright` 0.14.1 is RELEASED** (PR #17; TexWright's two requests: PS-49 a retried
 > ArcadeDB write conflict no longer prints as an error, PS-50 `ensure_pack_schema` declares a property a pack gains on an
 > existing type). Before it, **(2026-10-17): the LangGraph ingestion workstream is RELEASED as `rag-wright` 0.14.0** (PR #16; LGI-1..5,
 > `docs/specs/langgraph-ingestion/plan.md`, ADR-0124 amended): `build_ingestion` is a LangGraph graph
