@@ -415,18 +415,33 @@ class ArcadeDBStore:
 
     def ensure_pack_schema(self, pack_ttl: str) -> None:
         """ING-8a/8b (ADR-0067 P5b): create a domain PACK's declared schema from its own `.ttl`, idempotently -- the
-        vertex types + their unique id indexes and the structural edges (`ontology.pack_schema.load_kg_schema`).
-        Called by `ensure_schema` for a configured pack, and by a pack on use (the reference contract pack does,
-        then adds its own typed property edges via `ensure_edge_types`)."""
+        vertex types, their declared properties, their unique id indexes and the structural edges
+        (`ontology.pack_schema.load_kg_schema`); each is created when absent, so a pack that gains a type, a property,
+        an index or an edge gets it on a database that already exists (PS-50). Nothing is altered or dropped: a
+        property whose declared type differs from the pack's is logged as a warning and left as it is, a property the
+        pack no longer declares stays, and a non-STRING property declared over values stored before it is logged
+        (those values are not converted; a re-ingest rewrites them, and fails the write of one that does not convert). Called by `ensure_schema` for a configured pack,
+        and by a pack on use (the reference contract pack does, then adds its own typed property edges via
+        `ensure_edge_types`)."""
         vertex_types, structural_edges = load_kg_schema(pack_ttl)
         self._ensured_packs = [*getattr(self, "_ensured_packs", []), pack_ttl]
         self._prop_types_cache = None  # re-derive the property encodings with this pack included
         types = self.type_names()
         for vt in vertex_types:
+            existing: dict[str, str] = {}
             if vt.name not in types:
                 self._command(f"CREATE VERTEX TYPE {vt.name}")
-                for pname, ptype in vt.properties:
+            else:
+                existing = self._declared_property_types(vt.name)
+            for pname, ptype in vt.properties:
+                if pname not in existing:
                     self._command(f"CREATE PROPERTY {vt.name}.{pname} {ptype}")
+                    if vt.name in types and ptype != "STRING":
+                        self._warn_unconverted_values(vt.name, pname, ptype)
+                elif existing[pname] != ptype:
+                    _log.warning("%s.%s is declared %s in the database but %s by the pack %s; left as it is (changing "
+                                 "a declared type over stored values is a data migration)",
+                                 vt.name, pname, existing[pname], ptype, pack_ttl)
         self.ensure_edge_types(sorted(structural_edges), types=types)
         indexes = self.index_names()
         for vt in vertex_types:
@@ -435,6 +450,19 @@ class ArcadeDBStore:
 
     def type_names(self) -> set[str]:
         return {row["name"] for row in self._query("SELECT name FROM schema:types")}
+
+    def _declared_property_types(self, type_name: str) -> dict[str, str]:
+        for row in self._query("SELECT name, properties FROM schema:types"):
+            if row.get("name") == type_name:
+                return {prop["name"]: prop.get("type") for prop in row.get("properties", [])}
+        return {}
+
+    def _warn_unconverted_values(self, type_name: str, pname: str, ptype: str) -> None:
+        n = self._query(f"SELECT count(*) AS n FROM {type_name} WHERE {pname} IS NOT NULL")[0]["n"]
+        if n:
+            _log.warning("%s.%s is now declared %s; %d existing record(s) already held a value, which is not "
+                         "converted (a re-ingest rewrites them as %s; a value that is not one fails its write)",
+                         type_name, pname, ptype, n, ptype)
 
     def property_names(self, type_name: str) -> set[str]:
         for row in self._query("SELECT name, properties FROM schema:types"):

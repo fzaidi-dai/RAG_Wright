@@ -18,7 +18,12 @@ The store creates the vertex and edge types your pack declares. The generic read
 `rag_wright.ontology.pack_schema.load_kg_schema(path)`, called by the store's `ensure_pack_schema(ttl)`, which
 `ensure_schema()` calls only when a pack is configured (`EngineConfig.pack`). It creates the `eng:KgVertexType`
 vertex types with their properties and unique indexes, and the `eng:KgStructuralEdge` edge types; nothing else in
-the pack is read by the engine. A minimal, domain-neutral example:
+the pack is read by the engine. Each is created when absent, so a pack that later gains a property gets it declared
+on the existing database the next time a process opens the workspace (`open_workspace` runs `ensure_schema`); no
+fresh database is needed. Nothing is altered or dropped: a property whose declared type changed is logged as a
+warning and left as it is (a migration is yours to run), and a numeric property declared over values stored before it
+is logged too, since those values are not converted until a re-ingest rewrites them (a value that does not
+convert, `'195 GSM'` for a `DOUBLE`, fails its write and dead-letters that document). A minimal, domain-neutral example:
 
 ```turtle
 @prefix eng:  <https://ragwright.local/ontology/engine#> .
