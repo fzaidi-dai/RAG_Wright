@@ -99,7 +99,8 @@ def span_search(ws: WorkspaceHandle, query: str, *, k: int = 10, documents: Opti
     `doc_end`, `pages`, `bbox`, `primary_tag`, `rank`, and `found_by` (`"hybrid"` and/or `"dense"`). `documents`
     scopes it to those source documents in the store (`None` = all, `[]` = nothing); `tag` keeps one primary tag.
     No reranking: compose `BGEReranker` over the hits if you want one. Raises `RuntimeError` when the workspace
-    has no embedder."""
+    has no embedder. Safe to call from several threads or requests at once: it shares the workspace's one embedder,
+    which is thread-safe (PS-52)."""
     from rag_wright.capabilities.span_search import span_search as _search
 
     if ws.embedder is None:

@@ -494,7 +494,7 @@ Resolve a capability name to its invoke factory via the manifest `impl_ref`. Rai
 
 ### `workspace_embedder(ws: 'WorkspaceHandle') -> 'Any'`
 
-PS-38 (G22): the workspace's query embedder, built from its `EngineConfig.embeddings` profile on first use, so a pack capability embeds its queries with the model the corpus was indexed with. None when no embedder backend is available (the caller reports it).
+PS-38 (G22): the workspace's query embedder, built from its `EngineConfig.embeddings` profile on first use, so a pack capability embeds its queries with the model the corpus was indexed with. None when no embedder backend is available (the caller reports it). Thread-safe, as `WorkspaceHandle.embedder` (PS-52).
 
 ### `load_kg_schema(path: 'str') -> 'tuple[tuple[KgVertexType, ...], frozenset[str]]'`
 

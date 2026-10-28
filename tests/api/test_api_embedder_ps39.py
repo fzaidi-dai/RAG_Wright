@@ -29,3 +29,34 @@ def test_query_embedder_is_on_the_api_and_is_the_pack_sdk_function():
 def test_the_workspace_handle_names_embedder_in_its_public_surface():
     public = sorted(n for n in dir(api.WorkspaceHandle) if not n.startswith("_"))
     assert public == ["config", "embedder", "model_id"]
+
+
+def test_concurrent_first_use_builds_one_embedder(monkeypatch):
+    # PS-52 (TexWright, 2026-10-24): the lazy build was an unguarded check-then-set, so N threads arriving before the
+    # first build finished built N models (four "Loading weights" for one workspace, then a SIGSEGV).
+    import concurrent.futures as cf
+    import threading
+    import time
+
+    from rag_wright.api import workspace as w
+
+    builds = []
+
+    def slow_build(cfg):
+        builds.append(1)
+        time.sleep(0.2)  # a model load: long enough for every thread to arrive before it finishes
+        return object()
+
+    monkeypatch.setattr(w, "_build_embedder", slow_build)
+    config = api.EngineConfig(store=api.StoreConfig(host="h", port="1", user="u", password="p"))
+    ws = w.WorkspaceHandle(store=object(), config=config, corpus="c")
+    start = threading.Barrier(8)
+
+    def first_use(_):
+        start.wait()
+        return ws.embedder
+
+    with cf.ThreadPoolExecutor(8) as ex:
+        got = list(ex.map(first_use, range(8)))
+    assert len(builds) == 1
+    assert len({id(e) for e in got}) == 1

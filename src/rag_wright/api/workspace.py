@@ -8,6 +8,7 @@ public store accessor; a pack's store extension is built over the workspace stor
 from __future__ import annotations
 
 import logging
+import threading
 import uuid
 from contextlib import contextmanager
 from typing import Any, Callable, Iterator, Optional, TypeVar
@@ -36,14 +37,20 @@ class WorkspaceHandle:
         self._corpus = corpus
         self.__embedder: Any = None
         self.__embedder_built = False
+        # PS-52 (TexWright, 2026-10-24): the first use may come from several threads at once (`arun_eval`'s
+        # concurrency, a web backend's requests); unguarded, each built its own model (four loads, then a SIGSEGV).
+        self.__embedder_lock = threading.Lock()
 
     @property
     def _embedder(self) -> Any:
         """The query embedder for this workspace, built lazily on first use (so an ingest-only workspace -- or a
-        test -- needs no embedder backend). Best-effort: unavailable -> None (the consumer surfaces it)."""
+        test -- needs no embedder backend). Best-effort: unavailable -> None (the consumer surfaces it). Built ONCE
+        however many threads arrive first: the others wait for that build."""
         if not self.__embedder_built:
-            self.__embedder = _build_embedder(self._config)
-            self.__embedder_built = True
+            with self.__embedder_lock:
+                if not self.__embedder_built:  # another thread may have built it while this one waited
+                    self.__embedder = _build_embedder(self._config)
+                    self.__embedder_built = True
         return self.__embedder
 
     def _share_embedder(self, other: "WorkspaceHandle") -> None:
@@ -59,7 +66,11 @@ class WorkspaceHandle:
     @property
     def embedder(self) -> Any:
         """PS-39: the workspace's query embedder, from its `EngineConfig.embeddings` profile (the model the corpus was
-        indexed with), built on first use and cached on the handle. None when no embedder backend is available."""
+        indexed with), built on first use and cached on the handle. None when no embedder backend is available.
+
+        Thread-safe (PS-52): concurrent first use builds one embedder, and the returned embedder may be called from
+        several threads at once (`encode_dense` / `encode_sparse` / `encode_batch`; the in-process model serializes
+        its own calls, the remote one makes one request per call)."""
         return self._embedder
 
     def model_id(self, role: ModelRole) -> str:
@@ -203,7 +214,7 @@ def _build_embedder(config: EngineConfig) -> Optional[Any]:
 def workspace_embedder(ws: WorkspaceHandle) -> Any:
     """PS-38 (G22): the workspace's query embedder, built from its `EngineConfig.embeddings` profile on first use, so a
     pack capability embeds its queries with the model the corpus was indexed with. None when no embedder backend is
-    available (the caller reports it)."""
+    available (the caller reports it). Thread-safe, as `WorkspaceHandle.embedder` (PS-52)."""
     return ws._embedder
 
 
