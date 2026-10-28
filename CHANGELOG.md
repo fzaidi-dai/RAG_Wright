@@ -4,6 +4,19 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.15.0...0.16.0) (2026-10-28)
+
+
+### Features
+
+* **PS-54:** a Contains where value matches a substring of a text field in the store ([e00b9e2](https://github.com/fzaidi-dai/RAG_Wright/commit/e00b9e271f7185cf5c15a0312d2e76c7c1eb68c6))
+
+
+### Bug Fixes
+
+* **PS-55:** only the BGE models run on Metal, one call at a time per process ([1cb1c90](https://github.com/fzaidi-dai/RAG_Wright/commit/1cb1c90ccc1d5e93421806c26862ab97d503bb72))
+* **PS-56:** the BGE reranker scores again on transformers 5 ([d06ec1b](https://github.com/fzaidi-dai/RAG_Wright/commit/d06ec1b97ad4ae457a232ba9f1bb5e89b033513b))
+
 ## [0.15.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.14.1...0.15.0) (2026-10-28)
 
 
