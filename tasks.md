@@ -9,9 +9,10 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 > longer prints as an error; TexWright's request) and PS-50 done 2026-10-28 (`ensure_pack_schema` declares a property a pack gains on an
 > existing type; TexWright's request); both RELEASED as `rag-wright` 0.14.1 (2026-10-28, PR #17). PS-51 done 2026-10-28 (the frontend skill draws the shell and ships
 > its scaffold; RuleWright's request; unreleased, lands as 0.15.0). PS-52 done 2026-10-28 (a workspace builds one embedder under
-> concurrent first use; TexWright's 2026-10-24 request). Next: triage TexWright's open engine requests
-> (2026-10-19, -21, -25; user to discuss first). Next: PS-48 (harness behaviour tests onto the fabric
-> fixture; proposed with sub-tasks PS-48a..g, awaiting go-ahead), EV-7, PS-30, PS-33. Before it,
+> concurrent first use; TexWright's 2026-10-24 request). **The open list, in order:** (1) TexWright's
+> engine requests: 2026-10-21 unescaped KG identifiers (in progress), 2026-10-19 substring filter, 2026-10-25 Metal abort;
+> (2) **PS-48**, port the harness substrate tests from RuleWright onto the fabric fixture (ledger row in
+> `docs/specs/public-surface/plan.md`, sub-tasks a..g, awaiting go-ahead); (3) EV-7, PS-30, PS-33. Before it,
 > **(2026-10-14): PS-32 done, the agent harness is `rag_wright.harness`** (third public
 > tier, ADR-0139; with PS-39); RELEASED as `rag-wright` 0.10.0 (PyPI + GitHub release, PR #12); RuleWright's guide `docs/specs/public-surface/rulewright-migration-0.10.0.md`.
 > Open: porting the substrate's behaviour tests onto the fabric fixture (most of RuleWright's 35 harness tests stay
