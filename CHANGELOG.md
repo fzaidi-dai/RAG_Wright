@@ -4,6 +4,15 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.16.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.16.0...0.16.1) (2026-11-01)
+
+
+### Bug Fixes
+
+* **PS-57:** a retried write no longer loses a document's clauses; the conflict budget is configurable ([5d209d7](https://github.com/fzaidi-dai/RAG_Wright/commit/5d209d7eb1ab4bad93cd7026e81e79d9b6852fe5))
+* **PS-58:** a record writer reports the count that landed ([a7c384c](https://github.com/fzaidi-dai/RAG_Wright/commit/a7c384cfab59832f9714bac9996f91a29340ed71))
+* **PS-59:** the store's client keeps keep-alive connections, one session per thread ([f644ba3](https://github.com/fzaidi-dai/RAG_Wright/commit/f644ba3f3f37f12102037405b9a58567098358b3))
+
 ## [0.16.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.15.0...0.16.0) (2026-10-28)
 
 
