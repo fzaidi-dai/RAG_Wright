@@ -252,9 +252,13 @@ class IngestionStages:
         return stage
 
     async def write(self, sd: Any, extractions: list) -> int:
-        """Persist the records (the domain's writer, else `kg_write`). Returns the number of record nodes."""
+        """Persist the records (the domain's writer, else `kg_write`). Returns the number that landed: the writer's own
+        count when it returns one; else the record nodes handed over, which the default `kg_write` lands in one
+        transaction (it raises rather than land part of them)."""
         if self.writer is not None:
-            await self.writer(sd.source_doc_id, extractions)
+            landed = await self.writer(sd.source_doc_id, extractions)
+            if landed is not None:
+                return int(landed)
         else:
             nodes = [n for e in extractions for n in e.nodes]
             edges = [ed for e in extractions for ed in e.edges]

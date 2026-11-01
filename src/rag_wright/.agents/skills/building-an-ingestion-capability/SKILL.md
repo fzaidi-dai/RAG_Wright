@@ -28,7 +28,7 @@ Repository paths in this skill (`docs/`, `eval/`, `scripts/`, `tests/`, `src/`) 
 | group spans into units | engine default, domain may override | a heading starts a unit, a table stays whole (a record table is one unit per row), page furniture dropped, units capped | `unit_grouper=`, `boundary_decider=` |
 | choose each unit's representative span (its `anchor` + leading tag) | **domain decision**, optional | the grouper's choice: the first member, often a heading | `unit_representative=` |
 | extract records from a unit | **domain (required)** | (none) | the `extractor` argument |
-| write records | engine default | `kg_write` | `writer=` |
+| write records | engine default | `kg_write` | `writer=` (returns the number of records now in the graph, or `None`) |
 | per-document follow-up (e.g. an entity graph) | domain, optional | none | `document_hook=` |
 | `Document` node, embedded children (`EmbeddedIn` / `AttachedTo`), progress, dead-lettering | engine | always on | (none) |
 

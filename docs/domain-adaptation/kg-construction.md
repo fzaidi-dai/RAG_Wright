@@ -59,7 +59,9 @@ parse → chunk → segment (+ optional tag) → index  (embed each span → the
   A unit holding exactly one data row of a parsed table carries that row as `Unit.table_row` (exact cells).
 - **extract**: your `extractor` turns each unit into **typed records** (`UnitExtraction`: `KgNode`s and `KgEdge`s
   in your pack's schema). This is the domain-specific step.
-- **write**: persist the records (your `writer`, else `kg_write`), then a generic `Document` node per document.
+- **write**: persist the records (your `writer`, else `kg_write`), then a generic `Document` node per document. Your
+  `writer` returns the number of records now in the graph (the report's `records`), or `None` to let the engine count
+  the record nodes it handed over.
 - **entity graph + resolve**: not run by default. Run your entity extraction and resolution in a `document_hook`
   (see [entity resolution](entity-resolution.md)).
 

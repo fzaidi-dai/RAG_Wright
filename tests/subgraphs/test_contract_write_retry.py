@@ -94,3 +94,4 @@ def test_a_retried_write_lands_every_clause(monkeypatch, tmp_path):
 
     assert out.get("dead_letter") is None
     assert sorted(store.clauses) == ["D1:0", "D1:1", "D1:2"]  # the retry wrote what the first attempt could not
+    assert out["written"]["clauses"] == 3  # RuleWright's second request: the count is what landed, from the writer

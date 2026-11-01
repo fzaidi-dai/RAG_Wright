@@ -196,9 +196,11 @@ class Extractor(Protocol):
 
 
 class RecordWriter(Protocol):
-    """Optional: persist a document's extractions. The engine default writes them with `kg_write`."""
+    """Optional: persist a document's extractions. The engine default writes them with `kg_write`. Return the number of
+    records now in the graph (written, or found already written); `None` lets the engine count the record nodes it
+    handed over (RuleWright, 2026-10-31: only the writer knows what landed)."""
 
-    def __call__(self, source_doc_id: str, extractions: Sequence[UnitExtraction]) -> Awaitable[None]: ...
+    def __call__(self, source_doc_id: str, extractions: Sequence[UnitExtraction]) -> Awaitable[Optional[int]]: ...
 
 
 # --- the engine-enforced checks --------------------------------------------------------------------------------

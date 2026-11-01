@@ -182,7 +182,7 @@ Group into units (checked), attach table rows, extract each unit concurrently (p
 
 #### `IngestionStages.write(self, sd: 'Any', extractions: 'list') -> 'int'`
 
-Persist the records (the domain's writer, else `kg_write`). Returns the number of record nodes.
+Persist the records (the domain's writer, else `kg_write`). Returns the number that landed: the writer's own count when it returns one; else the record nodes handed over, which the default `kg_write` lands in one transaction (it raises rather than land part of them).
 
 #### `IngestionStages.write_document_node(self, doc_id: 'str', *, parent_id: 'Optional[str]', filename: 'str', media_type: 'str', sha256: 'str', metadata: 'Optional[dict]' = None) -> 'None'`
 

@@ -304,9 +304,9 @@ PS-R3: which member span represents a unit -- a DOMAIN decision. The engine appl
 
 One unit -> the domain's typed records (required; the domain-specific step).
 
-### `RecordWriter: (source_doc_id: 'str', extractions: 'Sequence[UnitExtraction]') -> 'Awaitable[None]'`
+### `RecordWriter: (source_doc_id: 'str', extractions: 'Sequence[UnitExtraction]') -> 'Awaitable[Optional[int]]'`
 
-Optional: persist a document's extractions. The engine default writes them with `kg_write`.
+Optional: persist a document's extractions. The engine default writes them with `kg_write`. Return the number of records now in the graph (written, or found already written); `None` lets the engine count the record nodes it handed over (RuleWright, 2026-10-31: only the writer knows what landed).
 
 ### `BoundaryDiscoverer: (**kwargs)`
 

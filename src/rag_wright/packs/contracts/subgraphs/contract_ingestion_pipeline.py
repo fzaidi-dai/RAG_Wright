@@ -966,13 +966,14 @@ def aproduction_document_ingest(
         nodes, edges = clause_kg_graph(record)
         return UnitExtraction(nodes=nodes, edges=edges)
 
-    async def clause_kg_writer(source_doc_id: str, extractions: list) -> None:
-        def _write() -> None:
+    async def clause_kg_writer(source_doc_id: str, extractions: list) -> int:
+        def _write() -> int:
             for e in extractions:  # the write_clause_kg content-hash gate (idempotent re-ingest)
                 if not ckg.already_written(e.nodes[0].props["clause_id"]):
-                    store.kg_write(e.nodes, e.edges)
+                    store.kg_write(e.nodes, e.edges)  # one transaction per clause: it lands whole or raises
+            return len(extractions)  # every clause is now in the graph, written here or before
 
-        await asyncio.to_thread(_write)
+        return await asyncio.to_thread(_write)
 
     stages = IngestionStages(
         store, extractor=clause_extractor_hook, segmenter=legal_segmenter, span_tagger=function_tagger,
@@ -1019,7 +1020,7 @@ def aproduction_document_ingest(
     async def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
         # read, not pop: `extract_clauses` fills this map, so a retry of this node must still find it (RuleWright,
         # 2026-10-31: a popped map made the retry write nothing and report success). Released once the write lands.
-        await stages.write(doc, extractions_by_doc.get(doc.source_doc_id, []))
+        landed = await stages.write(doc, extractions_by_doc.get(doc.source_doc_id, []))  # the clauses in the graph
 
         def _write() -> dict:
             nodes, edges = resolution
@@ -1031,7 +1032,7 @@ def aproduction_document_ingest(
             stages.write_document_node(doc.source_doc_id, parent_id=None,
                                        filename=doc.metadata.get("raw_title", "") or doc.source_doc_id,
                                        media_type="", sha256=hashlib.sha256(doc.text.encode("utf-8")).hexdigest())
-            return {"clauses": len(clause_records), "entities": len(nodes), "edges": len(edges)}
+            return {"clauses": landed, "entities": len(nodes), "edges": len(edges)}
 
         written = await asyncio.to_thread(_write)
         extractions_by_doc.pop(doc.source_doc_id, None)
