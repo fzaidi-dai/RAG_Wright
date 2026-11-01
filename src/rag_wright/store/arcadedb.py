@@ -22,10 +22,12 @@ import logging
 import os
 import random
 import re
+import threading
 import time
 from dataclasses import dataclass, replace
 from typing import Any, Iterable, Optional
 
+import requests
 from arcadedb_python import DatabaseDao, SyncClient
 
 from rag_wright.contracts.chunk import BGE_M3_DENSE_DIM, ChunkRecord, MetadataValue
@@ -333,6 +335,51 @@ def _sql_literal(value: MetadataValue) -> str:
     return _sql_str(str(value))
 
 
+class _PooledClient(SyncClient):
+    """`SyncClient` over keep-alive connections, one `requests.Session` per thread (PS-59).
+
+    `SyncClient.post` / `get` call the bare `requests.post` / `requests.get`, so every request opens and closes a TCP
+    connection. Measured live during PS-57, 8 concurrent writers against Docker Desktop on macOS lost about two thirds
+    of their writes to `RemoteDisconnected`, and none with one keep-alive session per thread. Per thread because a
+    `Session` is not documented as thread-safe and the store is called from `asyncio.to_thread` workers. The two
+    methods are the library's own with the session in place of the module call (arcadedb_python 0.4.0); ArcadeDB
+    keeps a transaction in the `arcadedb-session-id` header and sets no cookies, so a session carries nothing else."""
+
+    def __init__(self, host: str, port: str, protocol: str = "http", **kwargs):
+        self._local = threading.local()
+        self._sessions: list[requests.Session] = []
+        self._sessions_lock = threading.Lock()
+        super().__init__(host, port, protocol, **kwargs)  # its login check already posts through `_session`
+
+    def _session(self) -> requests.Session:
+        session = getattr(self._local, "session", None)
+        if session is None:
+            session = self._local.session = requests.Session()
+            with self._sessions_lock:
+                self._sessions.append(session)
+        return session
+
+    def post(self, endpoint: str, payload: dict, return_headers: bool = False, extra_headers: dict = {}):
+        response = self._session().post(self._get_endpoint(endpoint), data=json.dumps(payload),
+                                        headers={**self.headers, **extra_headers},
+                                        auth=(self.username, self.password))
+        query = payload.get("command") if isinstance(payload, dict) else None
+        return self.subhandler(response, return_headers=return_headers, query=query)
+
+    def get(self, endpoint: str, return_headers: bool = False, extra_headers: dict = {}):
+        response = self._session().get(self._get_endpoint(endpoint), auth=(self.username, self.password),
+                                       headers=extra_headers)
+        return self.subhandler(response, return_headers=return_headers)
+
+    def close(self) -> None:
+        """Close every thread's session. A thread that calls again afterwards opens a new one."""
+        with self._sessions_lock:
+            sessions, self._sessions = self._sessions, []
+            self._local = threading.local()
+        for session in sessions:
+            session.close()
+
+
 class ArcadeDBStore:
     """The default store: schema management over a single ArcadeDB database."""
 
@@ -388,7 +435,7 @@ class ArcadeDBStore:
         attempts with waits capped at 2 s)."""
         if reset and not create:
             raise ValueError("reset=True drops and recreates the database; it cannot be combined with create=False")
-        client = SyncClient(host, port, protocol=protocol, username=user, password=password)
+        client = _PooledClient(host, port, protocol=protocol, username=user, password=password)
         if reset and DatabaseDao.exists(client, database):
             DatabaseDao.delete(client, database)
         if not DatabaseDao.exists(client, database):
@@ -602,8 +649,10 @@ class ArcadeDBStore:
         return DatabaseDao.exists(self._client, self._database)
 
     def close(self) -> None:
-        # The HTTP client holds no persistent connection to release.
-        pass
+        # PS-59: release the client's keep-alive connections (a client built elsewhere may hold none)
+        close = getattr(self._client, "close", None)
+        if close is not None:
+            close()
 
     # --- write-side (T20) -----------------------------------------------------------------------
 

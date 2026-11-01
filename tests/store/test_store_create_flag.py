@@ -41,6 +41,7 @@ def _fake(monkeypatch, request):
     if request.node.get_closest_marker("store"):
         return  # the live test uses the real client
     monkeypatch.setattr(adb, "DatabaseDao", _FakeDao)
+    monkeypatch.setattr(adb, "_PooledClient", lambda *a, **k: object())  # PS-59: what `from_config` builds
     monkeypatch.setattr(adb, "SyncClient", lambda *a, **k: object())
     _FakeDao.existing = {"tenant_a", "tenant_b"}
     _FakeDao.created = []
