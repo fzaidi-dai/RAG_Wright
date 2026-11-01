@@ -131,7 +131,9 @@ def _build_store(config: EngineConfig, corpus: str, *, reset: bool, create: bool
     from rag_wright.store.arcadedb import ArcadeDBStore
 
     return ArcadeDBStore.from_config(sc.host, sc.port, sc.user, sc.password, database=corpus,
-                                     protocol=sc.protocol, reset=reset, pack_ttl=config.pack, create=create)
+                                     protocol=sc.protocol, reset=reset, pack_ttl=config.pack, create=create,
+                                     conflict_attempts=sc.conflict_attempts,
+                                     conflict_backoff_cap_s=sc.conflict_backoff_cap_s)
 
 
 def drop_workspace(config: EngineConfig, *, corpus: str) -> bool:

@@ -106,3 +106,79 @@ def test_an_error_outside_a_retry_still_prints():
     record = logging.LogRecord("arcadedb_python.api.sync", logging.ERROR, __file__, 0,
                                "ArcadeDB Error Response: %s", (_CONFLICT,), None)
     assert all(f.filter(record) for f in logging.getLogger("arcadedb_python.api.sync").filters)
+
+
+# --- RuleWright's request (2026-10-31): the conflict budget is reachable, and a racing UPSERT is retried ---
+
+_DUPLICATE = ("Transaction failed: Found duplicate key in index: Duplicated key [HAS_D2|v2] found on index "
+              "'PropertyValue[value_key]' already assigned to record #5:4")
+
+
+class _FlakyDb:
+    """A `DatabaseDao` stand-in whose transaction fails `failures` times with `message`, then lands."""
+
+    def __init__(self, failures: int, message: str) -> None:
+        self.failures, self.message, self.calls = failures, message, 0
+
+    def execute_transaction(self, statements):
+        self.calls += 1
+        if self.calls <= self.failures:
+            raise Exception(self.message)
+
+
+def _flaky_store(monkeypatch, failures, message, **kw):
+    from rag_wright.store import arcadedb
+
+    monkeypatch.setattr(arcadedb.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(arcadedb, "DatabaseDao", lambda client, database: _FlakyDb(failures, message))
+    return ArcadeDBStore(None, "db", **kw)
+
+
+def test_a_racing_upsert_of_a_new_key_is_retried(monkeypatch):
+    # Two writers inserting the same NEW shared node: the loser gets a duplicate key, not a page conflict. Every
+    # node in `kg_write` is an UPSERT, so the retry finds the winner's record and updates it.
+    s = _flaky_store(monkeypatch, 2, _DUPLICATE)
+    s.kg_write([KgNode("PropertyValue", "value_key", {"value_key": "HAS_D2|v2"})])
+    assert s._db.calls == 3
+
+
+def test_a_duplicate_key_outside_an_upsert_is_not_retried():
+    assert not _is_retryable_conflict(Exception(_DUPLICATE))
+
+
+def test_the_conflict_budget_is_set_on_the_store(monkeypatch):
+    s = _flaky_store(monkeypatch, 99, _CONFLICT, conflict_attempts=3)
+    with pytest.raises(Exception, match="Concurrent modification"):
+        s.kg_write([KgNode("Rec", "k", {"k": "r"})])
+    assert s._db.calls == 3
+
+
+def test_the_conflict_budget_falls_back_to_the_environment(monkeypatch):
+    monkeypatch.setenv("ARCADEDB_CONFLICT_ATTEMPTS", "4")
+    s = _flaky_store(monkeypatch, 99, _CONFLICT)
+    with pytest.raises(Exception, match="Concurrent modification"):
+        s.kg_write([KgNode("Rec", "k", {"k": "r"})])
+    assert s._db.calls == 4
+
+
+def test_the_backoff_cap_bounds_every_wait(monkeypatch):
+    from rag_wright.store import arcadedb
+
+    waits = []
+    s = _flaky_store(monkeypatch, 99, _CONFLICT, conflict_attempts=12, conflict_backoff_cap_s=2.0)
+    monkeypatch.setattr(arcadedb.time, "sleep", waits.append)
+    with pytest.raises(Exception):
+        s.kg_write([KgNode("Rec", "k", {"k": "r"})])
+    assert len(waits) == 11 and max(waits) <= 2.0 + 0.01 and max(waits) > 1.0
+
+
+def test_the_workspace_passes_the_budget_to_its_store(monkeypatch):
+    from rag_wright.api import EngineConfig, StoreConfig
+    from rag_wright.api import workspace
+
+    seen = {}
+    monkeypatch.setattr(ArcadeDBStore, "from_config", classmethod(lambda cls, *a, **kw: seen.update(kw)))
+    workspace._build_store(EngineConfig(store=StoreConfig(host="h", port="1", user="u", password="p",
+                                                          conflict_attempts=20, conflict_backoff_cap_s=1.5)),
+                           "c", reset=False)
+    assert seen["conflict_attempts"] == 20 and seen["conflict_backoff_cap_s"] == 1.5

@@ -23,6 +23,7 @@ import os
 import random
 import re
 import time
+from dataclasses import dataclass, replace
 from typing import Any, Iterable, Optional
 
 from arcadedb_python import DatabaseDao, SyncClient
@@ -70,39 +71,59 @@ _SPAN_SPARSE_INDEX = f"{SPAN_TYPE}[sparse_indices,sparse_weights]"
 # ArcadeDB answers concurrent writes to the same page with a `ConcurrentModificationException` and asks the client to
 # retry; the failed command or transaction is rolled back whole, so a bounded retry with jittered backoff is safe
 # (found by the ING-5 doc audit: unretried, concurrent ingestion silently lost spans and records).
-_CONFLICT_RETRIES = 10
+# RuleWright (2026-10-31): the budget is the store's (`StoreConfig.conflict_attempts` / `conflict_backoff_cap_s`, else
+# `ARCADEDB_CONFLICT_ATTEMPTS` / `ARCADEDB_CONFLICT_BACKOFF_CAP_S`, else these defaults). Measured live with clause-shaped
+# transactions over shared value nodes: 10 attempts capped at 0.5 s (about 2 s of waiting) lost 38 of 2,400 at 4 and 8
+# writers; 20 capped at 2 s lost none, at the same wall-clock (it waits only while a write conflicts).
+_CONFLICT_RETRIES = 20
+_CONFLICT_BACKOFF_CAP_S = 2.0
+
+
+@dataclass(frozen=True)
+class _ConflictBudget:
+    attempts: int = _CONFLICT_RETRIES
+    cap_s: float = _CONFLICT_BACKOFF_CAP_S
+    # Two writers UPSERTing the same NEW key: the loser gets a duplicate key on the unique index, not a page conflict.
+    # Retried only where every node write is an UPSERT (the retry then finds the winner's record), never for a
+    # genuine duplicate.
+    duplicate_key: bool = False
+
+
 # PS-49 (TexWright, 2026-10-17): the client logs every error response at ERROR before raising, so a conflict the retry
 # absorbs printed exactly like a failure. While a retry is handling the call, that line is dropped; the retry says
 # itself what happened (INFO when the write landed after retrying, ERROR when it gave up).
-_RETRYING = contextvars.ContextVar("arcadedb_retrying", default=False)
+_RETRYING: contextvars.ContextVar[Optional[_ConflictBudget]] = contextvars.ContextVar("arcadedb_retrying", default=None)
 
 
 class _RetriedConflictFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
-        return not (_RETRYING.get() and _is_retryable_conflict(Exception(record.getMessage())))
+        budget = _RETRYING.get()
+        return not (budget and _is_retryable_conflict(Exception(record.getMessage()),
+                                                      duplicate_key=budget.duplicate_key))
 
 
 logging.getLogger("arcadedb_python.api.sync").addFilter(_RetriedConflictFilter())
 
 
-def _is_retryable_conflict(exc: BaseException) -> bool:
+def _is_retryable_conflict(exc: BaseException, *, duplicate_key: bool = False) -> bool:
     msg = str(exc)
-    return "ConcurrentModificationException" in msg or "Concurrent modification on page" in msg
+    return ("ConcurrentModificationException" in msg or "Concurrent modification on page" in msg
+            or (duplicate_key and ("DuplicatedKeyException" in msg or "Found duplicate key" in msg)))
 
 
-def _retry_on_conflict(fn, *args, **kwargs):
-    token = _RETRYING.set(True)
+def _retry_on_conflict(fn, *args, budget: _ConflictBudget = _ConflictBudget(), **kwargs):
+    token = _RETRYING.set(budget)
     try:
-        for attempt in range(_CONFLICT_RETRIES):
+        for attempt in range(budget.attempts):
             try:
                 result = fn(*args, **kwargs)
             except Exception as exc:  # noqa: BLE001 - only the retryable conflict is retried; anything else re-raises
-                if not _is_retryable_conflict(exc):
+                if not _is_retryable_conflict(exc, duplicate_key=budget.duplicate_key):
                     raise
-                if attempt == _CONFLICT_RETRIES - 1:
-                    _log.error("ArcadeDB write conflict: gave up after %d attempts: %s", _CONFLICT_RETRIES, exc)
+                if attempt == budget.attempts - 1:
+                    _log.error("ArcadeDB write conflict: gave up after %d attempts: %s", budget.attempts, exc)
                     raise
-                time.sleep(min(0.5, 0.01 * 2 ** attempt) + random.uniform(0, 0.01))
+                time.sleep(min(budget.cap_s, 0.01 * 2 ** attempt) + random.uniform(0, 0.01))
             else:
                 if attempt:
                     _log.info("ArcadeDB write conflict retried %d times; the write landed", attempt)
@@ -315,10 +336,19 @@ def _sql_literal(value: MetadataValue) -> str:
 class ArcadeDBStore:
     """The default store: schema management over a single ArcadeDB database."""
 
-    def __init__(self, client: SyncClient, database: str, *, pack_ttl: str | None = None) -> None:
+    _conflicts = _ConflictBudget()  # the default write-conflict budget; `__init__` resolves the configured one
+
+    def __init__(self, client: SyncClient, database: str, *, pack_ttl: str | None = None,
+                 conflict_attempts: int | None = None, conflict_backoff_cap_s: float | None = None) -> None:
         self._client = client
         self._database = database
         self._db = DatabaseDao(client, database)
+        # RuleWright (2026-10-31): the write-conflict retry budget (argument, else environment, else the default)
+        attempts = conflict_attempts or int(os.getenv("ARCADEDB_CONFLICT_ATTEMPTS") or _CONFLICT_RETRIES)
+        cap_s = conflict_backoff_cap_s or float(os.getenv("ARCADEDB_CONFLICT_BACKOFF_CAP_S") or _CONFLICT_BACKOFF_CAP_S)
+        if attempts < 1 or cap_s <= 0:
+            raise ValueError(f"the conflict budget needs attempts >= 1 and a backoff cap > 0 (got {attempts}, {cap_s})")
+        self._conflicts = _ConflictBudget(attempts, cap_s)
         # AC-journey / ING-8a: the DOMAIN pack `.ttl` whose KG vertex/edge types `ensure_schema` creates and whose
         # property storage types `kg_write` encodes by. `None` = NO domain pack (the neutral engine schema); a domain
         # points this at its OWN pack ("config + .ttl", no engine edit), or ensures it on use (`ensure_pack_schema`).
@@ -326,7 +356,8 @@ class ArcadeDBStore:
 
     @classmethod
     def from_env(cls, *, database: str | None = None, reset: bool = False,
-                 pack_ttl: str | None = None, create: bool = True) -> "ArcadeDBStore":
+                 pack_ttl: str | None = None, create: bool = True, conflict_attempts: int | None = None,
+                 conflict_backoff_cap_s: float | None = None) -> "ArcadeDBStore":
         """Build a store from `ARCADEDB_*` env, creating the database if absent (logged); `create=False` raises
         `LookupError` instead (PS-27), for a path where the database must already exist.
 
@@ -339,18 +370,22 @@ class ArcadeDBStore:
             os.environ["ARCADEDB_USER"], os.environ["ARCADEDB_PASSWORD"],
             database=database or os.environ["ARCADEDB_DATABASE"],
             protocol=os.getenv("ARCADEDB_PROTOCOL", "http"),  # `https` for the Modal-hosted KG (EC-2)
-            reset=reset, pack_ttl=pack_ttl, create=create)
+            reset=reset, pack_ttl=pack_ttl, create=create, conflict_attempts=conflict_attempts,
+            conflict_backoff_cap_s=conflict_backoff_cap_s)
 
     @classmethod
     def from_config(cls, host: str, port: str, user: str, password: str, *, database: str,
                     protocol: str = "http", reset: bool = False,
-                    pack_ttl: str | None = None, create: bool = True) -> "ArcadeDBStore":
+                    pack_ttl: str | None = None, create: bool = True, conflict_attempts: int | None = None,
+                    conflict_backoff_cap_s: float | None = None) -> "ArcadeDBStore":
         """Build a store from EXPLICIT connection params (EP-API-1: the de-env'd twin of `from_env`, so engine
         config flows as data, not `os.environ`). Creates the database if absent, and logs that it did (a product
         provisions a new corpus this way); `create=False` raises `LookupError` naming the databases that exist,
         and creates nothing (PS-27: a wrong name otherwise yields an empty graph, silently). `reset=True` drops +
         recreates it, so it cannot be combined with `create=False`. `pack_ttl` selects the domain pack schema
-        (None = the neutral engine schema, no domain pack)."""
+        (None = the neutral engine schema, no domain pack). `conflict_attempts` / `conflict_backoff_cap_s` set the
+        write-conflict retry budget (None: `ARCADEDB_CONFLICT_ATTEMPTS` / `ARCADEDB_CONFLICT_BACKOFF_CAP_S`, else 20
+        attempts with waits capped at 2 s)."""
         if reset and not create:
             raise ValueError("reset=True drops and recreates the database; it cannot be combined with create=False")
         client = SyncClient(host, port, protocol=protocol, username=user, password=password)
@@ -362,7 +397,8 @@ class ArcadeDBStore:
                 raise LookupError(f"database {database!r} does not exist (create=False); existing: {existing}")
             DatabaseDao.create(client, database)
             _log.info("created database %r (it did not exist)", database)
-        return cls(client, database, pack_ttl=pack_ttl)
+        return cls(client, database, pack_ttl=pack_ttl, conflict_attempts=conflict_attempts,
+                   conflict_backoff_cap_s=conflict_backoff_cap_s)
 
     @staticmethod
     def drop_database(host: str, port: str, user: str, password: str, *, database: str,
@@ -779,7 +815,9 @@ class ArcadeDBStore:
                 stmt += " SET " + ", ".join(f"{k} = {_kg_sql(v)}" for k, v in e.props.items())
             statements.append(stmt)
         if statements:
-            _retry_on_conflict(self._db.execute_transaction, statements)
+            # every node is an UPSERT, so a duplicate key here is two writers racing to create one node
+            _retry_on_conflict(self._db.execute_transaction, statements,
+                               budget=replace(self._conflicts, duplicate_key=True))
 
     def kg_ensure_edges(self, edges) -> int:
         """ING-4b (see `Store.kg_ensure_edges`): create each typed edge only if no edge of its type already joins
@@ -1026,7 +1064,9 @@ class ArcadeDBStore:
                 f" confidence = {_sql_str(edge.confidence)}, {_edge_provenance_assignments(edge.chunk_id)}"
             )
         if statements:
-            _retry_on_conflict(self._db.execute_transaction, statements)
+            # every node is an UPSERT, so a duplicate key here is two writers racing to create one node
+            _retry_on_conflict(self._db.execute_transaction, statements,
+                               budget=replace(self._conflicts, duplicate_key=True))
 
     def _mentions_edge_exists(self, chunk_id: str, node_key: str) -> bool:
         """True iff a `Mentions` edge already connects this chunk to this entity (issue 0029 idempotence).
@@ -1200,7 +1240,7 @@ class ArcadeDBStore:
     # --- internals ------------------------------------------------------------------------------
 
     def _command(self, sql: str) -> Any:
-        return _retry_on_conflict(self._db.query, "sql", sql, is_command=True)
+        return _retry_on_conflict(self._db.query, "sql", sql, is_command=True, budget=self._conflicts)
 
     def _query(self, sql: str) -> list[dict]:
         result = self._db.query("sql", sql)

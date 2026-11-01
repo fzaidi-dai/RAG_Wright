@@ -45,6 +45,14 @@ configuration change takes effect without a restart ([`workspaces.md`](workspace
 | `password` | `str` | — | password |
 | `backend` | `str` | `"arcadedb"` | store implementation (only `arcadedb` today) |
 | `protocol` | `str` | `"http"` | `http` locally; `https` for a remote/Modal store |
+| `conflict_attempts` | `int \| None` | `None` | attempts per write when ArcadeDB reports a write conflict (`None`: `ARCADEDB_CONFLICT_ATTEMPTS`, else 20) |
+| `conflict_backoff_cap_s` | `float \| None` | `None` | the longest wait between those attempts, in seconds (`None`: `ARCADEDB_CONFLICT_BACKOFF_CAP_S`, else 2) |
+
+Concurrent writers that touch the same page get a write conflict; the store retries the write (the failed
+transaction is rolled back whole) with a doubling wait from 10 ms up to the cap. Two writers creating the same new
+node by `kg_write` get a duplicate key instead, which is retried the same way. A write that is still conflicting
+after the last attempt raises, about 25 s after the first one with the defaults. Raise the budget when more than
+eight documents write into one graph at once.
 
 `StoreConfig.from_env()` builds one from `ARCADEDB_HOST` (default `localhost`), `ARCADEDB_PORT` (required: no
 default, so an unset variable cannot reach another instance on the machine),
@@ -284,6 +292,7 @@ Prefer config; use env for secrets and for non-API callers. The common ones the 
 | variable | purpose |
 |---|---|
 | `ARCADEDB_HOST` / `ARCADEDB_PORT` / `ARCADEDB_USER` / `ARCADEDB_PASSWORD` / `ARCADEDB_DATABASE` / `ARCADEDB_PROTOCOL` | store connection: `StoreConfig.from_env()` reads them (and the scripts do); `open_workspace` itself reads only the `StoreConfig` it is given |
+| `ARCADEDB_CONFLICT_ATTEMPTS` / `ARCADEDB_CONFLICT_BACKOFF_CAP_S` | the write-conflict retry budget when `StoreConfig.conflict_attempts` / `conflict_backoff_cap_s` are unset |
 | `OPENROUTER_API_KEY` / `OPENROUTER_BASE_URL` / `OPENROUTER_PROVIDER` / `OPENROUTER_ALLOW_FALLBACKS` | OpenRouter access + provider routing (`OPENROUTER_SORT` / `OPENROUTER_PROVIDER_ORDER`: the contracts pack's docling-graph extraction only) |
 | `RAG_SERVING` / `VLLM_BASE_URL` / `VLLM_API_KEY` / `STACK_URL` | serving backend (openrouter \| vllm) + self-hosted endpoint |
 | `RAG_MODEL_<ROLE>` (e.g. `RAG_MODEL_GENERAL`, `RAG_MODEL_VISION_OCR`) / `RAG_MODEL_ALL` / `RAG_GRAPH_EXTRACT_MODEL` / `RAG_DECISION_MODEL` | model overrides (one role / all roles / graph extraction / decision-model profile) |

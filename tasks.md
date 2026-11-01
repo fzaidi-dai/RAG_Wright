@@ -3,6 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **2026-11-01: PS-57 done, unreleased** (RuleWright's request: a retried contracts-pack write no longer loses a document's clauses; the ArcadeDB conflict budget is configurable, default 20 attempts / 2 s cap; a racing UPSERT's duplicate key is retried). Next: RuleWright's second 2026-10-31 request (`IngestionStages.write` returns a count from its input), then PS-48.
+>
 > **⇒ RESUME / NEXT UP (2026-10-17, NEWEST): the LangGraph ingestion workstream is RELEASED as `rag-wright` 0.14.0** (PR #16)
 > (`docs/specs/langgraph-ingestion/plan.md`, LGI-1..5; ADR-0124 amended; RuleWright guide
 > `docs/specs/public-surface/rulewright-migration-0.14.0.md`). PS-49 done 2026-10-17 (a retried ArcadeDB write conflict no

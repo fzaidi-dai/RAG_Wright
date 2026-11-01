@@ -23,6 +23,10 @@ class StoreConfig:
     password: str
     backend: str = "arcadedb"
     protocol: str = "http"
+    # RuleWright (2026-10-31): the write-conflict retry budget. None: `ARCADEDB_CONFLICT_ATTEMPTS` /
+    # `ARCADEDB_CONFLICT_BACKOFF_CAP_S`, else 20 attempts with each wait capped at 2 s (about 25 s in all).
+    conflict_attempts: Optional[int] = None
+    conflict_backoff_cap_s: Optional[float] = None
 
     @classmethod
     def from_env(cls) -> "StoreConfig":

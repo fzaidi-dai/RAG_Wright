@@ -1017,8 +1017,9 @@ def aproduction_document_ingest(
                 entity_rules=entity_rules)))
 
     async def write_fn(doc: SourceDocument, clause_records: list, resolution: Any) -> dict:
-        await stages.write(doc, extractions_by_doc.pop(doc.source_doc_id, []))
-        chunks_by_doc.pop(doc.source_doc_id, None)
+        # read, not pop: `extract_clauses` fills this map, so a retry of this node must still find it (RuleWright,
+        # 2026-10-31: a popped map made the retry write nothing and report success). Released once the write lands.
+        await stages.write(doc, extractions_by_doc.get(doc.source_doc_id, []))
 
         def _write() -> dict:
             nodes, edges = resolution
@@ -1032,7 +1033,10 @@ def aproduction_document_ingest(
                                        media_type="", sha256=hashlib.sha256(doc.text.encode("utf-8")).hexdigest())
             return {"clauses": len(clause_records), "entities": len(nodes), "edges": len(edges)}
 
-        return await asyncio.to_thread(_write)
+        written = await asyncio.to_thread(_write)
+        extractions_by_doc.pop(doc.source_doc_id, None)
+        chunks_by_doc.pop(doc.source_doc_id, None)
+        return written
 
     return abuild_document_ingest(
         chunk_fn, segment_fn, clauses_fn, index_fn, graph_fn, resolve_fn, write_fn)
