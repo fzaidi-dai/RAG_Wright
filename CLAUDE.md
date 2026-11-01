@@ -55,7 +55,11 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-10-29): `rag-wright` 0.16.0 is RELEASED** (PR #19; TexWright's requests: PS-54 a `Contains`
+> **CURRENT STATE (2026-11-01): `rag-wright` 0.16.1 is RELEASED** (PR #20; RuleWright's two requests and a finding
+> from them: PS-57 a retried contracts-pack write no longer loses a document's clauses, the ArcadeDB conflict budget is
+> configurable (default 20 attempts / 2 s cap) and a racing UPSERT's duplicate key is retried; PS-58 a `RecordWriter`
+> returns the count that landed; PS-59 the store's client keeps keep-alive connections, one session per thread). Next:
+> PS-48, EV-7, PS-30, PS-33. Before it, **`rag-wright` 0.16.0 is RELEASED** (PR #19; TexWright's requests: PS-54 a `Contains`
 > substring `where` value, PS-55 only the BGE models on Metal under one process lock (ADR-0140); PS-56 the BGE reranker
 > scores again on transformers 5). Before it, **`rag-wright` 0.15.0 is RELEASED** (PR #18; PS-51 the frontend skill draws the shell and
 > ships its scaffold, RuleWright's request; PS-52 one workspace embedder under concurrent first use and PS-53 KG calls refuse
