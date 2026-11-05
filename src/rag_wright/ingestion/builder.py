@@ -55,7 +55,11 @@ class DocumentReport:
     sheets left out (`IngestSource.include_hidden_sheets=False`). `children`: the ids of embedded files and PDF
     attachments ingested as child documents (`parent_doc_id` is set on theirs); `embedded_skipped`: embedded files
     that could not be ingested. `links`: `AttachedTo` record links written, by confidence; `unmapped_links`: links
-    whose record row could not be found. `dead_letter`: why the whole document failed (None when it landed)."""
+    whose record row could not be found. `unreached_table_rows` (PS-62): one entry per record table -- a table at
+    least one of whose rows reached a unit carrying its `TableRow` -- whose data rows did not ALL reach one,
+    `{table_ref, sheet, reached, total, missing}` (`missing`: the 1-based data-row indices, at most the first
+    1,000); the document still lands, so read this, or the `[ingest] warning:` line, to know rows were lost.
+    `dead_letter`: why the whole document failed (None when it landed)."""
 
     doc_id: str
     parent_doc_id: Optional[str] = None
@@ -70,6 +74,7 @@ class DocumentReport:
     children: list[str] = field(default_factory=list)
     links: dict[str, int] = field(default_factory=dict)  # AttachedTo edges written, by confidence
     unmapped_links: int = 0  # record links whose row span could not be found
+    unreached_table_rows: list[dict] = field(default_factory=list)  # PS-62: record tables that lost rows
     dead_letter: Optional[str] = None
 
 
@@ -119,6 +124,7 @@ class ExtractStage:
     extractions: list = field(default_factory=list)
     failures: list[dict] = field(default_factory=list)
     row_spans: dict = field(default_factory=dict)
+    unreached_rows: list[dict] = field(default_factory=list)  # PS-62: `_unreached_rows`
 
 
 class IngestionStages:
@@ -235,6 +241,7 @@ class IngestionStages:
         document = self.document(sd)
         stage.row_spans = _row_spans(document, [t.span for t in tagged])
         _attach_table_rows(document, stage.units, stage.row_spans)
+        stage.unreached_rows = _unreached_rows(document, stage.units)
         sem = asyncio.Semaphore(self.tuning.extract_concurrency)
 
         async def one(unit: Any) -> Optional[UnitExtraction]:
@@ -417,6 +424,12 @@ class IngestionPipeline:
                            + (f"DEAD-LETTER: {top.dead_letter}" if top.dead_letter else
                               f"spans={top.spans} units={top.units} records={top.records} "
                               f"children={len(top.children)} failures={len(top.extraction_failures)}"))
+            for d in docs:  # PS-62: a record table's lost rows are said, never only counted
+                for t in d.unreached_table_rows:
+                    where = f"sheet {t['sheet']!r}" if t["sheet"] else f"table {t['table_ref']}"
+                    self._progress(f"[ingest] warning: {d.doc_id}: {where}: {t['reached']} of {t['total']} rows "
+                                   f"reached a unit with their row; the rest produced no record "
+                                   f"(first missing: {t['missing'][:5]})")
             return {"documents": [_dump(list[DocumentReport], docs)]}
 
         def finish(state: _RunState) -> dict:
@@ -522,6 +535,7 @@ class IngestionPipeline:
             rep.chunks, rep.units = len(state["chunks"]), len(extracted.units)
             rep.spans, rep.span_failures = indexed["span_count"], indexed["span_failures"]
             rep.extraction_failures = extracted.failures
+            rep.unreached_table_rows = extracted.unreached_rows
             reports = [rep]
             for j, emb in enumerate(sd.embedded, 1):
                 if depth + 1 > _MAX_CHILD_DEPTH:
@@ -584,13 +598,15 @@ def _load(kind: Any, value: Any) -> Any:
 
 def _dump_extract_stage(stage: ExtractStage) -> dict:
     return {"units": _dump(list[Unit], stage.units), "extractions": _dump(list[UnitExtraction], stage.extractions),
-            "failures": stage.failures, "row_spans": [[ref, row, span] for (ref, row), span in stage.row_spans.items()]}
+            "failures": stage.failures, "row_spans": [[ref, row, span] for (ref, row), span in stage.row_spans.items()],
+            "unreached_rows": stage.unreached_rows}
 
 
 def _load_extract_stage(value: dict) -> ExtractStage:
     return ExtractStage(units=_load(list[Unit], value["units"]),
                         extractions=_load(list[UnitExtraction], value["extractions"]), failures=value["failures"],
-                        row_spans={(ref, row): span for ref, row, span in value["row_spans"]})
+                        row_spans={(ref, row): span for ref, row, span in value["row_spans"]},
+                        unreached_rows=value.get("unreached_rows", []))  # absent from a pre-PS-62 checkpoint
 
 
 class _RunState(TypedDict, total=False):
@@ -712,6 +728,32 @@ def _attach_table_rows(document: Any, units: list, row_spans: dict) -> None:
         keys = {span_row[s.span_id] for s in unit.spans if s.span_id in span_row}
         if len(keys) == 1:
             unit.table_row = rows.get(keys.pop())
+
+
+_MAX_MISSING_LISTED = 1000
+
+
+def _unreached_rows(document: Any, units: list) -> list[dict]:
+    """PS-62: the record tables whose data rows did not all reach a unit carrying their `TableRow`. A table none of
+    whose rows reached one is a block table (one unit for the whole table) or not a table the grouper split by row,
+    so it is not a loss; a table some of whose rows did is read row by row, and every row it lacks was lost."""
+    from rag_wright.ingestion.tables import rows_of, visible_tables
+
+    reached: dict[str, set[int]] = {}
+    for unit in units:
+        if unit.table_row is not None:
+            reached.setdefault(unit.table_row.table_ref, set()).add(unit.table_row.row_index)
+    out: list[dict] = []
+    for table in visible_tables(document):
+        got = reached.get(table.self_ref)
+        if not got:
+            continue
+        rows = rows_of(table, document)
+        missing = [r.row_index for r in rows if r.row_index not in got]
+        if missing:
+            out.append({"table_ref": table.self_ref, "sheet": rows[0].sheet, "reached": len(rows) - len(missing),
+                        "total": len(rows), "missing": missing[:_MAX_MISSING_LISTED]})
+    return out
 
 
 def _check_model_ceilings(tuning: IngestionTuning, documents: int, progress: Callable[[str], Any]) -> None:

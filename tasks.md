@@ -3,7 +3,7 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
-> **2026-11-05: PS-60 done, unreleased** (TexWright's request: a table over the chunk cap is split between lines with its header repeated, so every row keeps its own span and `TableRow`; ADR-0141). PS-61 done, unreleased (TexWright's question: the default segmenter `segment_layout` is exported on `pack_sdk`, so a pack can wrap it). Next: PS-62 (report a record table's lost rows), then PS-48.
+> **2026-11-05: PS-60 done, unreleased** (TexWright's request: a table over the chunk cap is split between lines with its header repeated, so every row keeps its own span and `TableRow`; ADR-0141). PS-61 done, unreleased (TexWright's question: the default segmenter `segment_layout` is exported on `pack_sdk`, so a pack can wrap it). PS-62 done, unreleased (a record table's rows that reach no unit are reported: `DocumentReport.unreached_table_rows` and an `[ingest] warning:` line). Next: reply to TexWright, then PS-48.
 >
 > **2026-11-01: `rag-wright` 0.16.1 is RELEASED (PR #20: PS-57, PS-58, PS-59).** PS-57 done (RuleWright's request: a retried contracts-pack write no longer loses a document's clauses; the ArcadeDB conflict budget is configurable, default 20 attempts / 2 s cap; a racing UPSERT's duplicate key is retried). PS-58 done (RuleWright's second request: a `RecordWriter` returns the count that landed). PS-59 done (the store's client keeps keep-alive connections, one session per thread; `requests` declared). Next: PS-48.
 >

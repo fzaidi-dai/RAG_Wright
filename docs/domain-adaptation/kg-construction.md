@@ -183,8 +183,10 @@ the run goes on. Every node and edge type your extractor returns must be declare
 
 `aingest` returns an `IngestionReport` (`succeeded`, `failed`, `documents`). Each `DocumentReport` has the counts
 (`chunks`, `spans`, `units`, `records`), `extraction_failures`, `span_failures`, `dead_letter` (the reason, if the
-document failed), `skipped_hidden_sheets`, `embedded_skipped`, `children`, and the `links` / `unmapped_links` of its
-embedded files. Nothing is skipped silently.
+document failed), `skipped_hidden_sheets`, `embedded_skipped`, `children`, the `links` / `unmapped_links` of its
+embedded files, and `unreached_table_rows`: each record table some of whose data rows reached no unit carrying their
+`TableRow`, so produced no record (`reached`, `total` and the `missing` row indices; also printed as an
+`[ingest] warning:` line). Nothing is skipped silently.
 
 ## The two graphs (one store)
 

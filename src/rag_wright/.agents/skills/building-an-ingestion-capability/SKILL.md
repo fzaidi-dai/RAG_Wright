@@ -181,6 +181,9 @@ category.
   `evaluate_ingestion(..., table_labels=[{"pattern": <regex on the header row>, "label": "record"|"block"}])`
   (first match wins): a block table split per row, or a wide record table not split, is a failure, and tables no
   pattern matched are listed in `unlabelled_tables`.
+- **Every row of a record table should reach a unit.** After an ingest, `DocumentReport.unreached_table_rows` lists
+  each record table whose rows did not all reach a unit with their `TableRow` (with the `[ingest] warning:` line);
+  an empty list on your samples is the check. Rows listed there produced no record.
 - **How an embedded file finds its row.** An identifier is a token of 4+ characters containing a digit that appears
   on at most `IdentifierRule.max_rows` table rows and in at most `max_files` embedded files (defaults 3 and 3; set
   them with `IngestionTuning(identifier=IdentifierRule(...))`). A file whose identifiers match no row, or too many,
