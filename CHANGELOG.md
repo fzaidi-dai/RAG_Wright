@@ -4,6 +4,19 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.16.1...0.17.0) (2026-11-05)
+
+
+### Features
+
+* **PS-61:** the default segmenter is on pack_sdk, so a pack can wrap it ([bbb179d](https://github.com/fzaidi-dai/RAG_Wright/commit/bbb179d64e5fc905ada2ddc57367cdd2cc2ca5b6))
+* **PS-62:** a record table's rows that reach no unit are reported, never silent ([632fefb](https://github.com/fzaidi-dai/RAG_Wright/commit/632fefb390e11014a0dcb4cdd16956697a92ea58))
+
+
+### Bug Fixes
+
+* **PS-60:** a table over the chunk cap keeps every row's span and TableRow ([acd9ce5](https://github.com/fzaidi-dai/RAG_Wright/commit/acd9ce5917de1daac6ac47ea0a09ca975fcdf556))
+
 ## [0.16.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.16.0...0.16.1) (2026-11-01)
 
 
