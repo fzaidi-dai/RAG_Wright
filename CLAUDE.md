@@ -55,7 +55,11 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-11-01): `rag-wright` 0.16.1 is RELEASED** (PR #20; RuleWright's two requests and a finding
+> **CURRENT STATE (2026-11-05): `rag-wright` 0.17.0 is RELEASED** (PR #21; TexWright's request: PS-60 a table over
+> the chunk cap is split between lines with its header repeated, so every row keeps its span and `TableRow` (ADR-0141);
+> PS-61 the default segmenter `segment_layout` is on `pack_sdk`; PS-62 a record table's rows that reach no unit are
+> reported, `DocumentReport.unreached_table_rows`). Next: PS-48, EV-7, PS-30, PS-33. Before it,
+> **`rag-wright` 0.16.1 is RELEASED** (PR #20; RuleWright's two requests and a finding
 > from them: PS-57 a retried contracts-pack write no longer loses a document's clauses, the ArcadeDB conflict budget is
 > configurable (default 20 attempts / 2 s cap) and a racing UPSERT's duplicate key is retried; PS-58 a `RecordWriter`
 > returns the count that landed; PS-59 the store's client keeps keep-alive connections, one session per thread). Next:
