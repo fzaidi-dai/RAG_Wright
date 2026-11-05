@@ -25,6 +25,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
 from pathlib import Path
 from typing import Any, Optional, Protocol, runtime_checkable
 
@@ -42,6 +44,8 @@ from rag_wright.contracts.identifiers import ChunkId
 from rag_wright.models.profiles import ModelRole, model_for
 from rag_wright.models.seam import build_structured
 from rag_wright.skills.rlm.agent import build_rlm_agent, rlm_interpreter_session
+
+_log = logging.getLogger(__name__)
 
 DEFAULT_TOKEN_CAP = 20_000
 DEFAULT_SUMMARY_CONCURRENCY = 8  # in-flight summary calls (backpressure); summaries are network-bound
@@ -518,10 +522,70 @@ def _estimate_tokens(text: str) -> int:
     return max(1, len(text) // 4)
 
 
+_TABLE_LINE = re.compile(r"[ \t]*\|")
+_TABLE_SEPARATOR = re.compile(r"[ \t]*\|?[ \t:|-]*-[ \t:|-]*\|?[ \t]*")
+
+
 def _hard_split(text: str, token_cap: int) -> list[str]:
-    """Split text that alone exceeds the cap into <= cap-sized pieces (by chars)."""
-    cap_chars = token_cap * 4
-    return [text[i : i + cap_chars] for i in range(0, len(text), cap_chars)]
+    """Split text that alone exceeds the cap into pieces under the cap (by chars).
+
+    PS-60 (TexWright): each cut falls at the last blank line in the window's second half, else the last line break,
+    else the last space, and only a run with none of them is cut at a fixed length; the one whitespace character cut
+    at is dropped. A cut inside a pipe table repeats the table's header and separator rows at the top of the next
+    piece, so every piece is a well-formed table and every row stays whole: the old fixed-length cut fell mid-row,
+    and the rows after it lost their table layout, their own spans and their `TableRow`. Pieces stay strictly under
+    the cap, so a cached manifest holding a cap-length piece can only come from the old cut (`_stale_split`)."""
+    cap = token_cap * 4
+    pieces: list[str] = []
+    rest = text
+    floor = 0  # the carried header's length: a cut must fall after it, or the split would not advance
+    while len(rest) >= cap:
+        window = rest[: cap - 1]
+        blank = window.rfind("\n\n", max(floor, cap // 2))
+        line = window.rfind("\n", floor + 1)
+        space = max(window.rfind(" ", floor + 1), window.rfind("\t", floor + 1))
+        if blank > floor:
+            end, start = blank, blank + 2
+        elif line > floor:
+            end, start = line, line + 1
+        elif space > floor:
+            end, start = space, space + 1
+        else:
+            end = start = cap - 1
+        piece, rest = rest[:end], rest[start:]
+        pieces.append(piece)
+        header = _continued_table_header(piece, rest)
+        if header and len(header) < cap // 2:
+            rest, floor = f"{header}\n{rest}", len(header)
+        else:
+            floor = 0
+    if rest:
+        pieces.append(rest)
+    return pieces
+
+
+def _stale_split(manifest: ChunkManifest) -> bool:
+    """PS-60: whether a cached manifest holds a table cut by the old fixed-length hard split, which made every piece
+    but the last exactly the cap long; `_hard_split` now keeps pieces under it. Only a piece holding table rows
+    counts: an old prose split keeps its cached chunks (re-chunking it would change nothing a reader relies on)."""
+    cap = manifest.token_cap * 4
+    return any(len(c.text) == cap and any(_TABLE_LINE.match(ln) for ln in c.text.split("\n"))
+               for c in manifest.chunks[:-1])
+
+
+def _continued_table_header(piece: str, rest: str) -> str:
+    """The header and separator rows of the pipe table a cut fell inside (`piece` ends in it and `rest` continues
+    it), or "" when the cut is not inside a table or the table's header cannot be told."""
+    if not _TABLE_LINE.match(rest.split("\n", 1)[0]):
+        return ""
+    lines = piece.split("\n")
+    i = len(lines)
+    while i > 0 and _TABLE_LINE.match(lines[i - 1]):
+        i -= 1
+    block = lines[i:]
+    if len(block) >= 2 and _TABLE_SEPARATOR.fullmatch(block[1]):
+        return f"{block[0]}\n{block[1]}"
+    return ""
 
 
 _SEP = "\n\n"
@@ -745,7 +809,10 @@ def _chunk_prepare(parsed: ParsedDocument, cache_dir: Path, discoverer: Optional
     cache_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = cache_dir / f"{parsed.source_doc_id}.{parsed.content_hash[:16]}.chunks.json"
     if manifest_path.exists():  # content-hash gate
-        return ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8")), manifest_path, None, None
+        cached = ChunkManifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
+        if not _stale_split(cached):
+            return cached, manifest_path, None, None
+        _log.info("re-chunking %s: its cached chunks cut a table mid-row (PS-60)", parsed.source_doc_id)
     document = _as_content_view(load_document(parsed))  # issue 0014: chunk the reading-order body (incl. tables)
     disc = discoverer if discoverer is not None else SeamBoundaryDiscoverer(token_cap=token_cap)
     return None, manifest_path, document, disc

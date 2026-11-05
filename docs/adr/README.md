@@ -196,4 +196,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0137 A generated answer states the evidence's support every time, and "none" is an abstention ·
 0138 PDF parses run one at a time, and the engine reaches pdfium through one locked door ·
 0139 The agent harness substrate is engine scope ·
-0140 One model family on Metal, under one process lock
+0140 One model family on Metal, under one process lock ·
+0141 The cap's hard split cuts between lines and repeats a table's header

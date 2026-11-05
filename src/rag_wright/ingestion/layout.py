@@ -40,14 +40,17 @@ def chunk_layouts(document: Any, chunk_texts: Sequence[str]) -> list[list[Layout
     items = [(it, t) for it, t in items if t]
     out: list[list[LayoutItem]] = []
     k = 0  # next unplaced item
-    for text in chunk_texts:
+    for c, text in enumerate(chunk_texts):
         layout: list[LayoutItem] = []
         cursor = 0
         while k < len(items):
             item, t = items[k]
             pos = text.find(t, cursor)
             if pos < 0:
-                break  # belongs to a later chunk (or was hard-split: left unlocated)
+                if any(t in later for later in chunk_texts[c + 1:]):
+                    break  # belongs to a later chunk
+                k += 1  # PS-60: no chunk holds it whole (hard-split): skip it, never block the items after it
+                continue  # (its text is laid out from the chunk text by the segmenter)
             layout.append(LayoutItem(kind=layout_kind(item.label), text=t, start=pos, end=pos + len(t),
                                      level=item.level, pages=[item.page] if item.page else []))
             cursor = pos + len(t)
