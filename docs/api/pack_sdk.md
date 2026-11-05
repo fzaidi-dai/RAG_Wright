@@ -492,6 +492,10 @@ ASYNC twin of `chunk_texts` (SEG-2/SEG-5): awaits the discoverer's async boundar
 
 Validate a `documents` scope against `store.known_document_ids()` BEFORE any retrieval spends (mirrors issue 0007's `_validate_sources`). `None` (whole store) is not validated. `[]` (scope-to-nothing) is a valid empty scope, not an error -- the retrieval surfaces short-circuit it. A non-empty list with any id absent from the store raises `UnknownDocumentError`. A store without `known_document_ids` (a minimal fake) is treated as un-validatable and passes through.
 
+### `segment_layout(chunk_id: 'str', text: 'str', layout: 'Sequence[LayoutItem]', *, min_alnum: 'Optional[int]' = None, tuning: 'Optional[IngestionTuning]' = None) -> 'list[Span]'`
+
+Segment one chunk into spans (the engine's default `Segmenter`). The fragment floor is `min_alnum`, else `tuning.min_fragment_alnum`, else the default.
+
 ### `capability_impl(name: 'str') -> 'Callable[..., Any]'`
 
 Resolve a capability name to its invoke factory via the manifest `impl_ref`. Raises `KeyError` if the name is unknown to the ARD catalog, `NotImplementedError` if it declares no `impl_ref` (not invokable by name).

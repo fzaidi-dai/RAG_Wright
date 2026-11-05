@@ -34,6 +34,20 @@ The reference pack's contract pipeline is one instantiation of the same stages (
 legal segmenter, a function tagger, a provision grouper, a decision-model boundary decider, its clause extractor and
 its typed writer. Read it as an example of hooks, not as the engine's definition of ingestion.
 
+A hook you pass replaces the default for the whole pipeline, for every document it ingests. When your documents
+need the default's behaviour in most places and your own rule in a few, build on the default rather than replace it:
+the default segmenter is `rag_wright.pack_sdk.segment_layout` (and the default chunk discoverer
+`StructuralModelFallbackDiscoverer`), so your segmenter can call it and adjust only the spans it gets wrong:
+
+```python
+from rag_wright.pack_sdk import segment_layout
+
+
+def segmenter(chunk_id, text, layout):
+    spans = segment_layout(chunk_id, text, layout)  # the engine's evaluated segmentation
+    return spans  # split or merge here only the spans your domain reads differently; keep them tiling the text
+```
+
 ## The stages
 
 ```

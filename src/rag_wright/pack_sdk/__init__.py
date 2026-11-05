@@ -8,7 +8,8 @@ migration note):
 - `rag_wright.pack_sdk` (this module) -- what a PACK's own code additionally needs to implement capabilities: the
   identifiers and provenance types, the model seam (model resolution, structured output, streaming), the LangGraph
   scaffold, the store protocol, the generic capabilities a pack composes (explicit-model generation and judging,
-  entity resolution, reranking, embedding, parsing, chunking, the ingestion stages), and capability plumbing.
+  entity resolution, reranking, embedding, parsing, chunking, the default segmenter, the ingestion stages), and
+  capability plumbing.
 
 A pack imports from `rag_wright.api` and `rag_wright.pack_sdk` (and its own modules) only; anything else in the
 engine is internal and may change. Everything here is a re-export of the engine's own object (no copies). Where a
@@ -64,6 +65,7 @@ from rag_wright.corpus.document_parser import (
 from rag_wright.corpus.document_parser import aparse_document_bytes as aparse_docling_bytes
 from rag_wright.corpus.document_parser import parse_document_bytes as parse_docling_bytes
 from rag_wright.ingestion.builder import IngestionStages
+from rag_wright.ingestion.segment import segment_layout
 from rag_wright.models.profiles import decision_profile, model_for, profile_for
 from rag_wright.models.seam import (
     ModelCallTimeout,
@@ -114,6 +116,7 @@ __all__ = [
     "INGEST_PARSE_DEADLINE_S", "TieredOCRParser", "parse_docling_bytes", "aparse_docling_bytes",
     "document_to_sections", "LEADING_ENUM", "is_bare_heading", "section_number", "StructuralModelFallbackDiscoverer",
     "achunk_texts", "IngestionStages", "UnknownDocumentError", "validate_documents",
+    "segment_layout",  # PS-61: the default `Segmenter`, so a pack's segmenter can delegate to it and adjust its spans
     # capability plumbing
     "capability_impl", "CapabilityRegistry", "ResponseBounds", "RLM_GRANTED_SUBAGENTS",
     "CapabilityInterface", "SkillRuntime",  # PS-38 (G23): the manifest's typed-interface and skill-runtime fields
