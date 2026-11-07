@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.0...0.17.1) (2026-11-07)
+
+
+### Bug Fixes
+
+* **PS-63:** the default record writer keeps one edge per type and endpoints (G8) ([e77ca91](https://github.com/fzaidi-dai/RAG_Wright/commit/e77ca9151e8cd5a425237f30ada721349eac7bb0))
+
 ## [0.17.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.16.1...0.17.0) (2026-11-05)
 
 
