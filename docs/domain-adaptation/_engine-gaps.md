@@ -53,13 +53,16 @@ they are the real "does a new customer benefit?" items. The genuine engine ones 
 - **Proposed:** a generic reader in `ontology.pack_schema` (or similar) over an engine-namespaced criterion
   vocabulary.
 
-### G8: The default record writer is not fully idempotent
-- **Where:** with no `writer=`, `build_ingestion` writes with the store's `kg_write`: nodes are upserted by their key,
-  but edges are created (`CREATE EDGE`), so re-ingesting a document duplicates its record edges. The store's
-  idempotent `kg_ensure_edges` (used for `EmbeddedIn` / `AttachedTo`) is not exported from `rag_wright.api`.
-- **Impact:** a domain whose extractor returns edges must pass its own idempotent `writer`, or clear the document's
-  records before a re-ingest.
-- **Proposed:** make the default writer use `kg_ensure_edges`, or export it.
+### G8: The default record writer is not fully idempotent (closed by PS-63)
+- **Where:** with no `writer=`, `build_ingestion` wrote with the store's `kg_write`: nodes were upserted by their key,
+  but edges were created (`CREATE EDGE`).
+- **Impact:** not only a re-ingest. Within ONE ingest of one document, an edge that several units emit (an entity
+  several rows mention, emitted by its key from each unit) landed once per unit, so a traversal over-counted while
+  node counts looked right (TexWright, 2026-10-15).
+- **Closed by PS-63 (ADR-0142):** the default writer calls `kg_write(..., ensure_edges=True)`: at most one edge per
+  (type, from node, to node), within the write, across writes and across concurrent writers, the last props landing,
+  in the same one transaction. A domain `writer=` gets the same with `rag_wright.api.kg_write(ws, nodes, edges,
+  ensure_edges=True)`; without the flag `kg_write` still keeps parallel edges.
 
 ### G9: One domain pack per workspace through the public API
 - **Where:** `EngineConfig.pack` takes one `.ttl`. A second pack's schema needs the store-internal

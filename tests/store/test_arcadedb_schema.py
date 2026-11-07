@@ -133,7 +133,7 @@ class _InMemoryStore:
                 return []
         return []
 
-    def kg_write(self, nodes, edges=()):  # DD-1b seam conformance: accept the generic typed write (no-op stub)
+    def kg_write(self, nodes, edges=(), *, ensure_edges=False):  # DD-1b seam conformance: accept the generic typed write (no-op stub)
         return None
 
     def kg_edges(self, from_type=None, *, where=None, key_range=None, direction="out", edge_type=None,

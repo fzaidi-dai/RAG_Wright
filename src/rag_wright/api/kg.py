@@ -62,11 +62,12 @@ def kg_update(ws: WorkspaceHandle, type_name: str, *, set: dict, where: Optional
     return ws._store.kg_update(type_name, set=set, where=where, key_range=key_range)
 
 
-def kg_write(ws: WorkspaceHandle, nodes: list, edges: Any = ()) -> None:
+def kg_write(ws: WorkspaceHandle, nodes: list, edges: Any = (), *, ensure_edges: bool = False) -> None:
     """Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_write`). `nodes`/`edges` are
     `KgNode`/`KgEdge` (from `rag_wright.api`); the store encodes each field per its pack-declared type. A node type
-    the workspace's schema does not declare fails the write."""
-    ws._store.kg_write(nodes, edges)
+    the workspace's schema does not declare fails the write. `ensure_edges=True` (PS-63) writes at most one edge per
+    (type, from node, to node), the last props winning: what a domain `writer=` passes to match the default writer."""
+    ws._store.kg_write(nodes, edges, ensure_edges=ensure_edges)
 
 
 def kg_edges(ws: WorkspaceHandle, from_type: Optional[str] = None, *, where: Optional[dict] = None,

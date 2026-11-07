@@ -199,7 +199,11 @@ category.
 - **One record over several rows, or one entity over many units.** The extractor sees one unit at a time. A record
   whose continuation rows sit under its main row needs a `unit_grouper=` that keeps them together, or a
   `document_hook=` that reads the whole table with `table_rows` and writes the grouped record. An entity several units
-  mention (a case its trial rows share) is emitted by its key from each unit and upserted by that key.
+  mention (a case its trial rows share) is emitted by its key from each unit and upserted by that key; an edge to it
+  emitted from each unit lands once, because the default writer keeps one edge per (type, from node, to node)
+  (PS-63). A `writer=` of your own gets the same with `kg_write(ws, nodes, edges, ensure_edges=True)`; leave the flag
+  off only when parallel edges of one type between the same two nodes are meant to stay (each with its own
+  provenance).
 - **Resume a long ingest instead of restarting it.** Pass a LangGraph checkpointer (yours, for example a Postgres
   saver; the engine ships none) and a `run_id` naming the run:
   `await pipeline.aingest(ws, sources, cache_dir=CACHE, checkpointer=saver, run_id=batch_id)`. If the process stops,
@@ -208,8 +212,9 @@ category.
   sources, raise `ValueError`: a new run gets a new id. The graph state is built-in values only, so it works under
   LangGraph's strict msgpack mode; a tuple inside a record's free-form `props` comes back as a list after a resume.
 - **Re-ingest.** Parsing is cached by content hash, so re-running is cheap. The default writer upserts nodes by their
-  key but is not fully idempotent for edges (engine gap G8): when a source is re-run, remove its previous records
-  first (`kg_delete` on the provenance your records carry, such as a per-source property) and write again.
+  key and writes each edge once, updating its props, so a re-run leaves no duplicates. It does not remove what a
+  source no longer yields: when a re-run should drop records, remove its previous records first (`kg_delete` on the
+  provenance your records carry, such as a per-source property) and write again.
 
 ## 6. Verify (definition of done)
 

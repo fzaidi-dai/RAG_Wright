@@ -278,10 +278,13 @@ class Store(Protocol):
         `v.<f>` (far vertex) for a traversal; or a bare edge field / `inV().<f>` / `outV().<f>` for an edge scan.
         A membership value that is an EMPTY list means scope-to-nothing -> `[]` with no query. Returns the rows."""
 
-    def kg_write(self, nodes: list["KgNode"], edges: "Iterable[KgEdge]" = ()) -> None:
+    def kg_write(self, nodes: list["KgNode"], edges: "Iterable[KgEdge]" = (), *, ensure_edges: bool = False) -> None:
         """Upsert typed `nodes` (by each node's `key_field`) then create typed `edges` (FROM/TO by node key), ALL in
         ONE transaction, nodes first so endpoints exist. The caller passes DOMAIN-NATIVE values; the store owns all
-        wire encoding, driven by each node type's pack-declared property storage type. Empty input is a no-op."""
+        wire encoding, driven by each node type's pack-declared property storage type. Empty input is a no-op.
+        `ensure_edges` (PS-63): at most one edge per (type, from node, to node), within the call, across calls and
+        across concurrent writers; an edge written again has the last props set on it. Without it every
+        edge is created, so parallel edges that each carry their own provenance are kept."""
 
     def kg_ensure_edges(self, edges: "Iterable[KgEdge]") -> int:
         """ING-4b: write typed edges IDEMPOTENTLY -- create an edge only when none of its type already joins the

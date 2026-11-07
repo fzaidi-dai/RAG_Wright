@@ -841,9 +841,12 @@ class ArcadeDBStore:
             self._prop_types_cache = cache
         return cache.get(type_name, {})
 
-    def kg_write(self, nodes, edges=()) -> None:
+    def kg_write(self, nodes, edges=(), *, ensure_edges: bool = False) -> None:
         """Upsert typed `nodes` (by `key_field`) then create typed `edges`, all in one transaction (see
-        `Store.kg_write`). Node props encode by the type's pack-declared storage type; edge props are type-driven."""
+        `Store.kg_write`). Node props encode by the type's pack-declared storage type; edge props are type-driven.
+        With `ensure_edges` (PS-63) an edge is one per (type, from node, to node): the batch keeps each one's last
+        props, an existing edge has them set (reached from its indexed from node, not by scanning the edge type),
+        and `CREATE EDGE ... IF NOT EXISTS` adds it only when absent."""
         nodes, edges = list(nodes), list(edges)
         for n in nodes:
             _kg_check_node(n)
@@ -855,13 +858,24 @@ class ArcadeDBStore:
             sets = ", ".join(f"{k} = {_kg_encode(v, types.get(k))}" for k, v in n.props.items())
             key_sql = _kg_encode(n.props[n.key_field], types.get(n.key_field))
             statements.append(f"UPDATE {n.type} SET {sets} UPSERT WHERE {n.key_field} = {key_sql}")
+        if ensure_edges:
+            edges = list({(e.type, e.from_type, e.from_key_field, e.from_key, e.to_type, e.to_key_field, e.to_key): e
+                          for e in edges}.values())
         for e in edges:
+            props = ", ".join(f"{k} = {_kg_sql(v)}" for k, v in e.props.items())
+            if ensure_edges and props:
+                statements.append(
+                    f"UPDATE (SELECT FROM (SELECT expand(outE('{e.type}')) FROM {e.from_type}"
+                    f" WHERE {e.from_key_field} = {_kg_sql(e.from_key)})"
+                    f" WHERE inV().{e.to_key_field} = {_kg_sql(e.to_key)}) SET {props}")
             stmt = (
                 f"CREATE EDGE {e.type}"
                 f" FROM (SELECT FROM {e.from_type} WHERE {e.from_key_field} = {_kg_sql(e.from_key)})"
                 f" TO (SELECT FROM {e.to_type} WHERE {e.to_key_field} = {_kg_sql(e.to_key)})")
-            if e.props:
-                stmt += " SET " + ", ".join(f"{k} = {_kg_sql(v)}" for k, v in e.props.items())
+            if ensure_edges:
+                stmt += " IF NOT EXISTS"
+            if props:
+                stmt += " SET " + props
             statements.append(stmt)
         if statements:
             # every node is an UPSERT, so a duplicate key here is two writers racing to create one node

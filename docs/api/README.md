@@ -430,9 +430,9 @@ Rank the live ARD catalog by semantic match to `query`; return the top `k` (opti
 
 Read typed nodes of `node_type` from the workspace (see `Store.kg_read`). Each `where` value is a scalar (equality), a list (membership; an empty list is scope-to-nothing -> `[]`), `NOT_NULL` (presence), a `Range` (comparisons, on any number of fields: `{"weight": Range(ge=180, le=220), "tensile": Range(gt=400)}`) or a `Contains` (a literal substring, case-insensitive unless `case_sensitive=True`; an empty field never matches: `{"composition": Contains("UHMWPE")}`); all filters are AND-ed and evaluated in the store. `key_range=(field, lo, hi)` is the half-open shorthand (`lo <= field < hi`). Then projection, distinct, order and limit. Every name is checked, never interpolated unchecked (the module docstring): a request-chosen field is safe, but an unknown one matches nothing.
 
-### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = ()) -> 'None'`
+### `kg_write(ws: 'WorkspaceHandle', nodes: 'list', edges: 'Any' = (), *, ensure_edges: 'bool' = False) -> 'None'`
 
-Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_write`). `nodes`/`edges` are `KgNode`/`KgEdge` (from `rag_wright.api`); the store encodes each field per its pack-declared type. A node type the workspace's schema does not declare fails the write.
+Upsert typed `nodes` + create typed `edges` in one transaction (see `Store.kg_write`). `nodes`/`edges` are `KgNode`/`KgEdge` (from `rag_wright.api`); the store encodes each field per its pack-declared type. A node type the workspace's schema does not declare fails the write. `ensure_edges=True` (PS-63) writes at most one edge per (type, from node, to node), the last props winning: what a domain `writer=` passes to match the default writer.
 
 ### `kg_edges(ws: 'WorkspaceHandle', from_type: 'Optional[str]' = None, *, where: 'Optional[dict]' = None, key_range: 'Optional[tuple]' = None, direction: 'str' = 'out', edge_type: 'Optional[str]' = None, edge_where: 'Optional[dict]' = None, target_where: 'Optional[dict]' = None, select: 'dict') -> 'list[dict]'`
 

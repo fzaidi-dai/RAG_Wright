@@ -43,7 +43,7 @@ class _Store:
             raise RuntimeError("span store unavailable")
         self.spans[record.span_id] = record
 
-    def kg_write(self, nodes, edges=()):
+    def kg_write(self, nodes, edges=(), *, ensure_edges=False):
         self.nodes += list(nodes)
         self.edges += list(edges)
 

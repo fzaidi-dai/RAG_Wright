@@ -259,9 +259,9 @@ class IngestionStages:
         return stage
 
     async def write(self, sd: Any, extractions: list) -> int:
-        """Persist the records (the domain's writer, else `kg_write`). Returns the number that landed: the writer's own
-        count when it returns one; else the record nodes handed over, which the default `kg_write` lands in one
-        transaction (it raises rather than land part of them)."""
+        """Persist the records (the domain's writer, else `kg_write` with idempotent edges). Returns the number that
+        landed: the writer's own count when it returns one; else the record nodes handed over, which the default
+        `kg_write` lands in one transaction (it raises rather than land part of them)."""
         if self.writer is not None:
             landed = await self.writer(sd.source_doc_id, extractions)
             if landed is not None:
@@ -269,7 +269,8 @@ class IngestionStages:
         else:
             nodes = [n for e in extractions for n in e.nodes]
             edges = [ed for e in extractions for ed in e.edges]
-            await asyncio.to_thread(self.store.kg_write, nodes, edges)
+            # PS-63 (G8): an edge several units emit (an entity several rows mention), or a re-ingest, lands once
+            await asyncio.to_thread(self.store.kg_write, nodes, edges, ensure_edges=True)
         return sum(len(e.nodes) for e in extractions)
 
     def write_document_node(self, doc_id: str, *, parent_id: Optional[str], filename: str, media_type: str,

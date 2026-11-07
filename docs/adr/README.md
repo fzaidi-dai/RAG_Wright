@@ -197,4 +197,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0138 PDF parses run one at a time, and the engine reaches pdfium through one locked door ·
 0139 The agent harness substrate is engine scope ·
 0140 One model family on Metal, under one process lock ·
-0141 The cap's hard split cuts between lines and repeats a table's header
+0141 The cap's hard split cuts between lines and repeats a table's header ·
+0142 The default record writer keeps one edge per type and endpoints

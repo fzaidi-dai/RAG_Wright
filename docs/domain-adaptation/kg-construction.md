@@ -221,10 +221,11 @@ ask-first change.
   citation**.
 - **What is cached on a re-ingest:** in `build_ingestion`, parse and chunk are content-hash cached; spans,
   record nodes and the `Document` node are upserted by key; the `EmbeddedIn` / `AttachedTo` edges are ensured (never
-  duplicated). Extraction runs again on every ingest (cache inside your extractor if it is expensive), and the
-  default writer creates record edges rather than ensuring them, so re-ingesting a document whose extractor returns
-  edges duplicates them unless your `writer` is idempotent (engine gap G8). A boundary decider is not cached either
-  (engine gap G6).
+  duplicated). Extraction runs again on every ingest (cache inside your extractor if it is expensive). The
+  default writer ensures record edges too (PS-63): one edge per (type, from node, to node), whether several units
+  emit it or a re-ingest writes it again, with the last props landing; a domain `writer=` gets the same from
+  `kg_write(ws, nodes, edges, ensure_edges=True)`. A re-ingest does not remove records a document no longer yields.
+  A boundary decider is not cached either (engine gap G6).
 
 ## Building your own
 

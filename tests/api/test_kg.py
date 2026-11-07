@@ -19,7 +19,7 @@ class _FakeStore:
         self.calls.append(("read", node_type, kw))
         return [{"span_id": "doc:0:h#0", "bbox": "[0.1,0.2,0.3,0.4]", "doc_start": 1}]
 
-    def kg_write(self, nodes, edges=()):
+    def kg_write(self, nodes, edges=(), *, ensure_edges=False):
         self.calls.append(("write", list(nodes), list(edges)))
 
 

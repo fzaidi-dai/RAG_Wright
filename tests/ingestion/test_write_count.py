@@ -32,7 +32,7 @@ def test_a_writer_that_returns_nothing_keeps_the_engine_count(tmp_path):
 
 def test_the_default_writer_counts_the_nodes_its_one_transaction_landed(tmp_path):
     class _Store:
-        def kg_write(self, nodes, edges=()):
+        def kg_write(self, nodes, edges=(), *, ensure_edges=False):
             self.nodes = list(nodes)
 
     store = _Store()
