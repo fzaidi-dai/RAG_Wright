@@ -249,7 +249,8 @@ class Store(Protocol):
                   key_range: Optional[tuple[str, object, object]] = None) -> int:
         """Set the `set` fields on the vertices or edges of `type_name` matching `where` / `key_range`. Only rows
         where some set field differs (or is unset) change, so a repeated update changes nothing; returns the number
-        of rows changed. Values are encoded as `kg_write` encodes them."""
+        of rows changed. Values are encoded as `kg_write` encodes them: a float as a 64-bit double unless the field
+        is declared FLOAT (PS-64), so an unchanged measurement compares equal."""
 
     def kg_edges(
         self,

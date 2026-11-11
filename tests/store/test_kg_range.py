@@ -15,7 +15,7 @@ def test_a_range_on_each_of_several_fields():
     s, sql = _store()
     s.kg_read("Trial", fields=["trial_id"], where={"weight": Range(ge=180, le=220), "tensile": Range(gt=400.5),
                                                    "season": "ss26", "lot": Range(lt="L5")})
-    assert sql == ["SELECT trial_id FROM Trial WHERE weight >= 180 AND weight <= 220 AND tensile > 400.5"
+    assert sql == ["SELECT trial_id FROM Trial WHERE weight >= 180 AND weight <= 220 AND tensile > 400.5d"
                    " AND season = 'ss26' AND lot < 'L5'"]
 
 

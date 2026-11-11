@@ -46,6 +46,9 @@ ex:LinkedTo a eng:EntityRelationshipType ; rdfs:label "Linked To" .
 
 - **Declare every type your extractor writes.** The store does not create types on write, so a `kg_write` to an
   undeclared vertex or edge type fails.
+- **A measurement is a `DOUBLE`.** A Python float is written as a 64-bit double, so it reads back, filters
+  (equality, membership, `Range`) and compares in `kg_update` exactly; an undeclared float property is stored as a
+  double too. Declare `FLOAT` only for a value you mean to keep at 32 bits.
 - **Record vertices carry provenance.** Declare `span_id:STRING` and `confidence:STRING` on each record type: the
   engine's `check_extraction` requires every `span_id` to be a span of the unit, a non-empty extraction to cite at
   least once, and any `confidence` to be a `ConfidenceTag` (`EXTRACTED`, `INFERRED` or `AMBIGUOUS`)

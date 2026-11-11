@@ -198,4 +198,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0139 The agent harness substrate is engine scope ·
 0140 One model family on Metal, under one process lock ·
 0141 The cap's hard split cuts between lines and repeats a table's header ·
-0142 The default record writer keeps one edge per type and endpoints
+0142 The default record writer keeps one edge per type and endpoints ·
+0143 A float is written and compared as a double

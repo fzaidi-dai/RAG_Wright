@@ -162,19 +162,26 @@ def _str_array(values: Iterable[str]) -> str:
     return "[" + ",".join(_sql_str(v) for v in values) + "]"
 
 
-def _kg_sql_value(value: object) -> str:
-    """Serialize a scalar for `kg_read` (DD-1a): bool/int/float native, everything else a quoted string."""
+def _kg_double(value: object) -> str:
+    """A Python float as an ArcadeDB DOUBLE literal (PS-64): a bare `0.9523` is read as a 32-bit FLOAT, which never
+    equals the stored double and stores an undeclared field at ~7 digits; the `d` suffix keeps all 64 bits."""
+    return repr(float(value)) + "d"
+
+
+def _kg_sql_value(value: object, declared_type: Optional[str] = None) -> str:
+    """Serialize a scalar for `kg_read` (DD-1a): bool/int native, a float a double literal unless the field is declared
+    FLOAT (PS-64), everything else a quoted string."""
     if isinstance(value, bool):
         return "true" if value else "false"
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
-        return repr(value)
+        return repr(value) if (declared_type or "").upper() == "FLOAT" else _kg_double(value)
     return _sql_str(str(value))
 
 
-def _kg_sql_array(values: list) -> str:
-    return "[" + ",".join(_kg_sql_value(v) for v in values) + "]"
+def _kg_sql_array(values: list, declared_type: Optional[str] = None) -> str:
+    return "[" + ",".join(_kg_sql_value(v, declared_type) for v in values) + "]"
 
 
 def _kg_sql(value: object) -> str:
@@ -187,7 +194,7 @@ def _kg_sql(value: object) -> str:
     if isinstance(value, int):
         return str(value)
     if isinstance(value, float):
-        return repr(value)
+        return _kg_double(value)  # PS-64
     if isinstance(value, (list, tuple)):
         return "[" + ",".join(_kg_sql(v) for v in value) + "]"
     return _sql_str(str(value))
@@ -245,12 +252,15 @@ def _kg_check_edge(e: Any) -> None:
 
 
 def _kg_where_terms(where: Optional[dict[str, object]],
-                    key_range: Optional[tuple[str, object, object]] = None) -> Optional[list[str]]:
+                    key_range: Optional[tuple[str, object, object]] = None,
+                    types: Optional[dict[str, str]] = None) -> Optional[list[str]]:
     """The shared KG filter grammar (`kg_read`, `kg_edges`, `kg_count` / `kg_delete` / `kg_update`): a scalar is
     equality, a list is membership, `NOT_NULL` is presence, a `Range` is its comparisons (ER-1), a `Contains` is a
     literal substring test (`indexOf`, not `LIKE`, whose `%` `_` `?` are wildcards; PS-54);
     `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
-    the caller returns without a statement)."""
+    the caller returns without a statement). A float is encoded by the field's declared type in `types` (PS-64); on a
+    field the pack does not declare, equality and membership also match a value stored at 32 bits before PS-64."""
+    types = types or {}
     for field in where or {}:
         _ident(field, record_attrs=True)
     if key_range is not None:
@@ -260,7 +270,7 @@ def _kg_where_terms(where: Optional[dict[str, object]],
         if value is NOT_NULL:
             out.append(f"{field} IS NOT NULL")
         elif isinstance(value, Range):
-            out += [f"{field} {op} {_kg_sql_value(bound)}" for op, bound in value.terms()]
+            out += [f"{field} {op} {_kg_sql_value(bound, types.get(field))}" for op, bound in value.terms()]
         elif isinstance(value, Contains):
             text = _sql_str(value.text)
             out.append(f"{field}.indexOf({text}) >= 0" if value.case_sensitive
@@ -269,12 +279,17 @@ def _kg_where_terms(where: Optional[dict[str, object]],
             vals = list(value)
             if not vals:
                 return None
-            out.append(f"{field} IN {_kg_sql_array(vals)}")
+            term = f"{field} IN {_kg_sql_array(vals, types.get(field))}"
+            if field not in types and any(isinstance(v, float) for v in vals):
+                term = f"({term} OR {field} IN {_kg_sql_array(vals, 'FLOAT')})"
+            out.append(term)
+        elif isinstance(value, float) and field not in types:
+            out.append(f"({field} = {_kg_double(value)} OR {field} = {value!r})")
         else:
-            out.append(f"{field} = {_kg_sql_value(value)}")
+            out.append(f"{field} = {_kg_sql_value(value, types.get(field))}")
     if key_range is not None:
         f, lo, hi = key_range
-        out += [f"{f} >= {_kg_sql_value(lo)}", f"{f} < {_kg_sql_value(hi)}"]
+        out += [f"{f} >= {_kg_sql_value(lo, types.get(f))}", f"{f} < {_kg_sql_value(hi, types.get(f))}"]
     return out
 
 
@@ -296,8 +311,10 @@ def _kg_encode(value: object, declared_type: Optional[str]) -> str:
         return _sql_str(value if isinstance(value, str) else json.dumps(value))
     if dt in ("INTEGER", "LONG", "SHORT", "BYTE"):
         return str(int(value))
-    if dt in ("FLOAT", "DOUBLE", "DECIMAL"):
+    if dt == "FLOAT":
         return repr(float(value))
+    if dt in ("DOUBLE", "DECIMAL"):
+        return _kg_double(value)  # PS-64: a bare decimal literal is a 32-bit FLOAT to ArcadeDB
     if dt == "BOOLEAN":
         return "true" if value else "false"
     if dt == "ARRAY_OF_INTEGERS":
@@ -710,7 +727,7 @@ class ArcadeDBStore:
             _ident(distinct)
         if order_by:
             _kg_order_by(order_by)
-        clauses = _kg_where_terms(where, key_range)
+        clauses = _kg_where_terms(where, key_range, self._property_types(node_type))
         if clauses is None:
             return []
         proj = f"DISTINCT({distinct}) AS {distinct}" if distinct else (", ".join(fields) if fields else "*")
@@ -746,7 +763,7 @@ class ArcadeDBStore:
         for alias, expr in select.items():
             _ident(alias, "a select alias")
             _kg_select_expr(expr)
-        c_terms = _kg_where_terms(where, key_range)
+        c_terms = _kg_where_terms(where, key_range, self._property_types(from_type) if from_type else None)
         e_terms, v_terms = _kg_where_terms(edge_where), _kg_where_terms(target_where)
         if c_terms is None or e_terms is None or v_terms is None:
             return []
@@ -783,7 +800,7 @@ class ArcadeDBStore:
                  key_range: Optional[tuple[str, object, object]] = None) -> int:
         """Count the vertices or edges of `type_name` matching `where` / `key_range` (see `Store.kg_count`)."""
         _ident(type_name, "a type name")
-        terms = _kg_where_terms(where, key_range)
+        terms = _kg_where_terms(where, key_range, self._property_types(type_name))
         if terms is None:
             return 0
         rows = self._query(f"SELECT count(*) AS n FROM {type_name}" + (" WHERE " + " AND ".join(terms) if terms else ""))
@@ -800,7 +817,7 @@ class ArcadeDBStore:
         """Delete the vertices (with their edges) or edges of `type_name` matching `where` / `key_range` (see
         `Store.kg_delete`). Edge types delete `UNSAFE` (this dialect's edge-safety check). Returns the count."""
         _ident(type_name, "a type name")
-        terms = _kg_where_terms(where, key_range)
+        terms = _kg_where_terms(where, key_range, self._property_types(type_name))
         if terms is None:
             return 0
         sql = f"DELETE FROM {type_name}" + (" WHERE " + " AND ".join(terms) if terms else "")
@@ -818,10 +835,10 @@ class ArcadeDBStore:
         _ident(type_name, "a type name")
         for k in set:
             _ident(k)
-        terms = _kg_where_terms(where, key_range)
+        types = self._property_types(type_name)
+        terms = _kg_where_terms(where, key_range, types)
         if terms is None:
             return 0
-        types = self._property_types(type_name)
         enc = {k: _kg_encode(v, types.get(k)) for k, v in set.items()}
         differs = " OR ".join(f"{k} IS NULL OR {k} <> {v}" for k, v in enc.items())
         sql = (f"UPDATE {type_name} SET " + ", ".join(f"{k} = {v}" for k, v in enc.items())
