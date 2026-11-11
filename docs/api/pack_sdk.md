@@ -120,7 +120,7 @@ The graph query capability's output: candidate answers as evidence for fusion (F
 
 The real reranker: a `sentence_transformers.CrossEncoder` over `bge-reranker-v2-m3` (PS-56), scoring raw logits (no activation), 512 tokens per pair as before.
 
-THREAD-SAFE (engine issue 0016): a shared reranker is guarded by an instance lock -- defense-in-depth for any concurrent `score` caller (its FlagEmbedding predecessor mutated the model in place on every call). It is in the BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one the embedders hold (PS-55), so a rerank never runs on Metal beside an embed.
+THREAD-SAFE (engine issue 0016): a shared reranker is guarded by an instance lock -- defense-in-depth for any concurrent `score` caller (its FlagEmbedding predecessor mutated the model in place on every call). It is in the BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one the embedders hold (PS-55), so a rerank never runs on Metal beside an embed. Like the embedder, the loaded model is shared by every reranker of the same (model, precision, device) in the process, with its one lock (PS-65).
 
 #### `BGEReranker.score(self, query: 'str', passages: 'list[str]') -> 'list[float]'`
 

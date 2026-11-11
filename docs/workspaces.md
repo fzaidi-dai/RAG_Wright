@@ -67,6 +67,11 @@ torch model takes its device from `pack_sdk.torch_device`, which never picks Met
      but the metadata is silently dropped (an unknown field is ignored), so documents are ingested without it.
 6. **One process, many workspaces, one set of process settings.** Where tenants need a different serving backend,
    decision model, timeouts or classifier weights, run a process per such set.
+7. **One loaded model per process, not per tenant.** The in-process BGE-M3 embedder and BGE reranker are loaded once
+   per (model, precision, device) and shared by every workspace and ingestion pipeline in the process (about 1 GB for
+   the embedder and 0.3 GB for the reranker, whatever the number of tenants). Their calls queue on that model's one
+   lock, so size throughput, not memory, per tenant; a tenant that needs its own model runs in its own process. A
+   loaded model stays until the process exits.
 
 ## Changing a workspace's configuration
 

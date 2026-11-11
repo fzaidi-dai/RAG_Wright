@@ -21,9 +21,11 @@ from __future__ import annotations
 
 import os
 import threading
-from typing import Optional
+from typing import Any, Callable, Optional
 
 METAL_LOCK = threading.RLock()  # every engine model call that runs on Metal holds it (one per process)
+_SHARED_MODELS: dict[tuple, tuple[Any, Any]] = {}  # PS-65: (kind, model, precision, device) -> (model, its lock)
+_SHARED_GUARD = threading.Lock()
 
 
 def metal_available() -> bool:
@@ -69,3 +71,16 @@ def docling_device() -> str:
 def model_lock(device: str) -> "threading.Lock | threading.RLock":
     """The lock a model instance holds around each call: the process-wide `METAL_LOCK` on Metal, else its own."""
     return METAL_LOCK if str(device).startswith("mps") else threading.Lock()
+
+
+def shared_model(key: tuple, device: str, build: Callable[[], Any]) -> tuple[Any, Any]:
+    """PS-65 (TexWright's 2026-11-09 request): the process's one loaded model for `key` (kind, model name, precision,
+    device), built by `build` on first use, and the ONE lock every wrapper of it holds around each call (`model_lock`:
+    `METAL_LOCK` on Metal). Sharing the lock with the model is what keeps issue 0016's serialization: FlagEmbedding
+    mutates a model in place on every encode, so two wrappers of one model must never run it at once. Concurrent
+    first use builds once. A loaded model stays for the life of the process (dropping a workspace does not free it)."""
+    with _SHARED_GUARD:
+        hit = _SHARED_MODELS.get(key)
+        if hit is None:
+            hit = _SHARED_MODELS[key] = (build(), model_lock(device))
+        return hit

@@ -70,25 +70,30 @@ class BGEReranker:
     THREAD-SAFE (engine issue 0016): a shared reranker is guarded by an instance lock -- defense-in-depth for any
     concurrent `score` caller (its FlagEmbedding predecessor mutated the model in place on every call). It is in the
     BGE family: its device follows the embedder's (`EMBED_DEVICE`), and on Metal its lock is the process-wide one
-    the embedders hold (PS-55), so a rerank never runs on Metal beside an embed."""
+    the embedders hold (PS-55), so a rerank never runs on Metal beside an embed. Like the embedder, the loaded model is
+    shared by every reranker of the same (model, precision, device) in the process, with its one lock (PS-65)."""
 
     def __init__(self, model_name: str = DEFAULT_RERANKER_MODEL, *, use_fp16: bool = False,
                  device: str | None = None, model: object | None = None) -> None:
         from rag_wright.capabilities.embedding import _resolve_device
-        from rag_wright.util.devices import model_lock
+        from rag_wright.util.devices import model_lock, shared_model
 
         resolved = _resolve_device(device)
-        self._lock = model_lock(resolved)  # issue 0016 per instance; on Metal one lock per process (PS-55)
-        if model is not None:  # injected (hermetic tests)
-            self._model = model
+        if model is not None:  # injected (hermetic tests); its own lock
+            self._model, self._lock = model, model_lock(resolved)
         else:
-            import torch
-            from sentence_transformers import CrossEncoder
+            def build() -> object:
+                import torch
+                from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(model_name, device=resolved, max_length=512,
-                                       activation_fn=torch.nn.Identity())  # raw logits, as FlagEmbedding gave
-            if use_fp16 and resolved != "cpu":
-                self._model.model.half()
+                loaded = CrossEncoder(model_name, device=resolved, max_length=512,
+                                      activation_fn=torch.nn.Identity())  # raw logits, as FlagEmbedding gave
+                if use_fp16 and resolved != "cpu":
+                    loaded.model.half()
+                return loaded
+
+            # PS-65: one model per (model, precision, device) in the process, with its one lock (issue 0016, PS-55)
+            self._model, self._lock = shared_model(("bge-reranker", model_name, use_fp16, resolved), resolved, build)
 
     def score(self, query: str, passages: list[str]) -> list[float]:
         if not passages:

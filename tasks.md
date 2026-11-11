@@ -5,6 +5,8 @@ from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0
 
 > **2026-11-11: PS-64 done, unreleased** (TexWright's request `2026-11-09-kg-update-rewrites-unchanged-doubles.md`): a float is written and compared as a 64-bit double unless declared FLOAT, so `kg_update` settles on an unchanged DOUBLE and equality / membership / `Range` filters find it (ADR-0143). Next: PS-65 (one BGE-M3 model per process).
 >
+> **2026-11-11: PS-65 done, unreleased** (TexWright's request `2026-11-09-the-embedder-model-is-rebuilt-for-every-workspace.md`): one loaded BGE model (embedder, reranker) per (model, precision, device) per process, every wrapper on its one lock (`util.devices.shared_model`, ADR-0144). Next: PS-48.
+>
 > **2026-11-08: `rag-wright` 0.17.1 is RELEASED (PR #22: PS-63).** PS-63 done (TexWright's request `2026-10-15-g8-duplicates-edges-within-one-ingest.md`, gap G8): the default record writer keeps one edge per (type, from node, to node), within an ingest and across re-ingests (`kg_write(..., ensure_edges=True)`, also on `api.kg_write`; ADR-0142). Next: PS-48.
 >
 > **2026-11-05: `rag-wright` 0.17.0 is RELEASED (PR #21: PS-60, PS-61, PS-62).** PS-60 done (TexWright's request: a table over the chunk cap is split between lines with its header repeated, so every row keeps its own span and `TableRow`; ADR-0141). PS-61 done (TexWright's question: the default segmenter `segment_layout` is exported on `pack_sdk`, so a pack can wrap it). PS-62 done (a record table's rows that reach no unit are reported: `DocumentReport.unreached_table_rows` and an `[ingest] warning:` line). Next: PS-48.

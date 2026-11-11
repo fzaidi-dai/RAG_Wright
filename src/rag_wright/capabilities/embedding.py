@@ -80,25 +80,32 @@ class BGEM3Embedder:
     driving one shared model swap the same parameter-tensor storage under each other and SEGFAULT the interpreter
     (not a catchable exception). The engine SHARES one `Embedder` across concurrent-document ingestion
     (`run_job(max_concurrency=...)` -> per-document `encode_batch`) and across `embed_chunks`' per-chunk thread
-    fan-out. So every model call is serialized by an instance lock. The lock guards ONLY `self._model.encode`
+    fan-out. So every model call is serialized by the model's lock. The lock guards ONLY `self._model.encode`
     (the numpy results are per-call, thread-local); the serialized section is the CPU/GPU encode, which is a small
     slice of ingest time -- the concurrency worth overlapping is the network-bound extraction, not the encode.
-    On Metal the lock is the process-wide `METAL_LOCK` instead (PS-55): Metal is not safe for concurrent use, and a
-    process can hold several embedders (the query embedder, each workspace's) plus the reranker."""
+    On Metal the lock is the process-wide `METAL_LOCK` instead (PS-55): Metal is not safe for concurrent use.
+
+    ONE MODEL PER PROCESS (PS-65): the loaded model is shared by every embedder of the same (model, precision, device)
+    -- the query embedder, each workspace's, each ingestion pipeline's -- with its one lock (`shared_model`), so a
+    second workspace costs no load time and no memory, and their encodes queue on that lock. An injected `model=`
+    is never shared."""
 
     def __init__(self, model_name: str = "BAAI/bge-m3", *, use_fp16: bool = False,
                  device: str | None = None, batch_size: int = 64, model: object | None = None) -> None:
         self._batch_size = batch_size  # cross-item independent, so batching never changes a vector, only speed
-        from rag_wright.util.devices import model_lock
+        from rag_wright.util.devices import model_lock, shared_model
 
         resolved = _resolve_device(device)
-        self._lock = model_lock(resolved)  # issue 0016 per instance; on Metal one lock per process (PS-55)
-        if model is not None:  # injected (hermetic tests) -- avoids loading the real model
-            self._model = model
+        if model is not None:  # injected (hermetic tests) -- avoids loading the real model; its own lock
+            self._model, self._lock = model, model_lock(resolved)
         else:
-            from FlagEmbedding import BGEM3FlagModel
+            def build() -> object:
+                from FlagEmbedding import BGEM3FlagModel
 
-            self._model = BGEM3FlagModel(model_name, use_fp16=use_fp16, devices=resolved)
+                return BGEM3FlagModel(model_name, use_fp16=use_fp16, devices=resolved)
+
+            # PS-65: one model per (model, precision, device) in the process, with its one lock (issue 0016, PS-55)
+            self._model, self._lock = shared_model(("bge-m3", model_name, use_fp16, resolved), resolved, build)
 
     def encode_dense(self, text: str) -> list[float]:
         with self._lock:  # issue 0016
