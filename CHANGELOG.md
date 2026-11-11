@@ -4,6 +4,14 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.2](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.1...0.17.2) (2026-11-11)
+
+
+### Bug Fixes
+
+* **PS-64:** a float is written and compared as a double, so an unchanged DOUBLE settles ([a337890](https://github.com/fzaidi-dai/RAG_Wright/commit/a33789085bb6623890b26fb0e361ed01bb8d5e0b))
+* **PS-65:** one loaded BGE model per process, shared with its one lock ([676d0a5](https://github.com/fzaidi-dai/RAG_Wright/commit/676d0a512ecd4494e8fff2e5f5266958b0a1f2d9))
+
 ## [0.17.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.0...0.17.1) (2026-11-07)
 
 
