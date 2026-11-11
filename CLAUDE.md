@@ -55,7 +55,7 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-11-11): PS-64 and PS-65 done, unreleased** (TexWright: a float is written and compared as a
+> **CURRENT STATE (2026-11-11): `rag-wright` 0.17.2 is RELEASED** (PR #23; PS-64 and PS-65, TexWright: a float is written and compared as a
 > double, ADR-0143; one loaded BGE model per process with its one lock, ADR-0144). Next: PS-48, EV-7, PS-30, PS-33. Before it,
 > **`rag-wright` 0.17.1 is RELEASED** (PR #22; PS-63, TexWright's G8 request: the default record writer keeps one
 > edge per type and endpoints, `kg_write(..., ensure_edges=True)`, ADR-0142). Next: PS-48, EV-7, PS-30, PS-33. Before it,
