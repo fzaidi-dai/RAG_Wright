@@ -223,3 +223,10 @@ and readers are tested against each other, including on recordings the recorder 
 It and the grading middleware are on the tier's public surface. The harness is a core part of the engine: substrate
 code a product still carries (its fault injector and preflight, PS-48h) moves here, and the names products reach
 through submodules join `__all__` (PS-48i).
+
+## Amendment (2026-11-13, PS-48f)
+
+`seen.answered_nothing` decided a counted result by one product's keys (`matched_count`, `possible_count`), so another
+product's `{"swatch_count": 0}` read as an answer and its repeat was never refused. A result that carries integer
+`*_count` fields is now empty when every one of them is zero, whatever they are called; a result without counts keeps
+the generic rule (every collection empty).

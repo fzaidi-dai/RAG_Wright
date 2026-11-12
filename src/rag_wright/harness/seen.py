@@ -149,8 +149,12 @@ def answered_nothing(result: Any) -> bool:
         return False
     if result.get("resolved") is False or result.get("found") is False:
         return True
-    if "matched_count" in result:
-        return not (result.get("matched_count") or result.get("possible_count"))
+    # **Counts decide when a result carries them** (PS-48f): it is empty when every count is zero. This named one
+    # product's `matched_count`/`possible_count`, so another product's `{"swatch_count": 0}` read as an answer.
+    counts = [value for key, value in result.items()
+              if key.endswith("_count") and isinstance(value, int) and not isinstance(value, bool)]
+    if counts:
+        return not any(counts)
     # **Generic, deliberately.** A list of known container keys would recognise one product's empty
     # results and nobody else's, and miss that product's next container too. A result whose every
     # collection is empty is empty, whatever the collections are called.
