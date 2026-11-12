@@ -82,6 +82,96 @@ One place the system chooses, and what it is choosing between.
 
 `observed` is the honest half: a point declared here without an observation is a decision we know is being taken and still cannot see. Naming it costs nothing and keeps the gap countable, which is the opposite of how six of these came to be invisible.
 
+### `RecordTheContext(sink: 'dict[str, Any]', label: 'str') -> 'None'`
+
+Capture the system prompt and every message an agent sees, and what it said, on every turn, into `sink`.
+
+#### `RecordTheContext.wrap_model_call(self, request, handler)`
+
+Intercept and control model execution via handler callback.
+
+Async version is `awrap_model_call`
+
+The handler callback executes the model request and returns a `ModelResponse`. Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Model request to execute (includes state and runtime). handler: Callback that executes the model request and returns `ModelResponse`.
+
+Call this to execute the model.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: The model call result.
+
+Examples: !!! example "Retry on error"
+
+```python def wrap_model_call(self, request, handler): for attempt in range(3): try: return handler(request) except Exception: if attempt == 2: raise ```
+
+!!! example "Rewrite response"
+
+```python def wrap_model_call(self, request, handler): response = handler(request) ai_msg = response.result[0] return ModelResponse( result=[AIMessage(content=f"[{ai_msg.content}]")], structured_response=response.structured_response, ) ```
+
+!!! example "Error to fallback"
+
+```python def wrap_model_call(self, request, handler): try: return handler(request) except Exception: return ModelResponse(result=[AIMessage(content="Service unavailable")]) ```
+
+!!! example "Cache/short-circuit"
+
+```python def wrap_model_call(self, request, handler): if cached := get_cache(request): return cached # Short-circuit with cached result response = handler(request) save_cache(request, response) return response ```
+
+!!! example "Simple `AIMessage` return (converted automatically)"
+
+```python def wrap_model_call(self, request, handler): response = handler(request) # Can return AIMessage directly for simple cases return AIMessage(content="Simplified response") ```
+
+#### `RecordTheContext.awrap_model_call(self, request, handler)`
+
+Intercept and control async model execution via handler callback.
+
+The handler callback executes the model request and returns a `ModelResponse`.
+
+Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Model request to execute (includes state and runtime). handler: Async callback that executes the model request and returns `ModelResponse`.
+
+Call this to execute the model.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: The model call result.
+
+Examples: !!! example "Retry on error"
+
+```python async def awrap_model_call(self, request, handler): for attempt in range(3): try: return await handler(request) except Exception: if attempt == 2: raise ```
+
+### `GradeThisTier(tier: 'Tier', recording: 'dict[str, Any]', settings: 'Any', *, model: 'Any' = None, on_evaluation: 'Any' = None, consulted: 'list[dict[str, Any]] | None' = None, deadline: 'float' = 120.0, attempt: 'float' = 25.0, retry_on: 'tuple[type[BaseException], ...]' = (), model_id: 'str | None' = None, rules: 'tuple[Any, ...]' = ()) -> 'None'`
+
+Grade one tier against ITS OWN rules, holding the rubric rather than storing it.
+
+**No graph state, and that is the design rather than an omission.** The rubric is a constant of this instance. It is never written to a channel, so a subagent cannot carry its rubric up to its parent (which once scored an orchestrator `satisfied` against `one-dispatch-per-worker` -- criteria for an agent that dispatches nobody), and two workers graded in one superstep cannot collide on it (which was a hard `INVALID_CONCURRENT_GRAPH_UPDATE` that presented as a hang).
+
+**Grading is observation: it must never cost the run it observes.** A grader that raises, or that overruns `GRADING_DEADLINE_S`, yields a `grader_error` verdict and the run continues untouched. With no revision loop a grade changes nothing anyway, so there is no version of this where waiting longer is worth a customer's answer.
+
+#### `GradeThisTier.aafter_agent(self, state: 'Any', runtime: 'Any') -> 'None'`
+
+Grade this tier's run. Returns no state update, ever -- see the class.
+
+#### `GradeThisTier.after_agent(self, state: 'Any', runtime: 'Any') -> 'None'`
+
+**Not a no-op, and not a lie either.**
+
+A middleware that defines only the async hook makes `invoke()` raise `NotImplementedError` from inside the agent, so this has to exist. It grades nothing: bounding a synchronous grader call from the thread making it is impossible, and an unbounded grader is what took down runs that had already produced their answer. Production drives these agents with `ainvoke`.
+
+### `Verdict(*, result: Literal['satisfied', 'needs_revision'], explanation: str, criteria: list[rag_wright.harness.grading.CriterionVerdict]) -> None`
+
+What the grader must return.
+
+**The TYPE is structured; the TRANSPORT is a format we own.** This was `create_agent(response_format=Verdict)` until langchain 1.4, where a bare `response_format` resolves through `AutoStrategy` to `ToolStrategy` -- which makes the verdict an ORDINARY OPTIONAL TOOL the model may simply decline. Measured live on `a_pair`: all three graders ended normally, no call limit, no deadline, no retry, `structured_response` `None`, and three `grader_error`s on a run whose answer was correct. A model always emits text, so asking for a fenced block and parsing it removes the failure by construction rather than by configuration, and it drops the extra model call the tool strategy spends.
+
+Parsing is lenient, validation is strict: `the_verdict_in` builds this model and pydantic rejects anything malformed, so the shape our scorers read (`evals/decomposition.py`) is unchanged.
+
 ## Hook protocols
 
 Callables you pass to the engine; any function with this signature conforms.
@@ -119,6 +209,12 @@ str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
 Create a new string object from the given object. If encoding or errors is specified, then the object must expose a data buffer that will be decoded using the given encoding and error handler. Otherwise, returns the result of object.__str__() (if defined) or repr(object). encoding defaults to sys.getdefaultencoding(). errors defaults to 'strict'.
 
 ### `ORCHESTRATING_PATH`
+
+str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
+
+Create a new string object from the given object. If encoding or errors is specified, then the object must expose a data buffer that will be decoded using the given encoding and error handler. Otherwise, returns the result of object.__str__() (if defined) or repr(object). encoding defaults to sys.getdefaultencoding(). errors defaults to 'strict'.
+
+### `GRADER_ERROR`
 
 str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
 
@@ -309,3 +405,41 @@ A detector for ids a tier used that nobody supplied, over the tool arguments the
 ### `blocked_without_saying_what_it_needs(recording: 'dict[str, Any]') -> 'str | None'`
 
 Reported `blocked` with an empty `need`, which tells the caller nothing.
+
+### `every_call(sink: 'dict[str, Any]') -> 'list[dict[str, Any]]'`
+
+Every tool call the agent made, in order, **with its arguments** and the turn it was made on.
+
+### `spend(sink: 'dict[str, Any]') -> 'dict[str, int]'`
+
+What this agent cost: model calls, tool calls and tokens -- the unit of an isolated-versus-orchestrated comparison. A model that reports no usage counts as zero, never as a crash.
+
+### `compare(isolated: 'dict[str, Any]', orchestrated: 'dict[str, Any]') -> 'str'`
+
+One table: the same tier alone and under a parent, **as ratios as well as totals**, because "23 calls" only means something beside the 3 the same tier took alone.
+
+### `transcript(sink: 'dict[str, Any]', *, width: 'int' = 200) -> 'str'`
+
+The run as a person would read it at the moment something has gone wrong: what arrived each turn, and what the agent did about it.
+
+### `describe(sink: 'dict[str, Any]') -> 'str'`
+
+A one-screen summary of what an agent was given.
+
+### `grading_middleware(tier: 'Tier', recording: 'dict[str, Any]', settings: 'Any', *, on_evaluation: 'Any' = None, consulted: 'list[dict[str, Any]] | None' = None, retry_on: 'tuple[type[BaseException], ...]' = (), model_id: 'str | None' = None, rules: 'tuple[Any, ...]' = ()) -> 'list[AgentMiddleware]'`
+
+The middleware that grades one tier.
+
+**One middleware, and no ordering to get right.** This was three -- a grader with a rubric-setter on either side of it, the second relying on `after_agent` running in reverse list order -- because the rubric lived on shared state and had to be defended from the agents sharing it. It does not live there any more, so there is nothing to defend and nothing to order.
+
+Still a list, because every caller splices it into a middleware stack and a scalar would be one more thing for each of them to get right.
+
+### `rule_tools(tier: 'Tier', recording: 'dict[str, Any]', *, consulted: 'list[dict[str, Any]] | None' = None, rules: 'tuple[Any, ...]' = ()) -> 'list[BaseTool]'`
+
+The grader's evidence: every deterministic detector for this tier, over this run's recording.
+
+**One tool rather than one per rule.** The grader has to be nudged to call it at all; making that a single unmissable call is more reliable than six optional ones, and the result names the rule ids the criteria are written from, so the mapping needs no guesswork.
+
+**It closes over the live recording**, which `RecordTheContext` fills as the run proceeds. Grading happens in `after_agent`, after the last model call, so by the time this is callable the recording is complete.
+
+**`consulted` records that the grader actually called it**, which is the one assumption this whole design rests on. The prompt tells the grader to call it first; a grader that reasoned instead would still return a plausible verdict, and we would have paid for a judge while believing we had a counter. Measuring it is the difference between a claim and a fact.

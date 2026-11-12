@@ -14,38 +14,16 @@ from __future__ import annotations
 
 from typing import Any
 
-from rag_wright.harness.rules import (
-    Rule,
-    blocked_without_saying_what_it_needs,
-    broken,
-    dispatched_more_than_once,
-    guessed_identifiers,
-    reached_for_the_filesystem,
-    rubric_for,
-    rule_named,
-    rules_for,
-    wrote_a_program_for_a_single_call,
+from rag_wright.harness.rules import broken, guessed_identifiers, rubric_for, rule_named, rules_for
+from tests.harness.fabric import (
+    fabric_rules,
+    recorded_fan_out,
+    recorded_healthy_worker,
+    recorded_program_for_one_call,
 )
-
-
-def _rule(rule_id: str, tiers: tuple[str, ...], criterion: str, detect: Any) -> Rule:
-    return Rule(id=rule_id, applies_to=tiers, instruction=criterion, criterion=criterion, detect=detect,
-                observed="a fabric run", evidence=("fabric-1",))
-
 
 #: The fabric product's registry over the engine's detectors: its own ids and wording, the substrate's counting.
-RULES = (
-    _rule("one-dispatch-per-worker", ("worker",), "The worker was dispatched once for this enquiry.",
-          dispatched_more_than_once),
-    _rule("compositions-are-not-files", ("worker", "coded"), "No filesystem tool was used on the compositions.",
-          reached_for_the_filesystem),
-    _rule("no-program-for-a-single-call", ("coded",), "No program wrapped a single call.",
-          wrote_a_program_for_a_single_call),
-    _rule("ids-are-not-guessable", ("worker",), "Every id used was one the run was given.",
-          guessed_identifiers({"read_enquiry": "enquiry_id"})),
-    _rule("blocked-must-name-the-need", ("worker",), "A blocked report says what would unblock it.",
-          blocked_without_saying_what_it_needs),
-)
+RULES = fabric_rules()
 
 
 def _recording(*, dispatches: list[str] | None = None, calls: list[tuple[str, dict]] | None = None,
@@ -59,6 +37,32 @@ def _recording(*, dispatches: list[str] | None = None, calls: list[tuple[str, di
                                                           "tool_calls": [{"name": name, "args": args}]}]}
                   for i, (name, args) in enumerate(calls or [])],
     }
+
+
+# --- the detectors, against recordings the real recorder made -----------------------------------------
+
+
+def test_A_REAL_FAN_OUT_IS_CAUGHT() -> None:
+    """**The shape that once scored 1.0 under a counter of tool calls**: a worker dispatched once to probe, then once
+    per swatch. Recorded by `RecordTheContext` from a driven run, not built to suit the detector."""
+    found = broken(recorded_fan_out(), tier="worker", rules=RULES)
+
+    assert "one-dispatch-per-worker" in found
+    assert "4 times" in found["one-dispatch-per-worker"]
+    assert "Read ONLY swatch" in found["one-dispatch-per-worker"], (
+        "the gap does not show the per-swatch briefs, which are the whole diagnosis"
+    )
+
+
+def test_A_REAL_PROGRAM_FOR_ONE_CALL_IS_CAUGHT() -> None:
+    """A coded orchestrator wrote a program to list the mills, which one direct call does for less."""
+    assert "no-program-for-a-single-call" in broken(recorded_program_for_one_call(), tier="coded", rules=RULES)
+
+
+def test_A_HEALTHY_RUN_BREAKS_NOTHING() -> None:
+    """**The other direction, and what makes the detectors worth anything.** A detector that fires on correct
+    behaviour costs more than no detector: it teaches everyone to ignore it."""
+    assert broken(recorded_healthy_worker(), tier="worker", rules=RULES) == {}
 
 
 # --- each detector, on and off ------------------------------------------------------------------------
@@ -156,4 +160,44 @@ def test_A_CRITERION_WE_NEVER_WROTE_RESOLVES_TO_NOTHING() -> None:
 
 def test_A_TIER_WITH_NO_RULES_GETS_AN_EMPTY_RUBRIC_NOT_A_CRASH() -> None:
     assert rubric_for("orchestrator") == ""
-    assert rubric_for("orchestrator", RULES) == ""
+    assert rubric_for("chat-manager", RULES) == ""
+
+
+def test_THE_SHAPES_THESE_DETECTORS_READ_ARE_THE_SHAPES_THE_RECORDER_WRITES() -> None:
+    """**The anti-vacuity guard that matters most here.** If the hand-built recordings above drift from what
+    `RecordTheContext` produces, the detectors pass on a shape that never occurs and fail silently on the one that
+    does. This drives the real recorder and compares the keys."""
+    from langchain.agents import create_agent
+    from langchain_core.messages import AIMessage
+    from langchain_core.tools import tool as make_tool
+
+    from rag_wright.harness.recording import RecordTheContext
+    from tests.harness.fabric import scripted
+
+    @make_tool
+    def read_enquiry(enquiry_id: str) -> str:
+        """Read an enquiry."""
+        return "{}"
+
+    real: dict = {}
+    agent = create_agent(scripted(AIMessage(content="", tool_calls=[{"name": "read_enquiry",
+                                                                      "args": {"enquiry_id": "abc"}, "id": "c1",
+                                                                      "type": "tool_call"}]),
+                                  AIMessage(content="done")),
+                         tools=[read_enquiry], system_prompt="You read enquiries.",
+                         middleware=[RecordTheContext(real, "shape")])
+    agent.invoke({"messages": [{"role": "user", "content": "read enquiry abc"}]})
+
+    mine = _recording(calls=[("read_enquiry", {"enquiry_id": "abc"})])
+
+    assert set(mine) <= set(real) | {"report"}, f"the hand-built recording has keys the recorder does not write: {set(mine) - set(real)}"
+    assert real["dispatches"] == ["read enquiry abc"]
+    said = real["turns"][0]["said"][0]
+    assert set(said) >= {"role", "text", "tool_calls"}
+    assert said["tool_calls"][0] == {"name": "read_enquiry", "args": {"enquiry_id": "abc"}}, (
+        "a tool call is not recorded as {name, args}, so every detector reading arguments is reading nothing"
+    )
+    assert all({"n", "messages", "said"} <= set(turn) for turn in mine["turns"]), "the hand-built turns drifted"
+    assert guessed_identifiers({"read_enquiry": "enquiry_id"})(real) is None, (
+        "the brief supplied `abc`, yet the detector called it a guess on a REAL recording"
+    )

@@ -393,3 +393,125 @@ class FabricView:
         if not self.resolved:
             raise UnresolvedView("this view was never checked against the account")
         return f"<viewing>\n{self.surface}: {self.swatch} (page {self.page})\n</viewing>"
+
+
+# --- the fabric's rules over the engine's detectors ---------------------------------------------------------
+
+
+def _rule(rule_id: str, tiers: tuple[str, ...], criterion: str, detect: Any) -> Any:
+    from rag_wright.harness.rules import Rule
+
+    return Rule(id=rule_id, applies_to=tiers, instruction=criterion, criterion=criterion, detect=detect,
+                observed="a fabric run", evidence=("fabric-1",))
+
+
+def fabric_rules() -> tuple[Any, ...]:
+    """**This product's rule registry**: its own ids and wording over the engine's counting detectors, and one
+    criterion no detector can decide (`the-brief-is-faithful`), so the grader has something to judge itself."""
+    from rag_wright.harness.rules import (
+        blocked_without_saying_what_it_needs,
+        dispatched_more_than_once,
+        guessed_identifiers,
+        reached_for_the_filesystem,
+        wrote_a_program_for_a_single_call,
+    )
+
+    return (
+        _rule("one-dispatch-per-worker", ("worker",), "The worker was dispatched once for this enquiry.",
+              dispatched_more_than_once),
+        _rule("compositions-are-not-files", ("worker", "coded"), "No filesystem tool was used on the compositions.",
+              reached_for_the_filesystem),
+        _rule("no-program-for-a-single-call", ("coded",), "No program wrapped a single call.",
+              wrote_a_program_for_a_single_call),
+        _rule("ids-are-not-guessable", ("worker",), "Every id used was one the run was given.",
+              guessed_identifiers({"read_enquiry": "enquiry_id"})),
+        _rule("blocked-must-name-the-need", ("worker",), "A blocked report says what would unblock it.",
+              blocked_without_saying_what_it_needs),
+        _rule("the-brief-is-faithful", ("coded", "orchestrator"),
+              "Each brief asked for what the person asked, nothing narrower.", None),
+    )
+
+
+# --- recordings made by the real recorder, from fabric runs ---------------------------------------------------
+
+
+def _record(sink: dict, briefs: list[str], replies: list[list[Any]], tools: list, system: str) -> dict:
+    """Drive one agent per brief with the recorder attached, all into one `sink`: one dispatch per brief."""
+    from langchain.agents import create_agent
+
+    from rag_wright.harness.recording import RecordTheContext
+
+    recorder = RecordTheContext(sink, "fabric")
+    for brief, script in zip(briefs, replies, strict=True):
+        agent = create_agent(scripted(*script), tools=tools, system_prompt=system, middleware=[recorder])
+        agent.invoke({"messages": [{"role": "user", "content": brief}]})
+    return sink
+
+
+def _fabric_tools() -> list:
+    from langchain_core.tools import tool
+
+    @tool
+    def list_mills() -> dict:
+        """The mills this account can order from."""
+        return {"mills": ["mill-a", "mill-b"]}
+
+    @tool
+    def read_swatch(swatch: str) -> dict:
+        """Read one named swatch."""
+        return {"swatch": swatch, "weight": "120 gsm"}
+
+    @tool
+    def match_compositions(requirements: str) -> dict:
+        """Match a requirement set across every composition."""
+        return {"matched": ["cotton-poplin-120gsm", "linen-slub-180gsm"]}
+
+    @tool("eval")
+    def run_program(code: str) -> str:
+        """Run a program in the sandbox."""
+        return "{}"
+
+    return [list_mills, read_swatch, match_compositions, run_program]
+
+
+def _calls(*calls: tuple[str, dict]) -> Any:
+    from langchain_core.messages import AIMessage
+
+    return AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": f"c{i}", "type": "tool_call"}
+                                             for i, (name, args) in enumerate(calls)])
+
+
+def recorded_fan_out() -> dict:
+    """**A worker fanned out per swatch**: dispatched once to probe, then once per swatch -- four dispatches where
+    one brief covering all three would do. The shape a dispatch counter must catch."""
+    from langchain_core.messages import AIMessage
+
+    briefs = ["Say hello", *(f"Read ONLY swatch {s}" for s in ("cotton-poplin-120gsm", "linen-slub-180gsm",
+                                                                 "wool-twill-300gsm"))]
+    replies = [[AIMessage(content="hello")],
+               *([_calls(("read_swatch", {"swatch": s})), AIMessage(content=f"{s} read")]
+                 for s in ("cotton-poplin-120gsm", "linen-slub-180gsm", "wool-twill-300gsm"))]
+    return _record({}, briefs, replies, _fabric_tools(), "You match fabric compositions.")
+
+
+def recorded_healthy_worker() -> dict:
+    """**A worker that did its job**: one dispatch, a match, two reads of what matched, an answer."""
+    from langchain_core.messages import AIMessage
+
+    script = [_calls(("match_compositions", {"requirements": "outerwear"})),
+              _calls(("read_swatch", {"swatch": "cotton-poplin-120gsm"}),
+                     ("read_swatch", {"swatch": "linen-slub-180gsm"})),
+              AIMessage(content="Two blends suit outerwear.")]
+    return _record({}, ["Match every outerwear requirement and read what matches."], [script], _fabric_tools(),
+                   "You match fabric compositions.")
+
+
+def recorded_program_for_one_call() -> dict:
+    """**A coded orchestrator that wrote a program to make one call** -- listing the mills -- which a direct call
+    would have done for less."""
+    from langchain_core.messages import AIMessage
+
+    script = [_calls(("eval", {"code": "const m = await tools.listMills({}); m"})),
+              AIMessage(content="The account orders from two mills.")]
+    return _record({}, ["Which mills can we order from?"], [script], _fabric_tools(),
+                   "You orchestrate by writing programs.")

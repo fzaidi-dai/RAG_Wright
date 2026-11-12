@@ -20,8 +20,10 @@ from rag_wright.harness.decisions import ANY_WORKER, DecisionPoint
 from rag_wright.harness.definition import AgentDefinition, AgentPrompts, ToolSurface
 from rag_wright.harness.errors import ModelAttemptTooSlow, ModelTooSlow, ModelTurnTooSlow, error_middleware
 from rag_wright.harness.events import RunEvent, translate, what_was_finished
+from rag_wright.harness.grading import GRADER_ERROR, GradeThisTier, Verdict, grading_middleware, rule_tools
 from rag_wright.harness.memory import MemoryWithoutTenancy
 from rag_wright.harness.models import agent_chat_model
+from rag_wright.harness.recording import RecordTheContext, compare, describe, every_call, spend, transcript
 from rag_wright.harness.rules import (
     Rule,
     blocked_without_saying_what_it_needs,
@@ -63,4 +65,7 @@ __all__ = [
     "Rule", "dispatched_more_than_once", "reached_for_the_filesystem", "wrote_a_program_for_a_single_call",
     "guessed_identifiers", "blocked_without_saying_what_it_needs", "DecisionPoint", "ANY_WORKER",
     "ORCHESTRATING_PATH",
+    # what a run did, recorded; and grading it against the rules
+    "RecordTheContext", "every_call", "spend", "compare", "transcript", "describe",
+    "GradeThisTier", "grading_middleware", "rule_tools", "Verdict", "GRADER_ERROR",
 ]

@@ -76,7 +76,7 @@ class Rule:
 
 # --- the detectors ------------------------------------------------------------------------------------
 #
-# Each takes ONE agent's recording (the shape `evals.recording.RecordTheContext` writes) and returns the
+# Each takes ONE agent's recording (the shape `recording.RecordTheContext` writes) and returns the
 # gap -- what a grader would be told -- or `None` when the rule held.
 
 

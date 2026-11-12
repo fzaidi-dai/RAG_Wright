@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-42 public names; `AgentDefinition` has 15 fields and `AgentPrompts` 11, every one required.
+53 public names; `AgentDefinition` has 15 fields and `AgentPrompts` 11, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -262,9 +262,16 @@ The order matters:
    seams and builds a real agent. Write it before your seams are final, so each one is designed against an outside
    implementer rather than audited afterwards. It is the only instrument that measures reusability; import counts
    measure decoupling, which is a different property. The engine's is the fabric product in
-   `tests/harness/test_greenfield_conformance.py`, whose scope is three parts deep.
+   `tests/harness/fabric.py`, whose scope is three parts deep; the harness's own behaviour tests run against it.
 2. **Guards on the consequence** of each permissive default (section 6), each proved by planting.
 3. **Your own rules and decision points**, graded by the substrate against the registries you declared.
+
+**Recording a run, and grading it.** `RecordTheContext(sink, label)` is a middleware that writes what a tier was
+given and what it did, turn by turn, into `sink`: the system prompt, every message, every tool call with its
+arguments, the briefs it was dispatched with, and tokens per turn. That recording is what the rule detectors read
+(`rules.broken`) and what the grader's evidence tool reads (`grading_middleware(tier, sink, settings, rules=...)`),
+so attach the recorder to every tier you grade. `every_call`, `spend`, `compare` and `transcript` read it back:
+`compare(alone, orchestrated)` is the one table that says whether a worker costs the same under a parent as alone.
 
 **The trap:** a conformance test that hands the substrate your own context type while asserting that a different
 product works proves nothing about a product whose scope has a different depth. When a seam changes, change the

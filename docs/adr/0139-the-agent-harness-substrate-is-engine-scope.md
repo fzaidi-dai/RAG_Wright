@@ -211,6 +211,15 @@ The id detector `guessed_an_identifier` checked one product's `read_compliance_c
 other product it could never fire and every run read as clean; the vocabulary guard enumerated tool names and missed
 it. It is replaced by `guessed_identifiers(arguments)`, a detector over the tool arguments the product names (an id
 counts as supplied when a dispatch brief or the system prompt carries it). Inferring every `*_id` argument was
-rejected: a recording clips long tool results, so an id a tool returned would read as guessed. A breaking change to
-one function; the guard now lists the source product's tool and worker names. Open: the detectors and the grader read
-a recording shape only the product's eval recorder writes; moving that recorder into the harness is proposed for PS-48e.
+rejected: a recording clips each message at 6,000 characters, so an id in a long tool result would read as guessed.
+A breaking change to one function; the guard now lists the source product's tool and worker names.
+
+## Amendment (2026-11-12, PS-48e)
+
+The rule detectors and the grader read a run recording that only the source product's eval code wrote, so a second
+product could not use either without reverse-engineering its shape. The recorder is now the harness's own,
+`rag_wright.harness.recording` (`RecordTheContext` and its read helpers), with the shape documented beside it; writer
+and readers are tested against each other, including on recordings the recorder makes from the fabric product's runs.
+It and the grading middleware are on the tier's public surface. The harness is a core part of the engine: substrate
+code a product still carries (its fault injector and preflight, PS-48h) moves here, and the names products reach
+through submodules join `__all__` (PS-48i).
