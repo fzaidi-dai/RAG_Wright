@@ -55,7 +55,10 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-11-11): `rag-wright` 0.17.2 is RELEASED** (PR #23; PS-64 and PS-65, TexWright: a float is written and compared as a
+> **CURRENT STATE (2026-11-12): `rag-wright` 0.17.3 is RELEASED** (PR #24; PS-67 and PS-68, TexWright: ArcadeDB
+> 26.11.1, so a vector index is not rebuilt on every start, with `warm_vector_indexes` / `rebuild_vector_indexes`
+> (ADR-0145); every KG filter field is quoted, so `text` is not a function module on 26.11.1). Next: PS-48, EV-7,
+> PS-30, PS-33. Before it, **`rag-wright` 0.17.2 is RELEASED** (PR #23; PS-64 and PS-65, TexWright: a float is written and compared as a
 > double, ADR-0143; one loaded BGE model per process with its one lock, ADR-0144). Next: PS-48, EV-7, PS-30, PS-33. Before it,
 > **`rag-wright` 0.17.1 is RELEASED** (PR #22; PS-63, TexWright's G8 request: the default record writer keeps one
 > edge per type and endpoints, `kg_write(..., ensure_edges=True)`, ADR-0142). Next: PS-48, EV-7, PS-30, PS-33. Before it,
