@@ -336,3 +336,53 @@ def fails_transiently(attempts: list) -> Any:
             raise MillIsOffline("the mill feed went quiet")
 
     return FailsTransiently(messages=iter([]))
+
+
+def slow_from(nth: int | None, delay: float, *messages: Any) -> Any:
+    """A scripted model whose `nth` call (1-based) -- or every call, when `nth` is None -- first waits `delay`
+    seconds. **A retry counts as a new call**, so `nth=2` slows one call and lets its retry through, while
+    `nth=None` exhausts any retry budget."""
+    import asyncio
+
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+
+    made: list = []
+
+    class SlowFrom(GenericFakeChatModel):
+        def bind_tools(self, tools: Any, **_kwargs: Any) -> Any:
+            return self
+
+        async def _agenerate(self, msgs: Any, stop: Any = None, run_manager: Any = None, **kwargs: Any):
+            made.append(1)
+            if nth is None or len(made) == nth:
+                await asyncio.sleep(delay)
+            return await super()._agenerate(msgs, stop=stop, run_manager=run_manager, **kwargs)
+
+    return SlowFrom(messages=iter(messages))
+
+
+# --- what the person was looking at ----------------------------------------------------------------------
+
+
+class UnresolvedView(Exception):
+    """The fabric product's refusal to render a view it has not checked against the account."""
+
+
+@dataclass(frozen=True)
+class FabricView:
+    """**This product's continuation: the swatch a person had open.** The substrate asks a continuation for
+    three things and nothing else -- its `surface`, its `subject()` (what was being looked at, compared turn to
+    turn) and its `render()` (the block put in front of the turn). Paging is not the subject; the swatch is."""
+
+    surface: str = "swatch"
+    swatch: str = "cotton-poplin-120gsm"
+    page: int = 1
+    resolved: bool = True
+
+    def subject(self) -> dict[str, str]:
+        return {"surface": self.surface, "swatch": self.swatch}
+
+    def render(self) -> str:
+        if not self.resolved:
+            raise UnresolvedView("this view was never checked against the account")
+        return f"<viewing>\n{self.surface}: {self.swatch} (page {self.page})\n</viewing>"

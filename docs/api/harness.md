@@ -198,7 +198,7 @@ The run id stays the PUBLIC identity: it is what `usage_run.correlation_id` join
 
 The chat-manager for one run, holding the manifest bound to that run's scope.
 
-**The model is resolved through DeepAgents**, not built here: `AGENT_MODEL_SPEC` plus a registered `ProviderProfile` is the only combination that applies the OpenRouter configuration (`init_chat_model` silently ignores the profile).
+**`model`, when given, is the model of every tier this builds** -- the chat-manager and the orchestrator beneath it. When it is not, each tier builds the product's configured one (`definition.model_id_for`).
 
 **A `context_schema` is required, not conventional.** It comes from `definition.context_schema` -- the product's own context type, which the substrate never names -- and `start_run` refuses an agent without one, because an agent compiled with `context_schema=None` accepts `context=` and drops it silently.
 

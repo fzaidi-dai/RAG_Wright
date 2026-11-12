@@ -77,9 +77,8 @@ def build_chat_agent(
 ) -> Any:
     """The chat-manager for one run, holding the manifest bound to that run's scope.
 
-    **The model is resolved through DeepAgents**, not built here: `AGENT_MODEL_SPEC` plus a registered
-    `ProviderProfile` is the only combination that applies the OpenRouter configuration (`init_chat_model`
-    silently ignores the profile).
+    **`model`, when given, is the model of every tier this builds** -- the chat-manager and the orchestrator
+    beneath it. When it is not, each tier builds the product's configured one (`definition.model_id_for`).
 
     **A `context_schema` is required, not conventional.** It comes from `definition.context_schema` --
     the product's own context type, which the substrate never names -- and `start_run` refuses an agent
@@ -118,8 +117,10 @@ def build_chat_agent(
         # **The DIRECT half only**. The orchestrator below holds all of it, so nothing is
         # unreachable -- but a listing must not pay for three model calls.
         tools=chat_manager_tools(context, resources, definition=definition),
+        # **The model given is the model every tier uses** (PS-48c). Passed to the chat-manager only, the
+        # orchestrator built its own from configuration, so a scripted agent made a real call on delegating.
         subagents=[orchestrator_subagent(context, resources, settings, ledger=decisions,
-                                         definition=definition)],
+                                         definition=definition, model=model)],
         system_prompt=definition.prompts.chat,
         context_schema=definition.context_schema,
         # **The four error levels, and the one exception that halts.** Without this the library's defaults

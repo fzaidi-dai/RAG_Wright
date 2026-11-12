@@ -196,3 +196,11 @@ A failure a product named both in `retry_on` and in `message_for` was never retr
 inside the retry and converted it to a message first, so the product's retry setting silently did nothing (found on
 the fabric fixture: one attempt, "try again" handed to the model). `error_middleware` now never converts a failure in
 `retry_on`; it is retried, and surfaces once the retries are spent.
+
+## Amendment (2026-11-12, PS-48c)
+
+`build_chat_agent(model=)` passed the model to the chat-manager only; the orchestrator tier beneath it built its own
+from `definition.model_id_for`, so an agent built with a scripted model still made a real call on delegating. A model
+passed in is now the model of every tier the call builds. Separately, a tool declaring a bare `ToolRuntime` (which is
+`ToolRuntime[None]`) logs a serializer warning on every call with a real context; the engine declares none, and the
+shipped `building-an-agent-harness` skill now teaches `ToolRuntime[MyContext]`.

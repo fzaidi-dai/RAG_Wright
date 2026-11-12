@@ -174,7 +174,7 @@ async def test_the_RESUMED_run_still_knows_its_SCOPE() -> None:
     seen: list = []
 
     @make_tool
-    def ask_with_context(question: str, runtime: ToolRuntime) -> str:
+    def ask_with_context(question: str, runtime: ToolRuntime[FabricContext]) -> str:
         """Ask, and record what scope the resumed pass sees."""
         answer = interrupt({"question": question})
         seen.append(getattr(runtime.context, "scope", None))

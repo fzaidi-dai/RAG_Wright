@@ -214,9 +214,13 @@ recombines - not for prompt-directed calling. Both properties hold because they 
 excluded from the schema sent to the model:
 
 ```
-search(question, runtime: ToolRuntime)    model sees -> ['question']
-search(question, workspace_id: str)       model sees -> ['question', 'workspace_id']   <- the leak
+search(question, runtime: ToolRuntime[MyContext])    model sees -> ['question']
+search(question, workspace_id: str)                  model sees -> ['question', 'workspace_id']   <- the leak
 ```
+
+**Parameterize it with your context type.** A bare `ToolRuntime` is `ToolRuntime[None]`: the context still
+arrives, but every call logs a `PydanticSerializationUnexpectedValue` warning, because the library checks the
+context against `None`.
 
 That is not stylistic. **In a product like this the documents are adversarial by origin** - somebody outside
 your company wrote them - so an identifier the model can name is one an injected instruction inside an
