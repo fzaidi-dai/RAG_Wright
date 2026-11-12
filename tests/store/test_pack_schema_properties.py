@@ -1,6 +1,10 @@
 """PS-50 (TexWright's 2026-10-28 request): `ensure_pack_schema` reconciles PROPERTIES the way it reconciles types,
 edge types and unique indexes: a property a pack gains is declared on a type the database already holds. A property
-whose declared type moved is reported, never altered; a property the pack stopped declaring is never dropped."""
+whose declared type moved is reported, never altered; a property the pack stopped declaring is never dropped.
+
+PS-67: from 26.10 ArcadeDB refuses to declare a property over a stored value that is not of its type (26.7 declared it
+and left the value). The refusal is reported, the property stays undeclared, and it is declared once a re-ingest has
+rewritten the values."""
 from __future__ import annotations
 
 import pytest
@@ -36,18 +40,24 @@ def test_a_property_a_pack_gains_is_declared_on_an_existing_type(tmp_path, caplo
         with caplog.at_level("WARNING", logger="rag_wright.store.arcadedb"):
             s.ensure_pack_schema(v2)
         assert _declared(s, "Rec") == {"rec_id": "STRING", "name": "STRING", "dropped": "STRING",
-                                       "label": "STRING", "weight": "DOUBLE"}  # added; never retyped or dropped
+                                       "label": "STRING"}  # added; never retyped or dropped; weight refused
         warned = " ".join(r.getMessage() for r in caplog.records)
         assert "Rec.name" in warned and "STRING" in warned and "INTEGER" in warned  # the moved type is reported
-        assert "Rec.weight" in warned and "1 existing" in warned  # values stored before the declaration: unconverted
+        assert "Rec.weight" in warned and "not declared" in warned and "1 existing" in warned  # the refusal
         assert "Rec.label" not in warned  # a new STRING over no values needs no word
 
-        caplog.clear()
         cmds = []
         run = s._command
         s._command = lambda sql: (cmds.append(sql), run(sql))[1]
-        with caplog.at_level("WARNING", logger="rag_wright.store.arcadedb"):
-            s.ensure_pack_schema(v2)
+        s.ensure_pack_schema(v2)
+        assert cmds == ["CREATE PROPERTY Rec.weight DOUBLE"]  # still refused: only the undeclared one is tried
+        assert "weight" not in _declared(s, "Rec")
+
+        run("UPDATE Rec SET weight = 195.0d WHERE rec_id = 'r1'")  # what a re-ingest under the v2 pack writes
+        s.ensure_pack_schema(v2)
+        assert _declared(s, "Rec")["weight"] == "DOUBLE"
+        cmds.clear()
+        s.ensure_pack_schema(v2)
         assert cmds == []  # idempotent: nothing left to declare
     finally:
         s.drop()

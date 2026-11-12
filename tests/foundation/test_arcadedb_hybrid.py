@@ -5,7 +5,7 @@ a dense `vector.neighbors` leg and a sparse `vector.sparseNeighbors` leg fused b
 the RRF strategy, honoring a metadata filter. Early signal for GATE-2: does ArcadeDB hybrid
 retrieval behave as documented, or do we lean toward the LanceDB fallback?
 
-SQL grounded against the official ArcadeDB docs and confirmed on the live 26.7.1 server (ADR-0007);
+SQL grounded against the official ArcadeDB docs and confirmed on the live 26.7.1 server (ADR-0007), and on 26.11.1 (PS-67);
 the arcadedb-python API does not wrap these functions, so they are issued through its grounded
 `query()` method. Opt-in and live: marked `store`, run with `-m store` (needs the container up).
 """

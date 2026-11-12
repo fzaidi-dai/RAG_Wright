@@ -174,6 +174,30 @@ def migrate_span_fields(config: EngineConfig, *, corpus: str, batch: int = 5000,
     return moved
 
 
+def warm_vector_indexes(ws: WorkspaceHandle) -> dict[str, float]:
+    """Load the workspace's dense vector indexes now, so the first search a user makes does not pay for it (PS-67).
+    A store process loads an index's vector graph on the first nearest-neighbour query, and builds it from scratch
+    when it cannot load it (on ArcadeDB 26.11, the first open after an upgrade and after a large share of the index
+    has changed); a deployment calls this at start-up, before it serves. Returns {index name: seconds taken}, each
+    also logged; an index holding no vector is skipped."""
+    took = ws._store.warm_vector_indexes()
+    for index, seconds in took.items():
+        logger.info("warmed vector index %s of database %r in %.2f s", index, ws._corpus, seconds)
+    return took
+
+
+def rebuild_vector_indexes(ws: WorkspaceHandle) -> dict[str, float]:
+    """Rebuild the workspace's dense vector indexes from their records (PS-67). Run it once on each database after
+    moving it from ArcadeDB 26.7 to 26.11: the first 26.11 open rebuilds the index by itself, and that rebuild can
+    leave nearly every vector searchable only by a full scan (correct results, but every search reads every
+    vector). Writes wait and searches scan while it runs (about 18 s for 140,000 vectors), so a deployment runs it
+    at start-up, before it serves. Returns {index name: seconds taken}, each also logged."""
+    took = ws._store.rebuild_vector_indexes()
+    for index, seconds in took.items():
+        logger.info("rebuilt vector index %s of database %r in %.2f s", index, ws._corpus, seconds)
+    return took
+
+
 @contextmanager
 def temporary_workspace(config: EngineConfig, *, prefix: str = "tmp") -> Iterator[WorkspaceHandle]:
     """A workspace on a fresh database, `<prefix>_<12 hex>`, dropped when the block exits, whether it succeeds or

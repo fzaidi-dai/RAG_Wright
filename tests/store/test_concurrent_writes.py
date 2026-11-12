@@ -23,6 +23,13 @@ def test_only_a_concurrent_modification_is_retried():
     assert not _is_retryable_conflict(Exception("Type with name 'Clause' was not found"))
 
 
+def test_the_record_level_conflict_of_arcadedb_26_11_is_retried_too():
+    # PS-67: from 26.10 ArcadeDB rebases a concurrent write per record, and words the conflict it cannot rebase so
+    assert _is_retryable_conflict(Exception(
+        "Cannot execute command: Slot rebase not possible on page PageId(db/1/0) slot 0 (concurrent change to the "
+        "same record). Please retry the operation"))
+
+
 @pytest.mark.store
 def test_concurrent_span_and_record_writes_all_land():
     s = ArcadeDBStore.from_env(database=_DB, reset=True)

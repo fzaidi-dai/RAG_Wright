@@ -20,7 +20,7 @@ ROOT_PW = "rag_wright_dev_2026"
 ARCADE_HOME = "/home/arcadedb"
 DB_MOUNT = f"{ARCADE_HOME}/databases"
 DB_NAME = "ragwright_cuad_full"
-_TARBALL = "https://github.com/ArcadeData/arcadedb/releases/download/26.7.1/arcadedb-26.7.1.tar.gz"
+_TARBALL = "https://github.com/ArcadeData/arcadedb/releases/download/26.11.1/arcadedb-26.11.1.tar.gz"
 
 app = modal.App("rw-backfill")
 data_vol = modal.Volume.from_name("rw-arcadedb-data")

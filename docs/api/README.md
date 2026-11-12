@@ -346,6 +346,14 @@ Drop the database `corpus` (PS-37): everything in it, the retrieval index and th
 
 Migrate the database `corpus` from the pre-0.2.0 `Span` field names (`contract_id`, `function`, `functions`) to the generic ones (`document_id`, `primary_tag`, `tags`), the database `open_workspace` refuses until this has run (PS-35). Values are copied in batches of `batch` and the old properties dropped; `progress(done, total)` is called after each batch. Idempotent: returns the number of records moved, 0 when already migrated. The database must exist (`LookupError` otherwise; it is never created), and a missing or blank `corpus` raises `ValueError`. Afterwards the schema is checked, so a database this returns for opens with `open_workspace`.
 
+### `warm_vector_indexes(ws: 'WorkspaceHandle') -> 'dict[str, float]'`
+
+Load the workspace's dense vector indexes now, so the first search a user makes does not pay for it (PS-67). A store process loads an index's vector graph on the first nearest-neighbour query, and builds it from scratch when it cannot load it (on ArcadeDB 26.11, the first open after an upgrade and after a large share of the index has changed); a deployment calls this at start-up, before it serves. Returns {index name: seconds taken}, each also logged; an index holding no vector is skipped.
+
+### `rebuild_vector_indexes(ws: 'WorkspaceHandle') -> 'dict[str, float]'`
+
+Rebuild the workspace's dense vector indexes from their records (PS-67). Run it once on each database after moving it from ArcadeDB 26.7 to 26.11: the first 26.11 open rebuilds the index by itself, and that rebuild can leave nearly every vector searchable only by a full scan (correct results, but every search reads every vector). Writes wait and searches scan while it runs (about 18 s for 140,000 vectors), so a deployment runs it at start-up, before it serves. Returns {index name: seconds taken}, each also logged.
+
 ### `temporary_workspace(config: 'EngineConfig', *, prefix: 'str' = 'tmp') -> 'Iterator[WorkspaceHandle]'`
 
 A workspace on a fresh database, `<prefix>_<12 hex>`, dropped when the block exits, whether it succeeds or raises (PS-37). For a probe or a measurement whose database must not outlive it: `with temporary_workspace(config, prefix="probe") as ws: ...`.

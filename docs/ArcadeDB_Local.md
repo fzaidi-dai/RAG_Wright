@@ -6,9 +6,9 @@ The instance below is the engine developer's own: it holds the databases the eng
 (`pytest -m store`) and its evals build, on public or locally acquired evaluation corpora. No product points at it,
 and no product's data goes in it.
 
-It runs as a local Docker container, pinned to **ArcadeDB 26.7.1** (the latest stable tag; `:latest` resolves to a
+It runs as a local Docker container, pinned to **ArcadeDB 26.11.1** (the latest stable tag; `:latest` resolves to a
 moving `-SNAPSHOT` dev build, which we deliberately do not use). This is the version the engine's schema and the
-`vector.fuse` hybrid retrieval are validated on. Sparse vector index and server-side hybrid retrieval exist since
+`vector.fuse` hybrid retrieval are validated on (moved from 26.7.1 by PS-67, ADR-0145). Sparse vector index and server-side hybrid retrieval exist since
 26.5.1.
 
 ## Start
@@ -19,7 +19,7 @@ docker run -d --name arcadedb-ragwright \
   -v "$PWD/data/arcadedb:/home/arcadedb/databases" \
   -e JAVA_OPTS="-Darcadedb.server.rootPassword=<YOUR_DEV_PASSWORD> -Darcadedb.server.mode=development" \
   -e ARCADEDB_OPTS_MEMORY="-Xms2G -Xmx6G" \
-  arcadedata/arcadedb:26.7.1
+  arcadedata/arcadedb:26.11.1
 ```
 
 - Port `2480` is the HTTP API the `arcadedb_python` client uses; `2424` is the binary protocol.

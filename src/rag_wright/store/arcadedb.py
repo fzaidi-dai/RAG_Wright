@@ -110,6 +110,7 @@ logging.getLogger("arcadedb_python.api.sync").addFilter(_RetriedConflictFilter()
 def _is_retryable_conflict(exc: BaseException, *, duplicate_key: bool = False) -> bool:
     msg = str(exc)
     return ("ConcurrentModificationException" in msg or "Concurrent modification on page" in msg
+            or "concurrent change to the same record" in msg  # 26.10+: a per-record rebase that failed (PS-67)
             or (duplicate_key and ("DuplicatedKeyException" in msg or "Found duplicate key" in msg)))
 
 
@@ -596,7 +597,8 @@ class ArcadeDBStore:
                 existing = self._declared_property_types(vt.name)
             for pname, ptype in vt.properties:
                 if pname not in existing:
-                    self._command(f"CREATE PROPERTY {vt.name}.{pname} {ptype}")
+                    if not self._declare_property(vt.name, pname, ptype):
+                        continue
                     if vt.name in types and ptype != "STRING":
                         self._warn_unconverted_values(vt.name, pname, ptype)
                 elif existing[pname] != ptype:
@@ -617,6 +619,22 @@ class ArcadeDBStore:
             if row.get("name") == type_name:
                 return {prop["name"]: prop.get("type") for prop in row.get("properties", [])}
         return {}
+
+    def _declare_property(self, type_name: str, pname: str, ptype: str) -> bool:
+        """Declare `type_name.pname`; False when ArcadeDB (26.10+) refuses it over a stored value that is not a
+        `ptype` (PS-67). The refusal is logged and the property left undeclared; the next `ensure_pack_schema`
+        declares it once a re-ingest has rewritten the values."""
+        try:
+            self._command(f"CREATE PROPERTY {type_name}.{pname} {ptype}")
+        except Exception as exc:  # noqa: BLE001 - only the refusal over non-conforming records is absorbed
+            if "Cannot create property" not in str(exc) or "violates it" not in str(exc):
+                raise
+            n = self._query(f"SELECT count(*) AS n FROM {type_name} WHERE {pname} IS NOT NULL")[0]["n"]
+            _log.warning("%s.%s is not declared %s: ArcadeDB refuses the declaration because some of the %d existing "
+                         "record(s) holding a value hold one that is not a %s; a re-ingest rewrites them, and the "
+                         "property is declared on the next ensure_pack_schema", type_name, pname, ptype, n, ptype)
+            return False
+        return True
 
     def _warn_unconverted_values(self, type_name: str, pname: str, ptype: str) -> None:
         n = self._query(f"SELECT count(*) AS n FROM {type_name} WHERE {pname} IS NOT NULL")[0]["n"]
@@ -1042,6 +1060,39 @@ class ArcadeDBStore:
         return self._query(
             f"SELECT span_id, parent_chunk_id, primary_tag FROM ({neighbours}){where} LIMIT {k}"
         )
+
+    def warm_vector_indexes(self) -> dict[str, float]:
+        """PS-67: one nearest-neighbour query per engine dense index that holds a vector, so ArcadeDB loads (or, when
+        it must, builds) the index's vector graph now rather than inside a user's first search. For a deployment's
+        start-up, before it serves. Returns {index name: seconds taken}; an index absent or holding no vector is
+        skipped."""
+        took: dict[str, float] = {}
+        indexes = self.index_names()
+        for type_name, index in ((CHUNK_TYPE, _DENSE_INDEX), (SPAN_TYPE, _SPAN_DENSE_INDEX)):
+            if index not in indexes:
+                continue
+            rows = self._query(f"SELECT dense FROM {type_name} WHERE dense IS NOT NULL LIMIT 1")
+            if not rows:
+                continue
+            start = time.perf_counter()
+            self._query(f"SELECT expand(`vector.neighbors`('{index}', {_float_array(rows[0]['dense'])}, 1))")
+            took[index] = time.perf_counter() - start
+        return took
+
+    def rebuild_vector_indexes(self) -> dict[str, float]:
+        """PS-67: `REBUILD INDEX` each engine dense index present, once, after ArcadeDB 26.11 first opens a database
+        26.7 wrote. That open rebuilds the graph by itself, and on real data the result can leave nearly every
+        vector reachable only by a full scan; an explicit rebuild builds it properly. Writes wait and searches scan
+        while it runs (seconds per 100k vectors), so a deployment runs it at start-up, before it serves. Returns
+        {index name: seconds taken}."""
+        took: dict[str, float] = {}
+        indexes = self.index_names()
+        for index in (_DENSE_INDEX, _SPAN_DENSE_INDEX):
+            if index in indexes:
+                start = time.perf_counter()
+                self._command(f"REBUILD INDEX `{index}`")
+                took[index] = time.perf_counter() - start
+        return took
 
     def span_texts(self, span_ids: list[str]) -> dict[str, str]:
         """The operative-span text for each span_id (batched), for citing a retrieved span. {span_id: text}."""

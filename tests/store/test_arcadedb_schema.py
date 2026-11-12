@@ -45,6 +45,12 @@ class _InMemoryStore:
     def ping(self) -> bool:
         return True
 
+    def warm_vector_indexes(self) -> dict[str, float]:  # PS-67 seam conformance: no vector index to load
+        return {}
+
+    def rebuild_vector_indexes(self) -> dict[str, float]:  # PS-67 seam conformance: no vector index to rebuild
+        return {}
+
     def close(self) -> None:
         pass
 

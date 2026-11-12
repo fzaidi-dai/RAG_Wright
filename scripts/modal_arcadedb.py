@@ -5,7 +5,7 @@ Requirement KG (`ragwright_compliance`, FTC 16 CFR 255, MODAL-COMPLIANCE) both l
 Modal Volume (each restored once from its `<db>-backup.zip` on first boot; one server serves every DB in the
 mount). ArcadeDB is a pure-Java
 server; the stock `arcadedata/arcadedb` image is Alpine (musl) which Modal's Python runner can't run on, so we
-build a debian + JRE image and drop the ArcadeDB 26.7.1 distribution into it, then run the server against the
+build a debian + JRE image and drop the ArcadeDB 26.11.1 distribution into it, then run the server against the
 Volume-mounted databases dir and expose the HTTP API (2480). `min_containers=1` keeps it always warm (cheap
 CPU, no per-query DB cold start -- the EC decision); the A100 is the scale-to-zero piece.
 
@@ -31,12 +31,12 @@ DB_MOUNT = f"{ARCADE_HOME}/databases"  # ArcadeDB's default databases dir
 # clobbers an already-unpacked DB. `ragwright_compliance` (the FTC 16 CFR 255 Requirement KG) is served
 # alongside the contract KG from the same Volume (no second app), MODAL-COMPLIANCE.
 DB_NAMES = ["ragwright_cuad_full", "ragwright_compliance"]
-_TARBALL = "https://github.com/ArcadeData/arcadedb/releases/download/26.7.1/arcadedb-26.7.1.tar.gz"
+_TARBALL = "https://github.com/ArcadeData/arcadedb/releases/download/26.11.1/arcadedb-26.11.1.tar.gz"
 
 app = modal.App("rw-arcadedb")
 data_vol = modal.Volume.from_name("rw-arcadedb-data", create_if_missing=True)
 image = (
-    # ArcadeDB 26.7.1 is compiled for Java 21 (class v65); Temurin 21-jre is Ubuntu/glibc so add_python works
+    # ArcadeDB 26.11.1 is compiled for Java 21 (class v65); Temurin 21-jre is Ubuntu/glibc so add_python works
     modal.Image.from_registry("eclipse-temurin:21-jre", add_python="3.12")
     .apt_install("curl")
     # download the distribution at build; EXTRACT at runtime (the build sandbox FS can't recreate its hardlinks)

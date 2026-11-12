@@ -3,6 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> PS-67 done (TexWright's request `2026-11-12-the-span-vector-index-is-rebuilt-on-every-process-start.md`): the engine moves to ArcadeDB 26.11.1, where a store that keeps ingesting reuses its saved vector graph across restarts; `warm_vector_indexes(ws)` at start-up and `rebuild_vector_indexes(ws)` once per database after the move (ADR-0145). Next: PS-48.
+>
 > **2026-11-11: `rag-wright` 0.17.2 is RELEASED (PR #23: PS-64, PS-65).** PS-64 done (TexWright's request `2026-11-09-kg-update-rewrites-unchanged-doubles.md`): a float is written and compared as a 64-bit double unless declared FLOAT, so `kg_update` settles on an unchanged DOUBLE and equality / membership / `Range` filters find it (ADR-0143). Next: PS-65 (one BGE-M3 model per process).
 >
 > PS-65 done (TexWright's request `2026-11-09-the-embedder-model-is-rebuilt-for-every-workspace.md`): one loaded BGE model (embedder, reranker) per (model, precision, device) per process, every wrapper on its one lock (`util.devices.shared_model`, ADR-0144). Next: PS-48.

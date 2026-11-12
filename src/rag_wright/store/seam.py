@@ -145,6 +145,12 @@ class Store(Protocol):
     def ping(self) -> bool:
         """True if the store is reachable."""
 
+    def warm_vector_indexes(self) -> dict[str, float]:
+        """Load each dense vector index's search structure now, before serving (PS-67); {index: seconds}."""
+
+    def rebuild_vector_indexes(self) -> dict[str, float]:
+        """Rebuild each dense vector index from its records, once, after a store upgrade (PS-67); {index: seconds}."""
+
     def close(self) -> None:
         """Release any resources held by the implementation."""
 

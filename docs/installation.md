@@ -79,7 +79,7 @@ are your product's data. Your product runs its own ArcadeDB instance, keeps its 
 (`open_workspace`); it never chooses where the data lives, and nothing of yours is stored in the engine's checkout or
 in the installed package.
 
-One ArcadeDB database holds both the hybrid retrieval index and the knowledge graph. Use **26.7.1**, the version the
+One ArcadeDB database holds both the hybrid retrieval index and the knowledge graph. Use **26.11.1**, the version the
 engine is tested on (do not use `:latest`; it is a moving snapshot). For local development, from your product's repo:
 
 ```bash
@@ -88,7 +88,7 @@ docker run -d --name <your-product>-arcadedb \
   -v "$PWD/data/arcadedb:/home/arcadedb/databases" \
   -e JAVA_OPTS="-Darcadedb.server.rootPassword=<DEV_PASSWORD> -Darcadedb.server.mode=development" \
   -e ARCADEDB_OPTS_MEMORY="-Xms2G -Xmx6G" \
-  arcadedata/arcadedb:26.7.1
+  arcadedata/arcadedb:26.11.1
 ```
 
 - `$PWD/data/arcadedb` is your product's data directory; add it to your product's `.gitignore`. Any path you own
@@ -107,6 +107,15 @@ docker run -d --name <your-product>-arcadedb \
   ```bash
   curl -s -u root:<DEV_PASSWORD> http://localhost:<http-port>/api/v1/databases
   ```
+- **A process that starts often** (a scale-to-zero or autoscaled deployment) calls
+  `rag_wright.api.warm_vector_indexes(ws)` at start-up, before it serves: the store loads each dense index's vector
+  graph on the first search in a process, and this makes that cost land at start-up rather than in a user's first
+  search. On 26.11.1 a saved graph is reused across restarts, through ingests, re-ingests and deletes; it is built
+  again only after a large share of an index has changed (on 26.7.1 any re-ingest made every later start rebuild it).
+- **Moving a database from 26.7.1 to 26.11.1:** back up the data directory, start 26.11.1 on it, and call
+  `rag_wright.api.rebuild_vector_indexes(ws)` once per database before serving. The first 26.11.1 open rebuilds each
+  dense index by itself, and on real data that rebuild can leave nearly every vector searchable only by a full scan
+  (results stay correct; every search reads every vector). The explicit rebuild takes seconds per 100,000 vectors.
 
 ## Configure access (`.env`)
 
