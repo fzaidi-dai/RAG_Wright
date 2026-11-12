@@ -4,6 +4,14 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.17.3](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.2...0.17.3) (2026-11-12)
+
+
+### Bug Fixes
+
+* **PS-67:** ArcadeDB 26.11.1, so a vector index is not rebuilt on every start ([626967f](https://github.com/fzaidi-dai/RAG_Wright/commit/626967fd017cd077f14247ca61a7d3d20f7d9b04))
+* **PS-68:** quote every KG filter field, so `text` is not a function on ArcadeDB 26.11.1 ([0d362e8](https://github.com/fzaidi-dai/RAG_Wright/commit/0d362e87b04a731d467c0177f2490cb48b629f7d))
+
 ## [0.17.2](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.1...0.17.2) (2026-11-11)
 
 
