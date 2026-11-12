@@ -250,3 +250,13 @@ The orchestrator could not read its own authored skills. `TheSubjectIsNotAFilesy
 grades filesystem calls already counted `/skills` as the agent's own: two hand-kept lists had drifted.
 `filesystem.OWN_ROOTS` (the memory roots plus the skills root) is now the one list, the signpost reads it, and
 `rules.OWN_FILESYSTEM` is derived from it.
+
+## Amendment (2026-11-13, PS-48h)
+
+A product's harness evals need two instruments every product would otherwise write for itself: a fault injector
+that causes a slow, failing, empty or truncated call deterministically, and a preflight that says what a run will
+build, with a cut that measures the chat-manager alone. Both moved from the first product's eval code into the
+harness as `harness.faults` (`Fault`, `InjectFaults`) and `harness.preflight` (`what_will_run`, `report`,
+`stub_orchestrator`, `only_the_chat_manager`), taking the product's definition instead of importing its roster.
+The injector now ships in the wheel, so "off in production" is guarded differently: nothing in the engine
+constructs one, asserted over the engine's source.

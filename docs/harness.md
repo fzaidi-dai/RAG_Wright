@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-53 public names; `AgentDefinition` has 15 fields and `AgentPrompts` 11, every one required.
+60 public names; `AgentDefinition` has 15 fields and `AgentPrompts` 11, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -278,6 +278,10 @@ arguments, the briefs it was dispatched with, and tokens per turn. That recordin
 (`rules.broken`) and what the grader's evidence tool reads (`grading_middleware(tier, sink, settings, rules=...)`),
 so attach the recorder to every tier you grade. `every_call`, `spend`, `compare` and `transcript` read it back:
 `compare(alone, orchestrated)` is the one table that says whether a worker costs the same under a parent as alone.
+
+**Causing a failure on demand.** A failure seen once, live, cannot be regression-tested. `InjectFaults(*faults, seed=)` is a middleware that causes one deterministically: `Fault(nth_model_call=2, delay_s=...)` slows the second model call of a run, `Fault(tool="my_tool", raises=MyError)` fails a tool, and `empty=` / `truncate_to=` spoil a response; `probability=` draws from the seeded generator, and `fired` lists the calls it landed on. It causes the condition, never the model's decision, which the run's decision ledger records. Put it after `error_middleware(...)` in an eval's own agent (or `build_orchestrator(..., extra_middleware=)`), never in an agent you serve: nothing in the engine installs it.
+
+**Measuring one tier.** `what_will_run(definition, context)` reports what a run would build -- whether the orchestrator is real or stubbed, and which workers -- and `report(label, definition, context)` prints it before an eval spends anything. Inside `with only_the_chat_manager(definition):` the chat-manager delegates to `stub_orchestrator`, which keeps your orchestrator's name and description (what the delegation decision is made from), answers each brief as finished work and records into the run's ledger; stub your own operations inside the same block.
 
 **The trap:** a conformance test that hands the substrate your own context type while asserting that a different
 product works proves nothing about a product whose scope has a different depth. When a seam changes, change the

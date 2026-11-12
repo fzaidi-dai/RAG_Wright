@@ -172,6 +172,150 @@ What the grader must return.
 
 Parsing is lenient, validation is strict: `the_verdict_in` builds this model and pydantic rejects anything malformed, so the shape our scorers read (`evals/decomposition.py`) is unchanged.
 
+### `Fault(nth_model_call: 'int | None' = None, tool: 'str | None' = None, delay_s: 'float' = 0.0, raises: 'type[BaseException] | None' = None, empty: 'bool' = False, truncate_to: 'int | None' = None, probability: 'float' = 1.0) -> None`
+
+One fault, aimed at an occurrence rather than at a moment.
+
+At most one of `nth_model_call` or `tool` addresses it; with neither it fires on every model call. The effects compose, so a call can be both delayed and emptied -- which is how a re-ask of a model that had just timed out is built.
+
+#### `Fault.aimed_at_model(self, nth: 'int') -> 'bool'`
+
+_(no docstring)_
+
+#### `Fault.aimed_at_tool(self, name: 'str') -> 'bool'`
+
+_(no docstring)_
+
+### `InjectFaults(*faults: 'Fault', seed: 'int' = 0) -> 'None'`
+
+Cause the named faults, and record where they fired.
+
+**`fired` is the evidence half.** A test that only observes the outcome cannot tell "the fault landed on the second call" from "the fault landed everywhere and the second call was the one that mattered".
+
+#### `InjectFaults.wrap_model_call(self, request: 'Any', handler: 'Any') -> 'Any'`
+
+Intercept and control model execution via handler callback.
+
+Async version is `awrap_model_call`
+
+The handler callback executes the model request and returns a `ModelResponse`. Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Model request to execute (includes state and runtime). handler: Callback that executes the model request and returns `ModelResponse`.
+
+Call this to execute the model.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: The model call result.
+
+Examples: !!! example "Retry on error"
+
+```python def wrap_model_call(self, request, handler): for attempt in range(3): try: return handler(request) except Exception: if attempt == 2: raise ```
+
+!!! example "Rewrite response"
+
+```python def wrap_model_call(self, request, handler): response = handler(request) ai_msg = response.result[0] return ModelResponse( result=[AIMessage(content=f"[{ai_msg.content}]")], structured_response=response.structured_response, ) ```
+
+!!! example "Error to fallback"
+
+```python def wrap_model_call(self, request, handler): try: return handler(request) except Exception: return ModelResponse(result=[AIMessage(content="Service unavailable")]) ```
+
+!!! example "Cache/short-circuit"
+
+```python def wrap_model_call(self, request, handler): if cached := get_cache(request): return cached # Short-circuit with cached result response = handler(request) save_cache(request, response) return response ```
+
+!!! example "Simple `AIMessage` return (converted automatically)"
+
+```python def wrap_model_call(self, request, handler): response = handler(request) # Can return AIMessage directly for simple cases return AIMessage(content="Simplified response") ```
+
+#### `InjectFaults.awrap_model_call(self, request: 'Any', handler: 'Any') -> 'Any'`
+
+Intercept and control async model execution via handler callback.
+
+The handler callback executes the model request and returns a `ModelResponse`.
+
+Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Model request to execute (includes state and runtime). handler: Async callback that executes the model request and returns `ModelResponse`.
+
+Call this to execute the model.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: The model call result.
+
+Examples: !!! example "Retry on error"
+
+```python async def awrap_model_call(self, request, handler): for attempt in range(3): try: return await handler(request) except Exception: if attempt == 2: raise ```
+
+#### `InjectFaults.wrap_tool_call(self, request: 'Any', handler: 'Any') -> 'Any'`
+
+Intercept tool execution for retries, monitoring, or modification.
+
+Async version is `awrap_tool_call`
+
+Multiple middleware compose automatically (first defined = outermost).
+
+Exceptions propagate unless `handle_tool_errors` is configured on `ToolNode`.
+
+Args: request: Tool call request with call `dict`, `BaseTool`, state, and runtime.
+
+Access state via `request.state` and runtime via `request.runtime`. handler: `Callable` to execute the tool (can be called multiple times).
+
+Returns: `ToolMessage` or `Command` (the final result).
+
+The handler `Callable` can be invoked multiple times for retry logic.
+
+Each call to handler is independent and stateless.
+
+Examples: !!! example "Modify request before execution"
+
+```python def wrap_tool_call(self, request, handler): modified_call = { **request.tool_call, "args": { **request.tool_call["args"], "value": request.tool_call["args"]["value"] * 2, }, } request = request.override(tool_call=modified_call) return handler(request) ```
+
+!!! example "Retry on error (call handler multiple times)"
+
+```python def wrap_tool_call(self, request, handler): for attempt in range(3): try: result = handler(request) if is_valid(result): return result except Exception: if attempt == 2: raise return result ```
+
+!!! example "Conditional retry based on response"
+
+```python def wrap_tool_call(self, request, handler): for attempt in range(3): result = handler(request) if isinstance(result, ToolMessage) and result.status != "error": return result if attempt < 2: continue return result ```
+
+#### `InjectFaults.awrap_tool_call(self, request: 'Any', handler: 'Any') -> 'Any'`
+
+Intercept and control async tool execution via handler callback.
+
+The handler callback executes the tool call and returns a `ToolMessage` or `Command`. Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Tool call request with call `dict`, `BaseTool`, state, and runtime.
+
+Access state via `request.state` and runtime via `request.runtime`. handler: Async callable to execute the tool and returns `ToolMessage` or `Command`.
+
+Call this to execute the tool.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: `ToolMessage` or `Command` (the final result).
+
+The handler `Callable` can be invoked multiple times for retry logic.
+
+Each call to handler is independent and stateless.
+
+Examples: !!! example "Async retry on error"
+
+```python async def awrap_tool_call(self, request, handler): for attempt in range(3): try: result = await handler(request) if is_valid(result): return result except Exception: if attempt == 2: raise return result ```
+
+```python async def awrap_tool_call(self, request, handler): if cached := await get_cache_async(request): return ToolMessage(content=cached, tool_call_id=request.tool_call["id"]) result = await handler(request) await save_cache_async(request, result) return result ```
+
+### `WhatWillRun(orchestrator: 'str', workers: 'tuple[str, ...]') -> None`
+
+The tiers a run would construct, given the module state installed right now.
+
 ## Hook protocols
 
 Callables you pass to the engine; any function with this signature conforms.
@@ -215,6 +359,12 @@ str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
 Create a new string object from the given object. If encoding or errors is specified, then the object must expose a data buffer that will be decoded using the given encoding and error handler. Otherwise, returns the result of object.__str__() (if defined) or repr(object). encoding defaults to sys.getdefaultencoding(). errors defaults to 'strict'.
 
 ### `GRADER_ERROR`
+
+str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
+
+Create a new string object from the given object. If encoding or errors is specified, then the object must expose a data buffer that will be decoded using the given encoding and error handler. Otherwise, returns the result of object.__str__() (if defined) or repr(object). encoding defaults to sys.getdefaultencoding(). errors defaults to 'strict'.
+
+### `STUB_ORCHESTRATOR_REPLY`
 
 str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
 
@@ -443,3 +593,23 @@ The grader's evidence: every deterministic detector for this tier, over this run
 **It closes over the live recording**, which `RecordTheContext` fills as the run proceeds. Grading happens in `after_agent`, after the last model call, so by the time this is callable the recording is complete.
 
 **`consulted` records that the grader actually called it**, which is the one assumption this whole design rests on. The prompt tells the grader to call it first; a grader that reasoned instead would still return a plausible verdict, and we would have paid for a judge while believing we had a counter. Measuring it is the difference between a claim and a fact.
+
+### `what_will_run(definition: 'Any', context: 'Any') -> 'WhatWillRun'`
+
+Report what a run of `definition`, in `context`, would build, as the harness stands.
+
+**The worker names are the ones the orchestrator offers**, read off the specs the roster builds -- not the factories' function names, which a product is free to choose differently. Building them needs the run's scope, which is the product's own type, so the caller passes it; the resources are a stand-in, as in `tiers.worker_operations`, because the tools built here are thrown away.
+
+### `only_the_chat_manager(definition: 'Any', *, reply: 'str' = 'Complete. I worked through the request: {brief}\n\nFindings: the material that bears on this was read and the answer is above. Coverage: everything in scope was read. Nothing further is needed -- this request is done.') -> 'Iterator[None]'`
+
+Within the block, every chat-manager `build_chat_agent` builds delegates to `stub_orchestrator`.
+
+**Patched where `build_chat_agent` looks it up** (`harness.agent`), and restored on the way out however the block ends. `what_will_run` inside the block reports `"stubbed"` and no workers -- which is how an eval proves it measures the tier it says it does.
+
+### `stub_orchestrator(context: 'Any', resources: 'Any', settings: 'Any', *, definition: 'Any', ledger: 'Any' = None, reply: 'str' = 'Complete. I worked through the request: {brief}\n\nFindings: the material that bears on this was read and the answer is above. Coverage: everything in scope was read. Nothing further is needed -- this request is done.', **_: 'Any') -> 'dict[str, Any]'`
+
+The orchestrator as the chat-manager SEES it, with nothing underneath.
+
+**A `CompiledSubAgent`, same as the real one**, so the parent's `task` tool is built the same way. **Its description is the product's own** (`definition.prompts.orchestrator_description`): the chat-manager decides whether to delegate by reading it, and a reworded stub would change the decision being measured.
+
+**It records**: the run's dispatch count comes from the ledger, and the ledger sees only a tier carrying `RecordTheDecisions` -- a bare stub left it empty, so a dispatch bound read as holding for any behaviour, including a run that attempted 24 dispatches. The recorder carries the product's framings, as the real orchestrator's does.
