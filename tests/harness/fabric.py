@@ -17,6 +17,7 @@ from pydantic import Field
 
 from rag_wright.harness.decisions import DecisionPoint
 from rag_wright.harness.definition import AgentPrompts
+from rag_wright.harness.errors import ModelAttemptTooSlow
 from rag_wright.harness.rules import Rule
 from rag_wright.harness.workers import WorkerReport
 
@@ -148,10 +149,15 @@ class MillIsOffline(Exception):
     """
 
 
+class UnknownComposition(ValueError):
+    """**This product's recoverable failure**: the model named a composition that does not exist, and the
+    message carries the ones that do, so it can pick again. Recoverable and transient are different sets: a
+    failure the model is told about is not retried, and a retried one is not told."""
+
+
 def _fabric_message_for(error: BaseException) -> str | None:
     """What this product tells the model about a failure. `None` lets it surface, which halts the run."""
-    return "The mill feed is briefly offline. Try that composition again." \
-        if isinstance(error, MillIsOffline) else None
+    return f"{type(error).__name__}: {error}" if isinstance(error, UnknownComposition) else None
 
 
 #: **This product says nothing of ours, which is the point.** Every word the substrate used to carry --
@@ -222,7 +228,7 @@ def _fabric() -> Any:
 
     return AgentDefinition(surface=FabricToolSurface(), planning=FABRIC_PLANNING,
                            workers=(_fabric_worker,), context_schema=FabricContext,
-                           retry_on=(MillIsOffline,), message_for=_fabric_message_for,
+                           retry_on=(MillIsOffline, ModelAttemptTooSlow), message_for=_fabric_message_for,
                            model_id_for=lambda settings: "fabric-mill-model",
                            prompts=FABRIC_PROMPTS,
                            repeatable=frozenset({"match_compositions", "list_mills"}),
@@ -292,3 +298,41 @@ def scripted(*messages: Any) -> Any:
             return self
 
     return Scripted(messages=iter(messages))
+
+
+# --- models that misbehave, for the clocks and the retries ---------------------------------------------
+
+
+def never_answers() -> Any:
+    """A provider that holds the connection open and never replies -- the case a read timeout misses."""
+    import asyncio
+
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+
+    class NeverAnswers(GenericFakeChatModel):
+        def bind_tools(self, tools: Any, **_kwargs: Any) -> Any:
+            return self
+
+        async def _agenerate(self, messages: Any, stop: Any = None, run_manager: Any = None, **kwargs: Any):
+            await asyncio.sleep(3600)
+            raise AssertionError("unreachable")
+
+    return NeverAnswers(messages=iter([]))
+
+
+def fails_transiently(attempts: list) -> Any:
+    """A mill feed that goes offline on every call, slowly, forever: a failure the fabric's retry set names."""
+    import asyncio
+
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+
+    class FailsTransiently(GenericFakeChatModel):
+        def bind_tools(self, tools: Any, **_kwargs: Any) -> Any:
+            return self
+
+        async def _agenerate(self, messages: Any, stop: Any = None, run_manager: Any = None, **kwargs: Any):
+            attempts.append(1)
+            await asyncio.sleep(0.4)
+            raise MillIsOffline("the mill feed went quiet")
+
+    return FailsTransiently(messages=iter([]))

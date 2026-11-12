@@ -189,3 +189,10 @@ Porting the harness's behaviour tests onto the fabric fixture (`tests/harness/fa
 skill without a `description` was skipped by deepagents' skills middleware with only a logged warning, so the model
 was never told it existed. `AgentPrompts` now refuses, at declaration, a skill the middleware would never advertise:
 one not published at `/skills/<name>/SKILL.md`, or whose frontmatter deepagents' own parser rejects.
+
+## Amendment (2026-11-12, PS-48b)
+
+A failure a product named both in `retry_on` and in `message_for` was never retried: `ToolErrorMiddleware` sits
+inside the retry and converted it to a message first, so the product's retry setting silently did nothing (found on
+the fabric fixture: one attempt, "try again" handed to the model). `error_middleware` now never converts a failure in
+`retry_on`; it is retried, and surfaces once the retries are spent.

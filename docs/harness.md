@@ -62,7 +62,7 @@ workers. A derived value crossing the boundary would become a convention the nex
 | `workers` | `tuple[Any, ...]` | The worker factories the orchestrator may dispatch. |
 | `context_schema` | `Any` | The type a run's context has, passed to the agent as `context_schema`; it must satisfy `RunScope`. The product's context stays its own: typed ids, its own construction rule, whatever else it wants. |
 | `retry_on` | `tuple[type[BaseException], ...]` | Which exceptions the retry middleware may re-attempt. **Named, never `Exception`** -- the library's default would retry a scope violation, which is re-attempting a leak with backoff. |
-| `message_for` | `Any` | `(error) -> str \| None`: what the model is told about a failure, or `None` to let it surface. |
+| `message_for` | `Any` | `(error) -> str \| None`: what the model is told about a failure, or `None` to let it surface. Never asked about a failure in `retry_on`: that one is retried, and surfaces once the retries are spent. |
 | `model_id_for` | `Any` | `(settings) -> str`: the ENGINE model id this product's agent reasons with (a registered profile's key). A model id is configuration: adopting a better model is a new profile and a changed setting. |
 | `prompts` | `AgentPrompts` | Every word this product says to its model (`AgentPrompts`). |
 | `repeatable` | `frozenset[str]` | Tools whose answer is the same twice in one run, so a repeat can be served from the record. |

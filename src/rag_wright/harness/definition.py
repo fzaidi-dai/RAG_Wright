@@ -126,7 +126,8 @@ class AgentDefinition:
     #: Which exceptions the retry middleware may re-attempt. **Named, never `Exception`** -- the library's default
     #: would retry a scope violation, which is re-attempting a leak with backoff.
     retry_on: tuple[type[BaseException], ...]
-    #: `(error) -> str | None`: what the model is told about a failure, or `None` to let it surface.
+    #: `(error) -> str | None`: what the model is told about a failure, or `None` to let it surface. Never asked
+    #: about a failure in `retry_on`: that one is retried, and surfaces once the retries are spent.
     message_for: Any
     #: `(settings) -> str`: the ENGINE model id this product's agent reasons with (a registered profile's key).
     #: A model id is configuration: adopting a better model is a new profile and a changed setting.

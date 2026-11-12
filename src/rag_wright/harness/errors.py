@@ -197,7 +197,7 @@ def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: 
                                  raises=ModelAttemptTooSlow),
         # Row two: the model's problem -- but only for failures it can actually act on. Everything else
         # returns None from `message_for` and propagates, which is the "bubbles to a developer" level.
-        ToolErrorMiddleware(on_error=_what_the_model_is_told(message_for or _tell_nothing)),
+        ToolErrorMiddleware(on_error=_what_the_model_is_told(message_for or _tell_nothing, retry_on)),
         # Runaway loops. A cap is not a judgement about the work, it is a bound on the bill.
         ModelCallLimitMiddleware(run_limit=MODEL_CALLS_PER_RUN, exit_behavior="end"),
         ToolCallLimitMiddleware(run_limit=TOOL_CALLS_PER_RUN, exit_behavior="end"),
@@ -213,7 +213,7 @@ def _tell_nothing(error: BaseException) -> str | None:
     return None
 
 
-def _what_the_model_is_told(decide: Any) -> Any:
+def _what_the_model_is_told(decide: Any, retry_on: tuple[type[BaseException], ...] = ()) -> Any:
     """Adapt the product's error taxonomy to the middleware's callback shape.
 
     **The library calls `on_error(exc, request)` — TWO arguments** — and `message_for(error)` takes one.
@@ -228,9 +228,16 @@ def _what_the_model_is_told(decide: Any) -> Any:
     **The adapter lives here, not in the product's error module.** Which failures are recoverable is product
     knowledge; the shape a middleware wants is the harness's problem. Same split the module docstring
     already makes.
+
+    **A failure the product RETRIES is never converted** (PS-48b). This middleware sits inside the retry, so a
+    message for a `retry_on` failure reached the model before the retry ever saw an exception: one attempt, and
+    "try again" handed to the model, so the product's retry setting silently did nothing. Retry wins; once the
+    retries are spent the failure surfaces, as any other the model is not told about.
     """
 
     def on_error(exc: BaseException, request: Any) -> str | None:
+        if isinstance(exc, retry_on):
+            return None
         return decide(exc)
 
     return on_error
