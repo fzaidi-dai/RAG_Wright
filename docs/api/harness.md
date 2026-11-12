@@ -300,9 +300,11 @@ Tried to open the subject documents as files.
 
 An `eval` whose program did the work of one tool call.
 
-### `guessed_an_identifier(recording: 'dict[str, Any]') -> 'str | None'`
+### `guessed_identifiers(arguments: 'dict[str, str]') -> 'Callable[[dict[str, Any]], str | None]'`
 
-Tried an id that was never supplied.
+A detector for ids a tier used that nobody supplied, over the tool arguments the PRODUCT names.
+
+`arguments` maps a tool to its argument that must carry an id the run was given -- in a dispatch brief or the system prompt. **Named, not inferred** (PS-48d): this detector once named one product's tool and argument, so for every other product it could never fire. Inferring every `*_id` argument instead would misfire, because a recording clips long tool results and an id a tool returned would look unsupplied.
 
 ### `blocked_without_saying_what_it_needs(recording: 'dict[str, Any]') -> 'str | None'`
 

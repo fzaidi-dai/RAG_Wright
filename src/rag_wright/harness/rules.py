@@ -160,18 +160,25 @@ def wrote_a_program_for_a_single_call(recording: dict[str, Any]) -> str | None:
             "been called directly for less")
 
 
-def guessed_an_identifier(recording: dict[str, Any]) -> str | None:
-    """Tried an id that was never supplied."""
-    supplied = " ".join(_dispatches(recording)) + " " + str(recording.get("system_prompt", ""))
-    invented = [
-        c for c in _calls(recording)
-        if c["tool"] == "read_compliance_check"
-        and str(c["args"].get("check_id", "")) not in supplied
-    ]
-    if not invented:
-        return None
-    return (f"{len(invented)} check id(s) were used that nobody supplied: "
-            f"{[c['args'].get('check_id') for c in invented[:3]]}")
+def guessed_identifiers(arguments: dict[str, str]) -> Callable[[dict[str, Any]], str | None]:
+    """A detector for ids a tier used that nobody supplied, over the tool arguments the PRODUCT names.
+
+    `arguments` maps a tool to its argument that must carry an id the run was given -- in a dispatch brief or the
+    system prompt. **Named, not inferred** (PS-48d): this detector once named one product's tool and argument, so
+    for every other product it could never fire. Inferring every `*_id` argument instead would misfire, because a
+    recording clips long tool results and an id a tool returned would look unsupplied.
+    """
+
+    def guessed_an_identifier(recording: dict[str, Any]) -> str | None:
+        supplied = " ".join(_dispatches(recording)) + " " + str(recording.get("system_prompt", ""))
+        invented = [(c["tool"], c["args"].get(arguments[c["tool"]])) for c in _calls(recording)
+                    if c["tool"] in arguments
+                    and str(c["args"].get(arguments[c["tool"]], "")) not in supplied]
+        if not invented:
+            return None
+        return f"{len(invented)} id(s) were used that nobody supplied: {invented[:3]}"
+
+    return guessed_an_identifier
 
 
 def _report_of(recording: dict[str, Any]) -> dict[str, Any]:

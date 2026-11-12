@@ -204,3 +204,13 @@ from `definition.model_id_for`, so an agent built with a scripted model still ma
 passed in is now the model of every tier the call builds. Separately, a tool declaring a bare `ToolRuntime` (which is
 `ToolRuntime[None]`) logs a serializer warning on every call with a real context; the engine declares none, and the
 shipped `building-an-agent-harness` skill now teaches `ToolRuntime[MyContext]`.
+
+## Amendment (2026-11-12, PS-48d)
+
+The id detector `guessed_an_identifier` checked one product's `read_compliance_check(check_id)` in code, so for any
+other product it could never fire and every run read as clean; the vocabulary guard enumerated tool names and missed
+it. It is replaced by `guessed_identifiers(arguments)`, a detector over the tool arguments the product names (an id
+counts as supplied when a dispatch brief or the system prompt carries it). Inferring every `*_id` argument was
+rejected: a recording clips long tool results, so an id a tool returned would read as guessed. A breaking change to
+one function; the guard now lists the source product's tool and worker names. Open: the detectors and the grader read
+a recording shape only the product's eval recorder writes; moving that recorder into the harness is proposed for PS-48e.

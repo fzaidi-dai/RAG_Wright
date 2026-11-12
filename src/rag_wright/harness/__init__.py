@@ -26,7 +26,7 @@ from rag_wright.harness.rules import (
     Rule,
     blocked_without_saying_what_it_needs,
     dispatched_more_than_once,
-    guessed_an_identifier,
+    guessed_identifiers,
     reached_for_the_filesystem,
     wrote_a_program_for_a_single_call,
 )
@@ -61,6 +61,6 @@ __all__ = [
     "ModelTooSlow", "ModelAttemptTooSlow", "ModelTurnTooSlow", "error_middleware",
     # the rules a run is graded against, and the decisions it records
     "Rule", "dispatched_more_than_once", "reached_for_the_filesystem", "wrote_a_program_for_a_single_call",
-    "guessed_an_identifier", "blocked_without_saying_what_it_needs", "DecisionPoint", "ANY_WORKER",
+    "guessed_identifiers", "blocked_without_saying_what_it_needs", "DecisionPoint", "ANY_WORKER",
     "ORCHESTRATING_PATH",
 ]

@@ -222,6 +222,9 @@ _PRODUCT_TEXT = (
     r"[/_-]matter\b|\bmatter[/_-]",
     r"\bcustomer_id\b", r"\bworkspace_id\b",
     r"\bcompliance_worker\b", r"\bask_contract_question\b", r"\bparty_exposure\b", r"list my contracts",
+    # PS-48d: a detector named `read_compliance_check(check_id)` in CODE and no line here matched it, so for every
+    # other product it could never fire. The product's other tool and worker names, so the next one is caught.
+    r"\bread_compliance_check\b", r"\bcheck_id\b", r"\bclause_worker\b", r"\bclause_types?\b",
     r"§ ?\d", r"\bADP-\d", r"run-contract\.md", r"\bSPEC\.md\b",   # the product's spec and its sections
     r"(?<!harness/)\btests/test_",            # the product's test files (the engine's are tests/harness/)
 )
@@ -248,4 +251,5 @@ def test_THE_SUBSTRATE_SPEAKS_NO_PRODUCTS_LANGUAGE() -> None:
 def test_THE_PRODUCT_TEXT_GUARD_SEES_A_PLANTED_LEAK() -> None:
     assert _product_text('"""Bound to that run\'s matter (T-5a.4c-iii, ADR-0019)."""')
     assert _product_text("#: Narrowest first: `(\"acme\", \"matter-7\")`.")
+    assert _product_text('if c["tool"] == "read_compliance_check"')
     assert not _product_text("#: **Trailing slashes matter**: no matter what (engine ADR-0139).")

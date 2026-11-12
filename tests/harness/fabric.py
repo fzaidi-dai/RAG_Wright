@@ -208,13 +208,20 @@ FABRIC_POINT = DecisionPoint(
 )
 
 
+#: **This product's two ways into its data**, the choice the substrate records as `D6`: match across every
+#: composition, or read one named swatch. Its own tool names; the substrate only records which came first.
+FABRIC_FRAMINGS = ("match_compositions", "read_swatch")
+
+
 def _fabric_reads_its_framing(tool_name: str, reading: dict) -> dict | None:
-    """**This product's framing tool is its own, and so is its payload.** The substrate used to check the
-    literal name `read_the_question` and read `clause_types` off the reply."""
-    if tool_name != "match_compositions":
+    """**This product's framing tool is its own, and so is its payload** (`D5`). `read_the_brief` reads an
+    enquiry into the fibres this account stocks, with the classifier's own confidence; `fallback` means it
+    recognised none. The substrate used to check the literal name `read_the_question` and read `clause_types`."""
+    if tool_name != "read_the_brief":
         return None
-    return {"chose": str(reading.get("fibre") or "no framing"), "confidence": None,
-            "inputs": {"fibre": reading.get("fibre")}}
+    fibres = list(reading.get("fibres") or [])
+    return {"chose": fibres[0] if fibres else "no framing", "confidence": reading.get("confidence"),
+            "inputs": {"fibres": fibres, "fallback": bool(reading.get("fallback"))}}
 
 
 def _fabric() -> Any:
@@ -233,7 +240,7 @@ def _fabric() -> Any:
                            prompts=FABRIC_PROMPTS,
                            repeatable=frozenset({"match_compositions", "list_mills"}),
                            question_argument={"match_compositions": "brief"},
-                           framings=("match_compositions",),
+                           framings=FABRIC_FRAMINGS,
                            carry_forward=None,
                            rules=(FABRIC_RULE,), decision_points=(FABRIC_POINT,),
                            read_framing=_fabric_reads_its_framing)

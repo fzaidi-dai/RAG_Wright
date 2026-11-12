@@ -3,6 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **2026-11-12: PS-48d done** (decisions and rules): 51 RuleWright tests ported; the id detector is `guessed_identifiers({tool: argument})` instead of one product's tool (ADR-0139 amendment; RuleWright's `agent/rules.py` needs a one-line change). Not pushed until PS-48 is done. Next: PS-48e (grading; propose moving the run recorder into the harness).
+>
 > **2026-11-12: PS-48c done** (runs, confirm, continuation): 26 RuleWright tests ported; a model passed to `build_chat_agent` reaches every tier (ADR-0139 amendment); the skill teaches `ToolRuntime[MyContext]`. Not pushed: the user pushes once PS-48 is done. Next: PS-48d (decisions and rules).
 >
 > **2026-11-12: PS-48b done** (models and errors): 36 RuleWright tests ported (model, deadline, error wiring); a failure a product both retries and explains is now retried, not explained (ADR-0139 amendment). Next: PS-48c (runs, confirm, continuation).
