@@ -182,3 +182,10 @@ in-flight call was mislabelled and its real end emitted a second, zero-duration 
 model turn share a parent run and a parallel worker's call does not, so only a retry of the same turn now abandons an
 earlier attempt (the end-of-run sweep still closes the rest), and a call that fails is closed as an error.
 
+
+## Amendment (2026-11-12, PS-48a)
+
+Porting the harness's behaviour tests onto the fabric fixture (`tests/harness/fabric.py`) found that a product's
+skill without a `description` was skipped by deepagents' skills middleware with only a logged warning, so the model
+was never told it existed. `AgentPrompts` now refuses, at declaration, a skill the middleware would never advertise:
+one not published at `/skills/<name>/SKILL.md`, or whose frontmatter deepagents' own parser rejects.

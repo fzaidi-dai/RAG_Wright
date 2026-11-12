@@ -3,6 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **2026-11-12: PS-48a done** (harness substrate tests onto the fabric fixture, ADR-0139 handover): `tests/harness/fabric.py` shared, 26 RuleWright tests ported (events, skills, clarify); `AgentPrompts` refuses a skill deepagents would skip (ADR-0139 amendment). Next: PS-48b (models and errors).
+>
 > **2026-11-12: `rag-wright` 0.17.3 is RELEASED (PR #24: PS-67, PS-68).** PS-68 done (TexWright's request `2026-11-12-a-filter-on-the-field-named-text-is-refused-on-arcadedb-26-11-1.md`): every field the KG filter grammar writes is quoted, so a `Contains` filter on `text` (or `date`, `math`, `util`) is no longer read as a function module on ArcadeDB 26.11.1 (ADR-0145 amendment). Next: PS-48.
 >
 > PS-67 done (TexWright's request `2026-11-12-the-span-vector-index-is-rebuilt-on-every-process-start.md`): the engine moves to ArcadeDB 26.11.1, where a store that keeps ingesting reuses its saved vector graph across restarts; `warm_vector_indexes(ws)` at start-up and `rebuild_vector_indexes(ws)` once per database after the move (ADR-0145). Next: PS-48.

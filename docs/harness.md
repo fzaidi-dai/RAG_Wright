@@ -96,9 +96,12 @@ Every word the model reads is the product's. The substrate ships no prompt of it
 | `label` | `str` | What the model is shown as the SOURCE of the skills: the product's name. |
 <!-- /generated -->
 
-**Two constraints on your text.** `skills_preamble` must contain the three format slots
-`{skills_list}{skills_locations}{skills_load_warnings}` or the build raises. And no prompt may name a scope
-identifier: an injected instruction in an uploaded document can quote back whatever the prompt contains.
+**Three constraints on your text.** `skills_preamble` must contain the three format slots
+`{skills_list}{skills_locations}{skills_load_warnings}` or the build raises. Each skill is published at
+`/skills/<name>/SKILL.md` and opens with YAML frontmatter carrying a `name` and a `description`, or
+`AgentPrompts` raises: the skills middleware would skip it with only a logged warning, and the model would
+never be told it exists. And no prompt may name a scope identifier: an injected instruction in an uploaded
+document can quote back whatever the prompt contains.
 
 ---
 

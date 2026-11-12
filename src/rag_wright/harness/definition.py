@@ -68,6 +68,44 @@ class AgentPrompts:
     #: What the model is shown as the SOURCE of the skills: the product's name.
     label: str
 
+    def __post_init__(self) -> None:
+        for path, text in self.skills.items():
+            _check_skill(path, text)
+
+
+def _check_skill(path: str, text: str) -> None:
+    """Refuse a skill the skills middleware would never advertise (PS-48a).
+
+    **The library skips such a skill with a logged warning**, so the model is never told it exists and the
+    product does not find out. The verdict is deepagents' own frontmatter parser, so the two cannot disagree.
+    """
+    import logging
+    from pathlib import PurePosixPath
+
+    from deepagents.middleware.skills import _parse_skill_metadata
+
+    from rag_wright.harness.skills import SKILLS_ROOT
+
+    parts = PurePosixPath(path).parts
+    if len(parts) != 4 or "/" + parts[1] != SKILLS_ROOT or parts[3] != "SKILL.md":
+        raise ValueError(f"skill {path!r} is never listed: a skill is published at {SKILLS_ROOT}/<name>/SKILL.md")
+
+    said: list[str] = []
+
+    class _Heard(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            said.append(record.getMessage())
+
+    log, heard = logging.getLogger("deepagents.middleware.skills"), _Heard()
+    log.addHandler(heard)
+    try:
+        parsed = _parse_skill_metadata(text, path, parts[2])
+    finally:
+        log.removeHandler(heard)
+    if parsed is None:
+        raise ValueError(f"skill {path!r} would be skipped by the skills middleware: "
+                         f"{'; '.join(said) or 'its frontmatter does not parse'}")
+
 
 @dataclass(frozen=True, slots=True)
 class AgentDefinition:
