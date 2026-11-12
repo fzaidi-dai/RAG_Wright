@@ -14,20 +14,20 @@ from tests.store.test_kg_mutations import _store
 def test_contains_is_a_case_insensitive_literal_match_by_default():
     s, sql = _store()
     s.kg_read("Trial", fields=["trial_id"], where={"composition": Contains("UHMWPE")})
-    assert sql == ["SELECT trial_id FROM Trial WHERE composition.toLowerCase().indexOf('UHMWPE'.toLowerCase()) >= 0"]
+    assert sql == ["SELECT trial_id FROM Trial WHERE `composition`.toLowerCase().indexOf('UHMWPE'.toLowerCase()) >= 0"]
 
 
 def test_case_sensitive_contains():
     s, sql = _store()
     s.kg_read("Trial", where={"composition": Contains("Kevlar", case_sensitive=True)})
-    assert sql == ["SELECT * FROM Trial WHERE composition.indexOf('Kevlar') >= 0"]
+    assert sql == ["SELECT * FROM Trial WHERE `composition`.indexOf('Kevlar') >= 0"]
 
 
 def test_contains_composes_with_the_rest_of_the_grammar_and_escapes_its_text():
     s, sql = _store()
     s.kg_read("Trial", where={"composition": Contains("it's 50%"), "gsm": Range(ge=250, le=320), "season": "ss26"})
-    assert sql == ["SELECT * FROM Trial WHERE composition.toLowerCase().indexOf('it\\'s 50%'.toLowerCase()) >= 0"
-                   " AND gsm >= 250 AND gsm <= 320 AND season = 'ss26'"]
+    assert sql == ["SELECT * FROM Trial WHERE `composition`.toLowerCase().indexOf('it\\'s 50%'.toLowerCase()) >= 0"
+                   " AND `gsm` >= 250 AND `gsm` <= 320 AND `season` = 'ss26'"]
 
 
 def test_count_delete_update_and_edges_take_contains():
@@ -37,12 +37,12 @@ def test_count_delete_update_and_edges_take_contains():
     s.kg_update("Entity", set={"flag": "x"}, where={"name": Contains("old")})
     s.kg_edges(edge_type="Relationship", select={"src": "outV().entity_id"},
                edge_where={"relationship_type": Contains("supplies")})
-    assert sql[0] == "SELECT count(*) AS n FROM Entity WHERE name.toLowerCase().indexOf('acme'.toLowerCase()) >= 0"
-    assert "DELETE FROM Entity WHERE name.toLowerCase().indexOf('tmp'.toLowerCase()) >= 0" in sql
-    assert any(q.startswith("UPDATE Entity SET") and "name.toLowerCase().indexOf('old'.toLowerCase()) >= 0" in q
+    assert sql[0] == "SELECT count(*) AS n FROM Entity WHERE `name`.toLowerCase().indexOf('acme'.toLowerCase()) >= 0"
+    assert "DELETE FROM Entity WHERE `name`.toLowerCase().indexOf('tmp'.toLowerCase()) >= 0" in sql
+    assert any(q.startswith("UPDATE Entity SET") and "`name`.toLowerCase().indexOf('old'.toLowerCase()) >= 0" in q
                for q in sql)
     assert ("SELECT outV().entity_id AS src FROM Relationship"
-            " WHERE relationship_type.toLowerCase().indexOf('supplies'.toLowerCase()) >= 0") in sql
+            " WHERE `relationship_type`.toLowerCase().indexOf('supplies'.toLowerCase()) >= 0") in sql
 
 
 @pytest.mark.parametrize("args", [("",), (5,), (None,), (["a"],)])

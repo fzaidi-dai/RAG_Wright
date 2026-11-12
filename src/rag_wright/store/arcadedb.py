@@ -252,6 +252,12 @@ def _kg_check_edge(e: Any) -> None:
         _ident(k)
 
 
+def _kg_field(name: str) -> str:
+    """A checked filter field as SQL: quoted, so no field name reads as a function namespace (PS-68); a record
+    attribute (`@rid`, `@type`, ...) as it is."""
+    return name if name in _RECORD_ATTRS else f"`{name}`"
+
+
 def _kg_where_terms(where: Optional[dict[str, object]],
                     key_range: Optional[tuple[str, object, object]] = None,
                     types: Optional[dict[str, str]] = None) -> Optional[list[str]]:
@@ -260,18 +266,21 @@ def _kg_where_terms(where: Optional[dict[str, object]],
     literal substring test (`indexOf`, not `LIKE`, whose `%` `_` `?` are wildcards; PS-54);
     `key_range=(field, lo, hi)` adds `field >= lo AND field < hi`. Returns the AND-ed terms, or None when a membership list is EMPTY (scope-to-nothing:
     the caller returns without a statement). A float is encoded by the field's declared type in `types` (PS-64); on a
-    field the pack does not declare, equality and membership also match a value stored at 32 bits before PS-64."""
+    field the pack does not declare, equality and membership also match a value stored at 32 bits before PS-64. Every
+    field is quoted (`` `text` ``) but a record attribute (`@rid`): ArcadeDB 26.11 reads `text.toLowerCase()` as a
+    function of a module named `text` (PS-68)."""
     types = types or {}
     for field in where or {}:
         _ident(field, record_attrs=True)
     if key_range is not None:
         _ident(key_range[0])
     out: list[str] = []
-    for field, value in (where or {}).items():
+    for name, value in (where or {}).items():
+        field = _kg_field(name)
         if value is NOT_NULL:
             out.append(f"{field} IS NOT NULL")
         elif isinstance(value, Range):
-            out += [f"{field} {op} {_kg_sql_value(bound, types.get(field))}" for op, bound in value.terms()]
+            out += [f"{field} {op} {_kg_sql_value(bound, types.get(name))}" for op, bound in value.terms()]
         elif isinstance(value, Contains):
             text = _sql_str(value.text)
             out.append(f"{field}.indexOf({text}) >= 0" if value.case_sensitive
@@ -280,17 +289,18 @@ def _kg_where_terms(where: Optional[dict[str, object]],
             vals = list(value)
             if not vals:
                 return None
-            term = f"{field} IN {_kg_sql_array(vals, types.get(field))}"
-            if field not in types and any(isinstance(v, float) for v in vals):
+            term = f"{field} IN {_kg_sql_array(vals, types.get(name))}"
+            if name not in types and any(isinstance(v, float) for v in vals):
                 term = f"({term} OR {field} IN {_kg_sql_array(vals, 'FLOAT')})"
             out.append(term)
-        elif isinstance(value, float) and field not in types:
+        elif isinstance(value, float) and name not in types:
             out.append(f"({field} = {_kg_double(value)} OR {field} = {value!r})")
         else:
-            out.append(f"{field} = {_kg_sql_value(value, types.get(field))}")
+            out.append(f"{field} = {_kg_sql_value(value, types.get(name))}")
     if key_range is not None:
         f, lo, hi = key_range
-        out += [f"{f} >= {_kg_sql_value(lo, types.get(f))}", f"{f} < {_kg_sql_value(hi, types.get(f))}"]
+        out += [f"{_kg_field(f)} >= {_kg_sql_value(lo, types.get(f))}",
+                f"{_kg_field(f)} < {_kg_sql_value(hi, types.get(f))}"]
     return out
 
 

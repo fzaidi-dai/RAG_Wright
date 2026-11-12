@@ -38,15 +38,15 @@ def _store():
 def test_kg_read_key_range():
     s, sql = _store()
     s.kg_read("Entity", fields=["entity_id"], key_range=("entity_id", "C:", "C;"), order_by="entity_id")
-    assert sql == ["SELECT entity_id FROM Entity WHERE entity_id >= 'C:' AND entity_id < 'C;' ORDER BY entity_id"]
+    assert sql == ["SELECT entity_id FROM Entity WHERE `entity_id` >= 'C:' AND `entity_id` < 'C;' ORDER BY entity_id"]
 
 
 def test_kg_count_with_where_and_key_range():
     s, sql = _store()
     assert s.kg_count("Entity", where={"entity_type": ["org", "person"], "name": NOT_NULL},
                       key_range=("entity_id", "a", "b")) == 7
-    assert sql == ["SELECT count(*) AS n FROM Entity WHERE entity_type IN ['org','person'] AND name IS NOT NULL"
-                   " AND entity_id >= 'a' AND entity_id < 'b'"]
+    assert sql == ["SELECT count(*) AS n FROM Entity WHERE `entity_type` IN ['org','person'] AND `name` IS NOT NULL"
+                   " AND `entity_id` >= 'a' AND `entity_id` < 'b'"]
 
 
 def test_kg_count_of_a_whole_type():
@@ -59,20 +59,20 @@ def test_kg_delete_a_vertex_type_and_an_edge_type():
     assert s.kg_delete("Entity", where={"entity_id": "x"}) == 3
     assert s.kg_delete("Relationship") == 3
     deletes = [q for q in sql if q.startswith("DELETE")]
-    assert deletes == ["DELETE FROM Entity WHERE entity_id = 'x'", "DELETE FROM Relationship UNSAFE"]
+    assert deletes == ["DELETE FROM Entity WHERE `entity_id` = 'x'", "DELETE FROM Relationship UNSAFE"]
 
 
 def test_kg_update_changes_only_rows_that_differ():
     s, sql = _store()
     assert s.kg_update("Relationship", set={"confidence": "AMBIGUOUS"}, where={"span_id": ["s1", "s2"]}) == 3
-    assert sql == ["UPDATE Relationship SET confidence = 'AMBIGUOUS' WHERE span_id IN ['s1','s2']"
+    assert sql == ["UPDATE Relationship SET confidence = 'AMBIGUOUS' WHERE `span_id` IN ['s1','s2']"
                    " AND (confidence IS NULL OR confidence <> 'AMBIGUOUS')"]
 
 
 def test_kg_update_of_several_fields_changes_a_row_when_any_differs():
     s, sql = _store()
     s.kg_update("Entity", set={"name": "Acme", "rank": 2}, where={"entity_id": "e1"})
-    assert sql == ["UPDATE Entity SET name = 'Acme', rank = 2 WHERE entity_id = 'e1'"
+    assert sql == ["UPDATE Entity SET name = 'Acme', rank = 2 WHERE `entity_id` = 'e1'"
                    " AND (name IS NULL OR name <> 'Acme' OR rank IS NULL OR rank <> 2)"]
 
 
@@ -101,7 +101,7 @@ def test_the_api_wrappers_delegate_to_the_workspace_store():
     assert kg_update(ws, "Entity", set={"name": "x"}, where={"entity_id": "e"}) == 3
     assert kg_delete(ws, "Relationship", where={"confidence": "AMBIGUOUS"}) == 3
     kg_read(ws, "Entity", fields=["entity_id"], key_range=("entity_id", "a", "b"))
-    assert sql[-1] == "SELECT entity_id FROM Entity WHERE entity_id >= 'a' AND entity_id < 'b'"
+    assert sql[-1] == "SELECT entity_id FROM Entity WHERE `entity_id` >= 'a' AND `entity_id` < 'b'"
 
 
 # --- live ArcadeDB (opt-in) ---------------------------------------------------------------------------------------

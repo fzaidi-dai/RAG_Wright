@@ -39,7 +39,7 @@ def _store_capturing_sql():
 def test_kg_read_equality_filter_and_fields():
     s, cap, _, _ = _store_capturing_sql()
     s.kg_read("T", fields=["a", "b"], where={"x": "v"})
-    assert cap["sql"] == "SELECT a, b FROM T WHERE x = 'v'"
+    assert cap["sql"] == "SELECT a, b FROM T WHERE `x` = 'v'"
 
 
 def test_kg_read_no_fields_selects_star():
@@ -51,7 +51,7 @@ def test_kg_read_no_fields_selects_star():
 def test_kg_read_in_filter_for_list_value():
     s, cap, _, _ = _store_capturing_sql()
     s.kg_read("T", fields=["a"], where={"s": ["x", "y"]})
-    assert cap["sql"] == "SELECT a FROM T WHERE s IN ['x','y']"
+    assert cap["sql"] == "SELECT a FROM T WHERE `s` IN ['x','y']"
 
 
 def test_kg_read_empty_list_value_returns_empty_without_querying():
@@ -63,7 +63,7 @@ def test_kg_read_empty_list_value_returns_empty_without_querying():
 def test_kg_read_multi_filter_is_anded_in_insertion_order_with_order_by():
     s, cap, _, _ = _store_capturing_sql()
     s.kg_read("Span", fields=["span_id"], where={"contract_id": "c1", "function": ["cap"]}, order_by="doc_start")
-    assert cap["sql"] == "SELECT span_id FROM Span WHERE contract_id = 'c1' AND function IN ['cap'] ORDER BY doc_start"
+    assert cap["sql"] == "SELECT span_id FROM Span WHERE `contract_id` = 'c1' AND `function` IN ['cap'] ORDER BY doc_start"
 
 
 def test_kg_read_distinct_and_limit():
@@ -89,7 +89,7 @@ def test_all_requirements_parity():
     ComplianceStore(s).all_requirements()
     assert cap["sql"] == _REQ_SQL
     ComplianceStore(s).all_requirements(sources=["FTC-16CFR255"])
-    assert cap["sql"] == _REQ_SQL + " WHERE source IN ['FTC-16CFR255']"
+    assert cap["sql"] == _REQ_SQL + " WHERE `source` IN ['FTC-16CFR255']"
     calls.clear()
     assert ComplianceStore(s).all_requirements(sources=[]) == [] and calls == []  # empty scope -> [] without a query
 
@@ -99,7 +99,7 @@ def test_contract_by_id_parity():
     assert ContractKGStore(s).contract_by_id("c1") is None  # no rows -> None
     assert cap["sql"] == (
         "SELECT contract_id, name, agreement_type, parties_json, agreement_date, effective_date,"
-        " source_doc_id, content_hash, page_count FROM Contract WHERE contract_id = 'c1'")
+        " source_doc_id, content_hash, page_count FROM Contract WHERE `contract_id` = 'c1'")
     add([{"contract_id": "c1"}])
     assert ContractKGStore(s).contract_by_id("c1") == {"contract_id": "c1"}  # row -> the row
 
@@ -110,7 +110,7 @@ def test_spans_by_contract_parity():
     s.spans_by_document("c1", ["cap_on_liability"])
     assert cap["sql"] == (
         "SELECT span_id, parent_chunk_id, span_index, text, primary_tag, document_id, doc_start,"
-        " doc_end, pages, bbox FROM Span WHERE document_id = 'c1' AND primary_tag IN ['cap_on_liability']"
+        " doc_end, pages, bbox FROM Span WHERE `document_id` = 'c1' AND `primary_tag` IN ['cap_on_liability']"
         " ORDER BY doc_start")
 
 

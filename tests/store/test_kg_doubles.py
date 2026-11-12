@@ -24,13 +24,13 @@ def test_a_float_is_written_as_a_double_literal_unless_the_column_is_float():
 
 def test_filters_encode_by_the_declared_type_and_an_undeclared_float_matches_either_width():
     types = {"x": "DOUBLE", "f": "FLOAT"}
-    assert _kg_where_terms({"x": 0.9523}, types=types) == ["x = 0.9523d"]
-    assert _kg_where_terms({"f": 0.9523}, types=types) == ["f = 0.9523"]
-    assert _kg_where_terms({"u": 0.9523}, types=types) == ["(u = 0.9523d OR u = 0.9523)"]
-    assert _kg_where_terms({"x": [0.9523, 2]}, types=types) == ["x IN [0.9523d,2]"]
-    assert _kg_where_terms({"u": [0.9523]}, types=types) == ["(u IN [0.9523d] OR u IN [0.9523])"]
-    assert _kg_where_terms({"x": Range(ge=1.5, lt=21.77)}, types=types) == ["x >= 1.5d", "x < 21.77d"]
-    assert _kg_where_terms({"n": 3, "s": "a"}) == ["n = 3", "s = 'a'"]  # non-floats unchanged
+    assert _kg_where_terms({"x": 0.9523}, types=types) == ["`x` = 0.9523d"]
+    assert _kg_where_terms({"f": 0.9523}, types=types) == ["`f` = 0.9523"]
+    assert _kg_where_terms({"u": 0.9523}, types=types) == ["(`u` = 0.9523d OR `u` = 0.9523)"]
+    assert _kg_where_terms({"x": [0.9523, 2]}, types=types) == ["`x` IN [0.9523d,2]"]
+    assert _kg_where_terms({"u": [0.9523]}, types=types) == ["(`u` IN [0.9523d] OR `u` IN [0.9523])"]
+    assert _kg_where_terms({"x": Range(ge=1.5, lt=21.77)}, types=types) == ["`x` >= 1.5d", "`x` < 21.77d"]
+    assert _kg_where_terms({"n": 3, "s": "a"}) == ["`n` = 3", "`s` = 'a'"]  # non-floats unchanged
 
 
 # --- live -----------------------------------------------------------------------------------------------------------

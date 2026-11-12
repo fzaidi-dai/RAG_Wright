@@ -1,7 +1,7 @@
 """Engine issue 0007 (0007-STORE): the SCALE-READY source filter on the Requirement KG.
 
 A compliance check must be scopeable to named policy `source`s. The filter is pushed into the DATABASE
-(`WHERE source IN [...]`) so a store holding thousands of requirement rows across many policies/tenants never
+(`WHERE `source` IN [...]`) so a store holding thousands of requirement rows across many policies/tenants never
 loads or embeds the ones outside the requested scope. `requirement_sources()` (DISTINCT source) powers
 unknown-source validation without loading any rows.
 
@@ -52,7 +52,7 @@ def test_all_requirements_without_sources_is_store_wide_no_where():
 def test_all_requirements_filters_by_source_in_the_query_not_in_memory():
     cap: list = []
     _bare_store(cap).all_requirements(sources=["p1", "p2"])
-    assert "WHERE source IN ['p1','p2']" in cap[0]  # DB-side filter -> other policies' rows never fetched
+    assert "WHERE `source` IN ['p1','p2']" in cap[0]  # DB-side filter -> other policies' rows never fetched
 
 
 def test_all_requirements_empty_scope_returns_empty_without_a_query():

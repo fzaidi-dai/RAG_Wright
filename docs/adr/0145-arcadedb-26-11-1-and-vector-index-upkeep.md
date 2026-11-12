@@ -41,3 +41,12 @@ concurrent searches each, none failed).
   row as it was, convert types more strictly and answer bad credentials with 401.
 - Heavy exact duplication among vectors still leaves some of them scan-only after any build (1,231 of 8,851 on
   TexWright's data); the results stay correct. That is ArcadeDB's to fix (issue #7190's area).
+
+## Amendment (2026-11-12, PS-68)
+
+TexWright's store gate on 26.11.1 found a third behaviour: a `Contains` filter on a field named `text` was refused
+(`Unknown function name 'text.toLowerCase'`), as on `date`, `math` and `util`; 26.11 reads a leading
+`<module>.<function>(` as a function of that module. The filter grammar now quotes every field it writes
+(`` `text` ``), record attributes (`@rid`, ...) excepted, so no field name, now or with a future function module,
+reads as one. Equality, membership, presence and ranges were not affected, and the engine had no live test of
+`Contains` on such a name, which is why its own 26.11.1 run passed.

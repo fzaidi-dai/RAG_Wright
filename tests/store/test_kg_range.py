@@ -15,14 +15,14 @@ def test_a_range_on_each_of_several_fields():
     s, sql = _store()
     s.kg_read("Trial", fields=["trial_id"], where={"weight": Range(ge=180, le=220), "tensile": Range(gt=400.5),
                                                    "season": "ss26", "lot": Range(lt="L5")})
-    assert sql == ["SELECT trial_id FROM Trial WHERE weight >= 180 AND weight <= 220 AND tensile > 400.5d"
-                   " AND season = 'ss26' AND lot < 'L5'"]
+    assert sql == ["SELECT trial_id FROM Trial WHERE `weight` >= 180 AND `weight` <= 220 AND `tensile` > 400.5d"
+                   " AND `season` = 'ss26' AND `lot` < 'L5'"]
 
 
 def test_kg_read_shares_the_filter_grammar_so_not_null_works_there_too():
     s, sql = _store()
     s.kg_read("Trial", where={"remark": NOT_NULL})
-    assert sql == ["SELECT * FROM Trial WHERE remark IS NOT NULL"]
+    assert sql == ["SELECT * FROM Trial WHERE `remark` IS NOT NULL"]
 
 
 def test_count_delete_and_update_take_ranges():
@@ -30,9 +30,9 @@ def test_count_delete_and_update_take_ranges():
     s.kg_count("Entity", where={"score": Range(gt=1)})
     s.kg_delete("Entity", where={"score": Range(le=0)})
     s.kg_update("Entity", set={"flag": "low"}, where={"score": Range(lt=2)})
-    assert sql[0] == "SELECT count(*) AS n FROM Entity WHERE score > 1"
-    assert "DELETE FROM Entity WHERE score <= 0" in sql
-    assert any(q.startswith("UPDATE Entity SET") and "score < 2" in q for q in sql)
+    assert sql[0] == "SELECT count(*) AS n FROM Entity WHERE `score` > 1"
+    assert "DELETE FROM Entity WHERE `score` <= 0" in sql
+    assert any(q.startswith("UPDATE Entity SET") and "`score` < 2" in q for q in sql)
 
 
 @pytest.mark.parametrize("kwargs", [{}, {"gt": 1, "ge": 1}, {"lt": 1, "le": 1}, {"gt": [1]}, {"le": None}])
