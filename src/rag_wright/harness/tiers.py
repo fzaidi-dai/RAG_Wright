@@ -209,6 +209,7 @@ def build_orchestrator(
     from langchain.agents.middleware.todo import TodoListMiddleware
 
     from rag_wright.harness.agent import agent_chat_model
+    from rag_wright.harness.models import catch_all_disabled
     from rag_wright.harness.batch import BatchTheQuestions
     from rag_wright.harness.decisions import WhatTheRunDecided
     from rag_wright.harness.errors import error_middleware
@@ -224,7 +225,9 @@ def build_orchestrator(
                  else WhatTheRunDecided(points=definition.decision_points))
 
     return create_deep_agent(
-        model=model if model is not None else agent_chat_model(
+        # **A passed model is given the same roster as a built one** (PS-48g): without this the catch-all
+        # `general-purpose` subagent stayed on every scripted tier, a route round every worker.
+        model=catch_all_disabled(model) if model is not None else agent_chat_model(
             settings, definition.model_id_for(settings)),
         tools=tools if tools is not None else orchestrator_tools(context, resources,
                                                                 definition=definition),

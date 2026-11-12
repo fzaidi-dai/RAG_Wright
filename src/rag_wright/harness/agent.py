@@ -32,7 +32,7 @@ from rag_wright.harness.memory import (
     build_memory_backend,
     memory_permissions,
 )
-from rag_wright.harness.models import agent_chat_model
+from rag_wright.harness.models import agent_chat_model, catch_all_disabled
 from rag_wright.harness.scope import RunScope
 from rag_wright.harness.tiers import chat_manager_tools, orchestrator_subagent
 from rag_wright.harness.withhold import WITHHELD_FROM_CHAT, withhold
@@ -112,7 +112,7 @@ def build_chat_agent(
         }
 
     return create_deep_agent(
-        model=model if model is not None else agent_chat_model(
+        model=catch_all_disabled(model) if model is not None else agent_chat_model(
             settings, definition.model_id_for(settings)),
         # **The DIRECT half only**. The orchestrator below holds all of it, so nothing is
         # unreachable -- but a listing must not pay for three model calls.

@@ -348,7 +348,7 @@ A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `Com
 
 A worker has no middleware and no subagents of its own, so letting the parent build it keeps one model resolution and one place that knows how a tier is compiled.
 
-**Pass `definition=`, the product's `AgentDefinition`.** Every policy parameter after `ledger` defaults to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no decision recording, and nothing fails to say so.
+**Pass `definition=`, the product's `AgentDefinition`.** Every policy parameter after `ledger` defaults to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no decision recording, and nothing fails to say so. With one, the product's `worker_filesystem_note` is appended to `prompt` unless the prompt already carries it.
 
 ### `clarification_tool() -> 'BaseTool'`
 

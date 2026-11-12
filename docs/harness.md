@@ -91,7 +91,7 @@ Every word the model reads is the product's. The substrate ships no prompt of it
 | `not_a_filesystem` | `str` | The signpost a wrong filesystem call is answered with by default (it names the product's own tools). |
 | `looking_for_subjects` | `str` | The signpost for a filesystem search plainly hunting the subject documents (a path or pattern ending in one of `subject_file_endings`): it says where those documents ARE, rather than where they are not. |
 | `subject_file_endings` | `tuple[str, ...]` | File extensions that mean "this model is hunting the subject documents it was shown", not notes. |
-| `worker_filesystem_note` | `str` | What a worker is told about its own filesystem. |
+| `worker_filesystem_note` | `str` | What a worker is told about its own filesystem: `worker_spec(definition=)` appends it to each worker's prompt. |
 | `orchestrator_description` | `str` | How the orchestrator is described to the chat-manager: the `description` of its compiled subagent, which is what the chat-manager reads when deciding whether to hand a request down. |
 | `label` | `str` | What the model is shown as the SOURCE of the skills: the product's name. |
 <!-- /generated -->
@@ -186,6 +186,8 @@ still wins:
 | `read_framing` | `None` | `definition.read_framing` |
 <!-- /generated -->
 
+With `definition=`, the worker's prompt also gains `definition.prompts.worker_filesystem_note`, unless the prompt already carries it, so a worker is told where its own notes live before it runs `ls('/')` to find out.
+
 ```python
 from rag_wright.harness import worker_spec
 
@@ -229,6 +231,8 @@ agent = build_chat_agent(context, resources, settings, definition=definition,
 result = await start_run(agent, context, message=question, settings=settings,
                          skills=definition.prompts.skills)
 ```
+
+**A model you pass is every tier's.** `build_chat_agent(..., model=)` and `build_orchestrator(..., model=)` give a scripted or self-built model the same tiers a configured one gets, DeepAgents' catch-all `general-purpose` subagent removed included, so a test's roster is production's.
 
 **Note what is not in that call**: no tier split, no direct surface, no worker-to-operation map; the substrate
 derives each from what you declared. `start_run` takes `skills` explicitly because seeding them is the product's

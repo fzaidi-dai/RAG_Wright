@@ -247,16 +247,23 @@ def _fabric() -> Any:
 
 
 def _fabric_worker(context: Any, resources: Any, ledger: Any = None) -> dict:
-    """This product's only worker. Built with the substrate's own spec helper, which names no domain."""
+    """This product's only worker. Built with the substrate's own spec helper, which names no domain.
+
+    **It holds the content-heavy operation and nothing else** (PS-48g): `list_mills` stays with the
+    orchestrator, which plans from it, so the fabric product has an operation on each side of the
+    orchestrator/worker split. **And it is built from the definition**, the way a product should: without
+    `definition=` a worker runs with no retries, no repeat suppression and no decision recording."""
     from rag_wright.harness.workers import worker_spec
 
     return worker_spec(
         "composition_worker",
         "Finds fabric compositions matching a requirement set.",
-        "You match requirement sets to fabric compositions. Report the swatches you found.",
-        FabricToolSurface().build(context, resources),
+        "You match requirement sets to fabric compositions. Report the swatches you found. "
+        "Your own notes live under `/memories`.",
+        FabricToolSurface().build(context, resources, only=["fabric.match_compositions"]),
         FabricFindings,
         ledger=ledger,
+        definition=_fabric(),
     )
 
 

@@ -60,7 +60,7 @@ class AgentPrompts:
     looking_for_subjects: str
     #: File extensions that mean "this model is hunting the subject documents it was shown", not notes.
     subject_file_endings: tuple[str, ...]
-    #: What a worker is told about its own filesystem.
+    #: What a worker is told about its own filesystem: `worker_spec(definition=)` appends it to each worker's prompt.
     worker_filesystem_note: str
     #: How the orchestrator is described to the chat-manager: the `description` of its compiled subagent, which
     #: is what the chat-manager reads when deciding whether to hand a request down.

@@ -128,6 +128,12 @@ NOT_ON_WORKERS: dict[str, str] = {
         "Only the ORCHESTRATOR batches questions. A worker that batched would be asking, which is the one "
         "thing it must not do -- it reports `status=\"blocked\"` instead."
     ),
+    "SkillsMiddleware": (
+        "The product's authored skills are procedures for PLANNING -- batching the questions workers came back "
+        "blocked on, and product knowledge a plan is built from -- so they are the orchestrator's to read. A "
+        "worker executes one brief and reports; offering it a skill list would be the planning surface again. "
+        "**Missed by the first audit**, which listed its factory as not building middleware (PS-48g)."
+    ),
     "CodeInterpreterMiddleware": (
         "Only the orchestrator gets an interpreter; workers use plain tool calls. One "
         "active interpreter per agent is easier to keep when only one tier has one."
@@ -239,7 +245,8 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
     to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its
     `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed
     explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no
-    decision recording, and nothing fails to say so.
+    decision recording, and nothing fails to say so. With one, the product's `worker_filesystem_note` is
+    appended to `prompt` unless the prompt already carries it.
     """
     if definition is not None:
         retry_on = retry_on or definition.retry_on
@@ -250,6 +257,12 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
         framings = framings or definition.framings
         carry_forward = carry_forward if carry_forward is not None else definition.carry_forward
         read_framing = read_framing if read_framing is not None else definition.read_framing
+        # **What the worker is told about its own filesystem** (PS-48g): declared on the product's prompts and,
+        # until this, read by nothing -- so a worker not told ran `ls('/')` to orient. Added once: a prompt that
+        # already carries it, written in by hand, is left as it is.
+        note = definition.prompts.worker_filesystem_note
+        if note and note not in prompt:
+            prompt = f"{prompt}\n\n{note}"
     return _spec(name, description, prompt, tools, report, ledger, retry_on=retry_on,
                  message_for=message_for, signposts=signposts, repeatable=repeatable,
                  question_argument=question_argument, framings=framings,

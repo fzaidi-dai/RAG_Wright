@@ -230,3 +230,14 @@ through submodules join `__all__` (PS-48i).
 product's `{"swatch_count": 0}` read as an answer and its repeat was never refused. A result that carries integer
 `*_count` fields is now empty when every one of them is zero, whatever they are called; a result without counts keeps
 the generic rule (every collection empty).
+
+## Amendment (2026-11-13, PS-48g1)
+
+Porting the worker, tier, batching, dispatch and agent-wiring tests found three gaps. A model a product passes to
+`build_chat_agent` or `build_orchestrator` kept DeepAgents' catch-all `general-purpose` subagent, because the profile
+that removes it was registered only for a model the engine built, and under a key a model without an identifier is
+never looked up by; every passed model now gets it removed too (`models.catch_all_disabled`), so a scripted tier's
+roster is production's. `AgentPrompts.worker_filesystem_note` was declared and read by nothing; `worker_spec(definition=)`
+now appends it to the worker's prompt unless the prompt already carries it. And the audit of tier middleware against
+worker middleware never classified the orchestrator's `SkillsMiddleware`; `NOT_ON_WORKERS` now states why workers do
+not carry it.

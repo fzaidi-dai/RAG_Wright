@@ -173,10 +173,20 @@ def _disable_the_catch_all_subagent(model: Any) -> None:
     )
     from deepagents._models import get_model_identifier, get_model_provider
 
+    provider, identifier = get_model_provider(model), get_model_identifier(model)
+    # **A model with no identifier is looked up by its provider alone** (`_harness_profile_for_model`), so a
+    # `provider:None` key would never match and the catch-all would stay (PS-48g: every scripted model).
     register_harness_profile(
-        f"{get_model_provider(model)}:{get_model_identifier(model)}",
+        f"{provider}:{identifier}" if provider and identifier else (provider or identifier),
         HarnessProfileConfig(general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False)),
     )
+
+
+def catch_all_disabled(model: Any) -> Any:
+    """`model` with DeepAgents' `general-purpose` subagent disabled for it, for a tier built on a model the
+    product passed rather than one `agent_chat_model` built (PS-48g). The tier is then the same either way."""
+    _disable_the_catch_all_subagent(model)
+    return model
 
 
 def real_cost_of(response: LLMResult) -> float | None:
