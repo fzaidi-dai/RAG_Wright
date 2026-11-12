@@ -241,3 +241,12 @@ roster is production's. `AgentPrompts.worker_filesystem_note` was declared and r
 now appends it to the worker's prompt unless the prompt already carries it. And the audit of tier middleware against
 worker middleware never classified the orchestrator's `SkillsMiddleware`; `NOT_ON_WORKERS` now states why workers do
 not carry it.
+
+## Amendment (2026-11-13, PS-48g2)
+
+The orchestrator could not read its own authored skills. `TheSubjectIsNotAFilesystem` let only `/memories/` and
+`/large_tool_results/` reach the real filesystem tools, and the skills middleware tells the model to `read_file`
+`/skills/<name>/SKILL.md`, so every skill read was answered with the product's "not files" signpost. The rule that
+grades filesystem calls already counted `/skills` as the agent's own: two hand-kept lists had drifted.
+`filesystem.OWN_ROOTS` (the memory roots plus the skills root) is now the one list, the signpost reads it, and
+`rules.OWN_FILESYSTEM` is derived from it.

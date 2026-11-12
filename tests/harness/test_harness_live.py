@@ -46,3 +46,26 @@ async def test_a_chat_run_waits_on_a_person_and_resumes_to_an_answer():
     assert second.run_id == first.run_id
     assert usage.calls >= 2  # every turn went through the engine's metered model
     print(f"\nlive harness run: {usage.calls} calls, ${usage.cost_usd:.5f}")
+
+
+async def test_OPENROUTER_reports_a_REAL_cost_and_the_recorder_finds_it():
+    """**The one assertion no fake can make** (ported from RuleWright under PS-48g). LangChain drops OpenRouter's
+    cost on the streaming path, so the recorder reads it back itself -- but only if `usage: {include: true}` reached
+    the provider and the field is where `real_cost_of` looks. If this fails, agent runs silently price from
+    Langfuse's table instead. One call, one word."""
+    from rag_wright.harness.models import GenerationRecorder, agent_chat_model
+    from rag_wright.pack_sdk import profile_for
+
+    if profile_for(MODEL).backend != "openrouter":
+        pytest.skip("not OpenRouter: a per-second-billed deployment reports no per-call cost, by design")
+
+    recorder = GenerationRecorder(SimpleNamespace(), MODEL)
+    answer = await agent_chat_model(SimpleNamespace(), MODEL).ainvoke(
+        "Reply with the single word: ready.", config={"callbacks": [recorder]})
+
+    assert answer.content, "the model returned nothing, so there is no call to price"
+    assert recorder.costs and recorder.costs[0] > 0.0, (
+        "OpenRouter reported no per-call cost: `usage: {include: true}` is not reaching the provider, or the "
+        "field moved"
+    )
+    print(f"\nlive cost read back: ${recorder.costs[0]:.6f}")

@@ -37,6 +37,8 @@ from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 
+from rag_wright.harness.skills import SKILLS_ROOT
+
 #: The roots that really are the agent's own filesystem.
 #:
 #: `/memories/` is where `MemoryMiddleware` keeps notes — recall genuinely is `glob` and `grep` across it.
@@ -46,6 +48,14 @@ from langchain.agents.middleware.types import AgentMiddleware
 #: A guard asserts every path in `harness.memory.MEMORY_SOURCES` is covered here, because a second
 #: hand-maintained copy would drift and the symptom would be memory recall redirected into a signpost.
 MEMORY_ROOTS = ("/memories/", "/large_tool_results/")
+
+#: Everything that really is the agent's own space: the memory roots and its authored skills.
+#:
+#: **`/skills/` is read with `read_file` by design** (PS-48g): the skills middleware advertises each skill by its
+#: path and tells the model to read it. Left out, the orchestrator's read of its own skill was answered with the
+#: product's "not files" signpost, so the procedures authored for it could never be read. `rules.OWN_FILESYSTEM`
+#: is derived from this, so the rule that grades filesystem calls and the signpost cannot disagree again.
+OWN_ROOTS = (*MEMORY_ROOTS, f"{SKILLS_ROOT}/")
 
 #: The filesystem tools a wrong turn goes through, and where each keeps the path it was given.
 _PATH_ARGUMENTS = {
@@ -124,7 +134,7 @@ def _is_the_agents_own(value: str) -> bool:
     inside = value.rstrip("/")
     if not inside:
         return False
-    return any(value.startswith(root) or root.startswith(inside + "/") for root in MEMORY_ROOTS)
+    return any(value.startswith(root) or root.startswith(inside + "/") for root in OWN_ROOTS)
 
 
 class TheSubjectIsNotAFilesystem(AgentMiddleware):

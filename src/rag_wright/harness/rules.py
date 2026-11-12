@@ -35,6 +35,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from rag_wright.harness.filesystem import OWN_ROOTS
+
 #: Which tier a rule binds. A rule is checked only against a recording from a tier it applies to.
 Tier = Literal["orchestrator", "worker", "coded"]
 
@@ -130,7 +132,9 @@ FILE_TOOLS = ("ls", "glob", "grep", "read_file", "write_file", "edit_file")
 #: criterion is "no filesystem tool against the subject DOCUMENTS", and a skill we authored is not a
 #: subject document, so reading one must not read as a violation. Without it the skill would have been
 #: unreadable in practice -- every read scoring against the tier that read it.
-OWN_FILESYSTEM = ("/memories", "/large_tool_results", "/skills")
+#: **Derived from `harness.filesystem.OWN_ROOTS`** (PS-48g): this was a mirror, and the signpost's copy lacked
+#: `/skills`, so a skill read this rule allowed was refused before it ran.
+OWN_FILESYSTEM = tuple(root.rstrip("/") for root in OWN_ROOTS)
 
 
 def reached_for_the_filesystem(recording: dict[str, Any]) -> str | None:

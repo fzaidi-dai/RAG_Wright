@@ -103,6 +103,8 @@ Every word the model reads is the product's. The substrate ships no prompt of it
 never be told it exists. And no prompt may name a scope identifier: an injected instruction in an uploaded
 document can quote back whatever the prompt contains.
 
+**The signposts never stand between a tier and its own files.** `/memories/`, `/large_tool_results/` and `/skills/` are the agent's own space (`filesystem.OWN_ROOTS`), so recall, an offloaded result and a skill read with `read_file` reach the real tool; any other path gets your `not_a_filesystem` or `looking_for_subjects` text.
+
 ---
 
 ## 4. The two protocols

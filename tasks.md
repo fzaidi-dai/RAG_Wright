@@ -3,6 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **2026-11-13: PS-48g2 done** (filesystem, interpreter, withhold, live cost read-back): 35 RuleWright tests ported, 5 new; the orchestrator can read its own skills, which the filesystem signpost refused (ADR-0139 amendment). Not pushed until PS-48 is done. Next: PS-48h (harness eval tooling: faults, preflight).
+>
 > **2026-11-13: PS-48g1 done** (workers, tiers, batching, dispatch, agent wiring): 62 RuleWright tests ported, 11 new; a passed model no longer keeps the catch-all subagent, the worker filesystem note is used, the worker audit classifies skills (ADR-0139 amendment). Not pushed until PS-48 is done. Next: PS-48g2 (filesystem, interpreter, withhold, live accounting).
 >
 > **2026-11-13: PS-48f done** (seen and memory): 57 RuleWright tests ported; a result's emptiness is decided by its `*_count` fields whatever they are called, not one product's keys (ADR-0139 amendment). Not pushed until PS-48 is done. Next: PS-48g (workers, batch, dispatch, tiers, agent wiring, filesystem, interpreter, withhold).
