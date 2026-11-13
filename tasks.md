@@ -3,6 +3,8 @@
 Phase 2 output. The persistent, cross-session task ledger and shared memory of progress. Derived
 from `plan.md` (Phase 1) and `SPEC.md` v0.1, honoring ADR-0001 (stack) and ADR-0002 (corpus).
 
+> **2026-11-13: `rag-wright` 0.18.0 RELEASED** (PR #25; PyPI + tag `0.18.0`): PS-48 a-i, the harness's substrate tests on the fabric product, `harness.recording`/`faults`/`preflight`, BREAKING `guessed_identifiers` and `worker_names` removed. RuleWright's guide `docs/specs/public-surface/rulewright-migration-0.18.0.md`; TexWright needs nothing until T-6.2. Next: EV-7, PS-30, PS-33.
+>
 > **2026-11-13: PS-48i done, PS-48 DONE** (the harness's public surface): the 17 names a product's code reached through submodules are exported, guarded by `test_harness_public_surface.py`; `RecordTheDecisions(worker_names=)` removed (BREAKING, never read; ADR-0139 amendment). PS-48 a-i are local commits, pushed together next. Next: push, then RuleWright's migration guide; then EV-7, PS-30, PS-33.
 >
 > **2026-11-13: PS-48h done** (harness eval tooling): the fault injector and the preflight with its routing stub are engine modules, `harness.faults` and `harness.preflight`; 26 RuleWright tests ported, 7 new (ADR-0139 amendment). Not pushed until PS-48 is done. Next: PS-48i (the public surface: export the submodule names, a guard, drop `worker_names`).

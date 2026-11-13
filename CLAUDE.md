@@ -55,11 +55,11 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-11-13): PS-48 is DONE and pushed, `rag-wright` 0.18.0 is PENDING** (release PR open; the
+> **CURRENT STATE (2026-11-13): `rag-wright` 0.18.0 is RELEASED** (PR #25; PS-48: the
 > harness's substrate tests run in the engine on the fabric product; new `harness.recording`, `harness.faults`,
 > `harness.preflight`; `__all__` 77 names with a guard; BREAKING `guessed_identifiers`, `worker_names` removed;
-> ADR-0139 amended a-i; guide `docs/specs/public-surface/rulewright-migration-0.18.0.md`). Next: release 0.18.0,
-> then EV-7, PS-30, PS-33. Before it, **`rag-wright` 0.17.3 is RELEASED** (PR #24; PS-67 and PS-68, TexWright: ArcadeDB
+> ADR-0139 amended a-i; guide `docs/specs/public-surface/rulewright-migration-0.18.0.md`; TexWright needs nothing until it builds on the
+> harness, T-6.2). Next: EV-7, PS-30, PS-33. Before it, **`rag-wright` 0.17.3 is RELEASED** (PR #24; PS-67 and PS-68, TexWright: ArcadeDB
 > 26.11.1, so a vector index is not rebuilt on every start, with `warm_vector_indexes` / `rebuild_vector_indexes`
 > (ADR-0145); every KG filter field is quoted, so `text` is not a function module on 26.11.1). Next: PS-48, EV-7,
 > PS-30, PS-33. Before it, **`rag-wright` 0.17.2 is RELEASED** (PR #23; PS-64 and PS-65, TexWright: a float is written and compared as a
