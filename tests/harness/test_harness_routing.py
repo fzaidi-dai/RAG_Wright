@@ -263,3 +263,69 @@ def test_WHEN_B1_CANNOT_BE_ASKED_THE_MODEL_WRITES_THE_BRIEF(routes, monkeypatch:
 
     assert offered[0] == ["task"]
     assert (_d1(ledger).inputs["brief_by"], _d1(ledger).inputs["self_contained"]) == ("model", None)
+
+
+# --- forcing the tool the router chose (HD-9) ---------------------------------------------------------------
+
+
+def _choices(*messages: AIMessage) -> tuple[Any, list]:
+    """A scripted chat model that records the `tool_choice` each call was bound with."""
+    from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
+
+    chosen: list = []
+
+    class Choosing(GenericFakeChatModel):
+        choice: Any = None
+
+        def bind_tools(self, tools: Any, *, tool_choice: Any = None, **_kwargs: Any) -> Any:
+            return self.model_copy(update={"choice": tool_choice})
+
+        async def _agenerate(self, msgs: Any, stop: Any = None, run_manager: Any = None, **kwargs: Any):
+            chosen.append(self.choice)
+            return await super()._agenerate(msgs, stop=stop, run_manager=run_manager, **kwargs)
+
+    return Choosing(messages=iter(messages)), chosen
+
+
+def test_A_MODEL_MEASURED_TO_HONOUR_FORCING_IS_FORCED_TO_THE_TOOL_THE_ROUTER_CHOSE(routes, monkeypatch) -> None:
+    """Measured (HD-9): offered alone but not forced, the chat model answered a routed `ask_the_user` with a reply 4
+    times of 18; forced, 0 of 18."""
+    import rag_wright.harness.agent as agent_module
+
+    monkeypatch.setattr(agent_module, "forces_a_tool", lambda definition, settings, model=None: True)
+    routes("ask_the_user", 0.9)
+    model, chosen = _choices(_call("ask_the_user", {"question": "Which standard?"}))
+
+    _turn(model, "Check it against the standard.")  # the run pauses at the person's interrupt
+
+    assert chosen[0] == "ask_the_user"
+
+
+def test_A_MODEL_NOT_KNOWN_TO_HONOUR_FORCING_IS_OFFERED_THE_TOOL_UNFORCED(routes) -> None:
+    routes("read_swatch", 0.9)
+    model, chosen = _choices(_call("read_swatch", {"swatch": "sw-1042"}), AIMessage(content="A poplin."))
+
+    _turn(model, "What is sw-1042 made of?")
+
+    assert chosen[0] is None
+
+
+def test_ONLY_THE_CONFIGURED_MODEL_WITH_A_MEASURED_PROFILE_IS_FORCED(monkeypatch: pytest.MonkeyPatch) -> None:
+    import rag_wright.api
+    from rag_wright.api import ModelProfile
+    from rag_wright.harness.agent import forces_a_tool
+
+    measured = {"hd9-honours": ModelProfile(model_id="hd9-honours", forced_tool_choice=True)}
+    monkeypatch.setattr(rag_wright.api, "profile_for", lambda model_id: measured.get(model_id, ModelProfile(model_id=model_id)))
+    honours = dataclasses.replace(loom(variant="small"), model_id_for=lambda settings: "hd9-honours")
+    unknown = dataclasses.replace(loom(variant="small"), model_id_for=lambda settings: "hd9-never-measured")
+
+    assert forces_a_tool(honours, _settings()) is True
+    assert forces_a_tool(unknown, _settings()) is False, "a model nobody measured is never assumed to honour it"
+    assert forces_a_tool(honours, _settings(), model=object()) is False, "a model passed in has no profile"
+
+
+def test_THE_MEASURED_PROFILE_SAYS_IT_HONOURS_FORCING() -> None:
+    from rag_wright.api import profile_for
+
+    assert profile_for("qwen3.8-27b-modal-or").forced_tool_choice is True

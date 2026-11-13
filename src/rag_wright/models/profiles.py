@@ -53,6 +53,10 @@ class ModelProfile(BaseModel):
     # PS-36: the agent-turn counterpart: applied by the seam to an agent's chat model (`build_agent_model`), whose
     # turns decide which tool to call, so a product names no vendor's reasoning flag in code. None = base body only.
     agent_extra_body: Optional[dict[str, Any]] = Field(default=None)
+    # HD-9 (ADR-0146): whether an agent turn honours a FORCED tool choice (`tool_choice` naming one tool), so the
+    # harness's router can force the one tool it chose. Measured per model, never assumed: False = the router offers
+    # the tool alone without forcing it.
+    forced_tool_choice: bool = False
     # PS-22: the default `max_tokens` for a forced structured call (a caller's own `max_tokens` wins). A thinking
     # model can loop in its reasoning; the cap ends that at `finish_reason=length`, a parse failure the seam's
     # bounded retry handles, instead of running into the wall-clock deadline. None = no cap.
@@ -250,6 +254,8 @@ PROFILES: dict[str, ModelProfile] = {
         structured_extra_body={"reasoning": {"enabled": True}}, structured_max_tokens=_THINKING_CAP,
         text_extra_body={"reasoning": {"enabled": False}},
         agent_extra_body={"reasoning": {"enabled": True}},  # PS-36: an agent turn reasons about its tool call
+        # HD-9, 2026-11-13: 16 of 16 forced calls on the chat tier (reasoning off) called the forced tool, no errors
+        forced_tool_choice=True,
     ),
     # Kimi-k3 (Moonshot) shows the same `function_calling` degeneracy as granite (empty structured result on
     # some queries); `json_schema` fixes it. Registered only for the KG-6 query-side model comparison (not

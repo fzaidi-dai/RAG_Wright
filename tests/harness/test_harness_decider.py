@@ -86,26 +86,36 @@ def test_A_QUESTION_ASKED_AGAIN_IN_A_RUN_IS_ANSWERED_FROM_THE_RUN_AND_NOT_ACROSS
     assert len(fake.requests) == 2
 
 
-def test_UNREGISTERED_MEANS_UNAVAILABLE_NOTHING_IS_CALLED_AND_NOTHING_IS_LOGGED(registered, caplog) -> None:
-    """Not registered is configuration, not a failure: a product that never registers the decision model hears
-    nothing about it."""
+def test_THE_DECIDER_REGISTERS_THE_ENGINES_DECISION_MODEL_ITSELF(registered, monkeypatch) -> None:
+    """The decision model is the harness's own: a product registers nothing, and the call still goes through the
+    capability layer by name."""
+    import rag_wright.api
+
     fake = registered(FakeDecisionModel(_routes_to("delegate", 0.7)), catalog=())
+    added: list[str] = []
+    monkeypatch.setattr(rag_wright.api, "register_capability", lambda manifest: added.append(manifest.slug))
 
-    assert asyncio.run(Decider().choose("run-1", "x", "Do what?", OPTIONS)) is None
-    assert fake.requests == []
-    assert not [r for r in caplog.records if "decision_model_unavailable" in r.message]
+    assert asyncio.run(Decider().choose("run-1", "x", "Do what?", OPTIONS)) == Routed("delegate", 0.7)
+    assert added == ["jev_decision"]
+    assert len(fake.requests) == 1
 
 
-def test_A_FAILED_CALL_IS_UNAVAILABLE_AND_THE_RUN_STOPS_ASKING(registered, caplog) -> None:
+def test_A_FAILED_CALL_IS_UNAVAILABLE_THE_RUN_STOPS_ASKING_AND_THE_PROCESS_WARNS_ONCE(registered, caplog,
+                                                                                      monkeypatch) -> None:
+    """No credentials is the usual failure: each run finds out with one call that never reaches the network, and
+    the deployment is told once rather than on every run."""
+    import rag_wright.harness.decider as decider_module
+
+    monkeypatch.setattr(decider_module, "_warned", False)
     fake = registered(FakeDecisionModel(fails=True))
     decider = Decider()
 
     assert asyncio.run(decider.choose("run-1", "x", "Do what?", OPTIONS)) is None
     assert asyncio.run(decider.yes_no("run-1", "y", {"a": ("Needs a?", "yes")})) is None
     assert len(fake.requests) == 1
-    assert sum("decision_model_unavailable" in r.message for r in caplog.records) == 1
     assert asyncio.run(decider.choose("run-2", "x", "Do what?", OPTIONS)) is None
     assert len(fake.requests) == 2  # a new run asks again
+    assert sum("decision_model_unavailable" in r.message for r in caplog.records) == 1
 
 
 def test_AN_ANSWER_MISSING_A_QUESTION_IS_UNAVAILABLE_NOT_A_GUESS(registered) -> None:

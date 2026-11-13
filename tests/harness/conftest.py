@@ -1,9 +1,9 @@
-"""The harness's hermetic tests do not route through the decision model unless they ask to (ADR-0146).
+"""The harness's hermetic tests do not call the decision model unless they ask to (ADR-0146).
 
-The root conftest registers the reference pack, which brings the decision model (`jev_decision`) into the catalog, and
-with a key in `.env` the chat-manager's router would really call it -- reaching the network from a hermetic test. So
-here it is not in the catalog, and the router steps aside as it does for any product that never registers it. A test
-that wants the router patches the catalog itself; a live test (`model`) keeps the real one.
+The harness registers and calls its decision model itself, and with a key in `.env` it would really call it --
+reaching the network from a hermetic test. So here the decision model's call fails, and the decider routes as
+before, as it does for a deployment without the decision model's credentials. A test that wants the router patches
+`ainvoke_model` itself; a live test (`model`) keeps the real one.
 """
 
 from __future__ import annotations
@@ -17,6 +17,11 @@ def _no_decision_model_unless_asked(request: pytest.FixtureRequest, monkeypatch:
         return
     import rag_wright.api
 
-    catalog = rag_wright.api.capability_index
-    monkeypatch.setattr(rag_wright.api, "capability_index",
-                        lambda: {slug: card for slug, card in catalog().items() if slug != "jev_decision"})
+    invoke = rag_wright.api.ainvoke_model
+
+    async def no_decision_model(name: str, inputs: dict, **kwargs: object) -> object:
+        if name == "jev_decision":
+            raise RuntimeError("the decision model is not called in a hermetic harness test")
+        return await invoke(name, inputs, **kwargs)
+
+    monkeypatch.setattr(rag_wright.api, "ainvoke_model", no_decision_model)

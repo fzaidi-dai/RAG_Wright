@@ -282,15 +282,11 @@ delegated message that stands on its own (no earlier turns, or B1 yes) is handed
 `<viewing>` block included. In the orchestrator, no worker means its opening call runs without the hand-off, one
 worker is dispatched in code with the brief, and several are planned by the orchestrator as before.
 
-**Turning it on.** Nothing is required: without the decision model registered, every tier behaves as it did. To
-route, register it at startup and provide its credentials (`OPENROUTER_API_KEY`, or the profile's `api_key_env`; a
-self-hosted deployment registers an on-premises decision profile with `register_decision_profile`):
-
-```python
-from rag_wright.api import engine_capabilities, register_capability
-
-register_capability(next(m for m in engine_capabilities() if m.slug == "jev_decision"))
-```
+**Nothing to turn on.** The decision model is the harness's own: it registers the engine's `jev_decision` capability
+and calls it itself, and a product registers nothing. It needs the decision model's credentials, which are the
+engine's configuration (`OPENROUTER_API_KEY` by default; a self-hosted deployment registers an on-premises decision
+profile with `register_decision_profile`). Without them every tier routes as it did before, and the process logs one
+warning.
 
 **Your declarations are the criteria.** The decision model reads each direct tool's own description, the
 orchestrator's `orchestrator_description` (what delegating means) and each worker's description. Write them so they
@@ -312,7 +308,9 @@ decided by reading `brief_by` rather than by a judge. Each worker's D2 row carri
 `confidence` when the decision model dispatched it, as `decision_model_yes` when the orchestrator did; a brief sent
 to no worker is a D2 row `none`.
 
-**Known gaps** (HD-8): a route to `ask_the_user` offers the model that tool alone but does not force it, and the
-`ask_the_user` items were answered with a reply 4 times of 18 in each D1 run; several workers are still planned by the
-orchestrator. **Data:** the
+**A tool the router chose is forced when the model is known to honour it** (HD-9): the configured model's profile
+says so (`ModelProfile.forced_tool_choice`, read with `profile_for`), measured per model and never assumed. Offered
+alone but not forced, the chat model answered a routed `ask_the_user` with a reply 4 times of 18; forced, 0 of 18.
+A product on another model measures it and registers its profile with `forced_tool_choice=True`. **Known gap:**
+several workers are still planned by the orchestrator. **Data:** the
 person's message and the brief are sent to the decision model's provider.

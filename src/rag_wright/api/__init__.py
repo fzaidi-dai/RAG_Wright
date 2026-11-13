@@ -79,8 +79,8 @@ from rag_wright.capabilities.span_search import SpanHit
 from rag_wright.api.tracing import (finish_generation, flush_tracing, start_generation, trace_level, traced_run,
                                     traced_step, tracing_on)
 from rag_wright.api.usage import ModelUsage, UsageTotals, measure_usage, record_usage
-from rag_wright.models.profiles import (DecisionModelProfile, ModelProfile, ModelRole, register_decision_profile,
-                                      register_model_profile)
+from rag_wright.models.profiles import (DecisionModelProfile, ModelProfile, ModelRole, profile_for,
+                                      register_decision_profile, register_model_profile)
 from rag_wright.api.workspace import (
     WorkspaceHandle,
     drop_workspace,
@@ -112,6 +112,7 @@ __all__ = [
     "ModelServerNotDeployed", "ModelServerStatus", "amodel_server_status", "astop_model_server",
     "publish", "publish_all",  # PS-38 (G14): write registered capabilities' ARD manifests to a registry root
     "DecisionModelProfile", "register_decision_profile", "ModelProfile", "register_model_profile",  # PS-38 (G12)
+    "profile_for",  # HD-9: what a model is measured to honour, read by the harness
     "agent_chat_model",  # PS-36: an agent's chat model from a profile, metered and traced
     "query_embedder",  # PS-39: the process-wide query embedder, for a seam that holds no workspace
     "ModelRole",  # PS-1 (G17): WorkspaceHandle.model_id(role) and EngineConfig.models need it

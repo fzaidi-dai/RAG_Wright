@@ -5,9 +5,13 @@ through the capability layer) answers a `choice` among options or a yes/no per q
 second, and its probability is what `Decision.confidence` has been waiting for. Measured on the routing gold sets
 (HD-2): it matches the tiers' own model on D1 and B1 and beats it on D2.
 
-**Unavailable is an answer, not an error.** `jev_decision` not registered (silently: that is configuration), no key,
-or a failed call: the decider returns None and the caller decides as it did before there was a decider. After one
-failure the run stops asking, so a missing key costs one warning per run rather than one per question.
+**The decision model is the harness's own, so a product registers nothing** (HD-9). The decider registers the engine's
+`jev_decision` capability on first use and calls it through the capability layer by name; what it needs is the
+engine's configuration, the decision model's profile and credentials (`OPENROUTER_API_KEY` by default).
+
+**Unavailable is an answer, not an error.** No credentials, or a failed call: the decider returns None and the
+caller decides as it did before there was a decider. After one failure the run stops asking, and the process warns
+once, so a deployment without the decision model's credentials is told once and routes as before.
 
 **One record per run** (`run_key`), as the call record and the decision ledger keep theirs: the decision model flips
 about 3% of answers between identical calls, so a question asked twice in one run gets the first answer again.
@@ -67,7 +71,7 @@ class Decider:
     async def _ask(self, run: str, state: str, questions: dict) -> dict | None:
         """Each question's answer, already read into its value: a `choice` as `Routed`, a yes/no as
         its probability. None when unavailable, including an answer that is not one of the questions' own."""
-        from rag_wright.api import ainvoke_model, capability_index
+        from rag_wright.api import ainvoke_model
 
         record = self.runs.setdefault(run, _RunRecord())
         if record.unavailable:
@@ -75,20 +79,37 @@ class Decider:
         key = json.dumps([state, questions], sort_keys=True)
         if key in record.answers:
             return record.answers[key]
-        if CAPABILITY not in capability_index():  # not configured: silent, unlike a failure
-            record.unavailable = True
-            return None
         inputs = {"state": state, "questions": questions, **({"model": self.model} if self.model else {})}
         try:
+            _ensure_registered()
             raw = (await ainvoke_model(CAPABILITY, inputs, resources=None))["answers"]
             # every question answered, in the shape asked, or the whole answer is unusable
             answers = {qid: _read(raw[qid], question) for qid, question in questions.items()}
         except Exception:  # noqa: BLE001 - any failure means "decide as before", never a failed turn
-            logger.warning("decision_model_unavailable", exc_info=True)
+            _warn_once()
             record.unavailable = True
             return None
         record.answers[key] = answers
         return answers
+
+
+def _ensure_registered() -> None:
+    """The engine's decision model in the catalog, registered from its own manifest if nothing has yet."""
+    from rag_wright.api import capability_index, engine_capabilities, register_capability
+
+    if CAPABILITY not in capability_index():
+        register_capability(next(m for m in engine_capabilities() if m.slug == CAPABILITY))
+
+
+_warned = False
+
+
+def _warn_once() -> None:
+    """One warning per process with the reason, so a deployment without the credentials hears it once."""
+    global _warned
+    if not _warned:
+        _warned = True
+        logger.warning("decision_model_unavailable: routing as before", exc_info=True)
 
 
 def _read(answer: dict, question: dict) -> Any:

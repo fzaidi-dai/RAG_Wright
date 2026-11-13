@@ -62,9 +62,11 @@ class RouteTheTurn(AgentMiddleware):
     `orchestrator` its subagent name; `thresholds` is the product's `RoutingThresholds`."""
 
     def __init__(self, decider: Decider, *, direct: frozenset[str], delegating: str, orchestrator: str,
-                 thresholds: RoutingThresholds) -> None:
+                 thresholds: RoutingThresholds, force: bool = False) -> None:
         super().__init__()
         self._decider = decider
+        #: Whether a tool offered alone is also forced (`tool_choice`), for a model known to honour it (HD-9).
+        self._force = force
         self._thresholds = thresholds
         self._orchestrator = orchestrator
         self._offered = direct | {clarification_tool().name}
@@ -90,8 +92,11 @@ class RouteTheTurn(AgentMiddleware):
         chosen = {"answer": None, "delegate": tools.get(_DELEGATE)}.get(routed.choice, tools.get(routed.choice))
         if chosen is not None and not _takes_arguments(chosen):
             reply = _called(routed.choice, {})
+        elif chosen is None:
+            reply = await handler(request.override(tools=[]))
         else:
-            reply = await handler(request.override(tools=[chosen] if chosen is not None else []))
+            forced = {"tool_choice": _name_of(chosen)} if self._force else {}
+            reply = await handler(request.override(tools=[chosen], **forced))
         return _stamped(reply, stamp)
 
     async def _brief(self, request: Any, messages: list) -> tuple[str | None, dict]:

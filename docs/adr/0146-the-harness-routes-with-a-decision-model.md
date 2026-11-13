@@ -73,3 +73,17 @@ four direct tools (Qwen alone 86.5%, weakest option 0.44 against 0.39) and 92.2%
 worker (75.6%), exact sets 78.9%, the misses all multi-worker briefs the orchestrator plans and is read at its first
 round. No regression. One gap: a route to `ask_the_user` offers the tool without forcing it, and those items were
 answered with a reply 4 of 18 times per D1 run (HD-9, proposed).
+
+## Addendum (HD-9, 2026-11-13): the chosen tool is forced where the model is measured to honour it
+
+A routed call that offers one tool now also forces it (`tool_choice`) when the configured model's profile says it
+honours a forced tool choice (`ModelProfile.forced_tool_choice`, False by default, read through `profile_for` on
+`rag_wright.api`). Measured on `qwen3.8-27b-modal-or`, the chat tier with reasoning off: 16 of 16 forced calls
+called the tool, no errors, and the routed `ask_the_user` items were answered with a reply 0 times of 18 (4 of 18
+unforced). A provider behaviour, so it lives in the profile with this date, never in the harness's code.
+
+**And the decision model is the harness's own** (HD-9, the same day). Routing first switched on only when a product
+had registered `jev_decision` in its capability catalog, which made an implementation choice of the harness depend on
+a product's action. The decider now registers the engine's capability itself on first use and calls it through the
+capability layer by name; availability is the engine's configuration (the decision model's profile and credentials)
+alone, and without it the tiers route as before with one warning per process. A product does nothing.

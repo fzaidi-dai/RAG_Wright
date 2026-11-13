@@ -54,7 +54,7 @@ How to reach a typed-DECISION model (TypeSafe Jev, or an on-prem Laya decisions 
 
 Keyed by model id so swapping `jev-1.13` -> `jev-latest`, or Jev -> an on-prem Laya decisions endpoint, is a config change, not a code edit (the Laya fallback, ADR-0119). The capability (`capabilities/jev_decision.py`) reads this; the model id is never hardcoded in capability/node code (the model-neutrality rule).
 
-### `ModelProfile(*, model_id: str, structured_method: Literal['function_calling', 'json_mode', 'json_schema'] = 'function_calling', client_side_structured: bool = False, structured_extra_body: Optional[dict[str, Any]] = None, text_extra_body: Optional[dict[str, Any]] = None, agent_extra_body: Optional[dict[str, Any]] = None, structured_max_tokens: Optional[int] = None, extra_body: Optional[dict[str, Any]] = None, backend: Optional[Literal['openrouter', 'vllm', 'ollama']] = None, served_model_id: Optional[str] = None, base_url: Optional[str] = None, base_url_env: Optional[str] = None, api_key_env: Optional[str] = None, max_concurrency: Optional[int] = None) -> None`
+### `ModelProfile(*, model_id: str, structured_method: Literal['function_calling', 'json_mode', 'json_schema'] = 'function_calling', client_side_structured: bool = False, structured_extra_body: Optional[dict[str, Any]] = None, text_extra_body: Optional[dict[str, Any]] = None, agent_extra_body: Optional[dict[str, Any]] = None, forced_tool_choice: bool = False, structured_max_tokens: Optional[int] = None, extra_body: Optional[dict[str, Any]] = None, backend: Optional[Literal['openrouter', 'vllm', 'ollama']] = None, served_model_id: Optional[str] = None, base_url: Optional[str] = None, base_url_env: Optional[str] = None, api_key_env: Optional[str] = None, max_concurrency: Optional[int] = None) -> None`
 
 How a given model id must be driven for a forced structured-output call.
 
@@ -405,6 +405,10 @@ PS-38 (G12): add (or replace) the decision-model profile for `profile.model_id`,
 ### `register_model_profile(profile: 'ModelProfile') -> 'ModelProfile'`
 
 Add (or replace) the profile for `profile.model_id`, process-wide, so that model id resolves to it from now on (PS-19: a deployed server registers its own profile).
+
+### `profile_for(model_id: 'str') -> 'ModelProfile'`
+
+The registered profile for a model id, or a safe default profile for an unregistered one.
 
 ### `agent_chat_model(model: 'Optional[str]' = None, *, temperature: 'float' = 0.0, trace: 'bool' = True, **overrides: 'Any') -> 'BaseChatModel'`
 

@@ -62,6 +62,14 @@ def chat_thinking() -> Any:
     return HowMuchToThink(reasoning=False, tier="chat-manager", max_tokens=CHAT_TURN_TOKEN_CAP)
 
 
+def forces_a_tool(definition: Any, settings: Any, model: Any = None) -> bool:
+    """Whether the router may FORCE the one tool it chose (HD-9): only for the configured model, and only when its
+    profile is measured to honour a forced tool choice. A model passed in has no profile to say so."""
+    from rag_wright.api import profile_for
+
+    return model is None and profile_for(definition.model_id_for(settings)).forced_tool_choice
+
+
 def build_chat_agent(
     context: RunScope,
     #: The product's own per-run resource bundle, opaque here: the substrate hands it
@@ -147,7 +155,7 @@ def build_chat_agent(
             # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146).
             RouteTheTurn(Decider(), direct=frozenset(direct_names(definition)),
                          delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
-                         thresholds=definition.routing),
+                         thresholds=definition.routing, force=forces_a_tool(definition, settings, model)),
         ],
         checkpointer=checkpointer if checkpointer is not None else InMemorySaver(),
         **memory,

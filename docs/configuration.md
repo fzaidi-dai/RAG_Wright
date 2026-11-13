@@ -148,7 +148,9 @@ with measure_usage() as usage:
 ```
 
 The profile decides the backend, endpoint, key and served id, and its `agent_extra_body` carries the agent turn's
-reasoning flag in the backend's own spelling (OpenRouter's `reasoning`, vLLM's `chat_template_kwargs`). Every call
+reasoning flag in the backend's own spelling (OpenRouter's `reasoning`, vLLM's `chat_template_kwargs`). Its
+`forced_tool_choice` says whether the model is measured to honour a forced tool choice, which lets the agent harness
+force the one tool its router chose (False unless measured; `profile_for(model_id)` reads a profile). Every call
 the model makes, including a subagent's, a streamed one and a tool-bound one, is recorded into the active
 `measure_usage()` scopes with the provider's real per-call cost, and traced as one Langfuse generation when tracing
 is on. Other keyword arguments are the chat model's own settings (`timeout`, `max_retries`, `max_tokens`,
