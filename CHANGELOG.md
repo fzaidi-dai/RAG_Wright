@@ -4,6 +4,31 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.18.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.3...0.18.0) (2026-11-13)
+
+
+### ⚠ BREAKING CHANGES
+
+* **PS-48i:** RecordTheDecisions no longer takes worker_names=; it was stored and never read (a decision's options come from the product's declared DecisionPoints). Drop the argument.
+* **PS-48d:** rag_wright.harness.guessed_an_identifier is removed. Use guessed_identifiers({"<tool>": "<id argument>"}) as the rule's detect.
+
+### Features
+
+* **PS-48e:** the run recorder is the harness's own; grading tests onto the fabric fixture ([3d80813](https://github.com/fzaidi-dai/RAG_Wright/commit/3d808130807974bd9bd1e922171d49e8fe9a995f))
+* **PS-48h:** the harness's eval instruments are the engine's: harness.faults and harness.preflight ([e6e7d8f](https://github.com/fzaidi-dai/RAG_Wright/commit/e6e7d8ff0a4354478384bba9ae98343c4f7d4ba7))
+* **PS-48i:** the harness's public surface carries what a product's code uses; worker_names is removed ([6492e13](https://github.com/fzaidi-dai/RAG_Wright/commit/6492e131504c22fd49c6320c2299cbb8317240ae))
+
+
+### Bug Fixes
+
+* **PS-48a:** harness tests onto the fabric fixture; a skill deepagents would skip is refused ([8332cff](https://github.com/fzaidi-dai/RAG_Wright/commit/8332cff980b820b84597bec67b4db4337f3e85dc))
+* **PS-48b:** harness model and error tests onto the fabric fixture; a retried failure is never explained ([a30655d](https://github.com/fzaidi-dai/RAG_Wright/commit/a30655dbc2f28d84cc3f4364cc33397aac3ffdb4))
+* **PS-48c:** harness run and view tests onto the fabric fixture; a given model reaches every tier ([b243100](https://github.com/fzaidi-dai/RAG_Wright/commit/b24310088b20893207c6ee390dcd1bf50dc7065e))
+* **PS-48d:** harness decision and rule tests onto the fabric fixture; the id detector takes the product's arguments ([b17983b](https://github.com/fzaidi-dai/RAG_Wright/commit/b17983bde0887d233b293c531241369a59c30d27))
+* **PS-48f:** harness seen and memory tests onto the fabric fixture; a result's counts decide its emptiness ([daf1812](https://github.com/fzaidi-dai/RAG_Wright/commit/daf18126b8835944efadaa94da990eb81be0c4dc))
+* **PS-48g1:** harness worker, tier, batching, dispatch and agent tests onto the fabric fixture; a passed model loses the catch-all subagent ([a1f9f23](https://github.com/fzaidi-dai/RAG_Wright/commit/a1f9f23aaa013122ace8903de392c0785936ac01))
+* **PS-48g2:** harness filesystem, interpreter and withhold tests onto the fabric fixture; the orchestrator can read its own skills ([87ec265](https://github.com/fzaidi-dai/RAG_Wright/commit/87ec265389e11c9ed89a6ecc7607d47ff7909843))
+
 ## [0.17.3](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.2...0.17.3) (2026-11-12)
 
 
