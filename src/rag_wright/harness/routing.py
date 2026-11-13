@@ -139,3 +139,53 @@ def _stamped(reply: Any, routed: dict) -> Any:
         if isinstance(message, AIMessage):
             message.response_metadata[ROUTED] = routed
     return reply
+
+
+class RouteTheBrief(AgentMiddleware):
+    """D2 by the decision model: which workers the orchestrator's brief needs (ADR-0146, HD-7).
+
+    On the orchestrator's opening call (its one human message is the brief) the decider asks, for each worker, "does
+    this request need it?", the worker's own description as what a yes means. At the product's D2 threshold
+    (`RoutingThresholds.d2`, 0.5 by default) the fast paths are taken:
+
+    - **no worker**: the opening call goes to the model without the hand-off, to answer with the tier's own tools;
+    - **one worker**: it is dispatched in code with the brief as given, with no model call;
+    - **several**: the orchestrator plans as before, writing each worker's brief and sequencing steps that depend on
+      one another ("check it; if it fails, find an alternative").
+
+    The decision model's yes per worker is noted on the run's ledger, so each worker's `D2` row carries it: as the
+    row's confidence when the decision model decided, as an input when the model did.
+    """
+
+    def __init__(self, decider: Decider, *, workers: dict[str, str], ledger: Any, threshold: float) -> None:
+        super().__init__()
+        self._decider = decider
+        self._questions = {name: (f"Does this request need the {name}?", description,
+                                  "the request does not need this") for name, description in workers.items()}
+        self._ledger = ledger
+        self._threshold = threshold
+
+    def wrap_model_call(self, request: Any, handler: Any) -> Any:
+        return handler(request)  # the decider is asynchronous; a synchronous run plans as before
+
+    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
+        messages = request.messages or []
+        tools = [tool for tool in request.tools or [] if _name_of(tool) != _DELEGATE]
+        if len(messages) != 1 or not isinstance(messages[0], HumanMessage) or len(tools) == len(request.tools or []):
+            return await handler(request)  # not the opening call, or nothing to dispatch with
+        run = run_key(request)
+        brief = _text(messages[0])
+        yes = await self._decider.yes_no(run, brief, self._questions)
+        if yes is None:
+            return await handler(request)
+        chosen = [name for name in self._questions if yes[name] >= self._threshold]
+        here = self._ledger.of(run)
+        # only a worker the decision model dispatched is its decision; any other is the orchestrator's
+        here.routed = {name: {"p": p, "decided": chosen == [name]} for name, p in yes.items()}
+        if not chosen:
+            here.record("D2", tier="orchestrator", chose="none", confidence=1.0 - max(yes.values(), default=0.0),
+                        inputs={"brief": brief, "decision_model_yes": yes})
+            return await handler(request.override(tools=tools))
+        if len(chosen) == 1:
+            return _called(_DELEGATE, {"description": brief, "subagent_type": chosen[0]})
+        return await handler(request)

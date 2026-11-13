@@ -57,12 +57,12 @@ class Decider:
                                                           "criteria": dict(options)}})
         return None if answers is None else answers["choice"]
 
-    async def yes_no(self, run: str, state: str, questions: Mapping[str, tuple[str, str]]) -> dict[str, float] | None:
-        """The probability of yes for each question (`{id: (question, what a yes means)}`), asked in one call, or
-        None when unavailable."""
+    async def yes_no(self, run: str, state: str, questions: Mapping[str, tuple[str, ...]]) -> dict[str, float] | None:
+        """The probability of yes for each question (`{id: (question, what a yes means[, what a no means])}`), asked
+        in one call, or None when unavailable."""
         return await self._ask(run, state, {
-            qid: {"type": "noul", "instructions": question, "criteria": {"true": yes, "false": "no"}}
-            for qid, (question, yes) in questions.items()})
+            qid: {"type": "noul", "instructions": question, "criteria": {"true": yes, "false": no[0] if no else "no"}}
+            for qid, (question, yes, *no) in questions.items()})
 
     async def _ask(self, run: str, state: str, questions: dict) -> dict | None:
         """Each question's answer, already read into its value: a `choice` as `Routed`, a yes/no as

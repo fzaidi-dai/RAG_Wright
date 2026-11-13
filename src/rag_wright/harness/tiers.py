@@ -212,8 +212,10 @@ def build_orchestrator(
     from rag_wright.harness.models import catch_all_disabled
     from rag_wright.harness.batch import BatchTheQuestions
     from rag_wright.harness.decisions import WhatTheRunDecided
+    from rag_wright.harness.decider import Decider
     from rag_wright.harness.errors import error_middleware
     from rag_wright.harness.interpreter import code_interpreter
+    from rag_wright.harness.routing import RouteTheBrief
     from rag_wright.harness.skills import orchestrator_skill
     from rag_wright.harness.withhold import WITHHELD_FROM_ORCHESTRATOR, withhold
 
@@ -223,6 +225,7 @@ def build_orchestrator(
     # decisions while recording none would be the exact shape of instrument this phase was reset over.
     decisions = (ledger if ledger is not None
                  else WhatTheRunDecided(points=definition.decision_points))
+    workers = [worker(context, resources, decisions) for worker in definition.workers]
 
     return create_deep_agent(
         # **A passed model is given the same roster as a built one** (PS-48g): without this the catch-all
@@ -271,11 +274,14 @@ def build_orchestrator(
             code_interpreter(context, resources, surface=definition.surface),
             *_remembering(definition), *_recording(decisions, definition), BatchTheQuestions(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
+            # **Innermost of the tier's own**, so everything above still shapes and observes the routed call.
+            RouteTheBrief(Decider(), workers={spec["name"]: spec["description"] for spec in workers},
+                          ledger=decisions, threshold=definition.routing.d2),
             *(extra_middleware or []),
         ],
         # **Workers hang off the orchestrator, never off the chat-manager**. A worker on the
         # conversation tier would put planning on the path of an unambiguous listing.
-        subagents=[worker(context, resources, decisions) for worker in definition.workers],
+        subagents=workers,
         checkpointer=checkpointer,
         store=store,
         name="orchestrator",

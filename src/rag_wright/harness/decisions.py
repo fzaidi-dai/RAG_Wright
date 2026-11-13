@@ -146,6 +146,9 @@ class DecisionLedger:
     #: The product's decision points, passed down from `WhatTheRunDecided` so one ledger and its records
     #: cannot disagree about what the option space for a point is.
     points: tuple[Any, ...] = ()
+    #: The decision model's D2 view per worker (`{worker: {"p": yes, "decided": bool}}`), noted by the orchestrator's
+    #: router before any worker opens, so each worker's D2 row carries it (ADR-0146).
+    routed: dict[str, dict[str, Any]] = field(default_factory=dict)
 
     def record(
         self,
@@ -354,7 +357,11 @@ class RecordTheDecisions(AgentMiddleware):
         # `D2` for it as well would count one decision twice, and `D2` is *"which WORKERS this question
         # needs"* -- the orchestrator is not one of them.
         if self._is_worker:
-            here.record("D2", tier=decided_by, chose=self._tier, inputs={"brief": brief})
+            # the decision model's yes for this worker: its confidence when it decided, an input when the model did
+            view = here.routed.get(self._tier)
+            here.record("D2", tier=decided_by, chose=self._tier,
+                        confidence=view["p"] if view and view["decided"] else None,
+                        inputs={"brief": brief, **({"decision_model_yes": view["p"]} if view else {})})
 
     def _framing(self, request, result) -> None:
         """`D5`, read off `read_the_question`'s reply -- **with its confidence**.

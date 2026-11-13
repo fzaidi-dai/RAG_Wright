@@ -124,6 +124,9 @@ NOT_ON_WORKERS: dict[str, str] = {
         "D1 routes a PERSON's message: answer, call a direct tool, ask, or delegate (ADR-0146). A worker never "
         "receives one -- it executes the brief it was dispatched with -- so there is no turn of its own to route."
     ),
+    "RouteTheBrief": (
+        "D2 chooses which WORKERS a brief needs (ADR-0146), and a worker dispatches none: it executes its brief."
+    ),
     "Decider": (
         "**Not middleware**: the decision-model client `RouteTheTurn` asks, named here because the audit reads "
         "capitalised calls in a tier builder. A worker has no routing decision to hand it."
