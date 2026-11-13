@@ -43,7 +43,10 @@ as instructions. On 0.10.0 or later, **consume the tier**: most of this skill be
 following it as instructions means hand-building several thousand lines the engine ships and maintains. A
 product declares an `AgentDefinition` (its `ToolSurface`, planning split, workers, context type satisfying
 `RunScope`, retry set, model id, `AgentPrompts`, rules and decision points) and runs it through `start_run` /
-`resume_run` / `stream_run`.
+`resume_run` / `stream_run`. **From 0.18.0 it also ships the instruments its evals need**: the run recorder
+(`RecordTheContext`), a deterministic fault injector (`Fault`, `InjectFaults`) and a preflight with a
+chat-manager-only cut (`what_will_run`, `only_the_chat_manager`). Import everything from `rag_wright.harness`,
+never from a submodule.
 
 So check, every time, and pin what you find:
 
@@ -327,8 +330,8 @@ Four observed failures, and the sequence of getting them wrong is the lesson:
 | the grading deadline burned re-asking a model that had just timed out | retries exhausted | **nothing at all** |
 
 **First conclusion: "these are all one bug" was wrong.** Grouping a decision failure with three completion
-failures made one policy look sufficient for all four. Drive each one with a fault injector and inspect the
-aftermath separately.
+failures made one policy look sufficient for all four. Drive each one with a fault injector (the engine's tier
+ships one, `InjectFaults`) and inspect the aftermath separately.
 
 **Second conclusion, and it saves you a component: the finished work is UNREAD, not LOST.** Two of the four
 leave the worker's correct answer verbatim in the checkpoint as a tool message. So "proceed with what
