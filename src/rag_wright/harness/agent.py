@@ -101,6 +101,9 @@ def build_chat_agent(
     decisions = (ledger if ledger is not None
                  else WhatTheRunDecided(points=definition.decision_points))
 
+    orchestrator = orchestrator_subagent(context, resources, settings, ledger=decisions, definition=definition,
+                                         model=model)
+
     memory: dict[str, Any] = {}
     if store is not None:
         # **Memory is granted, never assumed.** With no store there is no durable memory at all, which is
@@ -121,8 +124,7 @@ def build_chat_agent(
         tools=chat_manager_tools(context, resources, definition=definition),
         # **The model given is the model every tier uses** (PS-48c). Passed to the chat-manager only, the
         # orchestrator built its own from configuration, so a scripted agent made a real call on delegating.
-        subagents=[orchestrator_subagent(context, resources, settings, ledger=decisions,
-                                         definition=definition, model=model)],
+        subagents=[orchestrator],
         system_prompt=definition.prompts.chat,
         context_schema=definition.context_schema,
         # **The four error levels, and the one exception that halts.** Without this the library's defaults
@@ -144,7 +146,8 @@ def build_chat_agent(
                              message_for=definition.message_for),
             # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146).
             RouteTheTurn(Decider(), direct=frozenset(direct_names(definition)),
-                         delegating=definition.prompts.orchestrator_description, threshold=definition.routing.d1),
+                         delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
+                         thresholds=definition.routing),
         ],
         checkpointer=checkpointer if checkpointer is not None else InMemorySaver(),
         **memory,

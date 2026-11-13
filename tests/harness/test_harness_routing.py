@@ -47,13 +47,16 @@ def recording(*messages: AIMessage) -> tuple[Any, list[list[str]]]:
 
 
 class Routes:
-    """The decision model at the capability layer: answers every routing question with `choice` at `p`."""
+    """The decision model at the capability layer: D1 is `choice` at `p`; B1 (is the message self-contained) is a yes
+    at probability `b1`."""
 
-    def __init__(self, choice: str, p: float) -> None:
-        self.choice, self.p, self.asked = choice, p, []
+    def __init__(self, choice: str, p: float, b1: float) -> None:
+        self.choice, self.p, self.b1, self.asked = choice, p, b1, []
 
     async def __call__(self, name: str, inputs: dict, *, resources: object = None) -> dict:
         self.asked.append(inputs)
+        if "self_contained" in inputs["questions"]:
+            return {"answers": {"self_contained": {"type": "noul", "noul": self.b1}}}
         return {"answers": {"choice": {"type": "choice", "choice": self.choice,
                                        "probabilities": {self.choice: self.p}}}}
 
@@ -62,20 +65,31 @@ class Routes:
 def routes(monkeypatch: pytest.MonkeyPatch):
     import rag_wright.api
 
-    def install(choice: str, p: float) -> Routes:
-        fake = Routes(choice, p)
+    def install(choice: str, p: float, *, b1: float = 0.9) -> Routes:
+        fake = Routes(choice, p, b1)
         monkeypatch.setattr(rag_wright.api, "ainvoke_model", fake)
         monkeypatch.setattr(rag_wright.api, "capability_index", lambda: {"jev_decision": {}})
         return fake
     return install
 
 
-def _turn(model: Any, message: str, *, ledger: WhatTheRunDecided | None = None, definition: Any = None) -> list:
+def _turn(model: Any, message: str, *, ledger: WhatTheRunDecided | None = None, definition: Any = None,
+          earlier: tuple[tuple[str, str], ...] = ()) -> list:
     agent = build_chat_agent(_a_context(), _resources(), _settings(), model=model,
                              definition=definition or loom(variant="small"), ledger=ledger)
-    out = asyncio.run(agent.ainvoke({"messages": [{"role": "user", "content": message}]},
-                                    {"configurable": {"thread_id": uuid.uuid4().hex}}, context=_a_context()))
+    turns = [{"role": role, "content": text} for role, text in earlier] + [{"role": "user", "content": message}]
+    out = asyncio.run(agent.ainvoke({"messages": turns}, {"configurable": {"thread_id": uuid.uuid4().hex}},
+                                    context=_a_context()))
     return out["messages"]
+
+
+def _brief(messages: list) -> str:
+    (handover,) = [c for m in messages if isinstance(m, AIMessage) for c in m.tool_calls if c["name"] == "task"]
+    return handover["args"]["description"]
+
+
+EARLIER = (("user", "Which mills can we order from?"), ("assistant", "mill-a, mill-b, mill-c and mill-d."))
+REPLY = "mill-c is fastest."
 
 
 def _call(name: str, args: dict) -> AIMessage:
@@ -131,21 +145,6 @@ def test_A_CONFIDENT_ANSWER_IS_WRITTEN_WITH_NO_TOOLS_AND_D1_CARRIES_ITS_CONFIDEN
     assert (made.chose, made.confidence, made.inputs["route"]) == ("answer_directly", 0.9, "answer")
 
 
-def test_A_CONFIDENT_DELEGATE_OFFERS_THE_HANDOFF_ALONE_AND_D1_CARRIES_ITS_CONFIDENCE(routes) -> None:
-    routes("delegate", 0.8)
-    model, offered = recording(_call("task", {"description": "Compare mills for 8,000 m of linen twill.",
-                                              "subagent_type": "orchestrator"}),
-                               AIMessage(content="mill-c is fastest."))
-    ledger = WhatTheRunDecided(points=())
-
-    with only_the_chat_manager(loom(variant="small"), reply="mill-c is fastest."):
-        _turn(model, "Which mill is best for 8,000 m of linen twill?", ledger=ledger)
-
-    assert offered[0] == ["task"]
-    made = _d1(ledger)
-    assert (made.chose, made.confidence, made.inputs["route"]) == ("delegate", 0.8, "delegate")
-
-
 def test_BELOW_THE_THRESHOLD_THE_TURN_IS_EXACTLY_AS_BEFORE(routes) -> None:
     routes("list_mills", RoutingThresholds().d1 - 0.01)
     model, offered = recording(AIMessage(content="Which mills? We have two."))
@@ -180,3 +179,87 @@ def test_A_PRODUCTS_OWN_THRESHOLD_DECIDES_WHEN_A_ROUTE_IS_TAKEN(routes) -> None:
 def test_A_THRESHOLD_THAT_IS_NOT_A_PROBABILITY_IS_REFUSED() -> None:
     with pytest.raises(ValueError, match="d1"):
         RoutingThresholds(d1=1.5)
+
+
+# --- B1 and the brief (HD-6) ---------------------------------------------------------------------------------
+
+
+def test_A_FIRST_MESSAGE_DELEGATED_IS_HANDED_OVER_VERBATIM_WITH_NO_MODEL_CALL_AND_NO_B1(routes) -> None:
+    """With no earlier turns the message cannot refer back to any, so nothing is asked about it."""
+    decision = routes("delegate", 0.8)
+    model, offered = recording(AIMessage(content=REPLY))
+    ledger = WhatTheRunDecided(points=())
+
+    with only_the_chat_manager(loom(variant="small"), reply=REPLY):
+        messages = _turn(model, "Which mill is best for 8,000 m of linen twill?", ledger=ledger)
+
+    assert _brief(messages) == "Which mill is best for 8,000 m of linen twill?"
+    assert len(offered) == 1, "the only model call is the reply after the orchestrator answered"
+    assert len(decision.asked) == 1, "D1 only"
+    made = _d1(ledger)
+    assert (made.chose, made.confidence, made.inputs["route"]) == ("delegate", 0.8, "delegate")
+    assert (made.inputs["brief"], made.inputs["brief_by"]) == ("Which mill is best for 8,000 m of linen twill?",
+                                                               "verbatim")
+
+
+def test_A_SELF_CONTAINED_MESSAGE_AFTER_EARLIER_TURNS_IS_HANDED_OVER_VERBATIM(routes) -> None:
+    decision = routes("delegate", 0.8, b1=0.9)
+    model, offered = recording(AIMessage(content=REPLY))
+    ledger = WhatTheRunDecided(points=())
+
+    with only_the_chat_manager(loom(variant="small"), reply=REPLY):
+        messages = _turn(model, "Compare mill-a and mill-c for 5,000 m of poplin.", ledger=ledger, earlier=EARLIER)
+
+    assert _brief(messages) == "Compare mill-a and mill-c for 5,000 m of poplin."
+    assert len(offered) == 1
+    assert decision.asked[1]["state"].startswith("Earlier turns:\nuser: Which mills can we order from?")
+    assert _d1(ledger).inputs["self_contained"] == 0.9
+
+
+def test_A_MESSAGE_THAT_REFERS_BACK_HAS_ITS_BRIEF_WRITTEN_BY_THE_MODEL(routes) -> None:
+    routes("delegate", 0.8, b1=0.2)
+    model, offered = recording(_call("task", {"description": "Which of mill-a, mill-b, mill-c, mill-d is fastest?",
+                                              "subagent_type": "orchestrator"}), AIMessage(content=REPLY))
+    ledger = WhatTheRunDecided(points=())
+
+    with only_the_chat_manager(loom(variant="small"), reply=REPLY):
+        _turn(model, "Which of them is fastest?", ledger=ledger, earlier=EARLIER)
+
+    assert offered[0] == ["task"], "the model writes the brief, offered the hand-off alone"
+    assert (_d1(ledger).inputs["brief_by"], _d1(ledger).inputs["self_contained"]) == ("model", 0.2)
+
+
+def test_A_PRODUCTS_OWN_B1_THRESHOLD_DECIDES_WHEN_A_BRIEF_IS_VERBATIM(routes) -> None:
+    """0.9 is verbatim at the default 0.6; a product that asks for 0.95 has the model write it."""
+    routes("delegate", 0.8, b1=0.9)
+    model, offered = recording(_call("task", {"description": "Compare mill-a and mill-c.",
+                                              "subagent_type": "orchestrator"}), AIMessage(content=REPLY))
+    stricter = dataclasses.replace(loom(variant="small"), routing=RoutingThresholds(b1=0.95))
+
+    with only_the_chat_manager(stricter, reply=REPLY):
+        _turn(model, "Compare mill-a and mill-c for 5,000 m of poplin.", definition=stricter, earlier=EARLIER)
+
+    assert offered[0] == ["task"]
+
+
+def test_WHEN_B1_CANNOT_BE_ASKED_THE_MODEL_WRITES_THE_BRIEF(routes, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The decision model fails on the B1 question: the brief is the model's, never a guess that it stands alone."""
+    decision = routes("delegate", 0.8)
+
+    async def b1_fails(name: str, inputs: dict, *, resources: object = None) -> dict:
+        if "self_contained" in inputs["questions"]:
+            raise RuntimeError("the decision model is down")
+        return await decision(name, inputs, resources=resources)
+
+    import rag_wright.api
+
+    monkeypatch.setattr(rag_wright.api, "ainvoke_model", b1_fails)
+    model, offered = recording(_call("task", {"description": "Which mill is fastest?", "subagent_type": "orchestrator"}),
+                               AIMessage(content=REPLY))
+    ledger = WhatTheRunDecided(points=())
+
+    with only_the_chat_manager(loom(variant="small"), reply=REPLY):
+        _turn(model, "Which of them is fastest?", ledger=ledger, earlier=EARLIER)
+
+    assert offered[0] == ["task"]
+    assert (_d1(ledger).inputs["brief_by"], _d1(ledger).inputs["self_contained"]) == ("model", None)

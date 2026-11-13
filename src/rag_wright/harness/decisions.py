@@ -497,9 +497,14 @@ class RecordTheDecisions(AgentMiddleware):
 
         calls = _tool_calls(response)
         # the decision model's route, when this reply was routed (ADR-0146): its probability is D1's confidence
-        routed = _routed(response)
-        by = {"route": routed["choice"]} if routed else {}
-        confidence = routed["confidence"] if routed else None
+        routed = _routed(response) or {}
+        by = {}
+        if routed:
+            by["route"] = routed["choice"]
+        if "brief" in routed:
+            by["brief_by"] = routed["brief"]["by"]
+            by["self_contained"] = routed["brief"]["self_contained"]
+        confidence = routed.get("confidence")
         handed_over = next((call for call in calls if call.get("name") == "task"), None)
         if handed_over is not None:
             here.record("D1", tier=self._tier, chose="delegate", confidence=confidence,
