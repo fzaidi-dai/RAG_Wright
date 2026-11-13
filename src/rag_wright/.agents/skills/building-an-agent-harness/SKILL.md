@@ -495,6 +495,12 @@ proceed - are candidates, and the registry doubles as the labelled corpus for tr
 decisions are recorded. **A point already decided by a typed allow-list stays deterministic: replacing a
 deterministic check with a probabilistic one is a regression however fast it is.** Shadow-mode first, always.
 
+**The engine's harness now routes three of these with a decision model** (ADR-0146): D1 (answer, a direct tool,
+ask, or delegate), B1 (whether a delegated message is handed over verbatim) and D2 (which workers), each below a
+threshold left to the tier's model. Measured on the engine's routing gold sets against the model alone: D1 85.7%
+against 86.5% on four direct tools and 92.2% against 90.0% on twelve; D2 90.0% against 75.6% per worker. Register `jev_decision` to turn it on; your tools', orchestrator's and
+workers' descriptions are what it reads, so write them to tell the options apart. `docs/harness.md` section 9.
+
 **Derive a decision from what the tier DID, never from what the model announces.** A model asked to report
 its own decision reports an intention.
 

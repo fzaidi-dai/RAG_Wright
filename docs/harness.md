@@ -260,3 +260,59 @@ so attach the recorder to every tier you grade. `every_call`, `spend`, `compare`
 **The trap:** a conformance test that hands the substrate your own context type while asserting that a different
 product works proves nothing about a product whose scope has a different depth. When a seam changes, change the
 fake product first.
+
+---
+
+## 9. Routing with the decision model
+
+**The harness routes three decisions with a decision model** (Jev, the engine's `jev_decision` capability), and the
+tier's own model decides only below a threshold or when the decision model is unavailable (ADR-0146). Measured on the
+engine's routing gold sets (HD-2, HD-8), the routed tiers match or beat the model-only tiers: D1 92.2% against 90.0%
+on twelve direct tools, D2 90.0% against 75.6% per worker, each routing call about $0.00002 and under a second.
+
+| decision | where | the decision model asks | taken at | otherwise |
+|---|---|---|---|---|
+| **D1** | the chat-manager's opening call of a turn | one choice: each direct tool, `delegate`, `ask_the_user`, `answer` | `routing.d1` (0.7) | the tier's model routes, as before |
+| **B1** | a routed `delegate` with earlier turns | can the message be understood without them? | `routing.b1` (0.6) | the tier's model writes the brief |
+| **D2** | the orchestrator's opening call | one yes/no per worker | `routing.d2` (0.5) | the orchestrator plans, as before |
+
+What a route does: a direct tool with no arguments is called in code; a tool with arguments, `ask_the_user` or a
+`delegate` whose brief must be written is offered to the model alone; `answer` goes to the model with no tools. A
+delegated message that stands on its own (no earlier turns, or B1 yes) is handed over in the person's own words,
+`<viewing>` block included. In the orchestrator, no worker means its opening call runs without the hand-off, one
+worker is dispatched in code with the brief, and several are planned by the orchestrator as before.
+
+**Turning it on.** Nothing is required: without the decision model registered, every tier behaves as it did. To
+route, register it at startup and provide its credentials (`OPENROUTER_API_KEY`, or the profile's `api_key_env`; a
+self-hosted deployment registers an on-premises decision profile with `register_decision_profile`):
+
+```python
+from rag_wright.api import engine_capabilities, register_capability
+
+register_capability(next(m for m in engine_capabilities() if m.slug == "jev_decision"))
+```
+
+**Your declarations are the criteria.** The decision model reads each direct tool's own description, the
+orchestrator's `orchestrator_description` (what delegating means) and each worker's description. Write them so they
+tell the options apart. The weakest option on the engine's sets is `delegate`, confused with a direct read of the
+same subject, so say in `orchestrator_description` what needs planning (matching, comparing, checking against a
+standard, several steps), not only what the orchestrator is.
+
+**Thresholds are yours to change**, after measuring on your own gold sets (`arun_eval`, as for any capability):
+
+```python
+from rag_wright.harness import AgentDefinition, RoutingThresholds
+
+definition = AgentDefinition(..., routing=RoutingThresholds(d1=0.8))
+```
+
+**What is recorded.** D1 carries the decision model's probability as its `confidence`, the `route`, and for a
+delegation `brief_by` (`verbatim` or `model`) and B1's `self_contained`, so a rule that the brief is faithful can be
+decided by reading `brief_by` rather than by a judge. Each worker's D2 row carries the decision model's yes: as its
+`confidence` when the decision model dispatched it, as `decision_model_yes` when the orchestrator did; a brief sent
+to no worker is a D2 row `none`.
+
+**Known gaps** (HD-8): a route to `ask_the_user` offers the model that tool alone but does not force it, and the
+`ask_the_user` items were answered with a reply 4 times of 18 in each D1 run; several workers are still planned by the
+orchestrator. **Data:** the
+person's message and the brief are sent to the decision model's provider.

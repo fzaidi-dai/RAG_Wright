@@ -1,4 +1,7 @@
-"""HD-2, live: today's Qwen tiers and Jev on the D1, D2 and B1 gold sets, three repeats each.
+"""HD-2 and HD-8, live: the tiers as built, Jev alone and Qwen alone on the D1, D2 and B1 gold sets, three repeats.
+
+Since HD-5 and HD-7 the tiers route with the decision model, which this runner registers, so the `-tier` runs measure
+the routed tiers (HD-8); HD-2's model-only figures were taken before routing existed and are recorded in ADR-0146.
 
     uv run python -m tests.harness.gold.run [--limit N] [--only NAME ...]
 
@@ -12,6 +15,8 @@ import argparse
 import asyncio
 import functools
 import json
+import os
+import sys
 import time
 from collections import defaultdict
 from pathlib import Path
@@ -33,12 +38,12 @@ def _runs(kept: defaultdict[str, deciders.Probabilities]) -> list[tuple[str, str
     workers = functools.partial(score_workers, workers=tuple(WORKERS), floor=FLOOR)
     runs = []
     for variant in ("small", "wide"):
-        runs += [(f"d1-{variant}-qwen", f"d1:{variant}", lambda v=variant: deciders.qwen_d1(v), choice),
+        runs += [(f"d1-{variant}-tier", f"d1:{variant}", lambda v=variant: deciders.tier_d1(v), choice),
                  (f"d1-{variant}-jev-single", f"d1:{variant}",
                   lambda v=variant: deciders.jev_d1(v, kept[f"d1-{v}-jev-single"], split=False), choice),
                  (f"d1-{variant}-jev-split", f"d1:{variant}",
                   lambda v=variant: deciders.jev_d1(v, kept[f"d1-{v}-jev-split"], split=True), choice)]
-    runs += [("d2-qwen", "d2", deciders.qwen_d2, workers),
+    runs += [("d2-tier", "d2", deciders.tier_d2, workers),
              ("d2-jev", "d2", lambda: deciders.jev_d2(kept["d2-jev"]), workers),
              ("b1-qwen", "b1", deciders.qwen_b1, choice),
              ("b1-jev", "b1", lambda: deciders.jev_b1(kept["b1-jev"]), choice)]
@@ -52,6 +57,13 @@ def pooled(report: EvalReport, gold_set: GoldSet, scorer) -> ScorerResult:
     answers = {f"{i.item_id}#{r}": out for i in report.items
                for r, (out, err) in enumerate(zip(i.outputs, i.errors)) if err is None}
     return scorer(gold_set.model_copy(update={"items": items}), answers)
+
+
+def _models(run: str) -> list[str]:
+    """The models a run's decisions are made with: a tier is routed by Jev with Qwen below the threshold."""
+    if "tier" in run:
+        return [deciders.MODEL, "jev-1.13"]
+    return [deciders.MODEL] if "qwen" in run else ["jev-1.13"]
 
 
 def _gold(spec: str, limit: int | None):
@@ -75,7 +87,7 @@ async def main(limit: int | None, only: list[str]) -> None:
         print(f"[hd2] {n}/{len(runs)} {name} items={len(gold_set.items)}", flush=True)
         with measure_usage() as usage:
             report = await arun_eval(gold_set, factory(), [scorer], repeats=REPEATS, task_name=name,
-                                     models=[deciders.MODEL] if "qwen" in name else ["jev-1.13"],
+                                     models=_models(name),
                                      progress=lambda line, name=name: print(f"[{name}] {line}", flush=True))
         (out / f"{name}.json").write_text(report.model_dump_json(indent=1))
         if name in kept:
@@ -87,7 +99,9 @@ async def main(limit: int | None, only: list[str]) -> None:
                          "errors": sum(e is not None for i in report.items for e in i.errors),
                          "flipped": sum(i.flipped for i in report.items), "calls": usage.calls,
                          "cost_usd": round(usage.cost_usd, 4), "calls_without_cost": usage.calls_without_cost,
-                         "ms_per_call": round(usage.latency_ms_total / usage.calls) if usage.calls else None}
+                         "ms_per_call": round(usage.latency_ms_total / usage.calls) if usage.calls else None,
+                         "by_model": {m: {"calls": u.calls, "cost_usd": round(u.cost_usd, 4)}
+                                      for m, u in usage.by_model.items()}}
         print(f"[hd2] {name} done: {json.dumps({k: v for k, v in summary[name].items() if k != 'per_label'})}",
               flush=True)
     (out / "summary.json").write_text(json.dumps(summary, indent=1))
@@ -103,3 +117,10 @@ if __name__ == "__main__":
     parser.add_argument("--only", nargs="*", default=[], help="only these runs, by name")
     args = parser.parse_args()
     asyncio.run(main(args.limit, args.only))
+    # **End the process here, outputs written.** HD-2's full run finished at 18:00 and its process was still alive
+    # 3.5 hours later, waiting in interpreter shutdown; small probes (one item: Jev only, routed tiers, direct Qwen)
+    # all exited, so the cause -- most likely work left in flight by hundreds of streams closed at a tier's first
+    # decision -- was not isolated. A finished eval must not depend on library shutdown.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(0)

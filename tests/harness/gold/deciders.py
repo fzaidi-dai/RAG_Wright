@@ -1,13 +1,15 @@
-"""Who decides D1, D2 and B1 in the HD-2 comparison: today's Qwen tiers, and Jev.
+"""Who decides D1, D2 and B1 in the HD-2 and HD-8 comparisons: the tiers as built, Jev alone, and Qwen alone (B1).
 
-**Each Qwen decider is the tier as the harness builds it**, stopped at its decision: the chat-manager at its first
+**A tier decider is the tier as the harness builds it**, stopped at its decision: the chat-manager at its first
 model call (D1), the orchestrator at the call that dispatches workers or answers without them (D2). Tools that run
-before that are Loom's canned ones.
+before that are Loom's canned ones. Since HD-5 and HD-7 the tiers route with the decision model when it is
+registered; HD-2 measured them before that existed.
 
 **What this measures is the tier's FIRST action, not its whole turn** (HD-2's caveat, recorded in ADR-0146). A
 chat-manager that reads a swatch and then delegates scores as `read_swatch`; an orchestrator that dispatches one worker
 and the next after its report scores as the first; one still reading after `ORCHESTRATOR_CALLS` model calls is an
-error. The gold labels describe the whole turn, so these understate Qwen on `delegate` and on multi-worker briefs. Jev is called through the capability layer (`ainvoke_model("jev_decision")`).
+error. The gold labels describe the whole turn, so these understate a tier on `delegate` and on multi-worker
+briefs. Jev is called through the capability layer (`ainvoke_model("jev_decision")`).
 
 **A decider returns only its decision** (a label, or the sorted workers), because an eval item counts as flipped
 when its repeats differ anywhere in the output, and Jev's probabilities differ on every call. The probabilities go to
@@ -89,29 +91,41 @@ def _on_qwen(definition: Any) -> Any:
     return dataclasses.replace(definition, model_id_for=lambda settings: MODEL)
 
 
-def qwen_d1(variant: str) -> Callable:
-    """D1 by the Loom chat-manager on `variant`, built by `build_chat_agent` as production builds it."""
-    from rag_wright.harness import build_chat_agent
-
-    agent = build_chat_agent(_a_context(), _resources(), _settings(), definition=_on_qwen(loom(variant=variant)))
-
-    async def decide(item: Any) -> str:
-        return await decision_of(agent, opening(item.input["view"], item.input["message"]), d1_choice)
-    return decide
-
-
-def qwen_d2() -> Callable:
-    """D2 by the Loom orchestrator, built by `build_orchestrator` and driven directly with the brief."""
+def tier_d2(*, model: Any = None) -> Callable:
+    """D2 by the Loom orchestrator as built (`build_orchestrator`), driven directly with the brief. **Since HD-7 it
+    routes with the decision model whenever that is registered**: HD-2 measured it before routing existed. A brief
+    the router sends to no worker is read off the run's ledger (`D2` = `none`), the moment the router records it."""
     from rag_wright.harness import build_orchestrator
-
-    agent = build_orchestrator(_a_context(), _resources(), _settings(), definition=_on_qwen(loom()))
+    from rag_wright.harness.decisions import WhatTheRunDecided
 
     async def decide(item: Any) -> list[str]:
-        workers = await decision_of(agent, opening(item.input["view"], item.input["brief"]), d2_workers,
+        ledger = WhatTheRunDecided(points=())
+        agent = build_orchestrator(_a_context(), _resources(), _settings(), model=model,
+                                   definition=_on_qwen(loom()), ledger=ledger)
+
+        def read(message: AIMessage) -> list[str] | None:
+            routed_none = any(d.chose == "none" for run in ledger.runs.values() for d in run.by_point("D2"))
+            return ["none"] if routed_none else d2_workers(message)
+
+        workers = await decision_of(agent, opening(item.input["view"], item.input["brief"]), read,
                                     calls=ORCHESTRATOR_CALLS)
         if workers is None:
             raise RuntimeError(f"no dispatch decision in {ORCHESTRATOR_CALLS} model calls")
         return workers
+    return decide
+
+
+def tier_d1(variant: str, *, model: Any = None) -> Callable:
+    """D1 by the Loom chat-manager on `variant`, built by `build_chat_agent` as production builds it. **Since HD-5
+    it routes with the decision model whenever that is registered** (as `run.py` registers it): HD-2 measured the
+    tier before routing existed."""
+    from rag_wright.harness import build_chat_agent
+
+    agent = build_chat_agent(_a_context(), _resources(), _settings(), model=model,
+                             definition=_on_qwen(loom(variant=variant)))
+
+    async def decide(item: Any) -> str:
+        return await decision_of(agent, opening(item.input["view"], item.input["message"]), d1_choice)
     return decide
 
 

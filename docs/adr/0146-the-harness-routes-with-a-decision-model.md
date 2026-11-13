@@ -65,3 +65,11 @@ From Jev's saved probabilities, against Qwen's answers on the same items:
   inputs already do (ADR-0119); a self-hosted deployment points the profile at an on-premises decision server (Laya).
 - The build is gated tasks in the plan: the decider hook, D1 in the chat-manager, B1 and the brief, D2 in the
   orchestrator, then a live end-to-end run and the products' guide.
+
+## Addendum (HD-8, 2026-11-13): measured live
+
+The routed tiers on the same gold sets (run `20261113-214024`, read at the first action as HD-2 was): D1 85.7% on
+four direct tools (Qwen alone 86.5%, weakest option 0.44 against 0.39) and 92.2% on twelve (90.0%); D2 90.0% per
+worker (75.6%), exact sets 78.9%, the misses all multi-worker briefs the orchestrator plans and is read at its first
+round. No regression. One gap: a route to `ask_the_user` offers the tool without forcing it, and those items were
+answered with a reply 4 of 18 times per D1 run (HD-9, proposed).

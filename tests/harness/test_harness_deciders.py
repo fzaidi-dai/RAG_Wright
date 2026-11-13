@@ -139,3 +139,46 @@ def test_D2_SCORING_IS_PER_WORKER_YES_AND_NO_SO_SENDING_EVERYONE_FAILS() -> None
         "n": 2, "accuracy": 0.0}
     assert score_workers(gold, right, workers=workers, floor=1.0).passed
     assert score_workers(gold, right, workers=workers, floor=1.0).diagnostics["exact_sets"] == 1.0
+
+
+
+# --- HD-8: the routed deciders read the routed tiers -------------------------------------------------------------
+
+
+@pytest.fixture
+def decides(monkeypatch: pytest.MonkeyPatch):
+    """The decision model at the capability layer, registered: `answers(inputs)` gives its answers."""
+    import rag_wright.api
+
+    def install(answers) -> None:
+        async def fake(name: str, inputs: dict, *, resources: object = None) -> dict:
+            return {"answers": answers(inputs)}
+        monkeypatch.setattr(rag_wright.api, "ainvoke_model", fake)
+        monkeypatch.setattr(rag_wright.api, "capability_index", lambda: {"jev_decision": {}})
+    return install
+
+
+def test_ROUTED_D1_READS_A_ROUTE_THE_DECIDER_TOOK_WITH_NO_MODEL_CALL(decides) -> None:
+    decides(lambda inputs: {"choice": {"choice": "list_mills", "probabilities": {"list_mills": 0.9}}})
+
+    decide = deciders.tier_d1("small", model=scripted())  # an empty script: any model call would fail
+
+    assert asyncio.run(decide(_item(message="Which mills can we order from?", view={}))) == "list_mills"
+
+
+def test_ROUTED_D2_READS_NO_WORKER_OFF_THE_LEDGER_WHILE_THE_ORCHESTRATOR_READS(decides) -> None:
+    """The router sent the brief to no worker; the orchestrator's first call reads with its own tool, which alone
+    says nothing about D2 -- the ledger does."""
+    decides(lambda inputs: {w: {"noul": 0.1} for w in inputs["questions"]})
+
+    decide = deciders.tier_d2(model=scripted(_calls(("list_mills", {}))))
+
+    assert asyncio.run(decide(_item(brief="List the mills and their minimum orders.", view={}))) == ["none"]
+
+
+def test_ROUTED_D2_READS_A_WORKER_DISPATCHED_IN_CODE(decides) -> None:
+    decides(lambda inputs: {w: {"noul": 0.9 if w == "sourcing_worker" else 0.1} for w in inputs["questions"]})
+
+    decide = deciders.tier_d2(model=scripted())
+
+    assert asyncio.run(decide(_item(brief="Find the cheapest mill.", view={}))) == ["sourcing_worker"]
