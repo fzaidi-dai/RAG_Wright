@@ -29,15 +29,18 @@ block (no model call); one that refers back ("what about the second one?") is re
 
 ## Method
 
-- **Gold sets on the engine's own product.** The fabric product (`tests/harness/fabric.py`) is the harness's
-  stand-in; its roster grows to three workers and several direct tools with distinct descriptions, so D1 and D2 have
-  real option spaces. Requests are authored, never taken from a client's or RuleWright's data. Each item lists every
+- **Gold sets on the engine's own product.** Loom (`tests/harness/gold/loom.py`) is the fabric product with a
+  roster wide enough to route on: three workers and twelve direct tools with distinct descriptions, so D1 and D2 have
+  real option spaces. It sits beside `tests/harness/fabric.py` rather than changing it, because about three hundred
+  tests are built on the fabric product's two operations and one worker. Requests are authored, never taken from a client's or RuleWright's data. Each item lists every
   acceptable answer (a request can be served by a direct tool or by delegating), and the set is symmetric per
   option. Multi-turn items carry the earlier turns for B1.
 - **Measured with the engine's evals**: `arun_eval` with repeats (Jev flips about 3% of answers on identical calls;
-  `flips` is reported) and `score_classification`, gated on the per-option floor, not overall accuracy.
+  `flips` is reported), gated on each option's floor, not overall accuracy. D1 and B1 are scored by the routing
+  evals' own `score_choice` (any of an item's accepted labels is correct); D2 per worker, a yes or no each.
 - **The baseline is today's Qwen tier on the same items**: the chat-manager as built by `build_chat_agent`
-  (reasoning off) for D1, the orchestrator's first turn for D2, both read from the recorded decision
+  (reasoning off) for D1, the orchestrator's first turn for D2, D1 read from the chat-manager's first tool call
+  (the ledger records D1 only as `delegate` or `answer_directly`), D2 from the recorded dispatches
   (`WhatTheRunDecided`). Jev is called through `ainvoke_model("jev_decision")`, never directly.
 - **Paid calls get a pre-flight**: the exact count and cost before running, and approval.
 
@@ -53,7 +56,7 @@ block (no model call); one that refers back ("what about the second one?") is re
 
 | Id | Task | Acceptance (verify) | Status |
 |---|---|---|---|
-| HD-1 | Gold sets for D1, D2 and B1 on the fabric product: the fabric roster and direct tools widened (three workers, a twelve-tool variant), the items authored with every acceptable answer, symmetric per option, committed under `tests/harness/gold/` | the sets load and validate (hermetic test); per-option counts printed and balanced; no item names a client or another product | todo |
+| HD-1 | Gold sets for D1, D2 and B1 on Loom, a product beside the fabric one (three workers, a four-tool and a twelve-tool chat-manager), the items authored with every acceptable answer, symmetric per option, committed under `tests/harness/gold/` | the sets load and validate (hermetic test); per-option counts printed and balanced; no item names a client or another product | done (2026-11-13: Loom; D1 90 items, 6 per option over 15 options (42 on the small surface); D2 30 briefs, each worker needed in 12 and not in 18, 4 need none; B1 20, 10 per label; D1 and B1 scored by `tests/harness/gold/scoring.py`'s `score_choice` (one choice per item, any accepted label correct; the engine's `score_classification` reads several labels as multi-label), 3 D1 items list alternatives; `tests/harness/test_harness_gold.py` 13 tests, a planted mislabel and a scorer that ignores alternatives each fail them) |
 | HD-2 | The baseline and the comparison, live: today's Qwen tiers and Jev on the same items, three repeats each, `[eval] i/N` progress; pre-flight count and cost approved first | `EvalReport`s committed for both; a table per decision: per-option floor, flips, latency, cost; the two open questions answered from the numbers | todo |
 | HD-3 | The decision: for each of D1, D2 and B1, adopt Jev (with a threshold below which Qwen decides as today), or not; an ADR records the numbers and the choice. If any is adopted, the next tasks (the decider hook on `DecisionPoint`, the per-run cache, the probability on `Decision.confidence`) are written here then | the ADR; this ledger extended or closed | todo |
 

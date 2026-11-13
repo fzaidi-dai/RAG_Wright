@@ -1,0 +1,90 @@
+{"id": "d1-list_mills-1", "message": "Which mills can we order from?", "view": {}, "variant": "both", "expected": "list_mills"}
+{"id": "d1-list_mills-2", "message": "Remind me who our mills are.", "view": {}, "variant": "both", "expected": "list_mills"}
+{"id": "d1-list_mills-3", "message": "Show me the list of mills on this account.", "view": {}, "variant": "both", "expected": "list_mills"}
+{"id": "d1-list_mills-4", "message": "Do we have any mills set up yet?", "view": {}, "variant": "both", "expected": "list_mills"}
+{"id": "d1-list_mills-5", "message": "What mills are available to us?", "view": {}, "variant": "both", "expected": "list_mills"}
+{"id": "d1-list_mills-6", "message": "List the mills, please.", "view": {}, "variant": "both", "expected": "list_mills"}
+{"id": "d1-read_swatch-1", "message": "What is sw-1042 made of?", "view": {}, "variant": "both", "expected": "read_swatch"}
+{"id": "d1-read_swatch-2", "message": "What's the weight on this one?", "view": {"surface": "swatch", "id": "sw-2210"}, "variant": "both", "expected": "read_swatch"}
+{"id": "d1-read_swatch-3", "message": "Give me the composition and finish of swatch sw-0877.", "view": {}, "variant": "both", "expected": "read_swatch"}
+{"id": "d1-read_swatch-4", "message": "Is this a twill or a plain weave?", "view": {"surface": "swatch", "id": "sw-3301"}, "variant": "both", "expected": "read_swatch"}
+{"id": "d1-read_swatch-5", "message": "Pull up swatch sw-1555.", "view": {}, "variant": "both", "expected": "read_swatch"}
+{"id": "d1-read_swatch-6", "message": "What finish does sw-0419 have?", "view": {}, "variant": "both", "expected": "read_swatch"}
+{"id": "d1-list_swatches-1", "message": "What swatches are in this collection?", "view": {}, "variant": "both", "expected": "list_swatches"}
+{"id": "d1-list_swatches-2", "message": "How many swatches have we got so far?", "view": {}, "variant": "both", "expected": "list_swatches"}
+{"id": "d1-list_swatches-3", "message": "Show me everything in the collection.", "view": {}, "variant": "both", "expected": "list_swatches"}
+{"id": "d1-list_swatches-4", "message": "List the swatches.", "view": {}, "variant": "both", "expected": "list_swatches"}
+{"id": "d1-list_swatches-5", "message": "Which fabrics are in the resort collection?", "view": {}, "variant": "both", "expected": "list_swatches"}
+{"id": "d1-list_swatches-6", "message": "Remind me what's in the collection.", "view": {}, "variant": "both", "expected": "list_swatches"}
+{"id": "d1-read_order-1", "message": "When is ord-2231 being delivered?", "view": {}, "variant": "both", "expected": "read_order"}
+{"id": "d1-read_order-2", "message": "Which mill is making this?", "view": {"surface": "order", "id": "ord-1180"}, "variant": "both", "expected": "read_order"}
+{"id": "d1-read_order-3", "message": "How many metres were on order ord-0942?", "view": {}, "variant": "both", "expected": "read_order"}
+{"id": "d1-read_order-4", "message": "Show me order ord-3307.", "view": {}, "variant": "both", "expected": "read_order"}
+{"id": "d1-read_order-5", "message": "What's the delivery date?", "view": {"surface": "order", "id": "ord-2045"}, "variant": "both", "expected": "read_order"}
+{"id": "d1-read_order-6", "message": "Which swatches are on ord-1776?", "view": {}, "variant": "both", "expected": "read_order"}
+{"id": "d1-delegate-1", "message": "Find me compositions for a lightweight summer shirting, under 130 gsm, mostly cotton.", "view": {}, "variant": "both", "expected": "delegate"}
+{"id": "d1-delegate-2", "message": "Which of our mills would be best for 8,000 metres of linen twill by March?", "view": {}, "variant": "both", "expected": "delegate"}
+{"id": "d1-delegate-3", "message": "Does sw-1042 pass buyer-harbour's standard?", "view": {}, "variant": "both", "expected": "delegate"}
+{"id": "d1-delegate-4", "message": "Check this against the buyer's standard and, if it fails, find an alternative composition.", "view": {"surface": "swatch", "id": "sw-2210"}, "variant": "both", "expected": "delegate"}
+{"id": "d1-delegate-5", "message": "Compare mill-a and mill-c on lead time and price for a 5,000 m order of poplin.", "view": {}, "variant": "both", "expected": ["delegate", "read_mill", "read_price_list"]}
+{"id": "d1-delegate-6", "message": "We need a stretch alternative to sw-0877 at the same weight; find options and tell me which mill could make it fastest.", "view": {}, "variant": "both", "expected": "delegate"}
+{"id": "d1-ask_the_user-1", "message": "Check it against the standard.", "view": {}, "variant": "both", "expected": "ask_the_user"}
+{"id": "d1-ask_the_user-2", "message": "Is the order on time?", "view": {}, "variant": "both", "expected": ["ask_the_user", "list_open_orders"]}
+{"id": "d1-ask_the_user-3", "message": "Swap it for the other one.", "view": {}, "variant": "both", "expected": "ask_the_user"}
+{"id": "d1-ask_the_user-4", "message": "What's the weight?", "view": {}, "variant": "both", "expected": "ask_the_user"}
+{"id": "d1-ask_the_user-5", "message": "Can you send that to the mill?", "view": {}, "variant": "both", "expected": "ask_the_user"}
+{"id": "d1-ask_the_user-6", "message": "Use the cheaper option.", "view": {}, "variant": "both", "expected": "ask_the_user"}
+{"id": "d1-answer-1", "message": "Thanks, that's all for now.", "view": {}, "variant": "both", "expected": "answer"}
+{"id": "d1-answer-2", "message": "What can you help me with?", "view": {}, "variant": "both", "expected": "answer"}
+{"id": "d1-answer-3", "message": "Hi!", "view": {}, "variant": "both", "expected": "answer"}
+{"id": "d1-answer-4", "message": "Great, that's exactly what I needed.", "view": {}, "variant": "both", "expected": "answer"}
+{"id": "d1-answer-5", "message": "What does gsm stand for?", "view": {}, "variant": "both", "expected": "answer"}
+{"id": "d1-answer-6", "message": "Can you explain what a buyer's quality standard is?", "view": {}, "variant": "both", "expected": "answer"}
+{"id": "d1-read_mill-1", "message": "What's mill-b's minimum order?", "view": {}, "variant": "wide", "expected": "read_mill"}
+{"id": "d1-read_mill-2", "message": "How long is their usual lead time?", "view": {"surface": "mill", "id": "mill-c"}, "variant": "wide", "expected": "read_mill"}
+{"id": "d1-read_mill-3", "message": "What capacity does mill-a have?", "view": {}, "variant": "wide", "expected": "read_mill"}
+{"id": "d1-read_mill-4", "message": "Tell me about mill-d.", "view": {}, "variant": "wide", "expected": "read_mill"}
+{"id": "d1-read_mill-5", "message": "What's their minimum order quantity?", "view": {"surface": "mill", "id": "mill-a"}, "variant": "wide", "expected": "read_mill"}
+{"id": "d1-read_mill-6", "message": "How much can mill-c produce a month?", "view": {}, "variant": "wide", "expected": "read_mill"}
+{"id": "d1-list_buyers-1", "message": "Who are we making this collection for?", "view": {}, "variant": "wide", "expected": "list_buyers"}
+{"id": "d1-list_buyers-2", "message": "Which buyers are on this collection?", "view": {}, "variant": "wide", "expected": "list_buyers"}
+{"id": "d1-list_buyers-3", "message": "List the buyers.", "view": {}, "variant": "wide", "expected": "list_buyers"}
+{"id": "d1-list_buyers-4", "message": "Remind me of our buyers.", "view": {}, "variant": "wide", "expected": "list_buyers"}
+{"id": "d1-list_buyers-5", "message": "Is the collection for more than one buyer?", "view": {}, "variant": "wide", "expected": "list_buyers"}
+{"id": "d1-list_buyers-6", "message": "Who's buying from this collection?", "view": {}, "variant": "wide", "expected": "list_buyers"}
+{"id": "d1-read_buyer_standard-1", "message": "What tests does buyer-harbour require?", "view": {}, "variant": "wide", "expected": "read_buyer_standard"}
+{"id": "d1-read_buyer_standard-2", "message": "What's buyer-northwind's limit for pilling?", "view": {}, "variant": "wide", "expected": "read_buyer_standard"}
+{"id": "d1-read_buyer_standard-3", "message": "Show me buyer-harbour's quality standard.", "view": {}, "variant": "wide", "expected": "read_buyer_standard"}
+{"id": "d1-read_buyer_standard-4", "message": "What colour fastness does buyer-alder ask for?", "view": {}, "variant": "wide", "expected": "read_buyer_standard"}
+{"id": "d1-read_buyer_standard-5", "message": "Does buyer-northwind have a shrinkage limit?", "view": {}, "variant": "wide", "expected": "read_buyer_standard"}
+{"id": "d1-read_buyer_standard-6", "message": "Read me buyer-alder's standard.", "view": {}, "variant": "wide", "expected": "read_buyer_standard"}
+{"id": "d1-list_lab_reports-1", "message": "Which lab reports do we have for sw-1042?", "view": {}, "variant": "wide", "expected": "list_lab_reports"}
+{"id": "d1-list_lab_reports-2", "message": "Has this been tested yet?", "view": {"surface": "swatch", "id": "sw-2210"}, "variant": "wide", "expected": "list_lab_reports"}
+{"id": "d1-list_lab_reports-3", "message": "Any test reports on file for sw-0877?", "view": {}, "variant": "wide", "expected": "list_lab_reports"}
+{"id": "d1-list_lab_reports-4", "message": "List the lab reports for swatch sw-3301.", "view": {}, "variant": "wide", "expected": "list_lab_reports"}
+{"id": "d1-list_lab_reports-5", "message": "What reports are there for this swatch?", "view": {"surface": "swatch", "id": "sw-1555"}, "variant": "wide", "expected": "list_lab_reports"}
+{"id": "d1-list_lab_reports-6", "message": "Has sw-0419 been sent to the lab?", "view": {}, "variant": "wide", "expected": "list_lab_reports"}
+{"id": "d1-read_lab_report-1", "message": "What did report lr-5512 find?", "view": {}, "variant": "wide", "expected": "read_lab_report"}
+{"id": "d1-read_lab_report-2", "message": "Show me lab report lr-6020.", "view": {}, "variant": "wide", "expected": "read_lab_report"}
+{"id": "d1-read_lab_report-3", "message": "What was the tear strength in lr-4471?", "view": {}, "variant": "wide", "expected": "read_lab_report"}
+{"id": "d1-read_lab_report-4", "message": "Which method did lr-5512 use for shrinkage?", "view": {}, "variant": "wide", "expected": "read_lab_report"}
+{"id": "d1-read_lab_report-5", "message": "Open report lr-7003.", "view": {}, "variant": "wide", "expected": "read_lab_report"}
+{"id": "d1-read_lab_report-6", "message": "Did lr-6020 pass the rub test?", "view": {}, "variant": "wide", "expected": ["read_lab_report", "delegate"]}
+{"id": "d1-list_open_orders-1", "message": "Which orders haven't been delivered yet?", "view": {}, "variant": "wide", "expected": "list_open_orders"}
+{"id": "d1-list_open_orders-2", "message": "What's still outstanding?", "view": {}, "variant": "wide", "expected": "list_open_orders"}
+{"id": "d1-list_open_orders-3", "message": "Show me open orders.", "view": {}, "variant": "wide", "expected": "list_open_orders"}
+{"id": "d1-list_open_orders-4", "message": "How many orders are we waiting on?", "view": {}, "variant": "wide", "expected": "list_open_orders"}
+{"id": "d1-list_open_orders-5", "message": "List undelivered orders.", "view": {}, "variant": "wide", "expected": "list_open_orders"}
+{"id": "d1-list_open_orders-6", "message": "What's still in production?", "view": {}, "variant": "wide", "expected": "list_open_orders"}
+{"id": "d1-read_price_list-1", "message": "What does mill-a charge for 120 gsm poplin?", "view": {}, "variant": "wide", "expected": "read_price_list"}
+{"id": "d1-read_price_list-2", "message": "Show me their prices.", "view": {"surface": "mill", "id": "mill-b"}, "variant": "wide", "expected": "read_price_list"}
+{"id": "d1-read_price_list-3", "message": "What's on mill-c's price list?", "view": {}, "variant": "wide", "expected": "read_price_list"}
+{"id": "d1-read_price_list-4", "message": "How much is linen from mill-d per metre?", "view": {}, "variant": "wide", "expected": "read_price_list"}
+{"id": "d1-read_price_list-5", "message": "What's their current price for twill?", "view": {"surface": "mill", "id": "mill-a"}, "variant": "wide", "expected": "read_price_list"}
+{"id": "d1-read_price_list-6", "message": "Read mill-b's price list.", "view": {}, "variant": "wide", "expected": "read_price_list"}
+{"id": "d1-read_season_plan-1", "message": "When is the resort collection due?", "view": {}, "variant": "wide", "expected": "read_season_plan"}
+{"id": "d1-read_season_plan-2", "message": "What's the target volume for this season?", "view": {}, "variant": "wide", "expected": "read_season_plan"}
+{"id": "d1-read_season_plan-3", "message": "Show me the season plan.", "view": {}, "variant": "wide", "expected": "read_season_plan"}
+{"id": "d1-read_season_plan-4", "message": "Which collections are we doing this season?", "view": {}, "variant": "wide", "expected": "read_season_plan"}
+{"id": "d1-read_season_plan-5", "message": "What's the deadline for the summer collection?", "view": {}, "variant": "wide", "expected": "read_season_plan"}
+{"id": "d1-read_season_plan-6", "message": "How many metres are we planning across the season?", "view": {}, "variant": "wide", "expected": "read_season_plan"}

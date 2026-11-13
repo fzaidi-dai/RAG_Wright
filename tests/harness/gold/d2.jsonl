@@ -1,0 +1,30 @@
+{"id": "d2-1", "brief": "Find compositions for a lightweight summer shirting under 130 gsm, mostly cotton.", "view": {}, "expected": ["composition_worker"]}
+{"id": "d2-2", "brief": "Find a stretch alternative to this with the same weight.", "view": {"surface": "swatch", "id": "sw-0877"}, "expected": ["composition_worker"]}
+{"id": "d2-3", "brief": "Which compositions would suit a water-repellent outer layer around 200 gsm?", "view": {}, "expected": ["composition_worker"]}
+{"id": "d2-4", "brief": "Suggest linen blends for a mid-weight resort trouser that crease less.", "view": {}, "expected": ["composition_worker"]}
+{"id": "d2-5", "brief": "Find a recycled-polyester composition close to sw-1042's hand feel.", "view": {}, "expected": ["composition_worker"]}
+{"id": "d2-6", "brief": "What compositions match: 100% organic cotton, sateen weave, 140-160 gsm?", "view": {}, "expected": ["composition_worker"]}
+{"id": "d2-7", "brief": "Which mill is best for 8,000 metres of linen twill by March?", "view": {}, "expected": ["sourcing_worker"]}
+{"id": "d2-8", "brief": "Compare mill-a and mill-c on lead time and price for a 5,000 m poplin order.", "view": {}, "expected": ["sourcing_worker"]}
+{"id": "d2-9", "brief": "Which of our mills can take a 2,000 m order with delivery in six weeks?", "view": {}, "expected": ["sourcing_worker"]}
+{"id": "d2-10", "brief": "Find the cheapest mill for 10,000 m of 120 gsm poplin.", "view": {}, "expected": ["sourcing_worker"]}
+{"id": "d2-11", "brief": "Could a different mill deliver this order sooner?", "view": {"surface": "order", "id": "ord-2231"}, "expected": ["sourcing_worker"]}
+{"id": "d2-12", "brief": "Rank our mills for a rush order of 3,000 m of jersey.", "view": {}, "expected": ["sourcing_worker"]}
+{"id": "d2-13", "brief": "Does sw-1042 pass buyer-harbour's standard?", "view": {}, "expected": ["testing_worker"]}
+{"id": "d2-14", "brief": "Check this against buyer-northwind's quality standard.", "view": {"surface": "swatch", "id": "sw-2210"}, "expected": ["testing_worker"]}
+{"id": "d2-15", "brief": "Check every lab report for sw-0877 against buyer-alder's limits.", "view": {}, "expected": ["testing_worker"]}
+{"id": "d2-16", "brief": "Which of buyer-harbour's tests does sw-3301 fail?", "view": {}, "expected": ["testing_worker"]}
+{"id": "d2-17", "brief": "Is sw-1555 within buyer-northwind's shrinkage and pilling limits?", "view": {}, "expected": ["testing_worker"]}
+{"id": "d2-18", "brief": "Verify sw-0419's lab results meet buyer-alder's standard before we order.", "view": {}, "expected": ["testing_worker"]}
+{"id": "d2-19", "brief": "Find a mid-weight linen blend for trousers and tell me which mill could make 6,000 m of it fastest.", "view": {}, "expected": ["composition_worker", "sourcing_worker"]}
+{"id": "d2-20", "brief": "Suggest an organic cotton poplin and the cheapest mill for 10,000 m of it.", "view": {}, "expected": ["composition_worker", "sourcing_worker"]}
+{"id": "d2-21", "brief": "Check this against buyer-harbour's standard; if it fails, find an alternative composition.", "view": {"surface": "swatch", "id": "sw-2210"}, "expected": ["composition_worker", "testing_worker"]}
+{"id": "d2-22", "brief": "Check sw-3301 against buyer-alder's standard and suggest compositions that would fix any failures.", "view": {}, "expected": ["composition_worker", "testing_worker"]}
+{"id": "d2-23", "brief": "Check sw-1042 against buyer-northwind's standard and, if it passes, find the mill that can make 4,000 m soonest.", "view": {}, "expected": ["sourcing_worker", "testing_worker"]}
+{"id": "d2-24", "brief": "Before we place it, check that sw-0877 meets buyer-harbour's standard and compare mills on price for 3,000 m.", "view": {}, "expected": ["sourcing_worker", "testing_worker"]}
+{"id": "d2-25", "brief": "sw-1555 is failing buyer-alder's pilling test. Confirm it against the standard, find a composition that would pass, and tell me which mill could make 5,000 m of it by May.", "view": {}, "expected": ["composition_worker", "sourcing_worker", "testing_worker"]}
+{"id": "d2-26", "brief": "Plan a replacement for sw-0419: check it against buyer-harbour's standard, propose alternatives, and compare mills for 8,000 m.", "view": {}, "expected": ["composition_worker", "sourcing_worker", "testing_worker"]}
+{"id": "d2-27", "brief": "List the open orders and the season plan's deadlines.", "view": {}, "expected": ["none"]}
+{"id": "d2-28", "brief": "Read sw-1042 and order ord-2231 and tell me whether the swatch is on that order.", "view": {}, "expected": ["none"]}
+{"id": "d2-29", "brief": "Which mills do we have, and what is each one's minimum order?", "view": {}, "expected": ["none"]}
+{"id": "d2-30", "brief": "Summarise the season plan.", "view": {}, "expected": ["none"]}
