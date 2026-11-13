@@ -142,6 +142,9 @@ Re-read if you link them (ADR-0134; from your installed engine): **`building-an-
 typed with the product's context (c), and the eval instruments (`InjectFaults`, the recorder, the preflight) as the
 tier's rather than yours to build (h).
 
+From 0.18 on, `building-an-agent-harness` and `docs/harness.md` are the reference for building on the harness: read
+them before adding a worker, a tier, a rule or an eval, rather than copying from RuleWright's own code.
+
 ## Verify
 
 `uv run python -c "import rulewright.agent.rules"` imports (section 1); your fast and db suites green on
