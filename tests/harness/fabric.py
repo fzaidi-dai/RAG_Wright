@@ -15,11 +15,7 @@ from typing import Any
 
 from pydantic import Field
 
-from rag_wright.harness.decisions import DecisionPoint
-from rag_wright.harness.definition import AgentPrompts
-from rag_wright.harness.errors import ModelAttemptTooSlow
-from rag_wright.harness.rules import Rule
-from rag_wright.harness.workers import WorkerReport
+from rag_wright.harness import AgentPrompts, DecisionPoint, ModelAttemptTooSlow, Rule, WorkerReport
 
 # --- the fabric product: everything a greenfield consumer would write ---------------------------------
 
@@ -231,7 +227,7 @@ def _fabric() -> Any:
     in the light of an earlier one supplies nothing and the substrate amends nothing -- which is what
     makes it a seam rather than a requirement.
     """
-    from rag_wright.harness.definition import AgentDefinition
+    from rag_wright.harness import AgentDefinition
 
     return AgentDefinition(surface=FabricToolSurface(), planning=FABRIC_PLANNING,
                            workers=(_fabric_worker,), context_schema=FabricContext,
@@ -253,7 +249,7 @@ def _fabric_worker(context: Any, resources: Any, ledger: Any = None) -> dict:
     orchestrator, which plans from it, so the fabric product has an operation on each side of the
     orchestrator/worker split. **And it is built from the definition**, the way a product should: without
     `definition=` a worker runs with no retries, no repeat suppression and no decision recording."""
-    from rag_wright.harness.workers import worker_spec
+    from rag_wright.harness import worker_spec
 
     return worker_spec(
         "composition_worker",
@@ -406,8 +402,6 @@ class FabricView:
 
 
 def _rule(rule_id: str, tiers: tuple[str, ...], criterion: str, detect: Any) -> Any:
-    from rag_wright.harness.rules import Rule
-
     return Rule(id=rule_id, applies_to=tiers, instruction=criterion, criterion=criterion, detect=detect,
                 observed="a fabric run", evidence=("fabric-1",))
 
@@ -415,7 +409,7 @@ def _rule(rule_id: str, tiers: tuple[str, ...], criterion: str, detect: Any) -> 
 def fabric_rules() -> tuple[Any, ...]:
     """**This product's rule registry**: its own ids and wording over the engine's counting detectors, and one
     criterion no detector can decide (`the-brief-is-faithful`), so the grader has something to judge itself."""
-    from rag_wright.harness.rules import (
+    from rag_wright.harness import (
         blocked_without_saying_what_it_needs,
         dispatched_more_than_once,
         guessed_identifiers,
@@ -446,7 +440,7 @@ def _record(sink: dict, briefs: list[str], replies: list[list[Any]], tools: list
     """Drive one agent per brief with the recorder attached, all into one `sink`: one dispatch per brief."""
     from langchain.agents import create_agent
 
-    from rag_wright.harness.recording import RecordTheContext
+    from rag_wright.harness import RecordTheContext
 
     recorder = RecordTheContext(sink, "fabric")
     for brief, script in zip(briefs, replies, strict=True):

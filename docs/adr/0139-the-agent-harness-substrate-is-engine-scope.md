@@ -260,3 +260,13 @@ harness as `harness.faults` (`Fault`, `InjectFaults`) and `harness.preflight` (`
 `stub_orchestrator`, `only_the_chat_manager`), taking the product's definition instead of importing its roster.
 The injector now ships in the wheel, so "off in production" is guarded differently: nothing in the engine
 constructs one, asserted over the engine's source.
+
+## Amendment (2026-11-13, PS-48i)
+
+The first product reached into harness submodules for seventeen names its own code needed -- the run's decision
+ledger, `run_key`, `build_worker`, `withhold` and the derived tier split among them -- because they were never
+exported. They are now in `rag_wright.harness.__all__`, and the surface is guarded: the fabric product (the engine's
+stand-in for a greenfield product) imports nothing from a submodule, no engine-facing doc shows a submodule import,
+and the names a product's code uses stay exported. `RecordTheDecisions(worker_names=)`, stored and never read (a
+decision's options come from the product's declared `DecisionPoint`s), is removed: a breaking change for a caller
+passing it. With this, PS-48 is complete: the harness's behaviour is tested in the engine, on the fabric product.

@@ -44,6 +44,18 @@ What every worker carries, whatever else it returns.
 
 **Structured, because the orchestrator chains it.** `status` lets a program branch; `need` is how a worker says it cannot finish without a person, since it has no way to ask.
 
+### `ConfirmTheView()`
+
+Stop the run when the subject has moved, and let a person say which one they meant.
+
+#### `ConfirmTheView.before_agent(self, state, runtime) -> 'dict[str, Any] | None'`
+
+Logic to run before the agent execution starts.
+
+Args: state: The current agent state. runtime: The runtime context.
+
+Returns: Agent state updates to apply before agent execution.
+
 ### `RunEvent(name: 'str', data: 'dict[str, Any]', namespace: 'str' = '') -> None`
 
 One thing worth telling the client about.
@@ -81,6 +93,142 @@ One thing we tell a model not to do, and the way we find out whether it did.
 One place the system chooses, and what it is choosing between.
 
 `observed` is the honest half: a point declared here without an observation is a decision we know is being taken and still cannot see. Naming it costs nothing and keeps the gap countable, which is the opposite of how six of these came to be invisible.
+
+### `WhatTheRunDecided(runs: 'dict[str, DecisionLedger]' = <factory>, points: 'tuple[Any, ...]' = ()) -> None`
+
+One ledger per run, and one object that holds them all.
+
+Keyed by `run_key` -- the same definition of *a run* the call record already uses (`seen.py`), so a re-dispatch means "again in this run" and can never mean "somebody else asked the same thing". A second notion of run identity is a second thing to get wrong.
+
+#### `WhatTheRunDecided.of(self, key: 'str') -> 'DecisionLedger'`
+
+_(no docstring)_
+
+### `RecordTheDecisions(ledger: 'WhatTheRunDecided', *, tier: 'str', is_worker: 'bool' = False, dispatched_by: 'str | None' = None, framings: 'tuple[str, ...]' = (), read_framing: 'Any' = None) -> 'None'`
+
+Write this tier's decisions into the run's ledger, changing nothing else.
+
+Attached per tier, because attribution is the point: *"an alarm that cannot name its cause is one we will learn to ignore"*.
+
+#### `RecordTheDecisions.wrap_tool_call(self, request, handler)`
+
+Intercept tool execution for retries, monitoring, or modification.
+
+Async version is `awrap_tool_call`
+
+Multiple middleware compose automatically (first defined = outermost).
+
+Exceptions propagate unless `handle_tool_errors` is configured on `ToolNode`.
+
+Args: request: Tool call request with call `dict`, `BaseTool`, state, and runtime.
+
+Access state via `request.state` and runtime via `request.runtime`. handler: `Callable` to execute the tool (can be called multiple times).
+
+Returns: `ToolMessage` or `Command` (the final result).
+
+The handler `Callable` can be invoked multiple times for retry logic.
+
+Each call to handler is independent and stateless.
+
+Examples: !!! example "Modify request before execution"
+
+```python def wrap_tool_call(self, request, handler): modified_call = { **request.tool_call, "args": { **request.tool_call["args"], "value": request.tool_call["args"]["value"] * 2, }, } request = request.override(tool_call=modified_call) return handler(request) ```
+
+!!! example "Retry on error (call handler multiple times)"
+
+```python def wrap_tool_call(self, request, handler): for attempt in range(3): try: result = handler(request) if is_valid(result): return result except Exception: if attempt == 2: raise return result ```
+
+!!! example "Conditional retry based on response"
+
+```python def wrap_tool_call(self, request, handler): for attempt in range(3): result = handler(request) if isinstance(result, ToolMessage) and result.status != "error": return result if attempt < 2: continue return result ```
+
+#### `RecordTheDecisions.awrap_tool_call(self, request, handler)`
+
+Intercept and control async tool execution via handler callback.
+
+The handler callback executes the tool call and returns a `ToolMessage` or `Command`. Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Tool call request with call `dict`, `BaseTool`, state, and runtime.
+
+Access state via `request.state` and runtime via `request.runtime`. handler: Async callable to execute the tool and returns `ToolMessage` or `Command`.
+
+Call this to execute the tool.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: `ToolMessage` or `Command` (the final result).
+
+The handler `Callable` can be invoked multiple times for retry logic.
+
+Each call to handler is independent and stateless.
+
+Examples: !!! example "Async retry on error"
+
+```python async def awrap_tool_call(self, request, handler): for attempt in range(3): try: result = await handler(request) if is_valid(result): return result except Exception: if attempt == 2: raise return result ```
+
+```python async def awrap_tool_call(self, request, handler): if cached := await get_cache_async(request): return ToolMessage(content=cached, tool_call_id=request.tool_call["id"]) result = await handler(request) await save_cache_async(request, result) return result ```
+
+#### `RecordTheDecisions.wrap_model_call(self, request, handler)`
+
+Intercept and control model execution via handler callback.
+
+Async version is `awrap_model_call`
+
+The handler callback executes the model request and returns a `ModelResponse`. Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Model request to execute (includes state and runtime). handler: Callback that executes the model request and returns `ModelResponse`.
+
+Call this to execute the model.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: The model call result.
+
+Examples: !!! example "Retry on error"
+
+```python def wrap_model_call(self, request, handler): for attempt in range(3): try: return handler(request) except Exception: if attempt == 2: raise ```
+
+!!! example "Rewrite response"
+
+```python def wrap_model_call(self, request, handler): response = handler(request) ai_msg = response.result[0] return ModelResponse( result=[AIMessage(content=f"[{ai_msg.content}]")], structured_response=response.structured_response, ) ```
+
+!!! example "Error to fallback"
+
+```python def wrap_model_call(self, request, handler): try: return handler(request) except Exception: return ModelResponse(result=[AIMessage(content="Service unavailable")]) ```
+
+!!! example "Cache/short-circuit"
+
+```python def wrap_model_call(self, request, handler): if cached := get_cache(request): return cached # Short-circuit with cached result response = handler(request) save_cache(request, response) return response ```
+
+!!! example "Simple `AIMessage` return (converted automatically)"
+
+```python def wrap_model_call(self, request, handler): response = handler(request) # Can return AIMessage directly for simple cases return AIMessage(content="Simplified response") ```
+
+#### `RecordTheDecisions.awrap_model_call(self, request, handler)`
+
+Intercept and control async model execution via handler callback.
+
+The handler callback executes the model request and returns a `ModelResponse`.
+
+Middleware can call the handler multiple times for retry logic, skip calling it to short-circuit, or modify the request/response. Multiple middleware compose with first in list as outermost layer.
+
+Args: request: Model request to execute (includes state and runtime). handler: Async callback that executes the model request and returns `ModelResponse`.
+
+Call this to execute the model.
+
+Can be called multiple times for retry logic.
+
+Can skip calling it to short-circuit.
+
+Returns: The model call result.
+
+Examples: !!! example "Retry on error"
+
+```python async def awrap_model_call(self, request, handler): for attempt in range(3): try: return await handler(request) except Exception: if attempt == 2: raise ```
 
 ### `RecordTheContext(sink: 'dict[str, Any]', label: 'str') -> 'None'`
 
@@ -334,6 +482,14 @@ A product's own context type satisfies this by having the two members; it keeps 
 
 ## Constants
 
+### `DISPATCHES_PER_RUN`
+
+int([x]) -> integer int(x, base=10) -> integer
+
+Convert a number or string to an integer, or return 0 if no arguments are given. If x is a number, return x.__int__(). For floating-point numbers, this truncates towards zero.
+
+If x is not a number or if base is given, then x must be a string, bytes, or bytearray instance representing an integer literal in the given base. The literal can be preceded by '+' or '-' and be surrounded by whitespace. The base defaults to 10. Valid bases are 0 and 2-36. Base 0 means to interpret the base from the string as an integer literal. >>> int('0b100', base=0) 4
+
 ### `CANNOT_ASK`
 
 str(object='') -> str str(bytes_or_buffer[, encoding[, errors]]) -> str
@@ -478,6 +634,20 @@ Time and trace one agent run, and hand it to `accounting` when it ends.
 
 **Opened here rather than on the route**, because a streamed response produces its body after the endpoint returns: a request-scoped dependency would be resting the ledger on when Starlette closes its exit stack. The door already owns the context and the trace; it owns this too, and every caller inherits it.
 
+### `run_key(request: 'Any') -> 'str'`
+
+What separates one run from another, and what must NOT separate a run from itself.
+
+**`thread_id` first, because a run is the right scope.** `thread_for` builds it from the workspace and the run id, so it is shared by every dispatch of one run and never reaches another run or another tenant. Keying by dispatch instead was measurably too narrow: a re-dispatched worker asked four documents the same question in new words and matched nothing, because the two halves sat either side of a boundary that was guarding nothing the subject check does not already guard.
+
+**The namespace is the fallback, and its obvious reading is wrong.** `checkpoint_ns` is hierarchical and its LAST segment is the individual tool call -- measured, not assumed: two calls in one run gave `tools:98601b2c…` and `tools:cf1dfe0e…`. So the prefix is what identifies an invocation, and an agent invoked with no thread at all falls back to that.
+
+**`runtime.config` exists on a TOOL request and NOT on a model one** (measured on langchain 1.4.2). `ModelRequest.runtime` carries no `config` attribute at all, so every model-seam caller got `""` back -- a run identity that silently collapses every run in the process into one record. Nothing was broken by it, because both readers were tool-side; the next caller was the decision ledger, whose whole subject is "did THIS run do that twice". The same fact lives on the model side as `runtime.execution_info.thread_id`, so it is read from there rather than answered wrongly, and one definition of *a run* still serves both seams.
+
+### `harness_tracing_on(settings: 'Any' = None) -> 'bool'`
+
+The engine's switch: a trace level other than `off` AND real Langfuse credentials, both required.
+
 ### `scope_namespace(context: 'Any', leaf: 'str') -> 'tuple[str, ...]'`
 
 The run's own writable memory: `scope + (leaf,)`.
@@ -492,6 +662,72 @@ The run's thread id: its scope and its run id, composed.
 
 **Not the run id alone.** The run id is the PUBLIC identity a client keeps; the thread is ours and never leaves the process, and keying it by scope is what makes a guessed run id from another tenant resolve to nothing by construction.
 
+### `scope_namespace_of(runtime: 'Any') -> 'tuple[str, ...]'`
+
+The run's OWN memory: `scope + ("memories",)`.
+
+**Read off the run's `scope`, not off named ids** (engine ADR-0139 addendum). This was two named tenancy ids plus `LEAF`, which made the substrate's context type encode one product's two-level tenancy. The narrowest part is in the key, so two runs of the same shared scope cannot see each other's notes -- the same isolation the document scope gives, applied to what the agent remembers.
+
+### `shared_namespace_of(runtime: 'Any') -> 'tuple[str, ...]'`
+
+The one WIDER memory a run may promote into: `shared_scope + ("memories",)`.
+
+**Deliberately wider than the run and deliberately not the root.** A fact learned while working customer A's documents is derived from customer A's documents; there is no scope above this one that anything may be promoted into by learning.
+
+**The substrate enforces that now, rather than trusting this function.** `validate_scope` refuses a `shared_scope` that is not a strict, non-empty prefix of `scope`, so sideways, the root and another tenant's chain are unrepresentable. A product with a one-part scope has none, and this mount is not offered to it at all.
+
+### `chat_manager_tools(context: 'Any', resources: 'Any', *, definition: 'Any') -> 'list'`
+
+What the conversation tier holds: the direct operations, plus the ability to ask.
+
+Built from the same factories as the full manifest rather than filtered afterwards, so a tool here is the same bound object the orchestrator would get -- one binding, two callers.
+
+### `direct_names(definition: 'Any') -> 'set[str]'`
+
+Operations the chat-manager may call DIRECTLY: a store read or an engine search, no model call.
+
+**Derived, deliberately.** A set computed at import from one product's registry would hand every product that product's tier split, and letting a product pass its own direct set would let it pass one that disagrees with its own `planning`, putting a planning operation on the direct surface with nothing to catch it. A product declares what is irreducible and the substrate derives this, so the two cannot drift by construction.
+
+### `orchestrator_direct(definition: 'Any', context: 'Any') -> 'set[str]'`
+
+What the orchestrator calls ITSELF.
+
+**A tool a worker holds is not on the parent's direct surface**, and that one rule is the whole of this function. Before it, the orchestrator held everything a worker held -- so delegating cost it a turn and bought it nothing, and across six measured runs it never delegated once. The docs give context isolation as the reason subagents exist; a parent holding the same tools has no bloat to avoid.
+
+What is left is planning and bookkeeping: what documents exist, what work is running, what it cost. Cheap, bounded, and exactly what a plan is built from -- taking the listing away would blind the planner.
+
+### `worker_operations(definition: 'Any', context: 'Any') -> 'frozenset[str]'`
+
+The operations some worker holds, derived from the workers themselves.
+
+**It takes a real context rather than constructing one** (engine ADR-0139 addendum). Binding each worker's tools to read their names needs a context, and a product's context is its own type with its own tenancy, which the substrate cannot invent.
+
+**The context is NOT part of the cache key, and that is the load-bearing detail.** Which operations a worker holds is a static fact about the roster; the context only supplies bindings that are built and thrown away. Keying on it would make the cache miss on every run, and deriving this uncached added ~45 seconds to the fast suite when it was measured.
+
+### `withhold(*names: 'str') -> 'WithheldTools'`
+
+A middleware that keeps `names` off the tier it is attached to.
+
+### `bridged_tools(context: 'Any', resources: 'Any', *, surface: 'Any') -> 'list'`
+
+The tools a program in the sandbox may call.
+
+**`surface` is handed in rather than imported.** The tool registry is the PRODUCT's -- its named operations and its governance over them. A generic substrate cannot know those names, so it asks whatever it was given for the run's bound tools.
+
+**The run's own bindings**, so tenancy stays out of the model's reach inside the sandbox too: a bridged tool that took a workspace argument would let a JS program name another scope.
+
+**The agent's WHOLE surface minus what interrupts**, which is what this docstring always claimed — the first version bridged `build_manifest` instead, a set that differs for an unrelated reason. The gap was `read_the_question`: on the orchestrator's tool surface, absent from the sandbox. A model that had been given the camelCase convention generalised it correctly, wrote `tools.readTheQuestion(...)`, and got `TypeError: not a function` — so the coded arm of a code-versus-prompt comparison failed for a reason that had nothing to do with whether code beats prompting.
+
+**A surface the model can see but the sandbox cannot is a trap**, and the same shape as the documents-are-not-files collision: our own inconsistency, discovered by a model behaving reasonably.
+
+### `js_name(tool_name: 'str') -> 'str'`
+
+The name a bridged tool answers to inside the sandbox.
+
+**The bridge camelCases our snake_case names**: `sweep_scope` is `tools.sweepScope`. A model that knows our tool names — every model on this tier does, they are in its schema — writes `tools.sweep_scope(...)` and gets `TypeError: not a function`. The same namespace collision as the documents-are-not-files one, one layer down, and the reason anything that tells the orchestrator how to write a program must use these names.
+
+A test drives the real sandbox and compares, so this cannot drift from what the bridge actually does.
+
 ### `worker_spec(name: 'str', description: 'str', prompt: 'str', tools: 'list', report: 'type', ledger: 'Any' = None, *, retry_on: 'tuple[type[BaseException], ...]' = (), message_for: 'Any' = None, signposts: 'Any' = None, repeatable: 'frozenset[str]' = frozenset(), question_argument: 'dict[str, str] | None' = None, framings: 'tuple[str, ...]' = (), carry_forward: 'Any' = None, read_framing: 'Any' = None, definition: 'Any' = None) -> 'dict[str, Any]'`
 
 A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`.
@@ -499,6 +735,20 @@ A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `Com
 A worker has no middleware and no subagents of its own, so letting the parent build it keeps one model resolution and one place that knows how a tier is compiled.
 
 **Pass `definition=`, the product's `AgentDefinition`.** Every policy parameter after `ledger` defaults to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no decision recording, and nothing fails to say so. With one, the product's `worker_filesystem_note` is appended to `prompt` unless the prompt already carries it.
+
+### `build_worker(spec: 'dict[str, Any]', settings: 'Any', *, model: 'Any' = None, model_id: 'str | None' = None) -> 'Any'`
+
+Compile ONE worker as a standalone agent, with no parent above it.
+
+**So a worker can be tested for what it is, not for what an orchestrator makes of it.** Until this existed a worker could only be exercised through `task`, so a run that went wrong told us nothing about WHERE: the worker, the decomposition, or the mode. A worker that cannot finish its own job in a short known sequence is broken, and that should be findable in seconds rather than discovered twenty minutes into an orchestrated run.
+
+**Compiled by the library's own SUBAGENT path, through a throwaway parent.** Two wrong versions preceded this, and each one made the isolated worker differ from the real one in a way that quietly biased every measurement taken against it:
+
+1. `create_agent` -- which IS what `create_sub_agent` calls, so it looked right. But the augmentation happens one level higher: `create_deep_agent` PREPENDS a base stack to every raw `SubAgent` spec (`TodoListMiddleware`, `FilesystemMiddleware`, a summarizer, `PatchToolCallsMiddleware`) before `SubAgentMiddleware` ever sees it. The worker was offered THREE tools where the real one is offered TEN. 2. `create_deep_agent` on the MAIN-AGENT path, which fixed the tools and broke the prompt: it prepends a generic preamble ("You are a deep agent... ## Core Behavior... ## Progress Updates") that `create_sub_agent` never adds. The isolated worker carried 2,260 characters no subagent has ever seen -- and two workers then measured 9% CHEAPER orchestrated than alone, which was the clue.
+
+**So the spec is handed to `create_deep_agent` as a SUBAGENT and the compiled child is taken back out.** There is no third way that does not amount to re-implementing the library's augmentation here, and a second implementation of it is exactly what went stale twice (one implementation and two callers). `test_harness_workers.py` compares the result against a REAL orchestrator's compiled subagents -- tools, graph and system prompt -- so a throwaway parent that diverged from the real one would fail rather than mislead.
+
+**Found by the isolated-versus-orchestrated context diff**, which is the only thing that could have seen either: both agents answer, both look healthy, and the difference shows up only as a token ratio that is slightly wrong in the wrong direction.
 
 ### `clarification_tool() -> 'BaseTool'`
 
@@ -555,6 +805,12 @@ A detector for ids a tier used that nobody supplied, over the tool arguments the
 ### `blocked_without_saying_what_it_needs(recording: 'dict[str, Any]') -> 'str | None'`
 
 Reported `blocked` with an empty `need`, which tells the caller nothing.
+
+### `rule_named(criterion: 'str', rules: 'tuple[Rule, ...]' = ()) -> 'Rule | None'`
+
+The rule a grader's criterion name refers to, or `None` if it matches nothing we asked about.
+
+**`None` is a real answer and must not be discarded.** A grader that returns a criterion we never wrote is either hallucinating one or renaming ours past recognition; either way the verdict cannot be scored, and silently dropping it would leave a rule looking permanently clean.
 
 ### `every_call(sink: 'dict[str, Any]') -> 'list[dict[str, Any]]'`
 

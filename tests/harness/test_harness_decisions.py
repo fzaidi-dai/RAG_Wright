@@ -78,8 +78,7 @@ def _drive(ledger: WhatTheRunDecided, tier: str, replies: list[AIMessage], *,
                      else DISPATCHER_OF_THE_ORCHESTRATOR if tier == "orchestrator" else None)
     agent = create_agent(scripted(*replies), tools=tools if tools is not None else [list_mills, task],
                          system_prompt="s",
-                         middleware=[_recorder(ledger, tier, is_worker=is_worker, dispatched_by=dispatched_by,
-                                               worker_names=(tier,) if is_worker else ())])
+                         middleware=[_recorder(ledger, tier, is_worker=is_worker, dispatched_by=dispatched_by)])
     return agent.invoke({"messages": [{"role": "user", "content": opening}]},
                         config={"configurable": {"thread_id": thread}})
 
@@ -448,8 +447,7 @@ def test_THE_REASON_A_REPORT_BOUNCED_IS_KEPT_FROM_THE_REAL_VALIDATOR() -> None:
 
     spec = dict(_fabric_worker(_a_context(), _resources()))
     ledger = WhatTheRunDecided()
-    spec["middleware"] = [_recorder(ledger, "composition_worker", is_worker=True, dispatched_by=DISPATCHER_OF_A_WORKER,
-                                    worker_names=("composition_worker",)),
+    spec["middleware"] = [_recorder(ledger, "composition_worker", is_worker=True, dispatched_by=DISPATCHER_OF_A_WORKER),
                           *spec.get("middleware", [])]
     agent = build_worker(spec, _settings(), model=scripted(a_report(swatches=[{"name": "poplin"}]), a_report()))
     agent.invoke({"messages": [{"role": "user", "content": "which blends suit outerwear?"}]},

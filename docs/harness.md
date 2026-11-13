@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-60 public names; `AgentDefinition` has 15 fields and `AgentPrompts` 11, every one required.
+77 public names; `AgentDefinition` has 15 fields and `AgentPrompts` 11, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -158,6 +158,8 @@ Builders:
 | `build_orchestrator` | The planning tier, compiled as an agent in its own right. |
 | `worker_spec` | A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`. |
 <!-- /generated -->
+
+**Import from `rag_wright.harness`, never from a submodule.** Everything a product's agent, evals and guards need is in its `__all__`, listed in full in [the API reference](api/harness.md): the run's decision ledger (`WhatTheRunDecided`, `RecordTheDecisions`), `run_key`, `build_worker`, `withhold`, the derived tier split (`direct_names`, `orchestrator_direct`, `worker_operations`, `chat_manager_tools`) among them. A submodule is the harness's own and may change without notice.
 
 ---
 

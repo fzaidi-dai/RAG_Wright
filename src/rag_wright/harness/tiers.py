@@ -296,8 +296,7 @@ def _recording(ledger: Any, definition: Any) -> list:
 
     return ([RecordTheDecisions(ledger, tier="orchestrator", framings=definition.framings,
                                 read_framing=definition.read_framing,
-                               dispatched_by=DISPATCHER_OF_THE_ORCHESTRATOR,
-                               worker_names=tuple(w.__name__ for w in definition.workers))]
+                               dispatched_by=DISPATCHER_OF_THE_ORCHESTRATOR)]
             if ledger is not None else [])
 
 

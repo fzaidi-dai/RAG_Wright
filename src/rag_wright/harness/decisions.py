@@ -39,11 +39,9 @@ from langchain.agents.middleware.types import AgentMiddleware
 
 from rag_wright.harness.seen import run_key
 
-#: The workers a dispatch can name, from the roster itself rather than a second copy of it. A list that
-#: **The option space D2 chooses from, when no roster is supplied.** A product's workers are its own, and
-#: this module is substrate: it does not derive the worker names from any one product's roster, which
-#: would put that roster in the decision taxonomy. `RecordTheDecisions` takes the
-#: names it should record, and this is what a caller that supplies none gets.
+#: **An option meaning "some worker", for a decision point a product declares.** A decision's options come from
+#: the product's `DecisionPoint`s; a dispatch decision whose options are "a worker, or none" can name this rather
+#: than listing the roster, which would have to change with every worker added.
 ANY_WORKER = "<worker>"
 
 #: **Who decided that this tier should run.** A worker's dispatch is the orchestrator's decision; the
@@ -252,7 +250,7 @@ class RecordTheDecisions(AgentMiddleware):
     """
 
     def __init__(self, ledger: WhatTheRunDecided, *, tier: str, is_worker: bool = False,
-                 dispatched_by: str | None = None, worker_names: tuple[str, ...] = (),
+                 dispatched_by: str | None = None,
                  framings: tuple[str, ...] = (),
                  #: `(tool_name, parsed_result) -> {chose, confidence, inputs} | None`: the product reads
                  #: its OWN framing tool's reply. `None` records no `D5`, which is honest for a product
@@ -261,10 +259,8 @@ class RecordTheDecisions(AgentMiddleware):
         """**What kind of tier this is, told rather than looked up.**
 
         `is_worker` and `dispatched_by` are passed rather than read off a roster: every caller already
-        knows which it is building for, so a lookup would ask a question the caller had answered.
-        `worker_names` is only `D2`'s recorded option space, and a caller that supplies none gets
-        `ANY_WORKER` -- the decision is still recorded, with its chosen value, which is the part that
-        counts.
+        knows which it is building for, so a lookup would ask a question the caller had answered. A decision's
+        option space is the product's declared `DecisionPoint`'s, read by the ledger.
 
         **`framings` is the same shape of fact.** They are the product's own tool names, so `D6` -- which
         framing a worker chose for its task -- fires for any product that names them. A caller that supplies
@@ -278,7 +274,6 @@ class RecordTheDecisions(AgentMiddleware):
         self._tier = tier
         self._is_worker = is_worker
         self._dispatched_by = dispatched_by
-        self._worker_names = worker_names
         #: Observations that RAISED and were swallowed. **Counted because the swallow made a bug in an
         #: observer indistinguishable from an observation correctly not made**: a planted `IndexError`
         #: inside `_escalated` left all thirty tests green, since `_observe` caught it and nothing recorded

@@ -16,13 +16,16 @@ goes through `start_run` / `resume_run` / `stream_run`. The harness reaches the 
 from rag_wright.harness.accounting import accounted_run
 from rag_wright.harness.agent import build_chat_agent
 from rag_wright.harness.clarify import clarification_tool
-from rag_wright.harness.decisions import ANY_WORKER, DecisionPoint
+from rag_wright.harness.confirm import ConfirmTheView
+from rag_wright.harness.decisions import ANY_WORKER, DecisionPoint, RecordTheDecisions, WhatTheRunDecided
+from rag_wright.harness.dispatch import DISPATCHES_PER_RUN
 from rag_wright.harness.definition import AgentDefinition, AgentPrompts, ToolSurface
 from rag_wright.harness.errors import ModelAttemptTooSlow, ModelTooSlow, ModelTurnTooSlow, error_middleware
 from rag_wright.harness.events import RunEvent, translate, what_was_finished
 from rag_wright.harness.faults import Fault, InjectFaults
 from rag_wright.harness.grading import GRADER_ERROR, GradeThisTier, Verdict, grading_middleware, rule_tools
-from rag_wright.harness.memory import MemoryWithoutTenancy
+from rag_wright.harness.interpreter import bridged_tools, js_name
+from rag_wright.harness.memory import MemoryWithoutTenancy, scope_namespace_of, shared_namespace_of
 from rag_wright.harness.models import agent_chat_model
 from rag_wright.harness.preflight import (
     STUB_ORCHESTRATOR_REPLY,
@@ -38,6 +41,7 @@ from rag_wright.harness.rules import (
     dispatched_more_than_once,
     guessed_identifiers,
     reached_for_the_filesystem,
+    rule_named,
     wrote_a_program_for_a_single_call,
 )
 from rag_wright.harness.runs import (
@@ -51,27 +55,41 @@ from rag_wright.harness.runs import (
     thread_for,
 )
 from rag_wright.harness.scope import RunScope, scope_namespace, shared_namespace, thread_key, validate_scope
+from rag_wright.harness.seen import run_key
 from rag_wright.harness.skills import ORCHESTRATING_PATH
-from rag_wright.harness.tiers import build_orchestrator
-from rag_wright.harness.workers import CANNOT_ASK, DO_WHAT_WAS_ASKED, WorkerReport, worker_spec
+from rag_wright.harness.tiers import (
+    build_orchestrator,
+    chat_manager_tools,
+    direct_names,
+    orchestrator_direct,
+    worker_operations,
+)
+from rag_wright.harness.tracing import harness_tracing_on
+from rag_wright.harness.withhold import withhold
+from rag_wright.harness.workers import CANNOT_ASK, DO_WHAT_WAS_ASKED, WorkerReport, build_worker, worker_spec
 
 __all__ = [
     # what a product declares
     "AgentDefinition", "AgentPrompts", "ToolSurface", "RunScope", "validate_scope",
     # running an agent: the one door
     "start_run", "resume_run", "stream_run", "read_run", "RunResult", "RunOutcome", "outcome_of", "thread_for",
-    "build_chat_agent", "build_orchestrator", "agent_chat_model", "accounted_run",
+    "build_chat_agent", "build_orchestrator", "agent_chat_model", "accounted_run", "run_key", "harness_tracing_on",
     # namespaces the product's stores are keyed by
-    "scope_namespace", "shared_namespace", "thread_key", "MemoryWithoutTenancy",
+    "scope_namespace", "shared_namespace", "thread_key", "MemoryWithoutTenancy", "scope_namespace_of",
+    "shared_namespace_of",
+    # the tier split, derived from the definition: for a product's guards on its own composition
+    "chat_manager_tools", "direct_names", "orchestrator_direct", "worker_operations",
+    "withhold", "DISPATCHES_PER_RUN", "bridged_tools", "js_name",
     # workers and their reports
-    "worker_spec", "WorkerReport", "CANNOT_ASK", "DO_WHAT_WAS_ASKED",
+    "worker_spec", "WorkerReport", "CANNOT_ASK", "DO_WHAT_WAS_ASKED", "build_worker",
     # human in the loop and the run's event stream
-    "clarification_tool", "RunEvent", "translate", "what_was_finished",
+    "clarification_tool", "ConfirmTheView", "RunEvent", "translate", "what_was_finished",
     # failures and their bounds
     "ModelTooSlow", "ModelAttemptTooSlow", "ModelTurnTooSlow", "error_middleware",
     # the rules a run is graded against, and the decisions it records
     "Rule", "dispatched_more_than_once", "reached_for_the_filesystem", "wrote_a_program_for_a_single_call",
-    "guessed_identifiers", "blocked_without_saying_what_it_needs", "DecisionPoint", "ANY_WORKER",
+    "guessed_identifiers", "blocked_without_saying_what_it_needs", "rule_named", "DecisionPoint", "ANY_WORKER",
+    "WhatTheRunDecided", "RecordTheDecisions",
     "ORCHESTRATING_PATH",
     # what a run did, recorded; and grading it against the rules
     "RecordTheContext", "every_call", "spend", "compare", "transcript", "describe",
