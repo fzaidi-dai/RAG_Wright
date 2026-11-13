@@ -229,7 +229,7 @@ _PRODUCT_TEXT = (
     r"(?<!harness/)\btests/test_",            # the product's test files (the engine's are tests/harness/)
 )
 #: The engine ADRs the harness may cite. Any other number is the product's, or a citation nobody checked.
-_ENGINE_ADRS = {"ADR-0125", "ADR-0139"}
+_ENGINE_ADRS = {"ADR-0125", "ADR-0139", "ADR-0146"}
 
 
 def _product_text(text: str) -> list[str]:
