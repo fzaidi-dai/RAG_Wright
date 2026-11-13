@@ -86,11 +86,14 @@ def test_A_QUESTION_ASKED_AGAIN_IN_A_RUN_IS_ANSWERED_FROM_THE_RUN_AND_NOT_ACROSS
     assert len(fake.requests) == 2
 
 
-def test_UNREGISTERED_MEANS_UNAVAILABLE_AND_NOTHING_IS_CALLED(registered) -> None:
+def test_UNREGISTERED_MEANS_UNAVAILABLE_NOTHING_IS_CALLED_AND_NOTHING_IS_LOGGED(registered, caplog) -> None:
+    """Not registered is configuration, not a failure: a product that never registers the decision model hears
+    nothing about it."""
     fake = registered(FakeDecisionModel(_routes_to("delegate", 0.7)), catalog=())
 
     assert asyncio.run(Decider().choose("run-1", "x", "Do what?", OPTIONS)) is None
     assert fake.requests == []
+    assert not [r for r in caplog.records if "decision_model_unavailable" in r.message]
 
 
 def test_A_FAILED_CALL_IS_UNAVAILABLE_AND_THE_RUN_STOPS_ASKING(registered, caplog) -> None:

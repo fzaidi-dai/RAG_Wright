@@ -19,7 +19,7 @@ from rag_wright.harness.clarify import clarification_tool
 from rag_wright.harness.confirm import ConfirmTheView
 from rag_wright.harness.decisions import ANY_WORKER, DecisionPoint, RecordTheDecisions, WhatTheRunDecided
 from rag_wright.harness.dispatch import DISPATCHES_PER_RUN
-from rag_wright.harness.definition import AgentDefinition, AgentPrompts, ToolSurface
+from rag_wright.harness.definition import AgentDefinition, AgentPrompts, RoutingThresholds, ToolSurface
 from rag_wright.harness.errors import ModelAttemptTooSlow, ModelTooSlow, ModelTurnTooSlow, error_middleware
 from rag_wright.harness.events import RunEvent, translate, what_was_finished
 from rag_wright.harness.faults import Fault, InjectFaults
@@ -70,7 +70,7 @@ from rag_wright.harness.workers import CANNOT_ASK, DO_WHAT_WAS_ASKED, WorkerRepo
 
 __all__ = [
     # what a product declares
-    "AgentDefinition", "AgentPrompts", "ToolSurface", "RunScope", "validate_scope",
+    "AgentDefinition", "AgentPrompts", "RoutingThresholds", "ToolSurface", "RunScope", "validate_scope",
     # running an agent: the one door
     "start_run", "resume_run", "stream_run", "read_run", "RunResult", "RunOutcome", "outcome_of", "thread_for",
     "build_chat_agent", "build_orchestrator", "agent_chat_model", "accounted_run", "run_key", "harness_tracing_on",

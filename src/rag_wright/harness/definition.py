@@ -108,6 +108,25 @@ def _check_skill(path: str, text: str) -> None:
 
 
 @dataclass(frozen=True, slots=True)
+class RoutingThresholds:
+    """The probability at or above which the decision model's routing answer is taken (ADR-0146); below it the
+    tier decides as it did before there was a decider. The defaults are the measured ones on the harness's routing
+    gold sets; a product overrides them on its `AgentDefinition` after measuring its own."""
+
+    #: D1, the chat-manager's route: answer, a direct tool, ask, or delegate.
+    d1: float = 0.7
+    #: D2, which workers the orchestrator dispatches: a worker is sent at this probability of "needed" or more.
+    d2: float = 0.5
+    #: B1, whether the brief can be the person's words verbatim.
+    b1: float = 0.6
+
+    def __post_init__(self) -> None:
+        for point in ("d1", "d2", "b1"):
+            if not 0.0 <= getattr(self, point) <= 1.0:
+                raise ValueError(f"routing threshold {point}={getattr(self, point)!r} is not a probability")
+
+
+@dataclass(frozen=True, slots=True)
 class AgentDefinition:
     """One product's agent, as the substrate needs to see it.
 
@@ -150,3 +169,5 @@ class AgentDefinition:
     #: `(tool_name, parsed_result) -> {chose, confidence, inputs} | None`: how this product reads its own framing
     #: tool's reply.
     read_framing: Any
+    #: When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults.
+    routing: RoutingThresholds = RoutingThresholds()

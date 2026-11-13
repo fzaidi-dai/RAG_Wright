@@ -5,9 +5,9 @@ through the capability layer) answers a `choice` among options or a yes/no per q
 second, and its probability is what `Decision.confidence` has been waiting for. Measured on the routing gold sets
 (HD-2): it matches the tiers' own model on D1 and B1 and beats it on D2.
 
-**Unavailable is an answer, not an error.** No key, `jev_decision` not registered, or a failed call: the decider
-returns None and the caller decides as it did before there was a decider. After one failure the run stops asking, so
-a missing key costs one warning per run rather than one per question.
+**Unavailable is an answer, not an error.** `jev_decision` not registered (silently: that is configuration), no key,
+or a failed call: the decider returns None and the caller decides as it did before there was a decider. After one
+failure the run stops asking, so a missing key costs one warning per run rather than one per question.
 
 **One record per run** (`run_key`), as the call record and the decision ledger keep theirs: the decision model flips
 about 3% of answers between identical calls, so a question asked twice in one run gets the first answer again.
@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 
 #: The engine capability asked. A product registers it from `engine_capabilities()`, like any engine capability.
 CAPABILITY = "jev_decision"
+#: The key on a reply's `response_metadata` that carries the route the decider chose and its probability, so the
+#: decision ledger can record that probability when the reply settles a decision.
+ROUTED = "routed"
 
 
 @dataclass(frozen=True)
@@ -72,10 +75,11 @@ class Decider:
         key = json.dumps([state, questions], sort_keys=True)
         if key in record.answers:
             return record.answers[key]
+        if CAPABILITY not in capability_index():  # not configured: silent, unlike a failure
+            record.unavailable = True
+            return None
         inputs = {"state": state, "questions": questions, **({"model": self.model} if self.model else {})}
         try:
-            if CAPABILITY not in capability_index():
-                raise LookupError(f"`{CAPABILITY}` is not registered")
             raw = (await ainvoke_model(CAPABILITY, inputs, resources=None))["answers"]
             # every question answered, in the shape asked, or the whole answer is unusable
             answers = {qid: _read(raw[qid], question) for qid, question in questions.items()}

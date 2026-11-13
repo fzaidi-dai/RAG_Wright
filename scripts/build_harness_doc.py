@@ -100,10 +100,19 @@ def _worker_spec_defaults() -> str:
     return ("| parameter | inert default | with `definition=`, taken from |\n|---|---|---|\n" + "\n".join(rows))
 
 
+def _fields(cls: type) -> str:
+    """`N fields, every one required`, or `N fields (M required; optional: ...)`."""
+    fields = dataclasses.fields(cls)
+    optional = [f"`{f.name}`" for f in fields if f.default is not dataclasses.MISSING
+                or f.default_factory is not dataclasses.MISSING]
+    if not optional:
+        return f"{len(fields)} fields, every one required"
+    return f"{len(fields)} fields ({len(fields) - len(optional)} required; optional: {', '.join(optional)})"
+
+
 def _counts() -> str:
-    return (f"{len(h.__all__)} public names; `AgentDefinition` has "
-            f"{len(dataclasses.fields(h.AgentDefinition))} fields and `AgentPrompts` "
-            f"{len(dataclasses.fields(h.AgentPrompts))}, every one required.")
+    return (f"{len(h.__all__)} public names; `AgentDefinition` has {_fields(h.AgentDefinition)}; "
+            f"`AgentPrompts` has {_fields(h.AgentPrompts)}.")
 
 
 BLOCKS = {

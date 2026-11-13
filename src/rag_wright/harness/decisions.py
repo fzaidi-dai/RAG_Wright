@@ -37,6 +37,7 @@ from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 
+from rag_wright.harness.decider import ROUTED
 from rag_wright.harness.seen import run_key
 
 #: **An option meaning "some worker", for a decision point a product declares.** A decision's options come from
@@ -227,6 +228,15 @@ def _why_it_bounced(request: Any) -> str:
         said = _text(getattr(message, "content", ""))
         return said if said.startswith("Error") else ""
     return ""
+
+
+def _routed(response: Any) -> dict[str, Any] | None:
+    """The decision model's route on a reply (`ROUTED`), if it was routed."""
+    for message in getattr(response, "result", None) or [response]:
+        routed = (getattr(message, "response_metadata", None) or {}).get(ROUTED)
+        if routed:
+            return routed
+    return None
 
 
 def _tool_calls(response: Any) -> list[dict[str, Any]]:
@@ -486,14 +496,18 @@ class RecordTheDecisions(AgentMiddleware):
             return
 
         calls = _tool_calls(response)
+        # the decision model's route, when this reply was routed (ADR-0146): its probability is D1's confidence
+        routed = _routed(response)
+        by = {"route": routed["choice"]} if routed else {}
+        confidence = routed["confidence"] if routed else None
         handed_over = next((call for call in calls if call.get("name") == "task"), None)
         if handed_over is not None:
-            here.record("D1", tier=self._tier, chose="delegate",
+            here.record("D1", tier=self._tier, chose="delegate", confidence=confidence,
                         inputs={"to": str((handed_over.get("args") or {}).get("subagent_type", "")),
-                                "brief": _text((handed_over.get("args") or {}).get("description", ""))})
+                                "brief": _text((handed_over.get("args") or {}).get("description", "")), **by})
         elif not calls:
-            here.record("D1", tier=self._tier, chose="answer_directly",
-                        inputs={"turns": len(getattr(request, "messages", None) or [])})
+            here.record("D1", tier=self._tier, chose="answer_directly", confidence=confidence,
+                        inputs={"turns": len(getattr(request, "messages", None) or []), **by})
 
     def _observe(self, observe: Any, *args: Any) -> None:
         """**A recorder must never fail a run.** Planted in the tests rather than asserted in a comment."""

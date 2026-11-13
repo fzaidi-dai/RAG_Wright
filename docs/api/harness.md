@@ -4,7 +4,7 @@
 
 ## Types
 
-### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any') -> None`
+### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6)) -> None`
 
 One product's agent, as the substrate needs to see it.
 
@@ -15,6 +15,10 @@ One product's agent, as the substrate needs to see it.
 Every word a product says to its model: the tier prompts, the memory line and the authored skills.
 
 **Frozen**: a prompt a middleware could edit mid-run is one where two turns were given different instructions.
+
+### `RoutingThresholds(d1: 'float' = 0.7, d2: 'float' = 0.5, b1: 'float' = 0.6) -> None`
+
+The probability at or above which the decision model's routing answer is taken (ADR-0146); below it the tier decides as it did before there was a decider. The defaults are the measured ones on the harness's routing gold sets; a product overrides them on its `AgentDefinition` after measuring its own.
 
 ### `RunResult(run_id: 'str', context: 'RunScope', state: 'dict[str, Any]', outcome: 'RunOutcome | None' = None) -> None`
 

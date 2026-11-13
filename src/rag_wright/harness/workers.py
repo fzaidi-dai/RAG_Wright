@@ -120,6 +120,14 @@ NOT_ON_WORKERS: dict[str, str] = {
         "unmeasured on this tier**: a worker turn is uncapped and can outlive its own deadline the same "
         "way, which is what the 222.9s call (out=1,627) looks like."
     ),
+    "RouteTheTurn": (
+        "D1 routes a PERSON's message: answer, call a direct tool, ask, or delegate (ADR-0146). A worker never "
+        "receives one -- it executes the brief it was dispatched with -- so there is no turn of its own to route."
+    ),
+    "Decider": (
+        "**Not middleware**: the decision-model client `RouteTheTurn` asks, named here because the audit reads "
+        "capitalised calls in a tier builder. A worker has no routing decision to hand it."
+    ),
     "ConfirmTheView": (
         "The view belongs to the conversation. A worker never talks to the user and has no "
         "screen to have moved, so it would be confirming something it cannot see."
