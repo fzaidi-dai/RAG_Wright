@@ -55,7 +55,12 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-11-13): `rag-wright` 0.18.0 is RELEASED** (PR #25; PS-48: the
+> **CURRENT STATE (2026-11-14): `rag-wright` 0.19.0 is RELEASED** (PR #26; the harness-decisions workstream HD-1..10,
+> `docs/specs/harness-decisions/plan.md`, ADR-0146: the harness routes D1 (the chat-manager's turn), B1 (a verbatim
+> brief) and D2 (the orchestrator's workers) with its own decision model, Jev, at configurable `RoutingThresholds`;
+> `routing=None` turns it off; `ModelProfile.forced_tool_choice`; guide
+> `docs/specs/public-surface/rulewright-migration-0.19.0.md`). Next: EV-7, PS-30, PS-33; later, tuning the `delegate`
+> option's wording. Before it, **`rag-wright` 0.18.0 is RELEASED** (PR #25; PS-48: the
 > harness's substrate tests run in the engine on the fabric product; new `harness.recording`, `harness.faults`,
 > `harness.preflight`; `__all__` 77 names with a guard; BREAKING `guessed_identifiers`, `worker_names` removed;
 > ADR-0139 amended a-i; guide `docs/specs/public-surface/rulewright-migration-0.18.0.md`; TexWright needs nothing until it builds on the
