@@ -152,10 +152,12 @@ def build_chat_agent(
                                read_framing=definition.read_framing),  # the top tier: nobody dispatches it
             TheSubjectIsNotAFilesystem(signposts=definition.prompts), ConfirmTheView(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
-            # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146).
-            RouteTheTurn(Decider(), direct=frozenset(direct_names(definition)),
-                         delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
-                         thresholds=definition.routing, force=forces_a_tool(definition, settings, model)),
+            # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146); absent when the
+            # product turned routing off.
+            *([RouteTheTurn(Decider(), direct=frozenset(direct_names(definition)),
+                            delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
+                            thresholds=definition.routing, force=forces_a_tool(definition, settings, model))]
+              if definition.routing is not None else []),
         ],
         checkpointer=checkpointer if checkpointer is not None else InMemorySaver(),
         **memory,

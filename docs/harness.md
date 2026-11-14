@@ -55,7 +55,24 @@ accepting it: the direct surface is derived from `planning` plus the surface, an
 workers. A derived value crossing the boundary would become a convention the next product can break silently.
 
 <!-- generated:definition -->
-16 fields (15 required; optional: `routing`)
+| field | type | what it is for |
+|---|---|---|
+| `surface` | `ToolSurface` | What a product offers an agent run, and the two things the substrate asks about it. |
+| `planning` | `dict[str, str]` | Operation name -> why it needs planning. The reason is kept: a classification without one cannot be revisited. |
+| `workers` | `tuple[Any, ...]` | The worker factories the orchestrator may dispatch. |
+| `context_schema` | `Any` | The type a run's context has, passed to the agent as `context_schema`; it must satisfy `RunScope`. The product's context stays its own: typed ids, its own construction rule, whatever else it wants. |
+| `retry_on` | `tuple[type[BaseException], ...]` | Which exceptions the retry middleware may re-attempt. **Named, never `Exception`** -- the library's default would retry a scope violation, which is re-attempting a leak with backoff. |
+| `message_for` | `Any` | `(error) -> str \| None`: what the model is told about a failure, or `None` to let it surface. Never asked about a failure in `retry_on`: that one is retried, and surfaces once the retries are spent. |
+| `model_id_for` | `Any` | `(settings) -> str`: the ENGINE model id this product's agent reasons with (a registered profile's key). A model id is configuration: adopting a better model is a new profile and a changed setting. |
+| `prompts` | `AgentPrompts` | Every word this product says to its model (`AgentPrompts`). |
+| `repeatable` | `frozenset[str]` | Tools whose answer is the same twice in one run, so a repeat can be served from the record. |
+| `question_argument` | `dict[str, str]` | `{tool: argument}` -- which argument carries a QUESTION, so two phrasings of one ask are one ask. |
+| `framings` | `tuple[str, ...]` | Tools that FRAME a request rather than answer it, for the framing decision point. |
+| `carry_forward` | `Any` | `(record, tool, content) -> content \| None`, or `None`: the product's chance to amend a result in the light of what this run already found. `None` amends nothing. |
+| `rules` | `tuple[Any, ...]` | The rules this product holds its own runs to. The grading machinery is the substrate's; the rubric is not. |
+| `decision_points` | `tuple[Any, ...]` | The decisions a run of this product takes; the ledger reads each point's option space from here. |
+| `read_framing` | `Any` | `(tool_name, parsed_result) -> {chose, confidence, inputs} \| None`: how this product reads its own framing tool's reply. |
+| `routing` | `RoutingThresholds \| None` | When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10). |
 <!-- /generated -->
 
 ---
@@ -65,7 +82,19 @@ workers. A derived value crossing the boundary would become a convention the nex
 Every word the model reads is the product's. The substrate ships no prompt of its own.
 
 <!-- generated:prompts -->
-11 fields, every one required
+| field | type | what it is for |
+|---|---|---|
+| `chat` | `str` | The chat-manager's system prompt: the tier a person talks to. |
+| `orchestrator` | `str` | The orchestrator's, with the product's worker roster already interpolated into it. |
+| `memory` | `str` | One line of guidance about the agent's own memory, shown above whatever is in it. |
+| `skills` | `dict[str, str]` | `{published path: text}` -- the procedures a tier may read when they apply. |
+| `skills_preamble` | `str` | The paragraph that introduces the skills above. |
+| `not_a_filesystem` | `str` | The signpost a wrong filesystem call is answered with by default (it names the product's own tools). |
+| `looking_for_subjects` | `str` | The signpost for a filesystem search plainly hunting the subject documents (a path or pattern ending in one of `subject_file_endings`): it says where those documents ARE, rather than where they are not. |
+| `subject_file_endings` | `tuple[str, ...]` | File extensions that mean "this model is hunting the subject documents it was shown", not notes. |
+| `worker_filesystem_note` | `str` | What a worker is told about its own filesystem: `worker_spec(definition=)` appends it to each worker's prompt. |
+| `orchestrator_description` | `str` | How the orchestrator is described to the chat-manager: the `description` of its compiled subagent, which is what the chat-manager reads when deciding whether to hand a request down. |
+| `label` | `str` | What the model is shown as the SOURCE of the skills: the product's name. |
 <!-- /generated -->
 
 **Three constraints on your text.** `skills_preamble` must contain the three format slots
@@ -286,7 +315,8 @@ worker is dispatched in code with the brief, and several are planned by the orch
 and calls it itself, and a product registers nothing. It needs the decision model's credentials, which are the
 engine's configuration (`OPENROUTER_API_KEY` by default; a self-hosted deployment registers an on-premises decision
 profile with `register_decision_profile`). Without them every tier routes as it did before, and the process logs one
-warning.
+warning. **To turn routing off** -- for example where users' messages must not reach the decision model's provider --
+declare `AgentDefinition(..., routing=None)`: no tier asks the decision model and nothing is sent to it.
 
 **Your declarations are the criteria.** The decision model reads each direct tool's own description, the
 orchestrator's `orchestrator_description` (what delegating means) and each worker's description. Write them so they

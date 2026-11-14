@@ -84,3 +84,15 @@ def test_THE_GUARDS_CATCH_A_PLANTED_SUBMODULE_IMPORT() -> None:
     assert _submodule_imports("from rag_wright.harness import run_key\n") == []
     assert _SUBMODULE_IMPORT.search("```python\nfrom rag_wright.harness.tiers import x\n```")
     assert not _SUBMODULE_IMPORT.search("```python\nfrom rag_wright.harness import x\n```")
+
+
+def test_EVERY_DECLARED_FIELD_HAS_A_ROW_IN_THE_HARNESS_DOC() -> None:
+    """**The doc-drift guard checks the doc against its generator, so a broken generator passes it.** One did: a
+    helper named like the table renderer replaced it, and both field tables became a bare count while every guard
+    stayed green. This checks the outcome instead -- each field a product declares is a row a reader can find."""
+    import dataclasses
+
+    text = (ROOT / "docs" / "harness.md").read_text(encoding="utf-8")
+    for cls in (harness.AgentDefinition, harness.AgentPrompts):
+        missing = [f.name for f in dataclasses.fields(cls) if f"| `{f.name}` |" not in text]
+        assert not missing, f"docs/harness.md has no row for {cls.__name__} fields {missing}"

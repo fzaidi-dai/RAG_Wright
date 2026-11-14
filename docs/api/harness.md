@@ -4,7 +4,7 @@
 
 ## Types
 
-### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6)) -> None`
+### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds | None' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6)) -> None`
 
 One product's agent, as the substrate needs to see it.
 

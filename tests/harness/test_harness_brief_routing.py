@@ -137,3 +137,14 @@ def test_A_WORKER_THE_ORCHESTRATOR_ADDS_LATER_IS_ITS_DECISION_NOT_THE_DECISION_M
     sourcing, testing = _d2(ledger)
     assert (sourcing.chose, sourcing.confidence) == ("sourcing_worker", 0.9)
     assert (testing.chose, testing.confidence, testing.inputs["decision_model_yes"]) == ("testing_worker", None, 0.3)
+
+
+
+def test_ROUTING_OFF_THE_ORCHESTRATOR_NEVER_ASKS_AND_PLANS_AS_BEFORE(needs) -> None:
+    decision = needs(sourcing_worker=0.9)
+    model, offered = recording(AIMessage(content="Nothing to dispatch."))
+
+    _plan(model, definition=dataclasses.replace(loom(), routing=None))
+
+    assert decision.asked == []
+    assert "task" in offered[0]

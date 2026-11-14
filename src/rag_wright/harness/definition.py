@@ -169,5 +169,6 @@ class AgentDefinition:
     #: `(tool_name, parsed_result) -> {chose, confidence, inputs} | None`: how this product reads its own framing
     #: tool's reply.
     read_framing: Any
-    #: When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults.
-    routing: RoutingThresholds = RoutingThresholds()
+    #: When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns
+    #: routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10).
+    routing: RoutingThresholds | None = RoutingThresholds()

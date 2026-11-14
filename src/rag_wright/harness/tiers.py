@@ -274,9 +274,11 @@ def build_orchestrator(
             code_interpreter(context, resources, surface=definition.surface),
             *_remembering(definition), *_recording(decisions, definition), BatchTheQuestions(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
-            # **Innermost of the tier's own**, so everything above still shapes and observes the routed call.
-            RouteTheBrief(Decider(), workers={spec["name"]: spec["description"] for spec in workers},
-                          ledger=decisions, threshold=definition.routing.d2),
+            # **Innermost of the tier's own**, so everything above still shapes and observes the routed call; absent
+            # when the product turned routing off.
+            *([RouteTheBrief(Decider(), workers={spec["name"]: spec["description"] for spec in workers},
+                             ledger=decisions, threshold=definition.routing.d2)]
+              if definition.routing is not None else []),
             *(extra_middleware or []),
         ],
         # **Workers hang off the orchestrator, never off the chat-manager**. A worker on the

@@ -329,3 +329,18 @@ def test_THE_MEASURED_PROFILE_SAYS_IT_HONOURS_FORCING() -> None:
     from rag_wright.api import profile_for
 
     assert profile_for("qwen3.8-27b-modal-or").forced_tool_choice is True
+
+
+
+# --- routing off (HD-10) --------------------------------------------------------------------------------------
+
+
+def test_ROUTING_OFF_NEVER_ASKS_THE_DECISION_MODEL_AND_THE_TURN_IS_AS_BEFORE(routes) -> None:
+    """A product that must not send its users' messages to the decision model's provider turns routing off."""
+    decision = routes("list_mills", 0.9)
+    model, offered = recording(AIMessage(content="We have two mills."))
+
+    _turn(model, "Which mills can we order from?", definition=dataclasses.replace(loom(variant="small"), routing=None))
+
+    assert decision.asked == []
+    assert {"list_mills", "read_swatch", "task", "ask_the_user", "ls"} <= set(offered[0])
