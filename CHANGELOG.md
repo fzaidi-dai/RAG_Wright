@@ -4,6 +4,18 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.18.0...0.19.0) (2026-11-14)
+
+
+### Features
+
+* **HD-10:** routing=None turns the harness's decision model off (ADR-0146) ([55b05ef](https://github.com/fzaidi-dai/RAG_Wright/commit/55b05ef19fc58e59ac5c62013694c6c18e3b93ce))
+* **HD-4:** the harness's routing decider asks the decision model, cached per run (ADR-0146) ([d06171b](https://github.com/fzaidi-dai/RAG_Wright/commit/d06171b15b01b03d97283a75b95c951b9122ac10))
+* **HD-5:** the chat-manager's turn is routed by the decision model (ADR-0146) ([a1d5e6e](https://github.com/fzaidi-dai/RAG_Wright/commit/a1d5e6ed37deac5c1e2ee10b3886d0179e23192f))
+* **HD-6:** a delegated message that stands on its own is handed over verbatim (ADR-0146) ([84eb87e](https://github.com/fzaidi-dai/RAG_Wright/commit/84eb87ec7d673cd835f88f8c805ded093282ee04))
+* **HD-7:** the orchestrator's workers are chosen by the decision model, with fast paths (ADR-0146) ([650fa11](https://github.com/fzaidi-dai/RAG_Wright/commit/650fa119ec2b3660e28485b992a7e766a012bd2e))
+* **HD-9:** the router's chosen tool is forced where the model is measured to honour it; the decision model is the harness's own (ADR-0146) ([00abda6](https://github.com/fzaidi-dai/RAG_Wright/commit/00abda6c6a52d1e9e8552d5ffd6ef989520715a5))
+
 ## [0.18.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.17.3...0.18.0) (2026-11-13)
 
 
