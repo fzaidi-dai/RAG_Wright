@@ -24,7 +24,8 @@ echo "Graphify index status:"
 if [ "$fw" = "-" ]; then
   echo "  framework graph: MISSING — rebuild before grounding any library call"
 else
-  echo "  framework graph: $fw nodes (grounding authority: docling, docling-core, FlagEmbedding, langchain_openai, mcp, spacy, arcadedb_python [Python AST] + ArcadeDB SQL vector docs [LLM-extracted])"
+  pkgs=$(sed -n 's/^PKGS="\(.*\)"$/\1/p' "$ROOT/scripts/refresh_framework_graph.sh")
+  echo "  framework graph: $fw nodes (grounding authority: $pkgs + vllm, fastmcp [Python AST] + ArcadeDB SQL vector docs [LLM-extracted])"
 fi
 if [ "$pj" = "-" ]; then
   echo "  project graph:   MISSING — run /graphify . to build"

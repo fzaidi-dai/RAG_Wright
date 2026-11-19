@@ -10,7 +10,7 @@
 #   gitignored, so it is cheap and produces no git noise. This is the index that actually goes
 #   stale as each task adds code.
 # - Framework index: only when the commit changed dependencies (uv.lock / pyproject.toml).
-#   refresh_framework_graph.sh does a full ~11s rebuild over the 7 grounding-authority libraries
+#   refresh_framework_graph.sh does a full rebuild over the grounding-authority libraries (its PKGS)
 #   (ADR-0001), so gating it on a real dependency change avoids paying that on every commit.
 #
 # Best-effort: a refresh failure never disrupts anything (the commit is already made).

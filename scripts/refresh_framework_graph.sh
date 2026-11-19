@@ -5,7 +5,7 @@
 # extraction (~10-15s). The framework graph is the grounding authority for every library call the
 # capabilities make (CLAUDE.md library-grounding rule); it must reflect the installed versions.
 #
-# Scope (ADR-0001): exactly the 7 libraries the capabilities drive, noise-pruned. Pruning is done
+# Scope (ADR-0001): the libraries in PKGS below (the 7 of ADR-0001 and later additions), noise-pruned. Pruning is done
 # by controlling what is staged for extraction (graphify has no extraction-time exclude flag): the
 # packages are rsynced into a staging tree with test trees, bytecode, and the spaCy language tables
 # excluded, then extracted. Output lands at graphify-out/framework/graph.json (what graph_status.sh
@@ -19,7 +19,10 @@ cd "$(git rev-parse --show-toplevel)"
 # schema-driven KG extractor GP-1B adopted and KG-0..KG-6 lean on heavily — `template from-ontology`,
 # the extraction runners, the model seam; ground its API first-class alongside the `kg-extraction-recipe`
 # Skill + live CLI, so nothing is guessed). modal_proto (low-level gRPC stubs) is excluded as noise.
-PKGS="docling docling_core docling_graph FlagEmbedding langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters langfuse olefile pypdfium2 openpyxl"
+# `langchain` + `langchain_core` (added 2026-11-19): the agent harness is built on langchain's agent
+# middleware (`AgentMiddleware`, `ModelRequest.override`) and langchain_core's messages and tools, which
+# deepagents only references; without them those symbols had no definition in the graph.
+PKGS="docling docling_core docling_graph FlagEmbedding langchain langchain_core langchain_openai mcp spacy arcadedb_python modal langgraph deepagents rdflib pyshacl langchain_mcp_adapters langfuse olefile pypdfium2 openpyxl"
 SP="$(uv run python -c 'import sysconfig;print(sysconfig.get_paths()["purelib"])')"
 STAGE="$HOME/.graphify/rag-wright-framework/src"
 OUT="graphify-out/framework/graph.json"
