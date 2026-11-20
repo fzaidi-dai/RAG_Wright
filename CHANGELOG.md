@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.19.1...0.20.0) (2026-11-20)
+
+
+### Features
+
+* **PS-72:** rules and grading on every tier, the chat-manager included ([6e02375](https://github.com/fzaidi-dai/RAG_Wright/commit/6e02375838d4c15a01b6f36c8718fd2032757912))
+
 ## [0.19.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.19.0...0.19.1) (2026-11-20)
 
 
