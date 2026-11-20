@@ -193,11 +193,14 @@ calls; an operation that writes is not a tool unless the spec says so. Underneat
 `agent_chat_model("<model id>", max_retries=0)` (`None` takes the `GENERAL` role's model). The profile decides endpoint, key and the agent turn's reasoning flag, so your code names no model,
 vendor or vendor flag; every call, a subagent's included, is recorded into `measure_usage()` with the provider's
 real cost and traced when tracing is on. The generic harness substrate (the loop, error levels and deadlines,
-retries, interrupts and human-in-the-loop, replay on resume, memory practice, metering) is engine scope (engine
-ADR-0139, PS-32): the third public tier `rag_wright.harness` (engine 0.10.0 and later; reference
-`docs/api/harness.md`, practice in the `building-an-agent-harness` skill). Declare an `AgentDefinition` and run it
-with `start_run` / `resume_run`; never write a substrate of your own (on an older engine, keep agents thin). Your
-product keeps its agents, tools, prompts, skills, guardrails and decision models.
+retries, interrupts and human-in-the-loop, replay on resume, memory practice, metering, the event stream, and from
+0.19.0 the decision whether a turn is answered directly or delegated, ADR-0146, tuned by `RoutingThresholds`) is
+engine scope (engine ADR-0139, PS-32): the third public tier `rag_wright.harness` (engine 0.10.0 and later;
+reference `docs/api/harness.md`, guide `docs/harness.md`). Start from `examples/harness_quickstart.py` (a whole
+product on the tier, run by the engine's tests) and the `building-an-agent-harness` skill's "If you consume the
+tier" section, which says which of its lessons the tier already ships and the order to build yours in. Never
+write a substrate of your own (on an older engine, keep agents thin). Your product keeps its agents, tools,
+prompts, skills, guardrails, checkpointer and its own decision points.
 
 **Using a self-hosted model (Qwen on Modal).** Deploy it from the engine and use its model id like any model:
 `server = await adeploy_model_server(ModelServerSpec(name="<app>", max_num_seqs=<concurrency target>))` (the locked
