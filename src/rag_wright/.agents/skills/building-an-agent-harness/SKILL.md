@@ -93,7 +93,7 @@ and to verify it, not to build it again; a product that cards them as its own wo
 | tracing, metering, the run's duration | **the tier's** (`accounted_run`, `harness_tracing_on`, `spend`), on the engine's configuration; the `accounting` object is yours |
 | the event contract | **the tier's** `translate`: `stream_run`'s items become `RunEvent`s; your client routes on their names |
 | the agent's skills | **yours**: `AgentPrompts.skills` is `{path: text}`, so keep the files anywhere version-controlled and load them |
-| your rules, decision points, gold sets, the replay test against YOUR asking tools | **yours**; the grading, the ledger and the instruments are the tier's |
+| your rules, decision points, gold sets, the replay test against YOUR asking tools | **yours**; the grading, the ledger and the instruments are the tier's: declare `rules` and pass `grading=Grading(on_evaluation)` to `build_chat_agent`, and every tier with a rule (the chat-manager included) is recorded and graded |
 
 **The order, consuming:** pin the tier's surface; the context and the entry point; the tool surface; one tier
 end to end, live; your checkpointer; your rules, decision points and gold sets; then measure, and tune your
@@ -534,6 +534,16 @@ tools', orchestrator's and workers' descriptions are what it reads, so write the
 its own decision reports an intention.
 
 ## Grading your own runs
+
+**If you consume the tier, the grader is built for you.** Declare your rules on `AgentDefinition.rules` and pass
+`grading=Grading(on_evaluation=...)` to `build_chat_agent`: each tier with a rule of its own (`chat-manager`,
+`orchestrator`, `worker`) is recorded and graded when it finishes, and its verdict arrives tagged with the tier.
+What stays yours is the rules themselves, delivering each `instruction` into its tier's prompt, and a test that it is
+there (`instructions_for`). The rest of this section is why the grader is built the way it is.
+
+**Grading checks how a run behaved, not whether its answer was the right kind.** A rule holds or breaks the same way
+for every question. Whether a question should have been answered, refused or declined differs per question, so it
+is a gold set scored with `arun_eval` and `score_classification`, not a rule.
 
 **Keep each rule as ONE object holding both the sentence the model reads and the question the grader is
 asked.** They are deliberately different sentences for different readers - the model is told what to do, the

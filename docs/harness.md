@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-78 public names; `AgentDefinition` has 16 fields (15 required; optional: `routing`); `AgentPrompts` has 11 fields, every one required.
+81 public names; `AgentDefinition` has 16 fields (15 required; optional: `routing`); `AgentPrompts` has 11 fields, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -70,7 +70,7 @@ workers. A derived value crossing the boundary would become a convention the nex
 | `question_argument` | `dict[str, str]` | `{tool: argument}` -- which argument carries a QUESTION, so two phrasings of one ask are one ask. |
 | `framings` | `tuple[str, ...]` | Tools that FRAME a request rather than answer it, for the framing decision point. |
 | `carry_forward` | `Any` | `(record, tool, content) -> content \| None`, or `None`: the product's chance to amend a result in the light of what this run already found. `None` amends nothing. |
-| `rules` | `tuple[Any, ...]` | The rules this product holds its own runs to. The grading machinery is the substrate's; the rubric is not. |
+| `rules` | `tuple[Any, ...]` | The rules this product holds its own runs to (`Rule`). The grading machinery is the substrate's; the rubric is not. Read by the builders when a run is given `grading=` (PS-72): each tier with a rule is recorded and graded. |
 | `decision_points` | `tuple[Any, ...]` | The decisions a run of this product takes; the ledger reads each point's option space from here. |
 | `read_framing` | `Any` | `(tool_name, parsed_result) -> {chose, confidence, inputs} \| None`: how this product reads its own framing tool's reply. |
 | `routing` | `RoutingThresholds \| None` | When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10). |
@@ -277,14 +277,36 @@ The order matters:
    measure decoupling, which is a different property. The engine's is the fabric product in
    `tests/harness/fabric.py`, whose scope is three parts deep; the harness's own behaviour tests run against it.
 2. **Guards on the consequence** of each permissive default (section 6), each proved by planting.
-3. **Your own rules and decision points**, graded by the substrate against the registries you declared.
+3. **Your own rules and decision points**, graded by the substrate against the registries you declared (below).
 
-**Recording a run, and grading it.** `RecordTheContext(sink, label)` is a middleware that writes what a tier was
-given and what it did, turn by turn, into `sink`: the system prompt, every message, every tool call with its
-arguments, the briefs it was dispatched with, and tokens per turn. That recording is what the rule detectors read
-(`rules.broken`) and what the grader's evidence tool reads (`grading_middleware(tier, sink, settings, rules=...)`),
-so attach the recorder to every tier you grade. `every_call`, `spend`, `compare` and `transcript` read it back:
-`compare(alone, orchestrated)` is the one table that says whether a worker costs the same under a parent as alone.
+**Grading a run against your rules.** Declare each rule on `AgentDefinition.rules` as a `Rule` (`id`,
+`applies_to`, the `instruction` the model reads, the `criterion` the grader checks, and a `detect` function when it
+can be counted), and pass `grading=Grading(on_evaluation=...)` to `build_chat_agent`. Every tier with a rule of its
+own -- the chat-manager, the orchestrator, each worker -- is then recorded and graded when it finishes, and each
+verdict reaches `on_evaluation` carrying its `tier` (`chat-manager`, `orchestrator`, or the worker's name). A tier
+with no rule is not graded, and without `grading` nothing is built. Each graded tier costs a grader call (two when
+it reads its evidence first) every time it finishes, a worker each time it is dispatched, so grade evals and
+sampled runs rather than every served one. `applies_to` names `chat-manager`,
+`orchestrator` or `worker`; the orchestrator holds an interpreter, so a rule about its programs names `orchestrator`
+(with `coded`, for an eval that grades a coded arm it drives itself). Grading observes and never changes the run: a
+grader that fails or overruns reports `GRADER_ERROR` and the run is untouched. `Grading(model=...)` sets the grader's
+model; otherwise it is your `model_id_for`.
+
+**A rule's instruction is yours to deliver.** Put it in the prompt of the tier it applies to (`carried_by` records
+where), and test that it is there: `instructions_for(tier, rules)` lists what each tier must be told, and
+`broken(recording, tier=, rules=)` runs the detectors over a recording offline, with no grader.
+
+**Grading is not answer scoring.** A rule is a property of how a run behaved (an answer came from a tool, a worker was
+dispatched once), and its verdict says whether the run kept it. Whether an answer was the right kind for a question
+(answered, refused, declined) is an eval: a gold set holding each question's expected class, run with `arun_eval`
+and scored with `score_classification` (`docs/evals.md`).
+
+**Recording a run.** `RecordTheContext(sink, label)` is the middleware grading attaches: it writes what a tier was
+given and what it did, turn by turn, into `sink` -- the system prompt, every message, every tool call with its
+arguments, the briefs it was dispatched with, and tokens per turn -- and that recording is what the detectors and the
+grader's evidence tool read. An eval that builds its own agent attaches it with `grading_middleware(tier, sink,
+settings, rules=...)`. `every_call`, `spend`, `compare` and `transcript` read a recording back: `compare(alone,
+orchestrated)` is the one table that says whether a worker costs the same under a parent as alone.
 
 **Causing a failure on demand.** A failure seen once, live, cannot be regression-tested. `InjectFaults(*faults, seed=)` is a middleware that causes one deterministically: `Fault(nth_model_call=2, delay_s=...)` slows the second model call of a run, `Fault(tool="my_tool", raises=MyError)` fails a tool, and `empty=` / `truncate_to=` spoil a response; `probability=` draws from the seeded generator, and `fired` lists the calls it landed on. It causes the condition, never the model's decision, which the run's decision ledger records. Put it after `error_middleware(...)` in an eval's own agent (or `build_orchestrator(..., extra_middleware=)`), never in an agent you serve: nothing in the engine installs it.
 

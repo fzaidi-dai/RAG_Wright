@@ -193,6 +193,8 @@ def build_orchestrator(
     checkpointer: Any = None,
     store: Any = None,
     ledger: Any = None,
+    #: Opt-in: record and grade this tier and each worker against the definition's rules (`Grading`).
+    grading: Any = None,
 ) -> Any:
     """The planning tier, compiled as an agent in its own right.
 
@@ -214,6 +216,7 @@ def build_orchestrator(
     from rag_wright.harness.decisions import WhatTheRunDecided
     from rag_wright.harness.decider import Decider
     from rag_wright.harness.errors import error_middleware
+    from rag_wright.harness.grading import graded
     from rag_wright.harness.interpreter import code_interpreter
     from rag_wright.harness.routing import RouteTheBrief
     from rag_wright.harness.skills import orchestrator_skill
@@ -225,7 +228,8 @@ def build_orchestrator(
     # decisions while recording none would be the exact shape of instrument this phase was reset over.
     decisions = (ledger if ledger is not None
                  else WhatTheRunDecided(points=definition.decision_points))
-    workers = [worker(context, resources, decisions) for worker in definition.workers]
+    workers = [_graded_worker(worker(context, resources, decisions), definition, settings, grading)
+               for worker in definition.workers]
 
     return create_deep_agent(
         # **A passed model is given the same roster as a built one** (PS-48g): without this the catch-all
@@ -274,6 +278,8 @@ def build_orchestrator(
             code_interpreter(context, resources, surface=definition.surface),
             *_remembering(definition), *_recording(decisions, definition), BatchTheQuestions(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
+            # Outer of the router, so a brief it dispatches in code, with no model call, is still recorded.
+            *graded("orchestrator", "orchestrator", definition, settings, grading),
             # **Innermost of the tier's own**, so everything above still shapes and observes the routed call; absent
             # when the product turned routing off.
             *([RouteTheBrief(Decider(), workers={spec["name"]: spec["description"] for spec in workers},
@@ -288,6 +294,14 @@ def build_orchestrator(
         store=store,
         name="orchestrator",
     )
+
+
+def _graded_worker(spec: dict[str, Any], definition: Any, settings: Any, grading: Any) -> dict[str, Any]:
+    """A worker's spec with its grader added, under the worker's own name; unchanged when nothing grades it."""
+    from rag_wright.harness.grading import graded
+
+    extra = graded("worker", spec["name"], definition, settings, grading)
+    return {**spec, "middleware": [*spec.get("middleware", []), *extra]} if extra else spec
 
 
 def _recording(ledger: Any, definition: Any) -> list:

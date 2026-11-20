@@ -37,8 +37,11 @@ from typing import Any, Literal
 
 from rag_wright.harness.filesystem import OWN_ROOTS
 
-#: Which tier a rule binds. A rule is checked only against a recording from a tier it applies to.
-Tier = Literal["orchestrator", "worker", "coded"]
+#: Which tier a rule binds. A rule is checked only against a recording from a tier it applies to. `chat-manager` is
+#: the tier a person talks to (PS-72: a product with only that tier had nothing to grade). The engine's orchestrator
+#: holds an interpreter, so it is graded as `orchestrator`: a rule about its programs applies to both
+#: `orchestrator` and `coded`, and `coded` alone is for an eval grading a coded arm it drives itself.
+Tier = Literal["chat-manager", "orchestrator", "worker", "coded"]
 
 
 @dataclass(frozen=True)

@@ -298,6 +298,12 @@ Examples: !!! example "Retry on error"
 
 ```python async def awrap_model_call(self, request, handler): for attempt in range(3): try: return await handler(request) except Exception: if attempt == 2: raise ```
 
+### `Grading(on_evaluation: 'Callable[[dict[str, Any]], Any]', model: 'Any' = None) -> None`
+
+A product's request that a run be graded against its definition's rules (PS-72). Opt-in, per run.
+
+Passed to `build_chat_agent` (or `build_orchestrator`), it records and grades every tier the definition has a rule for -- the chat-manager, the orchestrator and each worker -- and hands each verdict to `on_evaluation`, tagged with `tier` (`chat-manager`, `orchestrator`, or the worker's name). A tier with no rule of its own is not graded, so no grader call judges nothing. `model`, when given, is the grader's model; otherwise the grader uses the product's configured one (`definition.model_id_for`).
+
 ### `GradeThisTier(tier: 'Tier', recording: 'dict[str, Any]', settings: 'Any', *, model: 'Any' = None, on_evaluation: 'Any' = None, consulted: 'list[dict[str, Any]] | None' = None, deadline: 'float' = 120.0, attempt: 'float' = 25.0, retry_on: 'tuple[type[BaseException], ...]' = (), model_id: 'str | None' = None, rules: 'tuple[Any, ...]' = ()) -> 'None'`
 
 Grade one tier against ITS OWN rules, holding the rubric rather than storing it.
@@ -600,7 +606,7 @@ So the scope is part of the key rather than a comparison somebody must remember 
 
 The run id stays the PUBLIC identity: it is what `usage_run.correlation_id` joins on and what a client keeps to reconnect. The thread id is ours and never leaves the process.
 
-### `build_chat_agent(context: 'RunScope', resources: 'Any', settings: 'Any', *, model: 'Any' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None) -> 'Any'`
+### `build_chat_agent(context: 'RunScope', resources: 'Any', settings: 'Any', *, model: 'Any' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None, grading: 'Grading | None' = None) -> 'Any'`
 
 The chat-manager for one run, holding the manifest bound to that run's scope.
 
@@ -610,7 +616,7 @@ The chat-manager for one run, holding the manifest bound to that run's scope.
 
 **The checkpointer defaults to in-memory, which is a real limitation.** A run outlives the view that started it, and an in-memory saver does not outlive the process. A durable checkpointer is the caller's to pass, and re-attaching to a run by id is the requirement that forces it.
 
-### `build_orchestrator(context: 'Any', resources: 'Any', settings: 'Any', *, model: 'Any' = None, tools: 'Any' = None, system_prompt: 'str | None' = None, extra_middleware: 'list | None' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None) -> 'Any'`
+### `build_orchestrator(context: 'Any', resources: 'Any', settings: 'Any', *, model: 'Any' = None, tools: 'Any' = None, system_prompt: 'str | None' = None, extra_middleware: 'list | None' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None, grading: 'Any' = None) -> 'Any'`
 
 The planning tier, compiled as an agent in its own right.
 
@@ -815,6 +821,16 @@ Reported `blocked` with an empty `need`, which tells the caller nothing.
 The rule a grader's criterion name refers to, or `None` if it matches nothing we asked about.
 
 **`None` is a real answer and must not be discarded.** A grader that returns a criterion we never wrote is either hallucinating one or renaming ours past recognition; either way the verdict cannot be scored, and silently dropping it would leave a rule looking permanently clean.
+
+### `broken(recording: 'dict[str, Any]', *, tier: 'Tier', rules: 'tuple[Rule, ...]' = ()) -> 'dict[str, str]'`
+
+Which rules this recording breaks, and the gap for each. `{}` means it held to all of them.
+
+**Reports rather than enforces.** This is the base-rate measurement that has to exist before any revision loop is turned on -- otherwise "the rubric helped" is unfalsifiable.
+
+### `instructions_for(tier: 'Tier', rules: 'tuple[Rule, ...]' = ()) -> 'Sequence[str]'`
+
+The sentences a tier is actually told, in the words the model reads them in.
 
 ### `every_call(sink: 'dict[str, Any]') -> 'list[dict[str, Any]]'`
 

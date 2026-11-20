@@ -28,6 +28,8 @@ from rag_wright.harness import tiers as tiers_module
 from rag_wright.harness.agent import build_chat_agent
 from rag_wright.harness.decisions import RecordTheDecisions, WhatTheRunDecided
 from rag_wright.harness.errors import error_middleware
+from rag_wright.harness.grading import Grading
+from rag_wright.harness.rules import Rule
 from rag_wright.harness.tiers import _recording, build_orchestrator
 from rag_wright.harness.workers import (
     FRAMEWORK_DEFAULTS,
@@ -216,6 +218,8 @@ FACTORIES = {
     "dispatch_bound": "OnlySoManyDispatches",
     "orchestrator_thinking": "HowMuchToThink",
     "orchestrator_skill": "SkillsMiddleware",
+    # PS-72: a graded tier's recorder and the grader reading it, built only when a run asks for grading.
+    "graded": ("RecordTheContext", "GradeThisTier"),
 }
 
 #: Lowercase calls in a builder that build something other than middleware, or whose middleware is carried by
@@ -226,6 +230,8 @@ NOT_MIDDLEWARE = {
     "build_orchestrator", "len", "dict", "_remembering", "_recording", "catch_all_disabled", "direct_names",
     "forces_a_tool",
     "frozenset",
+    # adds a worker's recorder and grader to its spec: checked below as what a graded worker carries
+    "_graded_worker",
 }
 
 
@@ -247,13 +253,19 @@ def test_EVERY_TIER_MIDDLEWARE_IS_ON_WORKERS_OR_EXPLAINED() -> None:
     workers on the same commit, rather than being discovered when a worker loops."""
     def built_in(builder: Any) -> set[str]:
         names = _calls_in(builder)
-        return {n for n in names if n[:1].isupper()} | {made for f, made in FACTORIES.items() if f in names}
+        made_by = {f: (made,) if isinstance(made, str) else made for f, made in FACTORIES.items()}
+        return {n for n in names if n[:1].isupper()} | {m for f, made in made_by.items() if f in names for m in made}
 
     on_tiers = built_in(agent_module.build_chat_agent) | built_in(tiers_module.build_orchestrator)
     # Capitalised calls that construct something other than middleware: the run's record and its saver.
     on_tiers -= {"WhatTheRunDecided", "InMemorySaver"}
     # **Built the way production builds a worker**, with a run ledger: bare, the recorder is missing.
     carried = {type(m).__name__ for m in worker_middleware(WhatTheRunDecided(), "composition_worker")}
+    # **And what a GRADED run adds to it** (PS-72): the orchestrator hands each worker its own recorder and grader.
+    graded_run = dataclasses.replace(_fabric(), rules=(Rule(id="r", applies_to=("worker",), instruction="i",
+                                                            criterion="c"),))
+    carried |= {type(m).__name__ for m in tiers_module._graded_worker(
+        {"name": "composition_worker", "middleware": []}, graded_run, _settings(), Grading(on_evaluation=print))["middleware"]}
 
     unexplained = {n for n in on_tiers if n not in carried and n not in NOT_ON_WORKERS}
     assert not unexplained, f"{sorted(unexplained)} is on a tier but neither on workers nor in NOT_ON_WORKERS"

@@ -162,7 +162,8 @@ class AgentDefinition:
     #: `(record, tool, content) -> content | None`, or `None`: the product's chance to amend a result in the light
     #: of what this run already found. `None` amends nothing.
     carry_forward: Any
-    #: The rules this product holds its own runs to. The grading machinery is the substrate's; the rubric is not.
+    #: The rules this product holds its own runs to (`Rule`). The grading machinery is the substrate's; the rubric is
+    #: not. Read by the builders when a run is given `grading=` (PS-72): each tier with a rule is recorded and graded.
     rules: tuple[Any, ...]
     #: The decisions a run of this product takes; the ledger reads each point's option space from here.
     decision_points: tuple[Any, ...]

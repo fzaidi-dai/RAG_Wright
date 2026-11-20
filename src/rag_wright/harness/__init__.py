@@ -23,7 +23,7 @@ from rag_wright.harness.definition import AgentDefinition, AgentPrompts, Routing
 from rag_wright.harness.errors import ModelAttemptTooSlow, ModelTooSlow, ModelTurnTooSlow, error_middleware
 from rag_wright.harness.events import RunEvent, translate, what_was_finished
 from rag_wright.harness.faults import Fault, InjectFaults
-from rag_wright.harness.grading import GRADER_ERROR, GradeThisTier, Verdict, grading_middleware, rule_tools
+from rag_wright.harness.grading import GRADER_ERROR, GradeThisTier, Grading, Verdict, grading_middleware, rule_tools
 from rag_wright.harness.interpreter import bridged_tools, js_name
 from rag_wright.harness.memory import MemoryWithoutTenancy, scope_namespace_of, shared_namespace_of
 from rag_wright.harness.models import agent_chat_model
@@ -38,8 +38,10 @@ from rag_wright.harness.recording import RecordTheContext, compare, describe, ev
 from rag_wright.harness.rules import (
     Rule,
     blocked_without_saying_what_it_needs,
+    broken,
     dispatched_more_than_once,
     guessed_identifiers,
+    instructions_for,
     reached_for_the_filesystem,
     rule_named,
     wrote_a_program_for_a_single_call,
@@ -88,12 +90,12 @@ __all__ = [
     "ModelTooSlow", "ModelAttemptTooSlow", "ModelTurnTooSlow", "error_middleware",
     # the rules a run is graded against, and the decisions it records
     "Rule", "dispatched_more_than_once", "reached_for_the_filesystem", "wrote_a_program_for_a_single_call",
-    "guessed_identifiers", "blocked_without_saying_what_it_needs", "rule_named", "DecisionPoint", "ANY_WORKER",
+    "guessed_identifiers", "blocked_without_saying_what_it_needs", "rule_named", "broken", "instructions_for", "DecisionPoint", "ANY_WORKER",
     "WhatTheRunDecided", "RecordTheDecisions",
     "ORCHESTRATING_PATH",
     # what a run did, recorded; and grading it against the rules
     "RecordTheContext", "every_call", "spend", "compare", "transcript", "describe",
-    "GradeThisTier", "grading_middleware", "rule_tools", "Verdict", "GRADER_ERROR",
+    "Grading", "GradeThisTier", "grading_middleware", "rule_tools", "Verdict", "GRADER_ERROR",
     # an eval's instruments: faults on demand, and what a run will build
     "Fault", "InjectFaults", "WhatWillRun", "what_will_run", "only_the_chat_manager", "stub_orchestrator",
     "STUB_ORCHESTRATOR_REPLY",

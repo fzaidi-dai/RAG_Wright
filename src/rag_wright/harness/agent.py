@@ -28,6 +28,7 @@ from rag_wright.harness.decisions import RecordTheDecisions, WhatTheRunDecided
 from rag_wright.harness.dispatch import dispatch_bound
 from rag_wright.harness.errors import error_middleware
 from rag_wright.harness.filesystem import TheSubjectIsNotAFilesystem
+from rag_wright.harness.grading import Grading, graded
 from rag_wright.harness.memory import (
     MEMORY_SOURCES,
     build_memory_backend,
@@ -84,6 +85,8 @@ def build_chat_agent(
     checkpointer: Any = None,
     store: Any = None,
     ledger: Any = None,
+    #: Opt-in: record and grade every tier the definition has a rule for (`Grading`). `None` builds no grader.
+    grading: Grading | None = None,
 ) -> Any:
     """The chat-manager for one run, holding the manifest bound to that run's scope.
 
@@ -110,7 +113,7 @@ def build_chat_agent(
                  else WhatTheRunDecided(points=definition.decision_points))
 
     orchestrator = orchestrator_subagent(context, resources, settings, ledger=decisions, definition=definition,
-                                         model=model)
+                                         model=model, grading=grading)
 
     memory: dict[str, Any] = {}
     if store is not None:
@@ -152,6 +155,8 @@ def build_chat_agent(
                                read_framing=definition.read_framing),  # the top tier: nobody dispatches it
             TheSubjectIsNotAFilesystem(signposts=definition.prompts), ConfirmTheView(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
+            # Outer of the router, so a turn it settles without a model call is still recorded.
+            *graded("chat-manager", "chat-manager", definition, settings, grading),
             # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146); absent when the
             # product turned routing off.
             *([RouteTheTurn(Decider(), direct=frozenset(direct_names(definition)),

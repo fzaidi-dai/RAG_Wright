@@ -40,6 +40,8 @@ import asyncio
 import logging
 import re
 import secrets
+from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from langchain.agents.middleware.types import AgentMiddleware
@@ -541,6 +543,39 @@ class GradeThisTier(AgentMiddleware):
         already produced their answer. Production drives these agents with `ainvoke`.
         """
         return
+
+
+@dataclass(frozen=True)
+class Grading:
+    """A product's request that a run be graded against its definition's rules (PS-72). Opt-in, per run.
+
+    Passed to `build_chat_agent` (or `build_orchestrator`), it records and grades every tier the definition has a rule
+    for -- the chat-manager, the orchestrator and each worker -- and hands each verdict to `on_evaluation`, tagged with
+    `tier` (`chat-manager`, `orchestrator`, or the worker's name). A tier with no rule of its own is not graded, so no
+    grader call judges nothing. `model`, when given, is the grader's model; otherwise the grader uses the product's
+    configured one (`definition.model_id_for`).
+    """
+
+    on_evaluation: Callable[[dict[str, Any]], Any]
+    model: Any = None
+
+
+def graded(tier: Tier, label: str, definition: Any, settings: Any, grading: Grading | None) -> list[AgentMiddleware]:
+    """What one built tier carries to be graded: a recorder and the grader reading its recording, or nothing.
+
+    **The recording is the grader's evidence**, so the two are built together on one dict: `check_this_run` runs the
+    detectors over exactly what this tier did.
+    """
+    if grading is None or not rules_for(tier, definition.rules):
+        return []
+    from rag_wright.harness.recording import RecordTheContext
+
+    recording: dict[str, Any] = {}
+    return [RecordTheContext(recording, label),
+            GradeThisTier(tier, recording, settings, model=grading.model,
+                          on_evaluation=lambda verdict: grading.on_evaluation({**verdict, "tier": label}),
+                          retry_on=definition.retry_on, model_id=definition.model_id_for(settings),
+                          rules=definition.rules)]
 
 
 def grading_middleware(
