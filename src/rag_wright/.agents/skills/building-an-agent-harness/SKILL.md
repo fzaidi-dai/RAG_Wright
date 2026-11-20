@@ -71,6 +71,34 @@ Building, it asks *"did I write this generically?"* Consuming, it asks *"does th
 satisfy my seams?"* -- which is the cheaper question and the one you can answer in an afternoon, so there
 is no version of this where writing that fake product is wasted.
 
+## If you consume the tier: what it already does, and what is yours
+
+**Start from `examples/harness_quickstart.py`** in the engine repository: a whole product in one file (context,
+tools, worker, prompts, definition, entry point), which the engine's tests run, so it is a working composition.
+
+Most sections below describe a lesson **the tier already implements**. Read those to know what it does for you
+and to verify it, not to build it again; a product that cards them as its own work rebuilds the engine.
+
+| the lesson (section below) | who does it when you consume the tier |
+|---|---|
+| the derived tool surface, the tier split | **yours**: a `ToolSurface` over your operation registry and the `planning` map; the tier derives the direct surface and the worker split (`direct_names`, `worker_operations`) |
+| the context type, tenancy the model cannot reach | **yours**: a context type with `scope` / `shared_scope` and tools reading it from the run; the tier validates the scope and keys memory and threads by it |
+| one entry point | **yours**: one function that builds the context from the authenticated principal and calls `start_run` / `resume_run` / `stream_run`; the tier refuses an agent that cannot carry a context |
+| take the tool away, the dispatch bound, per-tier reasoning, error levels and their order, signposts | **the tier's**, inside `build_chat_agent` / `build_orchestrator` (`withhold`, `error_middleware`, `DISPATCHES_PER_RUN`) |
+| the ask-only tool, workers that cannot ask | **the tier's** (`clarification_tool`, `CANNOT_ASK`): a worker reports `status: "blocked"` with its `need` |
+| a changed subject confirmed deterministically | **the tier's** (`ConfirmTheView`); your continuation type and its resolution are yours |
+| memory that refuses without a context | **the tier's** (`MemoryWithoutTenancy`); you pass the `store` |
+| routing D1, B1, D2 with a decision model | **the tier's** (ADR-0146); your descriptions are what it reads, `routing=None` turns it off |
+| the durable checkpointer, in its own schema | **yours**, passed as `checkpointer=`; the default is in-memory and loses a suspended run on restart |
+| tracing, metering, the run's duration | **the tier's** (`accounted_run`, `harness_tracing_on`, `spend`), on the engine's configuration; the `accounting` object is yours |
+| the event contract | **the tier's** `translate`: `stream_run`'s items become `RunEvent`s; your client routes on their names |
+| the agent's skills | **yours**: `AgentPrompts.skills` is `{path: text}`, so keep the files anywhere version-controlled and load them |
+| your rules, decision points, gold sets, the replay test against YOUR asking tools | **yours**; the grading, the ledger and the instruments are the tier's |
+
+**The order, consuming:** pin the tier's surface; the context and the entry point; the tool surface; one tier
+end to end, live; your checkpointer; your rules, decision points and gold sets; then measure, and tune your
+descriptions and `RoutingThresholds` on your own runs.
+
 ## The thesis, measured -- and CORRECTED, which is the first lesson
 
 **An earlier version of this skill said "32 modules, 7,514 lines, and only THREE import anything from the
@@ -170,8 +198,8 @@ planning classification (`planning`), the worker roster (`workers`) and the cont
 The other eleven are the customization surface, and an agent without them runs but is quietly less capable:
 `retry_on`, `message_for`, `model_id_for`, `prompts` (an `AgentPrompts`, eleven fields of its own: every word
 the model reads), `repeatable`, `question_argument`, `framings`, `carry_forward`, `rules`, `decision_points` and
-`read_framing`. The field-by-field reference, generated from the tier, is `docs/harness.md` in the engine
-repository.
+`read_framing`; a sixteenth, `routing`, is optional. The field-by-field reference, generated from the tier, is
+`docs/harness.md` in the engine repository.
 
 **Build every worker with `worker_spec(..., definition=...)`.** `worker_spec`'s policy parameters default to
 inert values, and all but the ledger are fields of the definition you already declared; a worker built
@@ -289,9 +317,10 @@ correctly today and is a **proxy**: it misclassifies an operation that takes a j
 one that traverses the graph through injected callables while belonging on the direct path. Write the split
 down, ratchet that every exposed operation lands in exactly one half, and keep the proxy as a cross-check.
 
-**Name the limitation out loud: the routing decision is itself a model call and there is no structural way to
-make it.** One model call then a direct tool is what you want; whether the model takes the direct path is
-measured, not asserted.
+**The routing decision has a structural decider now, but not a certain one.** In the engine's tier a decision
+model routes the chat-manager's turn (D1, ADR-0146): above its threshold it decides and a direct tool with no
+arguments is called with no model call at all; below it, or without the decision model, the tier's model routes.
+Either way, whether a request takes the direct path is measured on your gold sets, not asserted.
 
 ## Take the tool away. Do not ask the model not to use it.
 
@@ -484,9 +513,9 @@ behaviour was exercised only by a test outside the harness. **Build the decider 
 then trivial.**
 
 **Say plainly what decides each point today, and resist the flattering answer.** In this harness, after a
-full phase of work: no decision model anywhere in the loop, so most points are plain model turns where *a
-51% call and a 99% call are indistinguishable in the output*. Exactly one point returned a real confidence,
-because a tool decided it. That asymmetry is the argument for a decision model, and it only becomes visible
+full phase of work and before ADR-0146: no decision model anywhere in the loop, so most points are plain model
+turns where *a 51% call and a 99% call are indistinguishable in the output*. Exactly one point returned a
+real confidence, because a tool decided it. That asymmetry is the argument for a decision model, and it only becomes visible
 if the registry is honest.
 
 **Where a decision model pays, and where it must never go.** Points that are a model's implicit judgement
@@ -565,8 +594,8 @@ restore. And when you report a cause, label it: mechanism observed, consistent-w
 
 ## Build order
 
-0. **Check whether the engine ships the substrate** (the first section above). If it does, steps 1-5 become
-   *pin its surface, then verify it against your second product*, and you resume at step 6.
+0. **Check whether the engine ships the substrate** (the first section above). If it does, follow the
+   consuming order in "If you consume the tier" instead of this list.
 1. **The context object and the single entry point**, with the guard that nothing else may invoke an agent.
    **Give the context an opaque `scope: tuple[str, ...]` from the start**, not named tenancy ids -- it is
    the hardest thing to change later, because every agent is built with it.
@@ -587,7 +616,8 @@ restore. And when you report a cause, label it: mechanism observed, consistent-w
 11. **The interrupt protocol**, with the replay test pinned first.
 12. **The remaining tiers**, the roster, and the withholding middleware.
 13. **The decision registry and the rule registry**, then grading.
-14. **Then**, and only with runs recorded, consider a decision model on a point that has one.
+14. **Then**, and only with runs recorded, consider a decision model on a point that has one (the engine's
+    tier already routes D1, B1 and D2 with one).
 
 ## What goes in your project's own child skill
 

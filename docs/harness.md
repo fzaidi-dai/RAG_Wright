@@ -43,7 +43,8 @@ your rules, your decision points. Those are the fields of an `AgentDefinition`, 
 else about you.
 
 **The asymmetry worth internalising.** `AgentDefinition` and `AgentPrompts` are **total**: every field is
-required, so an agent cannot be under-declared and the dataclass says so at construction. The per-worker builder
+required except `routing`, which has measured defaults, so an agent cannot be under-declared and the dataclass says
+so at construction. The per-worker builder
 `worker_spec` is **permissive**, and that is where silence lives (section 6).
 
 ---
@@ -208,7 +209,10 @@ yours, your question map, your framings, signposts that are not `None`. Then pro
 policy from one worker and watching it fail; a guard that has never failed is untested. The engine's own version
 is `test_A_WORKER_TAKES_ITS_POLICY_FROM_THE_DEFINITION_IT_IS_GIVEN` in `tests/harness/test_greenfield_conformance.py`.
 
-**A minimal composition**, every name taken from the tables above:
+**A minimal composition**, every name taken from the tables above. `resources` is whatever your tools need at run
+time (a store handle, a client), passed to your factories untouched; `settings` is your own settings object, read
+only by your `model_id_for`. The whole of a small product, runnable and run by the engine's tests, is
+`examples/harness_quickstart.py`:
 
 ```python
 from rag_wright.harness import AgentDefinition, AgentPrompts, build_chat_agent, start_run
@@ -341,6 +345,7 @@ to no worker is a D2 row `none`.
 **A tool the router chose is forced when the model is known to honour it** (HD-9): the configured model's profile
 says so (`ModelProfile.forced_tool_choice`, read with `profile_for`), measured per model and never assumed. Offered
 alone but not forced, the chat model answered a routed `ask_the_user` with a reply 4 times of 18; forced, 0 of 18.
-A product on another model measures it and registers its profile with `forced_tool_choice=True`. **Known gap:**
-several workers are still planned by the orchestrator. **Data:** the
+A product on another model measures it and registers its profile with `forced_tool_choice=True`.
+
+**What it does not do:** a brief needing several workers is still planned by the orchestrator's model. **Data:** the
 person's message and the brief are sent to the decision model's provider.
