@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.19.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.19.0...0.19.1) (2026-11-20)
+
+
+### Miscellaneous Chores
+
+* release 0.19.1, shipping the harness guide for a product consuming the tier ([e9ac706](https://github.com/fzaidi-dai/RAG_Wright/commit/e9ac706b7e387d45aa3dbd5a1df608d5f4fdfdce))
+
 ## [0.19.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.18.0...0.19.0) (2026-11-14)
 
 
