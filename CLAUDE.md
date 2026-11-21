@@ -55,7 +55,9 @@ The failure mode to avoid, which has happened before: a command fails with "modu
 
 ## Start of every session
 
-> **CURRENT STATE (2026-11-20): `rag-wright` 0.20.0 is RELEASED** (PR #28; PS-72, TexWright's query: rules and
+> **CURRENT STATE (2026-11-21): `rag-wright` 0.20.1 is RELEASED** (PR #29; PS-73, TexWright's request: the
+> chat-manager answers an identical repeat from the run's record, as the orchestrator and workers do; opt-in per tool
+> via `AgentDefinition.repeatable`). Next: EV-7, PS-30, PS-33. Before it, **`rag-wright` 0.20.0 is RELEASED** (PR #28; PS-72, TexWright's query: rules and
 > grading on every tier, the chat-manager included: `build_chat_agent(..., grading=Grading(on_evaluation=...))`
 > records and grades each tier with a rule; `Tier` gains `chat-manager`; `Grading`, `broken`, `instructions_for`
 > public). Next: EV-7, PS-30, PS-33. Before it, **`rag-wright` 0.19.1 is RELEASED** (PR #27; docs only: PS-69 the harness guide for a
