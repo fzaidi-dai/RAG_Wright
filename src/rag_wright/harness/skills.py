@@ -2,7 +2,7 @@
 
 **Why a skill and not more prompt.** The orchestrator's skill is the mechanism for batched clarifications
 and for authored product knowledge. The distinction that earns it is frequency, not importance: the
-decomposition rules in `ORCHESTRATOR_PROMPT` are needed on EVERY turn and must stay there, because those
+decomposition rules in `definition.prompts.orchestrator` are needed on EVERY turn and must stay there, because those
 rules have to be decisive at the margin.
 Batching a clarification is needed only when a worker comes back `blocked`, which is rare. Progressive
 disclosure means the model sees a name and one line until then, and reads the procedure when it applies.

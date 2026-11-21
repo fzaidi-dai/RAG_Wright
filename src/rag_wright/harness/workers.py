@@ -217,6 +217,7 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
         question_encoder,
         OneAnswerPerTurn,
         RememberWhatWasCalled,
+        TheModelWasTold,
         WhatTheRunHasSeen,
     )
     from rag_wright.harness.withhold import WITHHELD_FROM_WORKERS, withhold
@@ -231,7 +232,7 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
                                     dispatched_by=DISPATCHER_OF_A_WORKER)]
                  if ledger is not None and name else [])
     return [withhold(*WITHHELD_FROM_WORKERS),
-            OneAnswerPerTurn(), *recording,
+            OneAnswerPerTurn(), TheModelWasTold(), *recording,
             RememberWhatWasCalled(seen, encoder=question_encoder(),
                                   carry_forward=carry_forward),
             TheSubjectIsNotAFilesystem(seen, signposts=signposts),

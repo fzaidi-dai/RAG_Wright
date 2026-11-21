@@ -250,7 +250,7 @@ def build_orchestrator(
             orchestrator_thinking(),
             # **The mechanism for batched clarifications and authored product knowledge.** What
             # goes in it is decided by FREQUENCY: the decomposition rules are needed every turn and stay
-            # in `ORCHESTRATOR_PROMPT`; batching a clarification is needed only when a worker returns
+            # in `definition.prompts.orchestrator`; batching a clarification is needed only when a worker returns
             # `blocked`, so it is read on demand and costs one line until then.
             orchestrator_skill(preamble=definition.prompts.skills_preamble,
                                label=definition.prompts.label),
@@ -323,24 +323,26 @@ def _recording(ledger: Any, definition: Any) -> list:
 
 
 def remembering(definition: Any) -> list:
-    """The run record and the two middlewares that read it, on each tier (each worker builds its own).
+    """The run record and the middlewares that read it, on each tier (each worker builds its own).
 
     **The chat-manager repeats itself too** (PS-73): with direct tools and no orchestrator, it cycled five
     byte-identical calls until the run's model-call limit stopped it, every repeat a second payload in the context.
     **So does the orchestrator**: it re-dispatched a worker with a byte-identical brief, and
     called `grep('3f1c9d2a', '/')` hunting a check id. 25 of 194 recorded tool calls were exact repeats.
+    **And a model told it is repeating can ask again regardless** (PS-74), so `TheModelWasTold` takes its tools away.
     """
     from rag_wright.harness.filesystem import TheSubjectIsNotAFilesystem
     from rag_wright.harness.seen import (
         question_encoder,
         OneAnswerPerTurn,
         RememberWhatWasCalled,
+        TheModelWasTold,
         WhatTheRunHasSeen,
     )
 
     seen = WhatTheRunHasSeen(repeatable=definition.repeatable,
                              question_argument=definition.question_argument)
-    return [OneAnswerPerTurn(),
+    return [OneAnswerPerTurn(), TheModelWasTold(),
             RememberWhatWasCalled(seen, encoder=question_encoder(),
                                   carry_forward=definition.carry_forward),
             TheSubjectIsNotAFilesystem(seen, signposts=definition.prompts)]

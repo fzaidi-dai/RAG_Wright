@@ -433,6 +433,10 @@ not an error, and raising would put a foreign identifier on the model's path ins
    and remember that what prevents a wrong answer is the **subject** check, not which brief did the asking.
    **Every tier carries it, the chat-manager included** (PS-73): a chat-manager with direct tools and no
    orchestrator cycled five identical calls until the run's call limit stopped it.
+   **And the record stops the tool, not the model** (PS-74): with every repeat served, one model still asked
+   seventeen times. So once one call is served a second time, the next model call has no tools and the model
+   must answer. Count what ran by the served marker (`ToolMessage.artifact["served_from_record"]`), never by
+   the calls a model emitted.
 2. **Progressive disclosure for the rare procedure.** What a tier needs on every turn belongs in its prompt
    and must stay decisive at the margin. What it needs occasionally - how to batch a clarification, which
    arises only when a worker comes back blocked - belongs in a skill it sees as a name and one line until it

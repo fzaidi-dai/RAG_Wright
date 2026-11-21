@@ -154,7 +154,9 @@ class AgentDefinition:
     #: Every word this product says to its model (`AgentPrompts`).
     prompts: AgentPrompts
     #: Tools whose answer is the same twice in one run, so a repeat is served from the record, on every tier: the
-    #: chat-manager, the orchestrator and each worker (PS-73). A tool not listed runs every time it is called.
+    #: chat-manager, the orchestrator and each worker (PS-73). A tool not listed runs every time it is called. A
+    #: served reply carries `artifact={"served_from_record": n}`, and once one call is served a second time the
+    #: model's next call has no tools, so it answers from what it has (PS-74).
     repeatable: frozenset[str]
     #: `{tool: argument}` -- which argument carries a QUESTION, so two phrasings of one ask are one ask.
     question_argument: dict[str, str]

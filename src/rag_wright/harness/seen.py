@@ -71,6 +71,13 @@ THE_SAME_QUESTION = 0.85
 #: the same contract topped out at 0.516), so a note there would be noise.
 WORTH_MENTIONING = 0.6
 
+#: How many times one call is served from the record before the model's next call is given no tools (PS-74).
+#:
+#: **Two: told once, and asked again anyway.** The first served reply says the answer is already in hand; a model
+#: that repeats the call after reading that will not be moved by a third copy of the same sentence. Measured on
+#: TexWright: one call served seventeen times, the model asking again after every one until the run's call limit.
+TOLD = 2
+
 
 @dataclass
 class Call:
@@ -106,6 +113,8 @@ class RunRecord:
     #: suppression rather than guessing, because a substrate that hardcoded tool names would know one product's.
     repeatable: frozenset[str] = frozenset()
     question_argument: dict[str, str] = field(default_factory=dict)
+    #: How many times each call (by `Call.key`) has been answered from the record instead of running.
+    served: dict[str, int] = field(default_factory=dict)
 
     def remember(self, tool: str, args: dict[str, Any], result: Any) -> Call:
         call = Call(tool=tool, args=dict(args or {}), result=result, turn=len(self.calls) + 1)
@@ -326,14 +335,20 @@ class RememberWhatWasCalled(AgentMiddleware):
                 return None
             said = (f"You already asked this in different words ({alike:.2f} alike) -- "
                     f"{_the_question(earlier, self._facts.question_argument)!r}")
+        times = here.served[earlier.key] = here.served.get(earlier.key, 0) + 1
+        then = ("Use it, or ask something this does not cover -- naming the part you want." if times < TOLD else
+                f"You have been given this answer {times} times. Your next step has no tools: answer from what "
+                "you have, and say plainly what it does not show.")
         return ToolMessage(
             content=(
                 f"{said}, and this is what it returned. Asking again the same way will not produce a "
-                "different answer. Use it, or ask something this does not cover -- naming the part you "
-                "want.\n\n"
+                f"different answer. {then}\n\n"
                 f"{earlier.digest}"
             ),
             tool_call_id=call.get("id", ""), name=tool,
+            # **The marker a product counts by** (PS-74): an emitted call is not a call that ran, and a product
+            # that counted emitted calls read seventeen served repeats as seventeen runs.
+            artifact={"served_from_record": times},
         )
 
     def _same_question_asked(self, here: RunRecord, tool: str,
@@ -477,6 +492,45 @@ class OneAnswerPerTurn(AgentMiddleware):
         trimmed = message.model_copy() if hasattr(message, "model_copy") else message
         trimmed.tool_calls = kept
         return trimmed
+
+
+class TheModelWasTold(AgentMiddleware):
+    """Give the model no tools once it has asked again for an answer the record already gave it twice (PS-74).
+
+    **Suppression stops the tool, not the model.** Live on TexWright, with every repeat answered from the record,
+    the model emitted one byte-identical call seventeen times until the run's call limit: each repeat cost 614
+    characters instead of a dossier, but each model call still re-read the whole context, so the run cost ~300k
+    input tokens for an answer that takes 15k. A prompt rule had been tried and left the call count unchanged.
+
+    **So the next call is made with no tools**, and the only thing the model can do is answer. The served reply has
+    already told it why. It reads only the replies since the model last spoke, so it acts once, on the call right
+    after the repeat, and a later turn starts with its tools. A worker's structured response is unaffected: the
+    framework adds those tools after this, from the response format.
+    """
+
+    @property
+    def name(self) -> str:
+        return "TheModelWasTold"
+
+    def wrap_model_call(self, request, handler):
+        return handler(self._narrowed(request))
+
+    async def awrap_model_call(self, request, handler):
+        return await handler(self._narrowed(request))
+
+    def _narrowed(self, request: Any) -> Any:
+        from langchain_core.messages import AIMessage, ToolMessage
+
+        served = 0
+        for message in reversed(request.messages or []):  # the replies since the model last spoke
+            if isinstance(message, AIMessage):
+                break
+            if isinstance(message, ToolMessage) and isinstance(message.artifact, dict):
+                served = max(served, message.artifact.get("served_from_record", 0))
+        if served < TOLD or not request.tools:
+            return request
+        logger.warning("model_repeated_after_told served=%d tools_withheld=%d", served, len(request.tools))
+        return request.override(tools=[], tool_choice=None)
 
 
 def _the_question(call: Call, question_argument: dict[str, str]) -> str:
