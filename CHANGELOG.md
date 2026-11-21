@@ -4,6 +4,13 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.20.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.20.0...0.20.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **PS-73:** the chat-manager answers an identical repeat from the run's record ([f4e5544](https://github.com/fzaidi-dai/RAG_Wright/commit/f4e554470936b7eafa8b0b27d954fc7f4e86426a))
+
 ## [0.20.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.19.1...0.20.0) (2026-11-20)
 
 
