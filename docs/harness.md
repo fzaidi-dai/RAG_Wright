@@ -66,7 +66,7 @@ workers. A derived value crossing the boundary would become a convention the nex
 | `message_for` | `Any` | `(error) -> str \| None`: what the model is told about a failure, or `None` to let it surface. Never asked about a failure in `retry_on`: that one is retried, and surfaces once the retries are spent. |
 | `model_id_for` | `Any` | `(settings) -> str`: the ENGINE model id this product's agent reasons with (a registered profile's key). A model id is configuration: adopting a better model is a new profile and a changed setting. |
 | `prompts` | `AgentPrompts` | Every word this product says to its model (`AgentPrompts`). |
-| `repeatable` | `frozenset[str]` | Tools whose answer is the same twice in one run, so a repeat can be served from the record. |
+| `repeatable` | `frozenset[str]` | Tools whose answer is the same twice in one run, so a repeat is served from the record, on every tier: the chat-manager, the orchestrator and each worker (PS-73). A tool not listed runs every time it is called. |
 | `question_argument` | `dict[str, str]` | `{tool: argument}` -- which argument carries a QUESTION, so two phrasings of one ask are one ask. |
 | `framings` | `tuple[str, ...]` | Tools that FRAME a request rather than answer it, for the framing decision point. |
 | `carry_forward` | `Any` | `(record, tool, content) -> content \| None`, or `None`: the product's chance to amend a result in the light of what this run already found. `None` amends nothing. |

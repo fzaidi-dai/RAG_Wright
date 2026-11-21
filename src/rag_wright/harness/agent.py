@@ -27,7 +27,6 @@ from rag_wright.harness.decider import Decider
 from rag_wright.harness.decisions import RecordTheDecisions, WhatTheRunDecided
 from rag_wright.harness.dispatch import dispatch_bound
 from rag_wright.harness.errors import error_middleware
-from rag_wright.harness.filesystem import TheSubjectIsNotAFilesystem
 from rag_wright.harness.grading import Grading, graded
 from rag_wright.harness.memory import (
     MEMORY_SOURCES,
@@ -37,7 +36,7 @@ from rag_wright.harness.memory import (
 from rag_wright.harness.models import agent_chat_model, catch_all_disabled
 from rag_wright.harness.routing import RouteTheTurn
 from rag_wright.harness.scope import RunScope
-from rag_wright.harness.tiers import chat_manager_tools, direct_names, orchestrator_subagent
+from rag_wright.harness.tiers import chat_manager_tools, direct_names, orchestrator_subagent, remembering
 from rag_wright.harness.withhold import WITHHELD_FROM_CHAT, withhold
 
 #: **What a chat-manager turn may produce, and why there is a number here at all**. With
@@ -153,7 +152,7 @@ def build_chat_agent(
             dispatch_bound(),
             RecordTheDecisions(decisions, tier="chat-manager",
                                read_framing=definition.read_framing),  # the top tier: nobody dispatches it
-            TheSubjectIsNotAFilesystem(signposts=definition.prompts), ConfirmTheView(), *error_middleware(retry_on=definition.retry_on,
+            *remembering(definition), ConfirmTheView(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
             # Outer of the router, so a turn it settles without a model call is still recorded.
             *graded("chat-manager", "chat-manager", definition, settings, grading),

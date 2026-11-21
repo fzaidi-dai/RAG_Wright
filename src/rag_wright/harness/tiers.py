@@ -276,7 +276,7 @@ def build_orchestrator(
             # **The surface is passed, not imported**: the interpreter bridges the product's own
             # surface, never one the substrate chose.
             code_interpreter(context, resources, surface=definition.surface),
-            *_remembering(definition), *_recording(decisions, definition), BatchTheQuestions(), *error_middleware(retry_on=definition.retry_on,
+            *remembering(definition), *_recording(decisions, definition), BatchTheQuestions(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
             # Outer of the router, so a brief it dispatches in code, with no model call, is still recorded.
             *graded("orchestrator", "orchestrator", definition, settings, grading),
@@ -322,10 +322,12 @@ def _recording(ledger: Any, definition: Any) -> list:
             if ledger is not None else [])
 
 
-def _remembering(definition: Any) -> list:
-    """The run record and the two middlewares that read it.
+def remembering(definition: Any) -> list:
+    """The run record and the two middlewares that read it, on each tier (each worker builds its own).
 
-    **The orchestrator repeats itself too**: it re-dispatched a worker with a byte-identical brief, and
+    **The chat-manager repeats itself too** (PS-73): with direct tools and no orchestrator, it cycled five
+    byte-identical calls until the run's model-call limit stopped it, every repeat a second payload in the context.
+    **So does the orchestrator**: it re-dispatched a worker with a byte-identical brief, and
     called `grep('3f1c9d2a', '/')` hunting a check id. 25 of 194 recorded tool calls were exact repeats.
     """
     from rag_wright.harness.filesystem import TheSubjectIsNotAFilesystem

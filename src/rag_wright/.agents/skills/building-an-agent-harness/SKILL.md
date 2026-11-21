@@ -431,6 +431,8 @@ not an error, and raising would put a foreign identifier on the model's path ins
    an asking tool must reach a person every time); key it on the **run**, not the dispatch (a worker
    re-dispatched asks the same question in different words, and a dispatch-scoped record matches nothing);
    and remember that what prevents a wrong answer is the **subject** check, not which brief did the asking.
+   **Every tier carries it, the chat-manager included** (PS-73): a chat-manager with direct tools and no
+   orchestrator cycled five identical calls until the run's call limit stopped it.
 2. **Progressive disclosure for the rare procedure.** What a tier needs on every turn belongs in its prompt
    and must stay decisive at the margin. What it needs occasionally - how to batch a clarification, which
    arises only when a worker comes back blocked - belongs in a skill it sees as a name and one line until it
