@@ -111,6 +111,12 @@ NOT_ON_WORKERS: dict[str, str] = {
         "`dispatched_once_each: 1.000` at the time -- and that is a per-subagent bound, raised rather "
         "than built here."
     ),
+    "TheReportIsTheAnswer": (
+        "It keys on a dispatch's report coming back, and a worker cannot dispatch: it has no `task` tool. "
+        "The orchestrator does not carry it either, by design: after a worker reports, the orchestrator "
+        "re-plans, fans out or dispatches the next worker, which is its job, so a report is not where its "
+        "turn ends (PS-76)."
+    ),
     "HowMuchToThink": (
         "A worker keeps the PROFILE's reasoning, which is on, and that is the current behaviour left "
         "deliberately unchanged. The A/B that turned reasoning off measured ONE question on "

@@ -337,6 +337,11 @@ delegated message that stands on its own (no earlier turns, or B1 yes) is handed
 `<viewing>` block included. In the orchestrator, no worker means its opening call runs without the hand-off, one
 worker is dispatched in code with the brief, and several are planned by the orchestrator as before.
 
+**After a delegation, the chat-manager answers from the report** (PS-76). Once the orchestrator's report is back in
+a turn, the chat-manager's next call keeps `ask_the_user` and none of its direct tools, so it presents the report
+rather than re-deriving it; a failed dispatch leaves the tools, and the person's next message, or their answer to a
+question the report needed put to them, restores them.
+
 **Nothing to turn on.** The decision model is the harness's own: it registers the engine's `jev_decision` capability
 and calls it itself, and a product registers nothing. It needs the decision model's credentials, which are the
 engine's configuration (`OPENROUTER_API_KEY` by default; a self-hosted deployment registers an on-premises decision

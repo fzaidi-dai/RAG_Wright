@@ -23,12 +23,16 @@ taxonomy and halt the run -- a dead session in place of a recoverable wrong turn
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from rag_wright.harness.seen import run_key
+
+logger = logging.getLogger(__name__)
 
 #: The tool a tier hands work down with, named by DeepAgents (`subagents.py`: `StructuredTool.from_function(
 #: name="task", ...)`). Confirmed in the installed source rather than recalled.
@@ -169,3 +173,71 @@ class OnlySoManyDispatches(AgentMiddleware):
 def dispatch_bound(limit: int = DISPATCHES_PER_RUN) -> OnlySoManyDispatches:
     """The bound a tier is built with."""
     return OnlySoManyDispatches(limit=limit)
+
+
+def _reported(messages: list, *, asking: str) -> bool:
+    """Whether a dispatch has come back with a report since the person last spoke.
+
+    **The person speaks twice over**: a new message, and an answer to `asking`, which arrives as that tool's reply.
+    An orchestrator that came back `blocked` has its question put to the person, and the tier must be able to act
+    on the answer. **Matched by call id, not by the reply's name**: DeepAgents builds the dispatch's reply as
+    `ToolMessage(content, tool_call_id=...)` with no name. A failed dispatch (`status="error"`) did not do the work,
+    so it is not a report.
+    """
+    reported = False
+    dispatches: set[str] = set()
+    questions: set[str] = set()
+    for message in messages:
+        if isinstance(message, HumanMessage):
+            reported = False
+        elif isinstance(message, AIMessage):
+            dispatches |= {call.get("id") for call in message.tool_calls if call.get("name") == DISPATCH}
+            questions |= {call.get("id") for call in message.tool_calls if call.get("name") == asking}
+        elif isinstance(message, ToolMessage):
+            if message.tool_call_id in questions:
+                reported = False
+            elif message.tool_call_id in dispatches and message.status != "error":
+                reported = True
+    return reported
+
+
+class TheReportIsTheAnswer(AgentMiddleware):
+    """A tier handed a report answers from it (PS-76).
+
+    **`OnlySoManyDispatches` took the dispatch away and left the direct tools**, and TexWright measured what the
+    tier did with them: one question, the right route and a complete report every time, and in two runs of four the
+    chat-manager went on to re-derive the report with its own reads -- 6 metered calls became 35, and 31k input
+    tokens 330k, for the same answer. Planning is the orchestrator's, and it holds every operation the product
+    exposes, so the direct tools give the tier back nothing the report lacked.
+
+    **So once a report has come back this turn, the next call has none of the direct tools.** `ask_the_user` stays,
+    so a question the orchestrator came back `blocked` on still reaches the person, and so do the agent's own
+    filesystem and memory. The person's next message, or their answer to that question, restores the tools: the
+    report answers the question it was asked for, not the next one. On the chat-manager only: the orchestrator
+    re-plans after a worker by design.
+    """
+
+    def __init__(self, *, direct: frozenset[str], asking: str) -> None:
+        super().__init__()
+        self._direct = direct
+        self._asking = asking
+
+    @property
+    def name(self) -> str:
+        return type(self).__name__
+
+    def wrap_model_call(self, request: Any, handler: Any) -> Any:
+        return handler(self._narrowed(request))
+
+    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
+        return await handler(self._narrowed(request))
+
+    def _narrowed(self, request: Any) -> Any:
+        tools = request.tools or []
+        if not _reported(request.messages or [], asking=self._asking):
+            return request
+        kept = [tool for tool in tools if _name_of(tool) not in self._direct]
+        if len(kept) == len(tools):
+            return request
+        logger.warning("answered_from_dispatch tools_withheld=%d", len(tools) - len(kept))
+        return request.override(tools=kept)

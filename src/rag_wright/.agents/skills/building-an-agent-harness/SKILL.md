@@ -336,6 +336,11 @@ Either way, whether a request takes the direct path is measured on your gold set
   reasoning settings only picks which failure you prefer. A dispatch past the bound never runs - no model
   call, no subagent, no second copy of a reply the tier already has. Twenty-three of those twenty-four were
   pure waste.
+  **And bound what the tier does with the report** (PS-76): with the dispatch bound in place, a chat-manager
+  handed a complete report re-derived it with its own direct tools, 6 metered calls becoming 35 for the same
+  answer. Once a report is back in a turn, the chat-manager's next call has no direct tools (it keeps
+  `ask_the_user`); the person's next message, or their answer to that question, restores them. Measure it as the parent's tool calls after the
+  dispatch's reply, never only by whether the route and the answer were right.
 - **Withholding is a MIDDLEWARE concern, not a model-profile one.** A provider profile keys on the *model*,
   and every tier runs the same model - so excluding a tool there strips it from the tier that needs it. A
   middleware is attached to a tier, which is the only seam that can say "this agent cannot do X".

@@ -22,10 +22,11 @@ from typing import Any
 from deepagents import create_deep_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
+from rag_wright.harness.clarify import clarification_tool
 from rag_wright.harness.confirm import ConfirmTheView
 from rag_wright.harness.decider import Decider
 from rag_wright.harness.decisions import RecordTheDecisions, WhatTheRunDecided
-from rag_wright.harness.dispatch import dispatch_bound
+from rag_wright.harness.dispatch import TheReportIsTheAnswer, dispatch_bound
 from rag_wright.harness.errors import error_middleware
 from rag_wright.harness.grading import Grading, graded
 from rag_wright.harness.memory import (
@@ -126,12 +127,17 @@ def build_chat_agent(
             "permissions": memory_permissions(),
         }
 
+    # **The DIRECT half only**. The orchestrator below holds all of it, so nothing is
+    # unreachable -- but a listing must not pay for three model calls.
+    tools = chat_manager_tools(context, resources, definition=definition)
+    # By the names the model calls them, which are the product's to choose: not its operation names.
+    asking = clarification_tool().name
+    direct = frozenset(tool.name for tool in tools) - {asking}
+
     return create_deep_agent(
         model=catch_all_disabled(model) if model is not None else agent_chat_model(
             settings, definition.model_id_for(settings)),
-        # **The DIRECT half only**. The orchestrator below holds all of it, so nothing is
-        # unreachable -- but a listing must not pay for three model calls.
-        tools=chat_manager_tools(context, resources, definition=definition),
+        tools=tools,
         # **The model given is the model every tier uses** (PS-48c). Passed to the chat-manager only, the
         # orchestrator built its own from configuration, so a scripted agent made a real call on delegating.
         subagents=[orchestrator],
@@ -150,6 +156,8 @@ def build_chat_agent(
             # on and 24 with it off, each time after reading "Complete -- nothing further is needed".
             # Both numbers are the model's judgement; this one is not.
             dispatch_bound(),
+            # Once a report is back this turn, the direct tools go: the tier answers from it (PS-76).
+            TheReportIsTheAnswer(direct=direct, asking=asking),
             RecordTheDecisions(decisions, tier="chat-manager",
                                read_framing=definition.read_framing),  # the top tier: nobody dispatches it
             *remembering(definition), ConfirmTheView(), *error_middleware(retry_on=definition.retry_on,

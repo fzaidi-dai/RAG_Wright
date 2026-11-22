@@ -230,6 +230,8 @@ NOT_MIDDLEWARE = {
     "build_orchestrator", "len", "dict", "remembering", "_recording", "catch_all_disabled", "direct_names",
     "forces_a_tool",
     "frozenset",
+    # names the one tool `TheReportIsTheAnswer` leaves (PS-76); builds no middleware
+    "clarification_tool",
     # adds a worker's recorder and grader to its spec: checked below as what a graded worker carries
     "_graded_worker",
 }

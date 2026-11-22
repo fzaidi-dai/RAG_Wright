@@ -239,4 +239,6 @@ def test_THE_REAL_CHAT_AGENT_STOPS_OFFERING_TASK_ONCE_THE_BUDGET_IS_SPENT(monkey
     assert with_task == list(range(1, DISPATCHES_PER_RUN + 1)), (
         f"`task` was offered on turns {with_task} of {len(offered_per_turn)}"
     )
-    assert set(offered_per_turn[0]) - set(offered_per_turn[-1]) == {"task"}, "more than `task` was taken away"
+    # **The direct tools go too once the report is back** (PS-76): the tier answers from it, and can still ask.
+    assert set(offered_per_turn[0]) - set(offered_per_turn[-1]) == {"task", "list_mills"}, offered_per_turn[-1]
+    assert "ask_the_user" in offered_per_turn[-1]
