@@ -45,6 +45,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from rag_wright.harness.models import agent_chat_model
+
 
 class WorkerReport(BaseModel):
     """What every worker carries, whatever else it returns.
@@ -253,7 +255,8 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
             framings: tuple[str, ...] = (),
             carry_forward: Any = None,
             read_framing: Any = None,
-            definition: Any = None) -> dict[str, Any]:
+            definition: Any = None,
+            model_id: str | None = None) -> dict[str, Any]:
     """A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`.
 
     A worker has no middleware and no subagents of its own, so letting the parent build it keeps one model
@@ -265,6 +268,9 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
     explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no
     decision recording, and nothing fails to say so. With one, the product's `worker_filesystem_note` is
     appended to `prompt` unless the prompt already carries it.
+
+    **`model_id`, an engine model id, is this worker's model alone** (PS-78): without it the worker runs the product's
+    (`definition.model_id_for`), as every tier does. The builders make it with `agent_chat_model`, the profile seam.
     """
     if definition is not None:
         retry_on = retry_on or definition.retry_on
@@ -281,10 +287,11 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
         note = definition.prompts.worker_filesystem_note
         if note and note not in prompt:
             prompt = f"{prompt}\n\n{note}"
-    return _spec(name, description, prompt, tools, report, ledger, retry_on=retry_on,
+    spec = _spec(name, description, prompt, tools, report, ledger, retry_on=retry_on,
                  message_for=message_for, signposts=signposts, repeatable=repeatable,
                  question_argument=question_argument, framings=framings,
                  carry_forward=carry_forward, read_framing=read_framing)
+    return {**spec, "model_id": model_id} if model_id else spec
 
 
 def _spec(name: str, description: str, prompt: str, tools: list, report: type, ledger: Any, *,
@@ -310,6 +317,17 @@ def _spec(name: str, description: str, prompt: str, tools: list, report: type, l
 
 
 
+
+def with_its_model(spec: dict[str, Any], settings: Any) -> dict[str, Any]:
+    """The spec as the library takes it: a worker's own `model_id` made into its `model`.
+
+    **Built here, never handed over as a string**: DeepAgents resolves a string itself, without the engine's profile --
+    no endpoint, no key, no meter. A spec with no `model_id` is returned as it is, and the worker runs its parent's.
+    """
+    if "model_id" not in spec:
+        return spec
+    own = {key: value for key, value in spec.items() if key != "model_id"}
+    return {**own, "model": agent_chat_model(settings, spec["model_id"])}
 
 
 def build_worker(spec: dict[str, Any], settings: Any, *, model: Any = None,
@@ -349,19 +367,21 @@ def build_worker(spec: dict[str, Any], settings: Any, *, model: Any = None,
     """
     from deepagents import create_deep_agent
 
-    from rag_wright.harness.agent import agent_chat_model
+    # **A model passed in is the worker's**, for a scripted test, so it wins over the worker's own `model_id`.
+    if model is not None:
+        spec = {key: value for key, value in spec.items() if key != "model_id"}
 
     # **The model SPEC, exactly as `build_orchestrator` passes it**, and the profile registered first.
     # `_harness_profile_for_model` is keyed by model, so a pre-resolved chat model resolves a DIFFERENT
     # profile -- and the profile is what excludes `execute` from the turn.
 
     parent = create_deep_agent(
-        model=model if model is not None else agent_chat_model(settings, _required(model_id)),
+        model=model if model is not None else agent_chat_model(settings, _required(model_id or spec.get("model_id"))),
         # The parent is scaffolding and never runs: it exists so the library compiles the child the way
         # it compiles every child. Its own tools and prompt are irrelevant and deliberately empty.
         tools=[],
         system_prompt="This agent exists only to compile its subagent and is never invoked.",
-        subagents=[spec],
+        subagents=[with_its_model(spec, settings)],
     )
     return _compiled_subagent(parent, spec["name"])
 

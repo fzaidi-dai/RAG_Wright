@@ -221,6 +221,7 @@ def build_orchestrator(
     from rag_wright.harness.routing import RouteTheBrief
     from rag_wright.harness.skills import orchestrator_skill
     from rag_wright.harness.withhold import WITHHELD_FROM_ORCHESTRATOR, withhold
+    from rag_wright.harness.workers import with_its_model
 
 
     # **One ledger, and one is MADE when the caller supplies none.** `build_chat_agent` passes
@@ -228,7 +229,8 @@ def build_orchestrator(
     # decisions while recording none would be the exact shape of instrument this phase was reset over.
     decisions = (ledger if ledger is not None
                  else WhatTheRunDecided(points=definition.decision_points))
-    workers = [_graded_worker(worker(context, resources, decisions), definition, settings, grading)
+    workers = [with_its_model(_graded_worker(worker(context, resources, decisions), definition, settings, grading),
+                              settings)
                for worker in definition.workers]
 
     return create_deep_agent(
@@ -300,7 +302,7 @@ def _graded_worker(spec: dict[str, Any], definition: Any, settings: Any, grading
     """A worker's spec with its grader added, under the worker's own name; unchanged when nothing grades it."""
     from rag_wright.harness.grading import graded
 
-    extra = graded("worker", spec["name"], definition, settings, grading)
+    extra = graded("worker", spec["name"], definition, settings, grading, model_id=spec.get("model_id"))
     return {**spec, "middleware": [*spec.get("middleware", []), *extra]} if extra else spec
 
 

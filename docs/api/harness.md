@@ -302,7 +302,7 @@ Examples: !!! example "Retry on error"
 
 A product's request that a run be graded against its definition's rules (PS-72). Opt-in, per run.
 
-Passed to `build_chat_agent` (or `build_orchestrator`), it records and grades every tier the definition has a rule for -- the chat-manager, the orchestrator and each worker -- and hands each verdict to `on_evaluation`, tagged with `tier` (`chat-manager`, `orchestrator`, or the worker's name). A tier with no rule of its own is not graded, so no grader call judges nothing. `model`, when given, is the grader's model; otherwise the grader uses the product's configured one (`definition.model_id_for`).
+Passed to `build_chat_agent` (or `build_orchestrator`), it records and grades every tier the definition has a rule for -- the chat-manager, the orchestrator and each worker -- and hands each verdict to `on_evaluation`, tagged with `tier` (`chat-manager`, `orchestrator`, or the worker's name) and `model`, the model id that tier ran on (a worker's own `model_id`, else the product's; PS-78). A tier with no rule of its own is not graded, so no grader call judges nothing. `model`, when given, is the grader's model; otherwise the grader uses the product's configured one (`definition.model_id_for`), whichever model the graded tier ran on.
 
 ### `GradeThisTier(tier: 'Tier', recording: 'dict[str, Any]', settings: 'Any', *, model: 'Any' = None, on_evaluation: 'Any' = None, consulted: 'list[dict[str, Any]] | None' = None, deadline: 'float' = 120.0, attempt: 'float' = 25.0, retry_on: 'tuple[type[BaseException], ...]' = (), model_id: 'str | None' = None, rules: 'tuple[Any, ...]' = ()) -> 'None'`
 
@@ -738,13 +738,15 @@ The name a bridged tool answers to inside the sandbox.
 
 A test drives the real sandbox and compares, so this cannot drift from what the bridge actually does.
 
-### `worker_spec(name: 'str', description: 'str', prompt: 'str', tools: 'list', report: 'type', ledger: 'Any' = None, *, retry_on: 'tuple[type[BaseException], ...]' = (), message_for: 'Any' = None, signposts: 'Any' = None, repeatable: 'frozenset[str]' = frozenset(), question_argument: 'dict[str, str] | None' = None, framings: 'tuple[str, ...]' = (), carry_forward: 'Any' = None, read_framing: 'Any' = None, definition: 'Any' = None) -> 'dict[str, Any]'`
+### `worker_spec(name: 'str', description: 'str', prompt: 'str', tools: 'list', report: 'type', ledger: 'Any' = None, *, retry_on: 'tuple[type[BaseException], ...]' = (), message_for: 'Any' = None, signposts: 'Any' = None, repeatable: 'frozenset[str]' = frozenset(), question_argument: 'dict[str, str] | None' = None, framings: 'tuple[str, ...]' = (), carry_forward: 'Any' = None, read_framing: 'Any' = None, definition: 'Any' = None, model_id: 'str | None' = None) -> 'dict[str, Any]'`
 
 A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`.
 
 A worker has no middleware and no subagents of its own, so letting the parent build it keeps one model resolution and one place that knows how a tier is compiled.
 
 **Pass `definition=`, the product's `AgentDefinition`.** Every policy parameter after `ledger` defaults to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no decision recording, and nothing fails to say so. With one, the product's `worker_filesystem_note` is appended to `prompt` unless the prompt already carries it.
+
+**`model_id`, an engine model id, is this worker's model alone** (PS-78): without it the worker runs the product's (`definition.model_id_for`), as every tier does. The builders make it with `agent_chat_model`, the profile seam.
 
 ### `build_worker(spec: 'dict[str, Any]', settings: 'Any', *, model: 'Any' = None, model_id: 'str | None' = None) -> 'Any'`
 

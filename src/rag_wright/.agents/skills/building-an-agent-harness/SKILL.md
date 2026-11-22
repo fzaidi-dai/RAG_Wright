@@ -92,6 +92,7 @@ and to verify it, not to build it again; a product that cards them as its own wo
 | the durable checkpointer, in its own schema | **yours**, passed as `checkpointer=`; the default is in-memory and loses a suspended run on restart |
 | tracing, metering, the run's duration | **the tier's** (`accounted_run`, `harness_tracing_on`, `spend`), on the engine's configuration; the `accounting` object is yours |
 | the event contract | **the tier's** `translate`: `stream_run`'s items become `RunEvent`s; your client routes on their names |
+| which model each worker reasons with | **yours**: `definition.model_id_for` for every tier, or `worker_spec(..., model_id=)` for one worker; the tier builds it through the profile seam, meters it under its own id and names it on that worker's verdicts (PS-78) |
 | the agent's skills | **yours**: `AgentPrompts.skills` is `{path: text}`, so keep the files anywhere version-controlled and load them |
 | your rules, decision points, gold sets, the replay test against YOUR asking tools | **yours**; the grading, the ledger and the instruments are the tier's: declare `rules` and pass `grading=Grading(on_evaluation)` to `build_chat_agent`, and every tier with a rule (the chat-manager included) is recorded and graded |
 

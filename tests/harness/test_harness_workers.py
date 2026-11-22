@@ -234,6 +234,8 @@ NOT_MIDDLEWARE = {
     "clarification_tool",
     # adds a worker's recorder and grader to its spec: checked below as what a graded worker carries
     "_graded_worker",
+    # makes a worker's own `model_id` into its model (PS-78); builds no middleware
+    "with_its_model",
 }
 
 

@@ -190,9 +190,18 @@ still wins:
 | `framings` | `()` | `definition.framings` |
 | `carry_forward` | `None` | `definition.carry_forward` |
 | `read_framing` | `None` | `definition.read_framing` |
+| `model_id` | `None` | not from the definition: this worker's own model; without it, `definition.model_id_for` |
 <!-- /generated -->
 
 With `definition=`, the worker's prompt also gains `definition.prompts.worker_filesystem_note`, unless the prompt already carries it, so a worker is told where its own notes live before it runs `ls('/')` to find out.
+
+**A worker can reason with a model of its own** (PS-78): `worker_spec(..., model_id="deepseek/deepseek-v4-flash")`
+names an engine model id (a registered profile's key) for that worker alone, and every other tier keeps
+`definition.model_id_for(settings)`. The builders make it with `agent_chat_model`, the profile seam; a string handed
+to DeepAgents as `model` would be resolved without the profile. Its calls are metered under its own id, so a usage
+scope's `by_model` separates the two models with nothing else to do. A graded verdict names the model its tier ran on
+(`model`), and the grader stays the product's model (or `Grading.model`), so both arms of an A/B are judged by one
+judge.
 
 ```python
 from rag_wright.harness import worker_spec

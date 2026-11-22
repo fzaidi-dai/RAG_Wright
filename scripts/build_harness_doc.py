@@ -94,6 +94,8 @@ def _worker_spec_defaults() -> str:
             source = f"`definition.{p.name}`"
         elif p.name == "signposts":
             source = "`definition.prompts`"
+        elif p.name == "model_id":
+            source = "not from the definition: this worker's own model; without it, `definition.model_id_for`"
         else:
             source = "not from the definition: the run's, passed down by the builder"
         rows.append(f"| `{p.name}` | `{p.default!r}` | {source} |")

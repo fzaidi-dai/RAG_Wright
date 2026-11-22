@@ -551,30 +551,36 @@ class Grading:
 
     Passed to `build_chat_agent` (or `build_orchestrator`), it records and grades every tier the definition has a rule
     for -- the chat-manager, the orchestrator and each worker -- and hands each verdict to `on_evaluation`, tagged with
-    `tier` (`chat-manager`, `orchestrator`, or the worker's name). A tier with no rule of its own is not graded, so no
-    grader call judges nothing. `model`, when given, is the grader's model; otherwise the grader uses the product's
-    configured one (`definition.model_id_for`).
+    `tier` (`chat-manager`, `orchestrator`, or the worker's name) and `model`, the model id that tier ran on (a worker's
+    own `model_id`, else the product's; PS-78). A tier with no rule of its own is not graded, so no grader call judges
+    nothing. `model`, when given, is the grader's model; otherwise the grader uses the product's configured one
+    (`definition.model_id_for`), whichever model the graded tier ran on.
     """
 
     on_evaluation: Callable[[dict[str, Any]], Any]
     model: Any = None
 
 
-def graded(tier: Tier, label: str, definition: Any, settings: Any, grading: Grading | None) -> list[AgentMiddleware]:
+def graded(tier: Tier, label: str, definition: Any, settings: Any, grading: Grading | None, *,
+           model_id: str | None = None) -> list[AgentMiddleware]:
     """What one built tier carries to be graded: a recorder and the grader reading its recording, or nothing.
 
     **The recording is the grader's evidence**, so the two are built together on one dict: `check_this_run` runs the
-    detectors over exactly what this tier did.
+    detectors over exactly what this tier did. `model_id` is the tier's own model when it has one (a worker's, PS-78);
+    the verdict names it, and the grader stays the product's model, so two arms of an A/B have one judge.
     """
     if grading is None or not rules_for(tier, definition.rules):
         return []
     from rag_wright.harness.recording import RecordTheContext
 
     recording: dict[str, Any] = {}
+    products = definition.model_id_for(settings)
+    ran_on = model_id or products
     return [RecordTheContext(recording, label),
             GradeThisTier(tier, recording, settings, model=grading.model,
-                          on_evaluation=lambda verdict: grading.on_evaluation({**verdict, "tier": label}),
-                          retry_on=definition.retry_on, model_id=definition.model_id_for(settings),
+                          on_evaluation=lambda verdict: grading.on_evaluation({**verdict, "tier": label,
+                                                                               "model": ran_on}),
+                          retry_on=definition.retry_on, model_id=products,
                           rules=definition.rules)]
 
 
