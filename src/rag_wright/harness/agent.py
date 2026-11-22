@@ -37,7 +37,7 @@ from rag_wright.harness.memory import (
 from rag_wright.harness.models import agent_chat_model, catch_all_disabled
 from rag_wright.harness.routing import RouteTheTurn
 from rag_wright.harness.scope import RunScope
-from rag_wright.harness.tiers import chat_manager_tools, direct_names, orchestrator_subagent, remembering
+from rag_wright.harness.tiers import chat_manager_tools, orchestrator_subagent, remembering
 from rag_wright.harness.withhold import WITHHELD_FROM_CHAT, withhold
 
 #: **What a chat-manager turn may produce, and why there is a number here at all**. With
@@ -130,7 +130,7 @@ def build_chat_agent(
     # **The DIRECT half only**. The orchestrator below holds all of it, so nothing is
     # unreachable -- but a listing must not pay for three model calls.
     tools = chat_manager_tools(context, resources, definition=definition)
-    # By the names the model calls them, which are the product's to choose: not its operation names.
+    # By the names the model calls them, which are the product's to choose: not its operation names (PS-77).
     asking = clarification_tool().name
     direct = frozenset(tool.name for tool in tools) - {asking}
 
@@ -166,7 +166,7 @@ def build_chat_agent(
             *graded("chat-manager", "chat-manager", definition, settings, grading),
             # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146); absent when the
             # product turned routing off.
-            *([RouteTheTurn(Decider(), direct=frozenset(direct_names(definition)),
+            *([RouteTheTurn(Decider(), direct=direct,
                             delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
                             thresholds=definition.routing, force=forces_a_tool(definition, settings, model))]
               if definition.routing is not None else []),

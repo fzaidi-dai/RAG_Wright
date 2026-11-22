@@ -344,3 +344,34 @@ def test_ROUTING_OFF_NEVER_ASKS_THE_DECISION_MODEL_AND_THE_TURN_IS_AS_BEFORE(rou
 
     assert decision.asked == []
     assert {"list_mills", "read_swatch", "task", "ask_the_user", "ls"} <= set(offered[0])
+
+
+# --- PS-77: a product whose operation names are not its tool names ------------------------------------------------
+
+
+def _fabric_routed() -> Any:
+    """The fabric product, routing on: its operation is `fabric.list_mills` and the tool the model calls `list_mills`."""
+    from tests.harness.fabric import _fabric
+
+    return dataclasses.replace(_fabric(), routing=RoutingThresholds())
+
+
+def test_D1_OFFERS_THE_DIRECT_TOOLS_BY_THE_NAMES_THE_MODEL_CALLS_THEM(routes) -> None:
+    """**Found in PS-76.** Matched by operation name, the fabric product's options were `ask_the_user`, `delegate` and
+    `answer`: a routed turn could never be sent to its one direct tool."""
+    decision = routes("answer", 0.9)
+    model, _offered = recording(AIMessage(content="Hello!"))
+
+    _turn(model, "Hi!", definition=_fabric_routed())
+
+    assert "list_mills" in decision.asked[0]["questions"]["choice"]["criteria"]
+
+
+def test_A_DIRECT_ROUTE_REACHES_THE_TOOL_ON_SUCH_A_PRODUCT(routes) -> None:
+    routes("list_mills", 0.9)
+    model, offered = recording(AIMessage(content="We order from mill-a."))
+
+    messages = _turn(model, "Which mills can we order from?", definition=_fabric_routed())
+
+    assert any(isinstance(m, ToolMessage) and m.name == "list_mills" for m in messages)
+    assert len(offered) == 1, "the only model call is the reply after the tool ran"

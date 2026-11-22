@@ -227,7 +227,7 @@ FACTORIES = {
 NOT_MIDDLEWARE = {
     "agent_chat_model", "chat_manager_tools", "orchestrator_tools", "orchestrator_subagent",
     "build_memory_backend", "memory_permissions", "create_deep_agent", "error_middleware", "worker",
-    "build_orchestrator", "len", "dict", "remembering", "_recording", "catch_all_disabled", "direct_names",
+    "build_orchestrator", "len", "dict", "remembering", "_recording", "catch_all_disabled",
     "forces_a_tool",
     "frozenset",
     # names the one tool `TheReportIsTheAnswer` leaves (PS-76); builds no middleware

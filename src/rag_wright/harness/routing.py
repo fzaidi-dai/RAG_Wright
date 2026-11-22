@@ -57,9 +57,9 @@ def _text(message: Any) -> str:
 
 
 class RouteTheTurn(AgentMiddleware):
-    """Routes the chat-manager's opening call of a turn with the decider. `direct` is the product's direct
-    operations; `delegating` is what handing the request to the orchestrator does (its description) and
-    `orchestrator` its subagent name; `thresholds` is the product's `RoutingThresholds`."""
+    """Routes the chat-manager's opening call of a turn with the decider. `direct` is the product's direct tools, by
+    the names the model calls them (PS-77); `delegating` is what handing the request to the orchestrator does (its
+    description) and `orchestrator` its subagent name; `thresholds` is the product's `RoutingThresholds`."""
 
     def __init__(self, decider: Decider, *, direct: frozenset[str], delegating: str, orchestrator: str,
                  thresholds: RoutingThresholds, force: bool = False) -> None:
