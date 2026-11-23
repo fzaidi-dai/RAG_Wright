@@ -79,6 +79,12 @@ sometimes answers them itself, and asks the user once rather than five times. Do
 else first and report what you got as far as."""
 
 
+#: What a worker is told when it keeps searching a filesystem that holds nothing it needs (PS-81).
+STOP_LOOKING = ("**Stop looking here: this filesystem holds your notes and nothing else.** If your task lacks "
+                "something you need to go on, finish now with `status: \"blocked\"` and put the one question in "
+                "`need`; otherwise carry on with the tools you were given.")
+
+
 DO_WHAT_WAS_ASKED = """**Do exactly what your task asks, and no more.** Your task is the only instruction
 you get; the tier above you decided what it needs. If it names particular items, work on those and do not
 search more widely. If it asks about the whole subject, then search. Re-doing work the caller did not ask
@@ -247,7 +253,7 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
             OneAnswerPerTurn(), TheModelWasTold(), *recording,
             RememberWhatWasCalled(seen, encoder=question_encoder(),
                                   carry_forward=carry_forward),
-            TheSubjectIsNotAFilesystem(seen, signposts=signposts),
+            TheSubjectIsNotAFilesystem(seen, signposts=signposts, then=STOP_LOOKING),
             *error_middleware(retry_on=retry_on, message_for=message_for, **_caps(model_calls, tool_calls))]
 
 

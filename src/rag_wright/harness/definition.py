@@ -53,7 +53,8 @@ class AgentPrompts:
     skills: dict[str, str]
     #: The paragraph that introduces the skills above.
     skills_preamble: str
-    #: The signpost a wrong filesystem call is answered with by default (it names the product's own tools).
+    #: The signpost a wrong filesystem call is answered with by default (it names the product's own tools). Every
+    #: tier reads it, workers included, so it names no route only one tier has (a worker cannot delegate).
     not_a_filesystem: str
     #: The signpost for a filesystem search plainly hunting the subject documents (a path or pattern ending in
     #: one of `subject_file_endings`): it says where those documents ARE, rather than where they are not.

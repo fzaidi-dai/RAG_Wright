@@ -91,7 +91,7 @@ Every word the model reads is the product's. The substrate ships no prompt of it
 | `memory` | `str` | One line of guidance about the agent's own memory, shown above whatever is in it. |
 | `skills` | `dict[str, str]` | `{published path: text}` -- the procedures a tier may read when they apply. |
 | `skills_preamble` | `str` | The paragraph that introduces the skills above. |
-| `not_a_filesystem` | `str` | The signpost a wrong filesystem call is answered with by default (it names the product's own tools). |
+| `not_a_filesystem` | `str` | The signpost a wrong filesystem call is answered with by default (it names the product's own tools). Every tier reads it, workers included, so it names no route only one tier has (a worker cannot delegate). |
 | `looking_for_subjects` | `str` | The signpost for a filesystem search plainly hunting the subject documents (a path or pattern ending in one of `subject_file_endings`): it says where those documents ARE, rather than where they are not. |
 | `subject_file_endings` | `tuple[str, ...]` | File extensions that mean "this model is hunting the subject documents it was shown", not notes. |
 | `worker_filesystem_note` | `str` | What a worker is told about its own filesystem: `worker_spec(definition=)` appends it to each worker's prompt. |
@@ -359,7 +359,9 @@ question the report needed put to them, restores them.
 the question and the answer together. A delegation in the person's own words hands that over as the brief. Only that
 call is routed; the call after it is under way again. The one dispatch a run's chat-manager may make is counted per
 thing the person asked, so a resumed turn can still delegate though the run delegated before it asked, and the ledger
-records the resumed route as a second D1 row with `resumed`.
+records the resumed route as a second D1 row with `resumed`. A worker's question asked through the orchestrator
+interrupts inside that dispatch, and the resume runs the same `task` call again to carry the answer down; that replay
+is the same dispatch, not a second one (PS-81).
 
 **Nothing to turn on.** The decision model is the harness's own: it registers the engine's `jev_decision` capability
 and calls it itself, and a product registers nothing. It needs the decision model's credentials, which are the

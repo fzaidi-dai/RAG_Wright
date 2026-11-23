@@ -71,6 +71,8 @@ class _Budget:
 
     spent: int = 0
     replies: list[str] = field(default_factory=list)
+    #: The dispatches let through, by call id: one that interrupted is run again, same id, on the resume.
+    passed: set[str] = field(default_factory=set)
 
 
 class OnlySoManyDispatches(AgentMiddleware):
@@ -147,13 +149,18 @@ class OnlySoManyDispatches(AgentMiddleware):
                                      _Budget())
 
     def _refuse(self, request: Any, budget: _Budget) -> Any:
+        call = request.tool_call
+        # **A replay is the same dispatch** (PS-81): a worker's question interrupts inside it, and the resume runs
+        # this call again, same id, to carry the person's answer down. Refused, the answer went nowhere.
+        if call.get("id") and call["id"] in budget.passed:
+            return None
         if budget.spent < self._limit:
             budget.spent += 1
+            budget.passed.add(call.get("id") or "")
             return None
 
         from langchain_core.messages import ToolMessage
 
-        call = request.tool_call
         already = "\n\n".join(budget.replies[-2:]) or "(the earlier reply is not in this record)"
         return ToolMessage(
             content=(

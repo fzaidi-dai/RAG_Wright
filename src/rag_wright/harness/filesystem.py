@@ -73,6 +73,13 @@ _PATH_ARGUMENTS = {
 
 
 
+#: Marks a refusal in the conversation (`response_metadata`), so a later one can count the dispatch's earlier ones.
+REFUSED = "not_a_filesystem"
+
+#: Refusals a dispatch gets with the signpost alone; the next is followed by the tier's `then` (PS-81).
+REFUSALS_BEFORE_SAYING_SO = 1
+
+
 #: The refusal when a product supplied no signpost text. **It names no tool**, because the substrate does
 #: not know any -- and a redirect that invented one would send the model somewhere that does not exist.
 _NO_SIGNPOST = (
@@ -147,9 +154,12 @@ class TheSubjectIsNotAFilesystem(AgentMiddleware):
     `resolved: False` -- and nothing in the `grep` says so. One signpost said the same sentence to both.
     """
 
-    def __init__(self, seen: Any = None, *, signposts: Any = None) -> None:
+    def __init__(self, seen: Any = None, *, signposts: Any = None, then: str | None = None) -> None:
         super().__init__()
         self._seen = seen
+        #: What a tier is told once it keeps looking (`REFUSALS_BEFORE_SAYING_SO`): a worker, to report what it
+        #: needs. `None` for the tiers above, which have no such report.
+        self._then = then
         #: The PRODUCT's signpost text. A built-in one would name tools such as `ask_a_question`, `sweep_scope`
         #: and `list_documents`, so a second product's model was redirected to tools it does not have.
         #: `None` falls back to the generic refusal below, which names no tool at all.
@@ -191,4 +201,18 @@ class TheSubjectIsNotAFilesystem(AgentMiddleware):
             return None
         # **The more specific answer wins.** A generic "these are not files" is true and answers nobody.
         signpost = self._after_an_empty_answer(request) or signpost
-        return ToolMessage(content=signpost, tool_call_id=call.get("id", ""), name=call.get("name", ""))
+        if self._then is not None and _refusals_so_far(request) >= REFUSALS_BEFORE_SAYING_SO:
+            signpost = f"{signpost}\n\n{self._then}"
+        return ToolMessage(content=signpost, tool_call_id=call.get("id", ""), name=call.get("name", ""),
+                           response_metadata={REFUSED: True})
+
+
+def _refusals_so_far(request: Any) -> int:
+    """The refusals already in this conversation: a worker's is one dispatch, so an earlier dispatch's never count.
+
+    **Measured live (PS-81)**: given a brief without the fault it needed, a worker spent 8 of its 13 calls on
+    `ls /root`, `read_file /notes.md` and the like, each refused, before it reported blocked. The signpost said where
+    the material is not; nothing said that what it lacked was a question for the tier above.
+    """
+    messages = (getattr(request, "state", None) or {}).get("messages") or []
+    return sum(1 for message in messages if (getattr(message, "response_metadata", None) or {}).get(REFUSED))

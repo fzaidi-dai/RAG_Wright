@@ -43,3 +43,17 @@ def test_THE_EXAMPLE_DECLARES_A_TIER_SPLIT_THE_SUBSTRATE_DERIVES() -> None:
 
     assert set(direct_names(example.DEFINITION)) == {"desk.list_open_tickets"}
     assert worker_operations(example.DEFINITION, example.DeskContext("acme", "site-1")) == {"desk.find_similar_faults"}
+
+
+def test_A_SYMPTOM_AS_A_PERSON_SAYS_IT_FINDS_THE_SIMILAR_TICKETS() -> None:
+    """**PS-81**: requiring every word of the symptom found nothing for "pump P-3 leaking at the seal", and a model
+    told "nothing" searched again and again: six worker dispatches in one live run, fourteen rephrasings in the next."""
+    example = _example()
+    resources = example.DeskResources(tickets={"site-1": ["pump P-3 leaking", "door sensor stuck"],
+                                               "site-2": ["pump P-7 leaking"]})
+    (search,) = example.DeskSurface().build(example.DeskContext(organisation="acme", site="site-1"), resources,
+                                           only=["desk.find_similar_faults"])
+
+    found = search.invoke({"symptom": "Pump P-3 leaking at the seal"})
+
+    assert found["similar"] == ["pump P-3 leaking", "pump P-7 leaking"]

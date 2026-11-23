@@ -57,9 +57,11 @@ def _find_similar_faults(context: DeskContext, resources: Any) -> Any:
     @tool
     def find_similar_faults(symptom: str) -> dict:
         """Find past tickets, at any of the organisation's sites, whose fault resembles a symptom."""
-        words = symptom.lower().split()
+        # A ticket resembles a symptom when they share a word that says something ("pump", "leaking"); requiring
+        # every word found nothing for a symptom as a person says it, and the model searched again and again (PS-81).
+        words = {w for w in symptom.lower().split() if len(w) > 3}
         return {"symptom": symptom,
-                "similar": [t for ts in resources.tickets.values() for t in ts if all(w in t.lower() for w in words)]}
+                "similar": [t for ts in resources.tickets.values() for t in ts if words & set(t.lower().split())]}
 
     return find_similar_faults
 
@@ -108,8 +110,8 @@ PROMPTS = AgentPrompts(
     skills={"/skills/escalating/SKILL.md": "---\nname: escalating\ndescription: Read when a fault recurs at "
                                            "several sites.\n---\nList the sites, then the common symptom."},
     skills_preamble="## Your skills\n\n{skills_list}{skills_locations}{skills_load_warnings}",
-    not_a_filesystem="Tickets are not files. `list_open_tickets` reads this site's open ones; past tickets at every "
-                     "site are found by delegating.",
+    # Every tier reads it, workers included, so it names no route only one tier has.
+    not_a_filesystem="Tickets are not files. Read them with the ticket tools you have, never from the filesystem.",
     looking_for_subjects="You are looking for tickets. They have ids, not paths.",
     subject_file_endings=(".ticket",),
     worker_filesystem_note="The filesystem is yours, for notes. The tickets are not on it.",

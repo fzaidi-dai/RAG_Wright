@@ -18,6 +18,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from rag_wright.harness.agent import build_chat_agent
 from rag_wright.harness.filesystem import MEMORY_ROOTS, OWN_ROOTS, TheSubjectIsNotAFilesystem, redirect_for
+from rag_wright.harness.workers import STOP_LOOKING
 from rag_wright.harness.memory import MEMORY_SOURCES
 from rag_wright.harness.rules import OWN_FILESYSTEM
 from rag_wright.harness.skills import SKILLS_ROOT, skill_files
@@ -179,3 +180,54 @@ def test_THE_ORCHESTRATOR_CAN_READ_ITS_OWN_SKILL() -> None:
     assert read and "How to batch a mill enquiry." in str(read[-1].content), (
         f"the orchestrator could not read its own skill: {str(read[-1].content)[:160] if read else None!r}"
     )
+
+
+# --- a worker that keeps looking is told to report (PS-81) ----------------------------------------------
+
+
+def _in_a_dispatch(name: str, args: dict, *earlier: ToolMessage) -> SimpleNamespace:
+    return SimpleNamespace(tool_call={"name": name, "args": args, "id": "9", "type": "tool_call"},
+                           state={"messages": list(earlier)})
+
+
+def _refused(middleware: TheSubjectIsNotAFilesystem, *earlier: ToolMessage) -> ToolMessage:
+    return middleware.wrap_tool_call(_in_a_dispatch("ls", {"path": "/root"}, *earlier),
+                                     lambda _r: pytest.fail("the real tool was called despite the redirect"))
+
+
+def test_A_WORKERS_SECOND_REFUSAL_IN_A_DISPATCH_TELLS_IT_TO_REPORT_WHAT_IT_NEEDS() -> None:
+    """**Measured live**: given a brief without the fault it needed, a worker spent 8 of its 13 calls on `ls /root`,
+    `read_file /notes.md` and the like, each refused, before it reported blocked. The signpost said where the
+    material is not; nothing said that what it lacked was a question for the tier above."""
+    worker = TheSubjectIsNotAFilesystem(signposts=FABRIC_PROMPTS, then=STOP_LOOKING)
+
+    first = _refused(worker)
+    second = _refused(worker, first)
+
+    assert STOP_LOOKING not in str(first.content), "the first wrong turn is answered with the signpost alone"
+    assert STOP_LOOKING in str(second.content) and "not files" in str(second.content)
+
+
+def test_A_REFUSAL_IN_AN_EARLIER_DISPATCH_DOES_NOT_COUNT() -> None:
+    """Each dispatch is a fresh conversation, so only its own messages are read: an answer about something else is
+    not a refusal."""
+    worker = TheSubjectIsNotAFilesystem(signposts=FABRIC_PROMPTS, then=STOP_LOOKING)
+
+    answer = ToolMessage(content="not files, but a tool result", tool_call_id="0", name="match_compositions")
+
+    assert STOP_LOOKING not in str(_refused(worker, answer).content)
+
+
+def test_A_TIER_ABOVE_IS_NEVER_TOLD_TO_REPORT_BLOCKED() -> None:
+    """The chat-manager and the orchestrator have no `blocked` to report: without `then` the signpost stands alone."""
+    above = TheSubjectIsNotAFilesystem(signposts=FABRIC_PROMPTS)
+
+    assert STOP_LOOKING not in str(_refused(above, _refused(above)).content)
+
+
+def test_A_WORKER_IS_BUILT_TO_BE_TOLD() -> None:
+    from rag_wright.harness.workers import worker_middleware
+
+    (signpost,) = [m for m in worker_middleware(signposts=FABRIC_PROMPTS) if isinstance(m, TheSubjectIsNotAFilesystem)]
+
+    assert STOP_LOOKING in str(_refused(signpost, _refused(signpost)).content)
