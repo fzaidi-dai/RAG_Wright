@@ -24,8 +24,7 @@ from langchain_core.messages import AIMessage
 from langchain_core.tools import tool
 
 from rag_wright.harness import agent as agent_module
-from rag_wright.harness.dispatch import DISPATCHES_PER_RUN, OnlySoManyDispatches, _Budget
-from rag_wright.harness.seen import run_key
+from rag_wright.harness.dispatch import DISPATCHES_PER_RUN, OnlySoManyDispatches, _asked, _Budget
 from tests.harness.fabric import _a_context, _fabric, _resources, _settings, scripted
 
 
@@ -170,7 +169,7 @@ def _offered(spent: int, *, limit: int = 2) -> list[str]:
 
     request = SimpleNamespace(tools=[task, list_mills], runtime=None)
     request.override = lambda **changes: SimpleNamespace(**{**vars(request), **changes})
-    middleware._runs[run_key(request)] = _Budget(spent=spent)
+    middleware._runs[_asked(request, [])] = _Budget(spent=spent)
 
     seen: list[str] = []
     middleware.wrap_model_call(request, lambda r: seen.extend(t.name for t in r.tools))

@@ -96,6 +96,9 @@ def _worker_spec_defaults() -> str:
             source = "`definition.prompts`"
         elif p.name == "model_id":
             source = "not from the definition: this worker's own model; without it, `definition.model_id_for`"
+        elif p.name in ("model_calls", "tool_calls"):
+            source = ("not from the definition: this worker's own cap on one dispatch; without it, the harness's "
+                      "`MODEL_CALLS_PER_INVOCATION` / `TOOL_CALLS_PER_INVOCATION`")
         else:
             source = "not from the definition: the run's, passed down by the builder"
         rows.append(f"| `{p.name}` | `{p.default!r}` | {source} |")

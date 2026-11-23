@@ -30,6 +30,7 @@ from typing import Any
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from rag_wright.harness.clarify import answers_so_far
 from rag_wright.harness.seen import run_key
 
 logger = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ class _Budget:
 
 
 class OnlySoManyDispatches(AgentMiddleware):
-    """Bound the number of dispatches one run may make from this tier."""
+    """Bound the number of dispatches this tier may make for each thing the person asks in a run (PS-80)."""
 
     def __init__(self, *, limit: int = DISPATCHES_PER_RUN) -> None:
         super().__init__()
@@ -102,7 +103,7 @@ class OnlySoManyDispatches(AgentMiddleware):
         **Rebuilt only when something is actually removed**, as `WithheldTools` does: `override` returns a
         new request, and doing that every turn for no change is work the tier does not need.
         """
-        budget = self._runs.get(run_key(request))
+        budget = self._runs.get(_asked(request, getattr(request, "messages", None)))
         if budget is None or budget.spent < self._limit:
             return request
         kept = [tool for tool in (getattr(request, "tools", None) or [])
@@ -142,7 +143,8 @@ class OnlySoManyDispatches(AgentMiddleware):
         call = getattr(request, "tool_call", None) or {}
         if call.get("name") != DISPATCH:
             return None
-        return self._runs.setdefault(run_key(request), _Budget())
+        return self._runs.setdefault(_asked(request, (getattr(request, "state", None) or {}).get("messages")),
+                                     _Budget())
 
     def _refuse(self, request: Any, budget: _Budget) -> Any:
         if budget.spent < self._limit:
@@ -168,6 +170,15 @@ class OnlySoManyDispatches(AgentMiddleware):
         content = getattr(result, "content", None)
         if content:
             budget.replies.append(str(content))
+
+
+def _asked(request: Any, messages: list | None) -> str:
+    """The run and the thing the person asked in it: their opening message, then each answer to a clarification.
+
+    **An answer is new intent** (PS-80), so the allowance is per thing asked, not per run: a turn resumed on an answer
+    may still delegate, once, though the run delegated before it asked.
+    """
+    return f"{run_key(request)}|{answers_so_far(messages or [])}"
 
 
 def dispatch_bound(limit: int = DISPATCHES_PER_RUN) -> OnlySoManyDispatches:

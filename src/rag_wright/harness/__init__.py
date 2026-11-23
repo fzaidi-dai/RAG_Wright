@@ -15,11 +15,12 @@ goes through `start_run` / `resume_run` / `stream_run`. The harness reaches the 
 
 from rag_wright.harness.accounting import accounted_run
 from rag_wright.harness.agent import build_chat_agent
+from rag_wright.harness.budget import RunSpend, TierSpend, WhatTheRunSpent
 from rag_wright.harness.clarify import clarification_tool
 from rag_wright.harness.confirm import ConfirmTheView
 from rag_wright.harness.decisions import ANY_WORKER, DecisionPoint, RecordTheDecisions, WhatTheRunDecided
 from rag_wright.harness.dispatch import DISPATCHES_PER_RUN
-from rag_wright.harness.definition import AgentDefinition, AgentPrompts, RoutingThresholds, ToolSurface
+from rag_wright.harness.definition import AgentDefinition, AgentPrompts, RoutingThresholds, RunBudget, ToolSurface
 from rag_wright.harness.errors import ModelAttemptTooSlow, ModelTooSlow, ModelTurnTooSlow, error_middleware
 from rag_wright.harness.events import RunEvent, translate, what_was_finished
 from rag_wright.harness.faults import Fault, InjectFaults
@@ -72,7 +73,7 @@ from rag_wright.harness.workers import CANNOT_ASK, DO_WHAT_WAS_ASKED, WorkerRepo
 
 __all__ = [
     # what a product declares
-    "AgentDefinition", "AgentPrompts", "RoutingThresholds", "ToolSurface", "RunScope", "validate_scope",
+    "AgentDefinition", "AgentPrompts", "RoutingThresholds", "RunBudget", "ToolSurface", "RunScope", "validate_scope",
     # running an agent: the one door
     "start_run", "resume_run", "stream_run", "read_run", "RunResult", "RunOutcome", "outcome_of", "thread_for",
     "build_chat_agent", "build_orchestrator", "agent_chat_model", "accounted_run", "run_key", "harness_tracing_on",
@@ -92,6 +93,8 @@ __all__ = [
     "Rule", "dispatched_more_than_once", "reached_for_the_filesystem", "wrote_a_program_for_a_single_call",
     "guessed_identifiers", "blocked_without_saying_what_it_needs", "rule_named", "broken", "instructions_for", "DecisionPoint", "ANY_WORKER",
     "WhatTheRunDecided", "RecordTheDecisions",
+    # what a run spent, tier by tier (PS-80)
+    "WhatTheRunSpent", "RunSpend", "TierSpend",
     "ORCHESTRATING_PATH",
     # what a run did, recorded; and grading it against the rules
     "RecordTheContext", "every_call", "spend", "compare", "transcript", "describe",

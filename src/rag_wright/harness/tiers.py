@@ -195,6 +195,8 @@ def build_orchestrator(
     ledger: Any = None,
     #: Opt-in: record and grade this tier and each worker against the definition's rules (`Grading`).
     grading: Any = None,
+    #: The run's tally of what each tier spent (`WhatTheRunSpent`), to read after the run. One is made when none is given.
+    spent: Any = None,
 ) -> Any:
     """The planning tier, compiled as an agent in its own right.
 
@@ -213,6 +215,7 @@ def build_orchestrator(
     from rag_wright.harness.agent import agent_chat_model
     from rag_wright.harness.models import catch_all_disabled
     from rag_wright.harness.batch import BatchTheQuestions
+    from rag_wright.harness.budget import ORCHESTRATOR, WhatTheRunSpent, budgeted, run_budget
     from rag_wright.harness.decisions import WhatTheRunDecided
     from rag_wright.harness.decider import Decider
     from rag_wright.harness.errors import error_middleware
@@ -229,8 +232,10 @@ def build_orchestrator(
     # decisions while recording none would be the exact shape of instrument this phase was reset over.
     decisions = (ledger if ledger is not None
                  else WhatTheRunDecided(points=definition.decision_points))
-    workers = [with_its_model(_graded_worker(worker(context, resources, decisions), definition, settings, grading),
-                              settings)
+    # **One tally for the run, as one ledger**: every tier counts into it and is held to the run's budget (PS-80).
+    tally = spent if spent is not None else WhatTheRunSpent()
+    workers = [with_its_model(budgeted(_graded_worker(worker(context, resources, decisions), definition, settings,
+                                                      grading), tally, definition.budget), settings)
                for worker in definition.workers]
 
     return create_deep_agent(
@@ -288,6 +293,8 @@ def build_orchestrator(
                              ledger=decisions, threshold=definition.routing.d2)]
               if definition.routing is not None else []),
             *(extra_middleware or []),
+            # Innermost: it counts the calls that reached the model, and holds the tier to the run's budget.
+            run_budget(tally, definition, tier="orchestrator", depth=ORCHESTRATOR),
         ],
         # **Workers hang off the orchestrator, never off the chat-manager**. A worker on the
         # conversation tier would put planning on the path of an unambiguous listing.

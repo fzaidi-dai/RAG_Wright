@@ -22,6 +22,7 @@ from typing import Any
 from deepagents import create_deep_agent
 from langgraph.checkpoint.memory import InMemorySaver
 
+from rag_wright.harness.budget import CHAT_MANAGER, WhatTheRunSpent, run_budget
 from rag_wright.harness.clarify import clarification_tool
 from rag_wright.harness.confirm import ConfirmTheView
 from rag_wright.harness.decider import Decider
@@ -87,6 +88,9 @@ def build_chat_agent(
     ledger: Any = None,
     #: Opt-in: record and grade every tier the definition has a rule for (`Grading`). `None` builds no grader.
     grading: Grading | None = None,
+    #: The run's tally of what each tier spent (`WhatTheRunSpent`), for the product to read after the run (PS-80). One
+    #: is made when none is given: every tier is held to `definition.budget` either way.
+    spent: WhatTheRunSpent | None = None,
 ) -> Any:
     """The chat-manager for one run, holding the manifest bound to that run's scope.
 
@@ -112,8 +116,9 @@ def build_chat_agent(
     decisions = (ledger if ledger is not None
                  else WhatTheRunDecided(points=definition.decision_points))
 
+    tally = spent if spent is not None else WhatTheRunSpent()
     orchestrator = orchestrator_subagent(context, resources, settings, ledger=decisions, definition=definition,
-                                         model=model, grading=grading)
+                                         model=model, grading=grading, spent=tally)
 
     memory: dict[str, Any] = {}
     if store is not None:
@@ -170,6 +175,8 @@ def build_chat_agent(
                             delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
                             thresholds=definition.routing, force=forces_a_tool(definition, settings, model))]
               if definition.routing is not None else []),
+            # Innermost: it counts the calls that reached the model, and holds the tier to the run's budget.
+            run_budget(tally, definition, tier="chat-manager", depth=CHAT_MANAGER),
         ],
         checkpointer=checkpointer if checkpointer is not None else InMemorySaver(),
         **memory,

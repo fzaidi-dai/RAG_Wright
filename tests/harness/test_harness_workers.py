@@ -26,7 +26,9 @@ from langchain_core.tools import tool
 from rag_wright.harness import agent as agent_module
 from rag_wright.harness import tiers as tiers_module
 from rag_wright.harness.agent import build_chat_agent
+from rag_wright.harness.budget import WhatTheRunSpent, budgeted
 from rag_wright.harness.decisions import RecordTheDecisions, WhatTheRunDecided
+from rag_wright.harness.definition import RunBudget
 from rag_wright.harness.errors import error_middleware
 from rag_wright.harness.grading import Grading
 from rag_wright.harness.rules import Rule
@@ -220,6 +222,8 @@ FACTORIES = {
     "orchestrator_skill": "SkillsMiddleware",
     # PS-72: a graded tier's recorder and the grader reading it, built only when a run asks for grading.
     "graded": ("RecordTheContext", "GradeThisTier"),
+    # PS-80: the run's tally and budget, on every tier
+    "run_budget": "SpendTheRunBudget",
 }
 
 #: Lowercase calls in a builder that build something other than middleware, or whose middleware is carried by
@@ -236,6 +240,8 @@ NOT_MIDDLEWARE = {
     "_graded_worker",
     # makes a worker's own `model_id` into its model (PS-78); builds no middleware
     "with_its_model",
+    # adds the run's budget to a worker's spec (PS-80): checked below as what a worker under a run carries
+    "budgeted",
 }
 
 
@@ -262,7 +268,7 @@ def test_EVERY_TIER_MIDDLEWARE_IS_ON_WORKERS_OR_EXPLAINED() -> None:
 
     on_tiers = built_in(agent_module.build_chat_agent) | built_in(tiers_module.build_orchestrator)
     # Capitalised calls that construct something other than middleware: the run's record and its saver.
-    on_tiers -= {"WhatTheRunDecided", "InMemorySaver"}
+    on_tiers -= {"WhatTheRunDecided", "WhatTheRunSpent", "InMemorySaver"}
     # **Built the way production builds a worker**, with a run ledger: bare, the recorder is missing.
     carried = {type(m).__name__ for m in worker_middleware(WhatTheRunDecided(), "composition_worker")}
     # **And what a GRADED run adds to it** (PS-72): the orchestrator hands each worker its own recorder and grader.
@@ -270,6 +276,9 @@ def test_EVERY_TIER_MIDDLEWARE_IS_ON_WORKERS_OR_EXPLAINED() -> None:
                                                             criterion="c"),))
     carried |= {type(m).__name__ for m in tiers_module._graded_worker(
         {"name": "composition_worker", "middleware": []}, graded_run, _settings(), Grading(on_evaluation=print))["middleware"]}
+    # **And the run's budget** (PS-80): the orchestrator holds each worker to it.
+    carried |= {type(m).__name__ for m in budgeted({"name": "composition_worker"}, WhatTheRunSpent(),
+                                                   RunBudget())["middleware"]}
 
     unexplained = {n for n in on_tiers if n not in carried and n not in NOT_ON_WORKERS}
     assert not unexplained, f"{sorted(unexplained)} is on a tier but neither on workers nor in NOT_ON_WORKERS"

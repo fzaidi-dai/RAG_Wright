@@ -127,6 +127,35 @@ class RoutingThresholds:
 
 
 @dataclass(frozen=True, slots=True)
+class RunBudget:
+    """What one run may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
+
+    **A tier stops at the budget less the reserve of every tier above it**: a worker (two tiers above it) at
+    `model_calls - 2 * reserve`, the orchestrator at `model_calls - reserve`, the chat-manager at the whole budget. So a
+    worker that spends all it may still leaves the orchestrator and the chat-manager the calls to compose an answer: a
+    cost control that cannot become a failure. The same holds for tool calls.
+
+    **Beside the per-invocation caps, not instead of them** (`errors.MODEL_CALLS_PER_INVOCATION`): those bound one
+    tier's one invocation; this bounds the run's bill, which a run with several dispatches would otherwise multiply.
+    """
+
+    #: Model calls the whole run may make, every tier and dispatch together.
+    model_calls: int = 60
+    #: Tool calls the whole run may make. A tier past its share is called with no tools, so it answers.
+    tool_calls: int = 100
+    #: Calls each tier keeps back for the tiers above it, to compose with.
+    reserve: int = 2
+
+    def __post_init__(self) -> None:
+        for limit in ("model_calls", "tool_calls"):
+            if getattr(self, limit) <= 2 * self.reserve:
+                raise ValueError(f"budget {limit}={getattr(self, limit)!r} leaves a worker nothing past two reserves "
+                                 f"of {self.reserve}")
+        if self.reserve < 1:
+            raise ValueError(f"budget reserve={self.reserve!r}: a tier above needs at least one call to compose")
+
+
+@dataclass(frozen=True, slots=True)
 class AgentDefinition:
     """One product's agent, as the substrate needs to see it.
 
@@ -176,3 +205,5 @@ class AgentDefinition:
     #: When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns
     #: routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10).
     routing: RoutingThresholds | None = RoutingThresholds()
+    #: What one run may spend across every tier, each tier keeping a reserve for the tiers above it (PS-80).
+    budget: RunBudget = RunBudget()

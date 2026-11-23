@@ -32,6 +32,16 @@ from typing import Any
 
 from langchain_core.tools import BaseTool, tool
 
+#: The clarification tool's name, which is also how a person's answer is found: on a resume it comes back as this
+#: tool's result.
+ASK_THE_USER = "ask_the_user"
+
+
+def answers_so_far(messages: list) -> int:
+    """How many times the person has answered a question this run: each answer is a result of `ask_the_user` (PS-80)."""
+    return sum(1 for message in messages if getattr(message, "type", "") == "tool"
+               and getattr(message, "name", "") == ASK_THE_USER)
+
 
 def clarification_tool() -> BaseTool:
     """A tool whose entire body is a question.

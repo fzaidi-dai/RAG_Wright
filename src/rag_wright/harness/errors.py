@@ -21,11 +21,16 @@ from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 
-#: **Caps, not guesses at good behaviour.** A run that has made this many model calls is looping, and the
-#: cost of letting it continue is paid by the customer. `exit_behavior="end"` stops the run with what it
-#: has rather than raising, so a partial answer still reaches the user.
-MODEL_CALLS_PER_RUN = 25
-TOOL_CALLS_PER_RUN = 40
+#: **Caps, not guesses at good behaviour.** A tier that has made this many model calls in one invocation is looping,
+#: and the cost of letting it continue is paid by the customer. `exit_behavior="end"` stops it with what it has rather
+#: than raising, so a partial answer still reaches the user.
+#:
+#: **Per INVOCATION of one tier, not per run** (PS-80): LangChain's `run_limit` counts within one call of one agent, so
+#: the chat-manager's start and its resume, and each dispatch of the orchestrator or a worker, each get these afresh.
+#: They were named `..._PER_RUN`, and were read as a run's bound; the run's bound is `RunBudget`. A worker's own
+#: caps are `worker_spec(model_calls=, tool_calls=)`.
+MODEL_CALLS_PER_INVOCATION = 25
+TOOL_CALLS_PER_INVOCATION = 40
 
 #: How many times `ModelRetryMiddleware` tries one turn: the first attempt plus `max_retries`.
 #: **Named, because the turn deadline has to be checked against it** -- a ceiling below this budget
@@ -146,8 +151,10 @@ class ADeadlineForOneModelTurn(AgentMiddleware):
             raise self._raises(message) from expired
 
 
-def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: Any) -> list[Any]:
-    """The stack, inner-first.
+def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: Any,
+                     model_calls: int = MODEL_CALLS_PER_INVOCATION,
+                     tool_calls: int = TOOL_CALLS_PER_INVOCATION) -> list[Any]:
+    """The stack, inner-first. `model_calls` and `tool_calls` cap one invocation of the tier (a worker's own, PS-80).
 
     `ToolRetryMiddleware` carries `on_failure="error"` so a failure that exhausts its retries becomes an
     exception the error middleware can see — rather than a message the model receives without anybody
@@ -199,8 +206,8 @@ def error_middleware(*, retry_on: tuple[type[BaseException], ...], message_for: 
         # returns None from `message_for` and propagates, which is the "bubbles to a developer" level.
         ToolErrorMiddleware(on_error=_what_the_model_is_told(message_for or _tell_nothing, retry_on)),
         # Runaway loops. A cap is not a judgement about the work, it is a bound on the bill.
-        ModelCallLimitMiddleware(run_limit=MODEL_CALLS_PER_RUN, exit_behavior="end"),
-        ToolCallLimitMiddleware(run_limit=TOOL_CALLS_PER_RUN, exit_behavior="end"),
+        ModelCallLimitMiddleware(run_limit=model_calls, exit_behavior="end"),
+        ToolCallLimitMiddleware(run_limit=tool_calls, exit_behavior="end"),
     ]
 
 

@@ -21,8 +21,8 @@ from typing import Any
 from langchain_core.tools import tool
 from pydantic import Field
 
-from rag_wright.harness import (AgentDefinition, AgentPrompts, RunResult, WorkerReport, build_chat_agent, start_run,
-                                worker_spec)
+from rag_wright.harness import (AgentDefinition, AgentPrompts, ModelAttemptTooSlow, RunResult, WorkerReport,
+                                build_chat_agent, start_run, worker_spec)
 
 # --- 1. The context: who the run is for. The substrate reads `scope` and `shared_scope` and nothing else. ---
 
@@ -108,12 +108,14 @@ PROMPTS = AgentPrompts(
     skills={"/skills/escalating/SKILL.md": "---\nname: escalating\ndescription: Read when a fault recurs at "
                                            "several sites.\n---\nList the sites, then the common symptom."},
     skills_preamble="## Your skills\n\n{skills_list}{skills_locations}{skills_load_warnings}",
-    not_a_filesystem="Tickets are not files. Use `list_open_tickets`.",
+    not_a_filesystem="Tickets are not files. `list_open_tickets` reads this site's open ones; past tickets at every "
+                     "site are found by delegating.",
     looking_for_subjects="You are looking for tickets. They have ids, not paths.",
     subject_file_endings=(".ticket",),
     worker_filesystem_note="The filesystem is yours, for notes. The tickets are not on it.",
     # What the chat-manager (and the routing decision model) read to decide whether to delegate: say what needs planning.
-    orchestrator_description="Plans work that compares faults across sites or takes several steps.",
+    orchestrator_description=("Finds past tickets, at any site, whose fault resembles a symptom, and plans any work "
+                              "that compares faults across sites or takes several steps."),
     label="Maintenance desk",
 )
 
@@ -130,7 +132,8 @@ DEFINITION = AgentDefinition(
     planning={"desk.find_similar_faults": "It reads tickets across every site."},  # the rest is direct
     workers=(fault_worker,),
     context_schema=DeskContext,
-    retry_on=(TicketSystemOffline,),
+    # A slow model attempt is retried too: the harness's own transient failure, which a product names (PS-80).
+    retry_on=(TicketSystemOffline, ModelAttemptTooSlow),
     message_for=lambda error: None,  # tell the model about no failure: each one surfaces
     model_id_for=lambda settings: settings.agent_model,
     prompts=PROMPTS,

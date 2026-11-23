@@ -37,6 +37,17 @@ WITHHELD_FROM_CHAT: dict[str, str] = {
         "conversation tier has nothing to compute, and one fewer thing for a model to reach "
         "for while flailing, which the routing eval showed it does."
     ),
+    "grep": (
+        "A search over the tier's own files, which hold its memory and nothing else, and its memory is already in its "
+        "prompt. Measured live (PS-80): after a person's answer the chat-manager ran `grep` 22 times, a different "
+        "word each time, every one 'No matches found', until its 25-call cap ended the turn -- distinct calls, so "
+        "repeat suppression never fired, and a plain `grep` passes the not-a-filesystem signpost. Workers keep it: "
+        "their recall is a search over `/memories`."
+    ),
+    "glob": (
+        "The same search by file name, and the same dead end: the tier's files are its memory, already in its prompt. "
+        "Withheld with `grep` (PS-80); `ls`, `read_file`, `write_file` and `edit_file` stay, for writing memory."
+    ),
 }
 
 #: What the PLANNING tier does not get. It keeps `eval`, which is the whole point of programmatic orchestration.

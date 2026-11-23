@@ -29,9 +29,9 @@ import uuid
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from rag_wright.harness.clarify import clarification_tool
+from rag_wright.harness.clarify import ASK_THE_USER, clarification_tool
 from rag_wright.harness.decider import ROUTED, Decider
 from rag_wright.harness.definition import RoutingThresholds
 from rag_wright.harness.seen import run_key
@@ -76,17 +76,18 @@ class RouteTheTurn(AgentMiddleware):
         return handler(request)  # the decider is asynchronous; a synchronous run routes as before
 
     async def awrap_model_call(self, request: Any, handler: Any) -> Any:
-        messages = request.messages or []
-        if not messages or not isinstance(messages[-1], HumanMessage):
-            return await handler(request)  # not the opening call: the turn is already under way
+        latest = _the_persons_latest(request.messages or [])
+        if latest is None:
+            return await handler(request)  # not an opening call: the turn is already under way
+        opening, earlier, resumed = latest
         tools = {_name_of(tool): tool for tool in request.tools or []}
         options = self._options(tools)
-        routed = await self._decider.choose(run_key(request), _text(messages[-1]), D1_QUESTION, options)
+        routed = await self._decider.choose(run_key(request), opening, D1_QUESTION, options)
         if routed is None or routed.confidence < self._thresholds.d1:
             return await handler(request)
-        stamp = {"choice": routed.choice, "confidence": routed.confidence}
+        stamp = {"choice": routed.choice, "confidence": routed.confidence, **({"resumed": True} if resumed else {})}
         if routed.choice == "delegate":
-            brief, stamp["brief"] = await self._brief(request, messages)
+            brief, stamp["brief"] = await self._brief(request, opening, earlier)
             if brief is not None:
                 return _stamped(_called(_DELEGATE, {"description": brief, "subagent_type": self._orchestrator}), stamp)
         chosen = {"answer": None, "delegate": tools.get(_DELEGATE)}.get(routed.choice, tools.get(routed.choice))
@@ -99,11 +100,10 @@ class RouteTheTurn(AgentMiddleware):
             reply = await handler(request.override(tools=[chosen], **forced))
         return _stamped(reply, stamp)
 
-    async def _brief(self, request: Any, messages: list) -> tuple[str | None, dict]:
+    async def _brief(self, request: Any, opening: str, before: list) -> tuple[str | None, dict]:
         """The person's opening turn as the brief when it stands on its own (B1), else None for the model to write
         one; with how it was decided, for the ledger."""
-        opening = _text(messages[-1])
-        earlier = [m for m in messages[:-1] if isinstance(m, (HumanMessage, AIMessage)) and _text(m).strip()]
+        earlier = [m for m in before if isinstance(m, (HumanMessage, AIMessage)) and _text(m).strip()]
         if not earlier:
             return opening, {"by": "verbatim", "self_contained": None}
         yes = await self._decider.yes_no(run_key(request), _transcript(earlier[-EARLIER_TURNS:], opening),
@@ -119,6 +119,31 @@ class RouteTheTurn(AgentMiddleware):
             options["delegate"] = self._delegating
         options["answer"] = ANSWER
         return options
+
+
+def _the_persons_latest(messages: list) -> tuple[str, list, bool] | None:
+    """What the person last said, the turns before it, and whether it was an answer; `None` when the call does not
+    open on something the person said.
+
+    **A person's answer to a clarification opens a call too** (PS-80). On a resume it arrives as the result of
+    `ask_the_user`, a tool message, so a router reading only human messages never saw it, and the one input most likely
+    to change how a turn is handled went unrouted. It is routed as what was asked, the question and the answer
+    together; the call after it is under way again, so only that one is.
+    """
+    if not messages:
+        return None
+    last = messages[-1]
+    if isinstance(last, HumanMessage):
+        return _text(last), messages[:-1], False
+    if not isinstance(last, ToolMessage) or last.name != ASK_THE_USER:
+        return None
+    asked = max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=None)
+    if asked is None:
+        return None
+    question = next((call["args"].get("question", "") for m in reversed(messages) if isinstance(m, AIMessage)
+                     for call in m.tool_calls if call.get("id") == last.tool_call_id), "")
+    return (f"{_text(messages[asked])}\n\nAsked: {question}\nAnswered: {_text(last)}",
+            messages[:asked], True)
 
 
 def _called(name: str, args: dict) -> AIMessage:

@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-81 public names; `AgentDefinition` has 16 fields (15 required; optional: `routing`); `AgentPrompts` has 11 fields, every one required.
+85 public names; `AgentDefinition` has 17 fields (15 required; optional: `routing`, `budget`); `AgentPrompts` has 11 fields, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -43,7 +43,7 @@ your rules, your decision points. Those are the fields of an `AgentDefinition`, 
 else about you.
 
 **The asymmetry worth internalising.** `AgentDefinition` and `AgentPrompts` are **total**: every field is
-required except `routing`, which has measured defaults, so an agent cannot be under-declared and the dataclass says
+required except `routing` and `budget`, which have defaults, so an agent cannot be under-declared and the dataclass says
 so at construction. The per-worker builder
 `worker_spec` is **permissive**, and that is where silence lives (section 6).
 
@@ -74,6 +74,7 @@ workers. A derived value crossing the boundary would become a convention the nex
 | `decision_points` | `tuple[Any, ...]` | The decisions a run of this product takes; the ledger reads each point's option space from here. |
 | `read_framing` | `Any` | `(tool_name, parsed_result) -> {chose, confidence, inputs} \| None`: how this product reads its own framing tool's reply. |
 | `routing` | `RoutingThresholds \| None` | When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10). |
+| `budget` | `RunBudget` | What one run may spend across every tier, each tier keeping a reserve for the tiers above it (PS-80). |
 <!-- /generated -->
 
 ---
@@ -191,6 +192,8 @@ still wins:
 | `carry_forward` | `None` | `definition.carry_forward` |
 | `read_framing` | `None` | `definition.read_framing` |
 | `model_id` | `None` | not from the definition: this worker's own model; without it, `definition.model_id_for` |
+| `model_calls` | `None` | not from the definition: this worker's own cap on one dispatch; without it, the harness's `MODEL_CALLS_PER_INVOCATION` / `TOOL_CALLS_PER_INVOCATION` |
+| `tool_calls` | `None` | not from the definition: this worker's own cap on one dispatch; without it, the harness's `MODEL_CALLS_PER_INVOCATION` / `TOOL_CALLS_PER_INVOCATION` |
 <!-- /generated -->
 
 With `definition=`, the worker's prompt also gains `definition.prompts.worker_filesystem_note`, unless the prompt already carries it, so a worker is told where its own notes live before it runs `ls('/')` to find out.
@@ -336,7 +339,7 @@ on twelve direct tools, D2 90.0% against 75.6% per worker, each routing call abo
 
 | decision | where | the decision model asks | taken at | otherwise |
 |---|---|---|---|---|
-| **D1** | the chat-manager's opening call of a turn | one choice: each direct tool, `delegate`, `ask_the_user`, `answer` | `routing.d1` (0.7) | the tier's model routes, as before |
+| **D1** | the chat-manager's opening call of a turn, and its first call after the person answers a question | one choice: each direct tool, `delegate`, `ask_the_user`, `answer` | `routing.d1` (0.7) | the tier's model routes, as before |
 | **B1** | a routed `delegate` with earlier turns | can the message be understood without them? | `routing.b1` (0.6) | the tier's model writes the brief |
 | **D2** | the orchestrator's opening call | one yes/no per worker | `routing.d2` (0.5) | the orchestrator plans, as before |
 
@@ -350,6 +353,13 @@ worker is dispatched in code with the brief, and several are planned by the orch
 a turn, the chat-manager's next call keeps `ask_the_user` and none of its direct tools, so it presents the report
 rather than re-deriving it; a failed dispatch leaves the tools, and the person's next message, or their answer to a
 question the report needed put to them, restores them.
+
+**A person's answer to a question is routed too** (PS-80). On a resume the answer arrives as the result of
+`ask_the_user`, so the chat-manager's next call opens on it, and D1 is asked of what was asked: the original request,
+the question and the answer together. A delegation in the person's own words hands that over as the brief. Only that
+call is routed; the call after it is under way again. The one dispatch a run's chat-manager may make is counted per
+thing the person asked, so a resumed turn can still delegate though the run delegated before it asked, and the ledger
+records the resumed route as a second D1 row with `resumed`.
 
 **Nothing to turn on.** The decision model is the harness's own: it registers the engine's `jev_decision` capability
 and calls it itself, and a product registers nothing. It needs the decision model's credentials, which are the
@@ -385,3 +395,42 @@ A product on another model measures it and registers its profile with `forced_to
 
 **What it does not do:** a brief needing several workers is still planned by the orchestrator's model. **Data:** the
 person's message and the brief are sent to the decision model's provider.
+
+---
+
+## 10. What a run spends: the budget and the tally
+
+**Two bounds, on different things** (PS-80). The per-invocation caps (`MODEL_CALLS_PER_INVOCATION`, 25;
+`TOOL_CALLS_PER_INVOCATION`, 40) bound one invocation of one tier: the chat-manager's start or resume, and each
+dispatch of the orchestrator or a worker, each counted afresh. They never bounded a run, whose bill grows with every
+dispatch. `AgentDefinition.budget`, a `RunBudget`, bounds the run: model calls and tool calls across every tier
+together (60 and 100 by default).
+
+**Each tier keeps a reserve for the tiers above it**, so a cost control cannot become a failure. A worker stops at the
+budget less two reserves, the orchestrator at the budget less one, the chat-manager at the whole budget: a worker
+that spends all it may still leaves the orchestrator and the chat-manager the calls to compose an answer. A tier past
+its share of tool calls is called with no tools, so it answers from what it has; one past its share of model calls
+ends with a message saying so.
+
+**One worker's own caps** are `worker_spec(..., model_calls=, tool_calls=)`, bounding each dispatch of that worker
+alone, for a worker measured to need fewer calls than the harness's caps allow.
+
+**What each tier spent is a product's to read.** `run.state` holds the chat-manager's conversation only; the run's
+tally is `WhatTheRunSpent`, keyed by run as the decision ledger is. Per tier (`chat-manager`, `orchestrator`, or a
+worker's name) it records how often the tier was started, its model and tool calls, its input and output tokens, and
+whether the budget stopped it. Pass one to read it, as a regression test on a tier's calls would:
+
+```python
+from rag_wright.harness import RunBudget, WhatTheRunSpent, build_chat_agent, start_run, thread_for
+
+spent = WhatTheRunSpent()
+agent = build_chat_agent(context, resources, settings, definition=definition, spent=spent)
+run = await start_run(agent, context, message="Which earlier development is closest to SDF 3146?")
+worker = spent.of(thread_for(context, run.run_id)).of("precedent_worker")
+assert worker.model_calls <= 6
+```
+
+Counted where the call reaches the model and the tool runs: a turn the router settled without a model call, or a
+repeat served from the run's record, costs nothing and is not counted. A run resumed on a rebuilt agent counts into
+the `spent` it is given, so pass the same one to both halves to see the whole run.
+

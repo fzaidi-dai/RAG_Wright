@@ -45,6 +45,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from rag_wright.harness.budget import WhatTheRunSpent, budgeted
+from rag_wright.harness.definition import RunBudget
 from rag_wright.harness.models import agent_chat_model
 
 
@@ -199,7 +201,9 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
                       read_framing: Any = None,
                       carry_forward: Any = None,
                       retry_on: tuple[type[BaseException], ...] = (),
-                      message_for: Any = None) -> list:
+                      message_for: Any = None,
+                      model_calls: int | None = None,
+                      tool_calls: int | None = None) -> list:
     """What every worker carries.
 
     **The audit that produced this list, and the defect it closes.** Workers were never bare -- every deep
@@ -244,7 +248,13 @@ def worker_middleware(ledger: Any = None, name: str = "", *,
             RememberWhatWasCalled(seen, encoder=question_encoder(),
                                   carry_forward=carry_forward),
             TheSubjectIsNotAFilesystem(seen, signposts=signposts),
-            *error_middleware(retry_on=retry_on, message_for=message_for)]
+            *error_middleware(retry_on=retry_on, message_for=message_for, **_caps(model_calls, tool_calls))]
+
+
+def _caps(model_calls: int | None, tool_calls: int | None) -> dict[str, int]:
+    """A worker's own per-invocation caps, where it has them; the harness's otherwise."""
+    return {key: value for key, value in (("model_calls", model_calls), ("tool_calls", tool_calls))
+            if value is not None}
 
 
 def worker_spec(name: str, description: str, prompt: str, tools: list, report: type,
@@ -256,7 +266,9 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
             carry_forward: Any = None,
             read_framing: Any = None,
             definition: Any = None,
-            model_id: str | None = None) -> dict[str, Any]:
+            model_id: str | None = None,
+            model_calls: int | None = None,
+            tool_calls: int | None = None) -> dict[str, Any]:
     """A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`.
 
     A worker has no middleware and no subagents of its own, so letting the parent build it keeps one model
@@ -271,6 +283,9 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
 
     **`model_id`, an engine model id, is this worker's model alone** (PS-78): without it the worker runs the product's
     (`definition.model_id_for`), as every tier does. The builders make it with `agent_chat_model`, the profile seam.
+
+    **`model_calls` and `tool_calls` cap one dispatch of this worker alone** (PS-80): without them it has the harness's
+    (`errors.MODEL_CALLS_PER_INVOCATION`, `TOOL_CALLS_PER_INVOCATION`). The run's own bound is `AgentDefinition.budget`.
     """
     if definition is not None:
         retry_on = retry_on or definition.retry_on
@@ -290,14 +305,16 @@ def worker_spec(name: str, description: str, prompt: str, tools: list, report: t
     spec = _spec(name, description, prompt, tools, report, ledger, retry_on=retry_on,
                  message_for=message_for, signposts=signposts, repeatable=repeatable,
                  question_argument=question_argument, framings=framings,
-                 carry_forward=carry_forward, read_framing=read_framing)
+                 carry_forward=carry_forward, read_framing=read_framing,
+                 model_calls=model_calls, tool_calls=tool_calls)
     return {**spec, "model_id": model_id} if model_id else spec
 
 
 def _spec(name: str, description: str, prompt: str, tools: list, report: type, ledger: Any, *,
           retry_on: tuple[type[BaseException], ...], message_for: Any, signposts: Any,
           repeatable: frozenset[str], question_argument: dict[str, str] | None,
-          framings: tuple[str, ...], carry_forward: Any, read_framing: Any) -> dict[str, Any]:
+          framings: tuple[str, ...], carry_forward: Any, read_framing: Any,
+          model_calls: int | None = None, tool_calls: int | None = None) -> dict[str, Any]:
     """The spec itself, once every policy value is settled.
 
     **No `ask_the_user` in any worker's tools**, and that absence is the mechanism: a prompt
@@ -310,7 +327,8 @@ def _spec(name: str, description: str, prompt: str, tools: list, report: type, l
                                             signposts=signposts, repeatable=repeatable,
                                             question_argument=question_argument, framings=framings,
                                             carry_forward=carry_forward,
-                                            read_framing=read_framing)}
+                                            read_framing=read_framing,
+                                            model_calls=model_calls, tool_calls=tool_calls)}
 
 
 
@@ -370,6 +388,8 @@ def build_worker(spec: dict[str, Any], settings: Any, *, model: Any = None,
     # **A model passed in is the worker's**, for a scripted test, so it wins over the worker's own `model_id`.
     if model is not None:
         spec = {key: value for key, value in spec.items() if key != "model_id"}
+    # **Held to a run's budget as a worker under an orchestrator is** (PS-80), so it compiles to the same graph.
+    spec = budgeted(spec, WhatTheRunSpent(), RunBudget())
 
     # **The model SPEC, exactly as `build_orchestrator` passes it**, and the profile registered first.
     # `_harness_profile_for_model` is keyed by model, so a pre-resolved chat model resolves a DIFFERENT

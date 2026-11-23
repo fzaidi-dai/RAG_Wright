@@ -499,15 +499,18 @@ class RecordTheDecisions(AgentMiddleware):
         if self._tier != "chat-manager":
             return
         here = self._ledger.of(run_key(request))
-        if here.by_point("D1"):
+        # the decision model's route, when this reply was routed (ADR-0146): its probability is D1's confidence
+        routed = _routed(response) or {}
+        # **A person's answer is decided again** (PS-80): the run's D1 is already on the ledger, and this is a second.
+        if here.by_point("D1") and not routed.get("resumed"):
             return
 
         calls = _tool_calls(response)
-        # the decision model's route, when this reply was routed (ADR-0146): its probability is D1's confidence
-        routed = _routed(response) or {}
         by = {}
         if routed:
             by["route"] = routed["choice"]
+        if routed.get("resumed"):
+            by["resumed"] = True
         if "brief" in routed:
             by["brief_by"] = routed["brief"]["by"]
             by["self_contained"] = routed["brief"]["self_contained"]

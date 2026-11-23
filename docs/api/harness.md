@@ -4,7 +4,7 @@
 
 ## Types
 
-### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds | None' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6)) -> None`
+### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds | None' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6), budget: 'RunBudget' = RunBudget(model_calls=60, tool_calls=100, reserve=2)) -> None`
 
 One product's agent, as the substrate needs to see it.
 
@@ -19,6 +19,14 @@ Every word a product says to its model: the tier prompts, the memory line and th
 ### `RoutingThresholds(d1: 'float' = 0.7, d2: 'float' = 0.5, b1: 'float' = 0.6) -> None`
 
 The probability at or above which the decision model's routing answer is taken (ADR-0146); below it the tier decides as it did before there was a decider. The defaults are the measured ones on the harness's routing gold sets; a product overrides them on its `AgentDefinition` after measuring its own.
+
+### `RunBudget(model_calls: 'int' = 60, tool_calls: 'int' = 100, reserve: 'int' = 2) -> None`
+
+What one run may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
+
+**A tier stops at the budget less the reserve of every tier above it**: a worker (two tiers above it) at `model_calls - 2 * reserve`, the orchestrator at `model_calls - reserve`, the chat-manager at the whole budget. So a worker that spends all it may still leaves the orchestrator and the chat-manager the calls to compose an answer: a cost control that cannot become a failure. The same holds for tool calls.
+
+**Beside the per-invocation caps, not instead of them** (`errors.MODEL_CALLS_PER_INVOCATION`): those bound one tier's one invocation; this bounds the run's bill, which a run with several dispatches would otherwise multiply.
 
 ### `RunResult(run_id: 'str', context: 'RunScope', state: 'dict[str, Any]', outcome: 'RunOutcome | None' = None) -> None`
 
@@ -233,6 +241,26 @@ Returns: The model call result.
 Examples: !!! example "Retry on error"
 
 ```python async def awrap_model_call(self, request, handler): for attempt in range(3): try: return await handler(request) except Exception: if attempt == 2: raise ```
+
+### `WhatTheRunSpent(runs: 'dict[str, RunSpend]' = <factory>) -> None`
+
+One tally per run, and one object that holds them all: passed to `build_chat_agent(spent=)` to be read, as the decision ledger is. Keyed by `run_key`, so `spent.of(thread_for(context, run.run_id))` is a run's.
+
+#### `WhatTheRunSpent.of(self, key: 'str') -> 'RunSpend'`
+
+_(no docstring)_
+
+### `RunSpend(tiers: 'dict[str, TierSpend]' = <factory>) -> None`
+
+One run's spend, by tier name: `chat-manager`, `orchestrator`, or a worker's own name.
+
+#### `RunSpend.of(self, tier: 'str') -> 'TierSpend'`
+
+_(no docstring)_
+
+### `TierSpend(invocations: 'int' = 0, model_calls: 'int' = 0, tool_calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, stopped_by_budget: 'bool' = False) -> None`
+
+What one tier spent in one run, every invocation of it together.
 
 ### `RecordTheContext(sink: 'dict[str, Any]', label: 'str') -> 'None'`
 
@@ -606,7 +634,7 @@ So the scope is part of the key rather than a comparison somebody must remember 
 
 The run id stays the PUBLIC identity: it is what `usage_run.correlation_id` joins on and what a client keeps to reconnect. The thread id is ours and never leaves the process.
 
-### `build_chat_agent(context: 'RunScope', resources: 'Any', settings: 'Any', *, model: 'Any' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None, grading: 'Grading | None' = None) -> 'Any'`
+### `build_chat_agent(context: 'RunScope', resources: 'Any', settings: 'Any', *, model: 'Any' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None, grading: 'Grading | None' = None, spent: 'WhatTheRunSpent | None' = None) -> 'Any'`
 
 The chat-manager for one run, holding the manifest bound to that run's scope.
 
@@ -616,7 +644,7 @@ The chat-manager for one run, holding the manifest bound to that run's scope.
 
 **The checkpointer defaults to in-memory, which is a real limitation.** A run outlives the view that started it, and an in-memory saver does not outlive the process. A durable checkpointer is the caller's to pass, and re-attaching to a run by id is the requirement that forces it.
 
-### `build_orchestrator(context: 'Any', resources: 'Any', settings: 'Any', *, model: 'Any' = None, tools: 'Any' = None, system_prompt: 'str | None' = None, extra_middleware: 'list | None' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None, grading: 'Any' = None) -> 'Any'`
+### `build_orchestrator(context: 'Any', resources: 'Any', settings: 'Any', *, model: 'Any' = None, tools: 'Any' = None, system_prompt: 'str | None' = None, extra_middleware: 'list | None' = None, definition: 'Any', checkpointer: 'Any' = None, store: 'Any' = None, ledger: 'Any' = None, grading: 'Any' = None, spent: 'Any' = None) -> 'Any'`
 
 The planning tier, compiled as an agent in its own right.
 
@@ -738,7 +766,7 @@ The name a bridged tool answers to inside the sandbox.
 
 A test drives the real sandbox and compares, so this cannot drift from what the bridge actually does.
 
-### `worker_spec(name: 'str', description: 'str', prompt: 'str', tools: 'list', report: 'type', ledger: 'Any' = None, *, retry_on: 'tuple[type[BaseException], ...]' = (), message_for: 'Any' = None, signposts: 'Any' = None, repeatable: 'frozenset[str]' = frozenset(), question_argument: 'dict[str, str] | None' = None, framings: 'tuple[str, ...]' = (), carry_forward: 'Any' = None, read_framing: 'Any' = None, definition: 'Any' = None, model_id: 'str | None' = None) -> 'dict[str, Any]'`
+### `worker_spec(name: 'str', description: 'str', prompt: 'str', tools: 'list', report: 'type', ledger: 'Any' = None, *, retry_on: 'tuple[type[BaseException], ...]' = (), message_for: 'Any' = None, signposts: 'Any' = None, repeatable: 'frozenset[str]' = frozenset(), question_argument: 'dict[str, str] | None' = None, framings: 'tuple[str, ...]' = (), carry_forward: 'Any' = None, read_framing: 'Any' = None, definition: 'Any' = None, model_id: 'str | None' = None, model_calls: 'int | None' = None, tool_calls: 'int | None' = None) -> 'dict[str, Any]'`
 
 A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`.
 
@@ -747,6 +775,8 @@ A worker has no middleware and no subagents of its own, so letting the parent bu
 **Pass `definition=`, the product's `AgentDefinition`.** Every policy parameter after `ledger` defaults to something inert, and all of them but `signposts` are fields of that definition (`signposts` is its `prompts`). With a definition, each parameter left at its inert default is taken from it; a value passed explicitly still wins. Without one, a worker runs with no retries, no repeat suppression and no decision recording, and nothing fails to say so. With one, the product's `worker_filesystem_note` is appended to `prompt` unless the prompt already carries it.
 
 **`model_id`, an engine model id, is this worker's model alone** (PS-78): without it the worker runs the product's (`definition.model_id_for`), as every tier does. The builders make it with `agent_chat_model`, the profile seam.
+
+**`model_calls` and `tool_calls` cap one dispatch of this worker alone** (PS-80): without them it has the harness's (`errors.MODEL_CALLS_PER_INVOCATION`, `TOOL_CALLS_PER_INVOCATION`). The run's own bound is `AgentDefinition.budget`.
 
 ### `build_worker(spec: 'dict[str, Any]', settings: 'Any', *, model: 'Any' = None, model_id: 'str | None' = None) -> 'Any'`
 
@@ -786,9 +816,9 @@ What to tell the client about a run that did not finish.
 
 **No tenancy, ever** -- the module's rule, and an SSE frame is more exposed than a prompt. Only tool names and the results they returned.
 
-### `error_middleware(*, retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any') -> 'list[Any]'`
+### `error_middleware(*, retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_calls: 'int' = 25, tool_calls: 'int' = 40) -> 'list[Any]'`
 
-The stack, inner-first.
+The stack, inner-first. `model_calls` and `tool_calls` cap one invocation of the tier (a worker's own, PS-80).
 
 `ToolRetryMiddleware` carries `on_failure="error"` so a failure that exhausts its retries becomes an exception the error middleware can see — rather than a message the model receives without anybody having retried.
 

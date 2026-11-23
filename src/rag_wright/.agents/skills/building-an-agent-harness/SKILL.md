@@ -92,6 +92,7 @@ and to verify it, not to build it again; a product that cards them as its own wo
 | the durable checkpointer, in its own schema | **yours**, passed as `checkpointer=`; the default is in-memory and loses a suspended run on restart |
 | tracing, metering, the run's duration | **the tier's** (`accounted_run`, `harness_tracing_on`, `spend`), on the engine's configuration; the `accounting` object is yours |
 | the event contract | **the tier's** `translate`: `stream_run`'s items become `RunEvent`s; your client routes on their names |
+| what one run may spend | **yours**: `AgentDefinition.budget` (`RunBudget`: model calls, tool calls, a reserve each tier keeps for the tiers above it), and `worker_spec(..., model_calls=, tool_calls=)` for one worker's cap per dispatch; what each tier spent is `WhatTheRunSpent`, passed as `build_chat_agent(spent=)` (PS-80) |
 | which model each worker reasons with | **yours**: `definition.model_id_for` for every tier, or `worker_spec(..., model_id=)` for one worker; the tier builds it through the profile seam, meters it under its own id and names it on that worker's verdicts (PS-78) |
 | the agent's skills | **yours**: `AgentPrompts.skills` is `{path: text}`, so keep the files anywhere version-controlled and load them |
 | your rules, decision points, gold sets, the replay test against YOUR asking tools | **yours**; the grading, the ledger and the instruments are the tier's: declare `rules` and pass `grading=Grading(on_evaluation)` to `build_chat_agent`, and every tier with a rule (the chat-manager included) is recorded and graded |
@@ -379,8 +380,10 @@ reportable as exactly that.
 
 **Error levels, by who fixes it.** Transient failures retry; tool failures reach the model as a message it
 can act on; missing information interrupts for a human; anything unexpected reaches a developer. Runaway
-loops are capped - and cap model calls and tool calls per run, ending with what you have rather than raising,
-so a partial answer still reaches the user.
+loops are capped - cap model calls and tool calls per invocation of each tier, ending with what you have rather
+than raising, so a partial answer still reaches the user. **And bound the run as a whole, with a reserve per tier
+above**: per-invocation caps restart on every dispatch, so they never bound the bill, and a run-wide budget with no
+reserve lets a worker spend what the tiers above need to compose (PS-80).
 
 **Composition order is load-bearing.** Retry middleware goes INNER, configured so exceptions reach the
 error middleware. The other way round, a tool failure is converted to a message before the retry ever sees

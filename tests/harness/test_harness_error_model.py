@@ -82,13 +82,13 @@ def test_the_error_middleware_uses_THE_PRODUCTS_policy() -> None:
 def test_the_run_is_CAPPED() -> None:
     """A cap is not a judgement about the work, it is a bound on the bill -- and `exit_behavior="end"` stops
     with what the run has rather than raising, so a partial answer still reaches the user."""
-    from rag_wright.harness.errors import MODEL_CALLS_PER_RUN, TOOL_CALLS_PER_RUN
+    from rag_wright.harness.errors import MODEL_CALLS_PER_INVOCATION, TOOL_CALLS_PER_INVOCATION
 
     names = {type(m).__name__ for m in _stack()}
 
     assert {"ModelCallLimitMiddleware", "ToolCallLimitMiddleware"} <= names
-    assert 0 < MODEL_CALLS_PER_RUN < 100
-    assert 0 < TOOL_CALLS_PER_RUN < 200
+    assert 0 < MODEL_CALLS_PER_INVOCATION < 100
+    assert 0 < TOOL_CALLS_PER_INVOCATION < 200
 
 
 @pytest.mark.parametrize("error", [MemoryWithoutTenancy("no scope"), RuntimeError("a bug in the seam")],

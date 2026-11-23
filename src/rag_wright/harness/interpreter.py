@@ -34,7 +34,7 @@ from typing import Any
 #: **A decision rather than the library's 256**, and it is load-bearing: `ToolCallLimitMiddleware` counts
 #: the calls the MODEL makes and cannot see a call made from inside the sandbox, so a loop over a corpus is
 #: exactly the shape that spends money without the run's own cap noticing. Forty is the same order as
-#: `TOOL_CALLS_PER_RUN`, which is the budget a prompted fan-out would have had.
+#: `TOOL_CALLS_PER_INVOCATION`, which is the budget a prompted fan-out would have had.
 PTC_BUDGET = 40
 
 #: How long one program may run, in seconds. The library's default is 5.0; a fan-out that reads forty

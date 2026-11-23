@@ -103,10 +103,12 @@ def test_THE_CHAT_MANAGER_KEEPS_EVERYTHING_ELSE() -> None:
 
     for kept in chat_manager_tools(context, _resources(), definition=_fabric()):
         assert kept.name in node
-    for memory_tool in ("ls", "glob", "grep", "read_file", "write_file"):
-        assert memory_tool in node, f"{memory_tool} is gone, which breaks memory recall"
+    # its memory is in its prompt; these write it (PS-80 withheld the searches, `grep` and `glob`)
+    for memory_tool in ("ls", "read_file", "write_file", "edit_file"):
+        assert memory_tool in node, f"{memory_tool} is gone, which breaks writing memory"
     assert "task" in node, "the chat-manager cannot delegate"
-    assert set(WITHHELD_FROM_CHAT) == {"execute", "eval"}, "more is withheld than this test knows about"
+    assert set(WITHHELD_FROM_CHAT) == {"execute", "eval", "grep", "glob"}, \
+        "more is withheld than this test knows about"
 
 
 def test_A_WORKER_HAS_NOTHING_WITHHELD() -> None:
@@ -140,3 +142,26 @@ def test_EVERY_WITHHELD_TOOL_HAS_A_STATED_REASON() -> None:
         assert listing
         for name, reason in listing.items():
             assert len(reason) > 40, f"{name}'s reason is too short to mean anything: {reason!r}"
+
+
+def test_THE_REAL_CHAT_MANAGER_IS_NOT_OFFERED_A_SEARCH_OF_ITS_OWN_FILES() -> None:
+    """**PS-80, measured live**: after a person's answer the chat-manager ran `grep` 22 times over files that hold only
+    its memory, a different word each time, until its call cap ended the turn. A worker keeps both: its recall is a
+    search over `/memories`."""
+    import asyncio
+    import dataclasses
+
+    from langchain_core.messages import AIMessage
+
+    from rag_wright.harness import build_chat_agent, start_run
+    from tests.harness.test_harness_answered_by_dispatch import PrecedentSurface, recording
+
+    definition = dataclasses.replace(_fabric(), surface=PrecedentSurface(), workers=(), routing=None,
+                                     planning={"product.find_precedents": "compares across cases"})
+    model, offered = recording(AIMessage(content="420 GSM."))
+    agent = build_chat_agent(_a_context(), _resources(), _settings(), definition=definition, model=model)
+
+    asyncio.run(start_run(agent, _a_context(), message="What GSM did SDF 3146 finish at?"))
+
+    assert "grep" not in offered[0] and "glob" not in offered[0], offered
+    assert {"read_file", "write_file", "edit_file", "ls"} <= set(offered[0]), offered
