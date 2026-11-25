@@ -302,10 +302,6 @@ Composes `doc_start = chunk_doc_start + op.start`, `doc_end = chunk_doc_start + 
 
 Resolve a role to a model id. Precedence: the active workspace's `EngineConfig.models` (PS-14, see `scoped_models`) > the ROLE-SPECIFIC override (`RAG_MODEL_<ROLE>`) > the ALL-ROLES override (`RAG_MODEL_ALL`, to point every role at one model for a quick cross-model test) > the documented default.
 
-### `profile_for(model_id: 'str') -> 'ModelProfile'`
-
-The registered profile for a model id, or a safe default profile for an unregistered one.
-
 ### `decision_profile(model_id: 'Optional[str]' = None) -> 'DecisionModelProfile'`
 
 The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `jev-1.13`). An unregistered id gets a default profile using that id as its served id (so a raw slug still works).

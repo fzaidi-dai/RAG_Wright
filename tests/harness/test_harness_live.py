@@ -54,7 +54,7 @@ async def test_OPENROUTER_reports_a_REAL_cost_and_the_recorder_finds_it():
     the provider and the field is where `real_cost_of` looks. If this fails, agent runs silently price from
     Langfuse's table instead. One call, one word."""
     from rag_wright.harness.models import GenerationRecorder, agent_chat_model
-    from rag_wright.pack_sdk import profile_for
+    from rag_wright.api import profile_for
 
     if profile_for(MODEL).backend != "openrouter":
         pytest.skip("not OpenRouter: a per-second-billed deployment reports no per-call cost, by design")

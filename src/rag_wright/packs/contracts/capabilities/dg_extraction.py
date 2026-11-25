@@ -277,7 +277,7 @@ def default_extraction_model(label: str = "clause-extract", model: str | None = 
     ADR-0100: the backend/base_url/served-id come from the model string's PROFILE (`resolve_connection`), so a
     string can pin OpenRouter or a self-hosted vLLM/Modal server -- mix per stage. An un-pinned string falls back
     to `RAG_SERVING`, unchanged from before."""
-    from rag_wright.pack_sdk import profile_for
+    from rag_wright.api import profile_for
     from rag_wright.pack_sdk import resolve_connection
 
     model = model or os.getenv("RAG_MODEL_ALL") or _PRODUCT_EXTRACT_DEFAULT
