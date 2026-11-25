@@ -188,6 +188,7 @@ def build_orchestrator(
     from rag_wright.harness.budget import ORCHESTRATOR, WhatTheRunSpent, budgeted, run_budget
     from rag_wright.harness.decisions import WhatTheRunDecided
     from rag_wright.harness.decider import Decider
+    from rag_wright.harness.dispatch import dispatch_bound
     from rag_wright.harness.errors import error_middleware
     from rag_wright.harness.grading import graded
     from rag_wright.harness.routing import RouteTheBrief
@@ -225,6 +226,9 @@ def build_orchestrator(
         # batch: the only question it ever sees is its own.
         middleware=[
             withhold(*WITHHELD_FROM_ORCHESTRATOR),
+            # **The product's count of workers per thing asked** (PS-86): measured, one question dispatched one worker
+            # 17 times from a single plan. A planner may dispatch several, so this is `RunBudget.dispatches`, not 1.
+            dispatch_bound(definition.budget.dispatches, tier="orchestrator", spent=tally),
             orchestrator_thinking(),
             # **The mechanism for batched clarifications and authored product knowledge.** What
             # goes in it is decided by FREQUENCY: the decomposition rules are needed every turn and stay

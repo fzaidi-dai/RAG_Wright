@@ -57,3 +57,15 @@ def test_A_SYMPTOM_AS_A_PERSON_SAYS_IT_FINDS_THE_SIMILAR_TICKETS() -> None:
     found = search.invoke({"symptom": "Pump P-3 leaking at the seal"})
 
     assert found["similar"] == ["pump P-3 leaking", "pump P-7 leaking"]
+
+
+def test_THE_WORKERS_REPORT_KEEPS_WHICH_TICKET_MATCHED_WHICH_SYMPTOM() -> None:
+    """**PS-86**: the report is all the orchestrator sees of a worker. A flat list for an eight-symptom question lost
+    which ticket matched which symptom, and the orchestrator re-dispatched one worker five times for one symptom."""
+    example = _example()
+
+    report = example.FaultFindings(status="done", tickets={"pump leaking": ["pump P-3 leaking", "pump P-7 leaking"],
+                                                          "belt slipping": []})
+
+    assert report.tickets["pump leaking"] == ["pump P-3 leaking", "pump P-7 leaking"]
+    assert report.tickets["belt slipping"] == []

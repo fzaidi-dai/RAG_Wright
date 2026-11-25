@@ -146,6 +146,9 @@ class RunBudget:
     tool_calls: int = 100
     #: Calls each tier keeps back for the tiers above it, to compose with.
     reserve: int = 2
+    #: Workers the orchestrator may dispatch for each thing the person asks (PS-86). A dispatch past it never runs, and
+    #: the orchestrator is told to report from what came back. The chat-manager's own bound stays `DISPATCHES_PER_RUN`.
+    dispatches: int = 6
 
     def __post_init__(self) -> None:
         for limit in ("model_calls", "tool_calls"):
@@ -154,6 +157,8 @@ class RunBudget:
                                  f"of {self.reserve}")
         if self.reserve < 1:
             raise ValueError(f"budget reserve={self.reserve!r}: a tier above needs at least one call to compose")
+        if self.dispatches < 1:
+            raise ValueError(f"budget dispatches={self.dispatches!r}: the orchestrator could dispatch no worker")
 
 
 @dataclass(frozen=True, slots=True)

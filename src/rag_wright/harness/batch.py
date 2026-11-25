@@ -34,6 +34,16 @@ from langgraph.types import interrupt
 PURE_BEFORE_THE_INTERRUPT = {"get", "set", "blocked_reports", "question_for", "str", "list"}
 
 
+#: The frame a batched answer arrives in, so it reads as a recorded answer and can be counted as one.
+ANSWERS = "answers_to_your_questions"
+
+
+def answers_batched(messages: list) -> int:
+    """How many batched questions the person has answered this run: each comes back framed in `ANSWERS` (PS-86)."""
+    return sum(1 for message in messages if getattr(message, "type", "") == "human"
+               and str(getattr(message, "content", "")).startswith(f"<{ANSWERS}>"))
+
+
 class BatchingState(AgentState):
     """Which needs have already been put to the user.
 
@@ -110,6 +120,6 @@ class BatchTheQuestions(AgentMiddleware):
             # Framed, so the orchestrator reads a recorded answer rather than something indistinguishable
             # from the user's own next sentence -- as `<viewing>` and `<agent_memory>` are.
             "messages": [{"role": "user",
-                          "content": f"<answers_to_your_questions>\n{question}\n\nThey answered: "
-                                     f"{answer}\n</answers_to_your_questions>"}],
+                          "content": f"<{ANSWERS}>\n{question}\n\nThey answered: "
+                                     f"{answer}\n</{ANSWERS}>"}],
         }

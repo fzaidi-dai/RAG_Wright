@@ -91,7 +91,10 @@ class DeskResources:
 
 
 class FaultFindings(WorkerReport):
-    tickets: list[str] = Field(default_factory=list, description="The past tickets that resemble the fault")
+    # **Keyed by symptom** (PS-86): this report is all the orchestrator sees of the worker. A flat list of tickets for a
+    # question about several symptoms lost which matched which, and the orchestrator re-dispatched to find out.
+    tickets: dict[str, list[str]] = Field(default_factory=dict,
+                                          description="For each symptom you searched, the past tickets that resemble it")
 
 
 def fault_worker(context: Any, resources: Any, ledger: Any = None) -> dict:

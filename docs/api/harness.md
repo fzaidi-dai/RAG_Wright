@@ -4,7 +4,7 @@
 
 ## Types
 
-### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds | None' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6), budget: 'RunBudget' = RunBudget(model_calls=60, tool_calls=100, reserve=2)) -> None`
+### `AgentDefinition(surface: 'ToolSurface', planning: 'dict[str, str]', workers: 'tuple[Any, ...]', context_schema: 'Any', retry_on: 'tuple[type[BaseException], ...]', message_for: 'Any', model_id_for: 'Any', prompts: 'AgentPrompts', repeatable: 'frozenset[str]', question_argument: 'dict[str, str]', framings: 'tuple[str, ...]', carry_forward: 'Any', rules: 'tuple[Any, ...]', decision_points: 'tuple[Any, ...]', read_framing: 'Any', routing: 'RoutingThresholds | None' = RoutingThresholds(d1=0.7, d2=0.5, b1=0.6), budget: 'RunBudget' = RunBudget(model_calls=60, tool_calls=100, reserve=2, dispatches=6)) -> None`
 
 One product's agent, as the substrate needs to see it.
 
@@ -20,7 +20,7 @@ Every word a product says to its model: the tier prompts, the memory line and th
 
 The probability at or above which the decision model's routing answer is taken (ADR-0146); below it the tier decides as it did before there was a decider. The defaults are the measured ones on the harness's routing gold sets; a product overrides them on its `AgentDefinition` after measuring its own.
 
-### `RunBudget(model_calls: 'int' = 60, tool_calls: 'int' = 100, reserve: 'int' = 2) -> None`
+### `RunBudget(model_calls: 'int' = 60, tool_calls: 'int' = 100, reserve: 'int' = 2, dispatches: 'int' = 6) -> None`
 
 What one run may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
 
@@ -264,7 +264,7 @@ One run's spend, by tier name: `chat-manager`, `orchestrator`, or a worker's own
 
 _(no docstring)_
 
-### `TierSpend(invocations: 'int' = 0, model_calls: 'int' = 0, tool_calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, stopped_by_budget: 'bool' = False) -> None`
+### `TierSpend(invocations: 'int' = 0, model_calls: 'int' = 0, tool_calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, stopped_by_budget: 'bool' = False, dispatched: 'list[str]' = <factory>, refused: 'list[str]' = <factory>) -> None`
 
 What one tier spent in one run, every invocation of it together.
 

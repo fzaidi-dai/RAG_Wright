@@ -160,7 +160,7 @@ def build_chat_agent(
             # **A count, not a request**. Measured: this tier delegated 3 times with reasoning
             # on and 24 with it off, each time after reading "Complete -- nothing further is needed".
             # Both numbers are the model's judgement; this one is not.
-            dispatch_bound(),
+            dispatch_bound(spent=tally),
             # Once a report is back this turn, the direct tools go: the tier answers from it (PS-76).
             TheReportIsTheAnswer(direct=direct, asking=asking),
             RecordTheDecisions(decisions, tier="chat-manager",

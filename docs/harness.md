@@ -219,6 +219,13 @@ scope's `by_model` separates the two models with nothing else to do. A graded ve
 (`model`), and the grader stays the product's model (or `Grading.model`), so both arms of an A/B are judged by one
 judge.
 
+**The report is all the orchestrator sees of a worker** (PS-86). DeepAgents hands the dispatching tier the worker's
+structured report as the `task` reply, serialized, and nothing else: not the worker's own messages, not its tool
+results. So design the report (your `WorkerReport` subclass) to carry what the plan needs, keyed the way the plan asks.
+Measured on the quickstart: a flat `tickets` list for an eight-symptom question left the orchestrator unable to tell
+which ticket matched which symptom, and it re-dispatched the same worker five times for one symptom, then asked the
+person whether to dispatch per symptom "to get more detail". The dispatch bound caps that; the report prevents it.
+
 ```python
 from rag_wright.harness import worker_spec
 
@@ -427,13 +434,26 @@ that spends all it may still leaves the orchestrator and the chat-manager the ca
 its share of tool calls is called with no tools, so it answers from what it has; one past its share of model calls
 ends with a message saying so.
 
+**The orchestrator's dispatches are bounded too** (PS-86). The chat-manager may dispatch the orchestrator once per
+thing the person asks (`DISPATCHES_PER_RUN`); the orchestrator may dispatch workers `RunBudget.dispatches` times (6 by
+default), since a plan may need several. Measured before the bound, one question dispatched one worker 17 times from a
+single plan. Once spent, the orchestrator's next turn has no tools and is told it has dispatched all it may and to
+report now, so it writes its report: with only `task` taken away it was measured spending 22 more calls on its
+filesystem and todo list until the run's budget ended it on a cap message; with `ask_the_user` kept it asked the person
+whether to dispatch more; with the tools gone and nothing said, its reply was its plan. A worker's question needs no tool
+there, since `BatchTheQuestions` asks it in code, and the person's answer, like an answer to `ask_the_user`, re-opens
+the allowance, so it can be carried down to the worker. A dispatch past the bound (calls in one turn counted one by
+one) never runs, and is answered with what came back; a call refused beside the one that ran in the same turn is told
+that reply arrives beside it.
+
 **One worker's own caps** are `worker_spec(..., model_calls=, tool_calls=)`, bounding each dispatch of that worker
 alone, for a worker measured to need fewer calls than the harness's caps allow.
 
 **What each tier spent is a product's to read.** `run.state` holds the chat-manager's conversation only; the run's
 tally is `WhatTheRunSpent`, keyed by run as the decision ledger is. Per tier (`chat-manager`, `orchestrator`, or a
-worker's name) it records how often the tier was started, its model and tool calls, its input and output tokens, and
-whether the budget stopped it. Pass one to read it, as a regression test on a tier's calls would:
+worker's name) it records how often the tier was started, its model and tool calls, its input and output tokens,
+whether the budget stopped it, and the dispatches it made and the ones its bound refused, by name (`dispatched`,
+`refused`). Pass one to read it, as a regression test on a tier's calls would:
 
 ```python
 from rag_wright.harness import RunBudget, WhatTheRunSpent, build_chat_agent, start_run, thread_for

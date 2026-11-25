@@ -41,6 +41,10 @@ class TierSpend:
     output_tokens: int = 0
     #: Whether the run's budget stopped this tier (its model calls ended, or its tools were taken away).
     stopped_by_budget: bool = False
+    #: The workers (or, from the chat-manager, the orchestrator) this tier dispatched, by name, in order (PS-86).
+    dispatched: list[str] = field(default_factory=list)
+    #: The dispatches its bound refused, by name: each never ran.
+    refused: list[str] = field(default_factory=list)
 
 
 @dataclass

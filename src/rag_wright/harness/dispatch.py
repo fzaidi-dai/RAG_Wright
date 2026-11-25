@@ -30,6 +30,7 @@ from typing import Any
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from rag_wright.harness.batch import answers_batched
 from rag_wright.harness.clarify import answers_so_far
 from rag_wright.harness.seen import run_key
 
@@ -78,9 +79,12 @@ class _Budget:
 class OnlySoManyDispatches(AgentMiddleware):
     """Bound the number of dispatches this tier may make for each thing the person asks in a run (PS-80)."""
 
-    def __init__(self, *, limit: int = DISPATCHES_PER_RUN) -> None:
+    def __init__(self, *, limit: int = DISPATCHES_PER_RUN, tier: str = "chat-manager", spent: Any = None) -> None:
         super().__init__()
         self._limit = limit
+        self._tier = tier
+        #: The run's tally (`WhatTheRunSpent`), into which each dispatch is written as run or refused (PS-86).
+        self._spent = spent
         self._runs: dict[str, _Budget] = {}
 
     @property
@@ -108,9 +112,23 @@ class OnlySoManyDispatches(AgentMiddleware):
         budget = self._runs.get(_asked(request, getattr(request, "messages", None)))
         if budget is None or budget.spent < self._limit:
             return request
-        kept = [tool for tool in (getattr(request, "tools", None) or [])
-                if _name_of(tool) != DISPATCH]
-        if len(kept) == len(getattr(request, "tools", None) or []):
+        tools = getattr(request, "tools", None) or []
+        # **A spent orchestrator reports** (PS-86): every tool goes, not only `task`. Measured live with only `task`
+        # taken away: 22 more model calls and 14 tool calls on its filesystem and todo list, until the run's budget
+        # ended it on a cap message, which became the run's answer. With `ask_the_user` kept it asked the person,
+        # twice of two, whether to dispatch more, which it could not. A worker's question needs no tool here:
+        # `BatchTheQuestions` asks it in code, and the person's answer re-opens the allowance (`_asked`).
+        if self._tier == "orchestrator":
+            if not tools:
+                return request
+            # **And it is told why** (the signpost, above): with the tools gone and nothing said, its reply was its
+            # plan, twice of two, not a report. Added to this call only; the tier's state is not written.
+            spent = HumanMessage(content=f"<dispatches_spent>You have dispatched {budget.spent} worker(s) for this "
+                                         "request, the most this run allows. Write your report now, from what the "
+                                         "workers returned.</dispatches_spent>")
+            return request.override(tools=[], tool_choice=None, messages=[*(request.messages or []), spent])
+        kept = [tool for tool in tools if _name_of(tool) != DISPATCH]
+        if len(kept) == len(tools):
             return request
         return request.override(tools=kept)
 
@@ -157,20 +175,35 @@ class OnlySoManyDispatches(AgentMiddleware):
         if budget.spent < self._limit:
             budget.spent += 1
             budget.passed.add(call.get("id") or "")
+            self._tally(request, "dispatched")
             return None
+        self._tally(request, "refused")
 
         from langchain_core.messages import ToolMessage
 
-        already = "\n\n".join(budget.replies[-2:]) or "(the earlier reply is not in this record)"
+        # A call refused beside the one that ran, in the same turn, is answered before that one returns (PS-86).
+        already = "\n\n".join(budget.replies[-2:]) or ("(none yet: the dispatch that ran in this same turn "
+                                                       "returns beside this message -- answer from its reply)")
         return ToolMessage(
-            content=(
-                f"You have already delegated this request {budget.spent} time(s) and it came back. "
-                "Do not delegate it again -- answer the user from what you have.\n\n"
-                f"What came back:\n{already}"
-            ),
+            content=f"{self._instead(budget.spent)}\n\nWhat came back:\n{already}",
             tool_call_id=call.get("id", ""),
             name=DISPATCH,
         )
+
+    def _instead(self, spent: int) -> str:
+        """What the tier does instead: the chat-manager answers the person; the orchestrator, who never talks to
+        them, reports from what its workers returned (PS-86)."""
+        if self._tier == "orchestrator":
+            return (f"You have dispatched {spent} worker(s) for this request, the most this run allows. Do not "
+                    "dispatch again -- write your report from what the workers returned.")
+        return (f"You have already delegated this request {spent} time(s) and it came back. "
+                "Do not delegate it again -- answer the user from what you have.")
+
+    def _tally(self, request: Any, outcome: str) -> None:
+        if self._spent is None:
+            return
+        spend = self._spent.of(run_key(request)).of(self._tier)
+        getattr(spend, outcome).append(str(request.tool_call.get("args", {}).get("subagent_type", "")))
 
     def _remember(self, budget: _Budget, result: Any) -> None:
         """Keep what came back, so a refusal can hand it over instead of merely saying no."""
@@ -183,14 +216,18 @@ def _asked(request: Any, messages: list | None) -> str:
     """The run and the thing the person asked in it: their opening message, then each answer to a clarification.
 
     **An answer is new intent** (PS-80), so the allowance is per thing asked, not per run: a turn resumed on an answer
-    may still delegate, once, though the run delegated before it asked.
+    may still delegate, once, though the run delegated before it asked. **Whichever way it arrives** (PS-86): to the
+    tier's own `ask_the_user`, or to a worker's question that `BatchTheQuestions` asked, so an orchestrator at its bound
+    can still carry the answer down to the worker that needed it.
     """
-    return f"{run_key(request)}|{answers_so_far(messages or [])}"
+    return f"{run_key(request)}|{answers_so_far(messages or []) + answers_batched(messages or [])}"
 
 
-def dispatch_bound(limit: int = DISPATCHES_PER_RUN) -> OnlySoManyDispatches:
-    """The bound a tier is built with."""
-    return OnlySoManyDispatches(limit=limit)
+def dispatch_bound(limit: int = DISPATCHES_PER_RUN, *, tier: str = "chat-manager",
+                   spent: Any = None) -> OnlySoManyDispatches:
+    """The bound a tier is built with: the chat-manager's `DISPATCHES_PER_RUN`, the orchestrator's
+    `RunBudget.dispatches` (PS-86)."""
+    return OnlySoManyDispatches(limit=limit, tier=tier, spent=spent)
 
 
 def _reported(messages: list, *, asking: str) -> bool:
