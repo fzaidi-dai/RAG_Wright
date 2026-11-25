@@ -270,3 +270,17 @@ stand-in for a greenfield product) imports nothing from a submodule, no engine-f
 and the names a product's code uses stay exported. `RecordTheDecisions(worker_names=)`, stored and never read (a
 decision's options come from the product's declared `DecisionPoint`s), is removed: a breaking change for a caller
 passing it. With this, PS-48 is complete: the harness's behaviour is tested in the engine, on the fabric product.
+
+## Amendment (2026-11-25, PS-84)
+
+The orchestrator plans and dispatches; it calls no product operation. The rule of 2026-09-15, *"an operation the
+orchestrator cannot see is a plan it cannot make"*, took seeing an operation for holding it: a tool bound to a model is
+one the model can call, so the orchestrator held, and could run, every operation no worker held (`orchestrator_direct`),
+and its `eval` interpreter bridged the whole surface, the workers' operations included, so a program could bypass every
+worker. The rule retires. The orchestrator now binds no operation (it keeps `task`, `write_todos`, routing, batching
+the workers' needs, and asking the person); what each worker can do reaches it as text, the name and first line of each
+of the worker's tools, which `worker_spec` adds to the worker's description for `task` and the D2 decision to read; an
+operation in `planning` that no worker holds is refused when the agent is built, since nothing could run it. The
+harness's interpreter is removed (`code_interpreter`, `bridged_tools`, `js_name`), and `orchestrator_direct` and
+`orchestrator_reachable` with it: a breaking change. A direct operation is out of reach once a message is delegated, so
+a product gives a worker any direct operation that may arrive with planning work.

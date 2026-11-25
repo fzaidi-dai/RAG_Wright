@@ -1,7 +1,6 @@
 """Taking a tool away from one tier.
 
-**The decision:** the interpreter is available for programmatic orchestration, but the chat-manager does
-not have it.
+**The decision:** a tool one tier must not run is taken from that tier, never only described as off limits.
 
 **The obvious mechanism does not work, and knowing why is most of this module.**
 `HarnessProfileConfig.excluded_tools` exists and is supported — but `_harness_profile_for_model(model,
@@ -33,9 +32,9 @@ WITHHELD_FROM_CHAT: dict[str, str] = {
         "fail spends a call and returns an error that reads like a temporary problem."
     ),
     "eval": (
-        "The JavaScript interpreter. It belongs to programmatic orchestration and the "
-        "conversation tier has nothing to compute, and one fewer thing for a model to reach "
-        "for while flailing, which the routing eval showed it does."
+        "The JavaScript interpreter. No tier is given one (PS-84): the conversation tier has nothing "
+        "to compute, and the orchestrator calls no operation. Kept here so a library that starts adding "
+        "it does not hand this tier one more thing to reach for while flailing, which the routing eval showed it does."
     ),
     "grep": (
         "A search over the tier's own files, which hold its memory and nothing else, and its memory is already in its "
@@ -50,7 +49,7 @@ WITHHELD_FROM_CHAT: dict[str, str] = {
     ),
 }
 
-#: What the PLANNING tier does not get. It keeps `eval`, which is the whole point of programmatic orchestration.
+#: What the PLANNING tier does not get. It is given no interpreter and no product operation at all (PS-84).
 WITHHELD_FROM_ORCHESTRATOR: dict[str, str] = {
     "execute": WITHHELD_FROM_CHAT["execute"],
 }

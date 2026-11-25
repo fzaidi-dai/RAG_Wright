@@ -215,7 +215,6 @@ def test_A_WORKER_CARRIES_THE_SAME_ERROR_MODEL_AS_A_TIER() -> None:
 #: middleware the audit cannot see**, which is the failure the audit exists to prevent, one level up.
 FACTORIES = {
     "withhold": "WithheldTools",
-    "code_interpreter": "CodeInterpreterMiddleware",
     "chat_thinking": "HowMuchToThink",
     "dispatch_bound": "OnlySoManyDispatches",
     "orchestrator_thinking": "HowMuchToThink",
@@ -229,9 +228,11 @@ FACTORIES = {
 #: Lowercase calls in a builder that build something other than middleware, or whose middleware is carried by
 #: workers already (`error_middleware`, `remembering`, `_recording`).
 NOT_MIDDLEWARE = {
-    "agent_chat_model", "chat_manager_tools", "orchestrator_tools", "orchestrator_subagent",
+    "agent_chat_model", "chat_manager_tools", "orchestrator_subagent",
     "build_memory_backend", "memory_permissions", "create_deep_agent", "error_middleware", "worker",
-    "build_orchestrator", "len", "dict", "remembering", "_recording", "catch_all_disabled",
+    "build_orchestrator", "len", "dict",
+    # refuses a planning operation no worker holds (PS-84); builds no middleware
+    "refuse_unworked", "remembering", "_recording", "catch_all_disabled",
     "forces_a_tool",
     "frozenset",
     # names the one tool `TheReportIsTheAnswer` leaves (PS-76); builds no middleware

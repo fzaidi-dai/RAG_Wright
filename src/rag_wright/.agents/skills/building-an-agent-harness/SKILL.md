@@ -310,8 +310,12 @@ user  <->  CHAT-MANAGER      conversation, threads, UI context, direct tools for
 calls before any tool runs, and routing *"list my documents"* through all three is latency and cost on the
 commonest path. A model must never sit in the path of an unambiguous request.
 
-**The split is a SUBSET, never a partition.** The orchestrator holds everything; the chat-manager holds the
-half that needs no planning. *An operation the orchestrator cannot see is a plan it cannot make.*
+**The orchestrator plans and dispatches; it runs nothing.** A tool bound to a model is a tool the model can
+call, and there is no way to show it one it may read but not run. So the orchestrator holds no operation: the
+chat-manager holds the half that needs no planning, workers hold the rest, and the orchestrator plans from each
+worker's description, which the engine ends with what that worker can call. An operation that needs planning and
+that no worker holds is refused when the agent is built (PS-84). Give a worker any direct operation a delegated
+message may also need: once the message is handed down, the chat-manager's direct tools are out of reach.
 
 **And the split is a judgement, so write it down rather than dressing it up as a derivation.** The tempting
 rule - "an operation that names a model or a retrieval graph is a planning operation" - separates the set
@@ -416,8 +420,9 @@ that would ask instead reports "blocked, I need X" through its structured result
 once. The less obvious benefit is bigger: a need that reaches the orchestrator can often be answered *by* the
 orchestrator, which already knows what the conversation settled on, and never troubles the user at all.
 
-**Never bridge the asking tool into a code interpreter.** A question raised from inside a loop re-runs the
-whole program on resume - every tool call it had already made, again, with nothing on screen to say so.
+**Never bridge the asking tool into a code interpreter**, if you give a tier one (the engine gives none, PS-84).
+A question raised from inside a loop re-runs the whole program on resume - every tool call it had already made,
+again, with nothing on screen to say so.
 
 **And a changed subject is confirmed deterministically, never adopted silently.** The user runs one query,
 navigates to another, types "what about this one?", and every word of the answer is fluent, cited, and about

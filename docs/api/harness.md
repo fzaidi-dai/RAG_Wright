@@ -732,14 +732,6 @@ Operations the chat-manager may call DIRECTLY: a store read or an engine search,
 
 **Derived, deliberately.** A set computed at import from one product's registry would hand every product that product's tier split, and letting a product pass its own direct set would let it pass one that disagrees with its own `planning`, putting a planning operation on the direct surface with nothing to catch it. A product declares what is irreducible and the substrate derives this, so the two cannot drift by construction.
 
-### `orchestrator_direct(definition: 'Any', context: 'Any') -> 'set[str]'`
-
-What the orchestrator calls ITSELF.
-
-**A tool a worker holds is not on the parent's direct surface**, and that one rule is the whole of this function. Before it, the orchestrator held everything a worker held -- so delegating cost it a turn and bought it nothing, and across six measured runs it never delegated once. The docs give context isolation as the reason subagents exist; a parent holding the same tools has no bloat to avoid.
-
-What is left is planning and bookkeeping: what documents exist, what work is running, what it cost. Cheap, bounded, and exactly what a plan is built from -- taking the listing away would blind the planner.
-
 ### `worker_operations(definition: 'Any', context: 'Any') -> 'frozenset[str]'`
 
 The operations some worker holds, derived from the workers themselves.
@@ -751,26 +743,6 @@ The operations some worker holds, derived from the workers themselves.
 ### `withhold(*names: 'str') -> 'WithheldTools'`
 
 A middleware that keeps `names` off the tier it is attached to.
-
-### `bridged_tools(context: 'Any', resources: 'Any', *, surface: 'Any') -> 'list'`
-
-The tools a program in the sandbox may call.
-
-**`surface` is handed in rather than imported.** The tool registry is the PRODUCT's -- its named operations and its governance over them. A generic substrate cannot know those names, so it asks whatever it was given for the run's bound tools.
-
-**The run's own bindings**, so tenancy stays out of the model's reach inside the sandbox too: a bridged tool that took a workspace argument would let a JS program name another scope.
-
-**The agent's WHOLE surface minus what interrupts**, which is what this docstring always claimed — the first version bridged `build_manifest` instead, a set that differs for an unrelated reason. The gap was `read_the_question`: on the orchestrator's tool surface, absent from the sandbox. A model that had been given the camelCase convention generalised it correctly, wrote `tools.readTheQuestion(...)`, and got `TypeError: not a function` — so the coded arm of a code-versus-prompt comparison failed for a reason that had nothing to do with whether code beats prompting.
-
-**A surface the model can see but the sandbox cannot is a trap**, and the same shape as the documents-are-not-files collision: our own inconsistency, discovered by a model behaving reasonably.
-
-### `js_name(tool_name: 'str') -> 'str'`
-
-The name a bridged tool answers to inside the sandbox.
-
-**The bridge camelCases our snake_case names**: `sweep_scope` is `tools.sweepScope`. A model that knows our tool names — every model on this tier does, they are in its schema — writes `tools.sweep_scope(...)` and gets `TypeError: not a function`. The same namespace collision as the documents-are-not-files one, one layer down, and the reason anything that tells the orchestrator how to write a program must use these names.
-
-A test drives the real sandbox and compares, so this cannot drift from what the bridge actually does.
 
 ### `worker_spec(name: 'str', description: 'str', prompt: 'str', tools: 'list', report: 'type', ledger: 'Any' = None, *, retry_on: 'tuple[type[BaseException], ...]' = (), message_for: 'Any' = None, signposts: 'Any' = None, repeatable: 'frozenset[str]' = frozenset(), question_argument: 'dict[str, str] | None' = None, framings: 'tuple[str, ...]' = (), carry_forward: 'Any' = None, read_framing: 'Any' = None, definition: 'Any' = None, model_id: 'str | None' = None, model_calls: 'int | None' = None, tool_calls: 'int | None' = None) -> 'dict[str, Any]'`
 

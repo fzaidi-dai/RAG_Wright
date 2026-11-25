@@ -23,12 +23,12 @@ FABRIC = Path(__file__).with_name("fabric.py")
 #: The harness names the first product's own code (its agent, its evals and its scripts) imports. Each was reached
 #: through a submodule until PS-48i; a name dropping off the surface would put that product back on internals.
 WHAT_A_PRODUCTS_CODE_USES = {
-    "WhatTheRunDecided", "RecordTheDecisions", "DISPATCHES_PER_RUN", "ConfirmTheView", "bridged_tools", "js_name",
+    "WhatTheRunDecided", "RecordTheDecisions", "DISPATCHES_PER_RUN", "ConfirmTheView",
     "scope_namespace_of", "shared_namespace_of", "rule_named", "run_key", "chat_manager_tools", "harness_tracing_on",
     "withhold", "build_worker", "guessed_identifiers", "RecordTheContext", "Fault", "InjectFaults",
     "what_will_run", "only_the_chat_manager", "stub_orchestrator",
     # a product's guards on its own tier split
-    "direct_names", "orchestrator_direct", "worker_operations",
+    "direct_names", "worker_operations",
 }
 
 _SUBMODULE_IMPORT = re.compile(r"^\s*(?:from\s+rag_wright\.harness\.\w+\s+import|import\s+rag_wright\.harness\.\w+)",

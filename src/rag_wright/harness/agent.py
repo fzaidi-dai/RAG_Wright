@@ -153,8 +153,8 @@ def build_chat_agent(
         # backoff -- and nothing would cap a runaway loop.
         middleware=[
             # **Per-AGENT, not per-model**. `HarnessProfileConfig.excluded_tools` keys on the
-            # model, and both tiers run the same one -- it would take the interpreter from the
-            # orchestrator too, which is where programmatic orchestration needs it.
+            # model, and both tiers run the same one -- it would take from the orchestrator whatever
+            # is taken from this tier.
             withhold(*WITHHELD_FROM_CHAT),
             chat_thinking(),
             # **A count, not a request**. Measured: this tier delegated 3 times with reasoning

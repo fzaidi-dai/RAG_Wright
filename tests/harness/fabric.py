@@ -246,8 +246,7 @@ def _fabric_worker(context: Any, resources: Any, ledger: Any = None) -> dict:
     """This product's only worker. Built with the substrate's own spec helper, which names no domain.
 
     **It holds the content-heavy operation and nothing else** (PS-48g): `list_mills` stays with the
-    orchestrator, which plans from it, so the fabric product has an operation on each side of the
-    orchestrator/worker split. **And it is built from the definition**, the way a product should: without
+    chat-manager, and the orchestrator holds neither (PS-84). **And it is built from the definition**, the way a product should: without
     `definition=` a worker runs with no retries, no repeat suppression and no decision recording."""
     from rag_wright.harness import worker_spec
 

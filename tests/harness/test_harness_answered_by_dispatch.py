@@ -23,7 +23,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from langchain_core.tools import tool
 
 import rag_wright.harness.agent as agent_module
-from rag_wright.harness import build_chat_agent, resume_run, start_run
+from rag_wright.harness import WorkerReport, build_chat_agent, resume_run, start_run, worker_spec
 from tests.harness.fabric import _a_context, _fabric, _resources, _settings
 
 ASK = "ask_the_user"
@@ -98,6 +98,12 @@ def _delegate(brief: str = "Which earlier development is closest to SDF 3146?") 
     return _call("task", {"description": brief, "subagent_type": "orchestrator"}, "d1")
 
 
+def precedent_worker(context: Any, resources: Any, ledger: Any = None) -> dict:
+    """The worker that holds the operation needing planning: the orchestrator runs none itself (PS-84)."""
+    return worker_spec("precedent_worker", "Finds the earlier cases closest to one.", "You find precedents.",
+                       PrecedentSurface().build(context, resources, only=["product.find_precedents"]), WorkerReport)
+
+
 REPORT = AIMessage(content="The closest earlier development to SDF 3146 is SDF 3204; finished GSM 350 against 420.")
 
 
@@ -108,8 +114,8 @@ class PlanningFailed(RuntimeError):
 def _agent(*replies: Any) -> tuple[Any, PrecedentSurface, list[list[str]]]:
     surface = PrecedentSurface()
     definition = dataclasses.replace(
-        _fabric(), surface=surface, planning={"product.find_precedents": "compares across cases"}, workers=(),
-        routing=None, repeatable=frozenset(), question_argument={},
+        _fabric(), surface=surface, planning={"product.find_precedents": "compares across cases"},
+        workers=(precedent_worker,), routing=None, repeatable=frozenset(), question_argument={},
         message_for=lambda error: f"the dispatch failed: {error}" if isinstance(error, PlanningFailed) else None)
     model, offered = recording(*replies)
     agent = build_chat_agent(_a_context(), _resources(), _settings(), definition=definition, model=model)
@@ -186,12 +192,25 @@ def test_THE_PERSONS_ANSWER_TO_A_BLOCKED_REPORT_RESTORES_THEM() -> None:
 
 def test_A_TWO_PART_MESSAGE_IS_ANSWERED_BY_THE_TIER_IT_WAS_HANDED_TO() -> None:
     """**The risk the card names.** Delegating first leaves no direct turn after the report, so the direct half
-    is answered where the whole message went: the orchestrator holds every exposed operation."""
+    is answered where the whole message went. The orchestrator runs no operation (PS-84), so it is a worker's: here
+    one holding both, which is what a product gives a worker when its direct half may arrive with planning work."""
     both = "What GSM did SDF 3146 finish at, and which earlier development is closest to it?"
-    agent, surface, offered = _agent(_delegate(both), _call("case_dossier", {"case": "3146"}, "o1"),
-                                     _call("find_precedents", {"case": "3146"}, "o2"),
-                                     AIMessage(content="3146 finished at 420 GSM; SDF 3204 is the closest."),
-                                     AIMessage(content="420 GSM, and SDF 3204 is the closest."))
+    surface = PrecedentSurface()
+
+    def case_worker(context: Any, resources: Any, ledger: Any = None) -> dict:
+        return worker_spec("case_worker", "Reads cases and finds the ones closest to them.", "You read cases.",
+                           surface.build(context, resources), WorkerReport)
+
+    definition = dataclasses.replace(
+        _fabric(), surface=surface, planning={"product.find_precedents": "compares across cases"},
+        workers=(case_worker,), routing=None, repeatable=frozenset(), question_argument={})
+    model, offered = recording(
+        _delegate(both), _call("task", {"description": both, "subagent_type": "case_worker"}, "t1"),
+        _call("case_dossier", {"case": "3146"}, "w1"), _call("find_precedents", {"case": "3146"}, "w2"),
+        _call("WorkerReport", {"status": "done", "need": ""}, "r1"),
+        AIMessage(content="3146 finished at 420 GSM; SDF 3204 is the closest."),
+        AIMessage(content="420 GSM, and SDF 3204 is the closest."))
+    agent = build_chat_agent(_a_context(), _resources(), _settings(), definition=definition, model=model)
 
     run = asyncio.run(start_run(agent, _a_context(), message=both))
 

@@ -6,8 +6,8 @@ and why), its operations' signatures and its prompts stay in RuleWright: those a
 
 **The direct surface is a requirement, not an optimisation.** Three tiers means three agents making model calls
 before any tool runs, so routing "list the mills" through all three is latency and cost on the commonest path.
-**And it is a SUBSET, never a partition**: an operation the orchestrator cannot see is a plan it cannot make. So
-the chat-manager holds what needs no planning, and the orchestrator reaches all of it.
+The chat-manager holds what needs no planning and the workers hold the rest; the orchestrator plans from the
+workers' descriptions and holds no operation (PS-84, `test_harness_orchestrator_plans.py`).
 """
 
 from __future__ import annotations
@@ -23,8 +23,6 @@ from rag_wright.harness.tiers import (
     build_orchestrator,
     chat_manager_tools,
     direct_names,
-    orchestrator_direct,
-    orchestrator_reachable,
     orchestrator_subagent,
     worker_operations,
 )
@@ -66,15 +64,6 @@ def test_A_PLANNING_NAME_THE_SURFACE_DOES_NOT_EXPOSE_ADDS_NOTHING_DIRECT() -> No
     definition = replace(_fabric(), planning={**FABRIC_PLANNING, "fabric.no_such_operation": "x" * 50})
 
     assert direct_names(definition) == direct_names(_fabric())
-
-
-def test_THE_ORCHESTRATOR_SEES_EVERYTHING_THE_CHAT_MANAGER_SEES() -> None:
-    """**A strict subset**: a partition would mean the orchestrator could not plan work that begins with a
-    listing."""
-    definition = _fabric()
-
-    assert direct_names(definition) < orchestrator_reachable(definition)
-    assert orchestrator_reachable(definition) == set(FABRIC_EXPOSED)
 
 
 # --- what each tier actually gets ---------------------------------------------------------------------
@@ -140,41 +129,13 @@ async def test_THE_SCOPE_REACHES_A_TOOL_INSIDE_THE_ORCHESTRATOR() -> None:
     assert seen == [("acme-mills", "ss26", "resort")], f"the orchestrator's tool woke with {seen}"
 
 
-# --- a tool a worker holds is not on the parent ----------------------------------------------------------
+# --- what the workers hold ---------------------------------------------------------------------------------
 
 
-def test_THE_ORCHESTRATOR_DOES_NOT_HOLD_WHAT_ITS_WORKERS_HOLD() -> None:
-    """**The rule that makes delegation worth a turn.** A parent holding its worker's tools never delegates --
-    across six measured runs it did not once -- because delegating then costs a turn and saves nothing."""
-    definition = _fabric()
-    held = worker_operations(definition, _a_context())
+def test_THE_WORKER_HOLDS_THE_OPERATION_THAT_NEEDS_PLANNING() -> None:
+    held = worker_operations(_fabric(), _a_context())
 
     assert held == {"fabric.match_compositions"}, f"the worker holds {sorted(held)}"
-    assert not orchestrator_direct(definition, _a_context()) & held
-
-
-def test_THE_ORCHESTRATOR_CAN_STILL_REACH_EVERYTHING() -> None:
-    """Reaching is not holding: what it does not hold, it reaches through a worker."""
-    definition = _fabric()
-
-    assert (orchestrator_direct(definition, _a_context()) | worker_operations(definition, _a_context())
-            == set(FABRIC_EXPOSED)), "some operation is neither the orchestrator's nor any worker's"
-
-
-def test_THE_ORCHESTRATOR_KEEPS_WHAT_A_PLAN_IS_BUILT_FROM() -> None:
-    """**Anti-vacuity.** A rule that moved everything to workers would blind the planner: it could not list the
-    mills in order to fan out over them."""
-    direct = orchestrator_direct(_fabric(), _a_context())
-
-    assert direct == {"fabric.list_mills"}
-
-
-def test_THE_ORCHESTRATOR_IS_BOUND_ITS_DIRECT_TOOLS_AND_NOT_ITS_WORKERS() -> None:
-    """Read off the compiled tier rather than the derivation, so the builder is held to it too."""
-    bound = set(_card()["runnable"].nodes["tools"].bound.tools_by_name)
-
-    assert "list_mills" in bound
-    assert "match_compositions" not in bound, "the orchestrator holds its worker's tool directly"
 
 
 def test_THE_CHAT_MANAGERS_SURFACE_IS_DECIDED_BY_PLANNING_NOT_BY_THE_WORKER_SPLIT() -> None:

@@ -25,7 +25,6 @@ from rag_wright.harness.errors import ModelAttemptTooSlow, ModelTooSlow, ModelTu
 from rag_wright.harness.events import RunEvent, translate, what_was_finished
 from rag_wright.harness.faults import Fault, InjectFaults
 from rag_wright.harness.grading import GRADER_ERROR, GradeThisTier, Grading, Verdict, grading_middleware, rule_tools
-from rag_wright.harness.interpreter import bridged_tools, js_name
 from rag_wright.harness.memory import MemoryWithoutTenancy, scope_namespace_of, shared_namespace_of
 from rag_wright.harness.models import agent_chat_model
 from rag_wright.harness.preflight import (
@@ -65,7 +64,6 @@ from rag_wright.harness.tiers import (
     build_orchestrator,
     chat_manager_tools,
     direct_names,
-    orchestrator_direct,
     worker_operations,
 )
 from rag_wright.harness.tracing import harness_tracing_on
@@ -83,8 +81,8 @@ __all__ = [
     "scope_namespace", "shared_namespace", "thread_key", "MemoryWithoutTenancy", "scope_namespace_of",
     "shared_namespace_of",
     # the tier split, derived from the definition: for a product's guards on its own composition
-    "chat_manager_tools", "direct_names", "orchestrator_direct", "worker_operations",
-    "withhold", "DISPATCHES_PER_RUN", "bridged_tools", "js_name",
+    "chat_manager_tools", "direct_names", "worker_operations",
+    "withhold", "DISPATCHES_PER_RUN",
     # workers and their reports
     "worker_spec", "WorkerReport", "CANNOT_ASK", "DO_WHAT_WAS_ASKED", "build_worker",
     # human in the loop and the run's event stream

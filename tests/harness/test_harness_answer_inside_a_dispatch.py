@@ -20,7 +20,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, ToolMessage
 
 from rag_wright.harness import build_chat_agent, resume_run, start_run
-from tests.harness.fabric import FabricFindings, FabricToolSurface, _a_context, _fabric, _resources, _settings
+from tests.harness.fabric import FabricFindings, _a_context, _fabric, _resources, _settings
 from tests.harness.test_harness_answered_by_dispatch import PrecedentSurface, _call, _delegate, recording
 
 QUESTION = "Which earlier development is closest to SDF 3146?"
@@ -32,7 +32,7 @@ def _worker(context: Any, resources: Any, ledger: Any = None) -> dict:
 
     return worker_spec("composition_worker", "Finds fabric compositions matching a requirement set.",
                        "You match requirement sets to fabric compositions.",
-                       FabricToolSurface().build(context, resources, only=["fabric.match_compositions"]),
+                       PrecedentSurface().build(context, resources, only=["product.find_precedents"]),
                        FabricFindings, ledger=ledger, definition=_fabric())
 
 

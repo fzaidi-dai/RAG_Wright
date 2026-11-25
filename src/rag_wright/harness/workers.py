@@ -326,7 +326,7 @@ def _spec(name: str, description: str, prompt: str, tools: list, report: type, l
     **No `ask_the_user` in any worker's tools**, and that absence is the mechanism: a prompt
     saying "do not ask" is a suggestion; a tool the worker was never given is a fact.
     """
-    return {"name": name, "description": description, "system_prompt": prompt,
+    return {"name": name, "description": with_what_it_can_call(description, tools), "system_prompt": prompt,
             "tools": tools, "response_format": report,
             "middleware": worker_middleware(ledger, name,
                                             retry_on=retry_on, message_for=message_for,
@@ -340,6 +340,22 @@ def _spec(name: str, description: str, prompt: str, tools: list, report: type, l
 
 
 
+
+
+def with_what_it_can_call(description: str, tools: list) -> str:
+    """The worker's description, followed by what it can call: the name and first line of each of its tools (PS-84).
+
+    **This is what the orchestrator plans from.** It holds no product operation, since a tool bound to a model is one
+    the model can run, so `task` and the D2 routing decision read each worker's description instead. Generated from the
+    worker's own tools, it cannot drift when a worker gains or loses one.
+    """
+    if not tools:
+        return description
+    lines = []
+    for tool in tools:
+        summary = (tool.description or "").strip().splitlines()
+        lines.append(f"- {tool.name}: {summary[0]}" if summary else f"- {tool.name}")
+    return f"{description}\n\nIt can call:\n" + "\n".join(lines)
 
 
 def with_its_model(spec: dict[str, Any], settings: Any) -> dict[str, Any]:

@@ -24,7 +24,7 @@ from langchain_core.messages import AIMessage, ToolMessage
 from rag_wright.harness import RoutingThresholds, build_chat_agent, resume_run, start_run
 from rag_wright.harness.decisions import WhatTheRunDecided
 from tests.harness.fabric import _a_context, _fabric, _resources, _settings
-from tests.harness.test_harness_answered_by_dispatch import ASK, PrecedentSurface, _call, recording
+from tests.harness.test_harness_answered_by_dispatch import ASK, PrecedentSurface, _call, precedent_worker, recording
 
 QUESTION = "Which earlier development is closest to SDF 3146?"
 ASKED = "SS26 or AW26?"
@@ -32,7 +32,8 @@ WHAT_WAS_ASKED = f"{QUESTION}\n\nAsked: {ASKED}\nAnswered: SS26"
 
 
 class Routes:
-    """The decision model: D1 answers `choices` in order, each at 0.9; B1 says every brief stands on its own."""
+    """The decision model: D1 answers `choices` in order, each at 0.9; B1 says every brief stands on its own; D2 needs
+    no worker."""
 
     def __init__(self, *choices: str) -> None:
         self.choices, self.states = list(choices), []
@@ -40,6 +41,8 @@ class Routes:
     async def __call__(self, name: str, inputs: dict, *, resources: object = None) -> dict:
         if "self_contained" in inputs["questions"]:
             return {"answers": {"self_contained": {"type": "noul", "noul": 0.9}}}
+        if "precedent_worker" in inputs["questions"]:  # D2: the orchestrator's opening call keeps the brief
+            return {"answers": {"precedent_worker": {"type": "noul", "noul": 0.0}}}
         self.states.append(inputs["state"])
         choice = self.choices.pop(0)
         return {"answers": {"choice": {"type": "choice", "choice": choice, "probabilities": {choice: 0.9}}}}
@@ -60,7 +63,8 @@ def routes(monkeypatch: pytest.MonkeyPatch):
 def _agent(*replies: Any, ledger: WhatTheRunDecided | None = None) -> tuple[Any, PrecedentSurface, list[list[str]]]:
     surface = PrecedentSurface()
     definition = dataclasses.replace(
-        _fabric(), surface=surface, planning={"product.find_precedents": "compares across cases"}, workers=(),
+        _fabric(), surface=surface, planning={"product.find_precedents": "compares across cases"},
+        workers=(precedent_worker,),
         routing=RoutingThresholds(), repeatable=frozenset(), question_argument={})
     model, offered = recording(*replies)
     agent = build_chat_agent(_a_context(), _resources(), _settings(), definition=definition, model=model,

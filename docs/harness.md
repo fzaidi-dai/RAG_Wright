@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-86 public names; `AgentDefinition` has 17 fields (15 required; optional: `routing`, `budget`); `AgentPrompts` has 11 fields, every one required.
+83 public names; `AgentDefinition` has 17 fields (15 required; optional: `routing`, `budget`); `AgentPrompts` has 11 fields, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -28,7 +28,11 @@ The substrate runs an agent; it does not know your domain. It owns the parts tha
 have nothing to do with what your documents contain:
 
 - **Three tiers.** A chat-manager a person talks to, an orchestrator that plans, and dispatched workers. The
-  chat-manager holds a direct read surface, so an unambiguous request never pays for three model calls.
+  chat-manager holds a direct read surface, so an unambiguous request never pays for three model calls. The
+  orchestrator plans and dispatches and calls no operation itself: it plans from each worker's description, to which
+  the engine adds what that worker can call, so every operation in `planning` must be held by a worker, and an agent
+  whose definition leaves one to no worker is refused when it is built (PS-84). An operation the chat-manager holds is
+  out of reach once a message is delegated, so give it to a worker too if it may arrive with planning work.
 - **One entry point per lifecycle event**, because runtime context is per invocation: a resume that forgot it
   would wake every tool with no scope, and the memory namespace would collapse to one global scope.
 - **The failure model**: named retry sets, a per-attempt clock inside the retry and a whole-turn ceiling outside
@@ -171,7 +175,7 @@ Builders:
 | `worker_spec` | A `SubAgent` spec, deliberately the opposite choice from the orchestrator's `CompiledSubAgent`. |
 <!-- /generated -->
 
-**Import from `rag_wright.harness`, never from a submodule.** Everything a product's agent, evals and guards need is in its `__all__`, listed in full in [the API reference](api/harness.md): the run's decision ledger (`WhatTheRunDecided`, `RecordTheDecisions`), `run_key`, `build_worker`, `withhold`, the derived tier split (`direct_names`, `orchestrator_direct`, `worker_operations`, `chat_manager_tools`) among them. A submodule is the harness's own and may change without notice.
+**Import from `rag_wright.harness`, never from a submodule.** Everything a product's agent, evals and guards need is in its `__all__`, listed in full in [the API reference](api/harness.md): the run's decision ledger (`WhatTheRunDecided`, `RecordTheDecisions`), `run_key`, `build_worker`, `withhold`, the derived tier split (`direct_names`, `worker_operations`, `chat_manager_tools`) among them. A submodule is the harness's own and may change without notice.
 
 ---
 
@@ -308,8 +312,7 @@ verdict reaches `on_evaluation` carrying its `tier` (`chat-manager`, `orchestrat
 with no rule is not graded, and without `grading` nothing is built. Each graded tier costs a grader call (two when
 it reads its evidence first) every time it finishes, a worker each time it is dispatched, so grade evals and
 sampled runs rather than every served one. `applies_to` names `chat-manager`,
-`orchestrator` or `worker`; the orchestrator holds an interpreter, so a rule about its programs names `orchestrator`
-(with `coded`, for an eval that grades a coded arm it drives itself). Grading observes and never changes the run: a
+`orchestrator` or `worker` (and `coded`, for an eval that grades a coded arm it drives itself). Grading observes and never changes the run: a
 grader that fails or overruns reports `GRADER_ERROR` and the run is untouched. `Grading(model=...)` sets the grader's
 model; otherwise it is your `model_id_for`.
 
@@ -380,7 +383,8 @@ warning. **To turn routing off** -- for example where users' messages must not r
 declare `AgentDefinition(..., routing=None)`: no tier asks the decision model and nothing is sent to it.
 
 **Your declarations are the criteria.** The decision model reads each direct tool's own description, the
-orchestrator's `orchestrator_description` (what delegating means) and each worker's description. Write them so they
+orchestrator's `orchestrator_description` (what delegating means) and each worker's description, which ends with
+what the worker can call: the name and first line of each of its tools, added by `worker_spec`. Write them so they
 tell the options apart. The weakest option on the engine's sets is `delegate`, confused with a direct read of the
 same subject, so say in `orchestrator_description` what needs planning (matching, comparing, checking against a
 standard, several steps), not only what the orchestrator is.

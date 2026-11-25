@@ -38,6 +38,7 @@ QUESTION = "Which earlier development is closest to SDF 3146?"
 
 
 def _agent(*replies: Any, budget: RunBudget = RunBudget(), workers: tuple = ()) -> tuple[Any, WhatTheRunSpent, list]:
+    workers = workers or (_worker,)
     definition = dataclasses.replace(
         _fabric(), surface=PrecedentSurface(), planning={"product.find_precedents": "compares across cases"},
         workers=workers, routing=None, repeatable=frozenset(), question_argument={}, budget=budget)
@@ -79,7 +80,7 @@ def test_TOKENS_ARE_COUNTED_FROM_EACH_REPLY() -> None:
 def _worker(context: Any, resources: Any, ledger: Any = None) -> dict:
     return worker_spec("composition_worker", "Finds fabric compositions matching a requirement set.",
                        "You match requirement sets to fabric compositions.",
-                       FabricToolSurface().build(context, resources, only=["fabric.match_compositions"]),
+                       PrecedentSurface().build(context, resources, only=["product.find_precedents"]),
                        FabricFindings, ledger=ledger, definition=_fabric())
 
 

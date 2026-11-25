@@ -84,7 +84,8 @@ def test_NO_WORKER_MEANS_THE_OPENING_CALL_HAS_NO_HANDOFF_AND_D2_IS_NONE(needs) -
 
     _, ledger = _plan(model)
 
-    assert "task" not in offered[0] and "list_mills" in offered[0], "its own tools, without the hand-off"
+    # PS-84: without the hand-off it holds no operation either, since it executes none.
+    assert "task" not in offered[0] and "list_mills" not in offered[0], "the opening call kept the hand-off"
     (made,) = _d2(ledger)
     assert (made.chose, made.confidence) == ("none", 0.8)
 

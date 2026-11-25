@@ -13,9 +13,10 @@ agents making model calls before any tool runs, and routing *"list my documents"
 latency and cost on the commonest path — which breaks the rule that a model never
 sits in the path of an unambiguous button click.
 
-**It is a SUBSET, never a partition.** As the design put it: *"an operation the orchestrator
-cannot see is a plan it cannot make."* So the orchestrator holds everything and the chat-manager holds the
-half that needs no planning. `ORCHESTRATOR == set(EXPOSED)`, asserted.
+**The orchestrator plans and dispatches; it executes nothing** (PS-84). A tool bound to a model is a tool the
+model can call, so what the orchestrator plans from is text: each worker's description, which carries what the worker
+can call. The chat-manager holds the operations that need no planning, the workers hold the rest, and an operation
+that needs planning with no worker to run it is refused when the agent is built.
 
 **The classification is a JUDGEMENT and is maintained, which is said plainly rather than dressed up as a
 derivation.** The tempting derivation — "the operation names a model or a retrieval graph in its signature"
@@ -48,21 +49,6 @@ def direct_names(definition: Any) -> set[str]:
     this, so the two cannot drift by construction.
     """
     return set(definition.surface.exposed_names) - set(definition.planning)
-
-#: Everything the orchestrator can REACH -- the whole exposed surface, deliberately. The user's rule,
-#: 2026-09-15: *"an operation the orchestrator cannot see is a plan it cannot make."*
-#:
-#: Reaching is not the same as HOLDING. Some of these it calls itself; the rest it reaches through a
-#: worker, which is what keeps that worker's tool calls out of its context.
-def orchestrator_reachable(definition: Any) -> set[str]:
-    """Everything the orchestrator can REACH -- the whole exposed surface, deliberately."""
-    return set(definition.surface.exposed_names)
-
-#: Kept for callers that predate the split; a product's definition is the authority now.
-def orchestrator_names(definition: Any) -> set[str]:
-    """Alias retained for readers of the old `ORCHESTRATOR` constant."""
-    return orchestrator_reachable(definition)
-
 
 #: Keyed on the facts the ANSWER depends on, and deliberately not on the context. See below.
 _WORKER_OPERATIONS: dict[tuple, frozenset[str]] = {}
@@ -115,20 +101,16 @@ def _worker_operations(definition: Any, context: Any) -> frozenset[str]:
                      if definition.surface.build(context, resources, only=[name])[0].name in held)
 
 
-def orchestrator_direct(definition: Any, context: Any) -> set[str]:
-    """What the orchestrator calls ITSELF.
+def refuse_unworked(definition: Any, context: Any) -> None:
+    """Refuse a definition with an operation that needs planning and that no worker holds: nothing could run it (PS-84).
 
-    **A tool a worker holds is not on the parent's direct surface**, and that one rule is the whole of
-    this function. Before it, the orchestrator held everything a worker held -- so delegating cost it a
-    turn and bought it nothing, and across six measured runs it never delegated once. The docs give
-    context isolation as the reason subagents exist; a parent holding the same tools has no bloat to
-    avoid.
-
-    What is left is planning and bookkeeping: what documents exist, what work is running, what it cost.
-    Cheap, bounded, and exactly what a plan is built from -- taking the listing away would blind the
-    planner.
+    The orchestrator executes nothing, so an operation the chat-manager does not hold is a worker's or nobody's. A
+    planning name the surface does not expose is left out: no tier could run it anyway.
     """
-    return orchestrator_reachable(definition) - set(worker_operations(definition, context))
+    missing = (set(definition.planning) & set(definition.surface.exposed_names)) - worker_operations(definition, context)
+    if missing:
+        raise ValueError(f"no worker holds {sorted(missing)}: each operation in `planning` must be held by a worker, "
+                         "since the orchestrator plans and dispatches and calls no operation itself")
 
 
 
@@ -141,18 +123,6 @@ def chat_manager_tools(context: Any, resources: Any, *, definition: Any) -> list
     """
     return [
         *definition.surface.build(context, resources, only=sorted(direct_names(definition))),
-        clarification_tool(),
-    ]
-
-
-def orchestrator_tools(context: Any, resources: Any, *, definition: Any) -> list:
-    """What the orchestrator calls itself: its direct operations, plus the ability to ask.
-
-    **Not `agent_tools`.** That is the whole model-reachable surface, which the tenancy guards read; this is
-    one tier's half of it.
-    """
-    return [
-        *definition.surface.build(context, resources, only=sorted(orchestrator_direct(definition, context))),
         clarification_tool(),
     ]
 
@@ -220,13 +190,13 @@ def build_orchestrator(
     from rag_wright.harness.decider import Decider
     from rag_wright.harness.errors import error_middleware
     from rag_wright.harness.grading import graded
-    from rag_wright.harness.interpreter import code_interpreter
     from rag_wright.harness.routing import RouteTheBrief
     from rag_wright.harness.skills import orchestrator_skill
     from rag_wright.harness.withhold import WITHHELD_FROM_ORCHESTRATOR, withhold
     from rag_wright.harness.workers import with_its_model
 
 
+    refuse_unworked(definition, context)
     # **One ledger, and one is MADE when the caller supplies none.** `build_chat_agent` passes
     # its own down, but the decomposition eval drives this builder directly -- and a harness that measures
     # decisions while recording none would be the exact shape of instrument this phase was reset over.
@@ -243,8 +213,9 @@ def build_orchestrator(
         # `general-purpose` subagent stayed on every scripted tier, a route round every worker.
         model=catch_all_disabled(model) if model is not None else agent_chat_model(
             settings, definition.model_id_for(settings)),
-        tools=tools if tools is not None else orchestrator_tools(context, resources,
-                                                                definition=definition),
+        # **No product operation, ever** (PS-84): a tool bound here is one this tier can run. It plans from the
+        # workers' descriptions, which say what each can call, and asking the person is not an operation.
+        tools=tools if tools is not None else [clarification_tool()],
         system_prompt=(system_prompt if system_prompt is not None
                        else definition.prompts.orchestrator),
         context_schema=definition.context_schema,
@@ -272,17 +243,6 @@ def build_orchestrator(
             # middleware, so workers stay without a todo list -- which is what `WITHHELD_FROM_WORKERS`
             # was asking for by hand when the framework still forced one on them.
             TodoListMiddleware(),
-            # **Only this tier gets an interpreter.** Whether it is USED is a measured
-            # question, not a settled one -- an eval compares a coded fan-out against a prompted one.
-            # **The interpreter's OWN guidance is left intact, including the fan-out lesson** -- it was
-            # removed once and put back. The observation that motivated removing it stands and
-            # is not lost: the EVAL's prompted arm withholds `eval` while this teaches dispatching from
-            # JavaScript, so that arm is taught to use a tool it is denied. That is an inconsistency in
-            # `evals/orchestration.py` to fix in the eval, and was never a reason to change what
-            # production tells the model (`docs/design/robustness-before-speed.md` section 4).
-            # **The surface is passed, not imported**: the interpreter bridges the product's own
-            # surface, never one the substrate chose.
-            code_interpreter(context, resources, surface=definition.surface),
             *remembering(definition), *_recording(decisions, definition), BatchTheQuestions(), *error_middleware(retry_on=definition.retry_on,
                              message_for=definition.message_for),
             # Outer of the router, so a brief it dispatches in code, with no model call, is still recorded.

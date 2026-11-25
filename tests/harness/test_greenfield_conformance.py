@@ -29,7 +29,6 @@ from tests.harness.fabric import (
     FabricAccounting,
     FabricContext,
     FabricFindings,
-    FabricToolSurface,
     MillIsOffline,
     _a_context,
     _fabric,
@@ -58,21 +57,6 @@ async def test_A_GREENFIELD_PRODUCT_CAN_ACCOUNT_ITS_OWN_RUNS() -> None:
     assert accounting.rows[0]["duration_ms"] >= 0.0
 
 
-def test_A_GREENFIELD_PRODUCT_CAN_BRIDGE_ITS_OWN_TOOLS_INTO_THE_SANDBOX() -> None:
-    """**Stage 4c-i, proved from the outside.** The code interpreter bridges whatever surface it is given,
-    so a fabric program calls `tools.matchCompositions(...)` and nothing of ours is reachable."""
-    from rag_wright.harness.interpreter import bridged_tools, js_name
-
-    context = _a_context()
-    bridged = bridged_tools(context, _resources(), surface=FabricToolSurface())
-    names = {tool.name for tool in bridged}
-
-    assert names == {"match_compositions", "list_mills"}, (
-        f"the sandbox was bridged to {names}, not the fabric product's own tools"
-    )
-    assert js_name("match_compositions") == "matchCompositions"
-
-
 # --- what a greenfield product CANNOT do yet ----------------------------------------------------------
 
 
@@ -96,15 +80,14 @@ def test_THE_SUBSTRATE_DERIVES_THE_TIER_SPLIT_AND_DOES_NOT_ASK_FOR_IT() -> None:
     RuleWright's registry at import. A greenfield product declares what is irreducible -- its surface and
     which operations need planning -- and the substrate derives the rest, so the fabric product never
     states a direct set and therefore cannot state one that disagrees with its own classification."""
-    from rag_wright.harness.tiers import direct_names, orchestrator_reachable
+    from rag_wright.harness.tiers import direct_names
 
     definition = _fabric()
 
     assert direct_names(definition) == {"fabric.list_mills"}, (
         "the substrate did not derive the fabric product's direct surface from what it declared"
     )
-    assert orchestrator_reachable(definition) == set(FABRIC_EXPOSED)
-    assert direct_names(definition) < orchestrator_reachable(definition)
+    assert direct_names(definition) < set(FABRIC_EXPOSED)
 
 
 def test_A_GREENFIELD_PRODUCT_CAN_EXPRESS_ITS_OWN_SCOPE() -> None:

@@ -154,9 +154,9 @@ def test_THE_REAL_CHAT_MANAGER_IS_NOT_OFFERED_A_SEARCH_OF_ITS_OWN_FILES() -> Non
     from langchain_core.messages import AIMessage
 
     from rag_wright.harness import build_chat_agent, start_run
-    from tests.harness.test_harness_answered_by_dispatch import PrecedentSurface, recording
+    from tests.harness.test_harness_answered_by_dispatch import PrecedentSurface, precedent_worker, recording
 
-    definition = dataclasses.replace(_fabric(), surface=PrecedentSurface(), workers=(), routing=None,
+    definition = dataclasses.replace(_fabric(), surface=PrecedentSurface(), workers=(precedent_worker,), routing=None,
                                      planning={"product.find_precedents": "compares across cases"})
     model, offered = recording(AIMessage(content="420 GSM."))
     agent = build_chat_agent(_a_context(), _resources(), _settings(), definition=definition, model=model)
