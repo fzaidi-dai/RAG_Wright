@@ -48,6 +48,7 @@ from rag_wright.harness.rules import (
     wrote_a_program_for_a_single_call,
 )
 from rag_wright.harness.runs import (
+    Pending,
     RunOutcome,
     RunResult,
     outcome_of,
@@ -76,6 +77,7 @@ __all__ = [
     "AgentDefinition", "AgentPrompts", "RoutingThresholds", "RunBudget", "ToolSurface", "RunScope", "validate_scope",
     # running an agent: the one door
     "start_run", "resume_run", "stream_run", "read_run", "RunResult", "RunOutcome", "outcome_of", "thread_for",
+    "Pending",
     "build_chat_agent", "build_orchestrator", "agent_chat_model", "accounted_run", "run_key", "harness_tracing_on",
     # namespaces the product's stores are keyed by
     "scope_namespace", "shared_namespace", "thread_key", "MemoryWithoutTenancy", "scope_namespace_of",

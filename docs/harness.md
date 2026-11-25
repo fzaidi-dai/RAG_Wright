@@ -7,7 +7,7 @@ substrate goes quiet rather than failing. It was drafted by RuleWright, the firs
 **The tables are generated** from the installed tier by `scripts/build_harness_doc.py`, and the test suite fails
 if they drift (`tests/arch/test_api_docs_current.py`). Edit the prose; regenerate the tables. Today:
 <!-- generated:counts -->
-85 public names; `AgentDefinition` has 17 fields (15 required; optional: `routing`, `budget`); `AgentPrompts` has 11 fields, every one required.
+86 public names; `AgentDefinition` has 17 fields (15 required; optional: `routing`, `budget`); `AgentPrompts` has 11 fields, every one required.
 <!-- /generated -->
 
 **What it is not**, so the documents do not overlap:
@@ -151,6 +151,15 @@ Runs (`outcome` is read with `read_run`):
 | `stream_run` | Begin a run and yield `(run_id, namespace, mode, chunk)` as it happens. |
 | `read_run` | Where a run got to, by its id alone — or `None` if it is not this scope's. |
 <!-- /generated -->
+
+**A run that paused says what it asked** (PS-83). `RunResult.waiting_on` is a `Pending` while the run waits on a
+person, and `None` otherwise; `start_run`, `resume_run` and `read_run` all fill it, the last from the checkpoint alone,
+so a reloaded page shows the question. One reader covers every pause: `kind` is `ask_the_user` (the chat-manager
+asked), `confirm_view` (the view moved) or `batched_needs` (the workers' needs, which the orchestrator asks inside
+the chat-manager's dispatch, with no tool call to read); `question` is the one message to show, and `needs` the
+questions behind it one by one, for a form. Two questions pending at once (a model that asks twice in one reply) are
+one `batched_needs`, and `resume_run`'s one answer goes to each. On the stream, `translate` emits a `waiting` event
+with the same three fields, once, however deep the pause was raised.
 
 Builders:
 

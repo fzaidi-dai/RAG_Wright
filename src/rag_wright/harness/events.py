@@ -23,6 +23,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from rag_wright.harness.runs import pending_in
+
 #: The main agent. A subagent's namespace is non-empty, e.g. `("tools:call_abc",)`.
 MAIN = ""
 
@@ -86,6 +88,13 @@ def _update_events(chunk: Any, where: str) -> list[RunEvent]:
         return []
 
     events: list[RunEvent] = []
+    # **The run stopped for a person, and what for** (PS-83). A subagent's pause streams in its own namespace and
+    # again at the top; only the top one is the run's, so it is told once.
+    if "__interrupt__" in chunk and where == MAIN:
+        pending = pending_in(chunk["__interrupt__"])
+        if pending is not None:
+            events.append(RunEvent("waiting", {"kind": pending.kind, "question": pending.question,
+                                               "needs": list(pending.needs)}, where))
     for node, payload in chunk.items():
         if node != "tools" or not isinstance(payload, dict):
             continue

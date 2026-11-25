@@ -67,7 +67,7 @@ def clarification_tool() -> BaseTool:
         # **The entire body, and it must stay that way.** Resume replays this function from the top, so
         # anything above this line would happen twice -- a spent search, a written row, a sent message.
         # `test_harness_clarify.py` reads this body and fails if a statement appears before the interrupt.
-        return interrupt({"question": question})
+        return interrupt({"question": question, "kind": ASK_THE_USER})
 
     return ask_the_user
 

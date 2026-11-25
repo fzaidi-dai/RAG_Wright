@@ -28,7 +28,7 @@ What one run may spend across every tier, and what each tier keeps back for the 
 
 **Beside the per-invocation caps, not instead of them** (`errors.MODEL_CALLS_PER_INVOCATION`): those bound one tier's one invocation; this bounds the run's bill, which a run with several dispatches would otherwise multiply.
 
-### `RunResult(run_id: 'str', context: 'RunScope', state: 'dict[str, Any]', outcome: 'RunOutcome | None' = None) -> None`
+### `RunResult(run_id: 'str', context: 'RunScope', state: 'dict[str, Any]', outcome: 'RunOutcome | None' = None, waiting_on: 'Pending | None' = None) -> None`
 
 One user-initiated agent turn, and the scope it ran under.
 
@@ -43,6 +43,12 @@ What became of a run, named in CODE because none of it is a judgement.
 **The distinction between `PARTIAL` and `NOTHING_CAME_BACK` was measured, not designed.** Three reproduced failures showed two different shapes: when the whole-turn clock fires, and when a caller's own ceiling fires, the finished work is still in the checkpoint -- so there is something to show. When the retries are exhausted the model never answered, and the checkpoint holds only the user's question. A single "proceed with what returned" rule would have rendered the second as a partial answer, which is worse than failing.
 
 Members: `COMPLETE` (`'complete'`), `PARTIAL` (`'partial'`), `NOTHING_CAME_BACK` (`'nothing_came_back'`), `WAITING_ON_A_PERSON` (`'waiting_on_a_person'`)
+
+### `Pending(kind: 'str', question: 'str', needs: 'tuple[str, ...]') -> None`
+
+What a paused run is waiting on (PS-83): one `question` to show, and the `needs` behind it one by one.
+
+`kind` says which pause: `ask_the_user` (the chat-manager asked), `confirm_view` (the view moved) or `batched_needs` (the workers' needs, batched by the orchestrator, or several questions pending at once). `needs` is never empty: a single question is its own one need, so a product renders fields from it alone.
 
 ### `MemoryWithoutTenancy`
 

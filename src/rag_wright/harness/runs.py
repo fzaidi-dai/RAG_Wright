@@ -135,6 +135,45 @@ class RunResult:
     #: return before anything can be said; `read_run` always fills it, because a reader arriving later is
     #: exactly who needs it.
     outcome: RunOutcome | None = None
+    #: What the run is waiting on a person for, or `None` (PS-83). Filled by every door, so a product shows the
+    #: question it would otherwise have to dig out of LangGraph's `__interrupt__` key.
+    waiting_on: Pending | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class Pending:
+    """What a paused run is waiting on (PS-83): one `question` to show, and the `needs` behind it one by one.
+
+    `kind` says which pause: `ask_the_user` (the chat-manager asked), `confirm_view` (the view moved) or
+    `batched_needs` (the workers' needs, batched by the orchestrator, or several questions pending at once).
+    `needs` is never empty: a single question is its own one need, so a product renders fields from it alone.
+    """
+
+    kind: str
+    question: str
+    needs: tuple[str, ...]
+
+
+def pending_in(interrupts: Any) -> Pending | None:
+    """The `Pending` a run's pending interrupts describe, or `None` when it is not paused.
+
+    **Several pending interrupts are one batch** (measured: a model that calls `ask_the_user` twice in one reply
+    leaves two), asked as one numbered question, as the orchestrator batches its workers' needs; `resume_run`
+    gives the person's one answer to each.
+    """
+    from rag_wright.harness.batch import question_for
+    from rag_wright.harness.clarify import ASK_THE_USER
+
+    payloads = [i.value for i in interrupts or () if isinstance(getattr(i, "value", None), dict)]
+    if not payloads:
+        return None
+    needs = tuple(str(need) for payload in payloads
+                  for need in (payload.get("needs") or [payload.get("question", "")]))
+    if len(payloads) > 1:
+        return Pending(kind="batched_needs", question=question_for(list(needs)), needs=needs)
+    # The one payload without a `kind` is `ask_the_user`'s, paused before PS-83 gave it one.
+    return Pending(kind=payloads[0].get("kind", ASK_THE_USER), question=str(payloads[0].get("question", "")),
+                   needs=needs)
 
 
 def _require_context_schema(agent: Any) -> None:
@@ -256,7 +295,7 @@ async def start_run(
             # run it is the attempt the run died on. `finally`, for the same reason: a run that raised is
             # exactly when the record is needed.
             _close_abandoned_attempts(config)
-    return RunResult(run_id=identity, context=context, state=state)
+    return RunResult(run_id=identity, context=context, state=state, waiting_on=pending_in(state.get("__interrupt__")))
 
 
 async def resume_run(
@@ -284,12 +323,16 @@ async def resume_run(
     # **The resumed half is accounted too.** A run that paused for a human and then did most of its work
     # would otherwise report only what it spent before the question.
     config = _config(settings, run_id, context)
+    # **Several questions pending take the one answer each** (PS-83): LangGraph refuses a bare resume value then, and
+    # the person was shown them as one question (`Pending`), so their one reply answers all of them.
+    pending = (await agent.aget_state(config)).interrupts
+    resume = {question.id: answer for question in pending} if len(pending) > 1 else answer
     async with _accounted(settings, accounting=accounting, run_id=run_id):
         try:
-            state = await agent.ainvoke(Command(resume=answer), config=config, context=context)
+            state = await agent.ainvoke(Command(resume=resume), config=config, context=context)
         finally:
             _close_abandoned_attempts(config)
-    return RunResult(run_id=run_id, context=context, state=state)
+    return RunResult(run_id=run_id, context=context, state=state, waiting_on=pending_in(state.get("__interrupt__")))
 
 
 async def stream_run(
@@ -365,8 +408,9 @@ async def read_run(
     if snapshot is None or not snapshot.values:
         return None
 
+    # **The snapshot's interrupts, not the values'**: a stored state holds no `__interrupt__` key.
     return RunResult(run_id=run_id, context=context, state=dict(snapshot.values),
-                     outcome=outcome_of(snapshot))
+                     outcome=outcome_of(snapshot), waiting_on=pending_in(snapshot.interrupts))
 
 
 def thread_for(context: RunScope, run_id: str) -> str:

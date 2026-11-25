@@ -85,7 +85,7 @@ and to verify it, not to build it again; a product that cards them as its own wo
 | the context type, tenancy the model cannot reach | **yours**: a context type with `scope` / `shared_scope` and tools reading it from the run; the tier validates the scope and keys memory and threads by it |
 | one entry point | **yours**: one function that builds the context from the authenticated principal and calls `start_run` / `resume_run` / `stream_run`; the tier refuses an agent that cannot carry a context |
 | take the tool away, the dispatch bound, per-tier reasoning, error levels and their order, signposts | **the tier's**, inside `build_chat_agent` / `build_orchestrator` (`withhold`, `error_middleware`, `DISPATCHES_PER_RUN`) |
-| the ask-only tool, workers that cannot ask | **the tier's** (`clarification_tool`, `CANNOT_ASK`): a worker reports `status: "blocked"` with its `need` |
+| the ask-only tool, workers that cannot ask | **the tier's** (`clarification_tool`, `CANNOT_ASK`): a worker reports `status: "blocked"` with its `need`; what a paused run asked, of every kind, is `RunResult.waiting_on` (a `Pending`), and a `waiting` event on the stream (PS-83) |
 | a changed subject confirmed deterministically | **the tier's** (`ConfirmTheView`); your continuation type and its resolution are yours |
 | memory that refuses without a context | **the tier's** (`MemoryWithoutTenancy`); you pass the `store` |
 | routing D1, B1, D2 with a decision model | **the tier's** (ADR-0146); your descriptions are what it reads, `routing=None` turns it off |
