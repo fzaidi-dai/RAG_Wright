@@ -4,6 +4,36 @@ All notable changes to RAG_Wright are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project aims to follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.21.0](https://github.com/fzaidi-dai/RAG_Wright/compare/0.20.1...0.21.0) (2026-11-26)
+
+
+### ⚠ BREAKING CHANGES
+
+* **PS-85:** rag_wright.pack_sdk no longer exports profile_for; import it from rag_wright.api.
+* **PS-84:** orchestrator_direct, orchestrator_reachable, bridged_tools and js_name are removed, with harness.interpreter; the orchestrator no longer runs operations no worker holds.
+
+### Features
+
+* **PS-78:** a worker reasons with its own model ([50e4770](https://github.com/fzaidi-dai/RAG_Wright/commit/50e4770b86398652465bf033142ed5fcf5d39a95))
+* **PS-80:** the run's protections see tiers and resumed turns ([18a3e13](https://github.com/fzaidi-dai/RAG_Wright/commit/18a3e134d867f154b82ed7df4356c175fce2621c))
+* **PS-83:** a paused run says what it is waiting on ([76e9666](https://github.com/fzaidi-dai/RAG_Wright/commit/76e966636217035aed4b849a6b928029c51705ed))
+* **PS-84:** the orchestrator plans and dispatches, never executes ([691ade6](https://github.com/fzaidi-dai/RAG_Wright/commit/691ade6cb7241ee80677138408dec810e980cd2e))
+* **PS-86:** the orchestrator's dispatches are bounded per run ([c515571](https://github.com/fzaidi-dai/RAG_Wright/commit/c515571405b649cbe50d6707cd60613f4628e321))
+* **PS-87:** a chat-manager with no direct operations is not offered answer ([00ec134](https://github.com/fzaidi-dai/RAG_Wright/commit/00ec13429af4f28d624c1ba717b242b65c02edf9))
+* **PS-88:** the run's call budget is per question, and a stop carries what came back ([95316cd](https://github.com/fzaidi-dai/RAG_Wright/commit/95316cdcaca3ceb12af278c3e3c817dc27e321fe))
+* **PS-89:** a decision model that is down falls back, and the outage is visible ([e05e375](https://github.com/fzaidi-dai/RAG_Wright/commit/e05e375218b1b74ef13707bcf1b1f433eb2a6f02))
+
+
+### Bug Fixes
+
+* **PS-74:** a model told it is repeating is made to answer ([a77d6dd](https://github.com/fzaidi-dai/RAG_Wright/commit/a77d6dd599a5ed8c1af1facb6a9d8d8fb376fd17))
+* **PS-76:** a chat-manager handed a report answers from it ([d69762d](https://github.com/fzaidi-dai/RAG_Wright/commit/d69762db79d66323fcf5e77088cfb734ae81de6a))
+* **PS-77:** D1 offers the product's direct tools ([3e44c3b](https://github.com/fzaidi-dai/RAG_Wright/commit/3e44c3b3d5b0d6a388c3ca541d2edcf2ee2b220c))
+* **PS-81:** a resumed dispatch carries the answer; a worker stops searching its filesystem ([bfa5e02](https://github.com/fzaidi-dai/RAG_Wright/commit/bfa5e02930a39c7ff0f691aff67e550d846b448d))
+* **PS-85:** profile_for on one public tier ([f0bc144](https://github.com/fzaidi-dai/RAG_Wright/commit/f0bc144acc42d841f026a7b94aab7847bc371f47))
+* the default decision model is jev-1.14, Jev having returned (ADR-0147 addendum) ([116e489](https://github.com/fzaidi-dai/RAG_Wright/commit/116e489a52165a3c348670b380eb586830256f4a))
+* the default decision model is pplx-decider-v1.2 while Jev is unavailable (ADR-0147) ([9d4cae5](https://github.com/fzaidi-dai/RAG_Wright/commit/9d4cae57f970246711dd785af2844e5bfde64d19))
+
 ## [0.20.1](https://github.com/fzaidi-dai/RAG_Wright/compare/0.20.0...0.20.1) (2026-11-21)
 
 
