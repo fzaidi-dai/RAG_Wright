@@ -214,7 +214,7 @@ stay below `max_num_seqs` (`aingest` warns when its own peak exceeds it).
 Full walk-through: `docs/configuration.md`, "A self-hosted model server".
 
 **Using the decision model (Jev).** Register `jev_decision` (from `engine_capabilities()`) and set
-`OPENROUTER_API_KEY` (`RAG_DECISION_MODEL` overrides the default profile, `pplx-decider-v1.2` while Jev is unavailable, ADR-0147). Without both, the reference
+`OPENROUTER_API_KEY` (`RAG_DECISION_MODEL` overrides the default profile `jev-1.14`, ADR-0147). Without both, the reference
 pack's decision paths silently fall back (to deterministic rules or the LLM); your own
 `ainvoke_model("jev_decision", ...)` raises `KeyError` when it is not registered and `RuntimeError` when the key is
 unset. Check both before trusting a run's numbers.

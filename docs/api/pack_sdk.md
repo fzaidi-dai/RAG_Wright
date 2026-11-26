@@ -304,7 +304,7 @@ Resolve a role to a model id. Precedence: the active workspace's `EngineConfig.m
 
 ### `decision_profile(model_id: 'Optional[str]' = None) -> 'DecisionModelProfile'`
 
-The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `pplx-decider-v1.2`, ADR-0147). An unregistered id gets a default profile using that id as its served id (so a raw slug still works).
+The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `jev-1.14`, ADR-0147). An unregistered id gets a default profile using that id as its served id (so a raw slug still works).
 
 ### `build_model(model_id: 'str', *, temperature: 'float' = 0.0, _client_cls: 'type[ChatOpenAI] | None' = None, **overrides: 'Any') -> 'ChatOpenAI'`
 

@@ -57,7 +57,7 @@ async def test_jev_decision_builds_request_and_parses(_stub_http):
                                                                     "criteria": {"true": "rule", "false": "not"}}}})
     assert out["answers"]["operative"]["noul"] == 0.93
     b = _Client.captured["body"]
-    assert b["model"] == "perplexity/pplx-decider-v1.2" and b["state"].startswith("Advertisers")
+    assert b["model"] == "typesafe/jev-1.14" and b["state"].startswith("Advertisers")
     assert "operative" in b["questions"] and b["questions"]["operative"]["type"] == "noul"
     assert _Client.captured["headers"]["Authorization"] == "Bearer test-key"
 
@@ -104,7 +104,7 @@ def test_jev_decision_live():
 def test_decision_profile_resolves_and_defaults():
     from rag_wright.models.profiles import decision_profile
     p = decision_profile()  # default
-    assert p.model_id == "pplx-decider-v1.2" and p.served == "perplexity/pplx-decider-v1.2"
+    assert p.model_id == "jev-1.14" and p.served == "typesafe/jev-1.14"
     assert p.endpoint.endswith("/api/alpha/decisions") and p.api_key_env == "OPENROUTER_API_KEY"
     assert 0.0 < p.op_threshold <= 1.0 and 0.0 < p.multilabel_threshold <= 1.0
     # a raw/unregistered id still works (used as its own served id) -> swapping is config, not code
@@ -112,19 +112,20 @@ def test_decision_profile_resolves_and_defaults():
     assert raw.served == "typesafe/jev-latest"
 
 
-def test_jev_stays_registered_while_it_is_not_the_default():
-    """ADR-0147: Jev failed upstream on 2026-11-26 (`Unknown model`), so the default moved; Jev's profile stays, so
-    it comes back by `RAG_DECISION_MODEL=jev-1.13` or by restoring the default, with no edit beyond that."""
+def test_the_other_decision_models_stay_registered():
+    """ADR-0147: Jev failed upstream on 2026-11-26 and Perplexity's decider was the default until it returned; both
+    stay selectable by `RAG_DECISION_MODEL`, with no edit beyond that."""
     from rag_wright.models.profiles import decision_profile
 
     assert decision_profile("jev-1.13").served == "typesafe/jev-1.13"
+    assert decision_profile("pplx-decider-v1.2").served == "perplexity/pplx-decider-v1.2"
 
 
 def test_jev_decision_uses_profile_served_id_and_key_env(_stub_http):
     import asyncio
     asyncio.run(jd.jev_decision(None, {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?",
                                                                          "criteria": {"true": "a", "false": "b"}}}}))
-    assert _Client.captured["body"]["model"] == "perplexity/pplx-decider-v1.2"  # from the profile, not hardcoded
+    assert _Client.captured["body"]["model"] == "typesafe/jev-1.14"  # from the profile, not hardcoded
 
 
 async def test_a_jev_call_is_metered_like_any_model_call(_stub_http):
@@ -136,4 +137,4 @@ async def test_a_jev_call_is_metered_like_any_model_call(_stub_http):
         await jd.jev_decision(None, {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?",
                                                                       "criteria": {"true": "a", "false": "b"}}}})
     assert usage.calls == 1 and usage.cost_usd == pytest.approx(1e-5) and usage.calls_without_cost == 0
-    assert list(usage.by_model) == ["pplx-decider-v1.2"]
+    assert list(usage.by_model) == ["jev-1.14"]

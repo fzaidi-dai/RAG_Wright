@@ -19,7 +19,7 @@ from typing import Any
 async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - API model, store-independent
     """Invoke a typed-decision model (Jev). `inputs`: `state` (the text/object to judge), `questions` (dict keyed
     by question id, each `{type: "noul"|"choice"|"score", instructions, criteria}`), optional `model` (a
-    DecisionModelProfile key, default `pplx-decider-v1.2`, ADR-0147). The endpoint, served id, key env and timeout come from the
+    DecisionModelProfile key, default `jev-1.14`, ADR-0147). The endpoint, served id, key env and timeout come from the
     decision-model PROFILE (`models.profiles.decision_profile`, ADR-0119) -- not hardcoded here -- so swapping
     Jev versions or pointing at an on-prem Laya decisions server is config. Returns the Decisions-API body
     `{answers: {<id>: {type, noul|choice|score, ...}}, usage: {...}}`. Raises if the key env is unset or the API errors."""

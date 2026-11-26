@@ -23,8 +23,8 @@ you can fine-tune. In RAG_Wright a decision model is wired as a `kind="model"` c
 `DecisionModelProfile` (model id / endpoint / thresholds in config) — see `setfit` Phase 0.5 +
 `authoring-a-capability`. The decision questions/criteria live in the `.ttl` (ADR-0066), not the capability.
 
-**Swapping Jev for Laya is config, but not free.** `DECISION_PROFILES` has the Jev entries (`jev-1.13`,
-`jev-latest`) and `pplx-decider-v1.2`, the default while Jev is unavailable (ADR-0147). A Laya swap needs (1) a server that speaks the Decisions API (POST
+**Swapping Jev for Laya is config, but not free.** `DECISION_PROFILES` has the Jev entries (`jev-1.14`, the
+default, `jev-1.13` and `jev-latest`) and Perplexity's `pplx-decider-v1.2` (ADR-0147). A Laya swap needs (1) a server that speaks the Decisions API (POST
 `{model, state, questions}`, return `{answers: {<id>: {type, noul|choice|score}}}`), and (2) its profile, registered
 at startup from your product: `register_decision_profile(DecisionModelProfile(model_id="laya-onprem",
 served_model_id=..., endpoint=..., api_key_env=...))`, both on `rag_wright.api` (an unregistered id falls back to the

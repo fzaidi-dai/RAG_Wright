@@ -360,13 +360,14 @@ class DecisionModelProfile(BaseModel):
 
 DECISION_PROFILES: dict[str, DecisionModelProfile] = {
     "jev-1.13": DecisionModelProfile(model_id="jev-1.13", served_model_id="typesafe/jev-1.13"),
+    "jev-1.14": DecisionModelProfile(model_id="jev-1.14", served_model_id="typesafe/jev-1.14"),
     "jev-latest": DecisionModelProfile(model_id="jev-latest", served_model_id="typesafe/jev-latest"),
     "pplx-decider-v1.2": DecisionModelProfile(model_id="pplx-decider-v1.2",
                                               served_model_id="perplexity/pplx-decider-v1.2"),
 }
-#: ADR-0147: Jev fails upstream (`Unknown model`, 2026-11-26), so the default is Perplexity's decider, on the same
-#: Decisions API, until Jev returns; Jev's profiles stay.
-_DEFAULT_DECISION_MODEL = "pplx-decider-v1.2"
+#: ADR-0147: Jev 1.14, since Jev returned from its outage of 2026-11-26 (Perplexity's decider was the default during
+#: it, and stays registered).
+_DEFAULT_DECISION_MODEL = "jev-1.14"
 
 
 def register_decision_profile(profile: DecisionModelProfile) -> DecisionModelProfile:
@@ -378,7 +379,7 @@ def register_decision_profile(profile: DecisionModelProfile) -> DecisionModelPro
 
 
 def decision_profile(model_id: Optional[str] = None) -> DecisionModelProfile:
-    """The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `pplx-decider-v1.2`, ADR-0147).
+    """The decision-model profile for `model_id` (or `RAG_DECISION_MODEL`, else the built-in default `jev-1.14`, ADR-0147).
     An unregistered id gets a default profile using that id as its served id (so a raw slug still works)."""
     mid = model_id or os.getenv("RAG_DECISION_MODEL") or _DEFAULT_DECISION_MODEL
     return DECISION_PROFILES.get(mid, DecisionModelProfile(model_id=mid, served_model_id=mid))
