@@ -328,6 +328,8 @@ down, ratchet that every exposed operation lands in exactly one half, and keep t
 model routes the chat-manager's turn (D1, ADR-0146): above its threshold it decides and a direct tool with no
 arguments is called with no model call at all; below it, or without the decision model, the tier's model routes.
 Either way, whether a request takes the direct path is measured on your gold sets, not asserted.
+A chat-manager with no direct tools is not offered `answer` (PS-87): it has nothing to answer from, so its
+routed choices are `delegate` and `ask_the_user`.
 
 ## Take the tool away. Do not ask the model not to use it.
 

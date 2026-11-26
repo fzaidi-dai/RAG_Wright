@@ -375,3 +375,39 @@ def test_A_DIRECT_ROUTE_REACHES_THE_TOOL_ON_SUCH_A_PRODUCT(routes) -> None:
 
     assert any(isinstance(m, ToolMessage) and m.name == "list_mills" for m in messages)
     assert len(offered) == 1, "the only model call is the reply after the tool ran"
+
+
+# --- PS-87: a chat-manager with no direct operations ---------------------------------------------------------------
+
+
+def _every_operation_behind_a_worker() -> Any:
+    """Loom with each of its direct tools planned, the shape a product reaches by moving every operation behind a
+    worker: the chat-manager holds `ask_the_user` and the hand-off, and nothing that reads the record."""
+    from tests.harness.gold.loom import DIRECT
+
+    small = loom(variant="small")
+    return dataclasses.replace(small, planning={**small.planning, **{n: "behind a worker" for n in DIRECT}})
+
+
+def test_A_CHAT_MANAGER_WITH_NO_DIRECT_TOOLS_IS_NOT_OFFERED_ANSWER(routes) -> None:
+    """**Measured by TexWright**: with every operation behind a worker, two questions the record answers were read as
+    "a general question that needs no data" at 0.78-0.82, and an `answer` route hands the model no tools -- so the tier
+    answered from the model's own knowledge. With nothing to answer from, `answer` has no valid completion."""
+    decision = routes("delegate", 0.9)
+    model, _offered = recording(AIMessage(content=REPLY))
+
+    with only_the_chat_manager(_every_operation_behind_a_worker(), reply=REPLY):
+        _turn(model, "Will a 380 GSM double fleece pass abrasion level 4?", definition=_every_operation_behind_a_worker())
+
+    assert set(decision.asked[0]["questions"]["choice"]["criteria"]) == {"ask_the_user", "delegate"}
+
+
+def test_SUCH_A_CHAT_MANAGER_ROUTED_TO_ANSWER_ANYWAY_RUNS_THE_TURN_AS_BEFORE(routes) -> None:
+    """An answer outside the options offered is no decision: the turn keeps every tool, never `tools=[]`."""
+    routes("answer", 0.9)
+    model, offered = recording(AIMessage(content="Hello!"))
+
+    with only_the_chat_manager(_every_operation_behind_a_worker(), reply=REPLY):
+        _turn(model, "Hi!", definition=_every_operation_behind_a_worker())
+
+    assert {"task", "ask_the_user"} <= set(offered[0]), offered

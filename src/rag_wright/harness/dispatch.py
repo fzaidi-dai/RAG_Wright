@@ -30,7 +30,6 @@ from typing import Any
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from rag_wright.harness.batch import answers_batched
 from rag_wright.harness.clarify import answers_so_far
 from rag_wright.harness.seen import run_key
 
@@ -213,14 +212,16 @@ class OnlySoManyDispatches(AgentMiddleware):
 
 
 def _asked(request: Any, messages: list | None) -> str:
-    """The run and the thing the person asked in it: their opening message, then each answer to a clarification.
+    """The run and the thing the person asked in it: each time they speak, a message or an answer to a clarification.
 
     **An answer is new intent** (PS-80), so the allowance is per thing asked, not per run: a turn resumed on an answer
     may still delegate, once, though the run delegated before it asked. **Whichever way it arrives** (PS-86): to the
-    tier's own `ask_the_user`, or to a worker's question that `BatchTheQuestions` asked, so an orchestrator at its bound
-    can still carry the answer down to the worker that needed it.
+    tier's own `ask_the_user`, or to a worker's question that `BatchTheQuestions` asked (a message, framed), so an
+    orchestrator at its bound can still carry the answer down to the worker that needed it. **And so is the person's
+    next message** (PS-87): counted only by its answers, a run that delegated once could never delegate a follow-up.
     """
-    return f"{run_key(request)}|{answers_so_far(messages or []) + answers_batched(messages or [])}"
+    spoken = sum(1 for message in messages or [] if isinstance(message, HumanMessage))
+    return f"{run_key(request)}|{spoken + answers_so_far(messages or [])}"
 
 
 def dispatch_bound(limit: int = DISPATCHES_PER_RUN, *, tier: str = "chat-manager",

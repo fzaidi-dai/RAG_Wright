@@ -175,6 +175,20 @@ def test_THE_PERSONS_NEXT_MESSAGE_RESTORES_THEM() -> None:
     assert "case_dossier" in offered[-1], offered
 
 
+def test_THE_PERSONS_NEXT_MESSAGE_MAY_BE_DELEGATED_AGAIN() -> None:
+    """**Measured live (PS-87)**: on a follow-up in the same run, D1 was offered `ask_the_user` alone. The bound counted
+    the opening message and each answer, never the person's next message, so a run that had delegated once could not
+    delegate the next question -- and a chat-manager with no direct tools could then only ask."""
+    agent, _, offered = _agent(_delegate(), REPORT, AIMessage(content="SDF 3204 is the closest."),
+                               AIMessage(content="Which one?"))
+
+    asyncio.run(start_run(agent, _a_context(), message="Which earlier development is closest to SDF 3146?",
+                          run_id="r1"))
+    asyncio.run(start_run(agent, _a_context(), message="And the closest to SDF 3150?", run_id="r1"))
+
+    assert "task" in offered[-1], offered
+
+
 def test_THE_PERSONS_ANSWER_TO_A_BLOCKED_REPORT_RESTORES_THEM() -> None:
     """**The person answering is the person speaking.** An orchestrator that comes back `blocked` has its question put
     with `ask_the_user`; the answer arrives as that tool's reply, not a new message, and the tier must be able to act

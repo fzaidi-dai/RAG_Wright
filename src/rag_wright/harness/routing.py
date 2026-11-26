@@ -9,6 +9,11 @@ product's D1 threshold (`RoutingThresholds.d1`, 0.7 by default) or more the rout
 - a tool that takes arguments, `ask_the_user` or `delegate` goes to the model with that one tool, to fill it in;
 - `answer` goes to the model with no tools.
 
+**`answer` is offered only to a chat-manager with direct tools** (PS-87). With every operation behind a worker the tier
+has nothing to answer from, and an `answer` route hands it no tools, so a question the record answers was answered from
+the model's own knowledge (TexWright, 0.78-0.82 on two such questions). Its options are `ask_the_user` and `delegate`;
+below the threshold its model routes, with every tool.
+
 **A delegated message that stands on its own is handed over in the person's own words** (B1, HD-6): the brief is
 the opening turn as the harness rendered it, `<viewing>` block included, so nothing is lost or reworded on the way to
 the orchestrator. It stands on its own when there are no earlier turns, or when the decider says at the product's B1
@@ -71,6 +76,8 @@ class RouteTheTurn(AgentMiddleware):
         self._orchestrator = orchestrator
         self._offered = direct | {clarification_tool().name}
         self._delegating = delegating
+        #: Whether the tier has anything to answer from (PS-87).
+        self._answerable = bool(direct)
 
     def wrap_model_call(self, request: Any, handler: Any) -> Any:
         return handler(request)  # the decider is asynchronous; a synchronous run routes as before
@@ -117,7 +124,8 @@ class RouteTheTurn(AgentMiddleware):
         options = {name: getattr(tool, "description", "") for name, tool in tools.items() if name in self._offered}
         if _DELEGATE in tools:
             options["delegate"] = self._delegating
-        options["answer"] = ANSWER
+        if self._answerable:
+            options["answer"] = ANSWER
         return options
 
 

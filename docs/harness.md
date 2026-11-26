@@ -358,12 +358,12 @@ on twelve direct tools, D2 90.0% against 75.6% per worker, each routing call abo
 
 | decision | where | the decision model asks | taken at | otherwise |
 |---|---|---|---|---|
-| **D1** | the chat-manager's opening call of a turn, and its first call after the person answers a question | one choice: each direct tool, `delegate`, `ask_the_user`, `answer` | `routing.d1` (0.7) | the tier's model routes, as before |
+| **D1** | the chat-manager's opening call of a turn, and its first call after the person answers a question | one choice: each direct tool, `delegate`, `ask_the_user`, `answer` (only when the chat-manager has a direct tool) | `routing.d1` (0.7) | the tier's model routes, as before |
 | **B1** | a routed `delegate` with earlier turns | can the message be understood without them? | `routing.b1` (0.6) | the tier's model writes the brief |
 | **D2** | the orchestrator's opening call | one yes/no per worker | `routing.d2` (0.5) | the orchestrator plans, as before |
 
 What a route does: a direct tool with no arguments is called in code; a tool with arguments, `ask_the_user` or a
-`delegate` whose brief must be written is offered to the model alone; `answer` goes to the model with no tools. A
+`delegate` whose brief must be written is offered to the model alone; `answer` goes to the model with no tools. **A chat-manager with no direct tools is not offered `answer`** (PS-87): with every operation behind a worker it has nothing to answer from, and with no tools it answered questions the record holds from the model's own knowledge. Its options are `ask_the_user` and `delegate`; below the threshold its model routes, with every tool. A
 delegated message that stands on its own (no earlier turns, or B1 yes) is handed over in the person's own words,
 `<viewing>` block included. In the orchestrator, no worker means its opening call runs without the hand-off, one
 worker is dispatched in code with the brief, and several are planned by the orchestrator as before.
@@ -435,7 +435,9 @@ its share of tool calls is called with no tools, so it answers from what it has;
 ends with a message saying so.
 
 **The orchestrator's dispatches are bounded too** (PS-86). The chat-manager may dispatch the orchestrator once per
-thing the person asks (`DISPATCHES_PER_RUN`); the orchestrator may dispatch workers `RunBudget.dispatches` times (6 by
+thing the person asks (`DISPATCHES_PER_RUN`): each message, and each answer to a question, is a new thing asked, so a
+follow-up in the same run may be delegated again (PS-87; counted by answers alone, it could not). The orchestrator
+may dispatch workers `RunBudget.dispatches` times (6 by
 default), since a plan may need several. Measured before the bound, one question dispatched one worker 17 times from a
 single plan. Once spent, the orchestrator's next turn has no tools and is told it has dispatched all it may and to
 report now, so it writes its report: with only `task` taken away it was measured spending 22 more calls on its
