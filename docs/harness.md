@@ -78,7 +78,7 @@ workers. A derived value crossing the boundary would become a convention the nex
 | `decision_points` | `tuple[Any, ...]` | The decisions a run of this product takes; the ledger reads each point's option space from here. |
 | `read_framing` | `Any` | `(tool_name, parsed_result) -> {chose, confidence, inputs} \| None`: how this product reads its own framing tool's reply. |
 | `routing` | `RoutingThresholds \| None` | When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10). |
-| `budget` | `RunBudget` | What one run may spend across every tier, each tier keeping a reserve for the tiers above it (PS-80). |
+| `budget` | `RunBudget` | What one question may spend across every tier, each tier keeping a reserve for the tiers above it (PS-80, PS-88). |
 <!-- /generated -->
 
 ---
@@ -425,14 +425,19 @@ person's message and the brief are sent to the decision model's provider.
 **Two bounds, on different things** (PS-80). The per-invocation caps (`MODEL_CALLS_PER_INVOCATION`, 25;
 `TOOL_CALLS_PER_INVOCATION`, 40) bound one invocation of one tier: the chat-manager's start or resume, and each
 dispatch of the orchestrator or a worker, each counted afresh. They never bounded a run, whose bill grows with every
-dispatch. `AgentDefinition.budget`, a `RunBudget`, bounds the run: model calls and tool calls across every tier
-together (60 and 100 by default).
+dispatch. `AgentDefinition.budget`, a `RunBudget`, bounds each question: model calls and tool calls across every
+tier together (60 and 100 by default), counted from the person's latest message (PS-88). A run kept for a conversation
+has the budget again for each message, so a later question is not answered with the budget message because earlier
+ones spent it; an answer to a clarification continues the question it answers. `WhatTheRunSpent` counts the whole run.
 
 **Each tier keeps a reserve for the tiers above it**, so a cost control cannot become a failure. A worker stops at the
 budget less two reserves, the orchestrator at the budget less one, the chat-manager at the whole budget: a worker
 that spends all it may still leaves the orchestrator and the chat-manager the calls to compose an answer. A tier past
 its share of tool calls is called with no tools, so it answers from what it has; one past its share of model calls
-ends with a message saying so.
+ends with a message saying the budget ran out, carrying the tool results that came back (PS-88): the tier above answers
+from those. A stop that said only "stops here with what it has" passed on none of it, and the chat-manager, reading no
+findings, said it had no ticket tool and asked the person for one. The tier's own filesystem and todo replies are not
+passed on, and with nothing back the message says so.
 
 **The orchestrator's dispatches are bounded too** (PS-86). The chat-manager may dispatch the orchestrator once per
 thing the person asks (`DISPATCHES_PER_RUN`): each message, and each answer to a question, is a new thing asked, so a

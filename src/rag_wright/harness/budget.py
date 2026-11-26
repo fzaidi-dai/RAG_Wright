@@ -10,6 +10,11 @@ dispatch starts afresh, so a run with several dispatches had no bound on its bil
 and each tier keeps back a reserve for the tiers above it, so a worker that spends all it may never leaves the
 orchestrator and the chat-manager without the calls to compose.
 
+**The budget is per question, the tally per run** (PS-88). A product may keep one `run_id` for a conversation, and a
+run-wide budget was then the conversation's: once the first questions spent it, each later turn's hand-off came back
+with the budget message. So each tier's share counts from the person's latest message; an answer to a clarification
+continues the question it answers. The tally keeps every call of the run, for the bill.
+
 **Innermost on every tier**, so it counts the calls that reached the model and the tools that ran: a turn the router
 settled without a model call, or a repeat served from the record, costs nothing and is not counted.
 """
@@ -20,13 +25,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
-from langchain_core.messages import AIMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from rag_wright.harness.definition import RunBudget
+from rag_wright.harness.rules import FILE_TOOLS
 from rag_wright.harness.seen import run_key
 
 #: How deep each kind of tier sits, which is how many tiers above it keep a reserve.
 CHAT_MANAGER, ORCHESTRATOR, WORKER = 0, 1, 2
+#: A tier's own bookkeeping: what these return is not a finding, and passed on reads as a missing tool.
+OWN_TOOLS = frozenset({*FILE_TOOLS, "write_todos"})
 
 
 @dataclass
@@ -52,6 +60,9 @@ class RunSpend:
     """One run's spend, by tier name: `chat-manager`, `orchestrator`, or a worker's own name."""
 
     tiers: dict[str, TierSpend] = field(default_factory=dict)
+    #: The person's messages so far, and the run's model and tool calls when the latest arrived (PS-88).
+    asked: int = 0
+    question_began: tuple[int, int] = (0, 0)
 
     def of(self, tier: str) -> TierSpend:
         return self.tiers.setdefault(tier, TierSpend())
@@ -63,6 +74,11 @@ class RunSpend:
     @property
     def tool_calls(self) -> int:
         return sum(tier.tool_calls for tier in self.tiers.values())
+
+    def this_question(self) -> tuple[int, int]:
+        """The model and tool calls since the person's latest message: what the budget holds each tier to."""
+        model_calls, tool_calls = self.question_began
+        return self.model_calls - model_calls, self.tool_calls - tool_calls
 
 
 @dataclass
@@ -92,6 +108,8 @@ class SpendTheRunBudget(AgentMiddleware):
         super().__init__()
         self._spent = spent
         self._tier = tier
+        #: The chat-manager sees the person's messages; the tiers below run inside its turn.
+        self._top = depth == CHAT_MANAGER
         self._model_calls = budget.model_calls - depth * budget.reserve
         self._tool_calls = budget.tool_calls - depth * budget.reserve
 
@@ -101,7 +119,12 @@ class SpendTheRunBudget(AgentMiddleware):
         return f"{type(self).__name__}({self._tier})"
 
     def before_agent(self, state: Any, runtime: Any) -> None:
-        self._spent.of(_thread(runtime)).of(self._tier).invocations += 1
+        run = self._spent.of(_thread(runtime))
+        run.of(self._tier).invocations += 1
+        if self._top:
+            asked = sum(1 for message in state.get("messages", []) if isinstance(message, HumanMessage))
+            if asked > run.asked:
+                run.asked, run.question_began = asked, (run.model_calls, run.tool_calls)
 
     async def abefore_agent(self, state: Any, runtime: Any) -> None:
         self.before_agent(state, runtime)
@@ -133,15 +156,16 @@ class SpendTheRunBudget(AgentMiddleware):
     def _held(self, request: Any) -> tuple[RunSpend, AIMessage | None]:
         """This run's tally, and the message the tier ends with when its share of model calls is spent."""
         run = self._spent.of(run_key(request))
-        if run.model_calls < self._model_calls:
+        model_calls, _ = run.this_question()
+        if model_calls < self._model_calls:
             return run, None
         run.of(self._tier).stopped_by_budget = True
-        return run, AIMessage(content=(f"This run has used the {run.model_calls} model calls its budget allows "
-                                       f"this tier, so it stops here with what it has."))
+        return run, AIMessage(content=_stopped(model_calls, _what_came_back(request.messages or [], latest=self._top)))
 
     def _within_tools(self, request: Any, run: RunSpend) -> Any:
         """The request, with no tools once the run's tool calls reach this tier's share."""
-        if run.tool_calls < self._tool_calls or not request.tools:
+        _, tool_calls = run.this_question()
+        if tool_calls < self._tool_calls or not request.tools:
             return request
         run.of(self._tier).stopped_by_budget = True
         # a worker's report is unaffected: the framework adds its tools after this, from the response format
@@ -154,6 +178,28 @@ class SpendTheRunBudget(AgentMiddleware):
             usage = getattr(message, "usage_metadata", None) or {}
             here.input_tokens += usage.get("input_tokens", 0)
             here.output_tokens += usage.get("output_tokens", 0)
+
+
+def _what_came_back(messages: list, *, latest: bool) -> list[str]:
+    """The tool results a tier has gathered: in its whole invocation, or since the person's latest message."""
+    if latest:
+        opened = max((i for i, m in enumerate(messages) if isinstance(m, HumanMessage)), default=-1)
+        messages = messages[opened + 1:]
+    called = {call.get("id"): call.get("name") for m in messages if isinstance(m, AIMessage) for call in m.tool_calls}
+    return [str(m.content) for m in messages if isinstance(m, ToolMessage) and m.status != "error"
+            and (m.name or called.get(m.tool_call_id)) not in OWN_TOOLS]
+
+
+def _stopped(model_calls: int, came_back: list[str]) -> str:
+    """What a tier ends with past its share (PS-88): what came back, which the tier above answers from.
+
+    **Measured live, three times**: an orchestrator that stopped with only "stops here with what it has" passed on none
+    of it, and the chat-manager, reading no findings, said it had no ticket tool and asked the person for one.
+    """
+    ran_out = f"This question's budget ran out ({model_calls} model calls for this tier)"
+    if not came_back:
+        return f"{ran_out} and nothing came back before it did, so it stops here."
+    return f"{ran_out}, so it stops here. What came back before it did:\n\n" + "\n\n".join(came_back)
 
 
 def run_budget(spent: WhatTheRunSpent, definition: Any, *, tier: str, depth: int) -> SpendTheRunBudget:

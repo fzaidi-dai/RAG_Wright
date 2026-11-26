@@ -144,3 +144,108 @@ def test_A_WORKERS_OWN_CAPS_BOUND_THAT_WORKER_ALONE() -> None:
 def test_A_BUDGET_THAT_LEAVES_A_WORKER_NOTHING_IS_REFUSED(budget: dict) -> None:
     with pytest.raises(ValueError):
         RunBudget(**budget)
+
+
+# --- per question, not per run (PS-88) -----------------------------------------------------------------------------
+
+
+def _spend_the_chat_managers_share(budget: RunBudget) -> list[AIMessage]:
+    """Replies that spend the chat-manager's whole share of model calls on one question: reads, then an answer."""
+    reads = budget.model_calls - 1
+    return [*[_call("case_dossier", {"case": f"31{n}"}, f"c{n}") for n in range(reads)], AIMessage(content="Read.")]
+
+
+def test_THE_NEXT_QUESTION_IN_A_RUN_HAS_THE_BUDGET_AGAIN() -> None:
+    """**Measured live (PS-87)**: with one `run_id` for a conversation, the budget was the conversation's -- once the
+    first questions spent it, every later turn's hand-off came back with the budget message."""
+    budget = RunBudget(model_calls=5, tool_calls=100, reserve=2)
+    agent, spent, _ = _agent(*_spend_the_chat_managers_share(budget), AIMessage(content="SDF 3204 is the closest."),
+                             budget=budget)
+
+    asyncio.run(start_run(agent, _a_context(), message="Read the dossiers of 3140 to 3143.", run_id="r1"))
+    run = asyncio.run(start_run(agent, _a_context(), message=QUESTION, run_id="r1"))
+
+    assert run.state["messages"][-1].content == "SDF 3204 is the closest."
+
+
+def test_THE_TALLY_STAYS_THE_RUNS() -> None:
+    """The budget is per question; the bill is the run's."""
+    budget = RunBudget(model_calls=5, tool_calls=100, reserve=2)
+    agent, spent, _ = _agent(*_spend_the_chat_managers_share(budget), AIMessage(content="SDF 3204."), budget=budget)
+
+    asyncio.run(start_run(agent, _a_context(), message="Read the dossiers of 3140 to 3143.", run_id="r1"))
+    run = asyncio.run(start_run(agent, _a_context(), message=QUESTION, run_id="r1"))
+
+    assert _spend(spent, run).of("chat-manager").model_calls == 6
+
+
+def test_AN_ANSWER_TO_A_QUESTION_CONTINUES_THE_QUESTION_IT_ANSWERS() -> None:
+    """A clarification is part of the question, not a new one: its budget is not reset by the person's answer."""
+    from rag_wright.harness import resume_run
+
+    budget = RunBudget(model_calls=5, tool_calls=100, reserve=2)
+    replies = [*_spend_the_chat_managers_share(budget)[:-1], _call("ask_the_user", {"question": "Which season?"}, "q1"),
+               AIMessage(content="never reached")]
+    agent, spent, _ = _agent(*replies, budget=budget)
+
+    run = asyncio.run(start_run(agent, _a_context(), message="Read every dossier.", run_id="r1"))
+    assert run.waiting_on is not None, "the scripted question did not pause the run"
+    run = asyncio.run(resume_run(agent, _a_context(), answer="SS26.", run_id="r1"))
+
+    assert "budget" in run.state["messages"][-1].content
+
+
+# --- a stop on the budget carries what came back (PS-88) ------------------------------------------------------------
+
+
+def _stopped(tier: str, depth: int, *messages: Any) -> str:
+    """The message a tier ends with when its share of this question's model calls is already spent."""
+    from types import SimpleNamespace
+
+    from rag_wright.harness.budget import SpendTheRunBudget
+
+    spent = WhatTheRunSpent()
+    spent.of("run-1").of("other").model_calls = 10
+    request = SimpleNamespace(messages=list(messages), runtime=SimpleNamespace(
+        config={"configurable": {"thread_id": "run-1"}}))
+    _, stop = SpendTheRunBudget(spent, RunBudget(model_calls=10), tier=tier, depth=depth)._held(request)
+    return stop.content
+
+
+def _dispatched(report: str, call: str = "t1") -> tuple[AIMessage, Any]:
+    from langchain_core.messages import ToolMessage
+
+    return (AIMessage(content="", tool_calls=[{"name": "task", "args": {}, "id": call}]),
+            ToolMessage(content=report, tool_call_id=call))
+
+
+def test_A_TIER_STOPPED_BY_THE_BUDGET_HANDS_ON_WHAT_CAME_BACK() -> None:
+    """**Measured live, three times (PS-87, PS-88)**: the orchestrator stopped on the budget returned only "stops here
+    with what it has", with none of it -- and the chat-manager, reading no findings, said it had no ticket tool, looked
+    on its filesystem and asked the person for a ticket system."""
+    from langchain_core.messages import HumanMessage
+
+    content = _stopped("orchestrator", 1, HumanMessage(content="Find pump leaks."),
+                       *_dispatched('{"tickets": {"pump leaking": ["pump P-3 leaking"]}}'))
+
+    assert "pump P-3 leaking" in content and "budget" in content, content
+
+
+def test_WITH_NOTHING_BACK_IT_SAYS_THE_BUDGET_RAN_OUT_NOT_THAT_A_TOOL_IS_MISSING() -> None:
+    """Its own filesystem's replies are not findings: a signpost passed on reads as a missing tool."""
+    from langchain_core.messages import HumanMessage, ToolMessage
+
+    looked = AIMessage(content="", tool_calls=[{"name": "ls", "args": {}, "id": "l1"}])
+    content = _stopped("orchestrator", 1, HumanMessage(content="Find pump leaks."), looked,
+                       ToolMessage(content="Tickets are not files.", tool_call_id="l1", name="ls"))
+
+    assert "Tickets are not files" not in content and "budget" in content and "nothing" in content.lower(), content
+
+
+def test_THE_CHAT_MANAGER_HANDS_ON_ONLY_WHAT_CAME_BACK_FOR_THIS_QUESTION() -> None:
+    from langchain_core.messages import HumanMessage
+
+    content = _stopped("chat-manager", 0, HumanMessage(content="Pump leaks?"), *_dispatched("P-3 and P-7.", "t1"),
+                       AIMessage(content="P-3 and P-7."), HumanMessage(content="Fans?"), *_dispatched("F-2.", "t2"))
+
+    assert "F-2." in content and "P-3 and P-7." not in content, content

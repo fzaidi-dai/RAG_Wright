@@ -129,7 +129,11 @@ class RoutingThresholds:
 
 @dataclass(frozen=True, slots=True)
 class RunBudget:
-    """What one run may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
+    """What one question may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
+
+    **Per question, counted from the person's latest message** (PS-88): a run kept for a conversation has the budget
+    again for each message, and an answer to a clarification continues the question it answers. `WhatTheRunSpent`
+    still counts every call of the run.
 
     **A tier stops at the budget less the reserve of every tier above it**: a worker (two tiers above it) at
     `model_calls - 2 * reserve`, the orchestrator at `model_calls - reserve`, the chat-manager at the whole budget. So a
@@ -140,9 +144,9 @@ class RunBudget:
     tier's one invocation; this bounds the run's bill, which a run with several dispatches would otherwise multiply.
     """
 
-    #: Model calls the whole run may make, every tier and dispatch together.
+    #: Model calls one question may make, every tier and dispatch together.
     model_calls: int = 60
-    #: Tool calls the whole run may make. A tier past its share is called with no tools, so it answers.
+    #: Tool calls one question may make. A tier past its share is called with no tools, so it answers.
     tool_calls: int = 100
     #: Calls each tier keeps back for the tiers above it, to compose with.
     reserve: int = 2
@@ -211,5 +215,5 @@ class AgentDefinition:
     #: When the decision model's routing answers are taken (ADR-0146). Optional: the measured defaults. `None` turns
     #: routing off: no tier asks the decision model, and nothing is sent to its provider (HD-10).
     routing: RoutingThresholds | None = RoutingThresholds()
-    #: What one run may spend across every tier, each tier keeping a reserve for the tiers above it (PS-80).
+    #: What one question may spend across every tier, each tier keeping a reserve for the tiers above it (PS-80, PS-88).
     budget: RunBudget = RunBudget()

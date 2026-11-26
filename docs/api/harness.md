@@ -22,7 +22,9 @@ The probability at or above which the decision model's routing answer is taken (
 
 ### `RunBudget(model_calls: 'int' = 60, tool_calls: 'int' = 100, reserve: 'int' = 2, dispatches: 'int' = 6) -> None`
 
-What one run may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
+What one question may spend across every tier, and what each tier keeps back for the tiers above it (PS-80).
+
+**Per question, counted from the person's latest message** (PS-88): a run kept for a conversation has the budget again for each message, and an answer to a clarification continues the question it answers. `WhatTheRunSpent` still counts every call of the run.
 
 **A tier stops at the budget less the reserve of every tier above it**: a worker (two tiers above it) at `model_calls - 2 * reserve`, the orchestrator at `model_calls - reserve`, the chat-manager at the whole budget. So a worker that spends all it may still leaves the orchestrator and the chat-manager the calls to compose an answer: a cost control that cannot become a failure. The same holds for tool calls.
 
@@ -256,13 +258,17 @@ One tally per run, and one object that holds them all: passed to `build_chat_age
 
 _(no docstring)_
 
-### `RunSpend(tiers: 'dict[str, TierSpend]' = <factory>) -> None`
+### `RunSpend(tiers: 'dict[str, TierSpend]' = <factory>, asked: 'int' = 0, question_began: 'tuple[int, int]' = (0, 0)) -> None`
 
 One run's spend, by tier name: `chat-manager`, `orchestrator`, or a worker's own name.
 
 #### `RunSpend.of(self, tier: 'str') -> 'TierSpend'`
 
 _(no docstring)_
+
+#### `RunSpend.this_question(self) -> 'tuple[int, int]'`
+
+The model and tool calls since the person's latest message: what the budget holds each tier to.
 
 ### `TierSpend(invocations: 'int' = 0, model_calls: 'int' = 0, tool_calls: 'int' = 0, input_tokens: 'int' = 0, output_tokens: 'int' = 0, stopped_by_budget: 'bool' = False, dispatched: 'list[str]' = <factory>, refused: 'list[str]' = <factory>) -> None`
 
