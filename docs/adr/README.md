@@ -202,4 +202,5 @@ framing that still appears in older ADRs and the root `SPEC.md`/`plan.md`.
 0143 A float is written and compared as a double ·
 0144 One loaded BGE model per process, with its one lock ·
 0145 ArcadeDB 26.11.1, with a start-up warm and a one-time rebuild of the vector indexes ·
-0146 The harness routes with a decision model, with the LLM below a threshold
+0146 The harness routes with a decision model, with the LLM below a threshold ·
+0147 The default decision model is Perplexity's decider while Jev is unavailable

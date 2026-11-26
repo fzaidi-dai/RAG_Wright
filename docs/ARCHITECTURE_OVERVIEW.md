@@ -182,7 +182,7 @@ flag. `RAG_SERVING` selects backend (`openrouter` default / `vllm` self-hosted).
 | role | model |
 |---|---|
 | every `ModelRole` (structured-reasoning and its secondary, general, summarization, function-classify, vision OCR) | **Qwen3.8-27B**, profile `qwen3.8-27b-modal-or` (OpenRouter today; it accepts images, so one served model covers OCR too) |
-| typed decisions (`jev_decision`): provision boundaries, the ingest judge, the residual values | **Jev**, `DecisionModelProfile` `jev-1.13` (`RAG_DECISION_MODEL` overrides) |
+| typed decisions (`jev_decision`): provision boundaries, the ingest judge, the residual values | the decision model, `DecisionModelProfile` `pplx-decider-v1.2` while Jev is unavailable (ADR-0147; `RAG_DECISION_MODEL` overrides) |
 | clause functions / closed-vocab properties | local trained classifiers (SetFit ensemble; 29-dim SetFit/Laya fleet) |
 
 Override one role with `RAG_MODEL_<ROLE>`, every role with `RAG_MODEL_ALL`. The old list-union knobs

@@ -124,7 +124,8 @@ and how to manage workspaces.
   cache without being passed). Delete each finding's `cache_files`, then re-ingest the document.
 - **Structured output** is client-side tag-parse (ADR-0045); any provider flags live in the profile.
 - **A self-hosted Qwen server**: see [A self-hosted model server](#a-self-hosted-model-server-qwen-on-modal) below.
-- **Decision models** (e.g. Jev) are reached through a `DecisionModelProfile` (default `jev-1.13`;
+- **Decision models** (e.g. Jev) are reached through a `DecisionModelProfile` (default `pplx-decider-v1.2` while Jev
+  is unavailable, ADR-0147;
   `RAG_DECISION_MODEL` only overrides which profile). The reference contract pipeline uses the decision model
   whenever its key (`OPENROUTER_API_KEY`) is set **and** the `jev_decision` capability is registered
   (`load_reference_pack()` registers it): for the uncertain provision boundaries, the extraction judge, and the
