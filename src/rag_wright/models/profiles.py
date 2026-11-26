@@ -352,6 +352,9 @@ class DecisionModelProfile(BaseModel):
     # default decision thresholds (callers may override): yes/no (noul) acceptance + multi-label noul cutoff.
     op_threshold: float = 0.5
     multilabel_threshold: float = 0.6
+    #: The decision model asked when this one fails, once and never past it (PS-89): on 2026-11-26 every Jev version
+    #: failed upstream, and every product's decision paths fell back to the LLM.
+    fallback: Optional[str] = None
 
     @property
     def served(self) -> str:
@@ -359,8 +362,10 @@ class DecisionModelProfile(BaseModel):
 
 
 DECISION_PROFILES: dict[str, DecisionModelProfile] = {
-    "jev-1.13": DecisionModelProfile(model_id="jev-1.13", served_model_id="typesafe/jev-1.13"),
-    "jev-1.14": DecisionModelProfile(model_id="jev-1.14", served_model_id="typesafe/jev-1.14"),
+    "jev-1.13": DecisionModelProfile(model_id="jev-1.13", served_model_id="typesafe/jev-1.13",
+                                     fallback="pplx-decider-v1.2"),
+    "jev-1.14": DecisionModelProfile(model_id="jev-1.14", served_model_id="typesafe/jev-1.14",
+                                     fallback="pplx-decider-v1.2"),
     "jev-latest": DecisionModelProfile(model_id="jev-latest", served_model_id="typesafe/jev-latest"),
     "pplx-decider-v1.2": DecisionModelProfile(model_id="pplx-decider-v1.2",
                                               served_model_id="perplexity/pplx-decider-v1.2"),

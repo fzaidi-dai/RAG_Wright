@@ -11,9 +11,12 @@ It is I/O-bound (a network call), so it is an ASYNC `model` capability -- invoke
 """
 from __future__ import annotations
 
+import logging
 import os
 import time
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - API model, store-independent
@@ -22,13 +25,27 @@ async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - 
     DecisionModelProfile key, default `jev-1.14`, ADR-0147). The endpoint, served id, key env and timeout come from the
     decision-model PROFILE (`models.profiles.decision_profile`, ADR-0119) -- not hardcoded here -- so swapping
     Jev versions or pointing at an on-prem Laya decisions server is config. Returns the Decisions-API body
-    `{answers: {<id>: {type, noul|choice|score, ...}}, usage: {...}}`. Raises if the key env is unset or the API errors."""
-    import httpx
-
+    `{answers: {<id>: {type, noul|choice|score, ...}}, usage: {...}, answered_by: <profile id>}`. A profile's
+    `fallback` is asked once when it fails (PS-89). Raises if the key env is unset or the API errors, the
+    fallback's included."""
     from rag_wright.models.profiles import decision_profile
-    from rag_wright.models.usage import record_usage
 
     prof = decision_profile(inputs.get("model"))
+    try:
+        return await _decide(prof, inputs)
+    except Exception:
+        if prof.fallback is None:
+            raise
+        logger.warning("decision model %s failed; asking %s", prof.model_id, prof.fallback, exc_info=True)
+        return await _decide(decision_profile(prof.fallback), inputs)
+
+
+async def _decide(prof: Any, inputs: dict) -> dict:
+    """One decision model asked, its reply with `answered_by`, the profile that answered (PS-89)."""
+    import httpx
+
+    from rag_wright.models.usage import record_usage
+
     api_key = os.environ.get(prof.api_key_env)
     if not api_key:
         raise RuntimeError(f"jev_decision requires {prof.api_key_env}")
@@ -45,4 +62,4 @@ async def jev_decision(resources: Any, inputs: dict) -> dict:  # noqa: ARG001 - 
     record_usage(prof.model_id, input_tokens=int(usage.get("input_tokens") or 0),
                  output_tokens=int(usage.get("output_tokens") or 0), cost=usage.get("cost"),
                  latency_ms=(time.perf_counter() - started) * 1000)
-    return out
+    return {**out, "answered_by": prof.model_id}

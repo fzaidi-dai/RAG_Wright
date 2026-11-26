@@ -253,7 +253,7 @@ def build_orchestrator(
             *graded("orchestrator", "orchestrator", definition, settings, grading),
             # **Innermost of the tier's own**, so everything above still shapes and observes the routed call; absent
             # when the product turned routing off.
-            *([RouteTheBrief(Decider(), workers={spec["name"]: spec["description"] for spec in workers},
+            *([RouteTheBrief(Decider(ledger=decisions), workers={spec["name"]: spec["description"] for spec in workers},
                              ledger=decisions, threshold=definition.routing.d2)]
               if definition.routing is not None else []),
             *(extra_middleware or []),

@@ -48,7 +48,7 @@ No deployed model server has this name (never deployed, or stopped).
 
 What `amodel_server_status` found. `deployed`: the Modal app exists. `running`: a container is up (the GPU is billing); False when scaled to zero after idling. `healthy`: a running container answers `/health` (False while it starts). `weights_cached`: the spec's model weights are in the weights Volume, so a deploy or cold start skips the ~31 GB download (an empty `modal app list` says nothing about this).
 
-### `DecisionModelProfile(*, model_id: str, served_model_id: Optional[str] = None, endpoint: str = 'https://openrouter.ai/api/alpha/decisions', api_key_env: str = 'OPENROUTER_API_KEY', timeout_s: float = 60.0, op_threshold: float = 0.5, multilabel_threshold: float = 0.6) -> None`
+### `DecisionModelProfile(*, model_id: str, served_model_id: Optional[str] = None, endpoint: str = 'https://openrouter.ai/api/alpha/decisions', api_key_env: str = 'OPENROUTER_API_KEY', timeout_s: float = 60.0, op_threshold: float = 0.5, multilabel_threshold: float = 0.6, fallback: Optional[str] = None) -> None`
 
 How to reach a typed-DECISION model (TypeSafe Jev, or an on-prem Laya decisions server). This is a DIFFERENT API surface from `ModelProfile`: a decision model POSTs a `state` + typed `questions` to a Decisions endpoint and returns calibrated typed answers (`noul`/`choice`/`score`), not chat completions -- so it needs its own profile shape (endpoint + served id + key env + default thresholds), not the structured-output fields.
 

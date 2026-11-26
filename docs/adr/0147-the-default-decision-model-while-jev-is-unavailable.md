@@ -32,3 +32,9 @@ The same day, `typesafe/jev-1.13` and `typesafe/jev-1.14` answered again (served
 for yes/no and choice questions. The default is now `jev-1.14` (the user's choice); `jev-1.13` and
 `pplx-decider-v1.2` stay registered. The thresholds were measured on `jev-1.13` (ADR-0146) and are not re-measured on
 1.14. That an outage of the decision model turns routing off for every product with only a log line is PS-89.
+
+## Addendum, PS-89: a fallback
+
+A `DecisionModelProfile` names an optional `fallback`, asked once when it fails; both Jev profiles fall back to
+`pplx-decider-v1.2`. A run keeps the model that answered it on every tier, and its ledger records which answered or that
+none could, so the next outage routes on the fallback and is visible per run rather than in one log line.

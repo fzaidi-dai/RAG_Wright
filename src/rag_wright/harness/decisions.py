@@ -149,6 +149,11 @@ class DecisionLedger:
     #: The decision model's D2 view per worker (`{worker: {"p": yes, "decided": bool}}`), noted by the orchestrator's
     #: router before any worker opens, so each worker's D2 row carries it (ADR-0146).
     routed: dict[str, dict[str, Any]] = field(default_factory=dict)
+    #: The decision model that last answered this run's routing questions, by profile id: a fallback answering is
+    #: worth knowing, since the thresholds were measured on another model (PS-89).
+    decision_model: str | None = None
+    #: Whether the run stopped asking the decision model, every model it may ask having failed: it routed as before.
+    decision_model_unavailable: bool = False
 
     def record(
         self,

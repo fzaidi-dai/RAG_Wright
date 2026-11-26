@@ -411,3 +411,40 @@ def test_SUCH_A_CHAT_MANAGER_ROUTED_TO_ANSWER_ANYWAY_RUNS_THE_TURN_AS_BEFORE(rou
         _turn(model, "Hi!", definition=_every_operation_behind_a_worker())
 
     assert {"task", "ask_the_user"} <= set(offered[0]), offered
+
+
+# --- PS-89: which decision model routed the run, or that none could -------------------------------------------------
+
+
+def _run_decided(monkeypatch: pytest.MonkeyPatch, decide: Any) -> Any:
+    """A routed turn whose decision model is `decide`, and the run's ledger after it."""
+    import rag_wright.api
+
+    monkeypatch.setattr(rag_wright.api, "ainvoke_model", decide)
+    monkeypatch.setattr(rag_wright.api, "capability_index", lambda: {"jev_decision": {}})
+    model, _offered = recording(AIMessage(content="Hello!"))
+    ledger = WhatTheRunDecided(points=())
+    _turn(model, "Hi!", ledger=ledger)
+    (run,) = ledger.runs.values()
+    return run
+
+
+def test_THE_RUN_SAYS_WHICH_DECISION_MODEL_ROUTED_IT(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**Measured 2026-11-26**: with Jev down, every product routed without the decision model, and nothing a product
+    reads said so. A fallback answering is worth knowing too: the thresholds were measured on another model."""
+    async def fallback_answered(name: str, inputs: dict, *, resources: object = None) -> dict:
+        return {"answers": {"choice": {"type": "choice", "choice": "answer", "probabilities": {"answer": 0.9}}},
+                "answered_by": "pplx-decider-v1.2"}
+
+    run = _run_decided(monkeypatch, fallback_answered)
+
+    assert (run.decision_model, run.decision_model_unavailable) == ("pplx-decider-v1.2", False)
+
+
+def test_THE_RUN_SAYS_WHEN_NO_DECISION_MODEL_COULD_ROUTE_IT(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def down(name: str, inputs: dict, *, resources: object = None) -> dict:
+        raise RuntimeError("400 Unknown model")
+
+    run = _run_decided(monkeypatch, down)
+
+    assert (run.decision_model, run.decision_model_unavailable) == (None, True)

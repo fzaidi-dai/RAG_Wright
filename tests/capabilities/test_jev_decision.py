@@ -138,3 +138,67 @@ async def test_a_jev_call_is_metered_like_any_model_call(_stub_http):
                                                                       "criteria": {"true": "a", "false": "b"}}}})
     assert usage.calls == 1 and usage.cost_usd == pytest.approx(1e-5) and usage.calls_without_cost == 0
     assert list(usage.by_model) == ["jev-1.14"]
+
+
+# --- PS-89: a decision model that is down falls back to another --------------------------------------------------
+
+
+class _Down(Exception):
+    pass
+
+
+def _one_model_down(monkeypatch, down: set[str]) -> list[str]:
+    """The Decisions API with the served ids in `down` failing, as Jev did on 2026-11-26; the served ids asked, in
+    order."""
+    import httpx
+
+    asked: list[str] = []
+
+    class Client(_Client):
+        async def post(self, url, headers=None, json=None, timeout=None):
+            asked.append(json["model"])
+            if json["model"] in down:
+                raise _Down(f"400 Unknown model: {json['model']}")
+            return _Resp({"answers": {"q": {"type": "noul", "noul": 0.8}}, "usage": {"cost": 1e-6}})
+
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    return asked
+
+
+_Q = {"state": "x", "questions": {"q": {"type": "noul", "instructions": "?", "criteria": {"true": "a", "false": "b"}}}}
+
+
+async def test_A_MODEL_THAT_IS_DOWN_FALLS_BACK_AND_SAYS_WHICH_ANSWERED(monkeypatch):
+    """**Measured 2026-11-26**: every Jev version failed upstream with `Unknown model`, and every product's decision
+    paths fell back to the LLM, with one warning per process to say so."""
+    asked = _one_model_down(monkeypatch, {"typesafe/jev-1.14"})
+
+    out = await jd.jev_decision(None, _Q)
+
+    assert asked == ["typesafe/jev-1.14", "perplexity/pplx-decider-v1.2"]
+    assert out["answers"]["q"]["noul"] == 0.8 and out["answered_by"] == "pplx-decider-v1.2"
+
+
+async def test_A_MODEL_THAT_ANSWERS_IS_NAMED_AND_NOTHING_ELSE_IS_ASKED(monkeypatch):
+    asked = _one_model_down(monkeypatch, set())
+
+    out = await jd.jev_decision(None, _Q)
+
+    assert asked == ["typesafe/jev-1.14"] and out["answered_by"] == "jev-1.14"
+
+
+async def test_THE_FALLBACK_IS_TRIED_ONCE_AND_BOTH_DOWN_RAISES(monkeypatch):
+    asked = _one_model_down(monkeypatch, {"typesafe/jev-1.14", "perplexity/pplx-decider-v1.2"})
+
+    with pytest.raises(_Down):
+        await jd.jev_decision(None, _Q)
+    assert asked == ["typesafe/jev-1.14", "perplexity/pplx-decider-v1.2"]
+
+
+async def test_A_PROFILE_WITH_NO_FALLBACK_FAILS_AS_BEFORE(monkeypatch):
+    asked = _one_model_down(monkeypatch, {"perplexity/pplx-decider-v1.2"})
+
+    with pytest.raises(_Down):
+        await jd.jev_decision(None, {**_Q, "model": "pplx-decider-v1.2"})
+    assert asked == ["perplexity/pplx-decider-v1.2"]

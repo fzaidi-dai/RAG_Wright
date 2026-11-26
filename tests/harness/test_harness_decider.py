@@ -166,3 +166,66 @@ def test_LIVE_ONE_CALL_PER_QUESTION_SHAPE() -> None:
 
     assert routed is not None and routed.choice == "list_mills" and 0.0 < routed.confidence <= 1.0
     assert yes is not None and yes["sourcing"] > 0.5 > yes["testing"]
+
+
+def test_A_RUN_ASKS_THE_MODEL_THAT_ANSWERED_IT_FIRST(registered) -> None:
+    """**Measured live (PS-89)**: with the default model down, each routed call asked it again before its fallback --
+    647 ms a call on a fast 400, and up to the 60 s timeout on a hanging one. A run keeps the model that answered it,
+    which also keeps one model's calibration across the run; another run asks the default again."""
+    fake = registered(FakeDecisionModel(_routes_to("delegate", 0.8)))
+    answered = fake.__call__
+
+    async def by_the_fallback(name: str, inputs: dict, *, resources: object = None) -> dict:
+        return {**await answered(name, inputs, resources=resources), "answered_by": "pplx-decider-v1.2"}
+
+    registered(by_the_fallback)
+    decider = Decider()
+
+    asyncio.run(decider.choose("run-1", "Compare mills.", "Do what?", OPTIONS))
+    asyncio.run(decider.choose("run-1", "Which is fastest?", "Do what?", OPTIONS))
+    asyncio.run(decider.choose("run-2", "Compare mills.", "Do what?", OPTIONS))
+
+    assert [r.get("model") for r in fake.requests] == [None, "pplx-decider-v1.2", None]
+
+
+def test_EVERY_TIERS_DECIDER_IN_A_RUN_ASKS_THE_MODEL_THAT_ANSWERED_IT(registered) -> None:
+    """**Measured live (PS-89)**: the chat-manager's router and the orchestrator's each tried the down model once, for
+    each has its own decider. They share the run's ledger, which says what answered, and when nothing could."""
+    from rag_wright.harness.decisions import WhatTheRunDecided
+
+    fake = registered(FakeDecisionModel(_routes_to("delegate", 0.8)))
+    answered = fake.__call__
+
+    async def by_the_fallback(name: str, inputs: dict, *, resources: object = None) -> dict:
+        return {**await answered(name, inputs, resources=resources), "answered_by": "pplx-decider-v1.2"}
+
+    registered(by_the_fallback)
+    ledger = WhatTheRunDecided()
+
+    asyncio.run(Decider(ledger=ledger).choose("run-1", "Compare mills.", "Do what?", OPTIONS))
+    asyncio.run(Decider(ledger=ledger).yes_no("run-1", "Compare mills.", {"a": ("Needs a?", "it needs a")}))
+
+    assert [r.get("model") for r in fake.requests] == [None, "pplx-decider-v1.2"]
+
+
+def test_A_RUN_WHOSE_DECISION_MODELS_ARE_ALL_DOWN_IS_NOT_ASKED_AGAIN_BY_ANOTHER_TIER(registered) -> None:
+    from rag_wright.harness.decisions import WhatTheRunDecided
+
+    fake = registered(FakeDecisionModel(fails=True))
+    ledger = WhatTheRunDecided()
+
+    asyncio.run(Decider(ledger=ledger).choose("run-1", "Compare mills.", "Do what?", OPTIONS))
+    second = asyncio.run(Decider(ledger=ledger).yes_no("run-1", "Compare mills.", {"a": ("Needs a?", "it needs a")}))
+
+    assert second is None and len(fake.requests) == 1
+
+
+def test_AN_UNUSABLE_ANSWER_DOES_NOT_SAY_THE_DECISION_MODEL_IS_DOWN(registered) -> None:
+    """A choice outside the options is no route for this decider, but the model answered: another tier still asks."""
+    from rag_wright.harness.decisions import WhatTheRunDecided
+
+    registered(FakeDecisionModel(_routes_to("not_an_option", 0.9)))
+    ledger = WhatTheRunDecided()
+
+    assert asyncio.run(Decider(ledger=ledger).choose("run-1", "Compare mills.", "Do what?", OPTIONS)) is None
+    assert ledger.of("run-1").decision_model_unavailable is False

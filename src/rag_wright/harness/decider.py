@@ -13,6 +13,11 @@ engine's configuration, the decision model's profile and credentials (`OPENROUTE
 caller decides as it did before there was a decider. After one failure the run stops asking, and the process warns
 once, so a deployment without the decision model's credentials is told once and routes as before.
 
+**A down model is asked once a run** (PS-89). The capability falls back to the profile's `fallback` and says which
+answered; the run then asks that model on every tier, through the run's ledger that each tier's decider shares, and the
+ledger records which answered, or that none could. Measured live: with the default down, each routed call had asked it
+again first, 647 ms a call on a fast refusal and up to the 60 s timeout on a hanging one.
+
 **One record per run** (`run_key`), as the call record and the decision ledger keep theirs: the decision model flips
 about 3% of answers between identical calls, so a question asked twice in one run gets the first answer again.
 """
@@ -45,15 +50,20 @@ class Routed:
 class _RunRecord:
     answers: dict[str, dict] = field(default_factory=dict)
     unavailable: bool = False
+    #: The decision model that answered this run first, asked from then on (PS-89): a model that is down is asked
+    #: once a run, not before every call's fallback, and the run keeps one model's calibration.
+    model: str | None = None
 
 
 @dataclass
 class Decider:
     """Asks the decision model, caching each run's answers. `model` names a decision-model profile (None: the
-    capability's default)."""
+    capability's default); `ledger`, the run's `WhatTheRunDecided`, is told which model answered, or that none could
+    (PS-89)."""
 
     model: str | None = None
     runs: dict[str, _RunRecord] = field(default_factory=dict)
+    ledger: Any = None
 
     async def choose(self, run: str, state: str, instructions: str, options: Mapping[str, str]) -> Routed | None:
         """One option of `options` (`{option: what choosing it means}`) for `state`, or None when unavailable."""
@@ -74,21 +84,34 @@ class Decider:
         from rag_wright.api import ainvoke_model
 
         record = self.runs.setdefault(run, _RunRecord())
-        if record.unavailable:
+        # the run's ledger is every tier's: what one tier's decider learned, the others' need not learn again (PS-89)
+        shared = self.ledger.of(run) if self.ledger is not None else None
+        if record.unavailable or (shared is not None and shared.decision_model_unavailable):
             return None
         key = json.dumps([state, questions], sort_keys=True)
         if key in record.answers:
             return record.answers[key]
-        inputs = {"state": state, "questions": questions, **({"model": self.model} if self.model else {})}
+        model = record.model or (shared.decision_model if shared is not None else None) or self.model
+        inputs = {"state": state, "questions": questions, **({"model": model} if model else {})}
         try:
             _ensure_registered()
-            raw = (await ainvoke_model(CAPABILITY, inputs, resources=None))["answers"]
-            # every question answered, in the shape asked, or the whole answer is unusable
-            answers = {qid: _read(raw[qid], question) for qid, question in questions.items()}
+            out = await ainvoke_model(CAPABILITY, inputs, resources=None)
         except Exception:  # noqa: BLE001 - any failure means "decide as before", never a failed turn
             _warn_once()
             record.unavailable = True
+            if shared is not None:  # every model it may ask failed: no tier of the run asks again (PS-89)
+                shared.decision_model_unavailable = True
             return None
+        try:
+            # every question answered, in the shape asked, or the whole answer is unusable
+            answers = {qid: _read(out["answers"][qid], question) for qid, question in questions.items()}
+        except Exception:  # noqa: BLE001 - an unusable answer stops this decider, as before; the model is not down
+            _warn_once()
+            record.unavailable = True
+            return None
+        record.model = record.model or out.get("answered_by")
+        if shared is not None:
+            shared.decision_model = out.get("answered_by")
         record.answers[key] = answers
         return answers
 

@@ -94,7 +94,8 @@ the eval. This is the engine's "identify → **eval-first** → build" chain.
   Question types are `noul` (yes/no, a score in `noul`), `choice` (one of the criteria keys) and `score`.
 - A **decision model rides a `DecisionModelProfile`** (ADR-0119): the model id, served id, endpoint, `api_key_env`
   and timeout live in the profile. `RAG_DECISION_MODEL` (or the `model` input) picks a profile; the default is
-  `jev-1.14` (ADR-0147). Point at an on-premises decision server (Laya) by registering its profile at startup:
+  `jev-1.14` (ADR-0147). A profile's `fallback` names the decision model asked once when it fails (PS-89; the
+  default's is `pplx-decider-v1.2`), and the reply's `answered_by` says which answered. Point at an on-premises decision server (Laya) by registering its profile at startup:
   `register_decision_profile(DecisionModelProfile(model_id="laya-onprem", served_model_id=..., endpoint=...,
   api_key_env=...))`, both from `rag_wright.api`, then select it by that id.
 - The decision **questions/criteria live in the `.ttl`** (ADR-0066), not in the capability code — the ontology is

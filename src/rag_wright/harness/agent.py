@@ -171,7 +171,7 @@ def build_chat_agent(
             *graded("chat-manager", "chat-manager", definition, settings, grading),
             # **Innermost**, so everything above still shapes and observes the routed call (ADR-0146); absent when the
             # product turned routing off.
-            *([RouteTheTurn(Decider(), direct=direct,
+            *([RouteTheTurn(Decider(ledger=decisions), direct=direct,
                             delegating=definition.prompts.orchestrator_description, orchestrator=orchestrator["name"],
                             thresholds=definition.routing, force=forces_a_tool(definition, settings, model))]
               if definition.routing is not None else []),

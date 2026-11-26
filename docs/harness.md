@@ -386,7 +386,11 @@ is the same dispatch, not a second one (PS-81).
 and calls it itself, and a product registers nothing. It needs the decision model's credentials, which are the
 engine's configuration (`OPENROUTER_API_KEY` by default; a self-hosted deployment registers an on-premises decision
 profile with `register_decision_profile`). Without them every tier routes as it did before, and the process logs one
-warning. **To turn routing off** -- for example where users' messages must not reach the decision model's provider --
+warning. **A decision model that is down falls back** (PS-89): a profile names a `fallback` (the default `jev-1.14`'s is
+`pplx-decider-v1.2`), asked once when it fails; a run then asks whichever answered it, on every tier, so a down model
+costs one failed call a run, not one a routed call. The run's ledger says which answered (`decision_model`) and when
+none could (`decision_model_unavailable`), so a run routed without the decision model is visible without the logs.
+**To turn routing off** -- for example where users' messages must not reach the decision model's provider --
 declare `AgentDefinition(..., routing=None)`: no tier asks the decision model and nothing is sent to it.
 
 **Your declarations are the criteria.** The decision model reads each direct tool's own description, the
